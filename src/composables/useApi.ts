@@ -1,0 +1,160 @@
+/**
+ * useApi — all backend calls in one place.
+ * Uses the access token from useAuth automatically.
+ */
+import { useAuth } from './useAuth'
+
+export const useApi = () => {
+  const { accessToken } = useAuth()
+
+  const headers = () => ({
+    'Content-Type': 'application/json',
+    ...(accessToken.value ? { Authorization: `Bearer ${accessToken.value}` } : {}),
+  })
+
+  const get = async <T>(path: string): Promise<T> => {
+    const res = await fetch(path, { headers: headers(), credentials: 'include' })
+    if (!res.ok) throw await res.json()
+    return res.json()
+  }
+
+  const post = async <T>(path: string, body?: unknown): Promise<T> => {
+    const res = await fetch(path, {
+      method: 'POST', headers: headers(), credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    if (!res.ok) throw await res.json()
+    return res.json()
+  }
+
+  const patch = async <T>(path: string, body?: unknown): Promise<T> => {
+    const res = await fetch(path, {
+      method: 'PATCH', headers: headers(), credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    if (!res.ok) throw await res.json()
+    return res.json()
+  }
+
+  const del = async <T>(path: string): Promise<T> => {
+    const res = await fetch(path, { method: 'DELETE', headers: headers(), credentials: 'include' })
+    if (!res.ok) throw await res.json()
+    return res.json()
+  }
+
+  // ── Users ────────────────────────────────────────────────────────────────
+  const searchUsers = (q: string) =>
+    get<{ users: ApiUser[] }>(`/users/search?q=${encodeURIComponent(q)}`)
+
+  const getFriends = () =>
+    get<{ friends: ApiUser[] }>('/users/friends')
+
+  const getPending = () =>
+    get<{ requests: PendingRequest[] }>('/users/friends/pending')
+
+  const sendFriendRequest = (targetId: string) =>
+    post<{ message: string }>('/users/friends/request', { targetId })
+
+  const acceptFriendRequest = (requestId: string) =>
+    patch<{ message: string }>(`/users/friends/accept/${requestId}`)
+
+  // ── Messages ─────────────────────────────────────────────────────────────
+  const getDMMessages = (partnerId: string, before?: string) =>
+    get<{ messages: ApiMessage[] }>(
+      `/messages/dm/${partnerId}${before ? `?before=${before}` : ''}`
+    )
+
+  const sendDMRest = (partnerId: string, content: string, authorName: string, authorAvatar: string, replyToIds: string[] = []) =>
+    post<{ message: ApiMessage }>(`/messages/dm/${partnerId}`, { content, authorName, authorAvatar, replyToIds })
+
+  // ── Groups ───────────────────────────────────────────────────────────────
+  const createGroup = (memberIds: string[], name?: string) =>
+    post<{ group: any }>('/conversations/groups', { memberIds, name })
+
+  const getMyGroups = () =>
+    get<{ groups: any[] }>('/conversations/groups')
+
+  const getGroupMessages = (groupId: string, before?: string) =>
+    get<{ messages: ApiMessage[] }>(
+      `/conversations/groups/${groupId}/messages${before ? `?before=${before}` : ''}`
+    )
+
+  const sendGroupRest = (groupId: string, content: string, authorName: string, replyToIds: string[] = []) =>
+    post<{ message: ApiMessage }>(`/conversations/groups/${groupId}/messages`, { content, authorName, replyToIds })
+
+  const createGroupInvite = (groupId: string) =>
+    post<{ code: string; expiresAt: string }>(`/conversations/groups/${groupId}/invites`)
+
+  const getInvite = (code: string) =>
+    get<{ code: string; group: { id: string; name: string | null; memberCount: number; memberNames: string[]; isMember: boolean } }>(
+      `/conversations/invites/${code}`
+    )
+
+  const joinViaInvite = (code: string) =>
+    post<{ group: any; alreadyMember: boolean }>(`/conversations/invites/${code}`)
+
+  const leaveGroup = (groupId: string) =>
+    post<{ left: boolean; deleted: boolean }>(`/conversations/groups/${groupId}/leave`)
+
+  const updateGroup = (groupId: string, body: { name?: string | null; avatar?: string | null }) =>
+    patch<{ group: any }>(`/conversations/groups/${groupId}`, body)
+
+  const addGroupMembers = (groupId: string, memberIds: string[]) =>
+    post<{ group: any }>(`/conversations/groups/${groupId}/members`, { memberIds })
+
+  // ── Themes ───────────────────────────────────────────────────────────────
+  const createTheme = (name: string, data: Record<string, unknown>) =>
+    post<{ slug: string }>('/themes', { name, data })
+
+  const getTheme = (slug: string) =>
+    get<{ slug: string; name: string; authorName: string; data: Record<string, unknown> }>(`/themes/${slug}`)
+
+  // ── Voice ────────────────────────────────────────────────────────────────
+  const getVoiceToken = (conversationId: string, kind: 'dm' | 'group') =>
+    post<{ token: string; url: string; room: string }>('/voice/token', { conversationId, kind })
+
+  return {
+    searchUsers, getFriends, getPending,
+    sendFriendRequest, acceptFriendRequest,
+    getDMMessages, sendDMRest,
+    createGroup, getMyGroups, getGroupMessages, sendGroupRest,
+    createGroupInvite, getInvite, joinViaInvite, leaveGroup,
+    updateGroup, addGroupMembers,
+    createTheme, getTheme,
+    getVoiceToken,
+  }
+}
+
+// ── API types ──────────────────────────────────────────────────────────────
+export interface ApiUser {
+  id:            string
+  username:      string
+  displayName:   string
+  discriminator: string
+  avatar:        string | null
+  status:        string
+  bio?:          string
+}
+
+export interface PendingRequest {
+  _id:       string
+  requester: ApiUser
+  createdAt: string
+}
+
+export interface ApiMessage {
+  id?:          string
+  _id?:         string
+  conversationId: string
+  authorId:     string
+  authorName:   string
+  authorAvatar: string | null
+  content:      string
+  reactions:    { emoji: string; userIds: string[] }[]
+  pinned:       boolean
+  edited:       boolean
+  createdAt:    string
+  replyTo?:     { id: string; author: string; content: string }[] | null
+  kind?:        'dm' | 'group' | 'channel' | 'system'
+  systemType?:  'rename' | 'icon' | 'add' | 'join' | 'leave' | 'call'
+}

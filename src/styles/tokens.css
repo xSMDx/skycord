@@ -1,0 +1,127 @@
+/*
+ * Design tokens. Defaults reproduce the current palette exactly, so the base
+ * theme looks identical — the Appearance settings (useAppearance.ts) flip these
+ * at the document root to retheme live.
+ *
+ * Accent is exposed both as a hex (--accent / --accent-hover) and as an RGB
+ * triple (--accent-rgb) so tints can use rgba(var(--accent-rgb), .x).
+ */
+:root {
+  /* Accent */
+  --accent:        #5865f2;
+  --accent-hover:  #4752c4;
+  --accent-rgb:    88, 101, 242;
+
+  /* Surfaces (dark default) */
+  --bg-floor:  #111214;  /* rail / darkest chrome */
+  --bg-deep:   #17191c;  /* user panel */
+  --bg-panel:  #2b2d31;  /* sidebars, modals, panels */
+  --bg-chat:   #313338;  /* main chat surface */
+  --bg-input:  #1e1f22;  /* inputs, code blocks */
+  --bg-raised: #1e2024;  /* settings shell */
+  --bg-chatbar:       #383a40;  /* message composer box (sits above the chat surface) */
+  --bg-chatbar-focus: #3d3f45;  /* composer box when focused */
+
+  /* Text */
+  --text-strong:    #ffffff;  /* headings / strongest */
+  --text-1:         #dcddde;  /* normal body */
+  --text-2:         #b5bac1;  /* secondary */
+  --text-3:         #949ba4;  /* muted / labels */
+  --text-faint:     #6d717a;  /* faint / placeholders */
+  --text-on-accent: #ffffff;  /* text sitting on the accent colour — stays light in every theme */
+
+  /* Borders */
+  --border:  rgba(255,255,255,.08);
+  --divider: rgba(255,255,255,.06);
+
+  /* Typography */
+  --font-ui:   'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --font-mono: 'Consolas','Menlo',monospace;
+
+  /* Message sizing */
+  --msg-pad-y:     1px;   /* density: vertical padding */
+  --msg-font-size: 15px;  /* message text size */
+  --msg-group-gap: 17px;  /* gap above a new author group */
+
+  /* Readability toggles (flipped by html classes below) */
+  --link-decoration: none;     /* "Always underline links" off */
+  --name-hover:      #8d96f8;  /* display-name hover tint when name styles on */
+
+  /* Hover / active surface tints — theme-aware (dark = white-alpha) */
+  --hover:        rgba(255,255,255,.06);
+  --hover-strong: rgba(255,255,255,.10);
+}
+
+/* Appearance: "Always underline links" */
+html.underline-links { --link-decoration: underline; }
+/* Appearance: "Display Name Styles" off → names render plain (no hover tint) */
+html.names-plain { --name-hover: var(--text-strong); }
+
+/* ── Light themes ───────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-floor:  #e3e5e8;
+  --bg-deep:   #ebedef;
+  --bg-panel:  #f2f3f5;
+  --bg-chat:   #ffffff;
+  --bg-input:  #ebedef;
+  --bg-raised: #ffffff;
+  --bg-chatbar:       #ebedef;
+  --bg-chatbar-focus: #e0e3e7;
+  --text-strong: #060607;
+  --text-1:      #2e3338;
+  --text-2:      #4e5058;
+  --text-3:      #5c5e66;
+  --text-faint:  #80848e;
+  --border:  rgba(0,0,0,.08);
+  --divider: rgba(0,0,0,.06);
+  --hover:        rgba(0,0,0,.06);
+  --hover-strong: rgba(0,0,0,.10);
+}
+[data-theme="light-dim"] {
+  --bg-floor:  #c7ccd1;
+  --bg-deep:   #d4d7dc;
+  --bg-panel:  #dfe1e4;
+  --bg-chat:   #eceef0;
+  --bg-input:  #dfe1e4;
+  --bg-raised: #eceef0;
+  --bg-chatbar:       #dfe1e4;
+  --bg-chatbar-focus: #d4d7dc;
+  --text-strong: #0a0a0b;
+  --text-1:      #2e3338;
+  --text-2:      #4e5058;
+  --text-3:      #5c5e66;
+  --text-faint:  #7a7d85;
+  --border:  rgba(0,0,0,.1);
+  --divider: rgba(0,0,0,.07);
+  --hover:        rgba(0,0,0,.06);
+  --hover-strong: rgba(0,0,0,.10);
+}
+
+/* ── Theme presets (dark family — text stays light) ─────────────────────── */
+[data-theme="midnight"] {
+  --bg-floor:  #050507;
+  --bg-deep:   #0b0c0f;
+  --bg-panel:  #15161a;
+  --bg-chat:   #1a1b1f;
+  --bg-input:  #0e0f12;
+  --bg-raised: #15161a;
+  --bg-chatbar:       #202127;
+  --bg-chatbar-focus: #25262d;
+}
+[data-theme="amoled"] {
+  --bg-floor:  #000000;
+  --bg-deep:   #000000;
+  --bg-panel:  #0a0a0c;
+  --bg-chat:   #000000;
+  --bg-input:  #0a0a0c;
+  --bg-raised: #0a0a0c;
+  --bg-chatbar:       #141416;
+  --bg-chatbar-focus: #1a1a1d;
+}
+
+/* ── Density ─────────────────────────────────────────────────────────────── */
+/* UI Density scales row padding across chat + lists (--row-pad-y) and message
+ * vertical padding (--msg-pad-y). Default (cozy) keeps the current look. */
+:root            { --row-pad-y: 2px; }
+[data-density="compact"] { --msg-pad-y: 0px; --row-pad-y: 0px; }
+[data-density="roomy"]   { --msg-pad-y: 6px; --row-pad-y: 6px; }
