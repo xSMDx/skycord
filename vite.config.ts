@@ -10,6 +10,9 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
+    // Hosts Vite will answer to. Localhost/IP access is always allowed; this
+    // list adds the public domain the VPS is served under (nginx → :5173).
+    allowedHosts: ['app.skycord.xyz', 'localhost'],
     // ── Fix: tell Vite HMR to use the server's actual public IP ──────────
     hmr: {
       // Uses the client's own host for the WS connection — works with any IP
