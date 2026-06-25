@@ -67,7 +67,7 @@ onBeforeUnmount(soundRingStop)
 
 .ic-actions { display: flex; gap: 36px; margin-top: 24px; }
 .ic-btn {
-  width: 58px; height: 58px; border-radius: 50%; color: #fff;
+  width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer; color: #fff;
   display: flex; align-items: center; justify-content: center;
   transition: transform .12s, filter .12s; box-shadow: 0 6px 18px rgba(0,0,0,.35);
 }
