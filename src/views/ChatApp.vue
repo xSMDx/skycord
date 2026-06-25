@@ -1787,6 +1787,7 @@ onBeforeUnmount(() => {
             :kind="currentCall.kind"
             :name="currentCall.name"
             :participants="callParticipantsHere"
+            :me="{ name: authUser?.displayName || authUser?.username || 'You', avatar: myAvatar }"
             :dismissed="currentCallDismissed"
             @dismiss="dismissCurrentCall"
           />
