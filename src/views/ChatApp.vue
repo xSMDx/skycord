@@ -91,11 +91,22 @@ const { voice, connect: vConnect, leave: vLeave, toggleMute: vToggleMute, toggle
 // Derived from call presence: a DM room (stable per friend-pair id) where the
 // partner is present, I'm not, and I haven't dismissed it → ring.
 const dismissedCallRooms = ref<Set<string>>(new Set())
+// Rooms you've already accepted/joined this session. Suppresses the ring modal so
+// a flaky LiveKit media drop (cleanup → connected=false) can't re-summon the
+// incoming-call modal in a loop. Pruned when the call actually ends.
+const engagedCallRooms = ref<Set<string>>(new Set())
 const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: string; name: string; avatar: string } | null>(() => {
   const myId = authUser.value?.id
   if (!myId || voice.connected || voice.connecting) return null
+  // If you're already viewing the conversation, the in-chat CallBar shows the
+  // call (with whoever's connected) — don't also ring with the modal.
+  const openRoom = currentCall.value
+    ? voiceRoomName(currentCall.value.kind, currentCall.value.id, myId)
+    : null
   for (const [room, ids] of Object.entries(activeCalls.value)) {
     if (dismissedCallRooms.value.has(room)) continue
+    if (engagedCallRooms.value.has(room)) continue   // already accepted/joined this call
+    if (room === openRoom) continue                  // viewing it → CallBar handles it
     if (ids.includes(myId) || ids.length === 0) continue   // I'm in it, or it's empty
 
     if (room.startsWith('dm:')) {
@@ -124,15 +135,31 @@ const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: stri
   }
   return null
 })
-const acceptIncomingCall  = () => { const c = incomingCall.value; if (c) vConnect(c.convId, c.kind, c.name) }
+const acceptIncomingCall  = () => {
+  const c = incomingCall.value; if (!c) return
+  engagedCallRooms.value = new Set([...engagedCallRooms.value, c.room])  // don't re-ring if media flaps
+  vConnect(c.convId, c.kind, c.name).catch(() => {})
+}
 const declineIncomingCall = () => { const c = incomingCall.value; if (c) dismissedCallRooms.value = new Set([...dismissedCallRooms.value, c.room]) }
-// Drop dismissals once the call actually ends, so a later call from the same
-// person (same stable room id) rings again instead of being silently swallowed.
+// Mark any room you connect to as engaged (covers joining via the CallBar's Join
+// button too, not just accepting the ring) so a later media drop won't re-ring.
+watch(() => [voice.connected, voice.activeConvId, voice.activeKind] as const, ([conn, cid, kind]) => {
+  if (!conn || !cid || !kind) return
+  const room = voiceRoomName(kind, cid, authUser.value?.id || '')
+  if (!engagedCallRooms.value.has(room)) engagedCallRooms.value = new Set([...engagedCallRooms.value, room])
+})
+// Drop dismissals/engagements once the call actually ends, so a later call from
+// the same person (same stable room id) rings again instead of being swallowed.
 watch(activeCalls, (cur) => {
-  if (!dismissedCallRooms.value.size) return
   const active = new Set(Object.keys(cur))
-  const next = new Set([...dismissedCallRooms.value].filter(r => active.has(r)))
-  if (next.size !== dismissedCallRooms.value.size) dismissedCallRooms.value = next
+  if (dismissedCallRooms.value.size) {
+    const next = new Set([...dismissedCallRooms.value].filter(r => active.has(r)))
+    if (next.size !== dismissedCallRooms.value.size) dismissedCallRooms.value = next
+  }
+  if (engagedCallRooms.value.size) {
+    const next = new Set([...engagedCallRooms.value].filter(r => active.has(r)))
+    if (next.size !== engagedCallRooms.value.size) engagedCallRooms.value = next
+  }
 }, { deep: true })
 
 // ── View state ─────────────────────────────────────────────────────────────
