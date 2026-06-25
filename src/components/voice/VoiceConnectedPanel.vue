@@ -20,7 +20,7 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
 </script>
 
 <template>
-  <div v-if="voice.connected" class="vcp">
+  <div v-if="voice.connected || voice.connecting" class="vcp">
     <!-- Hover popup (Discord-style connection readout) -->
     <div class="vcp-pop">
       <div class="vcp-pop-head">
@@ -38,18 +38,18 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
         <i v-for="n in 4" :key="n" :class="{ on: n <= q.bars }" :style="{ background: n <= q.bars ? q.color : undefined, animationDelay: (n * 0.12) + 's' }" />
       </div>
       <div class="vcp-meta">
-        <span class="vcp-status" :style="{ color: q.color }">Voice Connected</span>
-        <span v-if="voice.micBlocked" class="vcp-name vcp-warn">Listen-only · mic needs HTTPS</span>
-        <span v-else class="vcp-name">{{ pingText }} · {{ voice.activeName }}</span>
+        <span class="vcp-status" :style="{ color: q.color }">{{ voice.connecting ? 'Connecting…' : 'Voice Connected' }}</span>
+        <span v-if="voice.micBlocked && voice.connected" class="vcp-name vcp-warn">Listen-only · mic needs HTTPS</span>
+        <span v-else class="vcp-name">{{ voice.connecting ? voice.activeName : `${pingText} · ${voice.activeName}` }}</span>
       </div>
-      <button class="vcp-leave" title="Disconnect" @click="leave"><PhPhoneX :size="18" weight="fill" /></button>
+      <button class="vcp-leave" :title="voice.connecting ? 'Cancel' : 'Disconnect'" @click="leave"><PhPhoneX :size="18" weight="fill" /></button>
     </div>
 
     <div class="vcp-controls">
-      <button class="vcp-btn" :class="{ off: voice.localMuted }" @click="toggleMute" :title="voice.localMuted ? 'Unmute' : 'Mute'">
+      <button class="vcp-btn" :class="{ off: voice.localMuted }" :disabled="!voice.connected" @click="toggleMute" :title="voice.localMuted ? 'Unmute' : 'Mute'">
         <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="16" weight="fill" />
       </button>
-      <button class="vcp-btn" :class="{ off: voice.localDeafened }" @click="toggleDeafen" :title="voice.localDeafened ? 'Undeafen' : 'Deafen'">
+      <button class="vcp-btn" :class="{ off: voice.localDeafened }" :disabled="!voice.connected" @click="toggleDeafen" :title="voice.localDeafened ? 'Undeafen' : 'Deafen'">
         <PhHeadphones :size="16" weight="fill" />
       </button>
     </div>
@@ -98,6 +98,7 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
 }
 .vcp-btn:hover { background: var(--hover-strong, rgba(255,255,255,.12)); transform: translateY(-1px); }
 .vcp-btn:active { transform: scale(.94); }
+.vcp-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 .vcp-btn.off { background: #f23f43; color: #fff; }
 
 /* Hover popup — appears above the strip */

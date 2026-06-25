@@ -133,6 +133,9 @@ const refreshAc = () => {
 const onInput = (e: Event) => {
   emit('update:modelValue', (e.target as HTMLInputElement).value)
   emit('typing')
+  // Editing the text after opening the @time picker dismisses it (e.g. deleting
+  // the "@" you typed) — otherwise it lingered with nothing tying it to input.
+  if (showTimePicker.value) showTimePicker.value = false
   nextTick(refreshAc)
 }
 
@@ -180,6 +183,7 @@ const submit = () => {
 }
 
 const onKeydown = (e: KeyboardEvent) => {
+  if (showTimePicker.value && e.key === 'Escape') { e.preventDefault(); showTimePicker.value = false; return }
   if (ac.value && acItems.value.length) {
     if (e.key === 'ArrowDown') { e.preventDefault(); acIndex.value = (acIndex.value + 1) % acItems.value.length; return }
     if (e.key === 'ArrowUp')   { e.preventDefault(); acIndex.value = (acIndex.value - 1 + acItems.value.length) % acItems.value.length; return }
@@ -189,7 +193,7 @@ const onKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return }
   emit('typing')
 }
-const onBlur = () => setTimeout(() => { ac.value = null }, 150)
+const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = false }, 150)
 </script>
 
 <template>

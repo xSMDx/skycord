@@ -375,12 +375,37 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       else { const [a, b] = conversationId.split('_'); io.to(`user:${a}`).to(`user:${b}`).emit('dm:receive', payload) }
     }
 
+    // Posted when the last participant leaves, mirroring "X started a call".
+    // Derives the conversation straight from the room name (the leaver may already
+    // be disconnecting, so we can't rely on per-call closure state here).
+    const postCallEnded = async (room: string) => {
+      try {
+        const isGroup = room.startsWith('group:')
+        const conversationId = isGroup ? room.slice(6) : room.slice(3)
+        const msg = await Message.create({
+          conversationId, kind: 'system', systemType: 'call',
+          authorId: userId, authorName: username, authorAvatar: null, content: 'Call ended',
+        })
+        const payload = {
+          _id: msg._id.toString(), conversationId, kind: 'system', systemType: 'call',
+          authorId: userId, authorName: username, authorAvatar: null, content: 'Call ended',
+          reactions: [], pinned: false, edited: false, replyTo: null,
+          createdAt: msg.createdAt.toISOString(),
+        }
+        if (isGroup) io.to(room).emit('group:receive', payload)
+        else { const [a, b] = conversationId.split('_'); io.to(`user:${a}`).to(`user:${b}`).emit('dm:receive', payload) }
+      } catch (err) { console.error('[WS] postCallEnded', err) }
+    }
+
     const leaveCall = (room: string) => {
       const set = activeCalls.get(room)
       if (!set || !set.has(userId)) return
       set.delete(userId)
       joinedCallRooms.delete(room)
-      if (set.size === 0) { activeCalls.delete(room); callStartedAt.delete(room) }
+      if (set.size === 0) {
+        activeCalls.delete(room); callStartedAt.delete(room)
+        void postCallEnded(room)
+      }
       broadcastCall(room)
     }
 

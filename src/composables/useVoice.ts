@@ -11,7 +11,7 @@ import {
 } from 'livekit-client'
 import { useApi } from './useApi'
 import {
-  useSocket,
+  emitCallJoin, emitCallLeave,
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
@@ -32,6 +32,7 @@ interface VoiceState {
   activeKind:   'dm' | 'group' | null
   activeName:   string
   connecting:   boolean
+  connectingConvId: string | null  // which conv is mid-join (activeConvId isn't set until connected)
   connected:    boolean
   localMuted:   boolean
   localDeafened: boolean
@@ -43,7 +44,7 @@ interface VoiceState {
 
 export const voice = reactive<VoiceState>({
   activeConvId: null, activeKind: null, activeName: '',
-  connecting: false, connected: false,
+  connecting: false, connectingConvId: null, connected: false,
   localMuted: false, localDeafened: false, participants: [],
   ping: null, quality: 'unknown', micBlocked: false,
 })
@@ -142,8 +143,14 @@ const cleanup = () => {
   audioEls.clear()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
+  // Clear server-side call presence even when LiveKit dropped on its own
+  // (RoomEvent.Disconnected → cleanup, NOT via leave()). Without this, an
+  // unexpected media drop leaves you a ghost participant in everyone else's
+  // call banner until your whole socket disconnects. Idempotent server-side.
+  if (voice.activeConvId && voice.activeKind) emitCallLeave(voice.activeConvId, voice.activeKind)
   voice.connected = false
   voice.connecting = false
+  voice.connectingConvId = null
   voice.activeConvId = null
   voice.activeKind = null
   voice.activeName = ''
@@ -179,20 +186,23 @@ const unbindPtt = () => {
 
 export const useVoice = () => {
   const { getVoiceToken } = useApi()
-  const { emitCallJoin, emitCallLeave } = useSocket()
 
   const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
-    // Already in — or already joining — this exact call: no-op. Guarding on
-    // `connecting` (not just `connected`) is what stops a second click/accept
-    // during the ~1s join window from spinning up a duplicate LiveKit session
-    // with the same identity (the DUPLICATE_IDENTITY reconnect loop).
-    if ((voice.connected || voice.connecting) && voice.activeConvId === convId && voice.activeKind === kind) return
+    // Already in — or already joining — this exact call: no-op. Guarding the
+    // join window (connectingConvId, since activeConvId isn't set until success)
+    // is what stops a second click/accept during the ~1s join from spinning up a
+    // duplicate LiveKit session with the same identity (the DUPLICATE_IDENTITY
+    // reconnect loop).
+    if (voice.connecting && voice.connectingConvId === convId) return
+    if (voice.connected  && voice.activeConvId     === convId && voice.activeKind === kind) return
     // Switching calls (or recovering from a stale attempt): fully tear the old
     // room down before opening a new one, so we never hold two sessions at once.
     if (room || voice.connected || voice.connecting) await leave()
 
     const seq = ++connectSeq
     voice.connecting = true
+    voice.connectingConvId = convId
+    voice.activeName = name   // set now so the "Connecting…" strip can label the call
     try {
       const { token, url } = await getVoiceToken(convId, kind)
       if (seq !== connectSeq) return                                  // superseded while fetching token
@@ -214,6 +224,7 @@ export const useVoice = () => {
       }
       voice.connected = true
       voice.connecting = false
+      voice.connectingConvId = null
       voice.activeConvId = convId
       voice.activeKind = kind
       voice.activeName = name
@@ -232,8 +243,9 @@ export const useVoice = () => {
   }
 
   const leave = async () => {
-    if (voice.activeConvId && voice.activeKind) emitCallLeave(voice.activeConvId, voice.activeKind)
     soundCallLeave()
+    // call:leave is emitted by cleanup() (covers both this path and unexpected
+    // LiveKit drops), so we don't emit it here too.
     try { await room?.disconnect() } catch { /* ignore */ }
     cleanup()
   }

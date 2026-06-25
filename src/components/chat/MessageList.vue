@@ -4,7 +4,7 @@ import MessageItem    from './MessageItem.vue'
 import TypingIndicator from './TypingIndicator.vue'
 import type { Message } from '@/types'
 
-const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string }; loadingMsgs: boolean }>()
+const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string }; group?: { name: string; avatar?: string }; loadingMsgs: boolean }>()
 const emit  = defineEmits<{
   react:         [msgId: number, emoji: string]
   openEmoji:     [msgId: number]
@@ -98,6 +98,14 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
         <h3>{{ dmPartner.name }}</h3>
         <p>This is the beginning of your direct message history with <strong>{{ dmPartner.name }}</strong>.</p>
       </template>
+      <template v-else-if="group">
+        <div class="dm-av group-av">
+          <img v-if="group.avatar" :src="group.avatar" :alt="group.name"/>
+          <svg v-else width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <h3>{{ group.name }}</h3>
+        <p>Welcome to the beginning of the <strong>{{ group.name }}</strong> group.</p>
+      </template>
       <template v-else>
         <div class="ch-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg></div>
         <h3>Welcome to #{{ channelName }}!</h3>
@@ -150,6 +158,8 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .welcome{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:8px}
 .ch-icon{width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
 .dm-av{width:64px;height:64px;border-radius:50%;overflow:hidden;margin-bottom:14px;border:3px solid var(--bg-panel)}
+.group-av{display:flex;align-items:center;justify-content:center;background:var(--accent);border:none}
+.group-av svg{width:30px;height:30px}
 .welcome h3{font-size:26px;font-weight:800;color: var(--text-strong);margin-bottom:4px}
 .welcome p{font-size:14px;color:var(--text-3)}
 .welcome strong{color: var(--text-strong)}

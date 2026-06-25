@@ -47,6 +47,20 @@
   --link-decoration: none;     /* "Always underline links" off */
   --name-hover:      #8d96f8;  /* display-name hover tint when name styles on */
 
+  /* Mentions & time tokens — theme-aware so they stay legible in every theme.
+     Dark uses a lightened accent; light themes override to the full accent
+     (a lightened accent is invisible on a white surface). */
+  --mention-fg:      #8d96f8;
+  --mention-bg:      rgba(var(--accent-rgb), .18);
+  --mention-all-fg:  var(--text-strong);
+  --mention-all-bg:  rgba(240, 178, 0, .22);
+  --time-token-fg:   #c4c9ff;
+  --time-token-bg:   rgba(var(--accent-rgb), .16);
+  /* Whole-row highlight for messages that ping @everyone (or you). */
+  --mention-row-bg:       rgba(240, 178, 0, .07);
+  --mention-row-bg-hover: rgba(240, 178, 0, .11);
+  --mention-row-bar:      #f0b232;
+
   /* Hover / active surface tints — theme-aware (dark = white-alpha) */
   --hover:        rgba(255,255,255,.06);
   --hover-strong: rgba(255,255,255,.10);
@@ -76,6 +90,14 @@ html.names-plain { --name-hover: var(--text-strong); }
   --divider: rgba(0,0,0,.06);
   --hover:        rgba(0,0,0,.06);
   --hover-strong: rgba(0,0,0,.10);
+  /* Mentions/time tokens: full accent + deeper tints read clearly on white. */
+  --mention-fg:    var(--accent);
+  --mention-bg:    rgba(var(--accent-rgb), .15);
+  --time-token-fg: var(--accent);
+  --time-token-bg: rgba(var(--accent-rgb), .13);
+  --mention-all-bg:       rgba(200, 142, 0, .24);
+  --mention-row-bg:       rgba(200, 142, 0, .10);
+  --mention-row-bg-hover: rgba(200, 142, 0, .15);
 }
 [data-theme="light-dim"] {
   --bg-floor:  #c7ccd1;
@@ -95,6 +117,13 @@ html.names-plain { --name-hover: var(--text-strong); }
   --divider: rgba(0,0,0,.07);
   --hover:        rgba(0,0,0,.06);
   --hover-strong: rgba(0,0,0,.10);
+  --mention-fg:    var(--accent);
+  --mention-bg:    rgba(var(--accent-rgb), .15);
+  --time-token-fg: var(--accent);
+  --time-token-bg: rgba(var(--accent-rgb), .13);
+  --mention-all-bg:       rgba(200, 142, 0, .24);
+  --mention-row-bg:       rgba(200, 142, 0, .10);
+  --mention-row-bg-hover: rgba(200, 142, 0, .15);
 }
 
 /* ── Theme presets (dark family — text stays light) ─────────────────────── */

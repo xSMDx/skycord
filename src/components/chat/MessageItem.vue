@@ -82,6 +82,9 @@ const displayContent = computed(() =>
   themeRef.value?.code ? props.msg.content.replace(THEME_CODE_RE, '').trim() : props.msg.content,
 )
 
+// @everyone pings highlight the whole message row (Discord-style gold rail + tint).
+const hasEveryone = computed(() => /@everyone\b/.test(props.msg.content || ''))
+
 // Hold-to-view-tree gesture on the reply pill (Telegram-style long-press).
 // Short tap → jump to the original message. Hold past the threshold → open the full chain.
 const HOLD_MS = 350
@@ -112,7 +115,7 @@ const onReplyPillLeave = () => {
     <span class="msg-system-time">{{ msg.time }}</span>
   </div>
 
-  <div v-else class="msg" :class="{ consecutive, own: isOwn, compact, failed: (msg as any).failed }"
+  <div v-else class="msg" :class="{ consecutive, own: isOwn, compact, failed: (msg as any).failed, mentioned: hasEveryone }"
     :data-msg-id="msg.id"
     @mouseenter="emit('hover', msg.id)" @mouseleave="emit('hover', null)"
     @contextmenu.prevent="emit('openCtx', $event, msg)">
@@ -207,6 +210,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 .msg{display:flex;align-items:flex-start;padding:var(--msg-pad-y, 1px) 48px var(--msg-pad-y, 1px) 16px;position:relative;transition:background .08s}
 .msg:hover{background:rgba(0,0,0,.1)}
+.msg.mentioned{background:var(--mention-row-bg);box-shadow:inset 2px 0 0 var(--mention-row-bar)}
+.msg.mentioned:hover{background:var(--mention-row-bg-hover)}
 .msg:not(.consecutive){margin-top:var(--msg-group-gap, 17px)}
 .msg.consecutive{padding-top:0}
 .msg.failed .msg-text{color:#f08080}
@@ -234,7 +239,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-text{font-size:var(--msg-font-size, 15px);line-height:1.5;color:var(--text-1);word-break:break-word}
 .msg-gif{max-width:320px;max-height:240px;border-radius:8px;display:block;cursor:pointer}
 .msg-text.jumbo{font-size:42px;line-height:1.25}
-.msg-text :deep(.mention){color:#8d96f8;background:rgba(var(--accent-rgb),.18);padding:0 3px;border-radius:3px;cursor:pointer;font-weight:500}
+.msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding:0 3px;border-radius:3px;cursor:pointer;font-weight:500}
 .msg-text :deep(.emoji){width:1.35em;height:1.35em;vertical-align:-.28em;margin:0 .02em;object-fit:contain;display:inline-block}
 .msg-text :deep(.msg-link){color:#00a8fc;text-decoration:var(--link-decoration, none);word-break:break-all}
 .msg-text :deep(.msg-link):hover{text-decoration:underline}
@@ -252,8 +257,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-text :deep(em){font-style:italic}
 .msg-text :deep(u){text-decoration:underline}
 .msg-text :deep(s){text-decoration:line-through;color:#9a9ea6}
-.msg-text :deep(.mention-all){color: var(--text-strong);background:rgba(240,178,0,.22)}
-.msg-text :deep(.msg-time-token){background:rgba(var(--accent-rgb),.16);color:#c4c9ff;padding:0 4px;border-radius:3px;font-weight:500;cursor:default}
+.msg-text :deep(.mention-all){color: var(--mention-all-fg);background:var(--mention-all-bg);padding:0 3px;border-radius:3px;font-weight:600}
+.msg-text :deep(.msg-time-token){background:var(--time-token-bg);color:var(--time-token-fg);padding:0 4px;border-radius:3px;font-weight:500;cursor:default}
 .msg-text :deep(.msg-bq){border-left:3px solid #4e5058;padding:1px 0 1px 10px;margin:2px 0;color:#c4c7cd}
 .msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:7px 10px;margin:3px 0;font-family: var(--font-mono);font-size:13px;color:#e3e3e3;white-space:pre-wrap;word-break:break-word}
 .msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:rgba(0,0,0,.3);padding:1px 4px;border-radius:3px;color:#e3e3e3}

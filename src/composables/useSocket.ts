@@ -77,6 +77,12 @@ export const soundRingStart = () => {
 }
 export const soundRingStop = () => { if (_ringT) { clearInterval(_ringT); _ringT = null } }
 
+// Call presence emitters — module-level (not closure-bound) so non-component code
+// (useVoice's cleanup, which fires on unexpected LiveKit drops) can clear server
+// presence too, not just the component that opened the call.
+export const emitCallJoin  = (conversationId: string, kind: 'dm' | 'group') => _socket?.emit('call:join',  { conversationId, kind })
+export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group') => _socket?.emit('call:leave', { conversationId, kind })
+
 export const useSocket = () => {
   const { accessToken, user } = useAuth()
 
@@ -182,9 +188,6 @@ export const useSocket = () => {
   const sendTypingStop   = (partnerId: string) => _socket?.emit('typing:stop',  { partnerId })
 
   const subscribeGroup = (groupId: string) => _socket?.emit('group:subscribe', { groupId })
-
-  const emitCallJoin  = (conversationId: string, kind: 'dm' | 'group') => _socket?.emit('call:join',  { conversationId, kind })
-  const emitCallLeave = (conversationId: string, kind: 'dm' | 'group') => _socket?.emit('call:leave', { conversationId, kind })
 
   const on = (event: string, cb: CB<any>) => { _h[event] = cb }
 

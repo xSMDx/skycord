@@ -91,25 +91,40 @@ const { voice, connect: vConnect, leave: vLeave, toggleMute: vToggleMute, toggle
 // Derived from call presence: a DM room (stable per friend-pair id) where the
 // partner is present, I'm not, and I haven't dismissed it → ring.
 const dismissedCallRooms = ref<Set<string>>(new Set())
-const incomingCall = computed(() => {
+const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: string; name: string; avatar: string } | null>(() => {
   const myId = authUser.value?.id
   if (!myId || voice.connected || voice.connecting) return null
   for (const [room, ids] of Object.entries(activeCalls.value)) {
-    if (!room.startsWith('dm:') || dismissedCallRooms.value.has(room)) continue
-    const pair = room.slice(3).split('_')
-    if (!pair.includes(myId)) continue
-    const partnerId = pair[0] === myId ? pair[1] : pair[0]
-    if (!ids.includes(partnerId) || ids.includes(myId)) continue
-    const f = apiFriends.value.find(x => x.id === partnerId)
-    return {
-      room, partnerId,
-      name:   f ? (f.displayName || f.username) : 'Someone',
-      avatar: avatarFor(f?.username || '', f?.avatar ?? null),
+    if (dismissedCallRooms.value.has(room)) continue
+    if (ids.includes(myId) || ids.length === 0) continue   // I'm in it, or it's empty
+
+    if (room.startsWith('dm:')) {
+      const pair = room.slice(3).split('_')
+      if (!pair.includes(myId)) continue
+      const partnerId = pair[0] === myId ? pair[1] : pair[0]
+      if (!ids.includes(partnerId)) continue
+      const f = apiFriends.value.find(x => x.id === partnerId)
+      return {
+        room, kind: 'dm', convId: partnerId,
+        name:   f ? (f.displayName || f.username) : 'Someone',
+        avatar: avatarFor(f?.username || '', f?.avatar ?? null),
+      }
+    }
+
+    if (room.startsWith('group:')) {
+      const groupId = room.slice(6)
+      const g = groupsData.value.find(x => x.id === groupId)
+      if (!g) continue   // not one of my groups (or not loaded yet)
+      return {
+        room, kind: 'group', convId: groupId,
+        name:   groupDisplayName(g),
+        avatar: g.avatar || avatarFor(groupDisplayName(g)),
+      }
     }
   }
   return null
 })
-const acceptIncomingCall  = () => { const c = incomingCall.value; if (c) vConnect(c.partnerId, 'dm', c.name) }
+const acceptIncomingCall  = () => { const c = incomingCall.value; if (c) vConnect(c.convId, c.kind, c.name) }
 const declineIncomingCall = () => { const c = incomingCall.value; if (c) dismissedCallRooms.value = new Set([...dismissedCallRooms.value, c.room]) }
 // Drop dismissals once the call actually ends, so a later call from the same
 // person (same stable room id) rings again instead of being silently swallowed.
@@ -239,6 +254,41 @@ const toggleCall = async () => {
 const convHasCall = (kind: 'dm' | 'group', id: string) => {
   const room = voiceRoomName(kind, id, authUser.value?.id || '')
   return (activeCalls.value[room]?.length ?? 0) > 0
+}
+// Presence userIds for the open conversation's call, resolved to display info
+// (name + avatar) so the CallBar can show who's in the call before you join.
+const callParticipantsHere = computed(() => {
+  const c = currentCall.value
+  if (!c) return [] as { id: string; name: string; avatar: string; local: boolean }[]
+  const myId = authUser.value?.id || ''
+  const room = voiceRoomName(c.kind, c.id, myId)
+  const ids  = activeCalls.value[room] ?? []
+  return ids.map(id => {
+    if (id === myId) return { id, name: 'You', avatar: myAvatar.value, local: true }
+    if (c.kind === 'group') {
+      const m = activeGroup.value?.members.find(mm => mm.id === id)
+      return { id, name: m ? (m.displayName || m.username) : 'Member', avatar: m?.avatar || avatarFor(m?.username || ''), local: false }
+    }
+    const f = apiFriends.value.find(x => x.id === id)
+    return {
+      id,
+      name:   f ? (f.displayName || f.username) : (activeDM.value?.name || 'User'),
+      avatar: f ? avatarFor(f.username, f.avatar) : (activeDM.value?.avatar || avatarFor('')),
+      local:  false,
+    }
+  })
+})
+// Has the open conversation's call been dismissed (banner hidden until it ends)?
+const currentCallDismissed = computed(() => {
+  const c = currentCall.value
+  if (!c) return false
+  return dismissedCallRooms.value.has(voiceRoomName(c.kind, c.id, authUser.value?.id || ''))
+})
+const dismissCurrentCall = () => {
+  const c = currentCall.value
+  if (!c) return
+  const room = voiceRoomName(c.kind, c.id, authUser.value?.id || '')
+  dismissedCallRooms.value = new Set([...dismissedCallRooms.value, room])
 }
 const newMessage    = ref('')
 const friendsTab    = ref<'online' | 'all' | 'pending'>('online')
@@ -1678,8 +1728,17 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- Active voice call bar (participants + controls) -->
-          <CallBar v-if="currentCall" :conv-id="currentCall.id" />
+          <!-- Active voice call bar (participants + controls; persists while a
+               call is happening here, joined or not) -->
+          <CallBar
+            v-if="currentCall"
+            :conv-id="currentCall.id"
+            :kind="currentCall.kind"
+            :name="currentCall.name"
+            :participants="callParticipantsHere"
+            :dismissed="currentCallDismissed"
+            @dismiss="dismissCurrentCall"
+          />
 
           <!-- Pinned messages panel -->
           <div v-if="showPinned" class="pinned-sidebar" @click.stop>
@@ -1695,6 +1754,7 @@ onBeforeUnmount(() => {
             :channelName="currentChannel?.name || ''"
             :isDM="view==='dm'"
             :dmPartner="activeDM ? { name: activeDM.name, avatar: activeDM.avatar } : undefined"
+            :group="view==='group' && activeGroup ? { name: groupDisplayName(activeGroup), avatar: activeGroup.avatar } : undefined"
             :loadingMsgs="loadingMsgs"
             @react="handleReact"
             @openEmoji="openReactionPickerById"
