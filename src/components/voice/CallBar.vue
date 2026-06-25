@@ -119,6 +119,8 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
   background: var(--bg-floor); border-bottom: 1px solid var(--border);
   padding: 20px 16px 16px; display: flex; flex-direction: column; align-items: center; gap: 18px;
 }
+/* Kill the default browser button border (the ugly 2-tone bevel) on every control */
+.callbar button { border: none; cursor: pointer; box-sizing: border-box; }
 
 /* Stage — circular avatar tiles, Discord voice-call style */
 .cb-stage { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; }
