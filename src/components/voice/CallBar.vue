@@ -140,8 +140,8 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 .cb-name { font-size: 13px; color: var(--text-1); font-weight: 600; }
 
 /* Discord-style controls — no container shape, buttons float on the call bg */
-.cb-bar { display: flex; align-items: center; gap: 12px; }
-.cb-group { display: flex; align-items: center; gap: 2px; }
+.cb-bar { display: flex; align-items: center; gap: 8px; }
+.cb-group { display: flex; align-items: center; gap: 2px; background: var(--bg-input); border-radius: 16px; padding: 4px; }
 .cb-b {
   width: 40px; height: 40px; border-radius: 8px;
   background: transparent; color: #fff;
@@ -150,6 +150,9 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 }
 .cb-b:hover:not(:disabled) { background: rgba(255,255,255,.08); }
 .cb-b:disabled { opacity: .45; cursor: not-allowed; }
+/* No ugly browser focus ring — a subtle bg highlight stands in for keyboard focus */
+.cb-b:focus, .cb-chev:focus, .cb-leave:focus { outline: none; }
+.cb-b:focus-visible, .cb-chev:focus-visible { background: rgba(255,255,255,.16); }
 .cb-b.off { background: #f23f43; color: #fff; }
 .cb-b.off:hover:not(:disabled) { background: #d83c3f; }
 /* device-picker chevron — slim split-button next to mic/camera */
