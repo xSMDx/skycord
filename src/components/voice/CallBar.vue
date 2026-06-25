@@ -144,31 +144,31 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 /* Discord-style grouped pill control bar */
 .cb-bar { display: flex; align-items: center; gap: 8px; }
 .cb-group {
-  display: flex; align-items: center; gap: 0;
-  background: var(--bg-panel); border-radius: 24px; padding: 4px;
+  display: flex; align-items: center; gap: 2px;
+  background: var(--bg-panel); border-radius: 16px; padding: 4px;
 }
 .cb-b {
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 40px; height: 40px; border-radius: 8px;
   background: transparent; color: #fff;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s, color .12s, transform .1s;
 }
-.cb-b:hover:not(:disabled) { background: rgba(255,255,255,.12); }
-.cb-b:active:not(:disabled) { transform: scale(.9); }
+.cb-b:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+.cb-b:active:not(:disabled) { transform: scale(.92); }
 .cb-b:disabled { opacity: .5; cursor: not-allowed; }
 .cb-b.off { background: #f23f43; color: #fff; }
 .cb-b.off:hover:not(:disabled) { background: #d83c3f; }
 /* device-picker chevron — slim split-button next to mic/camera */
 .cb-chev {
-  width: 22px; height: 40px; border-radius: 14px;
+  width: 22px; height: 40px; border-radius: 8px;
   background: transparent; color: #b5bac1;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s, color .12s;
 }
-.cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #fff; }
+.cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.1); color: #fff; }
 .cb-chev:disabled { opacity: .5; cursor: not-allowed; }
 .cb-leave {
-  width: 56px; height: 48px; border-radius: 24px; flex-shrink: 0;
+  width: 56px; height: 48px; border-radius: 16px; flex-shrink: 0;
   background: #f23f43; color: #fff;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s, transform .1s;
