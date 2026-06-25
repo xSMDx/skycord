@@ -95,6 +95,11 @@ const dismissedCallRooms = ref<Set<string>>(new Set())
 // a flaky LiveKit media drop (cleanup → connected=false) can't re-summon the
 // incoming-call modal in a loop. Pruned when the call actually ends.
 const engagedCallRooms = ref<Set<string>>(new Set())
+// Rooms whose incoming-call MODAL has been handled this call — declined, seen in
+// the open chat, or left. Suppresses ONLY the ring modal, never the in-chat
+// CallBar (that's dismissedCallRooms). Pruned when the call actually ends, so a
+// fresh call from the same room rings again.
+const modalAckedRooms = ref<Set<string>>(new Set())
 const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: string; name: string; avatar: string } | null>(() => {
   const myId = authUser.value?.id
   if (!myId || voice.connected || voice.connecting) return null
@@ -104,7 +109,7 @@ const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: stri
     ? voiceRoomName(currentCall.value.kind, currentCall.value.id, myId)
     : null
   for (const [room, ids] of Object.entries(activeCalls.value)) {
-    if (dismissedCallRooms.value.has(room)) continue
+    if (modalAckedRooms.value.has(room)) continue    // declined / seen in-chat / left
     if (engagedCallRooms.value.has(room)) continue   // already accepted/joined this call
     if (room === openRoom) continue                  // viewing it → CallBar handles it
     if (ids.includes(myId) || ids.length === 0) continue   // I'm in it, or it's empty
@@ -140,7 +145,9 @@ const acceptIncomingCall  = () => {
   engagedCallRooms.value = new Set([...engagedCallRooms.value, c.room])  // don't re-ring if media flaps
   vConnect(c.convId, c.kind, c.name).catch(() => {})
 }
-const declineIncomingCall = () => { const c = incomingCall.value; if (c) dismissedCallRooms.value = new Set([...dismissedCallRooms.value, c.room]) }
+// Decline only silences the ring modal (acked) — it must NOT hide the in-chat
+// CallBar, so opening the conversation still shows "in a call / Join".
+const declineIncomingCall = () => { const c = incomingCall.value; if (c) modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room]) }
 // Mark any room you connect to as engaged (covers joining via the CallBar's Join
 // button too, not just accepting the ring) so a later media drop won't re-ring.
 watch(() => [voice.connected, voice.activeConvId, voice.activeKind] as const, ([conn, cid, kind]) => {
@@ -159,6 +166,10 @@ watch(activeCalls, (cur) => {
   if (engagedCallRooms.value.size) {
     const next = new Set([...engagedCallRooms.value].filter(r => active.has(r)))
     if (next.size !== engagedCallRooms.value.size) engagedCallRooms.value = next
+  }
+  if (modalAckedRooms.value.size) {
+    const next = new Set([...modalAckedRooms.value].filter(r => active.has(r)))
+    if (next.size !== modalAckedRooms.value.size) modalAckedRooms.value = next
   }
 }, { deep: true })
 
@@ -317,6 +328,19 @@ const dismissCurrentCall = () => {
   const room = voiceRoomName(c.kind, c.id, authUser.value?.id || '')
   dismissedCallRooms.value = new Set([...dismissedCallRooms.value, room])
 }
+// Acknowledge the open conversation's call (the in-chat CallBar already shows it)
+// so leaving and re-entering the chat doesn't re-trigger the ring modal. Modal
+// only — the in-chat bar stays visible regardless.
+watch([currentCall, activeCalls], () => {
+  const c = currentCall.value
+  if (!c) return
+  const myId = authUser.value?.id || ''
+  const room = voiceRoomName(c.kind, c.id, myId)
+  const ids = activeCalls.value[room]
+  if (ids && ids.length && !ids.includes(myId) && !modalAckedRooms.value.has(room)) {
+    modalAckedRooms.value = new Set([...modalAckedRooms.value, room])
+  }
+}, { deep: true })
 const newMessage    = ref('')
 const friendsTab    = ref<'online' | 'all' | 'pending'>('online')
 const friendSearch  = ref('')
