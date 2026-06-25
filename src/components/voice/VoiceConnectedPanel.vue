@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhPhoneX, PhMicrophone, PhMicrophoneSlash, PhHeadphones } from '@phosphor-icons/vue'
+import { PhPhoneX, PhVideoCamera, PhScreencast } from '@phosphor-icons/vue'
 import { useVoice } from '@/composables/useVoice'
 
 // Persistent "Voice Connected" strip above the user panel — stays put while you
-// browse other chats, so the call survives navigation.
-const { voice, leave, toggleMute, toggleDeafen } = useVoice()
+// browse other chats, so the call survives navigation. Mute/deafen live in the
+// user panel below; this row carries the call-media actions (camera/screenshare),
+// matching Discord's voice panel.
+const { voice, leave } = useVoice()
 
 // Connection quality → colour + human label. Drives the signal bars + popup.
 const QUALITY = {
@@ -46,11 +48,11 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
     </div>
 
     <div class="vcp-controls">
-      <button class="vcp-btn" :class="{ off: voice.localMuted }" :disabled="!voice.connected" @click="toggleMute" :title="voice.localMuted ? 'Unmute' : 'Mute'">
-        <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="16" weight="fill" />
+      <button class="vcp-btn" disabled title="Camera — coming soon">
+        <PhVideoCamera :size="18" weight="fill" />
       </button>
-      <button class="vcp-btn" :class="{ off: voice.localDeafened }" :disabled="!voice.connected" @click="toggleDeafen" :title="voice.localDeafened ? 'Undeafen' : 'Deafen'">
-        <PhHeadphones :size="16" weight="fill" />
+      <button class="vcp-btn" disabled title="Screen share — coming soon">
+        <PhScreencast :size="18" weight="fill" />
       </button>
     </div>
   </div>
@@ -91,15 +93,17 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
 }
 .vcp-leave:hover { background: #f23f43; color: #fff; transform: translateY(-1px); }
 
-.vcp-controls { display: flex; gap: 6px; }
+.vcp-controls { display: flex; gap: 8px; }
 .vcp-btn {
-  flex: 1; height: 30px; border-radius: 8px; background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
-  display: flex; align-items: center; justify-content: center; transition: background .12s, transform .1s;
+  flex: 1; height: 32px; border-radius: 8px;
+  background: rgba(255,255,255,.06); color: var(--text-2);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
 }
-.vcp-btn:hover { background: var(--hover-strong, rgba(255,255,255,.12)); transform: translateY(-1px); }
-.vcp-btn:active { transform: scale(.94); }
-.vcp-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
-.vcp-btn.off { background: #f23f43; color: #fff; }
+.vcp-btn:hover:not(:disabled) { background: rgba(255,255,255,.11); color: var(--text-1); }
+.vcp-btn:active:not(:disabled) { transform: scale(.96); }
+.vcp-btn.on { background: #248046; color: #fff; }
+.vcp-btn:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Hover popup — appears above the strip */
 .vcp-pop {
