@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCameraSlash, PhScreencast, PhSquaresFour, PhSparkle, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
+import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCameraSlash, PhScreencast, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
 import { useVoice } from '@/composables/useVoice'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
@@ -80,18 +80,16 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
       <!-- Discord-style grouped pill controls -->
       <div class="cb-bar">
         <div class="cb-group">
-          <button class="cb-b" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
+          <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
             <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
           </button>
           <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
-          <button class="cb-b" title="Camera — coming soon"><PhVideoCameraSlash :size="20" weight="fill" /></button>
+          <button class="cb-b cb-cam" title="Camera — coming soon"><PhVideoCameraSlash :size="20" weight="fill" /></button>
           <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
         </div>
         <div class="cb-group">
-          <button class="cb-b" title="Screen share — coming soon"><PhScreencast :size="20" weight="fill" /></button>
-          <button class="cb-b" title="Activities — coming soon"><PhSquaresFour :size="20" weight="fill" /></button>
-          <button class="cb-b" title="Soundboard — coming soon"><PhSparkle :size="20" weight="fill" /></button>
-          <button class="cb-b" title="More"><PhDotsThree :size="20" weight="bold" /></button>
+          <button class="cb-b cb-share" title="Screen share — coming soon"><PhScreencast :size="20" weight="fill" /></button>
+          <button class="cb-b cb-more" title="More"><PhDotsThree :size="20" weight="bold" /></button>
         </div>
         <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhPhoneX :size="20" weight="fill" /></button>
       </div>
@@ -141,40 +139,47 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 }
 .cb-name { font-size: 13px; color: var(--text-1); font-weight: 600; }
 
-/* Discord-style grouped pill control bar */
-.cb-bar { display: flex; align-items: center; gap: 8px; }
-.cb-group {
-  display: flex; align-items: center; gap: 2px;
-  background: var(--bg-panel); border-radius: 16px; padding: 4px;
-}
+/* Discord-style controls — no container shape, buttons float on the call bg */
+.cb-bar { display: flex; align-items: center; gap: 12px; }
+.cb-group { display: flex; align-items: center; gap: 2px; }
 .cb-b {
   width: 40px; height: 40px; border-radius: 8px;
   background: transparent; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s, transform .1s;
+  transition: background .12s, color .12s;
 }
-.cb-b:hover:not(:disabled) { background: rgba(255,255,255,.1); }
-.cb-b:active:not(:disabled) { transform: scale(.92); }
-.cb-b:disabled { opacity: .5; cursor: not-allowed; }
+.cb-b:hover:not(:disabled) { background: rgba(255,255,255,.08); }
+.cb-b:disabled { opacity: .45; cursor: not-allowed; }
 .cb-b.off { background: #f23f43; color: #fff; }
 .cb-b.off:hover:not(:disabled) { background: #d83c3f; }
 /* device-picker chevron — slim split-button next to mic/camera */
 .cb-chev {
-  width: 22px; height: 40px; border-radius: 8px;
+  width: 18px; height: 40px; border-radius: 6px;
   background: transparent; color: #b5bac1;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s, color .12s;
 }
-.cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.1); color: #fff; }
-.cb-chev:disabled { opacity: .5; cursor: not-allowed; }
+.cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.08); color: #fff; }
+.cb-chev:disabled { opacity: .45; cursor: not-allowed; }
 .cb-leave {
-  width: 56px; height: 48px; border-radius: 16px; flex-shrink: 0;
+  width: 56px; height: 44px; border-radius: 12px; flex-shrink: 0;
   background: #f23f43; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, transform .1s;
+  transition: background .12s;
 }
 .cb-leave:hover { background: #d83c3f; }
-.cb-leave:active { transform: scale(.94); }
+
+/* Per-icon hover animations — each control has its own personality */
+@keyframes cb-wiggle { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 45% { transform: rotate(11deg); } 70% { transform: rotate(-6deg); } }
+@keyframes cb-pop    { 0%,100% { transform: scale(1); } 45% { transform: scale(1.3); } }
+@keyframes cb-lift   { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px) scale(1.12); } }
+@keyframes cb-swing  { 0%,100% { transform: rotate(0); } 30% { transform: rotate(20deg); } 65% { transform: rotate(-12deg); } }
+.cb-mic:hover:not(:disabled)   svg { animation: cb-wiggle .5s ease; }
+.cb-cam:hover:not(:disabled)   svg { animation: cb-pop .4s ease; }
+.cb-share:hover:not(:disabled) svg { animation: cb-lift .45s ease; }
+.cb-more:hover:not(:disabled)  svg { animation: cb-pop .4s ease; }
+.cb-chev:hover:not(:disabled)  svg { animation: cb-pop .35s ease; }
+.cb-leave:hover                svg { animation: cb-swing .5s ease; }
 
 /* Ongoing (not joined) */
 .cb-ongoing-label { font-size: 13px; color: var(--text-3); font-weight: 600; }
