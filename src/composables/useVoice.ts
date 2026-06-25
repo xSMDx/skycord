@@ -26,12 +26,15 @@ export interface VoiceParticipant {
 }
 
 export type VoiceQuality = 'excellent' | 'good' | 'poor' | 'lost' | 'unknown'
+// Granular join progress, surfaced to the UI while connecting.
+export type ConnectStage = 'finding-server' | 'connecting' | 'authenticating' | 'rtc-connecting' | 'connected' | null
 
 interface VoiceState {
   activeConvId: string | null
   activeKind:   'dm' | 'group' | null
   activeName:   string
   connecting:   boolean
+  connectStage: ConnectStage       // which step of the join we're on
   connectingConvId: string | null  // which conv is mid-join (activeConvId isn't set until connected)
   connected:    boolean
   localMuted:   boolean
@@ -44,7 +47,7 @@ interface VoiceState {
 
 export const voice = reactive<VoiceState>({
   activeConvId: null, activeKind: null, activeName: '',
-  connecting: false, connectingConvId: null, connected: false,
+  connecting: false, connectStage: null, connectingConvId: null, connected: false,
   localMuted: false, localDeafened: false, participants: [],
   ping: null, quality: 'unknown', micBlocked: false,
 })
@@ -150,6 +153,7 @@ const cleanup = () => {
   if (voice.activeConvId && voice.activeKind) emitCallLeave(voice.activeConvId, voice.activeKind)
   voice.connected = false
   voice.connecting = false
+  voice.connectStage = null
   voice.connectingConvId = null
   voice.activeConvId = null
   voice.activeKind = null
@@ -201,13 +205,18 @@ export const useVoice = () => {
 
     const seq = ++connectSeq
     voice.connecting = true
+    voice.connectStage = 'finding-server'
     voice.connectingConvId = convId
     voice.activeName = name   // set now so the "Connecting…" strip can label the call
     try {
       const { token, url } = await getVoiceToken(convId, kind)
       if (seq !== connectSeq) return                                  // superseded while fetching token
+      voice.connectStage = 'connecting'
       const r = new Room({ adaptiveStream: true, dynacast: true })
       wireRoom(r)
+      // Signal channel up (token accepted by the server) → past auth, now negotiating media.
+      r.on(RoomEvent.SignalConnected, () => { if (seq === connectSeq) voice.connectStage = 'rtc-connecting' })
+      voice.connectStage = 'authenticating'
       await r.connect(url, token)
       if (seq !== connectSeq) { r.disconnect().catch(() => {}); return } // superseded mid-connect
       room = r
@@ -224,6 +233,7 @@ export const useVoice = () => {
       }
       voice.connected = true
       voice.connecting = false
+      voice.connectStage = 'connected'
       voice.connectingConvId = null
       voice.activeConvId = convId
       voice.activeKind = kind

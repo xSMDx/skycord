@@ -10,14 +10,28 @@ import { useVoice } from '@/composables/useVoice'
 const { voice, leave } = useVoice()
 
 // Connection quality → colour + human label. Drives the signal bars + popup.
-const QUALITY = {
-  excellent: { color: '#23a55a', label: 'Excellent', bars: 4 },
-  good:      { color: '#23a55a', label: 'Good',      bars: 3 },
-  poor:      { color: '#f0b232', label: 'Poor',      bars: 2 },
-  lost:      { color: '#f23f43', label: 'Lost',      bars: 1 },
-  unknown:   { color: '#80848e', label: 'Connecting…', bars: 1 },
-} as const
-const q = computed(() => QUALITY[voice.quality] ?? QUALITY.unknown)
+// Connecting steps, surfaced from the real join lifecycle (useVoice.connectStage).
+const STAGE_LABEL: Record<string, string> = {
+  'finding-server': 'Finding server…',
+  'connecting':     'Connecting…',
+  'authenticating': 'Authenticating…',
+  'rtc-connecting': 'RTC connecting…',
+  'connected':      'Voice Connected',
+}
+// Signal quality → colour + antenna count:
+//   green  (≤250ms)            → 3 bars
+//   yellow (250–400ms / connecting) → 2 bars
+//   red    (>400ms / lost / no route) → 1 bar
+const GREEN = '#23a55a', YELLOW = '#f0b232', RED = '#f23f43'
+const q = computed(() => {
+  if (voice.connecting) return { color: YELLOW, bars: 2, label: STAGE_LABEL[voice.connectStage ?? 'connecting'] ?? 'Connecting…' }
+  if (voice.quality === 'lost') return { color: RED, bars: 1, label: 'No route' }
+  const p = voice.ping
+  if (p === null) return { color: YELLOW, bars: 2, label: 'Voice Connected' }
+  if (p > 400)    return { color: RED,    bars: 1, label: 'Voice Connected' }
+  if (p > 250)    return { color: YELLOW, bars: 2, label: 'Voice Connected' }
+  return { color: GREEN, bars: 3, label: 'Voice Connected' }
+})
 const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—'))
 </script>
 
@@ -37,10 +51,10 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
     <div class="vcp-top">
       <!-- Animated signal bars, height + colour reflect quality -->
       <div class="vcp-bars" :title="q.label">
-        <i v-for="n in 4" :key="n" :class="{ on: n <= q.bars }" :style="{ background: n <= q.bars ? q.color : undefined, animationDelay: (n * 0.12) + 's' }" />
+        <i v-for="n in 3" :key="n" :class="{ on: n <= q.bars }" :style="{ background: n <= q.bars ? q.color : undefined, animationDelay: (n * 0.12) + 's' }" />
       </div>
       <div class="vcp-meta">
-        <span class="vcp-status" :style="{ color: q.color }">{{ voice.connecting ? 'Connecting…' : 'Voice Connected' }}</span>
+        <span class="vcp-status" :style="{ color: q.color }">{{ q.label }}</span>
         <span v-if="voice.micBlocked && voice.connected" class="vcp-name vcp-warn">Listen-only · mic needs HTTPS</span>
         <span v-else class="vcp-name">{{ voice.connecting ? voice.activeName : `${pingText} · ${voice.activeName}` }}</span>
       </div>
@@ -65,6 +79,8 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
   padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px;
   animation: vcp-in .22s cubic-bezier(.4,0,.2,1);
 }
+/* Kill the default browser button border (the ugly bevel) on every control */
+.vcp button { border: none; cursor: pointer; box-sizing: border-box; }
 @keyframes vcp-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 .vcp-top { display: flex; align-items: center; gap: 8px; }
@@ -73,13 +89,13 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
 .vcp-bars { display: flex; align-items: flex-end; gap: 2px; height: 18px; flex-shrink: 0; }
 .vcp-bars i {
   width: 3px; border-radius: 2px; background: var(--text-faint);
-  height: 40%; transition: background .2s;
+  height: 45%; transition: background .2s;
 }
-.vcp-bars i:nth-child(1) { height: 35%; }
-.vcp-bars i:nth-child(2) { height: 55%; }
-.vcp-bars i:nth-child(3) { height: 78%; }
-.vcp-bars i:nth-child(4) { height: 100%; }
-.vcp-bars i.on { animation: vcp-pulse 1.4s ease-in-out infinite; }
+.vcp-bars i:nth-child(1) { height: 45%; }
+.vcp-bars i:nth-child(2) { height: 72%; }
+.vcp-bars i:nth-child(3) { height: 100%; }
+/* Bars pulse only while hovering the panel — static otherwise */
+.vcp:hover .vcp-bars i.on { animation: vcp-pulse 1.4s ease-in-out infinite; }
 @keyframes vcp-pulse { 0%,100% { transform: scaleY(.78); } 50% { transform: scaleY(1); } }
 
 .vcp-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
