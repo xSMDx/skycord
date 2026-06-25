@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhMicrophone, PhMicrophoneSlash, PhHeadphones, PhPhoneX, PhVideoCamera, PhScreencast, PhPhoneCall, PhX } from '@phosphor-icons/vue'
+import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCameraSlash, PhScreencast, PhSquaresFour, PhSparkle, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
 import { useVoice } from '@/composables/useVoice'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
@@ -21,7 +21,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ dismiss: [] }>()
 
-const { voice, connect, leave, toggleMute, toggleDeafen } = useVoice()
+const { voice, connect, leave, toggleMute } = useVoice()
 
 const joinedHere     = computed(() => voice.connected  && voice.activeConvId     === props.convId)
 const connectingHere = computed(() => voice.connecting && voice.connectingConvId === props.convId)
@@ -83,13 +83,15 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
           <button class="cb-b" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
             <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
           </button>
-          <button class="cb-b" disabled title="Video — coming soon"><PhVideoCamera :size="20" weight="fill" /></button>
+          <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
+          <button class="cb-b" title="Camera — coming soon"><PhVideoCameraSlash :size="20" weight="fill" /></button>
+          <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
         </div>
         <div class="cb-group">
-          <button class="cb-b" disabled title="Screen share — coming soon"><PhScreencast :size="20" weight="fill" /></button>
-          <button class="cb-b" :class="{ off: voice.localDeafened }" :title="voice.localDeafened ? 'Undeafen' : 'Deafen'" @click="toggleDeafen">
-            <PhHeadphones :size="20" weight="fill" />
-          </button>
+          <button class="cb-b" title="Screen share — coming soon"><PhScreencast :size="20" weight="fill" /></button>
+          <button class="cb-b" title="Activities — coming soon"><PhSquaresFour :size="20" weight="fill" /></button>
+          <button class="cb-b" title="Soundboard — coming soon"><PhSparkle :size="20" weight="fill" /></button>
+          <button class="cb-b" title="More"><PhDotsThree :size="20" weight="bold" /></button>
         </div>
         <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhPhoneX :size="20" weight="fill" /></button>
       </div>
@@ -142,22 +144,31 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 /* Discord-style grouped pill control bar */
 .cb-bar { display: flex; align-items: center; gap: 8px; }
 .cb-group {
-  display: flex; align-items: center; gap: 2px;
-  background: rgba(0,0,0,.4); border-radius: 26px; padding: 4px;
+  display: flex; align-items: center; gap: 0;
+  background: var(--bg-panel); border-radius: 24px; padding: 4px;
 }
 .cb-b {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: transparent; color: var(--text-1);
+  width: 40px; height: 40px; border-radius: 50%;
+  background: transparent; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, transform .1s, color .12s;
+  transition: background .12s, color .12s, transform .1s;
 }
-.cb-b:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+.cb-b:hover:not(:disabled) { background: rgba(255,255,255,.12); }
 .cb-b:active:not(:disabled) { transform: scale(.9); }
-.cb-b:disabled { opacity: .4; cursor: not-allowed; }
+.cb-b:disabled { opacity: .5; cursor: not-allowed; }
 .cb-b.off { background: #f23f43; color: #fff; }
 .cb-b.off:hover:not(:disabled) { background: #d83c3f; }
+/* device-picker chevron — slim split-button next to mic/camera */
+.cb-chev {
+  width: 22px; height: 40px; border-radius: 14px;
+  background: transparent; color: #b5bac1;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
+}
+.cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #fff; }
+.cb-chev:disabled { opacity: .5; cursor: not-allowed; }
 .cb-leave {
-  width: 52px; height: 44px; border-radius: 26px; flex-shrink: 0;
+  width: 56px; height: 48px; border-radius: 24px; flex-shrink: 0;
   background: #f23f43; color: #fff;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s, transform .1s;
