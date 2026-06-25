@@ -1491,14 +1491,20 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="up-btns">
-            <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute">
-              <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
-              <PhMicrophone v-else :size="16" weight="light"/>
-            </button>
-            <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen">
-              <PhHeadphones :size="16" weight="light"/>
-            </button>
-            <button class="up-btn btn-settings" @click.stop="showSettings=true">
+            <div class="up-split">
+              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" :title="micOff ? 'Unmute' : 'Mute'">
+                <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
+                <PhMicrophone v-else :size="16" weight="light"/>
+              </button>
+              <button class="up-chev" disabled title="Input device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+            </div>
+            <div class="up-split">
+              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
+                <PhHeadphones :size="16" weight="light"/>
+              </button>
+              <button class="up-chev" disabled title="Output device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+            </div>
+            <button class="up-btn btn-settings" @click.stop="showSettings=true" title="User Settings">
               <PhGear :size="16" weight="light"/>
             </button>
           </div>
@@ -1547,14 +1553,20 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="up-btns">
-            <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute">
-              <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
-              <PhMicrophone v-else :size="16" weight="light"/>
-            </button>
-            <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen">
-              <PhHeadphones :size="16" weight="light"/>
-            </button>
-            <button class="up-btn btn-settings" @click.stop="showSettings=true">
+            <div class="up-split">
+              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" :title="micOff ? 'Unmute' : 'Mute'">
+                <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
+                <PhMicrophone v-else :size="16" weight="light"/>
+              </button>
+              <button class="up-chev" disabled title="Input device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+            </div>
+            <div class="up-split">
+              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
+                <PhHeadphones :size="16" weight="light"/>
+              </button>
+              <button class="up-chev" disabled title="Output device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+            </div>
+            <button class="up-btn btn-settings" @click.stop="showSettings=true" title="User Settings">
               <PhGear :size="16" weight="light"/>
             </button>
           </div>
@@ -2065,6 +2077,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
 .up-btn.danger{color:#ed4245;background:rgba(237,66,69,.12)}
+.up-split{display:flex;align-items:center}
+.up-chev{width:14px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:background .12s,color .12s}
+.up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
+.up-chev:disabled{opacity:.45;cursor:not-allowed}
 @keyframes wiggle-mic{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
 @keyframes bob-phones{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(-3px) scale(1.08)}60%{transform:translateY(1px) scale(.97)}}
 @keyframes spin-gear{to{transform:rotate(180deg)}}
