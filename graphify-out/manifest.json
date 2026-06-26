@@ -1,0 +1,507 @@
+{
+  "package.json": {
+    "mtime": 1782319767.0258627,
+    "ast_hash": "2ad88fe6044ff949d10052643b7bc3cc",
+    "semantic_hash": ""
+  },
+  "server/app.ts": {
+    "mtime": 1782320047.5167341,
+    "ast_hash": "6bd3c259e6991bb67cbb628f607b5934",
+    "semantic_hash": ""
+  },
+  "server/config/database.ts": {
+    "mtime": 1780301032.0,
+    "ast_hash": "7fd7e43a2d72925918e3212b0efc069a",
+    "semantic_hash": ""
+  },
+  "server/config/env.ts": {
+    "mtime": 1782319803.3606355,
+    "ast_hash": "ecb4fde402437a49e956cf93f858a51d",
+    "semantic_hash": ""
+  },
+  "server/controllers/authController.ts": {
+    "mtime": 1780301068.0,
+    "ast_hash": "8db8e6f377695ac5482176bf50b17b5d",
+    "semantic_hash": ""
+  },
+  "server/controllers/conversationsController.ts": {
+    "mtime": 1782248990.1317017,
+    "ast_hash": "8b4a9de620629cd7cbaffd2d81ee5773",
+    "semantic_hash": ""
+  },
+  "server/controllers/messagesController.ts": {
+    "mtime": 1782235242.5458815,
+    "ast_hash": "aa0f067547a8ab34400700175b505972",
+    "semantic_hash": ""
+  },
+  "server/controllers/stickersController.ts": {
+    "mtime": 1781983294.0,
+    "ast_hash": "1bad60df8716193f0bcdcb7dc2bd2ced",
+    "semantic_hash": ""
+  },
+  "server/controllers/themesController.ts": {
+    "mtime": 1782299831.7369146,
+    "ast_hash": "7d5bce3ffa7f1bd8fb1d1737ff4448e1",
+    "semantic_hash": ""
+  },
+  "server/controllers/usersController.ts": {
+    "mtime": 1782066474.0,
+    "ast_hash": "5af18d2289c75c9640ffd6f394a5050f",
+    "semantic_hash": ""
+  },
+  "server/controllers/voiceController.ts": {
+    "mtime": 1782319838.5768194,
+    "ast_hash": "dd748c9259829fa48a0a3d0d40d65679",
+    "semantic_hash": ""
+  },
+  "server/index.ts": {
+    "mtime": 1780990931.0,
+    "ast_hash": "b0976a096e2066c0a0a2beee0dd69db9",
+    "semantic_hash": ""
+  },
+  "server/middleware/auth.ts": {
+    "mtime": 1780301146.0,
+    "ast_hash": "f713f18f3c2a9a4482665e6ceb889b1e",
+    "semantic_hash": ""
+  },
+  "server/middleware/errorHandler.ts": {
+    "mtime": 1780301158.0,
+    "ast_hash": "38524f0d3e5ec55a10f3192d5dbf8ff8",
+    "semantic_hash": ""
+  },
+  "server/models/Conversation.ts": {
+    "mtime": 1782332121.338413,
+    "ast_hash": "8c97a06cec3b68c0bebb2506aff6c101",
+    "semantic_hash": ""
+  },
+  "server/models/Friendship.ts": {
+    "mtime": 1780782495.0,
+    "ast_hash": "782119925535d420068e4cd24d4f54c5",
+    "semantic_hash": ""
+  },
+  "server/models/GroupInvite.ts": {
+    "mtime": 1782158450.0,
+    "ast_hash": "a286a5e3f22397b028b84b5778a10f79",
+    "semantic_hash": ""
+  },
+  "server/models/Message.ts": {
+    "mtime": 1782320062.6972947,
+    "ast_hash": "95752cafb200e0fcbfc009f8d5875185",
+    "semantic_hash": ""
+  },
+  "server/models/Sticker.ts": {
+    "mtime": 1781983260.0,
+    "ast_hash": "466700c709f4cb5dfe46b0818e243ebc",
+    "semantic_hash": ""
+  },
+  "server/models/Theme.ts": {
+    "mtime": 1782299820.3058639,
+    "ast_hash": "6b1b3d3245d77d122d198c7e62a73f7e",
+    "semantic_hash": ""
+  },
+  "server/models/User.ts": {
+    "mtime": 1782086451.0,
+    "ast_hash": "f38de4b748e561396a2132514bfde4f1",
+    "semantic_hash": ""
+  },
+  "server/routes/auth.ts": {
+    "mtime": 1780301111.0,
+    "ast_hash": "b54dd0d484c26d5f52a9f46bd8a809e4",
+    "semantic_hash": ""
+  },
+  "server/routes/conversations.ts": {
+    "mtime": 1782231437.1697137,
+    "ast_hash": "7d7e77a965083cba24575fde5a7e66ad",
+    "semantic_hash": ""
+  },
+  "server/routes/messages.ts": {
+    "mtime": 1780782544.0,
+    "ast_hash": "65702c1496a2dc1450f40e48da2e4592",
+    "semantic_hash": ""
+  },
+  "server/routes/stickers.ts": {
+    "mtime": 1781983324.0,
+    "ast_hash": "0d3e27283aa45da54d30262cae375a58",
+    "semantic_hash": ""
+  },
+  "server/routes/themes.ts": {
+    "mtime": 1782299835.9341395,
+    "ast_hash": "82f77914995d92dde1e0a2524afb205d",
+    "semantic_hash": ""
+  },
+  "server/routes/users.ts": {
+    "mtime": 1782066483.0,
+    "ast_hash": "224e282478859d7657ced664db0ff98a",
+    "semantic_hash": ""
+  },
+  "server/routes/voice.ts": {
+    "mtime": 1782319845.6292908,
+    "ast_hash": "8fb84354816e55683beb743493cd246f",
+    "semantic_hash": ""
+  },
+  "server/sockets/chatSocket.ts": {
+    "mtime": 1782377493.7864356,
+    "ast_hash": "2894d8ebca57715213145b742c787823",
+    "semantic_hash": ""
+  },
+  "server/utils/cookie.ts": {
+    "mtime": 1780782461.0,
+    "ast_hash": "05fe21a2599ecace42e90628d9469ad9",
+    "semantic_hash": ""
+  },
+  "server/utils/jwt.ts": {
+    "mtime": 1780301184.0,
+    "ast_hash": "f933b9f3a3836c33f67a4d914c84a6a0",
+    "semantic_hash": ""
+  },
+  "server/utils/validators.ts": {
+    "mtime": 1780301190.0,
+    "ast_hash": "7fcf5d5d2b33efa14dc537551408132f",
+    "semantic_hash": ""
+  },
+  "src/App.vue": {
+    "mtime": 1782420282.5547705,
+    "ast_hash": "aad3d4a6562875c21f7f6a22ba5e445d",
+    "semantic_hash": ""
+  },
+  "src/assets/lottie/skycord-spin.json": {
+    "mtime": 1781776652.0,
+    "ast_hash": "3e1dffe14daeb8135cda913be906ff0a",
+    "semantic_hash": ""
+  },
+  "src/components/SkycordIcon.vue": {
+    "mtime": 1782316123.4815142,
+    "ast_hash": "0f9fb858ef063be7a6a58131dd21ffb0",
+    "semantic_hash": ""
+  },
+  "src/components/appearance/ThemePreviewBanner.vue": {
+    "mtime": 1782299589.4657388,
+    "ast_hash": "303f70ba3a0cc6c538dd73cf755f27f9",
+    "semantic_hash": ""
+  },
+  "src/components/chat/AutocompletePopup.vue": {
+    "mtime": 1782295017.0849001,
+    "ast_hash": "e845f5178e1fd3e508d5f285c8fd0a9a",
+    "semantic_hash": ""
+  },
+  "src/components/chat/ContextMenu.vue": {
+    "mtime": 1782312506.3381293,
+    "ast_hash": "a3d422b159cac7397d1ac3be3333d841",
+    "semantic_hash": ""
+  },
+  "src/components/chat/GroupInviteCard.vue": {
+    "mtime": 1782295184.3192568,
+    "ast_hash": "2a2c47ced72635c6df19e0d0969e34db",
+    "semantic_hash": ""
+  },
+  "src/components/chat/MessageInput.vue": {
+    "mtime": 1782380704.9522958,
+    "ast_hash": "9b41125fe5b4688b245819701179215d",
+    "semantic_hash": ""
+  },
+  "src/components/chat/MessageItem.vue": {
+    "mtime": 1782420282.555784,
+    "ast_hash": "88c13c6975a7a265645dc803337484a8",
+    "semantic_hash": ""
+  },
+  "src/components/chat/MessageList.vue": {
+    "mtime": 1782380672.4236543,
+    "ast_hash": "ec81c3bc17c1e0ed8db6043853c66ef4",
+    "semantic_hash": ""
+  },
+  "src/components/chat/ThemeCard.vue": {
+    "mtime": 1782299886.9622245,
+    "ast_hash": "8cdd583ebbd4d046b4426a9364a57621",
+    "semantic_hash": ""
+  },
+  "src/components/chat/TimeTokenPicker.vue": {
+    "mtime": 1782295017.0869799,
+    "ast_hash": "a3ddcb7b80aa5e0a1e4cc0810e847901",
+    "semantic_hash": ""
+  },
+  "src/components/chat/TypingIndicator.vue": {
+    "mtime": 1782295017.0875146,
+    "ast_hash": "b309f2fd063ff721a215e38531f3cce8",
+    "semantic_hash": ""
+  },
+  "src/components/modals/AddFriendModal.vue": {
+    "mtime": 1782312506.3401308,
+    "ast_hash": "42b5c8b3d4d1cc5b7f93ece5fa6b6c5b",
+    "semantic_hash": ""
+  },
+  "src/components/modals/ChangeIconModal.vue": {
+    "mtime": 1782312506.3401308,
+    "ast_hash": "7a9d28b3ad1e02615196d1eea38f61d6",
+    "semantic_hash": ""
+  },
+  "src/components/modals/EditFieldModal.vue": {
+    "mtime": 1782312506.3401308,
+    "ast_hash": "e45485af3895d2aa3c50fd9d1efc7fc5",
+    "semantic_hash": ""
+  },
+  "src/components/modals/EditGroupModal.vue": {
+    "mtime": 1782315405.8009608,
+    "ast_hash": "ac5637221f6dc8ba0c150d99efb0db59",
+    "semantic_hash": ""
+  },
+  "src/components/modals/EditImageModal.vue": {
+    "mtime": 1782312506.3412244,
+    "ast_hash": "d7422e8c86a61800b62e11d9835a5a64",
+    "semantic_hash": ""
+  },
+  "src/components/modals/EmojiPickerModal.vue": {
+    "mtime": 1782312506.3422427,
+    "ast_hash": "ef29bae52ab61cda1cabeba3d9c389e0",
+    "semantic_hash": ""
+  },
+  "src/components/modals/GifPickerModal.vue": {
+    "mtime": 1782312506.3422427,
+    "ast_hash": "13c9bb8987620ff137093eb4457fbed1",
+    "semantic_hash": ""
+  },
+  "src/components/modals/InviteGroupModal.vue": {
+    "mtime": 1782312506.3432312,
+    "ast_hash": "820db6d47ec07abe07c657198cbdeb89",
+    "semantic_hash": ""
+  },
+  "src/components/modals/ModalBase.vue": {
+    "mtime": 1782293298.4352214,
+    "ast_hash": "b1a421d3bb21a5316e76ed5ff447f119",
+    "semantic_hash": ""
+  },
+  "src/components/modals/NewDMModal.vue": {
+    "mtime": 1782312506.3432312,
+    "ast_hash": "7160aa9b3b301d4317be7dd431a96255",
+    "semantic_hash": ""
+  },
+  "src/components/modals/PinnedMessagesModal.vue": {
+    "mtime": 1782312506.343738,
+    "ast_hash": "92f3eea06c1263364bdae7d1568a0705",
+    "semantic_hash": ""
+  },
+  "src/components/modals/QuickSwitcherModal.vue": {
+    "mtime": 1782312506.343738,
+    "ast_hash": "1bc37a459b1bdd788f04c0f7f5ed50cf",
+    "semantic_hash": ""
+  },
+  "src/components/modals/ReactionPickerModal.vue": {
+    "mtime": 1782312506.3452456,
+    "ast_hash": "1becdde00c817cc9c92b696307490dd3",
+    "semantic_hash": ""
+  },
+  "src/components/modals/ReplyTreeModal.vue": {
+    "mtime": 1782312506.3452456,
+    "ast_hash": "26a894a56fa3d43c9447b9eaa48af5c2",
+    "semantic_hash": ""
+  },
+  "src/components/modals/SettingsModal.vue": {
+    "mtime": 1782321824.585605,
+    "ast_hash": "445aebf304605b60e5148e83936bfd9e",
+    "semantic_hash": ""
+  },
+  "src/components/modals/UserProfileModal.vue": {
+    "mtime": 1782312506.3472514,
+    "ast_hash": "bd4214b56c75d28fe98bf792ebd034e1",
+    "semantic_hash": ""
+  },
+  "src/components/voice/CallBar.vue": {
+    "mtime": 1782423762.9659572,
+    "ast_hash": "65b1bb4528ec24bec5621f5bc1082272",
+    "semantic_hash": ""
+  },
+  "src/components/voice/IncomingCallModal.vue": {
+    "mtime": 1782424605.5153391,
+    "ast_hash": "566a76de6cfb1201f0cc3062f774c9bf",
+    "semantic_hash": ""
+  },
+  "src/components/voice/VoiceConnectedPanel.vue": {
+    "mtime": 1782424373.7174945,
+    "ast_hash": "a59225b0defe06fe903f322dac4957da",
+    "semantic_hash": ""
+  },
+  "src/components/voice/VoiceVideoSettings.vue": {
+    "mtime": 1782323180.03096,
+    "ast_hash": "e086ff99ff4c74255bf3bbfaebb94cd9",
+    "semantic_hash": ""
+  },
+  "src/composables/materialScheme.ts": {
+    "mtime": 1782313946.8359725,
+    "ast_hash": "92bff8b9eb8dd34ba1a656c55ebabe27",
+    "semantic_hash": ""
+  },
+  "src/composables/useApi.ts": {
+    "mtime": 1782321581.1722903,
+    "ast_hash": "0ba97c7194657f12974d6232e97a4720",
+    "semantic_hash": ""
+  },
+  "src/composables/useAppearance.ts": {
+    "mtime": 1782316874.722938,
+    "ast_hash": "f7f42822cfb62ce5c6ca1e3492d55d60",
+    "semantic_hash": ""
+  },
+  "src/composables/useAuth.ts": {
+    "mtime": 1782314260.7302015,
+    "ast_hash": "052f200ae3492081df5c4361651bb8e3",
+    "semantic_hash": ""
+  },
+  "src/composables/useAvatar.ts": {
+    "mtime": 1782064901.0,
+    "ast_hash": "c7dffe768c17dadce292982f0cbc0bd8",
+    "semantic_hash": ""
+  },
+  "src/composables/useChatCommands.ts": {
+    "mtime": 1782248615.945819,
+    "ast_hash": "e3a94a751806aa24616cee23b1304c34",
+    "semantic_hash": ""
+  },
+  "src/composables/useGiphy.ts": {
+    "mtime": 1782228938.9326558,
+    "ast_hash": "2fdcdf8dd5143fe85d1c576968aaa983",
+    "semantic_hash": ""
+  },
+  "src/composables/useMessages.ts": {
+    "mtime": 1782235501.6988397,
+    "ast_hash": "04a58062b2406e1c6f75e2991284f09a",
+    "semantic_hash": ""
+  },
+  "src/composables/useModal.ts": {
+    "mtime": 1780531971.0,
+    "ast_hash": "7b07ce809f05c5e73c63f617a5927e52",
+    "semantic_hash": ""
+  },
+  "src/composables/useSocket.ts": {
+    "mtime": 1782380480.2043004,
+    "ast_hash": "a79b39cc27f802b1e4af6fe02aea6ef9",
+    "semantic_hash": ""
+  },
+  "src/composables/useVoice.ts": {
+    "mtime": 1782424295.3194761,
+    "ast_hash": "ca78c0575b249df3c969e27ceb0ff1c0",
+    "semantic_hash": ""
+  },
+  "src/composables/useVoiceSettings.ts": {
+    "mtime": 1782320239.4585233,
+    "ast_hash": "4fa74e17f7b5d63d9e9583c04d1c221b",
+    "semantic_hash": ""
+  },
+  "src/main.ts": {
+    "mtime": 1782293326.2999196,
+    "ast_hash": "01b3942dfa8a1ec8a66403adacb56b40",
+    "semantic_hash": ""
+  },
+  "src/types/index.ts": {
+    "mtime": 1782321568.3413029,
+    "ast_hash": "d9fe5f49fed53f2cc9f4e048c964ea0f",
+    "semantic_hash": ""
+  },
+  "src/utils/richText.ts": {
+    "mtime": 1782297774.785828,
+    "ast_hash": "c96f75989d2ef7b6a04813bf98e0cbc9",
+    "semantic_hash": ""
+  },
+  "src/views/AuthPage.vue": {
+    "mtime": 1782295017.0960011,
+    "ast_hash": "128cc3026a58b6a4414e4acfdb9e072c",
+    "semantic_hash": ""
+  },
+  "src/views/ChatApp.vue": {
+    "mtime": 1782422658.8042953,
+    "ast_hash": "4c5ff839654eed85e126bd838fc7cfaa",
+    "semantic_hash": ""
+  },
+  "tsconfig.json": {
+    "mtime": 1780300967.0,
+    "ast_hash": "50d342a337fe4f575a592e40621053ca",
+    "semantic_hash": ""
+  },
+  "tsconfig.server.json": {
+    "mtime": 1780301597.0,
+    "ast_hash": "70ecbeccf772c083c8eb200fdf93e81c",
+    "semantic_hash": ""
+  },
+  "vite.config.ts": {
+    "mtime": 1782338797.8270614,
+    "ast_hash": "aa0df3ab8205a6e73a655567624b8fd0",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/progress.md": {
+    "mtime": 1782419160.522303,
+    "ast_hash": "9b92e7e87a086b07fe49b46ffecab2ee",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-1-brief.md": {
+    "mtime": 1782406083.0945487,
+    "ast_hash": "6c1d60b331b7f91c6e56d182535c46f4",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-1-report.md": {
+    "mtime": 1782401967.1358368,
+    "ast_hash": "32e70c27e9fe70ba06ef9fee050d0202",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-2-brief.md": {
+    "mtime": 1782402089.073105,
+    "ast_hash": "9cc265eda10dcf7594bbedc320e5e3b2",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-2-report.md": {
+    "mtime": 1782402363.4428067,
+    "ast_hash": "e09b0752ecc1c414cf931fbeef838f2d",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-3-brief.md": {
+    "mtime": 1782402545.1139317,
+    "ast_hash": "26ffc004f90f86071225777473135d88",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-3-report.md": {
+    "mtime": 1782402635.1122434,
+    "ast_hash": "5fa133a8c123284d86274ed4b8279924",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-4-brief.md": {
+    "mtime": 1782402746.9067445,
+    "ast_hash": "edcc04f3cf8e6372eeeee1878fe4dc89",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-4-report.md": {
+    "mtime": 1782402817.636626,
+    "ast_hash": "b7f7979d3677655a03edf5a220adbda9",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-5-brief.md": {
+    "mtime": 1782402940.0969472,
+    "ast_hash": "0b170d961980562fe895cae35184451c",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/task-5-report.md": {
+    "mtime": 1782404955.492427,
+    "ast_hash": "ba42c53b29d6ae69cbe083850cc53ea7",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-06-23-group-dm-rework-design.md": {
+    "mtime": 1782221477.4176357,
+    "ast_hash": "c5fdd3b55abdee6bea5f93270350fa87",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-06-24-settings-density-theme-sharing-design.md": {
+    "mtime": 1782299077.21347,
+    "ast_hash": "74e3aaf4cc6c480ab04fab0c27a3ab13",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-06-24-voice-calls-livekit-design.md": {
+    "mtime": 1782319666.6416633,
+    "ast_hash": "936cd04e0a2b26ec6c51a2b12af8cc5f",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1782295556.939362,
+    "ast_hash": "189711f0782c9eae4299cf2c200dd372",
+    "semantic_hash": ""
+  },
+  "public/skycord-icon.svg": {
+    "mtime": 1781851690.0,
+    "ast_hash": "c2aac0f34d4038b9f79810b908134da7",
+    "semantic_hash": ""
+  }
+}
