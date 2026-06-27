@@ -16,7 +16,13 @@ import { errorHandler, notFound } from './middleware/errorHandler'
 export const createApp = () => {
   const app = express()
 
-  if (config.isProd) app.set('trust proxy', 1)
+  // Behind nginx/Cloudflare the real client IP arrives via X-Forwarded-For.
+  // Trust the first proxy hop in EVERY environment (not just isProd) — the VPS
+  // runs the dev server behind nginx, so gating this on isProd left trust proxy
+  // off there and express-rate-limit threw ERR_ERL_UNEXPECTED_X_FORWARDED_FOR,
+  // 500-ing rate-limited routes like /voice/token. Harmless in local dev (no
+  // proxy → no XFF header → no effect).
+  app.set('trust proxy', 1)
 
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
