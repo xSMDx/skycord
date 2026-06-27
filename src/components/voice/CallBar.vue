@@ -129,10 +129,12 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
   width: 72px; height: 72px; border-radius: 50%; position: relative;
   background: var(--accent); color: var(--text-on-accent);
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 700; overflow: hidden;
+  font-size: 26px; font-weight: 700;
   box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow .15s;
 }
-.cb-av img { width: 100%; height: 100%; object-fit: cover; }
+/* Clip the image to the circle on the IMAGE itself, NOT the container — the
+   container must stay un-clipped so the .cb-mute badge can overhang the corner. */
+.cb-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .cb-av.speaking { box-shadow: 0 0 0 3px #23a55a; }
 .cb-mute {
   position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px;

@@ -24,6 +24,7 @@ const STAGE_LABEL: Record<string, string> = {
 //   red    (>400ms / lost / no route) → 1 bar
 const GREEN = '#23a55a', YELLOW = '#f0b232', RED = '#f23f43', BLUE = 'var(--accent)'
 const q = computed(() => {
+  if (voice.connectStage === 'failed') return { color: RED, bars: 1, label: 'Couldn’t connect' }
   if (voice.connecting) {
     // Auto-retry cycle: red "No route" flash, then blue "Trying again…", repeat.
     if (voice.connectStage === 'no-route') return { color: RED, bars: 1, label: 'No route' }
@@ -41,7 +42,7 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
 </script>
 
 <template>
-  <div v-if="voice.connected || voice.connecting" class="vcp">
+  <div v-if="voice.connected || voice.connecting || voice.connectStage === 'failed'" class="vcp">
     <!-- Hover popup (Discord-style connection readout) -->
     <div class="vcp-pop">
       <div class="vcp-pop-head">
