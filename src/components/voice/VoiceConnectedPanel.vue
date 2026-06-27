@@ -22,9 +22,14 @@ const STAGE_LABEL: Record<string, string> = {
 //   green  (≤250ms)            → 3 bars
 //   yellow (250–400ms / connecting) → 2 bars
 //   red    (>400ms / lost / no route) → 1 bar
-const GREEN = '#23a55a', YELLOW = '#f0b232', RED = '#f23f43'
+const GREEN = '#23a55a', YELLOW = '#f0b232', RED = '#f23f43', BLUE = 'var(--accent)'
 const q = computed(() => {
-  if (voice.connecting) return { color: YELLOW, bars: 2, label: STAGE_LABEL[voice.connectStage ?? 'connecting'] ?? 'Connecting…' }
+  if (voice.connecting) {
+    // Auto-retry cycle: red "No route" flash, then blue "Trying again…", repeat.
+    if (voice.connectStage === 'no-route') return { color: RED, bars: 1, label: 'No route' }
+    if (voice.connectAttempt > 1)          return { color: BLUE, bars: 2, label: 'Trying again…' }
+    return { color: YELLOW, bars: 2, label: STAGE_LABEL[voice.connectStage ?? 'connecting'] ?? 'Connecting…' }
+  }
   if (voice.quality === 'lost') return { color: RED, bars: 1, label: 'No route' }
   const p = voice.ping
   if (p === null) return { color: YELLOW, bars: 2, label: 'Voice Connected' }

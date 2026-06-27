@@ -26,8 +26,9 @@ export interface VoiceParticipant {
 }
 
 export type VoiceQuality = 'excellent' | 'good' | 'poor' | 'lost' | 'unknown'
-// Granular join progress, surfaced to the UI while connecting.
-export type ConnectStage = 'finding-server' | 'connecting' | 'authenticating' | 'rtc-connecting' | 'connected' | null
+// Granular join progress, surfaced to the UI while connecting. 'no-route' is the
+// red "couldn't reach the server" flash shown between auto-retry attempts.
+export type ConnectStage = 'finding-server' | 'connecting' | 'authenticating' | 'rtc-connecting' | 'no-route' | 'connected' | null
 
 interface VoiceState {
   activeConvId: string | null
@@ -35,6 +36,7 @@ interface VoiceState {
   activeName:   string
   connecting:   boolean
   connectStage: ConnectStage       // which step of the join we're on
+  connectAttempt: number           // 1 = first try, >1 = auto-retrying ("Trying again…")
   connectingConvId: string | null  // which conv is mid-join (activeConvId isn't set until connected)
   connected:    boolean
   localMuted:   boolean
@@ -47,7 +49,7 @@ interface VoiceState {
 
 export const voice = reactive<VoiceState>({
   activeConvId: null, activeKind: null, activeName: '',
-  connecting: false, connectStage: null, connectingConvId: null, connected: false,
+  connecting: false, connectStage: null, connectAttempt: 0, connectingConvId: null, connected: false,
   localMuted: false, localDeafened: false, participants: [],
   ping: null, quality: 'unknown', micBlocked: false,
 })
@@ -58,6 +60,9 @@ let muteBeforeDeafen = false
 let pttBound = false
 let statsTimer: ReturnType<typeof setInterval> | null = null
 let connectSeq = 0   // bumped per connect() attempt; lets a superseded join bail out
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+const RETRY_DELAY_MS = 1600   // pause on the red "No route" flash before retrying
+const MAX_ATTEMPTS   = 8      // auto-retry this many times before giving up
 
 // Best-effort round-trip time from the underlying WebRTC peer connection. The
 // engine internals are private + version-specific, so this is all guarded and
@@ -146,6 +151,7 @@ const cleanup = () => {
   audioEls.clear()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
   // Clear server-side call presence even when LiveKit dropped on its own
   // (RoomEvent.Disconnected → cleanup, NOT via leave()). Without this, an
   // unexpected media drop leaves you a ghost participant in everyone else's
@@ -154,6 +160,7 @@ const cleanup = () => {
   voice.connected = false
   voice.connecting = false
   voice.connectStage = null
+  voice.connectAttempt = 0
   voice.connectingConvId = null
   voice.activeConvId = null
   voice.activeKind = null
@@ -202,10 +209,18 @@ export const useVoice = () => {
     // Switching calls (or recovering from a stale attempt): fully tear the old
     // room down before opening a new one, so we never hold two sessions at once.
     if (room || voice.connected || voice.connecting) await leave()
+    void attemptConnect(convId, kind, name, 1)
+  }
 
+  // One join attempt. On failure it flashes "No route" (red) and schedules the
+  // next attempt automatically — so the user never has to spam the call button;
+  // they just watch it retry until it lands (or hit Cancel).
+  const attemptConnect = async (convId: string, kind: 'dm' | 'group', name: string, attempt: number) => {
     const seq = ++connectSeq
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
     voice.connecting = true
-    voice.connectStage = 'finding-server'
+    voice.connectAttempt = attempt
+    voice.connectStage = attempt === 1 ? 'finding-server' : 'connecting'
     voice.connectingConvId = convId
     voice.activeName = name   // set now so the "Connecting…" strip can label the call
     try {
@@ -234,6 +249,7 @@ export const useVoice = () => {
       voice.connected = true
       voice.connecting = false
       voice.connectStage = 'connected'
+      voice.connectAttempt = 0
       voice.connectingConvId = null
       voice.activeConvId = convId
       voice.activeKind = kind
@@ -246,14 +262,27 @@ export const useVoice = () => {
       readRtt()
       statsTimer = setInterval(readRtt, 3000)
     } catch (err) {
-      console.error('[voice] connect failed', err)
-      if (seq === connectSeq) cleanup()
-      throw err
+      if (seq !== connectSeq) return            // superseded by a newer attempt / cancel
+      console.warn(`[voice] attempt ${attempt} failed`, err)
+      // Tear down the half-open room but KEEP the connecting target so the retry
+      // can reuse it (don't run full cleanup — that resets the call + emits leave).
+      const r = room; room = null
+      if (r) r.disconnect().catch(() => {})
+      if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
+      if (attempt < MAX_ATTEMPTS) {
+        voice.connectStage = 'no-route'         // red flash; voice.connecting stays true so the strip persists
+        retryTimer = setTimeout(() => { void attemptConnect(convId, kind, name, attempt + 1) }, RETRY_DELAY_MS)
+      } else {
+        cleanup()                                // gave it a fair shot — stop
+      }
     }
   }
 
   const leave = async () => {
-    soundCallLeave()
+    // Cancel any pending retry + invalidate in-flight attempts before tearing down.
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
+    connectSeq++
+    if (voice.connected) soundCallLeave()   // only the leave chime if we were actually in
     // call:leave is emitted by cleanup() (covers both this path and unexpected
     // LiveKit drops), so we don't emit it here too.
     try { await room?.disconnect() } catch { /* ignore */ }
