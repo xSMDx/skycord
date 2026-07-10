@@ -60,8 +60,19 @@ const unregisterLocalVideo = (source: 'camera' | 'screen') => {
   media.videoTracks.delete(keyFor(room.localParticipant.identity, source))
 }
 
-export const toggleCamera = async () => {
-  const room = getRoom(); if (!room) return
+// Friendly message for a failed camera start (returned to the UI for a toast).
+const cameraErrorMessage = (e: unknown): string => {
+  const name = (e as DOMException)?.name
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Camera permission denied'
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No camera found'
+  if (name === 'NotReadableError' || name === 'AbortError') return 'Camera is in use by another app'
+  return "Couldn't start the camera"
+}
+
+// Both toggles resolve to null on success, or a user-facing error message the
+// caller should surface (toast) — a silent no-op button reads as "broken".
+export const toggleCamera = async (): Promise<string | null> => {
+  const room = getRoom(); if (!room) return null
   const next = !room.localParticipant.isCameraEnabled
   try {
     await room.localParticipant.setCameraEnabled(next, {
@@ -70,14 +81,17 @@ export const toggleCamera = async () => {
     })
     media.localCamOn = next
     next ? registerLocalVideo(Track.Source.Camera) : unregisterLocalVideo('camera')
+    return null
   } catch (e) {
     console.warn('[voice-media] camera toggle failed', e)
     media.localCamOn = room.localParticipant.isCameraEnabled
+    // Only the enable direction warrants a toast; a failed disable is invisible.
+    return next ? cameraErrorMessage(e) : null
   }
 }
 
-export const toggleScreenShare = async () => {
-  const room = getRoom(); if (!room) return
+export const toggleScreenShare = async (): Promise<string | null> => {
+  const room = getRoom(); if (!room) return null
   const next = !room.localParticipant.isScreenShareEnabled
   try {
     await room.localParticipant.setScreenShareEnabled(next, {
@@ -92,10 +106,15 @@ export const toggleScreenShare = async () => {
     })
     media.localScreenOn = next
     next ? registerLocalVideo(Track.Source.ScreenShare) : unregisterLocalVideo('screen')
+    return null
   } catch (e) {
-    // Cancelling the OS picker rejects here — treat as a no-op.
     console.warn('[voice-media] screen share toggle cancelled/failed', e)
     media.localScreenOn = room.localParticipant.isScreenShareEnabled
+    // Cancelling the OS picker rejects with NotAllowedError — that's a user
+    // choice, not a failure; stay silent. Anything else deserves a toast.
+    const name = (e as DOMException)?.name
+    if (!next || name === 'NotAllowedError') return null
+    return "Couldn't start screen share"
   }
 }
 

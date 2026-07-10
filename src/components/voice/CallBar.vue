@@ -21,10 +21,16 @@ const props = defineProps<{
   me?: { name: string; avatar: string }
   dismissed?: boolean
 }>()
-const emit = defineEmits<{ dismiss: [] }>()
+const emit = defineEmits<{ dismiss: []; toast: [msg: string] }>()
 
 const { voice, connect, leave, toggleMute } = useVoice()
 const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
+
+// Media toggles return a user-facing error message on failure (e.g. camera
+// held by another app) — bubble it up to ChatApp's toast instead of failing
+// silently.
+const onCamera = async () => { const err = await toggleCamera(); if (err) emit('toast', err) }
+const onShare  = async () => { const err = await toggleScreenShare(); if (err) emit('toast', err) }
 
 const joinedHere     = computed(() => voice.connected  && voice.activeConvId     === props.convId)
 const connectingHere = computed(() => voice.connecting && voice.connectingConvId === props.convId)
@@ -82,13 +88,13 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
             <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
           </button>
           <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
-          <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="toggleCamera">
+          <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera">
             <component :is="media.localCamOn ? PhVideoCamera : PhVideoCameraSlash" :size="20" weight="fill" />
           </button>
           <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
         </div>
         <div class="cb-group">
-          <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" :title="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="toggleScreenShare">
+          <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" :title="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="onShare">
             <PhScreencast :size="20" weight="fill" />
           </button>
           <button class="cb-b cb-more" title="More"><PhDotsThree :size="20" weight="bold" /></button>

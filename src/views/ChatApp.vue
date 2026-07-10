@@ -1802,6 +1802,7 @@ onBeforeUnmount(() => {
             :me="{ name: authUser?.displayName || authUser?.username || 'You', avatar: myAvatar }"
             :dismissed="currentCallDismissed"
             @dismiss="dismissCurrentCall"
+            @toast="showToast"
           />
 
           <!-- Pinned messages panel -->
