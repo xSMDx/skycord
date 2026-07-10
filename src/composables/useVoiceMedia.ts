@@ -4,7 +4,7 @@
  * reactive map of every video publication (local + remote) for the call stage.
  * useVoice stays the audio/connection authority; this file owns video only.
  */
-import { reactive } from 'vue'
+import { reactive, markRaw } from 'vue'
 import {
   Track,
   type RemoteTrack, type LocalVideoTrack,
@@ -52,7 +52,7 @@ const registerLocalVideo = (source: Track.Source) => {
   media.videoTracks.set(keyFor(room.localParticipant.identity, s), {
     participantId: room.localParticipant.identity,
     name: room.localParticipant.name || 'You',
-    source: s, track, local: true,
+    source: s, track: markRaw(track), local: true,
   })
 }
 const unregisterLocalVideo = (source: 'camera' | 'screen') => {
@@ -62,7 +62,7 @@ const unregisterLocalVideo = (source: 'camera' | 'screen') => {
 
 export const toggleCamera = async () => {
   const room = getRoom(); if (!room) return
-  const next = !media.localCamOn
+  const next = !room.localParticipant.isCameraEnabled
   try {
     await room.localParticipant.setCameraEnabled(next, {
       deviceId: voiceSettings.cameraDeviceId || undefined,
@@ -72,13 +72,13 @@ export const toggleCamera = async () => {
     next ? registerLocalVideo(Track.Source.Camera) : unregisterLocalVideo('camera')
   } catch (e) {
     console.warn('[voice-media] camera toggle failed', e)
-    media.localCamOn = false   // revert; no device / permission denied
+    media.localCamOn = room.localParticipant.isCameraEnabled
   }
 }
 
 export const toggleScreenShare = async () => {
   const room = getRoom(); if (!room) return
-  const next = !media.localScreenOn
+  const next = !room.localParticipant.isScreenShareEnabled
   try {
     await room.localParticipant.setScreenShareEnabled(next, {
       audio: voiceSettings.screenAudio,
@@ -89,7 +89,7 @@ export const toggleScreenShare = async () => {
   } catch (e) {
     // Cancelling the OS picker rejects here — treat as a no-op.
     console.warn('[voice-media] screen share toggle cancelled/failed', e)
-    media.localScreenOn = false
+    media.localScreenOn = room.localParticipant.isScreenShareEnabled
   }
 }
 
@@ -99,7 +99,7 @@ export const addRemoteVideo = (track: RemoteTrack, participant: RemoteParticipan
   media.videoTracks.set(keyFor(participant.identity, s), {
     participantId: participant.identity,
     name: participant.name || participant.identity,
-    source: s, track, local: false,
+    source: s, track: markRaw(track), local: false,
   })
 }
 
