@@ -12,10 +12,10 @@ const el = ref<HTMLVideoElement | null>(null)
 const attach = () => { if (el.value) props.track.attach(el.value) }
 
 onMounted(attach)
-onBeforeUnmount(() => { try { props.track.detach() } catch { /* ignore */ } })
+onBeforeUnmount(() => { try { if (el.value) props.track.detach(el.value) } catch { /* ignore */ } })
 // If the track object itself is swapped (e.g. camera restart), rebind.
-watch(() => props.track, (next, prev) => {
-  try { prev?.detach() } catch { /* ignore */ }
+watch(() => props.track, (_next, prev) => {
+  try { if (el.value) prev?.detach(el.value) } catch { /* ignore */ }
   attach()
 })
 </script>
