@@ -18,6 +18,7 @@ export interface VoiceSettings {
   sensitivity:      number   // 0..100 voice-activity threshold
   noiseSuppression: boolean
   echoCancellation: boolean
+  screenAudio:      boolean   // capture system/tab audio when screen sharing
 }
 
 const KEY = 'sykord_voice'
@@ -26,6 +27,7 @@ const DEFAULTS: VoiceSettings = {
   inputVolume: 100, outputVolume: 100,
   inputMode: 'voice', pttKey: 'Space', sensitivity: 30,
   noiseSuppression: true, echoCancellation: true,
+  screenAudio: true,
 }
 
 const load = (): Partial<VoiceSettings> => {

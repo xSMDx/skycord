@@ -1,0 +1,123 @@
+/**
+ * useVoiceMedia — camera + screen-share for the active voice call. Publishes
+ * local video tracks into the shared LiveKit Room (voiceRoom) and keeps a
+ * reactive map of every video publication (local + remote) for the call stage.
+ * useVoice stays the audio/connection authority; this file owns video only.
+ */
+import { reactive } from 'vue'
+import {
+  Track,
+  type RemoteTrack, type LocalVideoTrack,
+  type Participant, type RemoteParticipant,
+} from 'livekit-client'
+import { getRoom } from './voiceRoom'
+import { voiceSettings } from './useVoiceSettings'
+
+export interface VideoTrackInfo {
+  participantId: string
+  name:          string
+  source:        'camera' | 'screen'
+  track:         RemoteTrack | LocalVideoTrack
+  local:         boolean
+}
+
+interface MediaState {
+  localCamOn:    boolean
+  localScreenOn: boolean
+  videoTracks:   Map<string, VideoTrackInfo>   // key = `${identity}:${source}`
+}
+
+export const media = reactive<MediaState>({
+  localCamOn: false,
+  localScreenOn: false,
+  videoTracks: new Map(),
+})
+
+// Fixed P1 encodings (picker is P2).
+const CAM_RES    = { width: 1280, height: 720 }
+const SCREEN_RES = { width: 1920, height: 1080 }
+
+const keyFor = (identity: string, source: 'camera' | 'screen') => `${identity}:${source}`
+const srcOf  = (s: Track.Source): 'camera' | 'screen' | null =>
+  s === Track.Source.Camera ? 'camera' : s === Track.Source.ScreenShare ? 'screen' : null
+
+// After a local publish resolves, read the freshly-created publication's track
+// and register it so the local user sees their own tile.
+const registerLocalVideo = (source: Track.Source) => {
+  const room = getRoom(); if (!room) return
+  const s = srcOf(source); if (!s) return
+  const pub = room.localParticipant.getTrackPublication(source)
+  const track = pub?.track as LocalVideoTrack | undefined
+  if (!track) return
+  media.videoTracks.set(keyFor(room.localParticipant.identity, s), {
+    participantId: room.localParticipant.identity,
+    name: room.localParticipant.name || 'You',
+    source: s, track, local: true,
+  })
+}
+const unregisterLocalVideo = (source: 'camera' | 'screen') => {
+  const room = getRoom(); if (!room) return
+  media.videoTracks.delete(keyFor(room.localParticipant.identity, source))
+}
+
+export const toggleCamera = async () => {
+  const room = getRoom(); if (!room) return
+  const next = !media.localCamOn
+  try {
+    await room.localParticipant.setCameraEnabled(next, {
+      deviceId: voiceSettings.cameraDeviceId || undefined,
+      resolution: CAM_RES,
+    })
+    media.localCamOn = next
+    next ? registerLocalVideo(Track.Source.Camera) : unregisterLocalVideo('camera')
+  } catch (e) {
+    console.warn('[voice-media] camera toggle failed', e)
+    media.localCamOn = false   // revert; no device / permission denied
+  }
+}
+
+export const toggleScreenShare = async () => {
+  const room = getRoom(); if (!room) return
+  const next = !media.localScreenOn
+  try {
+    await room.localParticipant.setScreenShareEnabled(next, {
+      audio: voiceSettings.screenAudio,
+      resolution: SCREEN_RES,
+    })
+    media.localScreenOn = next
+    next ? registerLocalVideo(Track.Source.ScreenShare) : unregisterLocalVideo('screen')
+  } catch (e) {
+    // Cancelling the OS picker rejects here — treat as a no-op.
+    console.warn('[voice-media] screen share toggle cancelled/failed', e)
+    media.localScreenOn = false
+  }
+}
+
+export const addRemoteVideo = (track: RemoteTrack, participant: RemoteParticipant) => {
+  if (track.kind !== Track.Kind.Video) return
+  const s = srcOf(track.source); if (!s) return
+  media.videoTracks.set(keyFor(participant.identity, s), {
+    participantId: participant.identity,
+    name: participant.name || participant.identity,
+    source: s, track, local: false,
+  })
+}
+
+export const removeRemoteVideo = (track: RemoteTrack, participant?: Participant) => {
+  if (!participant) return
+  const s = srcOf(track.source); if (!s) return
+  media.videoTracks.delete(keyFor(participant.identity, s))
+}
+
+// State-only reset for teardown/cleanup. The Room disconnect (in useVoice)
+// tears down the actual tracks; we just clear flags + the map, and never
+// auto-republish on reconnect.
+export const stopMedia = () => {
+  media.localCamOn = false
+  media.localScreenOn = false
+  media.videoTracks.clear()
+}
+
+export const useVoiceMedia = () => ({
+  media, toggleCamera, toggleScreenShare, addRemoteVideo, removeRemoteVideo, stopMedia,
+})
