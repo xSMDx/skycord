@@ -21,14 +21,23 @@ type Cell =
 
 const cells = computed<Cell[]>(() => {
   const out: Cell[] = []
+  const used = new Set<VideoTrackInfo>()
   for (const t of props.tiles) {
     const mine = props.videos.filter(v => v.participantId === t.id)
     if (mine.length) {
       for (const v of mine) {
+        used.add(v)
         out.push({ kind: 'video', key: `${t.id}:${v.source}`, name: t.name, speaking: t.speaking, source: v.source, video: v })
       }
     } else {
       out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar })
+    }
+  }
+  // Videos whose participant hasn't landed in `tiles` yet (presence lag):
+  // render them anyway rather than dropping them invisibly.
+  for (const v of props.videos) {
+    if (!used.has(v)) {
+      out.push({ kind: 'video', key: `${v.participantId}:${v.source}`, name: v.name, speaking: false, source: v.source, video: v })
     }
   }
   return out

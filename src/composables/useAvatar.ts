@@ -16,7 +16,7 @@ const AVATAR_PALETTE = [
   '#9b59b6', '#1abc9c', '#e67e22', '#3498db', '#e74c3c',
 ]
 
-const colorForUsername = (username: string): string => {
+export const colorForUsername = (username: string): string => {
   let hash = 0
   for (let i = 0; i < username.length; i++) {
     hash = username.charCodeAt(i) + ((hash << 5) - hash)
