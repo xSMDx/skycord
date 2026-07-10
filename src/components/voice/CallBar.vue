@@ -84,14 +84,19 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
       <!-- Discord-style grouped pill controls -->
       <div class="cb-bar">
         <div class="cb-group">
-          <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
-            <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
-          </button>
-          <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
-          <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera">
-            <component :is="media.localCamOn ? PhVideoCamera : PhVideoCameraSlash" :size="20" weight="fill" />
-          </button>
-          <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
+          <!-- mic/camera + their ▾ read as ONE control: hovering either lights the pair -->
+          <div class="cb-split">
+            <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
+              <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
+            </button>
+            <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
+          </div>
+          <div class="cb-split">
+            <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera">
+              <component :is="media.localCamOn ? PhVideoCamera : PhVideoCameraSlash" :size="20" weight="fill" />
+            </button>
+            <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
+          </div>
         </div>
         <div class="cb-group">
           <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" :title="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="onShare">
@@ -176,6 +181,12 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 }
 .cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.08); color: #fff; }
 .cb-chev:disabled { opacity: .45; cursor: not-allowed; }
+/* mic/cam + ▾ pair highlight: the split wrapper takes the hover bg so both
+   halves light together (Discord behavior). Individual bg hovers inside the
+   split go transparent; red .off / green .on states keep their own fills. */
+.cb-split { display: flex; align-items: center; gap: 2px; border-radius: 8px; transition: background .12s; }
+.cb-split:hover:has(.cb-b:not(:disabled)) { background: rgba(255,255,255,.08); }
+.cb-split .cb-b:hover:not(:disabled):not(.on):not(.off) { background: transparent; }
 .cb-leave {
   width: 56px; height: 44px; border-radius: 12px; flex-shrink: 0;
   background: #f23f43; color: #fff;
