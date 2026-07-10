@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCameraSlash, PhScreencast, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
+import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCamera, PhVideoCameraSlash, PhScreencast, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
 import { useVoice } from '@/composables/useVoice'
+import CallStage from './CallStage.vue'
+import { useVoiceMedia } from '@/composables/useVoiceMedia'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
 // in THIS conversation — joined, connecting, or ongoing-not-joined.
@@ -22,6 +24,7 @@ const props = defineProps<{
 const emit = defineEmits<{ dismiss: [] }>()
 
 const { voice, connect, leave, toggleMute } = useVoice()
+const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
 
 const joinedHere     = computed(() => voice.connected  && voice.activeConvId     === props.convId)
 const connectingHere = computed(() => voice.connecting && voice.connectingConvId === props.convId)
@@ -58,24 +61,16 @@ const stageTiles = computed<Tile[]>(() => {
   const meTile: Tile = { id: 'me', name: props.me?.name || 'You', avatar: props.me?.avatar || '', speaking: false, muted: voice.localMuted }
   return [meTile, ...others.value.map(o => ({ id: o.id, name: o.name, avatar: o.avatar, speaking: false, muted: false }))]
 })
+const videoList = computed(() => [...media.videoTracks.values()])
 
 const join = () => { connect(props.convId, props.kind, props.name).catch(() => {}) }
 </script>
 
 <template>
-  <div v-if="visible" class="callbar">
+  <div v-if="visible" class="callbar" :class="{ 'has-video': inCall && videoList.length }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
-      <div class="cb-stage">
-        <div v-for="p in stageTiles" :key="p.id" class="cb-tile">
-          <div class="cb-av" :class="{ speaking: p.speaking }">
-            <img v-if="p.avatar" :src="p.avatar" :alt="p.name" />
-            <template v-else>{{ initial(p.name) }}</template>
-            <span v-if="p.muted" class="cb-mute"><PhMicrophoneSlash :size="13" weight="fill" /></span>
-          </div>
-          <span class="cb-name">{{ p.name }}</span>
-        </div>
-      </div>
+      <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" />
 
       <!-- Discord-style grouped pill controls -->
       <div class="cb-bar">
@@ -84,11 +79,15 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
             <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
           </button>
           <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
-          <button class="cb-b cb-cam" title="Camera — coming soon"><PhVideoCameraSlash :size="20" weight="fill" /></button>
+          <button class="cb-b cb-cam" :class="{ on: media.localCamOn }" :title="media.localCamOn ? 'Turn off camera' : 'Turn on camera'" @click="toggleCamera">
+            <component :is="media.localCamOn ? PhVideoCamera : PhVideoCameraSlash" :size="20" weight="fill" />
+          </button>
           <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
         </div>
         <div class="cb-group">
-          <button class="cb-b cb-share" title="Screen share — coming soon"><PhScreencast :size="20" weight="fill" /></button>
+          <button class="cb-b cb-share" :class="{ on: media.localScreenOn }" :title="media.localScreenOn ? 'Stop sharing' : 'Share your screen'" @click="toggleScreenShare">
+            <PhScreencast :size="20" weight="fill" />
+          </button>
           <button class="cb-b cb-more" title="More"><PhDotsThree :size="20" weight="bold" /></button>
         </div>
         <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhPhoneX :size="20" weight="fill" /></button>
@@ -205,4 +204,13 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
   display: flex; align-items: center; justify-content: center; transition: background .12s;
 }
 .cb-dismiss:hover { background: var(--hover-strong, rgba(255,255,255,.12)); }
+
+/* Active camera / screen share — green like Discord */
+.cb-b.on { background: #248046; color: #fff; }
+.cb-b.on:hover:not(:disabled) { background: #1a6334; }
+
+/* When video is on the stage, let the call bar grow to fill the chat column */
+.callbar.has-video { flex: 1 1 auto; min-height: 0; }
+.cb-callstage { width: 100%; }
+.callbar.has-video .cb-callstage { flex: 1 1 auto; min-height: 0; }
 </style>
