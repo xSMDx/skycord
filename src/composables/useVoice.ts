@@ -17,6 +17,7 @@ import {
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
 import { voiceSettings, micCaptureOptions } from './useVoiceSettings'
+import { addRemoteVideo, removeRemoteVideo, stopMedia } from './useVoiceMedia'
 
 export interface VoiceParticipant {
   id:       string   // userId (LiveKit identity)
@@ -76,6 +77,7 @@ const teardownRoom = () => {
   audioEls.forEach(el => el.remove()); audioEls.clear()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
+  stopMedia()
 }
 
 // Best-effort round-trip time from the underlying WebRTC peer connection. The
@@ -138,8 +140,16 @@ const syncParticipants = () => {
 }
 
 const wireRoom = (r: Room) => {
-  r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => { attachTrack(track); syncParticipants() })
-  r.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => { detachTrack(track); syncParticipants() })
+  r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
+    if (track.kind === Track.Kind.Video) addRemoteVideo(track, participant)
+    else attachTrack(track)
+    syncParticipants()
+  })
+  r.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant) => {
+    if (track.kind === Track.Kind.Video) removeRemoteVideo(track, participant)
+    else detachTrack(track)
+    syncParticipants()
+  })
   r.on(RoomEvent.ParticipantConnected, () => { soundUserJoin(); syncParticipants() })
   r.on(RoomEvent.ParticipantDisconnected, () => { soundUserLeave(); syncParticipants() })
   r.on(RoomEvent.TrackMuted, syncParticipants)
@@ -180,6 +190,7 @@ const cleanup = () => {
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
   if (failTimer)  { clearTimeout(failTimer);  failTimer = null }
   intentionalLeave = false
+  stopMedia()
   // Clear server-side call presence even when LiveKit dropped on its own
   // (RoomEvent.Disconnected → cleanup, NOT via leave()). Without this, an
   // unexpected media drop leaves you a ghost participant in everyone else's
