@@ -10,6 +10,7 @@ import {
   type RemoteTrack, type RemoteParticipant, type Participant,
 } from 'livekit-client'
 import { useApi } from './useApi'
+import { getRoom, setRoom } from './voiceRoom'
 import {
   emitCallJoin, emitCallLeave,
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
@@ -54,7 +55,6 @@ export const voice = reactive<VoiceState>({
   ping: null, quality: 'unknown', micBlocked: false,
 })
 
-let room: Room | null = null
 const audioEls = new Map<string, HTMLAudioElement>()   // trackSid -> <audio>
 let muteBeforeDeafen = false
 let pttBound = false
@@ -71,7 +71,7 @@ const FAIL_HOLD_MS   = 10000  // show "Couldn't connect" this long, then auto-le
 // Disconnect + drop audio/stats WITHOUT clearing the call identity, so a retry or
 // auto-reconnect can reuse activeConvId/activeName. (cleanup() does the full reset.)
 const teardownRoom = () => {
-  const r = room; room = null
+  const r = getRoom(); setRoom(null)
   if (r) r.disconnect().catch(() => {})
   audioEls.forEach(el => el.remove()); audioEls.clear()
   unbindPtt()
@@ -83,7 +83,7 @@ const teardownRoom = () => {
 // simply leaves ping null if the path isn't there.
 const readRtt = async () => {
   try {
-    const eng: any = (room as any)?.engine
+    const eng: any = (getRoom() as any)?.engine
     const pc: RTCPeerConnection | undefined =
       eng?.pcManager?.publisher?.pc ?? eng?.pcManager?.subscriber?.pc ??
       eng?.publisher?.pc ?? eng?.subscriber?.pc
@@ -126,6 +126,7 @@ const detachTrack = (track: RemoteTrack) => {
 }
 
 const syncParticipants = () => {
+  const room = getRoom()
   if (!room) { voice.participants = []; return }
   const list: VoiceParticipant[] = []
   const lp = room.localParticipant
@@ -169,8 +170,8 @@ const cleanup = () => {
   // disconnecting leaves an orphaned session that auto-reconnects forever
   // (the "data channel closed → connecting → repeat" loop) and keeps the
   // half-joined user visible to everyone else.
-  const r = room
-  room = null
+  const r = getRoom()
+  setRoom(null)
   if (r) r.disconnect().catch(() => {})
   audioEls.forEach(el => el.remove())
   audioEls.clear()
@@ -203,10 +204,12 @@ const cleanup = () => {
 // ── Push-to-talk ────────────────────────────────────────────────────────────
 const onPttDown = (e: KeyboardEvent) => {
   if (e.code !== voiceSettings.pttKey || e.repeat) return
+  const room = getRoom()
   if (room && !voice.localDeafened) room.localParticipant.setMicrophoneEnabled(true).catch(() => {})
 }
 const onPttUp = (e: KeyboardEvent) => {
   if (e.code !== voiceSettings.pttKey) return
+  const room = getRoom()
   if (room) room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
 }
 const bindPtt = () => {
@@ -237,7 +240,7 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
     if (voice.connected  && voice.activeConvId     === convId && voice.activeKind === kind) return
     // Switching calls (or recovering from a stale attempt): fully tear the old
     // room down before opening a new one, so we never hold two sessions at once.
-    if (room || voice.connected || voice.connecting) await leave()
+    if (getRoom() || voice.connected || voice.connecting) await leave()
     void attemptConnect(convId, kind, name, 1)
   }
 
@@ -265,7 +268,7 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
       voice.connectStage = 'authenticating'
       await r.connect(url, token)
       if (seq !== connectSeq) { r.disconnect().catch(() => {}); return } // superseded mid-connect
-      room = r
+      setRoom(r)
       // Mic capture needs a secure context (HTTPS or localhost); over plain
       // http on an IP, navigator.mediaDevices is undefined. Rather than throw
       // (which orphaned the room → reconnect loop), join LISTEN-ONLY so the user
@@ -327,11 +330,12 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
     if (voice.connected) soundCallLeave()   // only the leave chime if we were actually in
     // call:leave is emitted by cleanup() (covers both this path and unexpected
     // LiveKit drops), so we don't emit it here too.
-    try { await room?.disconnect() } catch { /* ignore */ }
+    try { await getRoom()?.disconnect() } catch { /* ignore */ }
     cleanup()
   }
 
   const toggleMute = () => {
+    const room = getRoom()
     if (!room) return
     voice.localMuted = !voice.localMuted
     voice.localMuted ? soundMute() : soundUnmute()
@@ -341,6 +345,7 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
   }
 
   const toggleDeafen = () => {
+    const room = getRoom()
     if (!room) return
     voice.localDeafened = !voice.localDeafened
     voice.localDeafened ? soundDeafen() : soundUndeafen()
