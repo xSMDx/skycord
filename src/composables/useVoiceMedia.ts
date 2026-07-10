@@ -83,6 +83,12 @@ export const toggleScreenShare = async () => {
     await room.localParticipant.setScreenShareEnabled(next, {
       audio: voiceSettings.screenAudio,
       resolution: SCREEN_RES,
+      // Keep the call's own audio out of the capture: hide Skycord's tab from
+      // the share picker, and drop the "share system audio" option on monitor
+      // captures (system audio always contains the call → far side hears
+      // themselves). Tab shares still offer that tab's audio, which is safe.
+      selfBrowserSurface: 'exclude',
+      systemAudio: 'exclude',
     })
     media.localScreenOn = next
     next ? registerLocalVideo(Track.Source.ScreenShare) : unregisterLocalVideo('screen')
