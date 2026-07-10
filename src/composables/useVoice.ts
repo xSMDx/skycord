@@ -17,7 +17,7 @@ import {
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
 import { voiceSettings, micCaptureOptions } from './useVoiceSettings'
-import { addRemoteVideo, removeRemoteVideo, stopMedia } from './useVoiceMedia'
+import { addRemoteVideo, removeRemoteVideo, onLocalTrackUnpublished, stopMedia } from './useVoiceMedia'
 
 export interface VoiceParticipant {
   id:       string   // userId (LiveKit identity)
@@ -150,6 +150,7 @@ const wireRoom = (r: Room) => {
     else detachTrack(track)
     syncParticipants()
   })
+  r.on(RoomEvent.LocalTrackUnpublished, (pub) => { onLocalTrackUnpublished(pub); syncParticipants() })
   r.on(RoomEvent.ParticipantConnected, () => { soundUserJoin(); syncParticipants() })
   r.on(RoomEvent.ParticipantDisconnected, () => { soundUserLeave(); syncParticipants() })
   r.on(RoomEvent.TrackMuted, syncParticipants)

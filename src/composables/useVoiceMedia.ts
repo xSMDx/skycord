@@ -7,7 +7,7 @@
 import { reactive, markRaw } from 'vue'
 import {
   Track,
-  type RemoteTrack, type LocalVideoTrack,
+  type RemoteTrack, type LocalVideoTrack, type LocalTrackPublication,
   type Participant, type RemoteParticipant,
 } from 'livekit-client'
 import { getRoom } from './voiceRoom'
@@ -134,6 +134,18 @@ export const removeRemoteVideo = (track: RemoteTrack, participant?: Participant)
   media.videoTracks.delete(keyFor(participant.identity, s))
 }
 
+// Sync local flags + map when a local track is unpublished OUTSIDE our toggles —
+// e.g. Chrome's native "Stop sharing" bar, or a camera device ending mid-call.
+// Without this the button stays green and a dead tile lingers (frozen LIVE).
+// Idempotent, so it also firing for our own toggle-off path is harmless.
+export const onLocalTrackUnpublished = (pub: LocalTrackPublication) => {
+  const room = getRoom(); if (!room) return
+  const s = srcOf(pub.source); if (!s) return
+  media.videoTracks.delete(keyFor(room.localParticipant.identity, s))
+  media.localCamOn = room.localParticipant.isCameraEnabled
+  media.localScreenOn = room.localParticipant.isScreenShareEnabled
+}
+
 // State-only reset for teardown/cleanup. The Room disconnect (in useVoice)
 // tears down the actual tracks; we just clear flags + the map, and never
 // auto-republish on reconnect.
@@ -144,5 +156,5 @@ export const stopMedia = () => {
 }
 
 export const useVoiceMedia = () => ({
-  media, toggleCamera, toggleScreenShare, addRemoteVideo, removeRemoteVideo, stopMedia,
+  media, toggleCamera, toggleScreenShare, addRemoteVideo, removeRemoteVideo, onLocalTrackUnpublished, stopMedia,
 })
