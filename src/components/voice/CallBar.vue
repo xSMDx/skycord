@@ -61,6 +61,9 @@ const stageTiles = computed<Tile[]>(() => {
   const meTile: Tile = { id: 'me', name: props.me?.name || 'You', avatar: props.me?.avatar || '', speaking: false, muted: voice.localMuted }
   return [meTile, ...others.value.map(o => ({ id: o.id, name: o.name, avatar: o.avatar, speaking: false, muted: false }))]
 })
+// Camera/screen buttons are disabled until joinedHere: publishing during the
+// connecting window would register under the real LiveKit identity while the
+// optimistic stage tile still uses the 'me' placeholder id → duplicate self-cells.
 const videoList = computed(() => [...media.videoTracks.values()])
 
 const join = () => { connect(props.convId, props.kind, props.name).catch(() => {}) }
@@ -79,13 +82,13 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
             <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
           </button>
           <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
-          <button class="cb-b cb-cam" :class="{ on: media.localCamOn }" :title="media.localCamOn ? 'Turn off camera' : 'Turn on camera'" @click="toggleCamera">
+          <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="toggleCamera">
             <component :is="media.localCamOn ? PhVideoCamera : PhVideoCameraSlash" :size="20" weight="fill" />
           </button>
           <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
         </div>
         <div class="cb-group">
-          <button class="cb-b cb-share" :class="{ on: media.localScreenOn }" :title="media.localScreenOn ? 'Stop sharing' : 'Share your screen'" @click="toggleScreenShare">
+          <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" :title="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="toggleScreenShare">
             <PhScreencast :size="20" weight="fill" />
           </button>
           <button class="cb-b cb-more" title="More"><PhDotsThree :size="20" weight="bold" /></button>
