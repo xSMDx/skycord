@@ -37,7 +37,7 @@ export const media = reactive<MediaState>({
 const CAM_RES    = { width: 1280, height: 720 }
 const SCREEN_RES = { width: 1920, height: 1080 }
 
-const keyFor = (identity: string, source: 'camera' | 'screen') => `${identity}:${source}`
+export const keyFor = (identity: string, source: 'camera' | 'screen') => `${identity}:${source}`
 const srcOf  = (s: Track.Source): 'camera' | 'screen' | null =>
   s === Track.Source.Camera ? 'camera' : s === Track.Source.ScreenShare ? 'screen' : null
 

@@ -4,7 +4,7 @@ import { PhMicrophoneSlash, PhMonitor } from '@phosphor-icons/vue'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
 import { voiceSettings } from '@/composables/useVoiceSettings'
-import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
+import { keyFor, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 
 const props = defineProps<{
   tiles:  { id: string; name: string; avatar: string; speaking: boolean; muted: boolean }[]
@@ -30,7 +30,7 @@ const cells = computed<Cell[]>(() => {
     if (mine.length) {
       for (const v of mine) {
         used.add(v)
-        out.push({ kind: 'video', key: `${t.id}:${v.source}`, name: t.name, speaking: t.speaking, source: v.source, video: v })
+        out.push({ kind: 'video', key: keyFor(t.id, v.source), name: t.name, speaking: t.speaking, source: v.source, video: v })
       }
     } else if (voiceSettings.showNonVideo) {
       out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar })
@@ -40,7 +40,7 @@ const cells = computed<Cell[]>(() => {
   // render them anyway rather than dropping them invisibly.
   for (const v of props.videos) {
     if (!used.has(v) && !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera)) {
-      out.push({ kind: 'video', key: `${v.participantId}:${v.source}`, name: v.name, speaking: false, source: v.source, video: v })
+      out.push({ kind: 'video', key: keyFor(v.participantId, v.source), name: v.name, speaking: false, source: v.source, video: v })
     }
   }
   return out
@@ -114,6 +114,7 @@ button { border: none; }
   position: relative; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
   background: #0b0b0f; border: 2px solid transparent;
   display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s;
 }
 .g-cell.speaking { border-color: #23a55a; }
 .g-avwrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }

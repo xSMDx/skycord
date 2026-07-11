@@ -77,6 +77,7 @@ const teardownRoom = () => {
   audioEls.forEach(el => el.remove()); audioEls.clear()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
+  stopLocalLevel()
   stopMedia()
 }
 
@@ -99,6 +100,67 @@ const readRtt = async () => {
     })
     if (rtt !== null) voice.ping = rtt
   } catch { /* ignore */ }
+}
+
+// ── Local speaking detection ────────────────────────────────────────────────
+// LiveKit's ActiveSpeakersChanged round-trips through the server (~300ms+),
+// which makes your own ring feel laggy. Run a local analyser over the mic
+// track instead: your ring reacts within a frame; remote rings keep the
+// server-driven path. Rebinds automatically when the mic track is replaced
+// (device switch), and goes quiet when muted/deafened.
+let levelCtx: AudioContext | null = null
+let levelAnalyser: AnalyserNode | null = null
+let levelSrc: MediaStreamAudioSourceNode | null = null
+let levelData: Uint8Array | null = null
+let levelTrack: MediaStreamTrack | null = null
+let levelRaf = 0
+let lastLoudAt = 0
+const SPEAK_HANGOVER_MS = 250
+
+const setLocalSpeaking = (on: boolean) => {
+  const me = voice.participants.find(p => p.local)
+  if (me && me.speaking !== on)
+    voice.participants = voice.participants.map(p => (p.local ? { ...p, speaking: on } : p))
+}
+
+const bindLevelSource = async (t: MediaStreamTrack | null) => {
+  levelSrc?.disconnect(); levelSrc = null
+  levelAnalyser = null; levelData = null
+  levelTrack = t
+  if (!t) return
+  try {
+    if (!levelCtx) levelCtx = new AudioContext()
+    await levelCtx.resume()
+    levelSrc = levelCtx.createMediaStreamSource(new MediaStream([t]))
+    levelAnalyser = levelCtx.createAnalyser()
+    levelAnalyser.fftSize = 512
+    levelSrc.connect(levelAnalyser)   // analysis only — never to destination
+    levelData = new Uint8Array(levelAnalyser.frequencyBinCount)
+  } catch { /* ring falls back to server-driven state */ }
+}
+
+const levelTick = () => {
+  levelRaf = requestAnimationFrame(levelTick)
+  const room = getRoom(); if (!room) return
+  const t = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null
+  if (t !== levelTrack) { void bindLevelSource(t) }
+  if (!levelAnalyser || !levelData) { setLocalSpeaking(false); return }
+  levelAnalyser.getByteTimeDomainData(levelData)
+  let peak = 0
+  for (const v of levelData) peak = Math.max(peak, Math.abs(v - 128))
+  // sensitivity 0..100 → byte-peak threshold ~4..44 (higher setting = less sensitive)
+  const threshold = 4 + (voiceSettings.sensitivity / 100) * 40
+  const now = performance.now()
+  if (peak >= threshold) lastLoudAt = now
+  setLocalSpeaking(!voice.localMuted && !voice.localDeafened && now - lastLoudAt < SPEAK_HANGOVER_MS)
+}
+
+const startLocalLevel = () => { if (!levelRaf) levelTick() }
+const stopLocalLevel = () => {
+  cancelAnimationFrame(levelRaf); levelRaf = 0
+  levelSrc?.disconnect(); levelSrc = null
+  levelAnalyser = null; levelData = null; levelTrack = null
+  levelCtx?.close().catch(() => {}); levelCtx = null
 }
 
 // Room name for a conversation, matching the server (voiceController.roomFor).
@@ -157,7 +219,8 @@ const wireRoom = (r: Room) => {
   r.on(RoomEvent.TrackUnmuted, syncParticipants)
   r.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
     const ids = new Set(speakers.map(s => s.identity))
-    voice.participants = voice.participants.map(p => ({ ...p, speaking: ids.has(p.id) }))
+    // Local ring is analyser-driven (instant); server list only updates remotes.
+    voice.participants = voice.participants.map(p => (p.local ? p : { ...p, speaking: ids.has(p.id) }))
   })
   r.on(RoomEvent.ConnectionQualityChanged, (q: any, p: Participant) => {
     if (p?.isLocal) voice.quality = (q as VoiceQuality) || 'unknown'
@@ -191,6 +254,7 @@ const cleanup = () => {
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
   if (failTimer)  { clearTimeout(failTimer);  failTimer = null }
   intentionalLeave = false
+  stopLocalLevel()
   stopMedia()
   // Clear server-side call presence even when LiveKit dropped on its own
   // (RoomEvent.Disconnected → cleanup, NOT via leave()). Without this, an
@@ -307,6 +371,7 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
       soundCallJoin()
       readRtt()
       statsTimer = setInterval(readRtt, 3000)
+      startLocalLevel()
     } catch (err) {
       if (seq !== connectSeq) return            // superseded by a newer attempt / cancel
       console.warn(`[voice] attempt ${attempt} failed`, err)
