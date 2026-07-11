@@ -17,7 +17,7 @@ import {
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
 import { voiceSettings, micCaptureOptions } from './useVoiceSettings'
-import { addRemoteVideo, removeRemoteVideo, onLocalTrackUnpublished, stopMedia } from './useVoiceMedia'
+import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia } from './useVoiceMedia'
 
 export interface VoiceParticipant {
   id:       string   // userId (LiveKit identity)
@@ -215,9 +215,12 @@ const wireRoom = (r: Room) => {
   })
   r.on(RoomEvent.LocalTrackUnpublished, (pub) => { onLocalTrackUnpublished(pub); syncParticipants() })
   r.on(RoomEvent.ParticipantConnected, () => { soundUserJoin(); syncParticipants() })
-  r.on(RoomEvent.ParticipantDisconnected, () => { soundUserLeave(); syncParticipants() })
-  r.on(RoomEvent.TrackMuted, syncParticipants)
-  r.on(RoomEvent.TrackUnmuted, syncParticipants)
+  r.on(RoomEvent.ParticipantDisconnected, (p) => { purgeParticipantVideos(p.identity); soundUserLeave(); syncParticipants() })
+  // Camera-off MUTES the publication (no unpublish → no TrackUnsubscribed on the
+  // far side), so mirror video mute/unmute into the tile map or remote viewers
+  // keep a frozen black tile.
+  r.on(RoomEvent.TrackMuted, (pub, p) => { if (pub.kind === Track.Kind.Video) onRemoteVideoMuted(pub, p); syncParticipants() })
+  r.on(RoomEvent.TrackUnmuted, (pub, p) => { if (pub.kind === Track.Kind.Video) onRemoteVideoUnmuted(pub, p); syncParticipants() })
   r.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
     const ids = new Set(speakers.map(s => s.identity))
     // Local ring is analyser-driven (instant); server list only updates remotes.

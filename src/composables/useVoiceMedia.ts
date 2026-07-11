@@ -8,7 +8,7 @@ import { reactive, markRaw } from 'vue'
 import {
   Track,
   type RemoteTrack, type LocalVideoTrack, type LocalTrackPublication,
-  type Participant, type RemoteParticipant,
+  type TrackPublication, type Participant, type RemoteParticipant,
 } from 'livekit-client'
 import { getRoom } from './voiceRoom'
 import { voiceSettings } from './useVoiceSettings'
@@ -134,6 +134,35 @@ export const removeRemoteVideo = (track: RemoteTrack, participant?: Participant)
   media.videoTracks.delete(keyFor(participant.identity, s))
 }
 
+// Turning a camera OFF doesn't unpublish in LiveKit — it MUTES the track, so
+// the far side never gets TrackUnsubscribed and would keep a frozen black tile.
+// Mirror mute/unmute into the tile map: muted video = no tile (back to avatar),
+// unmuted = tile returns.
+export const onRemoteVideoMuted = (pub: TrackPublication, participant: Participant) => {
+  if (participant.isLocal) return
+  const s = srcOf(pub.source); if (!s) return
+  media.videoTracks.delete(keyFor(participant.identity, s))
+}
+export const onRemoteVideoUnmuted = (pub: TrackPublication, participant: Participant) => {
+  if (participant.isLocal) return
+  const s = srcOf(pub.source); if (!s) return
+  const track = pub.track as RemoteTrack | undefined
+  if (!track) return
+  media.videoTracks.set(keyFor(participant.identity, s), {
+    participantId: participant.identity,
+    name: participant.name || participant.identity,
+    source: s, track: markRaw(track), local: false,
+  })
+}
+
+// A participant leaving must never strand their tiles — TrackUnsubscribed
+// usually handles it, but abrupt drops can skip it (the "doesn't fully
+// disconnect" ghost). Purge everything they published.
+export const purgeParticipantVideos = (identity: string) => {
+  media.videoTracks.delete(keyFor(identity, 'camera'))
+  media.videoTracks.delete(keyFor(identity, 'screen'))
+}
+
 // Sync local flags + map when a local track is unpublished OUTSIDE our toggles —
 // e.g. Chrome's native "Stop sharing" bar, or a camera device ending mid-call.
 // Without this the button stays green and a dead tile lingers (frozen LIVE).
@@ -156,5 +185,7 @@ export const stopMedia = () => {
 }
 
 export const useVoiceMedia = () => ({
-  media, toggleCamera, toggleScreenShare, addRemoteVideo, removeRemoteVideo, onLocalTrackUnpublished, stopMedia,
+  media, toggleCamera, toggleScreenShare, addRemoteVideo, removeRemoteVideo,
+  onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos,
+  onLocalTrackUnpublished, stopMedia,
 })
