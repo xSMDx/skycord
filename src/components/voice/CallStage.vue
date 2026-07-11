@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { PhMicrophoneSlash, PhMonitor } from '@phosphor-icons/vue'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
+import { voiceSettings } from '@/composables/useVoiceSettings'
 import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
 
 const props = defineProps<{
@@ -23,20 +24,22 @@ const cells = computed<Cell[]>(() => {
   const out: Cell[] = []
   const used = new Set<VideoTrackInfo>()
   for (const t of props.tiles) {
-    const mine = props.videos.filter(v => v.participantId === t.id)
+    const mine = props.videos.filter(v =>
+      v.participantId === t.id &&
+      !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera))
     if (mine.length) {
       for (const v of mine) {
         used.add(v)
         out.push({ kind: 'video', key: `${t.id}:${v.source}`, name: t.name, speaking: t.speaking, source: v.source, video: v })
       }
-    } else {
+    } else if (voiceSettings.showNonVideo) {
       out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar })
     }
   }
   // Videos whose participant hasn't landed in `tiles` yet (presence lag):
   // render them anyway rather than dropping them invisibly.
   for (const v of props.videos) {
-    if (!used.has(v)) {
+    if (!used.has(v) && !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera)) {
       out.push({ kind: 'video', key: `${v.participantId}:${v.source}`, name: v.name, speaking: false, source: v.source, video: v })
     }
   }

@@ -5,6 +5,7 @@ import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
 import CameraFlyout from './CameraFlyout.vue'
+import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia } from '@/composables/useVoiceMedia'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
@@ -109,7 +110,10 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
           <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" :title="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="onShare">
             <PhScreencast :size="20" weight="fill" />
           </button>
-          <button class="cb-b cb-more" title="More"><PhDotsThree :size="20" weight="bold" /></button>
+          <div class="cb-split" :class="{ menuopen: openMenu === 'more' }">
+            <button class="cb-b cb-more" title="More" @click="toggleMenu('more')"><PhDotsThree :size="20" weight="bold" /></button>
+            <MoreFlyout v-if="openMenu === 'more'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
+          </div>
         </div>
         <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhPhoneX :size="20" weight="fill" /></button>
       </div>

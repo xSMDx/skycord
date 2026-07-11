@@ -19,6 +19,8 @@ export interface VoiceSettings {
   noiseSuppression: boolean
   echoCancellation: boolean
   screenAudio:      boolean   // capture system/tab audio when screen sharing
+  showOwnCamera:    boolean   // render your own camera tile in the grid
+  showNonVideo:     boolean   // render avatar tiles for participants without video
 }
 
 const KEY = 'sykord_voice'
@@ -27,7 +29,7 @@ const DEFAULTS: VoiceSettings = {
   inputVolume: 100, outputVolume: 100,
   inputMode: 'voice', pttKey: 'Space', sensitivity: 30,
   noiseSuppression: true, echoCancellation: true,
-  screenAudio: true,
+  screenAudio: true, showOwnCamera: true, showNonVideo: true,
 }
 
 const load = (): Partial<VoiceSettings> => {
