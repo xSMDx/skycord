@@ -756,16 +756,16 @@ img    { display: block; object-fit: cover; }
   border-left: 2px solid var(--border);
 }
 .sm-nav-subitem {
-  position: relative; display: block; width: 100%; text-align: left;
+  display: block; width: 100%; text-align: left;
   padding: 8px 12px 8px 14px; border-radius: 0 6px 6px 0;
   font-size: 14.5px; color: var(--text-3); transition: background .12s, color .12s;
+  /* Active indicator sits ON the subnav rail via a real border (margin pulls it
+     over the container's border-left) — no absolutely-positioned pseudo that
+     can detach or mis-size against the rail. */
+  border-left: 2px solid transparent; margin-left: -2px;
 }
 .sm-nav-subitem:hover { color: var(--text-1); background: var(--hover); }
-.sm-nav-subitem.active { color: var(--text-strong); }
-.sm-nav-subitem.active::before {
-  content: ''; position: absolute; left: -4px; top: 6px; bottom: 6px;
-  width: 2px; border-radius: 2px; background: var(--text-strong);
-}
+.sm-nav-subitem.active { color: var(--text-strong); border-left-color: var(--text-strong); }
 
 /* Content */
 .sm-content {
