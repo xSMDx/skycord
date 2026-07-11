@@ -22,7 +22,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <style scoped>
 .fly-backdrop { position: fixed; inset: 0; z-index: 8000; }
 .fly {
-  position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%);
+  /* Opens DOWNWARD: the call bar sits at the top of the chat column, so the
+     menu drops over the messages instead of covering the call stage. */
+  position: absolute; top: calc(100% + 12px); left: 50%; transform: translateX(-50%);
   z-index: 8001; min-width: 236px; max-height: 62vh; overflow-y: auto;
   background: var(--bg-floor); border: 1px solid rgba(255,255,255,.1);
   border-radius: 8px; padding: 6px;
@@ -30,7 +32,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   animation: fly-pop .12s cubic-bezier(.4,0,.2,1);
 }
 @keyframes fly-pop {
-  from { opacity: 0; transform: translateX(-50%) scale(.94) translateY(4px); }
+  from { opacity: 0; transform: translateX(-50%) scale(.94) translateY(-4px); }
   to   { opacity: 1; transform: translateX(-50%) scale(1)   translateY(0); }
 }
 </style>
