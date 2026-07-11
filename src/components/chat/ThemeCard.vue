@@ -82,35 +82,44 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
         </span>
       </div>
       <div class="tc-actions">
-        <button class="tc-btn ghost" @click.stop="onPreview">Preview</button>
-        <button class="tc-btn primary" @click.stop="onApply">Apply</button>
+        <button class="tc-preview" @click.stop="onPreview">Preview</button>
+        <button class="tc-btn" @click.stop="onApply">Apply</button>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
+/* Styled to sit beside GroupInviteCard: same width, border weight, icon size,
+   and a single accent action (Apply) — Preview demoted to a quiet text button. */
 .theme-card {
   display: flex; align-items: center; gap: 12px;
-  background: var(--bg-floor); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 14px; margin-top: 6px; max-width: 420px;
+  background: var(--bg-floor); border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px; padding: 12px 16px; margin-top: 6px; max-width: 380px;
 }
 .tc-loading { color: var(--text-3); font-size: 13px; }
 .tc-icon {
-  width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   background: var(--accent); color: var(--text-on-accent);
 }
 .tc-icon--err { background: #4f3535; color: var(--text-strong); }
-.tc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tc-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-sub { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 8px; }
 .tc-swatches { display: inline-flex; gap: 3px; }
 .tc-swatches i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.25); }
-.tc-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.tc-btn { padding: 7px 13px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s; }
-.tc-btn.ghost { color: var(--text-2); background: rgba(128,132,142,.16); }
-.tc-btn.ghost:hover { background: rgba(128,132,142,.28); color: var(--text-strong); }
-.tc-btn.primary { color: var(--text-on-accent); background: var(--accent); }
-.tc-btn.primary:hover { background: var(--accent-hover); }
+.tc-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.tc-preview {
+  border: none; background: none; padding: 4px 2px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--text-3); transition: color .12s;
+}
+.tc-preview:hover { color: var(--text-strong); text-decoration: underline; }
+.tc-btn {
+  padding: 8px 16px; border-radius: 6px; border: none;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: var(--text-on-accent);
+  transition: background .12s; flex-shrink: 0;
+}
+.tc-btn:hover { background: var(--accent-hover); }
 </style>
