@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCamera, PhVideoCameraSlash, PhScreencast, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
 import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
@@ -41,6 +41,10 @@ const toggleMenu = (m: 'mic' | 'cam' | 'more') => { openMenu.value = openMenu.va
 const joinedHere     = computed(() => voice.connected  && voice.activeConvId     === props.convId)
 const connectingHere = computed(() => voice.connecting && voice.connectingConvId === props.convId)
 const inCall         = computed(() => joinedHere.value || connectingHere.value)
+
+// Leaving the call (or it ending) must not leave a flyout open for next join.
+watch(inCall, (v) => { if (!v) openMenu.value = '' })
+
 const callActive     = computed(() => props.participants.length > 0)
 // Ongoing call you haven't joined (and haven't dismissed).
 const showOngoing    = computed(() => callActive.value && !inCall.value && !props.dismissed)

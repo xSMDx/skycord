@@ -26,27 +26,28 @@ const videoEl = ref<HTMLVideoElement | null>(null)
 let tempStream: MediaStream | null = null
 let disposed = false
 
+let startingPreview = false
 const startPreview = async () => {
+  if (previewing.value || startingPreview) return
+  startingPreview = true
   const live = getRoom()?.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack
   try {
     if (live) {
       if (videoEl.value) videoEl.value.srcObject = new MediaStream([live])
     } else {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const s = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: voiceSettings.cameraDeviceId || undefined },
       })
-      // Prevent await race: if unmounted during getUserMedia, stop the stream
-      // and return before assigning to tempStream/srcObject
-      if (disposed) {
-        stream.getTracks().forEach(t => t.stop())
-        return
-      }
-      tempStream = stream
+      if (disposed) { s.getTracks().forEach(t => t.stop()); return }
+      // Never orphan a previous capture, whatever path produced it.
+      tempStream?.getTracks().forEach(t => t.stop())
+      tempStream = s
       if (videoEl.value) videoEl.value.srcObject = tempStream
     }
     await videoEl.value?.play().catch(() => {})
     previewing.value = true
   } catch { previewing.value = false }
+  finally { startingPreview = false }
 }
 const stopPreview = () => {
   tempStream?.getTracks().forEach(t => t.stop()); tempStream = null

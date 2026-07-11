@@ -27,7 +27,7 @@ export const deviceLabel = (d: MediaDeviceInfo, fallback: string) => d.label || 
 export const setMicDevice = async (id: string) => {
   setVoiceSettings({ inputDeviceId: id })
   const r = getRoom()
-  if (r && id) await r.switchActiveDevice('audioinput', id).catch(() => {})
+  if (r && id) await r.switchActiveDevice('audioinput', id).catch((e) => console.warn('[voice] live mic switch failed', e))
 }
 export const setSpeakerDevice = (id: string) => {
   setVoiceSettings({ outputDeviceId: id })
@@ -36,7 +36,7 @@ export const setSpeakerDevice = (id: string) => {
 export const setCameraDevice = async (id: string) => {
   setVoiceSettings({ cameraDeviceId: id })
   const r = getRoom()
-  if (r?.localParticipant.isCameraEnabled && id) await r.switchActiveDevice('videoinput', id).catch(() => {})
+  if (r?.localParticipant.isCameraEnabled && id) await r.switchActiveDevice('videoinput', id).catch((e) => console.warn('[voice] live camera switch failed', e))
 }
 
 export const useCallDevices = () => ({
