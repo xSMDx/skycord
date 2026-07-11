@@ -1,0 +1,103 @@
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { PhCaretRight, PhCheck, PhGear, PhEye, PhEyeSlash } from '@phosphor-icons/vue'
+import { Track } from 'livekit-client'
+import CallFlyout from './CallFlyout.vue'
+import { useCallDevices } from '@/composables/useCallDevices'
+import { useVoiceSettings } from '@/composables/useVoiceSettings'
+import { useVoiceMedia } from '@/composables/useVoiceMedia'
+import { getRoom } from '@/composables/voiceRoom'
+
+const emit = defineEmits<{ close: []; openSettings: [] }>()
+const { cameras, refreshDevices, deviceLabel, setCameraDevice } = useCallDevices()
+const { voiceSettings } = useVoiceSettings()
+const { media } = useVoiceMedia()
+
+const showDevices = ref(false)
+const currentCamLabel = () => {
+  const d = cameras.value.find(x => x.deviceId === voiceSettings.cameraDeviceId)
+  return d ? deviceLabel(d, 'Camera') : 'Default'
+}
+
+// Inline preview: reuse the LIVE camera track when publishing; otherwise open a
+// temporary capture that is stopped when the preview or flyout closes.
+const previewing = ref(false)
+const videoEl = ref<HTMLVideoElement | null>(null)
+let tempStream: MediaStream | null = null
+let disposed = false
+
+const startPreview = async () => {
+  const live = getRoom()?.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack
+  try {
+    if (live) {
+      if (videoEl.value) videoEl.value.srcObject = new MediaStream([live])
+    } else {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: voiceSettings.cameraDeviceId || undefined },
+      })
+      // Prevent await race: if unmounted during getUserMedia, stop the stream
+      // and return before assigning to tempStream/srcObject
+      if (disposed) {
+        stream.getTracks().forEach(t => t.stop())
+        return
+      }
+      tempStream = stream
+      if (videoEl.value) videoEl.value.srcObject = tempStream
+    }
+    await videoEl.value?.play().catch(() => {})
+    previewing.value = true
+  } catch { previewing.value = false }
+}
+const stopPreview = () => {
+  tempStream?.getTracks().forEach(t => t.stop()); tempStream = null
+  if (videoEl.value) videoEl.value.srcObject = null
+  previewing.value = false
+}
+const togglePreview = () => { previewing.value ? stopPreview() : startPreview() }
+
+onMounted(refreshDevices)
+onBeforeUnmount(() => {
+  disposed = true
+  stopPreview()
+})
+</script>
+
+<template>
+  <CallFlyout @close="emit('close')">
+    <button class="fr" @click="showDevices = !showDevices">
+      <span>Camera<span class="fr-sub">{{ currentCamLabel() }}</span></span>
+      <PhCaretRight :size="13" weight="bold" :style="showDevices ? 'transform:rotate(90deg)' : ''" />
+    </button>
+    <template v-if="showDevices">
+      <button class="fr" @click="setCameraDevice('')">
+        <span>Default</span><PhCheck v-if="!voiceSettings.cameraDeviceId" class="fr-check" :size="15" weight="bold" />
+      </button>
+      <button v-for="(d,i) in cameras" :key="d.deviceId" class="fr" @click="setCameraDevice(d.deviceId)">
+        <span>{{ deviceLabel(d, `Camera ${i+1}`) }}</span>
+        <PhCheck v-if="voiceSettings.cameraDeviceId===d.deviceId" class="fr-check" :size="15" weight="bold" />
+      </button>
+    </template>
+
+    <div class="fr-sep" />
+    <button class="fr" @click="togglePreview">
+      <span>{{ previewing ? 'Hide Preview' : 'Preview Camera' }}<span v-if="media.localCamOn" class="fr-sub">Showing your live camera</span></span>
+      <component :is="previewing ? PhEyeSlash : PhEye" :size="15" weight="fill" />
+    </button>
+    <div v-show="previewing" class="cf-prevbox">
+      <video ref="videoEl" class="cf-video" muted playsinline />
+    </div>
+
+    <div class="fr-sep" />
+    <button class="fr" @click="emit('openSettings'); emit('close')">
+      <span>Video Settings</span><PhGear :size="15" weight="fill" />
+    </button>
+  </CallFlyout>
+</template>
+
+<style scoped>
+.cf-prevbox {
+  margin: 4px 2px; border-radius: 6px; overflow: hidden;
+  background: #000; aspect-ratio: 16 / 9;
+}
+.cf-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+</style>

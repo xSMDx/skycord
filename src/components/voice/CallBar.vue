@@ -4,6 +4,7 @@ import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCamera, PhVideoCamera
 import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
+import CameraFlyout from './CameraFlyout.vue'
 import { useVoiceMedia } from '@/composables/useVoiceMedia'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
@@ -96,11 +97,12 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
             <button class="cb-chev" title="Audio settings" @click="toggleMenu('mic')"><PhCaretDown :size="12" weight="bold" /></button>
             <MicFlyout v-if="openMenu === 'mic'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
-          <div class="cb-split">
+          <div class="cb-split" :class="{ menuopen: openMenu === 'cam' }">
             <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera">
               <component :is="media.localCamOn ? PhVideoCamera : PhVideoCameraSlash" :size="20" weight="fill" />
             </button>
-            <button class="cb-chev" disabled title="Video settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
+            <button class="cb-chev" :disabled="!joinedHere" title="Video settings" @click="toggleMenu('cam')"><PhCaretDown :size="12" weight="bold" /></button>
+            <CameraFlyout v-if="openMenu === 'cam'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
         </div>
         <div class="cb-group">
