@@ -1,253 +1,214 @@
-# Graph Report - sykord  (2026-06-26)
+# Graph Report - .  (2026-07-07)
 
 ## Corpus Check
-- 99 files · ~66,355 words
+- 102 files · ~67,083 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 624 nodes · 824 edges · 68 communities (64 shown, 4 thin omitted)
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
-- Token cost: 0 input · 0 output
-
-## Graph Freshness
-- Built from commit: `515e6b08`
-- Run `git rev-parse HEAD` and compare to check if the graph is stale.
-- Run `graphify update .` after code changes (no API cost).
+- 544 nodes · 835 edges · 50 communities (49 shown, 1 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.86)
+- Token cost: 130,000 input · 6,242 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Community 0|Community 0]]
-- [[_COMMUNITY_Community 1|Community 1]]
-- [[_COMMUNITY_Community 2|Community 2]]
-- [[_COMMUNITY_Community 3|Community 3]]
-- [[_COMMUNITY_Community 4|Community 4]]
-- [[_COMMUNITY_Community 5|Community 5]]
-- [[_COMMUNITY_Community 6|Community 6]]
-- [[_COMMUNITY_Community 7|Community 7]]
-- [[_COMMUNITY_Community 8|Community 8]]
-- [[_COMMUNITY_Community 9|Community 9]]
-- [[_COMMUNITY_Community 10|Community 10]]
-- [[_COMMUNITY_Community 11|Community 11]]
-- [[_COMMUNITY_Community 12|Community 12]]
-- [[_COMMUNITY_Community 13|Community 13]]
-- [[_COMMUNITY_Community 14|Community 14]]
-- [[_COMMUNITY_Community 15|Community 15]]
-- [[_COMMUNITY_Community 16|Community 16]]
-- [[_COMMUNITY_Community 17|Community 17]]
-- [[_COMMUNITY_Community 18|Community 18]]
-- [[_COMMUNITY_Community 19|Community 19]]
-- [[_COMMUNITY_Community 20|Community 20]]
-- [[_COMMUNITY_Community 21|Community 21]]
-- [[_COMMUNITY_Community 22|Community 22]]
-- [[_COMMUNITY_Community 23|Community 23]]
-- [[_COMMUNITY_Community 24|Community 24]]
-- [[_COMMUNITY_Community 25|Community 25]]
-- [[_COMMUNITY_Community 26|Community 26]]
-- [[_COMMUNITY_Community 27|Community 27]]
-- [[_COMMUNITY_Community 28|Community 28]]
-- [[_COMMUNITY_Community 29|Community 29]]
-- [[_COMMUNITY_Community 30|Community 30]]
-- [[_COMMUNITY_Community 31|Community 31]]
-- [[_COMMUNITY_Community 32|Community 32]]
-- [[_COMMUNITY_Community 33|Community 33]]
-- [[_COMMUNITY_Community 35|Community 35]]
-- [[_COMMUNITY_Community 36|Community 36]]
-- [[_COMMUNITY_Community 41|Community 41]]
-- [[_COMMUNITY_Community 42|Community 42]]
-- [[_COMMUNITY_Community 43|Community 43]]
-- [[_COMMUNITY_Community 44|Community 44]]
+- [[_COMMUNITY_App Shell & Theme UI|App Shell & Theme UI]]
+- [[_COMMUNITY_Server Core & Messages API|Server Core & Messages API]]
+- [[_COMMUNITY_Group Conversations Backend|Group Conversations Backend]]
+- [[_COMMUNITY_Package Dependencies|Package Dependencies]]
+- [[_COMMUNITY_Discord Kit Rebuild Docs|Discord Kit Rebuild Docs]]
+- [[_COMMUNITY_Voice Engine (LiveKit)|Voice Engine (LiveKit)]]
+- [[_COMMUNITY_Client State Composables|Client State Composables]]
+- [[_COMMUNITY_Auth Backend|Auth Backend]]
+- [[_COMMUNITY_Client TSConfig|Client TSConfig]]
+- [[_COMMUNITY_Client API & Group Modals|Client API & Group Modals]]
+- [[_COMMUNITY_Server TSConfig|Server TSConfig]]
+- [[_COMMUNITY_Realtime Socket Layer|Realtime Socket Layer]]
+- [[_COMMUNITY_VoiceVideo Settings UI|Voice/Video Settings UI]]
+- [[_COMMUNITY_Users & Friends Backend|Users & Friends Backend]]
+- [[_COMMUNITY_Reply Tree Modal|Reply Tree Modal]]
+- [[_COMMUNITY_Dev Dependencies|Dev Dependencies]]
+- [[_COMMUNITY_Rich Text Rendering|Rich Text Rendering]]
+- [[_COMMUNITY_Stickers Backend|Stickers Backend]]
+- [[_COMMUNITY_Themes Backend|Themes Backend]]
+- [[_COMMUNITY_In-Call UI|In-Call UI]]
+- [[_COMMUNITY_Mute & Participant Sync|Mute & Participant Sync]]
+- [[_COMMUNITY_Voice Settings Store|Voice Settings Store]]
+- [[_COMMUNITY_Quick Switcher Modal|Quick Switcher Modal]]
+- [[_COMMUNITY_Skycord Icon & Brand|Skycord Icon & Brand]]
+- [[_COMMUNITY_User Profile Modal|User Profile Modal]]
+- [[_COMMUNITY_Slash Commands|Slash Commands]]
+- [[_COMMUNITY_Default Avatars|Default Avatars]]
+- [[_COMMUNITY_Auth Page|Auth Page]]
+- [[_COMMUNITY_Rebuild Progress Ledger|Rebuild Progress Ledger]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 17 edges
-2. `Discord Kit Rebuild — W0 Foundation — Progress Ledger` - 15 edges
-3. `getIO()` - 12 edges
-4. `tone()` - 12 edges
+2. `getIO()` - 12 edges
+3. `tone()` - 12 edges
+4. `attemptConnect()` - 12 edges
 5. `compilerOptions` - 12 edges
-6. `Task 2: DButton Implementation Report` - 10 edges
-7. `requireAuth()` - 9 edges
-8. `Status: DONE` - 9 edges
-9. `Status: DONE` - 9 edges
-10. `Settings polish (Text Readability + Visual Density + subnav) & Theme Sharing` - 9 edges
+6. `tokens.css Design Token Scales` - 10 edges
+7. `updateGroup()` - 9 edges
+8. `requireAuth()` - 9 edges
+9. `config` - 8 edges
+10. `User` - 8 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `attemptConnect()` --calls--> `getVoiceToken()`  [INFERRED]
+  src/composables/useVoice.ts → server/controllers/voiceController.ts
+- `Settings Density + Theme Sharing Design Spec` --references--> `tokens.css Design Token Scales`  [EXTRACTED]
+  docs/superpowers/specs/2026-06-24-settings-density-theme-sharing-design.md → .superpowers/sdd/task-1-report.md
+- `Palette Decision: Kit Anatomy + Modern Token Colors` --rationale_for--> `tokens.css Design Token Scales`  [INFERRED]
+  .superpowers/sdd/progress.md → .superpowers/sdd/task-1-report.md
+- `Task 1 Report — Token Scales + Gallery Harness (W0)` --references--> `Task 1 Brief — DUserPanel Extraction (W1)`  [AMBIGUOUS]
+  .superpowers/sdd/task-1-report.md → .superpowers/sdd/task-1-brief.md
 - `getGroupMessages()` --calls--> `resolveMessages()`  [EXTRACTED]
   server/controllers/conversationsController.ts → server/controllers/messagesController.ts
-- `useSocket()` --calls--> `useAuth()`  [EXTRACTED]
-  src/composables/useSocket.ts → src/composables/useAuth.ts
-- `start()` --calls--> `createApp()`  [EXTRACTED]
-  server/index.ts → server/app.ts
-- `start()` --calls--> `connectDB()`  [EXTRACTED]
-  server/index.ts → server/config/database.ts
-- `register()` --calls--> `setRefreshCookie()`  [EXTRACTED]
-  server/controllers/authController.ts → server/utils/cookie.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (68 total, 4 thin omitted)
+## Hyperedges (group relationships)
+- **W0 Foundation UI Primitive Kit** — styles_tokens, views_uigallery, ui_dbutton, ui_davatar, ui_dinput, ui_dtextarea, ui_dtooltip [EXTRACTED 1.00]
+- **W1 Shell Components Extracted from ChatApp** — views_chatapp, shell_duserpanel, shell_dserverrail, shell_dtitlebar, shell_dchannelrow, shell_dcategoryheader, shell_dconversationrow [EXTRACTED 1.00]
+- **LiveKit Voice Call Flow (Phase 1 Audio)** — composables_usevoice, specs_2026_06_24_voice_calls_livekit_design_voice_token_endpoint, specs_2026_06_24_voice_calls_livekit_design_livekit_server, sockets_chatsocket, voice_callbar, voice_voiceconnectedpanel [EXTRACTED 1.00]
 
-### Community 0 - "Community 0"
+## Communities (50 total, 1 thin omitted)
+
+### Community 0 - "App Shell & Theme UI"
 Cohesion: 0.06
-Nodes (37): connectDB(), config, deleteMessage(), dmConvId(), editMessageContent(), getDMMessages(), ReplyPreview, resolveMessages() (+29 more)
+Nodes (39): displayContent, EMOJI_ONLY_RE, hasEveryone, inviteCode, buildSchemeTokens(), CTORS, SCHEME_TOKEN_KEYS, SchemeName (+31 more)
 
-### Community 1 - "Community 1"
-Cohesion: 0.12
-Nodes (32): actorNameOf(), addGroupMembers(), createGroup(), createGroupInvite(), getGroupMembers(), getGroupMessages(), getInvite(), getMyConversations() (+24 more)
+### Community 1 - "Server Core & Messages API"
+Cohesion: 0.07
+Nodes (31): connectDB(), config, deleteMessage(), dmConvId(), editMessageContent(), getDMMessages(), ReplyPreview, resolveMessages() (+23 more)
 
-### Community 2 - "Community 2"
-Cohesion: 0.08
-Nodes (31): buildSchemeTokens(), CTORS, SCHEME_TOKEN_KEYS, SchemeName, ACCENT_PRESETS, Appearance, applyAppearance(), b64urlDecode() (+23 more)
+### Community 2 - "Group Conversations Backend"
+Cohesion: 0.14
+Nodes (27): actorNameOf(), addGroupMembers(), createGroup(), createGroupInvite(), getGroupMembers(), getGroupMessages(), getInvite(), getMyConversations() (+19 more)
 
-### Community 3 - "Community 3"
+### Community 3 - "Package Dependencies"
+Cohesion: 0.06
+Nodes (30): dependencies, bcrypt, cookie-parser, cors, dotenv, express, express-rate-limit, helmet (+22 more)
+
+### Community 4 - "Discord Kit Rebuild Docs"
+Cohesion: 0.11
+Nodes (28): A11y Focus-Visible Outline Standard, Palette Decision: Kit Anatomy + Modern Token Colors, Sizing Decision: Scale Kit Geometry to Real Discord Sizes, W1 Shell Extraction (Extract-via-Props), Task 1 Brief — DUserPanel Extraction (W1), Task 1 Report — Token Scales + Gallery Harness (W0), Task 2 Brief — DButton, Task 2 Report — DButton Implementation (+20 more)
+
+### Community 5 - "Voice Engine (LiveKit)"
+Cohesion: 0.10
+Nodes (23): emitCallJoin(), emitCallLeave(), soundCallLeave(), applyAudioEl(), attachTrack(), attemptConnect(), audioEls, bindPtt() (+15 more)
+
+### Community 6 - "Client State Composables"
 Cohesion: 0.09
 Nodes (21): dmMessages, groupMessages, serverMessages, activeModal, ModalData, ModalType, Channel, DM (+13 more)
 
-### Community 4 - "Community 4"
+### Community 7 - "Auth Backend"
 Cohesion: 0.17
 Nodes (20): login(), logout(), me(), refresh(), register(), Request, requireAuth(), refreshLimit (+12 more)
 
-### Community 5 - "Community 5"
-Cohesion: 0.08
-Nodes (25): description, devDependencies, concurrently, nodemon, ts-node, @types/bcrypt, @types/cookie-parser, @types/cors (+17 more)
-
-### Community 6 - "Community 6"
-Cohesion: 0.13
-Nodes (19): activeCalls, CB, connected, emitCallJoin(), getCtx(), _h, soundCallJoin(), soundCallLeave() (+11 more)
-
-### Community 7 - "Community 7"
+### Community 8 - "Client TSConfig"
 Cohesion: 0.10
 Nodes (20): compilerOptions, allowImportingTsExtensions, isolatedModules, jsx, lib, module, moduleResolution, noEmit (+12 more)
 
-### Community 8 - "Community 8"
-Cohesion: 0.10
-Nodes (20): dependencies, bcrypt, cookie-parser, cors, dotenv, express, express-rate-limit, helmet (+12 more)
+### Community 9 - "Client API & Group Modals"
+Cohesion: 0.13
+Nodes (15): ApiMessage, ApiUser, PendingRequest, useApi(), accessToken, authFetch(), initialized, loading (+7 more)
 
-### Community 9 - "Community 9"
-Cohesion: 0.12
-Nodes (11): emitCallLeave(), applyAudioEl(), attachTrack(), audioEls, cleanup(), ConnectStage, unbindPtt(), voice (+3 more)
-
-### Community 10 - "Community 10"
+### Community 10 - "Server TSConfig"
 Cohesion: 0.11
 Nodes (18): compilerOptions, declaration, esModuleInterop, lib, module, outDir, resolveJsonModule, rootDir (+10 more)
 
-### Community 11 - "Community 11"
+### Community 11 - "Realtime Socket Layer"
+Cohesion: 0.17
+Nodes (13): activeCalls, CB, connected, getCtx(), _h, soundCallJoin(), soundMessage(), soundNotification() (+5 more)
+
+### Community 12 - "Voice/Video Settings UI"
 Cohesion: 0.16
 Nodes (12): cameras, camTesting, capturingPtt, micLevel, micTesting, onReset(), refreshDevices(), speakers (+4 more)
 
-### Community 12 - "Community 12"
-Cohesion: 0.12
-Nodes (15): Decisions (apply to all waves), Discord Kit Rebuild — W0 Foundation — Progress Ledger, Minor findings (for final review), NEXT: kit-fidelity VISUAL pass (the "rebuild" proper) — per-component Figma fetches + restyle. Best in a fresh session. W2 messages next per roadmap., PENDING USER VERIFY: voice smoke (mic/deafen in DUserPanel, call btn in DTitleBar) on localhost:5174., Tasks, Tracked improvements (triage at final review / future polish), W0 COMPLETE (+7 more)
+### Community 13 - "Users & Friends Backend"
+Cohesion: 0.23
+Nodes (12): acceptFriendRequest(), changeEmail(), changePassword(), changeUsername(), getFriends(), getPendingRequests(), searchUsers(), sendFriendRequest() (+4 more)
 
-### Community 13 - "Community 13"
-Cohesion: 0.12
-Nodes (15): 1. DTooltip Component (`src/components/ui/DTooltip.vue`), 2. UiGallery.vue Updates, 3. Tasks 1–4 Content Preserved, Build result, Build Status, Code Quality Checks, Commit, Completion Summary (+7 more)
-
-### Community 14 - "Community 14"
-Cohesion: 0.12
-Nodes (15): Backend, `composables/useVoice.ts` (singleton), `composables/useVoiceSettings.ts` (localStorage), Context, Dependencies, Env (server/.env), Frontend, Out of scope (Phase 2) (+7 more)
-
-### Community 15 - "Community 15"
+### Community 14 - "Reply Tree Modal"
 Cohesion: 0.15
 Nodes (8): closeCtx(), ctxCopy(), ctxJump(), maxCol, maxRow, svgH, svgW, zoom
 
-### Community 16 - "Community 16"
+### Community 15 - "Dev Dependencies"
 Cohesion: 0.13
-Nodes (14): Build Verification, Code Quality Checklist, Commit, Component Structure (DButton.vue), Deliverables, Files Changed, Files Created, Files Modified (+6 more)
+Nodes (15): devDependencies, concurrently, nodemon, ts-node, @types/bcrypt, @types/cookie-parser, @types/cors, @types/express (+7 more)
 
-### Community 17 - "Community 17"
-Cohesion: 0.15
-Nodes (12): Context, Data model — `useAppearance.ts`, Files, Out of scope, Phase A — Settings sections + generalized subnav (client-only), Phase B — Theme share core (client-only), Phase C — Theme share reach (backend + chat), Settings polish (Text Readability + Visual Density + subnav) & Theme Sharing (+4 more)
-
-### Community 18 - "Community 18"
-Cohesion: 0.26
-Nodes (9): createTheme(), getTheme(), sanitize(), THEME_FIELDS, generateThemeSlug(), ITheme, Theme, ThemeSchema (+1 more)
-
-### Community 19 - "Community 19"
-Cohesion: 0.17
-Nodes (11): App.vue toggle adaptation, Build Output, Commit, Figma Confirmation, Files Changed, Implementation Notes, Self-Review, Status: DONE (+3 more)
-
-### Community 20 - "Community 20"
-Cohesion: 0.17
-Nodes (11): Backend changes, Design, Edit Group modal (`EditGroupModal.vue`, new), Frontend changes, Group chat — normal chat + member panel, Group DM Rework — Design Spec, Invite to Group DM modal (`InviteGroupModal.vue`, new), Out of scope (+3 more)
-
-### Community 21 - "Community 21"
+### Community 16 - "Rich Text Rendering"
 Cohesion: 0.21
 Nodes (9): EMOJI_CDN, EMOJI_RE, emojify(), escapeHtml(), formatTimeToken(), relative(), renderMessage(), S (+1 more)
 
-### Community 22 - "Community 22"
+### Community 17 - "Stickers Backend"
 Cohesion: 0.27
 Nodes (8): createSticker(), deleteSticker(), getStickers(), toggleStarSticker(), IStickerDocument, Sticker, StickerSchema, router
 
-### Community 23 - "Community 23"
-Cohesion: 0.18
-Nodes (10): Build Verification, Commit, Compliance Checklist, Files Created, Files Modified, Implementation Details, Notes, Status: DONE (+2 more)
-
-### Community 24 - "Community 24"
-Cohesion: 0.18
-Nodes (10): Build Verification, Commit, Completion Summary, Files Created, Files Modified, Implementation Details, Notes, Self-Review (+2 more)
-
-### Community 25 - "Community 25"
-Cohesion: 0.28
-Nodes (8): accessToken, authFetch(), initialized, loading, PublicUser, scheduleRefresh(), silentRefresh(), user
-
-### Community 26 - "Community 26"
-Cohesion: 0.25
-Nodes (6): DEFAULTS, InputMode, micCaptureOptions(), resetVoiceSettings(), setVoiceSettings(), VoiceSettings
-
-### Community 27 - "Community 27"
-Cohesion: 0.22
-Nodes (7): avatarById, callActive, connectingHere, inCall, others, showOngoing, visible
-
-### Community 28 - "Community 28"
-Cohesion: 0.25
-Nodes (4): displayContent, EMOJI_ONLY_RE, hasEveryone, inviteCode
-
-### Community 29 - "Community 29"
+### Community 18 - "Themes Backend"
 Cohesion: 0.29
-Nodes (7): ApiMessage, ApiUser, PendingRequest, useApi(), useAuth(), useSocket(), useVoice()
+Nodes (8): createTheme(), getTheme(), sanitize(), THEME_FIELDS, generateThemeSlug(), ITheme, Theme, ThemeSchema
 
-### Community 30 - "Community 30"
+### Community 19 - "In-Call UI"
+Cohesion: 0.18
+Nodes (8): Voice Calls via LiveKit Design Spec, avatarById, callActive, connectingHere, inCall, others, showOngoing, visible
+
+### Community 20 - "Mute & Participant Sync"
+Cohesion: 0.29
+Nodes (8): soundDeafen(), soundMute(), soundUndeafen(), soundUnmute(), syncParticipants(), toggleDeafen(), toggleMute(), micCaptureOptions()
+
+### Community 21 - "Voice Settings Store"
+Cohesion: 0.29
+Nodes (5): DEFAULTS, InputMode, resetVoiceSettings(), setVoiceSettings(), VoiceSettings
+
+### Community 22 - "Quick Switcher Modal"
 Cohesion: 0.25
 Nodes (6): filteredDMs, filteredGroups, loading, query, { searchUsers }, string
 
-### Community 31 - "Community 31"
+### Community 23 - "Skycord Icon & Brand"
+Cohesion: 0.36
+Nodes (8): 256x256 Icon Canvas (transparent background), Discord Blurple Palette (#5865f2), Discord Visual Brand Language, Twin Eye Dots (filled circles r=12), Mascot Face Motif (eared head with two dot eyes), Rounded Outline Stroke Style (16px, round caps/joins), Skycord Application (Discord-like chat app), Skycord App Icon (SVG)
+
+### Community 24 - "User Profile Modal"
 Cohesion: 0.29
 Nodes (6): avatar, discriminator, status, string, userId, username
 
-### Community 32 - "Community 32"
+### Community 25 - "Slash Commands"
 Cohesion: 0.33
 Nodes (3): EIGHT_BALL, SlashCommand, slashCommands
 
-### Community 33 - "Community 33"
+### Community 26 - "Default Avatars"
 Cohesion: 0.60
 Nodes (4): AVATAR_PALETTE, avatarFor(), colorForUsername(), defaultAvatar()
 
-### Community 35 - "Community 35"
-Cohesion: 0.50
-Nodes (3): Notes for later waves (not part of this plan), Self-Review, Task 5: DTooltip
-
-### Community 36 - "Community 36"
+### Community 28 - "Auth Page"
 Cohesion: 0.67
 Nodes (3): clearAll(), map, submitLogin()
 
+## Ambiguous Edges - Review These
+- `Task 1 Brief — DUserPanel Extraction (W1)` → `Task 1 Report — Token Scales + Gallery Harness (W0)`  [AMBIGUOUS]
+  .superpowers/sdd/task-1-report.md · relation: references
+
 ## Knowledge Gaps
-- **291 isolated node(s):** `name`, `version`, `description`, `dev`, `dev:client` (+286 more)
+- **198 isolated node(s):** `name`, `version`, `description`, `dev`, `dev:client` (+193 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `User` connect `Community 0` to `Community 1`, `Community 18`, `Community 4`?**
-  _High betweenness centrality (0.005) - this node is a cross-community bridge._
-- **Why does `dependencies` connect `Community 8` to `Community 5`?**
-  _High betweenness centrality (0.003) - this node is a cross-community bridge._
+- **What is the exact relationship between `Task 1 Brief — DUserPanel Extraction (W1)` and `Task 1 Report — Token Scales + Gallery Harness (W0)`?**
+  _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
+- **Why does `Theme Sharing (Code + Link, Preview/Revert)` connect `App Shell & Theme UI` to `Client API & Group Modals`, `Themes Backend`?**
+  _High betweenness centrality (0.108) - this node is a cross-community bridge._
+- **Why does `DUserPanel Shell Component` connect `Discord Kit Rebuild Docs` to `Voice Engine (LiveKit)`?**
+  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+- **Why does `User` connect `Server Core & Messages API` to `Group Conversations Backend`, `Themes Backend`, `Users & Friends Backend`, `Auth Backend`?**
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `description` to the rest of the system?**
-  _291 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.06265664160401002 - nodes in this community are weakly interconnected._
-- **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.12375533428165007 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.08108108108108109 - nodes in this community are weakly interconnected._
-- **Should `Community 3` be split into smaller, more focused modules?**
-  _Cohesion score 0.08994708994708994 - nodes in this community are weakly interconnected._
+  _200 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `App Shell & Theme UI` be split into smaller, more focused modules?**
+  _Cohesion score 0.055152394775036286 - nodes in this community are weakly interconnected._
+- **Should `Server Core & Messages API` be split into smaller, more focused modules?**
+  _Cohesion score 0.07312925170068027 - nodes in this community are weakly interconnected._
