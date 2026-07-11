@@ -34,29 +34,59 @@ const currentSpkLabel = () => {
 const level = ref(0)
 let ctx: AudioContext | null = null
 let raf = 0
+let disposed = false
+let boundTrack: MediaStreamTrack | null = null
+let analyser: AnalyserNode | null = null
+let src: MediaStreamAudioSourceNode | null = null
+let data: Uint8Array | null = null
+
+const currentMicTrack = () =>
+  getRoom()?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null
+
+const bindTrack = (t: MediaStreamTrack) => {
+  if (!ctx) return
+  src?.disconnect()
+  src = ctx.createMediaStreamSource(new MediaStream([t]))
+  analyser = ctx.createAnalyser()
+  analyser.fftSize = 1024
+  src.connect(analyser)   // analysis only — never to destination
+  data = new Uint8Array(analyser.frequencyBinCount)
+  boundTrack = t
+}
+
 onMounted(async () => {
   await refreshDevices()
-  const t = getRoom()?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack
-  if (!t) return
+  if (disposed) return                    // flyout closed during the await
+  const t = currentMicTrack()
+  if (!t) return                          // no mic (connecting/blocked): meter idles
   try {
     ctx = new AudioContext()
     await ctx.resume()
-    const src = ctx.createMediaStreamSource(new MediaStream([t]))
-    const analyser = ctx.createAnalyser()
-    analyser.fftSize = 1024
-    src.connect(analyser)   // analysis only — never connect to destination
-    const data = new Uint8Array(analyser.frequencyBinCount)
+    if (disposed) { ctx.close().catch(() => {}); ctx = null; return }
+    bindTrack(t)
     const tick = () => {
-      analyser.getByteTimeDomainData(data)
-      let peak = 0
-      for (const v of data) peak = Math.max(peak, Math.abs(v - 128))
-      level.value = Math.min(1, (peak / 128) * 1.6)
+      if (disposed) return
+      // Rebind if the mic track was replaced (e.g. device switched from this menu)
+      const cur = currentMicTrack()
+      if (cur && cur !== boundTrack) bindTrack(cur)
+      if (analyser && data) {
+        analyser.getByteTimeDomainData(data)
+        let peak = 0
+        for (const v of data) peak = Math.max(peak, Math.abs(v - 128))
+        level.value = Math.min(1, (peak / 128) * 1.6)
+      }
       raf = requestAnimationFrame(tick)
     }
     tick()
   } catch { /* meter stays idle */ }
 })
-onBeforeUnmount(() => { cancelAnimationFrame(raf); ctx?.close().catch(() => {}) })
+
+onBeforeUnmount(() => {
+  disposed = true
+  cancelAnimationFrame(raf)
+  src?.disconnect(); src = null
+  ctx?.close().catch(() => {}); ctx = null
+})
 </script>
 
 <template>
