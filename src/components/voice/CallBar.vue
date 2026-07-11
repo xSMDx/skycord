@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCamera, PhVideoCameraSlash, PhScreencast, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
 import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
+import MicFlyout from './MicFlyout.vue'
 import { useVoiceMedia } from '@/composables/useVoiceMedia'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
@@ -21,7 +22,7 @@ const props = defineProps<{
   me?: { name: string; avatar: string }
   dismissed?: boolean
 }>()
-const emit = defineEmits<{ dismiss: []; toast: [msg: string] }>()
+const emit = defineEmits<{ dismiss: []; toast: [msg: string]; openSettings: [] }>()
 
 const { voice, connect, leave, toggleMute } = useVoice()
 const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
@@ -31,6 +32,9 @@ const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
 // silently.
 const onCamera = async () => { const err = await toggleCamera(); if (err) emit('toast', err) }
 const onShare  = async () => { const err = await toggleScreenShare(); if (err) emit('toast', err) }
+
+const openMenu = ref<'' | 'mic' | 'cam' | 'more'>('')
+const toggleMenu = (m: 'mic' | 'cam' | 'more') => { openMenu.value = openMenu.value === m ? '' : m }
 
 const joinedHere     = computed(() => voice.connected  && voice.activeConvId     === props.convId)
 const connectingHere = computed(() => voice.connecting && voice.connectingConvId === props.convId)
@@ -85,11 +89,12 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
       <div class="cb-bar">
         <div class="cb-group">
           <!-- mic/camera + their ▾ read as ONE control: hovering either lights the pair -->
-          <div class="cb-split">
+          <div class="cb-split" :class="{ menuopen: openMenu === 'mic' }">
             <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
               <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
             </button>
-            <button class="cb-chev" disabled title="Audio settings — coming soon"><PhCaretDown :size="12" weight="bold" /></button>
+            <button class="cb-chev" title="Audio settings" @click="toggleMenu('mic')"><PhCaretDown :size="12" weight="bold" /></button>
+            <MicFlyout v-if="openMenu === 'mic'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
           <div class="cb-split">
             <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera">
@@ -184,9 +189,10 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 /* mic/cam + ▾ pair highlight: the split wrapper takes the hover bg so both
    halves light together (Discord behavior). Individual bg hovers inside the
    split go transparent; red .off / green .on states keep their own fills. */
-.cb-split { display: flex; align-items: center; gap: 2px; border-radius: 8px; transition: background .12s; }
+.cb-split { position: relative; display: flex; align-items: center; gap: 2px; border-radius: 8px; transition: background .12s; }
 .cb-split:hover:has(.cb-b:not(:disabled)) { background: rgba(255,255,255,.08); }
 .cb-split .cb-b:hover:not(:disabled):not(.on):not(.off) { background: transparent; }
+.cb-split.menuopen { background: rgba(255,255,255,.08); }
 .cb-leave {
   width: 56px; height: 44px; border-radius: 12px; flex-shrink: 0;
   background: #f23f43; color: #fff;

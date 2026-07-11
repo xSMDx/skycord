@@ -1803,6 +1803,7 @@ onBeforeUnmount(() => {
             :dismissed="currentCallDismissed"
             @dismiss="dismissCurrentCall"
             @toast="showToast"
+            @open-settings="showSettings = true"
           />
 
           <!-- Pinned messages panel -->
