@@ -131,12 +131,13 @@ const bindLevelSource = async (t: MediaStreamTrack | null) => {
   try {
     if (!levelCtx) levelCtx = new AudioContext()
     await levelCtx.resume()
+    if (levelTrack !== t) return   // superseded by a newer bind while resuming
     levelSrc = levelCtx.createMediaStreamSource(new MediaStream([t]))
     levelAnalyser = levelCtx.createAnalyser()
     levelAnalyser.fftSize = 512
     levelSrc.connect(levelAnalyser)   // analysis only — never to destination
     levelData = new Uint8Array(levelAnalyser.frequencyBinCount)
-  } catch { /* ring falls back to server-driven state */ }
+  } catch { /* bind failed — local ring stays off until the next track change */ }
 }
 
 const levelTick = () => {
