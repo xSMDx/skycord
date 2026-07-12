@@ -60,34 +60,62 @@ const unregisterLocalVideo = (source: 'camera' | 'screen') => {
   media.videoTracks.delete(keyFor(room.localParticipant.identity, source))
 }
 
-// Friendly message for a failed camera start (returned to the UI for a toast).
-const cameraErrorMessage = (e: unknown): string => {
-  const name = (e as DOMException)?.name
-  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Camera permission denied'
-  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No camera found'
-  if (name === 'NotReadableError' || name === 'AbortError') return 'Camera is in use by another app'
-  return "Couldn't start the camera"
-}
-
 // Both toggles resolve to null on success, or a user-facing error message the
-// caller should surface (toast) — a silent no-op button reads as "broken".
+// caller should surface (toast). Device-in-use failures are deliberately
+// SILENT in the UI (per user request) — details go to the console instead.
 export const toggleCamera = async (): Promise<string | null> => {
   const room = getRoom(); if (!room) return null
   const next = !room.localParticipant.isCameraEnabled
-  try {
-    await room.localParticipant.setCameraEnabled(next, {
-      deviceId: voiceSettings.cameraDeviceId || undefined,
-      resolution: CAM_RES,
-    })
-    media.localCamOn = next
-    next ? registerLocalVideo(Track.Source.Camera) : unregisterLocalVideo('camera')
+
+  if (!next) {
+    try {
+      await room.localParticipant.setCameraEnabled(false)
+      media.localCamOn = false
+      unregisterLocalVideo('camera')
+    } catch (e) {
+      console.warn('[voice-media] camera disable failed', e)
+      media.localCamOn = room.localParticipant.isCameraEnabled
+    }
     return null
-  } catch (e) {
-    console.warn('[voice-media] camera toggle failed', e)
-    media.localCamOn = room.localParticipant.isCameraEnabled
-    // Only the enable direction warrants a toast; a failed disable is invisible.
-    return next ? cameraErrorMessage(e) : null
   }
+
+  // Enable: try the preferred device first, then EVERY other camera device.
+  // One physical camera can't be shared across two apps on Windows, but when a
+  // second device exists (virtual cam + real webcam), fall through to it
+  // instead of failing.
+  const candidates: (string | undefined)[] = [voiceSettings.cameraDeviceId || undefined]
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices()
+    for (const d of devs) {
+      if (d.kind === 'videoinput' && d.deviceId && d.deviceId !== voiceSettings.cameraDeviceId) {
+        candidates.push(d.deviceId)
+      }
+    }
+  } catch { /* enumeration denied — preferred/default attempt still runs */ }
+
+  let lastErr: unknown = null
+  const tried: string[] = []
+  for (const id of candidates) {
+    try {
+      await room.localParticipant.setCameraEnabled(true, { deviceId: id, resolution: CAM_RES })
+      media.localCamOn = true
+      registerLocalVideo(Track.Source.Camera)
+      return null
+    } catch (e) {
+      lastErr = e
+      tried.push(id || 'default')
+      const name = (e as DOMException)?.name
+      // Permission denials apply to all devices — don't spam retries.
+      if (name === 'NotAllowedError' || name === 'SecurityError') break
+    }
+  }
+
+  console.warn('[voice-media] camera enable failed on every device', { tried, lastErr })
+  media.localCamOn = room.localParticipant.isCameraEnabled
+  const name = (lastErr as DOMException)?.name
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Camera permission denied'
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No camera found'
+  return null   // in-use/unknown: silent by design — see console for the device list tried
 }
 
 export const toggleScreenShare = async (): Promise<string | null> => {
