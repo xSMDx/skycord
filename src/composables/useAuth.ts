@@ -19,6 +19,34 @@ const user        = ref<PublicUser | null>(null)
 const accessToken = ref<string | null>(null)
 const loading     = ref(false)
 const initialized = ref(false)
+
+// ── Server reachability ────────────────────────────────────────────────
+// The dev proxy answers with a bodyless 500 when the API process is down —
+// indistinguishable from a real error unless we probe. `serverDown` drives a
+// persistent banner on the auth page and self-clears by re-probing /health.
+const serverDown = ref(false)
+let probeTimer: ReturnType<typeof setTimeout> | null = null
+const OFFLINE_MSG = 'Skycord server is offline — start the API server (start-dev.cmd), it will reconnect automatically.'
+
+const probeServer = async (): Promise<void> => {
+  try {
+    const r = await fetch('/health', { cache: 'no-store' })
+    serverDown.value = !r.ok
+  } catch { serverDown.value = true }
+  if (probeTimer) { clearTimeout(probeTimer); probeTimer = null }
+  if (serverDown.value) probeTimer = setTimeout(() => { void probeServer() }, 5000)
+}
+
+// A response whose body isn't JSON is the proxy talking, not the API.
+const readJson = async (res: Response): Promise<any | null> => {
+  try { return await res.json() } catch { return null }
+}
+
+const flagServerDown = (path: string, detail: unknown) => {
+  console.error(`[auth] ${path} unreachable — API server down behind the dev proxy?`, detail)
+  serverDown.value = true
+  void probeServer()
+}
  
 const authFetch = async (path: string, opts: RequestInit = {}): Promise<Response> => {
   const headers: Record<string, string> = {
@@ -56,13 +84,17 @@ export const useAuth = () => {
     loading.value = true
     try {
       const res  = await authFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) })
-      const data = await res.json()
-      if (!res.ok) return { ok: false as const, errors: data.errors, message: data.message }
+      const data = await readJson(res)
+      if (!res.ok) {
+        if (!data) { flagServerDown('/auth/register', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        return { ok: false as const, errors: data.errors, message: data.message }
+      }
+      serverDown.value = false
       accessToken.value = data.accessToken
       user.value = data.user
       scheduleRefresh()
       return { ok: true as const }
-    } catch { return { ok: false as const, message: 'Could not reach server' } }
+    } catch (e) { flagServerDown('/auth/register', e); return { ok: false as const, message: OFFLINE_MSG } }
     finally   { loading.value = false }
   }
  
@@ -70,13 +102,17 @@ export const useAuth = () => {
     loading.value = true
     try {
       const res  = await authFetch('/auth/login', { method: 'POST', body: JSON.stringify(payload) })
-      const data = await res.json()
-      if (!res.ok) return { ok: false as const, errors: data.errors, message: data.message }
+      const data = await readJson(res)
+      if (!res.ok) {
+        if (!data) { flagServerDown('/auth/login', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        return { ok: false as const, errors: data.errors, message: data.message }
+      }
+      serverDown.value = false
       accessToken.value = data.accessToken
       user.value = data.user
       scheduleRefresh()
       return { ok: true as const }
-    } catch { return { ok: false as const, message: 'Could not reach server' } }
+    } catch (e) { flagServerDown('/auth/login', e); return { ok: false as const, message: OFFLINE_MSG } }
     finally   { loading.value = false }
   }
  
@@ -107,6 +143,6 @@ export const useAuth = () => {
   return {
     user, accessToken, loading, initialized, isAuthed,
     register, login, logout, initialize, updateUser,
-    authFetch
+    authFetch, serverDown, probeServer
   }
 }

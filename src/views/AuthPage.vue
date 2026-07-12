@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import SkycordIcon from '@/components/SkycordIcon.vue'
 
@@ -8,7 +8,11 @@ const showPw      = ref(false)
 const showConfirm = ref(false)
 const serverError = ref('')
 
-const { login, register, loading } = useAuth()
+const { login, register, loading, serverDown, probeServer } = useAuth()
+
+// Surface a dead API immediately on page load (not only after a failed
+// submit) — probeServer keeps re-checking and the banner self-clears.
+onMounted(() => { void probeServer() })
 
 const lf = reactive({ identifier: '', password: '' })
 const rf = reactive({ username: '', displayName: '', email: '', password: '', confirm: '' })
@@ -94,9 +98,17 @@ const submitRegister = async () => {
         <div class="tab-slider" :class="{right: mode==='register'}"/>
       </div>
 
+      <!-- Server-offline banner (auto-clears when /health responds again) -->
+      <transition name="drop">
+        <div v-if="serverDown" class="err-banner">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="currentColor"/></svg>
+          Server offline — start the API server (start-dev.cmd). Retrying automatically…
+        </div>
+      </transition>
+
       <!-- Error banner -->
       <transition name="drop">
-        <div v-if="serverError" class="err-banner">
+        <div v-if="serverError && !serverDown" class="err-banner">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="currentColor"/></svg>
           {{ serverError }}
         </div>
