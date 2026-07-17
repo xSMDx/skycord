@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCamera, PhVideoCameraSlash, PhScreencast, PhDotsThree, PhCaretDown, PhPhoneCall, PhX } from '@phosphor-icons/vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { PhMicrophone, PhMicrophoneSlash, PhPhoneX, PhVideoCamera, PhVideoCameraSlash, PhScreencast, PhDotsThree, PhCaretDown, PhPhoneCall, PhX, PhArrowsOut, PhArrowsIn } from '@phosphor-icons/vue'
 import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
@@ -83,10 +83,25 @@ const stageTiles = computed<Tile[]>(() => {
 const videoList = computed(() => [...media.videoTracks.values()])
 
 const join = () => { connect(props.convId, props.kind, props.name).catch(() => {}) }
+
+// ── Fullscreen ──────────────────────────────────────────────────────────────
+// Fullscreen the whole call surface (stage + control pill), so it becomes the
+// theater view with the message list hidden behind. isFullscreen tracks the
+// fullscreenchange event so the icon stays correct even when the user exits
+// with Esc rather than the button.
+const callbarRef  = ref<HTMLElement | null>(null)
+const isFullscreen = ref(false)
+const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
+const toggleFullscreen = () => {
+  if (!isFullscreen.value) callbarRef.value?.requestFullscreen?.().catch(() => {})
+  else document.exitFullscreen?.().catch(() => {})
+}
+onMounted(() => document.addEventListener('fullscreenchange', syncFullscreen))
+onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFullscreen))
 </script>
 
 <template>
-  <div v-if="visible" class="callbar" :class="{ 'has-video': inCall && videoList.length }">
+  <div v-if="visible" ref="callbarRef" class="callbar" :class="{ 'has-video': inCall && videoList.length, 'is-fs': isFullscreen }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" />
@@ -121,6 +136,11 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
         </div>
         <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhPhoneX :size="20" weight="fill" /></button>
       </div>
+
+      <!-- Fullscreen toggle — bottom-right of the stage, like Discord's ⛶ -->
+      <button class="cb-fs" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
+        <component :is="isFullscreen ? PhArrowsIn : PhArrowsOut" :size="18" weight="bold" />
+      </button>
     </template>
 
     <!-- ── Ongoing call you haven't joined ───────────────────────────────── -->
@@ -144,6 +164,7 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 
 <style scoped>
 .callbar {
+  position: relative;
   background: var(--bg-floor); border-bottom: 1px solid var(--border);
   padding: 20px 16px 16px; display: flex; flex-direction: column; align-items: center; gap: 18px;
 }
@@ -249,4 +270,18 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 .callbar.has-video { flex: 1 1 auto; min-height: 0; }
 .cb-callstage { width: 100%; }
 .callbar.has-video .cb-callstage { flex: 1 1 auto; min-height: 0; }
+
+/* Fullscreen (⛶) — theater view: the whole call surface fills the screen,
+   letterboxed on pure black, stage grows to fill above the control pill. */
+.cb-fs {
+  position: absolute; right: 16px; bottom: 16px;
+  width: 34px; height: 34px; border-radius: 8px;
+  background: rgba(255,255,255,.06); color: #cfd3e0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s, transform .1s;
+}
+.cb-fs:hover { background: rgba(255,255,255,.14); color: #fff; }
+.cb-fs:active { transform: scale(.92); }
+.callbar.is-fs { background: #000; border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
+.callbar.is-fs .cb-callstage { flex: 1 1 auto; min-height: 0; width: 100%; }
 </style>
