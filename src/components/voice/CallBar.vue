@@ -42,8 +42,15 @@ const joinedHere     = computed(() => voice.connected  && voice.activeConvId    
 const connectingHere = computed(() => voice.connecting && voice.connectingConvId === props.convId)
 const inCall         = computed(() => joinedHere.value || connectingHere.value)
 
-// Leaving the call (or it ending) must not leave a flyout open for next join.
-watch(inCall, (v) => { if (!v) openMenu.value = '' })
+// Leaving the call (or it ending) must not leave a flyout open for next join,
+// and must not strand the user in fullscreen (the ongoing/not-joined view has
+// no ⛶ button, so exit fullscreen ourselves when the call ends).
+watch(inCall, (v) => {
+  if (!v) {
+    openMenu.value = ''
+    if (isFullscreen.value) document.exitFullscreen?.().catch(() => {})
+  }
+})
 
 const callActive     = computed(() => props.participants.length > 0)
 // Ongoing call you haven't joined (and haven't dismissed).
@@ -104,7 +111,14 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFulls
   <div v-if="visible" ref="callbarRef" class="callbar" :class="{ 'has-video': inCall && videoList.length, 'is-fs': isFullscreen }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
-      <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" />
+      <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
+           button sits over the video area (not down at the control-bar row) -->
+      <div class="cb-stagewrap">
+        <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" />
+        <button class="cb-fs" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
+          <component :is="isFullscreen ? PhArrowsIn : PhArrowsOut" :size="18" weight="bold" />
+        </button>
+      </div>
 
       <!-- Discord-style grouped pill controls -->
       <div class="cb-bar">
@@ -136,11 +150,6 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFulls
         </div>
         <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhPhoneX :size="20" weight="fill" /></button>
       </div>
-
-      <!-- Fullscreen toggle — bottom-right of the stage, like Discord's ⛶ -->
-      <button class="cb-fs" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
-        <component :is="isFullscreen ? PhArrowsIn : PhArrowsOut" :size="18" weight="bold" />
-      </button>
     </template>
 
     <!-- ── Ongoing call you haven't joined ───────────────────────────────── -->
@@ -266,22 +275,28 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFulls
 .cb-b.on { background: #248046; color: #fff; }
 .cb-b.on:hover:not(:disabled) { background: #1a6334; }
 
-/* When video is on the stage, let the call bar grow to fill the chat column */
+/* When video is on the stage, let the call bar grow to fill the chat column.
+   The stage lives in .cb-stagewrap (positioning context for the ⛶ overlay);
+   growth applies to the wrapper, and the stage fills it. */
 .callbar.has-video { flex: 1 1 auto; min-height: 0; }
+.cb-stagewrap { position: relative; width: 100%; display: flex; }
 .cb-callstage { width: 100%; }
-.callbar.has-video .cb-callstage { flex: 1 1 auto; min-height: 0; }
+.callbar.has-video .cb-stagewrap,
+.callbar.is-fs   .cb-stagewrap { flex: 1 1 auto; min-height: 0; }
+.callbar.has-video .cb-callstage,
+.callbar.is-fs   .cb-callstage { flex: 1 1 auto; min-height: 0; }
 
-/* Fullscreen (⛶) — theater view: the whole call surface fills the screen,
-   letterboxed on pure black, stage grows to fill above the control pill. */
+/* Fullscreen (⛶) — bottom-right OF THE STAGE (wrapper-relative, so it never
+   drops down onto the control-bar row). */
 .cb-fs {
-  position: absolute; right: 16px; bottom: 16px;
+  position: absolute; right: 12px; bottom: 12px; z-index: 2;
   width: 34px; height: 34px; border-radius: 8px;
-  background: rgba(255,255,255,.06); color: #cfd3e0;
+  background: rgba(0,0,0,.55); color: #e8eaf0;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s, color .12s, transform .1s;
 }
-.cb-fs:hover { background: rgba(255,255,255,.14); color: #fff; }
+.cb-fs:hover { background: rgba(0,0,0,.8); color: #fff; }
 .cb-fs:active { transform: scale(.92); }
+/* Theater view: whole call surface fills the screen, letterboxed on black. */
 .callbar.is-fs { background: #000; border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
-.callbar.is-fs .cb-callstage { flex: 1 1 auto; min-height: 0; width: 100%; }
 </style>

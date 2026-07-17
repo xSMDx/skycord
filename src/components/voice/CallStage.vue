@@ -50,7 +50,6 @@ const cells = computed<Cell[]>(() => {
 // focusedKey is the cell.key being spotlighted; null = grid view.
 const focusedKey  = ref<string | null>(null)
 const focusedCell = computed(() => cells.value.find(c => c.key === focusedKey.value) ?? null)
-const stripCells  = computed(() => cells.value.filter(c => c.key !== focusedKey.value))
 const inSpotlight = computed(() => hasVideo.value && !!focusedCell.value)
 
 const focus  = (key: string) => { focusedKey.value = key }
