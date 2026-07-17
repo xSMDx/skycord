@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { PhMicrophoneSlash, PhMonitor } from '@phosphor-icons/vue'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
@@ -45,6 +45,28 @@ const cells = computed<Cell[]>(() => {
   }
   return out
 })
+
+// ── Spotlight ("big screen") ────────────────────────────────────────────────
+// focusedKey is the cell.key being spotlighted; null = grid view.
+const focusedKey  = ref<string | null>(null)
+const focusedCell = computed(() => cells.value.find(c => c.key === focusedKey.value) ?? null)
+const stripCells  = computed(() => cells.value.filter(c => c.key !== focusedKey.value))
+const inSpotlight = computed(() => hasVideo.value && !!focusedCell.value)
+
+const focus  = (key: string) => { focusedKey.value = key }
+const unfocus = () => { focusedKey.value = null }
+
+// If the focused participant leaves or stops their video, the key no longer
+// resolves — drop back to grid rather than freezing on an empty spotlight.
+watch(cells, () => {
+  if (focusedKey.value && !focusedCell.value) focusedKey.value = null
+})
+
+// Esc exits spotlight (when fullscreen is also on, the browser eats the first
+// Esc for fullscreen; the next one lands here).
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && focusedKey.value) focusedKey.value = null }
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
@@ -60,9 +82,21 @@ const cells = computed<Cell[]>(() => {
     </div>
   </div>
 
-  <!-- Layout 2: rectangular grid (any video present) -->
-  <div v-else class="stage stage--grid">
-    <div v-for="c in cells" :key="c.key" class="g-cell" :class="{ speaking: c.speaking }">
+  <!-- Layout 2/3: rectangular grid — or spotlight when a tile is focused.
+       One loop the whole time: entering spotlight only restyles the same cells
+       (the focused one becomes .is-main, the rest .is-thumb), so VideoTile nodes
+       are never remounted and the video never flashes. -->
+  <div v-else class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight }">
+    <div
+      v-for="c in cells" :key="c.key"
+      class="g-cell"
+      :class="{ speaking: c.speaking,
+                'is-main':  inSpotlight && c.key === focusedKey,
+                'is-thumb': inSpotlight && c.key !== focusedKey }"
+      role="button"
+      :title="inSpotlight && c.key === focusedKey ? 'Back to grid' : `Focus ${c.name}`"
+      @click="inSpotlight && c.key === focusedKey ? unfocus() : focus(c.key)"
+    >
       <template v-if="c.kind === 'video'">
         <VideoTile :track="c.video.track" :fit="c.source === 'screen' ? 'contain' : 'cover'" />
         <span v-if="c.source === 'screen'" class="g-live">LIVE</span>
@@ -112,11 +146,24 @@ button { border: none; }
 }
 .g-cell {
   position: relative; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
-  background: #0b0b0f; border: 2px solid transparent;
+  background: #0b0b0f; border: 2px solid transparent; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color .15s;
 }
 .g-cell.speaking { border-color: #23a55a; }
+/* Grid-only hover hint: clicking focuses this tile. Suppressed in spotlight. */
+.stage--grid:not(.stage--spotlight) .g-cell:hover { box-shadow: inset 0 0 0 2px rgba(255,255,255,.22); }
+
+/* Spotlight ("big screen"): focused cell fills the top, the rest wrap into a
+   thumbnail strip below. Overrides the grid display (defined after .stage--grid
+   so equal-specificity source order wins). */
+.stage--spotlight {
+  display: flex; flex-wrap: wrap; gap: 10px; padding: 8px;
+  align-content: flex-start; justify-content: center; overflow: auto;
+}
+.stage--spotlight .g-cell { aspect-ratio: auto; }
+.stage--spotlight .is-main  { order: -1; flex: 1 1 100%; height: 62%; min-height: 220px; }
+.stage--spotlight .is-thumb { flex: 0 0 156px; height: 88px; }
 .g-avwrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .g-av {
   width: 72px; height: 72px; border-radius: 50%; overflow: hidden;
