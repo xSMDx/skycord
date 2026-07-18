@@ -69,7 +69,10 @@ export const getDMMessages = async (req: Request, res: Response, next: NextFunct
     const limit   = Math.min(Number(req.query.limit) || 50, 100)
 
     const convId = dmConvId(userId, partnerId)
-    const filter: any = { conversationId: convId, kind: 'dm' }
+    // Include 'system' (call logs like "X started a call" / "Call ended") the
+    // same way group history does — they were being written but never loaded,
+    // so DM call logs vanished on refresh.
+    const filter: any = { conversationId: convId, kind: { $in: ['dm', 'system'] } }
     if (before) filter.createdAt = { $lt: new Date(before) }
 
     const messages = await Message.find(filter)
