@@ -281,10 +281,6 @@ const currentCall = computed<{ id: string; kind: 'dm' | 'group'; name: string } 
   return null
 })
 const callActiveHere = computed(() => !!currentCall.value && voice.connected && voice.activeConvId === currentCall.value.id)
-// Hide-chat only makes sense while a CallBar is on screen. If this view loses
-// its call bar (switching conversations mid-call unmounts it), never leave the
-// message list hidden.
-watch(currentCall, (c) => { if (!c) callExpanded.value = false })
 const toggleCall = async () => {
   const c = currentCall.value; if (!c) return
   if (callActiveHere.value) { await vLeave(); return }
@@ -363,6 +359,10 @@ const showSettings      = ref(false)
 // Call "hide chat" mode — CallBar's expand button hands the whole chat column
 // to the call by hiding the message list + composer (rails stay visible).
 const callExpanded      = ref(false)
+// Hide-chat only makes sense while a CallBar is on screen. Views without one
+// (friends, home) unmount it, so never leave the message list hidden. Declared
+// beside the ref so the callback can't outrun its initialisation.
+watch(currentCall, (c) => { if (!c) callExpanded.value = false })
 // Accepts any user-ish shape (ApiUser, Friend, Member, GroupMember) — the
 // UserProfileModal normalises whatever fields are present.
 const showUserProfile   = ref<Record<string, any> | null>(null)

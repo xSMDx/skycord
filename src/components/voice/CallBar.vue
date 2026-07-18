@@ -326,10 +326,13 @@ onBeforeUnmount(() => {
 }
 .cb-expand:hover { background: rgba(0,0,0,.8); color: #fff; }
 .cb-expand:active { transform: scale(.92); }
-/* Rest dimmed so they don't fight tile name labels in the stage corners;
-   full strength as soon as the pointer is anywhere on the stage. */
-.cb-expand, .cb-fs { opacity: .45; }
-.cb-stagewrap:hover .cb-expand, .cb-stagewrap:hover .cb-fs { opacity: 1; }
+/* Rest dimmed so they don't fight tile name labels in the stage corners; full
+   strength as soon as the pointer is on the stage. Only on hover-capable
+   pointers — touch has no hover, so phones/tablets keep them fully visible. */
+@media (hover: hover) {
+  .cb-expand, .cb-fs { opacity: .45; }
+  .cb-stagewrap:hover .cb-expand, .cb-stagewrap:hover .cb-fs { opacity: 1; }
+}
 /* Theater view: whole call surface fills the screen, letterboxed on black. */
 .callbar.is-fs { background: #000; border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
 </style>
