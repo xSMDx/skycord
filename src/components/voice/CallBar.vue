@@ -122,21 +122,26 @@ let stopDrag: (() => void) | null = null
 
 // Explicit height only while the call shares the column — expanded/fullscreen
 // have their own fill rules.
-const barStyle = computed(() =>
-  inCall.value && videoList.value.length && !expanded.value && !isFullscreen.value
-    ? { flex: '0 0 auto', height: (heightPct.value * 100).toFixed(2) + '%' }
-    : {})
+const barStyle = computed(() => {
+  if (!(inCall.value && videoList.value.length && !expanded.value && !isFullscreen.value)) return {}
+  // Clamp on read too: a hand-edited or legacy localStorage value must never
+  // render the bar unusably small or swallow the whole column.
+  const pct = Math.min(Math.max(heightPct.value, 0.15), EXPAND_AT)
+  return { flex: '0 0 auto', height: (pct * 100).toFixed(2) + '%' }
+})
 
 const onResizeDown = (e: PointerEvent) => {
   const column = callbarRef.value?.parentElement
-  if (!column) return
-  const colTop    = column.getBoundingClientRect().top
+  if (!column || !callbarRef.value) return
   const colHeight = column.getBoundingClientRect().height
+  // Measure from the BAR's own top, not the column's — the chat header sits
+  // between them, and using the column top would offset every drag by its height.
+  const barTop = callbarRef.value.getBoundingClientRect().top
   if (colHeight <= 0) return
   dragging.value = true
 
   const move = (ev: PointerEvent) => {
-    const pct = (ev.clientY - colTop) / colHeight
+    const pct = (ev.clientY - barTop) / colHeight
     if (pct >= EXPAND_AT) {                       // slide into hide-chat
       if (!expanded.value) { expanded.value = true; emit('expand', true) }
       return
@@ -153,12 +158,22 @@ const onResizeDown = (e: PointerEvent) => {
   stopDrag = () => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
+    // pointercancel (touch-scroll takeover, alt-tab, system dialog) must tear the
+    // drag down too, or stale listeners fire on the next unrelated click.
+    window.removeEventListener('pointercancel', up)
     stopDrag = null
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
   e.preventDefault()
 }
+
+// "Reset all Voice & Video settings" can fire mid-call — follow it, but never
+// yank the bar out from under an active drag.
+watch(() => voiceSettings.callHeightPct, (v) => {
+  if (!dragging.value && typeof v === 'number') heightPct.value = v
+})
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {
   if (!isFullscreen.value) callbarRef.value?.requestFullscreen?.().catch(() => {})
@@ -397,6 +412,7 @@ onBeforeUnmount(() => {
 .cb-resize {
   position: absolute; left: 0; right: 0; bottom: 0; height: 6px; z-index: 3;
   cursor: ns-resize; background: transparent; transition: background .12s;
+  touch-action: none;   /* stop touch browsers hijacking the drag as a scroll */
 }
 .cb-resize:hover, .cb-resize.on { background: rgba(var(--accent-rgb), .55); }
 /* Don't let a drag select text or fight the pointer across the app */
