@@ -6,6 +6,10 @@ import ModalBase from './ModalBase.vue'
 const props = defineProps<{ src: string }>()
 const emit  = defineEmits<{ apply: [dataUrl: string]; cancel: []; close: [] }>()
 
+// A canvas export flattens an animated GIF to a single frame, so GIFs are used
+// as-is — animation intact — and the crop/zoom/rotate controls are hidden.
+const isGif = /^data:image\/gif/i.test(props.src) || /\.gif($|\?)/i.test(props.src)
+
 const VIEWPORT = 300   // logical px of the square preview
 const OUTPUT   = 256   // exported avatar size
 
@@ -52,6 +56,9 @@ const rotate = () => { rot.value = (rot.value + 90) % 360 }
 const reset  = () => { scale.value = 1; rot.value = 0; tx.value = 0; ty.value = 0 }
 
 const apply = () => {
+  // Pass GIFs straight through — re-encoding through canvas would kill the animation.
+  if (isGif) { emit('apply', props.src); return }
+
   const canvas = document.createElement('canvas')
   canvas.width = OUTPUT; canvas.height = OUTPUT
   const ctx = canvas.getContext('2d')
@@ -83,7 +90,13 @@ const apply = () => {
       </div>
 
       <div class="ei-stage">
+        <!-- GIF: show it whole and animated; cropping would flatten it -->
+        <div v-if="isGif" class="ei-viewport">
+          <img :src="src" class="ei-gif" draggable="false" />
+          <div class="ei-mask"></div>
+        </div>
         <div
+          v-else
           class="ei-viewport"
           @pointerdown="onDown" @pointermove="onMove"
           @pointerup="onUp" @pointercancel="onUp"
@@ -93,7 +106,9 @@ const apply = () => {
         </div>
       </div>
 
-      <div class="ei-controls">
+      <p v-if="isGif" class="ei-gifnote">GIFs keep their animation, so they're used as-is.</p>
+
+      <div v-if="!isGif" class="ei-controls">
         <PhImageSquare :size="18" weight="fill" class="ei-zoom-ico" />
         <input
           v-model.number="scale"
@@ -108,10 +123,10 @@ const apply = () => {
       </div>
 
       <div class="ei-footer">
-        <button class="ei-reset" @click="reset">Reset</button>
+        <button v-if="!isGif" class="ei-reset" @click="reset">Reset</button>
         <div class="ei-actions">
           <button class="ei-cancel" @click="emit('cancel')">Cancel</button>
-          <button class="ei-apply" :disabled="!ready" @click="apply">Apply</button>
+          <button class="ei-apply" :disabled="!isGif && !ready" @click="apply">Apply</button>
         </div>
       </div>
     </div>
@@ -140,6 +155,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .ei-viewport:active { cursor: grabbing; }
 .ei-img { position: absolute; left: 50%; top: 50%; transform-origin: center; will-change: transform; }
+/* GIF preview: whole frame, centred, animation untouched */
+.ei-gif { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; }
+.ei-gifnote { text-align: center; font-size: 12.5px; color: var(--text-3); margin: 10px 0 0; }
 /* Circular alignment mask: darken everything outside the circle + white ring */
 .ei-mask {
   position: absolute; inset: 0; pointer-events: none;
