@@ -114,7 +114,13 @@ const toggleFullscreen = () => {
   else document.exitFullscreen?.().catch(() => {})
 }
 onMounted(() => document.addEventListener('fullscreenchange', syncFullscreen))
-onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFullscreen))
+onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', syncFullscreen)
+  // CallBar is destroyed whenever you view a DIFFERENT conversation — even while
+  // still connected to this call — so the inCall watch never runs. Hand the chat
+  // column back on the way out, or ChatApp stays stuck in hide-chat forever.
+  if (expanded.value) emit('expand', false)
+})
 </script>
 
 <template>
@@ -320,6 +326,10 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFulls
 }
 .cb-expand:hover { background: rgba(0,0,0,.8); color: #fff; }
 .cb-expand:active { transform: scale(.92); }
+/* Rest dimmed so they don't fight tile name labels in the stage corners;
+   full strength as soon as the pointer is anywhere on the stage. */
+.cb-expand, .cb-fs { opacity: .45; }
+.cb-stagewrap:hover .cb-expand, .cb-stagewrap:hover .cb-fs { opacity: 1; }
 /* Theater view: whole call surface fills the screen, letterboxed on black. */
 .callbar.is-fs { background: #000; border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
 </style>

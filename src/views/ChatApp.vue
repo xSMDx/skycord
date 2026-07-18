@@ -281,6 +281,10 @@ const currentCall = computed<{ id: string; kind: 'dm' | 'group'; name: string } 
   return null
 })
 const callActiveHere = computed(() => !!currentCall.value && voice.connected && voice.activeConvId === currentCall.value.id)
+// Hide-chat only makes sense while a CallBar is on screen. If this view loses
+// its call bar (switching conversations mid-call unmounts it), never leave the
+// message list hidden.
+watch(currentCall, (c) => { if (!c) callExpanded.value = false })
 const toggleCall = async () => {
   const c = currentCall.value; if (!c) return
   if (callActiveHere.value) { await vLeave(); return }
