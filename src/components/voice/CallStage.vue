@@ -151,12 +151,15 @@ button { border: none; }
 
 /* Layout 2 — rectangular grid */
 .stage--grid {
-  display: grid; gap: 10px; padding: 8px; width: 100%; height: 100%;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  align-content: center; justify-content: center; overflow: auto;
+  display: grid; gap: 10px; padding: 8px; width: 100%; height: 100%; min-height: 0;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  /* Rows share the stage's height, so tiles always FIT the call bar no matter
+     how short you drag it — the video letterboxes instead of overflowing. */
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch; justify-content: center; overflow: hidden;
 }
 .g-cell {
-  position: relative; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
+  position: relative; aspect-ratio: 16 / 9; min-height: 0; border-radius: 8px; overflow: hidden;
   background: #0b0b0f; border: 2px solid transparent; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color .15s;

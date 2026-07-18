@@ -123,7 +123,8 @@ let stopDrag: (() => void) | null = null
 // Explicit height only while the call shares the column — expanded/fullscreen
 // have their own fill rules.
 const barStyle = computed(() => {
-  if (!(inCall.value && videoList.value.length && !expanded.value && !isFullscreen.value)) return {}
+  // Resizable in ANY call — audio-only too, not just when video is on the stage.
+  if (!(inCall.value && !expanded.value && !isFullscreen.value)) return {}
   // Clamp on read too: a hand-edited or legacy localStorage value must never
   // render the bar unusably small or swallow the whole column.
   const pct = Math.min(Math.max(heightPct.value, 0.15), EXPAND_AT)
@@ -199,7 +200,8 @@ onBeforeUnmount(() => {
       <div class="cb-stagewrap">
         <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" :show-filmstrip="showFilmstrip" />
         <button class="cb-expand" :title="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
-          <PhCaretDown :size="16" weight="bold" :style="expanded ? '' : 'transform: rotate(180deg)'" />
+          <!-- points DOWN normally; flips UP once the chat is hidden -->
+          <PhCaretDown :size="16" weight="bold" :style="expanded ? 'transform: rotate(180deg)' : ''" />
         </button>
         <button class="cb-fs" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
           <component :is="isFullscreen ? PhArrowsIn : PhArrowsOut" :size="18" weight="bold" />
@@ -239,7 +241,7 @@ onBeforeUnmount(() => {
 
       <!-- Drag the bottom edge to resize; past the top it becomes hide-chat -->
       <div
-        v-if="videoList.length && !isFullscreen"
+        v-if="!isFullscreen"
         class="cb-resize" :class="{ on: dragging }"
         title="Drag to resize the call"
         @pointerdown="onResizeDown"
