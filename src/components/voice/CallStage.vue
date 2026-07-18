@@ -9,6 +9,9 @@ import { keyFor, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 const props = defineProps<{
   tiles:  { id: string; name: string; avatar: string; speaking: boolean; muted: boolean }[]
   videos: VideoTrackInfo[]
+  // Show the filmstrip of non-focused tiles in spotlight. False in compact
+  // spotlight (chat visible) → focused tile only; true in expand/fullscreen.
+  showFilmstrip?: boolean
 }>()
 
 const hasVideo = computed(() => props.videos.length > 0)
@@ -52,6 +55,15 @@ const focusedKey  = ref<string | null>(null)
 const focusedCell = computed(() => cells.value.find(c => c.key === focusedKey.value) ?? null)
 const inSpotlight = computed(() => hasVideo.value && !!focusedCell.value)
 
+// Compact spotlight (chat visible) renders ONLY the focused cell — the other
+// tiles aren't mounted, so two streams no longer stack a tall filmstrip. The
+// focused cell keeps its key, so its VideoTile is never remounted (no flash);
+// only the filmstrip tiles mount/unmount when expand/fullscreen toggles.
+const renderCells = computed(() =>
+  inSpotlight.value && !props.showFilmstrip
+    ? (focusedCell.value ? [focusedCell.value] : [])
+    : cells.value)
+
 const focus  = (key: string) => { focusedKey.value = key }
 const unfocus = () => { focusedKey.value = null }
 
@@ -85,9 +97,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
        One loop the whole time: entering spotlight only restyles the same cells
        (the focused one becomes .is-main, the rest .is-thumb), so VideoTile nodes
        are never remounted and the video never flashes. -->
-  <div v-else class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight }">
+  <div v-else class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight, 'no-strip': inSpotlight && !showFilmstrip }">
     <div
-      v-for="c in cells" :key="c.key"
+      v-for="c in renderCells" :key="c.key"
       class="g-cell"
       :class="{ speaking: c.speaking,
                 'is-main':  inSpotlight && c.key === focusedKey,
@@ -162,6 +174,8 @@ button { border: none; }
 }
 .stage--spotlight .g-cell { aspect-ratio: auto; }
 .stage--spotlight .is-main  { order: -1; flex: 1 1 100%; height: 62%; min-height: 220px; }
+/* Compact spotlight: no filmstrip below, so the focused tile takes the lot. */
+.stage--spotlight.no-strip .is-main { height: 100%; min-height: 0; }
 .stage--spotlight .is-thumb { flex: 0 0 156px; height: 88px; }
 .g-avwrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .g-av {
