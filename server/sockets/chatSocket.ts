@@ -7,8 +7,13 @@ import { Conversation } from '../models/Conversation'
 import { dmConvId } from '../controllers/messagesController'
 import { config }   from '../config/env'
 
-const onlineUsers = new Map<string, string>()
+// userId -> the socket ids that user currently has open. A user is online while
+// they hold AT LEAST ONE socket: tracking a single id meant a second tab (or the
+// brief overlap during a refresh, where the new socket connects before the old
+// one disconnects) could mark a live user offline — or leave a closed tab online.
+const onlineUsers = new Map<string, Set<string>>()
 export const getOnlineUsers = () => onlineUsers
+export const isUserOnline = (userId: string) => (onlineUsers.get(userId)?.size ?? 0) > 0
 
 // Active voice calls: LiveKit room name -> set of userIds currently in it. Lets
 // members who AREN'T in the room yet see "a call is happening / who's in it"
@@ -58,12 +63,16 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     const username = (socket as any).username as string
     console.log(`[WS] + ${username}`)
 
-    onlineUsers.set(userId, socket.id)
+    let sockets = onlineUsers.get(userId)
+    if (!sockets) { sockets = new Set(); onlineUsers.set(userId, sockets) }
+    const wasOffline = sockets.size === 0
+    sockets.add(socket.id)
     socket.join(`user:${userId}`)
     const me = await User.findByIdAndUpdate(
       userId, { status: 'online', lastSeenAt: new Date() }, { new: true }
     ).select('avatar').lean()
-    io.emit('presence', { userId, status: 'online' })
+    // Announce only on the first socket; extra tabs shouldn't re-broadcast.
+    if (wasOffline) io.emit('presence', { userId, status: 'online' })
 
     // Looked up once per connection rather than trusting whatever the client
     // sends per-message — avatars are no longer frozen onto each message at
@@ -75,6 +84,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // reach every connected member. Room name is the group's _id.
     const myGroups = await Conversation.find({ members: userId }).select('_id').lean()
     myGroups.forEach(g => socket.join(`group:${g._id.toString()}`))
+
+    // Catch up on calls already in progress. Without this, someone who was
+    // offline when the call started sees no ringing/indicator when they come
+    // online — call:state is only broadcast on join/leave, which they missed.
+    for (const [room, participants] of activeCalls) {
+      if (participants.size === 0) continue
+      const belongs = room.startsWith('group:')
+        ? myGroups.some(g => `group:${g._id.toString()}` === room)
+        : room.slice(3).split('_').includes(userId)
+      if (belongs) socket.emit('call:state', { room, userIds: [...participants] })
+    }
 
     // ── Send DM ───────────────────────────────────────────────────────────
     socket.on('dm:send', async (data: {
@@ -432,11 +452,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // ── Disconnect ─────────────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       console.log(`[WS] - ${username}`)
-      onlineUsers.delete(userId)
       // Drop out of any calls this socket was in so presence doesn't go stale.
       for (const room of [...joinedCallRooms]) leaveCall(room)
-      await User.findByIdAndUpdate(userId, { status: 'offline', lastSeenAt: new Date() })
-      io.emit('presence', { userId, status: 'offline' })
+      // Only go offline once the user's LAST socket closes — otherwise closing
+      // one of two tabs (or a refresh) would falsely mark them offline.
+      const set = onlineUsers.get(userId)
+      set?.delete(socket.id)
+      if (set && set.size === 0) {
+        onlineUsers.delete(userId)
+        await User.findByIdAndUpdate(userId, { status: 'offline', lastSeenAt: new Date() })
+        io.emit('presence', { userId, status: 'offline' })
+      }
     })
   })
 
