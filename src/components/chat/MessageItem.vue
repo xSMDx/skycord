@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhPencilSimple, PhArrowBendUpLeft, PhDotsThree, PhUserPlus, PhArrowRight, PhArrowLeft, PhPhone } from '@phosphor-icons/vue'
+import { PhPencilSimple, PhArrowBendUpLeft, PhDotsThree, PhUserPlus, PhArrowRight, PhArrowLeft, PhPhoneCall, PhPhoneX } from '@phosphor-icons/vue'
 import type { Message } from '@/types'
 import GroupInviteCard from './GroupInviteCard.vue'
 import ThemeCard from './ThemeCard.vue'
@@ -26,13 +26,18 @@ const emit  = defineEmits<{
   groupJoined:   [group: any]
 }>()
 
-// System log line (join/leave/add/rename/icon) — icon + colour per type.
+// Both call logs share systemType 'call', so the start/end distinction comes
+// from the content the server writes ("… started a call" vs "Call ended").
+const callEnded = computed(() =>
+  props.msg.systemType === 'call' && /\bended\b/i.test(props.msg.content || ''))
+
+// System log line (join/leave/add/rename/icon/call) — icon + colour per type.
 const systemIcon = computed(() => {
   switch (props.msg.systemType) {
     case 'add':   return PhUserPlus
     case 'join':  return PhArrowRight
     case 'leave': return PhArrowLeft
-    case 'call':  return PhPhone
+    case 'call':  return callEnded.value ? PhPhoneX : PhPhoneCall
     default:      return PhPencilSimple   // rename / icon
   }
 })
@@ -108,7 +113,7 @@ const onReplyPillLeave = () => {
 </script>
 <template>
   <!-- System log line (group rename / icon / add / join / leave) -->
-  <div v-if="msg.kind === 'system'" class="msg-system" :class="'sys-' + (msg.systemType || 'rename')">
+  <div v-if="msg.kind === 'system'" class="msg-system" :class="['sys-' + (msg.systemType || 'rename'), { 'call-ended': callEnded }]">
     <span class="msg-system-icon"><component :is="systemIcon" :size="16" weight="bold" /></span>
     <span class="msg-system-text">{{ msg.content }}</span>
     <span v-if="msg.systemType === 'rename' || msg.systemType === 'icon'" class="msg-system-link">Edit Group</span>
@@ -204,6 +209,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-system.sys-join .msg-system-icon{color:#23a55a}
 .msg-system.sys-leave .msg-system-icon{color:#f23f43}
 .msg-system.sys-add .msg-system-icon{color:#23a55a}
+/* Call logs: green when a call starts, red once it ends */
+.msg-system.sys-call .msg-system-icon{color:#23a55a}
+.msg-system.sys-call.call-ended .msg-system-icon{color:#f23f43}
 .msg-system-link{color:#00a8fc;font-weight:500;cursor:pointer}
 .msg-system-link:hover{text-decoration:underline}
 .msg-system-time{font-size:11px;color:#5c5e66;margin-left:2px}
