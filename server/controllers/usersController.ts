@@ -2,7 +2,13 @@ import { Request, Response, NextFunction } from 'express'
 import { User } from '../models/User'
 import { Friendship } from '../models/Friendship'
 import mongoose from 'mongoose'
-import { getIO } from '../sockets/chatSocket'
+import { getIO, isUserOnline } from '../sockets/chatSocket'
+
+// Anyone without a live socket is offline, whatever the DB says. Connected
+// users keep their chosen status (idle/dnd/invisible) rather than being forced
+// to 'online'.
+const presenceFor = (userId: string, stored: string): string =>
+  isUserOnline(userId) ? (stored === 'offline' ? 'online' : stored) : 'offline'
 
 // ── Search users by username/displayName ────────────────────────────────────
 export const searchUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -28,7 +34,7 @@ export const searchUsers = async (req: Request, res: Response, next: NextFunctio
       displayName:   u.displayName,
       discriminator: u.discriminator,
       avatar:        u.avatar,
-      status:        u.status,
+      status:        presenceFor(u._id.toString(), u.status),
     })) })
   } catch (err) { next(err) }
 }
@@ -124,9 +130,14 @@ export const getFriends = async (req: Request, res: Response, next: NextFunction
       status: 'accepted',
     }).populate('requester receiver', 'username displayName discriminator avatar status bio')
 
+    // Presence comes from the LIVE socket registry, not the stored status. A
+    // crash, deploy or missed disconnect can leave `status: 'online'` in the DB
+    // forever, which is what made closed tabs keep showing as online.
     const friends = friendships.map(f => {
-      const friend = f.requester._id.toString() === userId ? f.receiver : f.requester
-      return friend
+      const friend: any = f.requester._id.toString() === userId ? f.receiver : f.requester
+      const o = friend.toObject ? friend.toObject() : { ...friend }
+      o.status = presenceFor(o._id.toString(), o.status)
+      return o
     })
 
     res.json({ friends })

@@ -31,7 +31,7 @@ const DEFAULTS: VoiceSettings = {
   inputMode: 'voice', pttKey: 'Space', sensitivity: 30,
   noiseSuppression: true, echoCancellation: true,
   screenAudio: true, showOwnCamera: true, showNonVideo: true,
-  callHeightPct: 0.4,
+  callHeightPct: 0.3,
 }
 
 const load = (): Partial<VoiceSettings> => {

@@ -44,8 +44,19 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
   const io = new IOServer(httpServer, {
     cors: { origin: config.cors.clientOrigin, credentials: true },
     transports: ['websocket', 'polling'],
+    // Detect dead connections in ~15s instead of the ~45s default, so a killed
+    // tab or dropped network stops showing the user as online for so long.
+    pingInterval: 10000,
+    pingTimeout: 5000,
   })
   _io = io
+
+  // Nobody can still be connected across a restart: clear stale presence left
+  // by a crash, deploy or missed disconnect, which otherwise sticks in the DB
+  // forever and makes closed tabs read as online.
+  void User.updateMany({ status: { $ne: 'offline' } }, { $set: { status: 'offline' } })
+    .then(r => { if (r.modifiedCount) console.log(`[WS] reset ${r.modifiedCount} stale online user(s)`) })
+    .catch(err => console.error('[WS] presence reset failed', err))
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined
