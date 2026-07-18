@@ -7,6 +7,7 @@ import MicFlyout from './MicFlyout.vue'
 import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia } from '@/composables/useVoiceMedia'
+import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
 // in THIS conversation — joined, connecting, or ongoing-not-joined.
@@ -108,6 +109,56 @@ const callbarRef  = ref<HTMLElement | null>(null)
 const isFullscreen = ref(false)
 // Filmstrip of non-focused tiles only earns its space once the call has room.
 const showFilmstrip = computed(() => expanded.value || isFullscreen.value)
+
+// ── Vertical resize ─────────────────────────────────────────────────────────
+// Drag the call bar's bottom edge to size it. Stored as a FRACTION of the chat
+// column so it stays proportional across window sizes. Dragging past EXPAND_AT
+// slides straight into hide-chat; dragging back down leaves it again.
+const MIN_PX    = 140
+const EXPAND_AT = 0.9
+const heightPct = ref(voiceSettings.callHeightPct ?? 0.4)
+const dragging  = ref(false)
+let stopDrag: (() => void) | null = null
+
+// Explicit height only while the call shares the column — expanded/fullscreen
+// have their own fill rules.
+const barStyle = computed(() =>
+  inCall.value && videoList.value.length && !expanded.value && !isFullscreen.value
+    ? { flex: '0 0 auto', height: (heightPct.value * 100).toFixed(2) + '%' }
+    : {})
+
+const onResizeDown = (e: PointerEvent) => {
+  const column = callbarRef.value?.parentElement
+  if (!column) return
+  const colTop    = column.getBoundingClientRect().top
+  const colHeight = column.getBoundingClientRect().height
+  if (colHeight <= 0) return
+  dragging.value = true
+
+  const move = (ev: PointerEvent) => {
+    const pct = (ev.clientY - colTop) / colHeight
+    if (pct >= EXPAND_AT) {                       // slide into hide-chat
+      if (!expanded.value) { expanded.value = true; emit('expand', true) }
+      return
+    }
+    if (expanded.value) { expanded.value = false; emit('expand', false) }
+    const minPct = MIN_PX / colHeight
+    heightPct.value = Math.min(Math.max(pct, minPct), EXPAND_AT)
+  }
+  const up = () => {
+    dragging.value = false
+    setVoiceSettings({ callHeightPct: heightPct.value })
+    stopDrag?.()
+  }
+  stopDrag = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    stopDrag = null
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  e.preventDefault()
+}
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {
   if (!isFullscreen.value) callbarRef.value?.requestFullscreen?.().catch(() => {})
@@ -116,6 +167,7 @@ const toggleFullscreen = () => {
 onMounted(() => document.addEventListener('fullscreenchange', syncFullscreen))
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', syncFullscreen)
+  stopDrag?.()   // an interrupted drag must not leave window listeners behind
   // CallBar is destroyed whenever you view a DIFFERENT conversation — even while
   // still connected to this call — so the inCall watch never runs. Hand the chat
   // column back on the way out, or ChatApp stays stuck in hide-chat forever.
@@ -124,7 +176,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="visible" ref="callbarRef" class="callbar" :class="{ 'has-video': inCall && videoList.length, 'is-fs': isFullscreen }">
+  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'is-fs': isFullscreen, 'is-dragging': dragging }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
@@ -169,6 +221,14 @@ onBeforeUnmount(() => {
         </div>
         <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhPhoneX :size="20" weight="fill" /></button>
       </div>
+
+      <!-- Drag the bottom edge to resize; past the top it becomes hide-chat -->
+      <div
+        v-if="videoList.length && !isFullscreen"
+        class="cb-resize" :class="{ on: dragging }"
+        title="Drag to resize the call"
+        @pointerdown="onResizeDown"
+      />
     </template>
 
     <!-- ── Ongoing call you haven't joined ───────────────────────────────── -->
@@ -333,6 +393,15 @@ onBeforeUnmount(() => {
   .cb-expand, .cb-fs { opacity: .45; }
   .cb-stagewrap:hover .cb-expand, .cb-stagewrap:hover .cb-fs { opacity: 1; }
 }
+/* Vertical resize grip along the call bar's bottom edge */
+.cb-resize {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 6px; z-index: 3;
+  cursor: ns-resize; background: transparent; transition: background .12s;
+}
+.cb-resize:hover, .cb-resize.on { background: rgba(var(--accent-rgb), .55); }
+/* Don't let a drag select text or fight the pointer across the app */
+.callbar.is-dragging { user-select: none; }
+
 /* Theater view: whole call surface fills the screen, letterboxed on black. */
 .callbar.is-fs { background: #000; border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
 </style>

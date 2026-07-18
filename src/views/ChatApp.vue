@@ -2165,7 +2165,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .chat.call-expanded .input-area { display: none; }
 /* With video on the call stage, split the column: stage takes the majority,
    messages keep a usable minimum and stay scrollable. */
-.chat:has(.callbar.has-video) .ml { flex: 0 1 34%; min-height: 120px; }
+/* The call bar owns an explicit height (drag-resizable, default 40%); messages
+   simply take whatever's left. */
+.chat:has(.callbar.has-video) .ml { flex: 1 1 auto; min-height: 0; }
 .chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 12px}
 .chat-header-left,.chat-header-right{display:flex;align-items:center;gap:4px}
 /* Voice/video call header buttons — animated + colour-coded */

@@ -19,6 +19,7 @@ export interface VoiceSettings {
   noiseSuppression: boolean
   echoCancellation: boolean
   screenAudio:      boolean   // capture system/tab audio when screen sharing
+  callHeightPct:    number    // call bar height as a fraction of the chat column
   showOwnCamera:    boolean   // render your own camera tile in the grid
   showNonVideo:     boolean   // render avatar tiles for participants without video
 }
@@ -30,6 +31,7 @@ const DEFAULTS: VoiceSettings = {
   inputMode: 'voice', pttKey: 'Space', sensitivity: 30,
   noiseSuppression: true, echoCancellation: true,
   screenAudio: true, showOwnCamera: true, showNonVideo: true,
+  callHeightPct: 0.4,
 }
 
 const load = (): Partial<VoiceSettings> => {
