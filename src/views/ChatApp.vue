@@ -356,6 +356,9 @@ const acceptingId = ref<string | null>(null)
 
 // ── Modals ─────────────────────────────────────────────────────────────────
 const showSettings      = ref(false)
+// Call "hide chat" mode — CallBar's expand button hands the whole chat column
+// to the call by hiding the message list + composer (rails stay visible).
+const callExpanded      = ref(false)
 // Accepts any user-ish shape (ApiUser, Friend, Member, GroupMember) — the
 // UserProfileModal normalises whatever fields are present.
 const showUserProfile   = ref<Record<string, any> | null>(null)
@@ -1692,7 +1695,7 @@ onBeforeUnmount(() => {
 
       <!-- Chat view (DM, group, or server) -->
       <template v-else>
-        <section class="chat">
+        <section class="chat" :class="{ 'call-expanded': callExpanded }">
           <!-- Chat header -->
           <div class="chat-header">
             <div class="chat-header-left">
@@ -1804,6 +1807,7 @@ onBeforeUnmount(() => {
             @dismiss="dismissCurrentCall"
             @toast="showToast"
             @open-settings="showSettings = true"
+            @expand="callExpanded = $event"
           />
 
           <!-- Pinned messages panel -->
@@ -2151,6 +2155,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* ── Chat view ─────────────────────────────────────────────────────────── */
 .chat{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0;position:relative}
+/* Call "hide chat": the call takes the whole column — messages and composer step
+   aside (rails stay). Beats the :has() 34% split rule below via the extra class. */
+.chat.call-expanded .ml,
+.chat.call-expanded .input-area { display: none; }
 /* With video on the call stage, split the column: stage takes the majority,
    messages keep a usable minimum and stay scrollable. */
 .chat:has(.callbar.has-video) .ml { flex: 0 1 34%; min-height: 120px; }

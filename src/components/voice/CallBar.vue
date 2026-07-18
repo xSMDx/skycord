@@ -24,7 +24,7 @@ const props = defineProps<{
   me?: { name: string; avatar: string }
   dismissed?: boolean
 }>()
-const emit = defineEmits<{ dismiss: []; toast: [msg: string]; openSettings: [] }>()
+const emit = defineEmits<{ dismiss: []; toast: [msg: string]; openSettings: []; expand: [on: boolean] }>()
 
 const { voice, connect, leave, toggleMute } = useVoice()
 const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
@@ -43,12 +43,13 @@ const connectingHere = computed(() => voice.connecting && voice.connectingConvId
 const inCall         = computed(() => joinedHere.value || connectingHere.value)
 
 // Leaving the call (or it ending) must not leave a flyout open for next join,
-// and must not strand the user in fullscreen (the ongoing/not-joined view has
-// no ⛶ button, so exit fullscreen ourselves when the call ends).
+// must not strand the user in fullscreen (the ongoing/not-joined view has no ⛶
+// button), and must hand the chat column back to the message list.
 watch(inCall, (v) => {
   if (!v) {
     openMenu.value = ''
     if (isFullscreen.value) document.exitFullscreen?.().catch(() => {})
+    if (expanded.value) { expanded.value = false; emit('expand', false) }
   }
 })
 
@@ -96,8 +97,17 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 // theater view with the message list hidden behind. isFullscreen tracks the
 // fullscreenchange event so the icon stays correct even when the user exits
 // with Esc rather than the button.
+// ── Expand ("hide chat") ────────────────────────────────────────────────────
+// Grows the call to fill the chat column by hiding the message list + composer
+// (ChatApp applies that via the `expand` event). Rails stay visible — this is
+// the in-app expanded view, distinct from browser fullscreen.
+const expanded = ref(false)
+const toggleExpand = () => { expanded.value = !expanded.value; emit('expand', expanded.value) }
+
 const callbarRef  = ref<HTMLElement | null>(null)
 const isFullscreen = ref(false)
+// Filmstrip of non-focused tiles only earns its space once the call has room.
+const showFilmstrip = computed(() => expanded.value || isFullscreen.value)
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {
   if (!isFullscreen.value) callbarRef.value?.requestFullscreen?.().catch(() => {})
@@ -114,7 +124,10 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFulls
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
            button sits over the video area (not down at the control-bar row) -->
       <div class="cb-stagewrap">
-        <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" />
+        <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" :show-filmstrip="showFilmstrip" />
+        <button class="cb-expand" :title="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
+          <PhCaretDown :size="16" weight="bold" :style="expanded ? '' : 'transform: rotate(180deg)'" />
+        </button>
         <button class="cb-fs" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
           <component :is="isFullscreen ? PhArrowsIn : PhArrowsOut" :size="18" weight="bold" />
         </button>
@@ -297,6 +310,16 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFulls
 }
 .cb-fs:hover { background: rgba(0,0,0,.8); color: #fff; }
 .cb-fs:active { transform: scale(.92); }
+/* Expand / hide-chat — mirrors ⛶ at the stage's bottom-LEFT (user's pic 1) */
+.cb-expand {
+  position: absolute; left: 12px; bottom: 12px; z-index: 2;
+  width: 34px; height: 34px; border-radius: 8px;
+  background: rgba(0,0,0,.55); color: #e8eaf0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s, transform .1s;
+}
+.cb-expand:hover { background: rgba(0,0,0,.8); color: #fff; }
+.cb-expand:active { transform: scale(.92); }
 /* Theater view: whole call surface fills the screen, letterboxed on black. */
 .callbar.is-fs { background: #000; border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
 </style>
