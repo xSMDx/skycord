@@ -173,26 +173,49 @@ const stopLocalLevel = () => {
 export const voiceRoomName = (kind: 'dm' | 'group', convId: string, myId: string) =>
   kind === 'group' ? `group:${convId}` : `dm:${[myId, convId].sort().join('_')}`
 
-const applyAudioEl = (el: HTMLAudioElement) => {
-  el.volume = (voiceSettings.outputVolume ?? 100) / 100
-  const sink = voiceSettings.outputDeviceId
-  if (sink && typeof (el as any).setSinkId === 'function') (el as any).setSinkId(sink).catch(() => {})
-  el.muted = voice.localDeafened
+// ── Per-participant local controls ──────────────────────────────────────────
+// Purely local: muting someone or dropping their volume affects only your ears,
+// and disabling their video only your screen. Nothing is sent to the server, so
+// the other person is never told — which is the point.
+export interface UserAudioPref { volume: number; muted: boolean; videoOff: boolean }
+export const userPrefs = reactive<Record<string, UserAudioPref>>({})
+
+export const userPref = (identity: string): UserAudioPref =>
+  userPrefs[identity] ?? { volume: 100, muted: false, videoOff: false }
+
+// audioEls is keyed by track sid; this maps a sid back to whose track it is, so
+// a per-user volume change can find the right elements.
+const audioOwner = new Map<string, string>()
+
+export const setUserPref = (identity: string, patch: Partial<UserAudioPref>) => {
+  userPrefs[identity] = { ...userPref(identity), ...patch }
+  // Re-apply to that participant's live elements immediately.
+  audioEls.forEach((el, sid) => { if (audioOwner.get(sid) === identity) applyAudioEl(el, identity) })
 }
 
-const attachTrack = (track: RemoteTrack) => {
+const applyAudioEl = (el: HTMLAudioElement, identity?: string) => {
+  const u = identity ? userPref(identity) : { volume: 100, muted: false, videoOff: false }
+  // Per-user volume multiplies the global output level rather than replacing it.
+  el.volume = ((voiceSettings.outputVolume ?? 100) / 100) * (u.volume / 100)
+  const sink = voiceSettings.outputDeviceId
+  if (sink && typeof (el as any).setSinkId === 'function') (el as any).setSinkId(sink).catch(() => {})
+  el.muted = voice.localDeafened || u.muted
+}
+
+const attachTrack = (track: RemoteTrack, identity?: string) => {
   if (track.kind !== Track.Kind.Audio) return
   const el = track.attach() as HTMLAudioElement
   el.autoplay = true
   ;(el as any).playsInline = true
   el.style.display = 'none'
-  applyAudioEl(el)
+  if (track.sid && identity) audioOwner.set(track.sid, identity)
+  applyAudioEl(el, identity)
   document.body.appendChild(el)
   audioEls.set(track.sid!, el)
 }
 const detachTrack = (track: RemoteTrack) => {
   track.detach().forEach(el => el.remove())
-  if (track.sid) audioEls.delete(track.sid)
+  if (track.sid) { audioEls.delete(track.sid); audioOwner.delete(track.sid) }
 }
 
 const syncParticipants = () => {
@@ -210,7 +233,7 @@ const syncParticipants = () => {
 const wireRoom = (r: Room) => {
   r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
     if (track.kind === Track.Kind.Video) addRemoteVideo(track, participant)
-    else attachTrack(track)
+    else attachTrack(track, participant.identity)
     syncParticipants()
   })
   r.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant) => {
@@ -503,12 +526,14 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
     } else {
       voice.localMuted = muteBeforeDeafen
       room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions()).catch(() => {})
-      audioEls.forEach(el => (el.muted = false))
+      // Not a blanket unmute: someone you muted individually must STAY muted
+      // when you undeafen, or undeafening silently undoes those choices.
+      audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
     }
     syncParticipants()
   }
 
 // Re-apply output volume / sink to live audio elements (called from settings).
-const applyOutput = () => audioEls.forEach(applyAudioEl)
+const applyOutput = () => audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
 
 export const useVoice = () => ({ voice, voiceRoomName, connect, leave, toggleMute, toggleDeafen, applyOutput })

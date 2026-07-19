@@ -4,6 +4,12 @@ import { onMounted, onBeforeUnmount } from 'vue'
 // a position:relative container and v-if's this component inside it. The panel
 // opens UPWARD, centered on the anchor. A fixed backdrop catches outside
 // clicks; Esc closes too.
+// Direction is the caller's call because it depends on where the anchor sits:
+// the call bar is at the TOP of the chat column so its menus drop downward,
+// while the user panel is pinned to the BOTTOM and must open upward or the menu
+// would render off-screen.
+withDefaults(defineProps<{ dir?: 'down' | 'up' }>(), { dir: 'down' })
+
 const emit = defineEmits<{ close: [] }>()
 const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
 onMounted(() => window.addEventListener('keydown', onKey))
@@ -13,7 +19,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
   <div>
     <div class="fly-backdrop" @mousedown="emit('close')" @contextmenu.prevent />
-    <div class="fly" @click.stop>
+    <div class="fly" :class="`fly-${dir}`" @click.stop>
       <slot />
     </div>
   </div>
@@ -22,17 +28,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <style scoped>
 .fly-backdrop { position: fixed; inset: 0; z-index: 8000; }
 .fly {
-  /* Opens DOWNWARD: the call bar sits at the top of the chat column, so the
-     menu drops over the messages instead of covering the call stage. */
-  position: absolute; top: calc(100% + 12px); left: 50%; transform: translateX(-50%);
+  position: absolute; left: 50%; transform: translateX(-50%);
   z-index: 8001; min-width: 236px; max-height: 62vh; overflow-y: auto;
   background: var(--bg-floor); border: 1px solid rgba(255,255,255,.1);
   border-radius: 8px; padding: 6px;
   box-shadow: 0 8px 32px rgba(0,0,0,.85);
-  animation: fly-pop .12s cubic-bezier(.4,0,.2,1);
 }
-@keyframes fly-pop {
+/* Call bar sits at the top of the chat column: drop over the messages rather
+   than covering the call stage. */
+.fly-down { top: calc(100% + 12px); animation: fly-pop-down .12s cubic-bezier(.4,0,.2,1); }
+/* User panel is pinned to the bottom: opening downward would go off-screen. */
+.fly-up   { bottom: calc(100% + 12px); animation: fly-pop-up .12s cubic-bezier(.4,0,.2,1); }
+
+@keyframes fly-pop-down {
   from { opacity: 0; transform: translateX(-50%) scale(.94) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1)   translateY(0); }
+}
+@keyframes fly-pop-up {
+  from { opacity: 0; transform: translateX(-50%) scale(.94) translateY(4px); }
   to   { opacity: 1; transform: translateX(-50%) scale(1)   translateY(0); }
 }
 </style>

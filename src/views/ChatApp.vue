@@ -35,6 +35,9 @@ import ReactionPickerModal  from '@/components/modals/ReactionPickerModal.vue'
 import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
+import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
+import CallFlyout           from '@/components/voice/CallFlyout.vue'
+import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance }        from '@/composables/useAppearance'
@@ -356,6 +359,23 @@ const acceptingId = ref<string | null>(null)
 
 // ── Modals ─────────────────────────────────────────────────────────────────
 const showSettings      = ref(false)
+// Which settings pane to open on. Reset to 'account' by the plain entry points
+// so a deep-link from a menu doesn't stick for the next normal open.
+const settingsPage      = ref<'account' | 'appearance' | 'voice'>('account')
+const showCameraPreview = ref(false)
+// Which user-panel device menu is open. Same flyouts as the call bar, but
+// anchored upward — the panel is pinned to the bottom of the sidebar.
+const upMenu = ref<'' | 'mic' | 'out'>('')
+const callBarRef        = ref<any>(null)
+// Confirming the preview is what actually publishes the camera.
+const onCameraConfirmed = () => {
+  showCameraPreview.value = false
+  callBarRef.value?.startCameraNow?.()
+}
+const openSettings = (p: 'account' | 'appearance' | 'voice' = 'account') => {
+  settingsPage.value = p
+  showSettings.value = true
+}
 // Call "hide chat" mode — CallBar's expand button hands the whole chat column
 // to the call by hiding the message list + composer (rails stay visible).
 const callExpanded      = ref(false)
@@ -1417,7 +1437,8 @@ onBeforeUnmount(() => {
       @close="showInviteGroup = false"
       @added="handleGroupUpdated"
     />
-    <SettingsModal    v-if="showSettings"      @close="showSettings = false" />
+    <SettingsModal    v-if="showSettings"      :initial-page="settingsPage" @close="showSettings = false" />
+    <CameraPreviewModal v-if="showCameraPreview" @close="showCameraPreview = false" @confirm="onCameraConfirmed" />
     <AddFriendModal   v-if="showAddFriend"     @close="showAddFriend = false" />
     <QuickSwitcherModal
       v-if="showQuickSwitcher"
@@ -1590,7 +1611,7 @@ onBeforeUnmount(() => {
         <!-- Voice connected strip + user panel -->
         <VoiceConnectedPanel />
         <div class="user-panel">
-          <div class="up-left" @click.stop="showSettings = true">
+          <div class="up-left" @click.stop="openSettings()">
             <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me" /></div><span class="up-status-dot"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
@@ -1603,15 +1624,21 @@ onBeforeUnmount(() => {
                 <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
                 <PhMicrophone v-else :size="16" weight="light"/>
               </button>
-              <button class="up-chev" disabled title="Input device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
+              <CallFlyout v-if="upMenu === 'mic'" dir="up" @close="upMenu = ''">
+                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
+              </CallFlyout>
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
                 <PhHeadphones :size="16" weight="light"/>
               </button>
-              <button class="up-chev" disabled title="Output device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'"><PhCaretDown :size="9" weight="bold"/></button>
+              <CallFlyout v-if="upMenu === 'out'" dir="up" @close="upMenu = ''">
+                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
+              </CallFlyout>
             </div>
-            <button class="up-btn btn-settings" @click.stop="showSettings=true" title="User Settings">
+            <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
               <PhGear :size="16" weight="light"/>
             </button>
           </div>
@@ -1652,7 +1679,7 @@ onBeforeUnmount(() => {
         </div>
         <VoiceConnectedPanel />
         <div class="user-panel">
-          <div class="up-left" @click.stop="showSettings=true">
+          <div class="up-left" @click.stop="openSettings()">
             <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me"/></div><span class="up-status-dot"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
@@ -1665,15 +1692,21 @@ onBeforeUnmount(() => {
                 <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
                 <PhMicrophone v-else :size="16" weight="light"/>
               </button>
-              <button class="up-chev" disabled title="Input device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
+              <CallFlyout v-if="upMenu === 'mic'" dir="up" @close="upMenu = ''">
+                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
+              </CallFlyout>
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
                 <PhHeadphones :size="16" weight="light"/>
               </button>
-              <button class="up-chev" disabled title="Output device — coming soon"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'"><PhCaretDown :size="9" weight="bold"/></button>
+              <CallFlyout v-if="upMenu === 'out'" dir="up" @close="upMenu = ''">
+                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
+              </CallFlyout>
             </div>
-            <button class="up-btn btn-settings" @click.stop="showSettings=true" title="User Settings">
+            <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
               <PhGear :size="16" weight="light"/>
             </button>
           </div>
@@ -1905,6 +1938,7 @@ onBeforeUnmount(() => {
                call is happening here, joined or not) -->
           <CallBar
             v-if="currentCall"
+            ref="callBarRef"
             :conv-id="currentCall.id"
             :kind="currentCall.kind"
             :name="currentCall.name"
@@ -1913,8 +1947,10 @@ onBeforeUnmount(() => {
             :dismissed="currentCallDismissed"
             @dismiss="dismissCurrentCall"
             @toast="showToast"
-            @open-settings="showSettings = true"
+            @open-settings="openSettings($event ?? 'account')"
             @expand="callExpanded = $event"
+            @profile="showUserProfile = $event"
+            @preview-camera="showCameraPreview = true"
           />
 
           <!-- Pinned messages panel -->
@@ -2183,7 +2219,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
 .up-btn.danger{color:#ed4245;background:rgba(237,66,69,.12)}
-.up-split{display:flex;align-items:center}
+/* relative: anchors the upward device flyout to this control pair */
+.up-split{display:flex;align-items:center;position:relative}
 .up-chev{width:14px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:background .12s,color .12s}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
 .up-chev:disabled{opacity:.45;cursor:not-allowed}

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { PhMicrophoneSlash, PhMonitor } from '@phosphor-icons/vue'
+import { PhMicrophoneSlash, PhMonitor, PhArrowsIn, PhArrowsOut } from '@phosphor-icons/vue'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import { keyFor, type VideoTrackInfo } from '@/composables/useVoiceMedia'
+import { getRoom } from '@/composables/voiceRoom'
+import { userPref } from '@/composables/useVoice'
 
 const props = defineProps<{
   tiles:  { id: string; name: string; avatar: string; speaking: boolean; muted: boolean }[]
@@ -14,8 +16,21 @@ const props = defineProps<{
   showFilmstrip?: boolean
 }>()
 
+// The stage stays presentational: it reports WHICH tile was right-clicked and
+// lets the call bar, which owns the voice state, decide what the menu contains.
+const emit = defineEmits<{
+  tileCtx: [e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean }]
+}>()
+
 const hasVideo = computed(() => props.videos.length > 0)
 const initial  = (n: string) => (n || '?').charAt(0).toUpperCase()
+
+// Whose tile is this? A video cell knows its participant directly; an avatar
+// cell's key IS the participant id.
+const localId    = computed(() => getRoom()?.localParticipant.identity ?? '')
+const cellOwner  = (c: Cell) => c.kind === 'video' ? c.video.participantId : c.key
+const cellAvatar = (c: Cell) => c.kind === 'avatar' ? c.avatar
+  : (props.tiles.find(t => t.id === c.video.participantId)?.avatar ?? '')
 
 // One grid cell per participant: their video publication(s) if any, else an
 // avatar cell. A participant sharing screen + camera yields two video cells.
@@ -29,6 +44,9 @@ const cells = computed<Cell[]>(() => {
   for (const t of props.tiles) {
     const mine = props.videos.filter(v =>
       v.participantId === t.id &&
+      // "Disable Video" on someone's tile is local-only: their stream keeps
+      // flowing, you just stop rendering it.
+      !(!v.local && userPref(v.participantId).videoOff) &&
       !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera))
     if (mine.length) {
       for (const v of mine) {
@@ -42,7 +60,9 @@ const cells = computed<Cell[]>(() => {
   // Videos whose participant hasn't landed in `tiles` yet (presence lag):
   // render them anyway rather than dropping them invisibly.
   for (const v of props.videos) {
-    if (!used.has(v) && !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera)) {
+    if (!used.has(v)
+        && !(!v.local && userPref(v.participantId).videoOff)
+        && !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera)) {
       out.push({ kind: 'video', key: keyFor(v.participantId, v.source), name: v.name, speaking: false, source: v.source, video: v })
     }
   }
@@ -73,17 +93,55 @@ watch(cells, () => {
   if (focusedKey.value && !focusedCell.value) focusedKey.value = null
 })
 
+// ── Per-tile fullscreen ─────────────────────────────────────────────────────
+// Distinct from the call bar's ⛶, which fullscreens the whole surface. This
+// takes ONE stream full-screen — the usual thing you want when someone's
+// sharing and you don't care about the other tiles.
+const cellEls = new Map<string, HTMLElement>()
+const setCellEl = (key: string) => (el: any) => {
+  if (el) cellEls.set(key, el as HTMLElement)
+  else cellEls.delete(key)
+}
+const fsKey = ref<string | null>(null)
+
+const toggleCellFs = async (key: string, e?: Event) => {
+  e?.stopPropagation()          // don't also toggle spotlight focus
+  const el = cellEls.get(key); if (!el) return
+  try {
+    if (document.fullscreenElement === el) await document.exitFullscreen?.()
+    else await el.requestFullscreen?.()
+  } catch { /* denied or unsupported — leave as-is */ }
+}
+
+// Derive from the event rather than tracking our own flag, so exiting with Esc
+// or the browser's own control keeps the icon honest.
+const syncFs = () => {
+  const cur = document.fullscreenElement
+  fsKey.value = cur ? ([...cellEls.entries()].find(([, el]) => el === cur)?.[0] ?? null) : null
+}
+
 // Esc exits spotlight (when fullscreen is also on, the browser eats the first
 // Esc for fullscreen; the next one lands here).
-const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && focusedKey.value) focusedKey.value = null }
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+const onKey = (e: KeyboardEvent) => {
+  if (e.key !== 'Escape') return
+  if (fsKey.value) return          // that Esc belongs to fullscreen
+  if (focusedKey.value) focusedKey.value = null
+}
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  document.addEventListener('fullscreenchange', syncFs)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  document.removeEventListener('fullscreenchange', syncFs)
+})
 </script>
 
 <template>
   <!-- Layout 1: centered circular avatars (no video anywhere) -->
   <div v-if="!hasVideo" class="stage">
-    <div v-for="t in tiles" :key="t.id" class="s-tile">
+    <div v-for="t in tiles" :key="t.id" class="s-tile"
+         @contextmenu="emit('tileCtx', $event, { id: t.id, name: t.name, avatar: t.avatar, local: t.id === localId })">
       <div class="s-av" :class="{ speaking: t.speaking }">
         <img v-if="t.avatar" :src="t.avatar" :alt="t.name" />
         <template v-else>{{ initial(t.name) }}</template>
@@ -100,17 +158,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div v-else class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight, 'no-strip': inSpotlight && !showFilmstrip }">
     <div
       v-for="c in renderCells" :key="c.key"
+      :ref="setCellEl(c.key)"
       class="g-cell"
       :class="{ speaking: c.speaking,
                 'is-main':  inSpotlight && c.key === focusedKey,
-                'is-thumb': inSpotlight && c.key !== focusedKey }"
+                'is-thumb': inSpotlight && c.key !== focusedKey,
+                'is-cell-fs': fsKey === c.key }"
       role="button"
       :title="inSpotlight && c.key === focusedKey ? 'Back to grid' : `Focus ${c.name}`"
       @click="inSpotlight && c.key === focusedKey ? unfocus() : focus(c.key)"
+      @contextmenu="emit('tileCtx', $event, { id: cellOwner(c), name: c.name, avatar: cellAvatar(c), local: cellOwner(c) === localId })"
     >
       <template v-if="c.kind === 'video'">
-        <VideoTile :track="c.video.track" :fit="c.source === 'screen' ? 'contain' : 'cover'" />
+        <!-- Fullscreen forces `contain`: a cropped camera is fine in a small
+             tile, but filling a whole monitor by cutting the sides off isn't. -->
+        <VideoTile :track="c.video.track"
+                   :fit="fsKey === c.key || c.source === 'screen' ? 'contain' : 'cover'" />
         <span v-if="c.source === 'screen'" class="g-live">LIVE</span>
+        <button class="g-fs"
+                :title="fsKey === c.key ? 'Exit fullscreen' : `Fullscreen ${c.name}`"
+                @click="toggleCellFs(c.key, $event)">
+          <component :is="fsKey === c.key ? PhArrowsIn : PhArrowsOut" :size="15" weight="bold" />
+        </button>
       </template>
       <template v-else>
         <div class="g-avwrap" :style="{ background: colorForUsername(c.name) }">
@@ -176,13 +245,19 @@ button { border: none; }
    so equal-specificity source order wins). */
 .stage--spotlight {
   display: flex; flex-wrap: wrap; gap: 10px; padding: 8px;
-  align-content: flex-start; justify-content: center; overflow: auto;
+  align-content: flex-start; justify-content: center;
+  /* hidden, not auto: nothing here may scroll out of the bar */
+  overflow: hidden;
 }
 .stage--spotlight .g-cell { aspect-ratio: auto; }
-.stage--spotlight .is-main  { order: -1; flex: 1 1 100%; height: 62%; min-height: 220px; }
+/* min-height MUST stay 0. A fixed floor (this was 220px) makes the tile taller
+   than the stage whenever the call bar is short, which is exactly the overflow
+   the grid was already fixed for — the spotlight path just kept its own copy. */
+.stage--spotlight .is-main  { order: -1; flex: 1 1 100%; height: 62%; min-height: 0; }
 /* Compact spotlight: no filmstrip below, so the focused tile takes the lot. */
 .stage--spotlight.no-strip .is-main { height: 100%; min-height: 0; }
-.stage--spotlight .is-thumb { flex: 0 0 156px; height: 88px; }
+/* Thumbs shrink with the bar too, or they'd push the main tile out on their own. */
+.stage--spotlight .is-thumb { flex: 0 0 156px; height: min(88px, 28%); min-height: 0; }
 .g-avwrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .g-av {
   width: 72px; height: 72px; border-radius: 50%; overflow: hidden;
@@ -196,6 +271,21 @@ button { border: none; }
   background: rgba(0,0,0,.65); color: #fff; font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Fullscreen button — hidden until hover so it doesn't clutter a grid of tiles,
+   but always visible once fullscreen (there'd be no other way back out). */
+.g-fs {
+  position: absolute; right: 8px; top: 8px;
+  width: 28px; height: 28px; border-radius: 6px;
+  background: rgba(0,0,0,.6); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .12s, background .12s;
+}
+.g-cell:hover .g-fs, .g-cell.is-cell-fs .g-fs { opacity: 1; }
+.g-fs:hover { background: rgba(0,0,0,.85); }
+/* A screen share already uses the top-right for its LIVE badge. */
+.g-cell:has(.g-live) .g-fs { right: 8px; top: 38px; }
+/* The fullscreened cell IS the viewport — drop the tile chrome. */
+.g-cell.is-cell-fs { border-radius: 0; border-color: transparent; background: #000; }
 .g-live {
   position: absolute; right: 8px; top: 8px; padding: 2px 7px; border-radius: 5px;
   background: #f23f43; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .04em;

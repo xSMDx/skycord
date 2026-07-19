@@ -8,6 +8,10 @@ import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia } from '@/composables/useVoiceMedia'
 import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
+import { userPref, setUserPref } from '@/composables/useVoice'
+// Aliased: this component already has its own `openMenu` ref for the flyouts.
+import { openMenu as openCtxMenu } from '@/composables/useContextMenu'
+import { ownTileMenu, participantMenu } from '@/composables/contextMenus/callMenu'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
 // in THIS conversation — joined, connecting, or ongoing-not-joined.
@@ -25,15 +29,27 @@ const props = defineProps<{
   me?: { name: string; avatar: string }
   dismissed?: boolean
 }>()
-const emit = defineEmits<{ dismiss: []; toast: [msg: string]; openSettings: []; expand: [on: boolean] }>()
+const emit = defineEmits<{
+  dismiss: []; toast: [msg: string]; openSettings: [page?: 'voice']
+  expand: [on: boolean]; profile: [u: { id: string; displayName: string; avatar: string }]
+  previewCamera: []
+}>()
 
-const { voice, connect, leave, toggleMute } = useVoice()
+const { voice, connect, leave, toggleMute, toggleDeafen } = useVoice()
 const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
 
 // Media toggles return a user-facing error message on failure (e.g. camera
 // held by another app) — bubble it up to ChatApp's toast instead of failing
 // silently.
-const onCamera = async () => { const err = await toggleCamera(); if (err) emit('toast', err) }
+// Preview gates turning the camera ON only. Turning it off is never something
+// you want a confirmation dialog for.
+const onCamera = async () => {
+  if (!media.localCamOn && voiceSettings.alwaysPreviewVideo) { emit('previewCamera'); return }
+  const err = await toggleCamera(); if (err) emit('toast', err)
+}
+/** Called once the preview is confirmed — bypasses the gate. */
+const startCameraNow = async () => { const err = await toggleCamera(); if (err) emit('toast', err) }
+defineExpose({ startCameraNow })
 const onShare  = async () => { const err = await toggleScreenShare(); if (err) emit('toast', err) }
 
 const openMenu = ref<'' | 'mic' | 'cam' | 'more'>('')
@@ -173,6 +189,49 @@ const onResizeDown = (e: PointerEvent) => {
 watch(() => voiceSettings.callHeightPx, (v) => {
   if (!dragging.value && typeof v === 'number') heightPx.value = v
 })
+// ── Tile context menus ──────────────────────────────────────────────────────
+const copyText = (text: string, what: string) => {
+  navigator.clipboard.writeText(text)
+    .then(() => emit('toast', `${what} copied`))
+    .catch(() => emit('toast', `Couldn’t copy the ${what}`))
+}
+
+const menuHandlers = {
+  openProfile:     (u: any) => emit('profile', u),
+  previewCamera:   () => emit('previewCamera'),
+  toggleMute:      () => toggleMute(),
+  toggleDeafen:    () => toggleDeafen(),
+  openVoiceSettings: () => emit('openSettings', 'voice'),
+  copy:            copyText,
+  setUserVolume:   (id: string, v: number) => setUserPref(id, { volume: v }),
+  toggleUserMute:  (id: string) => setUserPref(id, { muted: !userPref(id).muted }),
+  toggleUserVideo: (id: string) => setUserPref(id, { videoOff: !userPref(id).videoOff }),
+  toggleShowNonVideo:  () => setVoiceSettings({ showNonVideo:  !voiceSettings.showNonVideo }),
+  toggleShowOwnCamera: () => setVoiceSettings({ showOwnCamera: !voiceSettings.showOwnCamera }),
+}
+
+const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean }) => {
+  const u = { id: t.id, displayName: t.name, avatar: t.avatar }
+  const base = {
+    selfMuted: voice.localMuted, selfDeafened: voice.localDeafened,
+    showNonVideo: voiceSettings.showNonVideo, showOwnCamera: voiceSettings.showOwnCamera,
+    channelId: props.convId,
+  }
+  if (t.local) openCtxMenu(e, ownTileMenu(u, base, menuHandlers))
+  else {
+    const p = userPref(t.id)
+    openCtxMenu(e, participantMenu(u, { ...base, volume: p.volume, muted: p.muted, videoOff: p.videoOff }, menuHandlers))
+  }
+}
+
+// Right-clicking the mic / camera buttons opens the same flyout their chevron
+// does — the chevron is easy to miss, and right-click is where people reach.
+const onCtrlCtx = (e: MouseEvent, which: 'mic' | 'cam') => {
+  e.preventDefault()
+  if (which === 'cam' && !joinedHere.value) return
+  openMenu.value = which     // open, not toggle — right-click shouldn't close it
+}
+
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {
   if (!isFullscreen.value) callbarRef.value?.requestFullscreen?.().catch(() => {})
@@ -196,7 +255,7 @@ onBeforeUnmount(() => {
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
            button sits over the video area (not down at the control-bar row) -->
       <div class="cb-stagewrap">
-        <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" :show-filmstrip="showFilmstrip" />
+        <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" :show-filmstrip="showFilmstrip" @tile-ctx="onTileCtx" />
         <button class="cb-expand" :title="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
           <!-- points DOWN normally; flips UP once the chat is hidden -->
           <PhCaretDown :size="16" weight="bold" :style="expanded ? 'transform: rotate(180deg)' : ''" />
@@ -211,14 +270,14 @@ onBeforeUnmount(() => {
         <div class="cb-group">
           <!-- mic/camera + their ▾ read as ONE control: hovering either lights the pair -->
           <div class="cb-split" :class="{ menuopen: openMenu === 'mic' }">
-            <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
+            <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute" @contextmenu="onCtrlCtx($event, 'mic')">
               <component :is="voice.localMuted ? PhMicrophoneSlash : PhMicrophone" :size="20" weight="fill" />
             </button>
             <button class="cb-chev" title="Audio settings" @click="toggleMenu('mic')"><PhCaretDown :size="12" weight="bold" /></button>
             <MicFlyout v-if="openMenu === 'mic'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
           <div class="cb-split" :class="{ menuopen: openMenu === 'cam' }">
-            <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera">
+            <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera" @contextmenu="onCtrlCtx($event, 'cam')">
               <component :is="media.localCamOn ? PhVideoCamera : PhVideoCameraSlash" :size="20" weight="fill" />
             </button>
             <button class="cb-chev" :disabled="!joinedHere" title="Video settings" @click="toggleMenu('cam')"><PhCaretDown :size="12" weight="bold" /></button>

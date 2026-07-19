@@ -95,7 +95,12 @@ const zoomIdx = computed(() => nearestIdx(ZOOM_STEPS, appearance.zoom))
 const fillPct = (value: number, min: number, max: number) =>
   `${max === min ? 0 : ((value - min) / (max - min)) * 100}%`
 
-const page = ref('account')
+// Which pane to land on. Context-menu items like "Voice Settings" have to open
+// the voice pane directly — dumping the user on the account page and making
+// them find it is the difference between a shortcut and a nuisance.
+const props = withDefaults(defineProps<{ initialPage?: 'account' | 'appearance' | 'voice' }>(),
+  { initialPage: 'account' })
+const page = ref<string>(props.initialPage)
 
 // Which field-edit modal is currently open — null means none. Each one is a
 // real centered dialog (EditFieldModal), not an inline-expanding row, per
@@ -237,7 +242,6 @@ const PAGE_SUBSECTIONS: Record<string, { id: string; label: string }[]> = {
     { id: 'acc-info',     label: 'Account Info' },
     { id: 'acc-password', label: 'Password & Security' },
     { id: 'acc-standing', label: 'Account Standing' },
-    { id: 'acc-family',   label: 'Family Center' },
   ],
   appearance: [
     { id: 'ap-theme',       label: 'Theme' },
@@ -413,17 +417,6 @@ const handleLogout = () => { emit('close'); logout() }
               </div>
             </div>
 
-            <!-- Family Center -->
-            <h2 id="acc-family" class="acc-section-title">Family Center</h2>
-            <div class="acc-card">
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Set up Family Center</span>
-                  <span class="acc-row-value muted">Link a teen account to stay involved in their Skycord experience.</span>
-                </div>
-                <button class="acc-btn">Set Up</button>
-              </div>
-            </div>
           </template>
 
           <!-- ── Appearance ── -->

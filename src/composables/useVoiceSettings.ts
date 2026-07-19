@@ -27,6 +27,7 @@ export interface VoiceSettings {
   callHeightPx:     number    // call bar height in px (drag-resizable)
   showOwnCamera:    boolean   // render your own camera tile in the grid
   showNonVideo:     boolean   // render avatar tiles for participants without video
+  alwaysPreviewVideo: boolean // show the camera preview before going live
 }
 
 const KEY = 'sykord_voice'
@@ -37,6 +38,9 @@ const DEFAULTS: VoiceSettings = {
   noiseMode: 'standard', echoCancellation: true,
   screenAudio: true, showOwnCamera: true, showNonVideo: true,
   callHeightPx: 220,
+  // On by default: going live with a camera you haven't checked is the kind of
+  // mistake that's embarrassing rather than merely annoying.
+  alwaysPreviewVideo: true,
 }
 
 const load = (): Partial<VoiceSettings> => {

@@ -10,7 +10,7 @@
  */
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { PhCheck, PhCaretRight } from '@phosphor-icons/vue'
-import { menu, closeMenu, isSeparator, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
+import { menu, closeMenu, isSeparator, isSlider, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 
 const el   = ref<HTMLElement | null>(null)
 const subEl = ref<HTMLElement | null>(null)
@@ -23,8 +23,10 @@ const subActive = ref(-1)
 
 // Indices of items that can actually be focused — separators and disabled rows
 // are skipped by the arrow keys rather than swallowing a keypress.
+// Sliders are skipped too — they're dragged, not selected, so landing keyboard
+// focus on one would be a dead stop.
 const navigable = () => menu.items
-  .map((it, i) => (!isSeparator(it) && !it.disabled ? i : -1))
+  .map((it, i) => (!isSeparator(it) && !isSlider(it) && !it.disabled ? i : -1))
   .filter(i => i !== -1)
 
 const GAP = 8   // keep this far from the viewport edge
@@ -190,6 +192,16 @@ onBeforeUnmount(() => {
 
       <template v-for="(item, i) in menu.items" :key="i">
         <div v-if="isSeparator(item)" class="cm-sep" />
+        <!-- Slider: a live control, so clicks inside must NOT close the menu. -->
+        <div v-else-if="isSlider(item)" class="cm-slider" @click.stop>
+          <div class="cm-slider-top">
+            <span>{{ item.label }}</span>
+            <span class="cm-slider-val">{{ (item.format ?? (v => String(v)))(item.value) }}</span>
+          </div>
+          <input type="range"
+                 :min="item.min ?? 0" :max="item.max ?? 200" :value="item.value"
+                 @input="item.onInput(+($event.target as HTMLInputElement).value)" />
+        </div>
         <button
           v-else
           class="cm-row"
@@ -279,6 +291,20 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm-row.disabled:hover                { background: none; color: var(--text-3); }
 .cm-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-check { flex: none; }
+.cm-slider { padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 6px; }
+.cm-slider-top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 13px; color: var(--text-2);
+}
+.cm-slider-val { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.cm-slider input[type=range] {
+  width: 100%; height: 4px; border-radius: 2px; appearance: none;
+  background: rgba(255,255,255,.14); outline: none; cursor: pointer;
+}
+.cm-slider input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--text-1); border: none; cursor: pointer;
+}
 .cm-caret { flex: none; opacity: .55; }
 .cm-row:hover .cm-caret, .cm-row.active .cm-caret { opacity: 1; }
 /* Above the parent, so an overlapping flyout is never rendered behind it. */

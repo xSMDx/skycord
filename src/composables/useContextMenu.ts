@@ -22,11 +22,30 @@ export interface MenuAction {
   onSelect?: () => void | Promise<void>
 }
 export interface MenuSeparator { sep: true }
-export type MenuItem = MenuAction | MenuSeparator
+
+/** A live control rather than an action — User Volume is the recurring case.
+ *  It gets its own item type rather than the header slot because it recurs; the
+ *  slot is for genuinely one-off content. Selecting it must NOT close the menu,
+ *  or you couldn't drag the handle. */
+export interface MenuSlider {
+  slider:  true
+  label:   string
+  value:   number
+  min?:    number
+  max?:    number
+  /** Formats the readout; defaults to the raw number. */
+  format?: (v: number) => string
+  onInput: (v: number) => void
+}
+
+export type MenuItem = MenuAction | MenuSeparator | MenuSlider
 
 export const isSeparator = (i: MenuItem): i is MenuSeparator => 'sep' in i
+export const isSlider    = (i: MenuItem): i is MenuSlider    => 'slider' in i
+/** Rows that behave like buttons — everything that isn't a separator or slider. */
+export const isAction    = (i: MenuItem): i is MenuAction    => !isSeparator(i) && !isSlider(i)
 export const hasSubmenu  = (i: MenuItem): i is MenuAction & { submenu: MenuItem[] } =>
-  !isSeparator(i) && !!i.submenu?.length
+  isAction(i) && !!i.submenu?.length
 
 interface MenuState {
   open:  boolean
@@ -43,7 +62,7 @@ export const menu = reactive<MenuState>({ open: false, x: 0, y: 0, items: [] })
 let lastFocused: HTMLElement | null = null
 
 const prepare = (items: MenuItem[]): MenuItem[] =>
-  items.map(i => isSeparator(i) ? i : {
+  items.map(i => (isSeparator(i) || isSlider(i)) ? i : {
     ...i,
     icon:    i.icon ? markRaw(i.icon) : undefined,
     submenu: i.submenu ? prepare(i.submenu) : undefined,
