@@ -1619,18 +1619,18 @@ onBeforeUnmount(() => {
           </div>
           <div class="up-btns">
             <div class="up-split">
-              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" :title="micOff ? 'Unmute' : 'Mute'">
+              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" :title="micOff ? 'Unmute' : 'Mute'">
                 <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
                 <PhMicrophone v-else :size="16" weight="light"/>
               </button>
-              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
-              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
+              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" :title="deafOff ? 'Undeafen' : 'Deafen'">
                 <PhHeadphones :size="16" weight="light"/>
               </button>
-              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><PhCaretDown :size="9" weight="bold"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
@@ -1683,18 +1683,18 @@ onBeforeUnmount(() => {
           </div>
           <div class="up-btns">
             <div class="up-split">
-              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" :title="micOff ? 'Unmute' : 'Mute'">
+              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" :title="micOff ? 'Unmute' : 'Mute'">
                 <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
                 <PhMicrophone v-else :size="16" weight="light"/>
               </button>
-              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
-              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
+              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" :title="deafOff ? 'Undeafen' : 'Deafen'">
                 <PhHeadphones :size="16" weight="light"/>
               </button>
-              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><PhCaretDown :size="9" weight="bold"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">

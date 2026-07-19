@@ -37,7 +37,10 @@ onBeforeUnmount(soundRingStop)
 
 <style scoped>
 .ic-overlay {
-  position: fixed; inset: 0; z-index: 5000;
+  /* Above the menus and flyouts (9001/8001). Someone calling you outranks
+     whatever popover happens to be open — at 5000 an open context menu's layer
+     sat on top of this and the call simply never appeared. */
+  position: fixed; inset: 0; z-index: 9700;
   display: flex; align-items: center; justify-content: center;
   background: rgba(0,0,0,.45);
   animation: ic-fade .15s ease;

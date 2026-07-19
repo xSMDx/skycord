@@ -170,22 +170,39 @@ const onKey = (e: KeyboardEvent) => {
 // Scrolling or resizing would leave the menu stranded next to nothing.
 const onDismiss = () => closeMenu()
 
+// Click-away WITHOUT a backdrop element.
+//
+// A full-screen backdrop is the easy way to catch outside clicks, and it costs
+// two real bugs: it swallows the click that dismisses it — so opening a menu
+// and then clicking a conversation needs two clicks, the first only closing the
+// menu — and being a stacking-context sibling it covered the incoming-call
+// modal, which sits lower. Listening on the document instead means there is
+// nothing over the app: the dismissing click lands on whatever you aimed at.
+const onDocPointerDown = (e: PointerEvent) => {
+  if (!menu.open) return
+  const t = e.target as Node
+  if (el.value?.contains(t) || subEl.value?.contains(t)) return
+  closeMenu()
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', onDismiss)
   window.addEventListener('scroll', onDismiss, true)
+  // Capture phase: close before the app's own handlers run, so a click never
+  // acts on a stale menu — but the event still reaches its target.
+  document.addEventListener('pointerdown', onDocPointerDown, true)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onDismiss)
   window.removeEventListener('scroll', onDismiss, true)
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
 })
 </script>
 
 <template>
-  <div v-if="menu.open" class="cm-backdrop"
-       @mousedown.self="closeMenu()"
-       @contextmenu.prevent="closeMenu()">
+  <Teleport v-if="menu.open" to="body">
     <div
       ref="el"
       class="cm"
@@ -260,15 +277,16 @@ onBeforeUnmount(() => {
         </button>
       </template>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 
-.cm-backdrop { position: fixed; inset: 0; z-index: 9000; }
-
+/* No backdrop element by design — see onDocPointerDown. Nothing of this
+   component ever covers the app, so nothing can swallow a click or hide a
+   modal underneath it. */
 .cm {
   position: fixed; z-index: 9001;
   background: var(--bg-floor);

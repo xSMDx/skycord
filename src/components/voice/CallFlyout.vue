@@ -47,21 +47,35 @@ const place = async () => {
 const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
 const onResize = () => { void place() }
 
+// Click-away without a backdrop element, for the same reason the context menu
+// dropped its own: an invisible full-screen layer eats the click that dismisses
+// it, so the thing you actually aimed at needs a second click.
+// Anchor clicks are ignored here — the anchor's own handler toggles the menu,
+// and closing on the way in would make it impossible to ever close by clicking
+// the button again.
+const onDocPointerDown = (e: PointerEvent) => {
+  const t = e.target as Node
+  if (panel.value?.contains(t)) return
+  if (root.value?.parentElement?.contains(t)) return
+  emit('close')
+}
+
 onMounted(() => {
   void place()
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', onResize)
+  document.addEventListener('pointerdown', onDocPointerDown, true)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onResize)
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
 })
 </script>
 
 <template>
   <div ref="root" class="fly-anchor">
     <Teleport to="body">
-      <div class="fly-backdrop" @mousedown="emit('close')" @contextmenu.prevent />
       <div
         ref="panel"
         class="fly"
@@ -80,7 +94,7 @@ onBeforeUnmount(() => {
    measure. The panel itself is teleported to <body>. */
 .fly-anchor { position: absolute; width: 0; height: 0; }
 
-.fly-backdrop { position: fixed; inset: 0; z-index: 8000; }
+/* No backdrop element — see onDocPointerDown. */
 .fly {
   position: fixed; z-index: 8001;
   min-width: 236px; max-height: 62vh; overflow-y: auto;
