@@ -492,11 +492,16 @@ const currentTypers = computed(() => {
 const loadFriends = async () => {
   apiLoading.value = true
   try {
-    // Prefs ride along with the boot fetch: the sidebar can't order itself
-    // correctly until it knows what's pinned, and a late arrival would visibly
-    // reshuffle the list after first paint.
-    const [fr, pnd, cp] = await Promise.all([getFriends(), getPending(), api.getConvPrefs()])
-    setAllConvPrefs(cp.prefs || {})
+    // Prefs ride along with the boot fetch so the sidebar can order itself
+    // without visibly reshuffling after first paint — but they are NOT allowed
+    // to break it. Bundling this into the Promise.all made a failed prefs call
+    // reject the whole thing, which wiped the friends list and with it every DM
+    // (the DM list is rebuilt from friends). Pin/mute are a nicety; the
+    // conversation list is the app. Worst case here is an unsorted sidebar.
+    const [fr, pnd] = await Promise.all([getFriends(), getPending()])
+    api.getConvPrefs()
+      .then(cp => setAllConvPrefs(cp.prefs || {}))
+      .catch(e => console.warn('[prefs] pin/mute unavailable — sidebar unsorted', e))
     apiFriends.value = fr.friends.map((f: any) => ({
       id:            f._id?.toString() || f.id,
       username:      f.username,
