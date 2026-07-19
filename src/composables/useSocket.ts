@@ -41,52 +41,17 @@ const _h: Record<string, CB<any>> = {
   onMentionEveryone:((_p: any) => {}) as CB<any>,
 }
 
-// ── Web Audio ─────────────────────────────────────────────────────────────
-const getCtx = (): AudioContext => {
-  if (!(window as any).__skCtx) (window as any).__skCtx = new AudioContext()
-  return (window as any).__skCtx
-}
-const tone = (freq: number, dur: number, vol = 0.15) => {
-  try {
-    const ac = getCtx(), o = ac.createOscillator(), g = ac.createGain()
-    o.connect(g); g.connect(ac.destination)
-    o.frequency.value = freq
-    g.gain.setValueAtTime(vol, ac.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur)
-    o.start(ac.currentTime); o.stop(ac.currentTime + dur)
-  } catch { /* blocked until gesture */ }
-}
-export const soundMessage      = () => { tone(880,.07,.14); setTimeout(()=>tone(1100,.1,.11),55) }
-export const soundNotification = () => { tone(660,.1,.16);  setTimeout(()=>tone(990,.15,.13),90) }
-
-// Mute/unmute are a mirrored pair: unmute rises (re-enabling), mute falls (cutting off).
-// Kept short and quiet since these fire on every single toggle, not just once.
-export const soundMute   = () => { tone(520,.08,.13); setTimeout(()=>tone(360,.09,.1),60) }
-export const soundUnmute = () => { tone(440,.07,.12); setTimeout(()=>tone(660,.09,.13),55) }
-
-// Deafen affects both directions of audio, so it gets a heavier, more "final"
-// two-note drop than mute — and undeafen the inverse climb, slightly brighter
-// than unmute since it's re-opening more than just your own mic.
-export const soundDeafen   = () => { tone(480,.09,.14); setTimeout(()=>tone(300,.13,.12),70) }
-export const soundUndeafen = () => { tone(420,.08,.13); setTimeout(()=>tone(740,.12,.14),65) }
-
-// ── Call lifecycle (Discord-style cues) ──────────────────────────────────────
-// You connect / disconnect: a confident rising fanfare vs a falling sign-off.
-export const soundCallJoin  = () => { tone(523.25,.10,.17); setTimeout(()=>tone(783.99,.15,.17),90) }   // C5 → G5
-export const soundCallLeave = () => { tone(587.33,.10,.15); setTimeout(()=>tone(392.00,.18,.13),95) }   // D5 → G4
-// Someone else joins / leaves the call — lighter blips so they don't dominate.
-export const soundUserJoin  = () => { tone(659.25,.07,.12); setTimeout(()=>tone(880.00,.10,.12),60) }   // E5 → A5
-export const soundUserLeave = () => { tone(440.00,.08,.11); setTimeout(()=>tone(329.63,.12,.10),60) }   // A4 → E4
-
-// Ringtone — a repeating two-tone "brrring" that loops until answered/dismissed.
-let _ringT: ReturnType<typeof setInterval> | null = null
-export const soundRingStart = () => {
-  if (_ringT) return
-  const ring = () => { tone(880,.20,.15); setTimeout(() => tone(660,.24,.13), 210) }
-  ring()
-  _ringT = setInterval(ring, 2600)
-}
-export const soundRingStop = () => { if (_ringT) { clearInterval(_ringT); _ringT = null } }
+// ── Sounds ────────────────────────────────────────────────────────────────
+// The palette lives in useSounds.ts. Re-exported here because these cues were
+// originally defined in this file and are imported from it across the app.
+export {
+  soundMessage, soundNotification,
+  soundMute, soundUnmute, soundDeafen, soundUndeafen,
+  soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
+  soundDisconnect, soundRingStart, soundRingStop,
+  soundDialStart, soundDialStop,
+} from './useSounds'
+import { soundMessage, soundNotification } from './useSounds'
 
 // Call presence emitters — module-level (not closure-bound) so non-component code
 // (useVoice's cleanup, which fires on unexpected LiveKit drops) can clear server
