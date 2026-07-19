@@ -63,6 +63,10 @@ export const resetVoiceSettings = () => setVoiceSettings({ ...DEFAULTS })
 // Capture constraints for livekit-client's mic track, derived from the settings.
 export const micCaptureOptions = () => ({
   deviceId: voiceSettings.inputDeviceId || undefined,
+  // Mono. Voice codecs are mono anyway, and a stereo capture left RNNoise
+  // (which processes one channel) cleaning one ear while the other passed
+  // through raw — audible as "noise only in my left ear".
+  channelCount: 1,
   echoCancellation: voiceSettings.echoCancellation,
   // In 'rnnoise' mode the browser filter is deliberately off — RNNoise does the
   // work downstream, and stacking both degrades the voice.

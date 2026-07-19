@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { PhCaretDown } from '@phosphor-icons/vue'
 import { useVoiceSettings, micCaptureOptions } from '@/composables/useVoiceSettings'
 import { createRnnoiseNode } from '@/composables/rnnoiseProcessor'
@@ -33,6 +33,19 @@ const micLevel   = ref(0)
 let micStream: MediaStream | null = null
 let micCtx: AudioContext | null = null
 let rnNode: Awaited<ReturnType<typeof createRnnoiseNode>> | null = null
+let volNode: GainNode | null = null    // input-volume stage (live-updated)
+let gateNode: GainNode | null = null   // sensitivity gate
+const micOpen = ref(false)             // is the gate currently passing audio?
+
+// Sensitivity 0..100 maps onto the same 0..1 scale the meter uses, so the
+// marker sits exactly where the gate opens. Higher = needs a louder voice.
+const gateThreshold = computed(() => (voiceSettings.sensitivity / 100) * 0.5)
+
+// Both sliders now take effect DURING a test — previously the gain was read
+// once at start, so dragging them appeared to do nothing.
+watch(() => voiceSettings.inputVolume, v => {
+  if (volNode && micCtx) volNode.gain.setTargetAtTime(v / 100, micCtx.currentTime, 0.02)
+})
 let micRaf = 0
 let deafenedByTest = false
 
@@ -66,14 +79,32 @@ const startMicTest = async () => {
     } else {
       src.connect(gain)
     }
+    // Sensitivity gate: below the threshold nothing is transmitted, which is
+    // what silences idle fan/keyboard noise between words. Measured BEFORE the
+    // gate so the meter still shows your true input while it's closed.
+    gateNode = micCtx.createGain()
+    gateNode.gain.value = 0
     gain.connect(analyser)
-    gain.connect(micCtx.destination)   // monitor — hear yourself
+    gain.connect(gateNode)
+    gateNode.connect(micCtx.destination)   // monitor — hear yourself
+    volNode = gain
+
     const data = new Uint8Array(analyser.frequencyBinCount)
+    let lastLoudAt = 0
     const tick = () => {
       analyser.getByteTimeDomainData(data)
       let peak = 0
       for (const v of data) peak = Math.max(peak, Math.abs(v - 128))
-      micLevel.value = Math.min(1, (peak / 128) * 1.6)
+      const level = Math.min(1, (peak / 128) * 1.6)
+      micLevel.value = level
+      // Hangover keeps the gate open briefly so word endings aren't clipped.
+      const now = performance.now()
+      if (level >= gateThreshold.value) lastLoudAt = now
+      const open = now - lastLoudAt < 250
+      micOpen.value = open
+      if (gateNode && micCtx) {
+        gateNode.gain.setTargetAtTime(open ? 1 : 0, micCtx.currentTime, 0.02)
+      }
       micRaf = requestAnimationFrame(tick)
     }
     tick()
@@ -88,8 +119,11 @@ const stopMicTest = () => {
   micStream?.getTracks().forEach(t => t.stop()); micStream = null
   try { rnNode?.disconnect(); rnNode?.destroy() } catch { /* ignore */ }
   rnNode = null
+  try { gateNode?.disconnect(); volNode?.disconnect() } catch { /* ignore */ }
+  gateNode = null; volNode = null
   micCtx?.close().catch(() => {}); micCtx = null
   micLevel.value = 0
+  micOpen.value = false
   if (micTesting.value) {
     soundUndeafen()
     if (deafenedByTest) { toggleDeafen(); deafenedByTest = false }
@@ -178,7 +212,11 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 
     <div class="vv-mictest">
       <button class="vv-btn primary" @click="startMicTest">{{ micTesting ? 'Stop Test' : 'Mic Test' }}</button>
-      <div class="vv-meter"><div class="vv-meter-fill" :style="{ width: (micLevel*100).toFixed(0) + '%' }" /></div>
+      <div class="vv-meter">
+        <div class="vv-meter-fill" :class="{ open: micOpen }" :style="{ width: (micLevel*100).toFixed(0) + '%' }" />
+        <!-- where the sensitivity gate opens: bar past this line = transmitting -->
+        <div class="vv-meter-thresh" :style="{ left: (gateThreshold*100).toFixed(0) + '%' }" />
+      </div>
     </div>
 
     <div class="vv-divider" />
@@ -268,8 +306,11 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 
 .vv-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .vv-mictest { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
-.vv-meter { flex: 1; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
-.vv-meter-fill { height: 100%; background: linear-gradient(90deg, #23a55a, #f0b232 70%, #ed4245); transition: width .05s linear; }
+.vv-meter { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
+/* Dim until the gate opens, so you can SEE when you're actually transmitting */
+.vv-meter-fill { height: 100%; background: linear-gradient(90deg, #23a55a, #f0b232 70%, #ed4245); transition: width .05s linear; opacity: .35; }
+.vv-meter-fill.open { opacity: 1; }
+.vv-meter-thresh { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-1); border-radius: 1px; }
 .vv-divider { height: 1px; background: var(--border); margin: 22px 0; }
 
 .vv-radio { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }

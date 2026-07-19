@@ -30,7 +30,13 @@ const getWasm = async () => {
 export const createRnnoiseNode = async (ctx: AudioContext): Promise<RnnoiseWorkletNode> => {
   const binary = await getWasm()
   await ctx.audioWorklet.addModule(rnnoiseWorkletUrl)
-  return new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: binary })
+  const node = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: binary })
+  // Belt-and-braces downmix: even if a device hands us stereo, collapse to one
+  // channel BEFORE the model so no channel escapes unprocessed.
+  node.channelCount = 1
+  node.channelCountMode = 'explicit'
+  node.channelInterpretation = 'speakers'
+  return node
 }
 
 export const createRnnoiseProcessor = (): TrackProcessor<Track.Kind.Audio, AudioProcessorOptions> => {
