@@ -194,10 +194,35 @@ button opens `dmMenu`/`groupMenu` instead, so click and right-click agree.
 
 - **Pin:** pinned conversations sort above unpinned in the sidebar; existing
   recency order holds within each group.
-- **Mute:** suppresses the incoming-message notification sound, and renders the
-  unread badge at reduced opacity while keeping its count. It does not hide the
-  conversation, and it does not suppress call ringing — an incoming call still
-  rings a muted DM.
+- **Mute:** silences **both** notification sounds from that conversation — the
+  incoming-message ding *and* the incoming-call ring — whenever you are outside
+  it. The unread badge still shows its count, at reduced opacity.
+
+  Mute silences; it does not hide. A muted conversation still appears in the
+  sidebar, still counts unread, and an incoming call **still shows the
+  IncomingCallModal** — it just arrives silently. You can see you're being
+  called; you don't hear it.
+
+  "Outside it" reuses the mechanism that already exists: `useSocket` tracks
+  `_activeDMPartnerId` and skips the message sound for the DM you're viewing
+  (`useSocket.ts:105`). Mute is a second condition on that same gate, not a new
+  concept.
+
+  Three call sites:
+
+  | Site | Today | With mute |
+  |---|---|---|
+  | `useSocket.ts:105` DM message | sound unless you're in that DM | …and unless muted |
+  | `useSocket.ts:135` group message | **always sounds** | gate on active-conversation *and* mute |
+  | `IncomingCallModal.vue:10` ring | `onMounted(soundRingStart)` | skip the ring when muted; still mount the modal |
+
+  Note the middle row: group messages currently play a sound **even while you
+  have that group open**, which DMs don't. That's a pre-existing inconsistency
+  in the same line of code we're changing, so it gets fixed here.
+
+  Because `convPrefs` is keyed by conversation id while the sound gate is keyed
+  by author id, the DM path needs `dmConvId(me, authorId)` to look up the mute
+  state.
 - Both read from `convPrefs` with expiry applied, via a
   `useConvPrefs` composable so sorting, badging and the menus share one source of
   truth.
@@ -220,5 +245,8 @@ User-driven, because the preview pane has no logged-in session:
   recalculation for post-render class changes, so I cannot verify the hover /
   keyboard highlight myself** — proven by adding a known-good class post-render
   and watching it fail to compute. This must be eyeballed in a real browser.
-- Pin reorders the sidebar; mute silences the sound and dims the badge; a muted
-  conversation un-mutes itself after its window passes.
+- Pin reorders the sidebar.
+- Mute silences a message from that conversation while you're elsewhere, silences
+  an incoming call's ring while still showing the call modal, and dims the badge.
+- A muted conversation un-mutes itself once its window passes.
+- A group you're actively viewing no longer dings (the pre-existing bug above).
