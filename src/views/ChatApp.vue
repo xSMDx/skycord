@@ -36,7 +36,6 @@ import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
-import CallFlyout           from '@/components/voice/CallFlyout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
@@ -1625,18 +1624,14 @@ onBeforeUnmount(() => {
                 <PhMicrophone v-else :size="16" weight="light"/>
               </button>
               <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
-              <CallFlyout v-if="upMenu === 'mic'" dir="up" @close="upMenu = ''">
-                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
-              </CallFlyout>
+              <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
                 <PhHeadphones :size="16" weight="light"/>
               </button>
               <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'"><PhCaretDown :size="9" weight="bold"/></button>
-              <CallFlyout v-if="upMenu === 'out'" dir="up" @close="upMenu = ''">
-                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
-              </CallFlyout>
+              <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
               <PhGear :size="16" weight="light"/>
@@ -1693,18 +1688,14 @@ onBeforeUnmount(() => {
                 <PhMicrophone v-else :size="16" weight="light"/>
               </button>
               <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
-              <CallFlyout v-if="upMenu === 'mic'" dir="up" @close="upMenu = ''">
-                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
-              </CallFlyout>
+              <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" :title="deafOff ? 'Undeafen' : 'Deafen'">
                 <PhHeadphones :size="16" weight="light"/>
               </button>
               <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'"><PhCaretDown :size="9" weight="bold"/></button>
-              <CallFlyout v-if="upMenu === 'out'" dir="up" @close="upMenu = ''">
-                <MicFlyout @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
-              </CallFlyout>
+              <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
               <PhGear :size="16" weight="light"/>

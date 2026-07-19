@@ -9,6 +9,7 @@ import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia } from '@/composables/useVoiceMedia'
 import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
 import { userPref, setUserPref } from '@/composables/useVoice'
+import { soundDialStart, soundDialStop } from '@/composables/useSocket'
 // Aliased: this component already has its own `openMenu` ref for the flyouts.
 import { openMenu as openCtxMenu } from '@/composables/useContextMenu'
 import { ownTileMenu, participantMenu } from '@/composables/contextMenus/callMenu'
@@ -234,6 +235,17 @@ const onCtrlCtx = (e: MouseEvent, which: 'mic' | 'cam') => {
   if (which === 'cam' && !joinedHere.value) return
   openMenu.value = which     // open, not toggle — right-click shouldn't close it
 }
+
+// ── Outgoing dial tone ──────────────────────────────────────────────────────
+// You're in a 1:1 call and nobody else has picked up yet: without this the
+// caller gets total silence and can't tell whether the call is even trying.
+// Stops the instant anyone joins, and on leave/unmount.
+watch(
+  () => joinedHere.value && props.kind === 'dm' && others.value.length === 0,
+  (waiting) => { waiting ? soundDialStart() : soundDialStop() },
+  { immediate: true },
+)
+onBeforeUnmount(soundDialStop)
 
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {

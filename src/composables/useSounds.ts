@@ -37,16 +37,38 @@ let _master: GainNode | null = null
 const ctx = (): AudioContext | null => {
   try {
     if (!_ctx) {
-      _ctx = new AudioContext()
-      _master = _ctx.createGain()
+      // Reuse the app-wide context if one already exists. Creating a private
+      // one meant starting from `suspended` even when earlier interaction had
+      // already unlocked audio elsewhere in the app — so the first cue after a
+      // quiet period, typically the ringtone, was silently dropped.
+      _ctx = (window as any).__skCtx ?? new AudioContext()
+      ;(window as any).__skCtx = _ctx
+      _master = _ctx!.createGain()
       _master.gain.value = 0.9
-      _master.connect(_ctx.destination)
+      _master.connect(_ctx!.destination)
     }
-    // Autoplay policy suspends the context until a gesture; resuming is cheap
-    // and a no-op when already running.
-    if (_ctx.state === 'suspended') void _ctx.resume()
     return _ctx
   } catch { return null }
+}
+
+/**
+ * Unlock audio on the first user gesture of the session.
+ *
+ * Browsers only allow an AudioContext to run once the user has interacted with
+ * the page. Without this the very first ring — which arrives unprompted — has
+ * to fight the autoplay policy on its own and usually loses.
+ */
+const unlock = () => {
+  const ac = ctx()
+  if (ac && ac.state === 'suspended') void ac.resume()
+  if (ac && ac.state === 'running') {
+    window.removeEventListener('pointerdown', unlock)
+    window.removeEventListener('keydown', unlock)
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', unlock)
+  window.addEventListener('keydown', unlock)
 }
 
 interface Note {
@@ -103,7 +125,15 @@ const voice = (ac: AudioContext, n: Note) => {
 
 const play = (notes: Note[]) => {
   const ac = ctx(); if (!ac) return
-  try { notes.forEach(n => voice(ac, n)) } catch { /* blocked until a gesture */ }
+  // Ask for a resume when suspended, but schedule REGARDLESS and never wait on
+  // that promise. Deferring the schedule until resume() settles looks tidier
+  // and is a trap: resume() never resolves on an OfflineAudioContext, and a
+  // browser that refuses it without a user gesture leaves it pending forever —
+  // so the sound is dropped entirely instead of merely being at risk. Playing
+  // immediately is at worst what the old code did; the ring loops every 2.6s
+  // and its next repeat lands once the context is running.
+  if (ac.state === 'suspended') { try { void ac.resume() } catch { /* ignore */ } }
+  try { notes.forEach(n => voice(ac, n)) } catch { /* ignore */ }
 }
 
 // ── Pitches (F–C fifth, low register) ───────────────────────────────────────
@@ -181,29 +211,45 @@ export const soundDisconnect = () => play([
 ])
 
 // ── Ringing ─────────────────────────────────────────────────────────────────
-// Two rising notes, a beat of silence, repeat — a phone cadence rather than an
-// alarm. Loops until answered or dismissed.
+// The ring deliberately breaks the palette's low register, and this is the one
+// place that's correct.
+//
+// Everything else here sits around F3-C4 (175-262 Hz) because that reads as warm
+// for a cue you hear a hundred times a day. A ringtone has the opposite job: be
+// noticed from across the room, through laptop speakers. Two facts make the low
+// register wrong for that:
+//
+//   · Small speakers roll off hard below ~200 Hz. An F3 ring, with its
+//     sub-octave at 87 Hz, is largely not reproduced at all.
+//   · Equal-loudness: at 175 Hz you need roughly 10-15 dB more level than at
+//     880 Hz to sound equally loud, so even when reproduced it reads quiet.
+//
+// Real phone ringtones sit at 400-1000 Hz for exactly these reasons. This keeps
+// the palette's F-C fifth for continuity, but two octaves up where it carries.
+const F5 = 698.46, C5_ = 523.25, F4_ = 349.23
+
 let _ringT: ReturnType<typeof setInterval> | null = null
 const RING_MS = 2600
 export const soundRingStart = () => {
   if (_ringT) return
   const ring = () => play([
-    { hz: F3, at: 0,    dur: 0.26, vol: 0.13 },
-    { hz: C4, at: 0.30, dur: 0.34, vol: 0.13 },
+    { hz: C5_, at: 0,    dur: 0.24, vol: 0.22 },
+    { hz: F5,  at: 0.28, dur: 0.32, vol: 0.22 },
   ])
   ring()
   _ringT = setInterval(ring, RING_MS)
 }
 export const soundRingStop = () => { if (_ringT) { clearInterval(_ringT); _ringT = null } }
 
-// Your outgoing call, waiting for them to pick up: the same two notes an octave
-// up and quieter, so caller and callee hear related but distinguishable cues.
+// Your outgoing call, waiting for them to pick up. Softer and lower than the
+// incoming ring: it's feedback that something is happening, not a demand for
+// attention, and you're already looking at the screen.
 let _dialT: ReturnType<typeof setInterval> | null = null
 export const soundDialStart = () => {
   if (_dialT) return
   const dial = () => play([
-    { hz: C4, at: 0,    dur: 0.24, vol: 0.08 },
-    { hz: F4, at: 0.28, dur: 0.30, vol: 0.08 },
+    { hz: F4_, at: 0,    dur: 0.22, vol: 0.10 },
+    { hz: C5_, at: 0.26, dur: 0.28, vol: 0.10 },
   ])
   dial()
   _dialT = setInterval(dial, RING_MS)

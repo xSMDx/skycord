@@ -8,6 +8,15 @@ import { useVoiceSettings } from '@/composables/useVoiceSettings'
 import { useVoice } from '@/composables/useVoice'
 import { getRoom } from '@/composables/voiceRoom'
 
+// The call bar shows everything in one menu; the user panel splits it, because
+// it has a separate mic button and headphone button and each should open the
+// half it belongs to rather than one identical combined panel.
+const props = withDefaults(defineProps<{
+  mode?: 'all' | 'input' | 'output'
+  dir?:  'down' | 'up'
+}>(), { mode: 'all', dir: 'down' })
+const show = (half: 'input' | 'output') => props.mode === 'all' || props.mode === half
+
 const emit = defineEmits<{ close: []; openSettings: [] }>()
 const { mics, speakers, supportsSinkId, refreshDevices, deviceLabel, setMicDevice, setSpeakerDevice } = useCallDevices()
 const { voiceSettings, setVoiceSettings } = useVoiceSettings()
@@ -90,12 +99,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <CallFlyout @close="emit('close')">
-    <button class="fr" @click="toggleSection('input')">
+  <CallFlyout :dir="dir" @close="emit('close')">
+    <button v-if="show('input')" class="fr" @click="toggleSection('input')">
       <span>Input Device<span class="fr-sub">{{ currentMicLabel() }}</span></span>
       <PhCaretRight :size="13" weight="bold" :style="openSection==='input' ? 'transform:rotate(90deg)' : ''" />
     </button>
-    <template v-if="openSection==='input'">
+    <template v-if="show('input') && openSection==='input'">
       <button class="fr" @click="setMicDevice('')">
         <span>Default</span><PhCheck v-if="!voiceSettings.inputDeviceId" class="fr-check" :size="15" weight="bold" />
       </button>
@@ -105,11 +114,11 @@ onBeforeUnmount(() => {
       </button>
     </template>
 
-    <button class="fr" :disabled="!supportsSinkId" @click="toggleSection('output')">
+    <button v-if="show('output')" class="fr" :disabled="!supportsSinkId" @click="toggleSection('output')">
       <span>Output Device<span class="fr-sub">{{ currentSpkLabel() }}</span></span>
       <PhCaretRight :size="13" weight="bold" :style="openSection==='output' ? 'transform:rotate(90deg)' : ''" />
     </button>
-    <template v-if="openSection==='output'">
+    <template v-if="show('output') && openSection==='output'">
       <button class="fr" @click="setSpeakerDevice('')">
         <span>Default</span><PhCheck v-if="!voiceSettings.outputDeviceId" class="fr-check" :size="15" weight="bold" />
       </button>
@@ -120,15 +129,20 @@ onBeforeUnmount(() => {
     </template>
 
     <div class="fr-sep" />
-    <span class="fr-label">Input Volume — {{ voiceSettings.inputVolume }}%</span>
-    <div class="fr static"><input class="fr-slider" type="range" min="0" max="100" :value="voiceSettings.inputVolume" @input="onInputVolume" /></div>
-    <span class="fr-label">Input Level</span>
-    <div class="fr static"><div class="mf-meter"><div class="mf-fill" :style="{ width: (level*100).toFixed(0) + '%' }" /></div></div>
-    <span class="fr-label">Output Volume — {{ voiceSettings.outputVolume }}%</span>
-    <div class="fr static"><input class="fr-slider" type="range" min="0" max="100" :value="voiceSettings.outputVolume" @input="onOutputVolume" /></div>
+    <template v-if="show('input')">
+      <span class="fr-label">Input Volume — {{ voiceSettings.inputVolume }}%</span>
+      <div class="fr static"><input class="fr-slider" type="range" min="0" max="100" :value="voiceSettings.inputVolume" @input="onInputVolume" /></div>
+      <span class="fr-label">Input Level</span>
+      <div class="fr static"><div class="mf-meter"><div class="mf-fill" :style="{ width: (level*100).toFixed(0) + '%' }" /></div></div>
+    </template>
+    <template v-if="show('output')">
+      <span class="fr-label">Output Volume — {{ voiceSettings.outputVolume }}%</span>
+      <div class="fr static"><input class="fr-slider" type="range" min="0" max="100" :value="voiceSettings.outputVolume" @input="onOutputVolume" /></div>
+    </template>
 
     <div class="fr-sep" />
-    <div class="fr" role="button" @click="toggleDeafen()">
+    <!-- Deafen belongs to the output side: it's what silences everyone else. -->
+    <div v-if="show('output')" class="fr" role="button" @click="toggleDeafen()">
       <span>Deafen</span>
       <span class="fr-tog" :class="{ on: voice.localDeafened }"><span /></span>
     </div>
