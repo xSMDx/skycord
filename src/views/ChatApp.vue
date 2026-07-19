@@ -44,6 +44,7 @@ import { useVoice }          from '@/composables/useVoice'
 import AppContextMenu        from '@/components/ui/ContextMenu.vue'
 import { openMenu }          from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
+import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
 
 import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
 
@@ -220,25 +221,17 @@ const hiddenIds = ref<Set<string>>(new Set(JSON.parse(localStorage.getItem(HIDDE
 const persistHidden = () => localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenIds.value]))
 
 // Sidebar X menu: Hide vs Leave (group) / Close vs Delete (DM)
-const convMenu = ref<{ id: string; kind: 'dm' | 'group'; x: number; y: number } | null>(null)
-const openConvMenu = (e: MouseEvent, kind: 'dm' | 'group', id: string) => {
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  convMenu.value = { id, kind, x: r.right, y: r.bottom + 4 }
-}
-const closeConvMenu = () => { convMenu.value = null }
 const hideConv = (id: string) => {
   hiddenIds.value = new Set(hiddenIds.value).add(id)
   persistHidden()
   if (activeDM.value?.id === id || activeGroup.value?.id === id) {
     activeDM.value = null; activeGroup.value = null; view.value = 'friends'
   }
-  closeConvMenu()
 }
 const unhideConv = (id: string) => {
   const s = new Set(hiddenIds.value); s.delete(id); hiddenIds.value = s; persistHidden()
 }
 const deleteDM = (id: string) => { initDM(id, []); hideConv(id) }
-const leaveGroupFromMenu = (id: string) => { closeConvMenu(); doLeaveGroup(id) }
 const activeServer  = ref('sykord')
 const activeChannel = ref('general')
 const sidebarOpen   = ref(true)
@@ -904,6 +897,44 @@ const userMenuHandlers = {
 const openUserMenu = (e: MouseEvent, u: MenuUser, ctx: { isSelf?: boolean; isCurrentDM?: boolean } = {}) =>
   openMenu(e, userMenu(u, userMenuHandlers, ctx))
 
+const copyText = (text: string, what: string) => {
+  navigator.clipboard.writeText(text)
+    .then(() => showToast(`${what} copied`))
+    .catch(() => showToast(`Couldn’t copy the ${what}`))
+}
+const markConvRead = (convId: string) => {
+  const c = dmsData.value.find(d => d.id === convId); if (c) c.unread = undefined
+  const g = groupsData.value.find(x => x.id === convId); if (g) g.unread = undefined
+}
+
+// Right-click AND the row's ⋯ button both land here, so the two can no longer
+// offer different things (the old bespoke convMenu only opened from the button).
+const openConversationMenu = (e: MouseEvent, c: any) => {
+  if (c.kind === 'dm') {
+    openMenu(e, dmMenu(
+      { id: c.dm.id, unread: c.dm.unread, user: { id: c.dm.id, displayName: c.dm.name, avatar: c.dm.avatar, status: c.dm.status } },
+      {
+        markRead:    markConvRead,
+        openProfile: (u) => { showUserProfile.value = u },
+        startCall:   userMenuHandlers.startCall,
+        closeDM:     hideConv,
+        deleteDM,
+        copy:        copyText,
+      }))
+  } else {
+    openMenu(e, groupMenu({ id: c.group.id, unread: c.group.unread }, {
+      markRead: markConvRead,
+      // Both modals read `activeGroup`, so the group has to be opened first or
+      // they'd act on whichever group happened to be selected.
+      openInvites: () => { openGroup(c.group); showInviteGroup.value = true },
+      editGroup:   () => { openGroup(c.group); showEditGroup.value = true },
+      hideGroup:   hideConv,
+      leaveGroup:  (id) => doLeaveGroup(id),
+      copy:        copyText,
+    }))
+  }
+}
+
 const openFriends = () => {
   view.value = 'friends'
   activeDM.value = null
@@ -1366,21 +1397,6 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
-    <!-- Sidebar conversation X menu -->
-    <Teleport to="body">
-      <div v-if="convMenu" class="conv-menu-overlay" @click="closeConvMenu" @contextmenu.prevent="closeConvMenu">
-        <div class="conv-menu" :style="{ left: convMenu.x + 'px', top: convMenu.y + 'px' }" @click.stop>
-          <template v-if="convMenu.kind === 'group'">
-            <button class="conv-menu-item" @click="hideConv(convMenu.id)">Hide Group</button>
-            <button class="conv-menu-item danger" @click="leaveGroupFromMenu(convMenu.id)">Leave Group</button>
-          </template>
-          <template v-else>
-            <button class="conv-menu-item" @click="hideConv(convMenu.id)">Close DM</button>
-            <button class="conv-menu-item danger" @click="deleteDM(convMenu.id)">Delete Conversation</button>
-          </template>
-        </div>
-      </div>
-    </Teleport>
     <UserProfileModal
       v-if="showUserProfile"
       :user="showUserProfile as any"
@@ -1492,6 +1508,7 @@ onBeforeUnmount(() => {
               v-if="c.kind === 'dm'"
               class="dm-item" :class="{ active: view==='dm' && activeDM?.id===c.dm.id }"
               @click.stop="openDM(c.dm)"
+              @contextmenu="openConversationMenu($event, c)"
             >
               <div class="dm-av">
                 <img :src="c.dm.avatar" :alt="c.dm.name" />
@@ -1503,7 +1520,7 @@ onBeforeUnmount(() => {
               </div>
               <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
               <span v-if="c.dm.unread" class="dm-unread">{{ c.dm.unread }}</span>
-              <button class="dm-x" @click.stop="openConvMenu($event, 'dm', c.id)">
+              <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <PhX :size="13" weight="light" />
               </button>
             </div>
@@ -1512,6 +1529,7 @@ onBeforeUnmount(() => {
               v-else
               class="dm-item" :class="{ active: view==='group' && activeGroup?.id===c.group.id }"
               @click.stop="openGroup(c.group)"
+              @contextmenu="openConversationMenu($event, c)"
             >
               <div class="grp-av">
                 <img v-if="c.group.avatar" :src="c.group.avatar" :alt="groupDisplayName(c.group)" />
@@ -1523,7 +1541,7 @@ onBeforeUnmount(() => {
               </div>
               <span v-if="convHasCall('group', c.group.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
               <span v-if="c.group.unread" class="dm-unread">{{ c.group.unread }}</span>
-              <button class="dm-x" @click.stop="openConvMenu($event, 'group', c.id)">
+              <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <PhX :size="13" weight="light" />
               </button>
             </div>
@@ -2046,18 +2064,6 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .toast-pop-enter-active,.toast-pop-leave-active{transition:opacity .2s ease,transform .2s ease}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
-/* Sidebar conversation X menu */
-.conv-menu-overlay{position:fixed;inset:0;z-index:1500}
-.conv-menu{
-  position:absolute;transform:translateX(-100%);
-  min-width:180px;background:var(--bg-floor);border:1px solid rgba(0,0,0,.4);
-  border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);
-  animation:ch-filters-in .12s ease;
-}
-.conv-menu-item{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:5px;font-size:14px;font-weight:500;color:var(--text-2);transition:background .12s,color .12s}
-.conv-menu-item:hover{background:var(--accent);color: var(--text-on-accent)}
-.conv-menu-item.danger{color:#f23f43}
-.conv-menu-item.danger:hover{background:#f23f43;color: var(--text-strong)}
 
 /* Header search — collapses to an icon, expands to an input with a Filters popup */
 .ch-search{position:relative;display:flex;align-items:center}
