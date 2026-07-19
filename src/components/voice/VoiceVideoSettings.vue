@@ -6,6 +6,12 @@ import { useVoice } from '@/composables/useVoice'
 import { soundDeafen, soundUndeafen } from '@/composables/useSocket'
 
 const { voiceSettings, setVoiceSettings, resetVoiceSettings } = useVoiceSettings()
+
+const NOISE_MODES = [
+  { value: 'off'      as const, label: 'None',     hint: 'Send your mic through untouched.' },
+  { value: 'standard' as const, label: 'Standard', hint: "Your browser's built-in filter. Good for most setups." },
+  { value: 'rnnoise'  as const, label: 'RNNoise',  hint: 'Stronger AI filter — kills fans, keyboards and hum, but can chew background music.' },
+]
 const { applyOutput, voice, toggleDeafen } = useVoice()
 
 // ── Device enumeration ───────────────────────────────────────────────────────
@@ -181,10 +187,15 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
       <button class="vv-btn" @click="capturePtt">{{ capturingPtt ? 'Press a key…' : voiceSettings.pttKey }}</button>
     </template>
 
-    <div class="vv-toggle-row">
-      <div class="vv-toggle-text"><span class="vv-label">Noise Suppression</span><span class="vv-hint">Reduce background noise from your mic.</span></div>
-      <button class="vv-tog" :class="{ on: voiceSettings.noiseSuppression }" @click="setVoiceSettings({ noiseSuppression: !voiceSettings.noiseSuppression })"><span/></button>
-    </div>
+    <h3 class="vv-sub">Noise Suppression</h3>
+    <label v-for="o in NOISE_MODES" :key="o.value" class="vv-radio">
+      <input
+        type="radio" name="noiseMode" :value="o.value"
+        :checked="voiceSettings.noiseMode === o.value"
+        @change="setVoiceSettings({ noiseMode: o.value })"
+      />
+      <span><strong>{{ o.label }}</strong><em>{{ o.hint }}</em></span>
+    </label>
     <div class="vv-toggle-row">
       <div class="vv-toggle-text"><span class="vv-label">Echo Cancellation</span><span class="vv-hint">Cancel echo from your speakers.</span></div>
       <button class="vv-tog" :class="{ on: voiceSettings.echoCancellation }" @click="setVoiceSettings({ echoCancellation: !voiceSettings.echoCancellation })"><span/></button>

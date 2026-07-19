@@ -4,11 +4,12 @@
  * reactive participant/mute/deafen state, and keep the server presence in sync
  * (call:join / call:leave) so others see the call.
  */
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 import {
   Room, RoomEvent, Track,
-  type RemoteTrack, type RemoteParticipant, type Participant,
+  type RemoteTrack, type RemoteParticipant, type Participant, type LocalAudioTrack,
 } from 'livekit-client'
+import { createRnnoiseProcessor } from './rnnoiseProcessor'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import {
@@ -16,7 +17,7 @@ import {
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
-import { voiceSettings, micCaptureOptions } from './useVoiceSettings'
+import { voiceSettings, setVoiceSettings, micCaptureOptions } from './useVoiceSettings'
 import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia } from './useVoiceMedia'
 
 export interface VoiceParticipant {
@@ -305,6 +306,32 @@ const unbindPtt = () => {
   pttBound = false
 }
 
+// ── Noise suppression ───────────────────────────────────────────────────────
+// RNNoise rides on the mic publication as a LiveKit processor, so mute, PTT,
+// device switching and the speaking analyser all keep working on the same track.
+// A failure here must never cost the user their microphone: fall back to the
+// browser's own suppression instead.
+const applyNoiseMode = async () => {
+  const room = getRoom(); if (!room) return
+  const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined
+  if (!mic) return
+  const want = voiceSettings.noiseMode === 'rnnoise'
+  const has  = mic.getProcessor()?.name === 'rnnoise'
+  try {
+    if (want && !has) await mic.setProcessor(createRnnoiseProcessor())
+    else if (!want && has) await mic.stopProcessor()
+  } catch (e) {
+    console.warn('[voice] RNNoise unavailable — falling back to browser suppression', e)
+    setVoiceSettings({ noiseMode: 'standard' })
+    try { await mic.stopProcessor() } catch { /* ignore */ }
+    // Re-apply capture constraints so the browser filter actually comes back on.
+    try { await room.localParticipant.setMicrophoneEnabled(true, micCaptureOptions()) } catch { /* ignore */ }
+  }
+}
+
+// Switching mode mid-call takes effect immediately — no rejoin.
+watch(() => voiceSettings.noiseMode, () => { void applyNoiseMode() })
+
 // Module-scoped (not inside useVoice) so wireRoom's Disconnected handler can
 // reach attemptConnect to auto-reconnect. useApi/useAuth are plain singletons,
 // safe to read here at import time; getVoiceToken reads the token at call time.
@@ -359,6 +386,7 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
       } else if (canCapture) {
         try { await r.localParticipant.setMicrophoneEnabled(true, micCaptureOptions()) }
         catch (e) { console.warn('[voice] mic unavailable — joining listen-only', e) }
+        await applyNoiseMode()
       }
       voice.connected = true
       voice.connecting = false

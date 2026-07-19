@@ -7,6 +7,11 @@ import { reactive } from 'vue'
 
 export type InputMode = 'voice' | 'ptt'
 
+// 'standard' = the browser's own suppression (the long-standing default).
+// 'rnnoise'  = WASM model in the mic pipeline; Skycord turns the browser filter
+//              OFF in that mode so the two can't double-process each other.
+export type NoiseMode = 'off' | 'standard' | 'rnnoise'
+
 export interface VoiceSettings {
   inputDeviceId:    string   // '' = system default
   outputDeviceId:   string
@@ -16,7 +21,7 @@ export interface VoiceSettings {
   inputMode:        InputMode
   pttKey:           string   // e.g. 'Space' (KeyboardEvent.code)
   sensitivity:      number   // 0..100 voice-activity threshold
-  noiseSuppression: boolean
+  noiseMode:        NoiseMode
   echoCancellation: boolean
   screenAudio:      boolean   // capture system/tab audio when screen sharing
   callHeightPct:    number    // call bar height as a fraction of the chat column
@@ -29,13 +34,21 @@ const DEFAULTS: VoiceSettings = {
   inputDeviceId: '', outputDeviceId: '', cameraDeviceId: '',
   inputVolume: 100, outputVolume: 100,
   inputMode: 'voice', pttKey: 'Space', sensitivity: 30,
-  noiseSuppression: true, echoCancellation: true,
+  noiseMode: 'standard', echoCancellation: true,
   screenAudio: true, showOwnCamera: true, showNonVideo: true,
   callHeightPct: 0.3,
 }
 
 const load = (): Partial<VoiceSettings> => {
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+  let raw: any = {}
+  try { raw = JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+  // Migrate the old boolean toggle to the three-way mode so saved settings
+  // survive the upgrade: on → browser suppression, off → none.
+  if (raw.noiseMode === undefined && raw.noiseSuppression !== undefined) {
+    raw.noiseMode = raw.noiseSuppression ? 'standard' : 'off'
+  }
+  delete raw.noiseSuppression
+  return raw
 }
 
 export const voiceSettings = reactive<VoiceSettings>({ ...DEFAULTS, ...load() })
@@ -51,7 +64,9 @@ export const resetVoiceSettings = () => setVoiceSettings({ ...DEFAULTS })
 export const micCaptureOptions = () => ({
   deviceId: voiceSettings.inputDeviceId || undefined,
   echoCancellation: voiceSettings.echoCancellation,
-  noiseSuppression: voiceSettings.noiseSuppression,
+  // In 'rnnoise' mode the browser filter is deliberately off — RNNoise does the
+  // work downstream, and stacking both degrades the voice.
+  noiseSuppression: voiceSettings.noiseMode === 'standard',
   autoGainControl: true,
 })
 
