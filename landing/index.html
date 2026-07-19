@@ -363,15 +363,17 @@
    type: 'add' (green) | 'imp' (blurple) | 'fix' (red)                  */
 const RELEASES = [
   {
-    v: 'v0.5', date: 'Jul 18, 2026', title: 'Calls, your way',
+    v: 'v0.5', date: 'Jul 19, 2026', title: 'Calls, your way',
     items: [
       ['add', 'Big screen — click any tile to focus it; everyone else drops to a filmstrip'],
       ['add', 'Fullscreen the call, and a hide-chat mode that hands the whole column to video'],
       ['add', 'Drag the call bar’s bottom edge to resize it; drag to the top for hide-chat'],
       ['add', 'RNNoise — a stronger noise filter that clears fans, keyboards and hum from your mic'],
+      ['add', 'Input sensitivity now works as a noise gate: quiet room sound between words never leaves your machine'],
       ['imp', 'Calls now open at a comfortable size instead of crowding the chat'],
       ['imp', 'A spotlighted stream automatically comes through at higher quality'],
       ['imp', 'Call logs in DMs now show a green start / red end marker'],
+      ['fix', 'Input sensitivity and input volume now apply to real calls — both previously changed only the mic test'],
       ['fix', 'People no longer show as online after closing Skycord'],
       ['fix', 'Calls already running are visible the moment you come online'],
       ['fix', 'Group icons set to a GIF stay animated'],
