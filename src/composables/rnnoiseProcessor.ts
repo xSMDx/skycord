@@ -36,17 +36,25 @@ export const createRnnoiseProcessor = (): TrackProcessor<Track.Kind.Audio, Audio
   }
 
   const build = async (opts: AudioProcessorOptions) => {
-    const binary = await getWasm()
-    // RNNoise assumes 48kHz. Own the context rather than borrowing LiveKit's,
-    // which may run at a different rate and would pitch-shift the output.
-    ctx = new AudioContext({ sampleRate: 48000 })
-    await ctx.audioWorklet.addModule(rnnoiseWorkletUrl)
-    source = ctx.createMediaStreamSource(new MediaStream([opts.track]))
-    node = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: binary })
-    dest = ctx.createMediaStreamDestination()
-    source.connect(node)
-    node.connect(dest)
-    processor.processedTrack = dest.stream.getAudioTracks()[0]
+    try {
+      const binary = await getWasm()
+      // RNNoise assumes 48kHz. Own the context rather than borrowing LiveKit's,
+      // which may run at a different rate and would pitch-shift the output.
+      ctx = new AudioContext({ sampleRate: 48000 })
+      await ctx.audioWorklet.addModule(rnnoiseWorkletUrl)
+      source = ctx.createMediaStreamSource(new MediaStream([opts.track]))
+      node = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: binary })
+      dest = ctx.createMediaStreamDestination()
+      source.connect(node)
+      node.connect(dest)
+      processor.processedTrack = dest.stream.getAudioTracks()[0]
+    } catch (e) {
+      // LiveKit never assigns a processor whose init() rejected, so it will
+      // never call destroy() on us — release the half-built graph ourselves or
+      // every failed attempt strands a live AudioContext.
+      await teardown()
+      throw e
+    }
   }
 
   const processor: TrackProcessor<Track.Kind.Audio, AudioProcessorOptions> = {

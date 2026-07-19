@@ -215,6 +215,12 @@ const wireRoom = (r: Room) => {
     syncParticipants()
   })
   r.on(RoomEvent.LocalTrackUnpublished, (pub) => { onLocalTrackUnpublished(pub); syncParticipants() })
+  // Catches EVERY way a mic track appears — normal join, a push-to-talk keypress
+  // (which publishes on demand, and so never hit the join-time call), or a device
+  // switch — so the chosen noise mode is always applied to the live track.
+  r.on(RoomEvent.LocalTrackPublished, (pub) => {
+    if (pub.source === Track.Source.Microphone) void applyNoiseMode()
+  })
   r.on(RoomEvent.ParticipantConnected, () => { soundUserJoin(); syncParticipants() })
   r.on(RoomEvent.ParticipantDisconnected, (p) => { purgeParticipantVideos(p.identity); soundUserLeave(); syncParticipants() })
   // Camera-off MUTES the publication (no unpublish → no TrackUnsubscribed on the
@@ -311,7 +317,13 @@ const unbindPtt = () => {
 // device switching and the speaking analyser all keep working on the same track.
 // A failure here must never cost the user their microphone: fall back to the
 // browser's own suppression instead.
-const applyNoiseMode = async () => {
+// Serialised: toggling the mode twice quickly would otherwise let the second
+// call read getProcessor() before the first setProcessor() resolved, leaving the
+// pipeline out of sync with the setting. Each run re-reads the CURRENT mode, so
+// the last intent always wins.
+let noiseChain: Promise<void> = Promise.resolve()
+
+const applyNoiseModeNow = async () => {
   const room = getRoom(); if (!room) return
   const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined
   if (!mic) return
@@ -327,6 +339,11 @@ const applyNoiseMode = async () => {
     // Re-apply capture constraints so the browser filter actually comes back on.
     try { await room.localParticipant.setMicrophoneEnabled(true, micCaptureOptions()) } catch { /* ignore */ }
   }
+}
+
+const applyNoiseMode = (): Promise<void> => {
+  noiseChain = noiseChain.then(applyNoiseModeNow, applyNoiseModeNow)
+  return noiseChain
 }
 
 // Switching mode mid-call takes effect immediately — no rejoin.
