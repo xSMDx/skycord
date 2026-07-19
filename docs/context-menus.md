@@ -76,6 +76,52 @@ none. Audio elements live in the `audioEls` map: volume = `el.volume`, local mut
 | System message (call log, rename) | `NONE` | Decide: any menu at all? |
 | Date divider | `NONE` | Probably intentionally none |
 
+### Reference menus (user-supplied screenshots, 2026-07-19)
+
+Discord's equivalents, mapped onto what Skycord can actually back today.
+`✅` buildable now · `🔨` needs the small endpoints already agreed · `❌` no backend · `➖` not applicable to Skycord
+
+**DM conversation** (right-click a DM in the sidebar)
+
+| Item | Status | Note |
+|---|---|---|
+| Mark As Read | ✅ | `unread` is client state already (`openDM` clears it) |
+| Profile | ✅ | |
+| Start a Call | ✅ | open the DM, then `toggleCall` |
+| Close DM | ✅ | existing `hideConv` |
+| Copy User ID / Copy Channel ID | ✅ | |
+| Remove Friend | 🔨 | endpoint agreed |
+| Pin conversation | ❌ | no field, no route |
+| Add Note | ❌ | no notes anywhere in the schema |
+| Add Friend Nickname | ❌ | no per-relationship nickname |
+| Mute @user ▸ | ❌ | no mute state |
+| Ignore | ❌ | distinct from Block; no backend |
+| Block | ❌ | `Friendship.status` has the enum value, nothing writes/reads it |
+| Apps ▸ | ➖ | Skycord has no app platform |
+| Invite to Server ▸ | ➖ | servers are mock data (see below) |
+
+**Group DM** (right-click a group in the sidebar)
+
+| Item | Status | Note |
+|---|---|---|
+| Mark As Read | ✅ | |
+| Invites | ✅ | `POST /conversations/groups/:id/invites` |
+| Edit Group | ✅ | `PATCH /groups/:id` — existing EditGroupModal |
+| Leave Group | ✅ | `POST /groups/:id/leave` — already in the ⋯ menu |
+| Copy Channel ID | ✅ | |
+| Pin conversation | ❌ | |
+| Mute Conversation ▸ | ❌ | |
+
+**Server icon** — ⚠️ **BLOCKED, belongs with the channels milestone.**
+
+`ChatApp.vue:403` and `:409` are hardcoded arrays of four fake servers and their
+channels, with dicebear placeholder images. There is no `Server` model, no
+server routes, no channel routes. Every item on this menu (Create Channel,
+Create Category, Create Event, Server Settings, Privacy Settings, Notification
+Settings, Mute Server, Hide Muted Channels, Invite to Server, Edit Per-server
+Profile) acts on data that does not exist, and Copy Server ID would copy the
+string `'sykord'`. Build this menu when servers/channels become real.
+
 ### Sidebars & rails
 | Target | Status | Notes |
 |---|---|---|

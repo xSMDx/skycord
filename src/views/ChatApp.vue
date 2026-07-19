@@ -39,6 +39,11 @@ import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance }        from '@/composables/useAppearance'
 import { useVoice }          from '@/composables/useVoice'
+// The app-wide right-click menu. Aliased because the message-only ContextMenu
+// above still owns its own surface until it's migrated onto this one.
+import AppContextMenu        from '@/components/ui/ContextMenu.vue'
+import { openMenu }          from '@/composables/useContextMenu'
+import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 
 import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
 
@@ -872,6 +877,33 @@ const openDM = async (dm: DM) => {
   await loadDMHistory(dm.id)
 }
 
+// ── Context menus ───────────────────────────────────────────────────────────
+// One handler set feeds every surface that shows a person, so the menu can't
+// drift between the friends list, Active Now and the members panel.
+const userMenuHandlers = {
+  openProfile: (u: MenuUser) => { showUserProfile.value = u },
+  openDM: (u: MenuUser) => openDM({
+    id:      u.id,
+    name:    u.displayName || u.username || 'Unknown',
+    avatar:  avatarFor(u.username || '', u.avatar),
+    status:  (u.status as any) || 'offline',
+    lastMsg: '',
+  }),
+  // Calling from a list means opening the conversation first — toggleCall acts
+  // on whatever DM is currently open.
+  startCall: async (u: MenuUser) => {
+    await userMenuHandlers.openDM(u)
+    if (!callActiveHere.value) await toggleCall()
+  },
+  copyId: (id: string) => {
+    navigator.clipboard.writeText(id)
+      .then(() => showToast('User ID copied'))
+      .catch(() => showToast('Couldn’t copy the ID'))
+  },
+}
+const openUserMenu = (e: MouseEvent, u: MenuUser, ctx: { isSelf?: boolean; isCurrentDM?: boolean } = {}) =>
+  openMenu(e, userMenu(u, userMenuHandlers, ctx))
+
 const openFriends = () => {
   view.value = 'friends'
   activeDM.value = null
@@ -1402,6 +1434,9 @@ onBeforeUnmount(() => {
       @edit="(msg) => { closeReplyTree(); msgListRef?.startEditExternal?.(msg) }"
     />
 
+    <!-- App-wide right-click menu — mounted once, driven by openMenu() -->
+    <AppContextMenu />
+
     <!-- ══ SHELL ════════════════════════════════════════════════════════════ -->
     <div class="shell">
 
@@ -1639,6 +1674,7 @@ onBeforeUnmount(() => {
                 v-for="f in (friendsTab==='online' ? filteredFriends.filter(x=>x.status!=='offline') : filteredFriends)"
                 :key="f.id" class="f-row"
                 @click.stop="showUserProfile = f"
+                @contextmenu="openUserMenu($event, f)"
               >
                 <div class="f-av">
                   <img :src="avatarFor(f.username,f.avatar)" :alt="f.displayName"/>
@@ -1652,7 +1688,7 @@ onBeforeUnmount(() => {
                   <button class="f-btn" title="Message" @click.stop="openDM({ id:f.id, name:f.displayName||f.username, avatar:avatarFor(f.username,f.avatar), status:f.status as any, lastMsg:'' })">
                     <PhChatDots :size="18" weight="light"/>
                   </button>
-                  <button class="f-btn" title="More"><PhDotsThree :size="18" weight="light"/></button>
+                  <button class="f-btn" title="More" @click.stop="openUserMenu($event, f)"><PhDotsThree :size="18" weight="light"/></button>
                 </div>
               </div>
             </template>
@@ -1664,7 +1700,8 @@ onBeforeUnmount(() => {
                 <div class="f-empty-icon">📬</div>
                 <p>No pending requests</p>
               </div>
-              <div v-for="req in pendingReqs" :key="req._id" class="f-row">
+              <div v-for="req in pendingReqs" :key="req._id" class="f-row"
+                   @contextmenu="openUserMenu($event, req.requester)">
                 <div class="f-av">
                   <img :src="avatarFor(req.requester.username,req.requester.avatar)" :alt="req.requester.displayName"/>
                   <span class="f-dot" :style="{ background: statusColor(req.requester.status) }"/>
@@ -1693,7 +1730,8 @@ onBeforeUnmount(() => {
               <div>👀</div><div>It's quiet for now…</div>
               <button class="an-add-btn" @click.stop="showAddFriend=true">Add friends</button>
             </div>
-            <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f">
+            <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f"
+                 @contextmenu="openUserMenu($event, f)">
               <div class="an-av"><img :src="avatarFor(f.username,f.avatar)" :alt="f.displayName"/><span class="an-dot" :style="{ background: statusColor(f.status) }"/></div>
               <div class="an-info">
                 <span class="an-name">{{ f.displayName||f.username }}</span>
@@ -1872,7 +1910,8 @@ onBeforeUnmount(() => {
           </div>
           <div class="mp-list">
             <div class="mp-section-label">Online — {{ onlineMembers.length }}</div>
-            <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="showUserProfile = m">
+            <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="showUserProfile = m"
+                 @contextmenu="openUserMenu($event, m)">
               <div class="mp-av"><img :src="m.avatar" :alt="m.name"/><span class="mp-dot" :style="{ background: statusColor(m.status) }"/></div>
               <div class="mp-info"><span class="mp-name">{{ m.name }}</span><span class="mp-status" :style="{ color: statusColor(m.status) }">{{ statusLabel(m.status) }}</span></div>
             </div>
@@ -1883,7 +1922,8 @@ onBeforeUnmount(() => {
         <aside v-if="view==='group' && activeGroup" class="members-panel" :class="{ closed: !membersOpen }">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeGroup.memberCount }}</span></h3></div>
           <div class="mp-list">
-            <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="showUserProfile = m">
+            <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="showUserProfile = m"
+                 @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <img v-if="m.avatar" :src="m.avatar" :alt="m.displayName || m.username"/>
                 <img v-else :src="avatarFor(m.username)" :alt="m.displayName || m.username"/>
