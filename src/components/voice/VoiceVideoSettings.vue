@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { PhCaretDown } from '@phosphor-icons/vue'
-import { useVoiceSettings } from '@/composables/useVoiceSettings'
+import { useVoiceSettings, micCaptureOptions } from '@/composables/useVoiceSettings'
+import { createRnnoiseNode } from '@/composables/rnnoiseProcessor'
 import { useVoice } from '@/composables/useVoice'
 import { soundDeafen, soundUndeafen } from '@/composables/useSocket'
 
@@ -31,28 +32,40 @@ const micTesting = ref(false)
 const micLevel   = ref(0)
 let micStream: MediaStream | null = null
 let micCtx: AudioContext | null = null
+let rnNode: Awaited<ReturnType<typeof createRnnoiseNode>> | null = null
 let micRaf = 0
 let deafenedByTest = false
 
 const startMicTest = async () => {
   if (micTesting.value) { stopMicTest(); return }
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: voiceSettings.inputDeviceId || undefined,
-        echoCancellation: voiceSettings.echoCancellation,
-        noiseSuppression: voiceSettings.noiseSuppression,
-      },
-    })
+    // Same constraints the call publishes with — one source of truth, so the
+    // test can't drift from reality (it previously read a renamed field and so
+    // requested NO suppression at all).
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: micCaptureOptions() })
     await refreshDevices()
-    micCtx = new AudioContext()
+    // 48kHz because RNNoise assumes it; harmless for the other modes.
+    micCtx = new AudioContext({ sampleRate: 48000 })
     await micCtx.resume()              // some browsers start suspended — fixes the dead meter
     const src = micCtx.createMediaStreamSource(micStream)
     const gain = micCtx.createGain()
     gain.gain.value = voiceSettings.inputVolume / 100
     const analyser = micCtx.createAnalyser()
     analyser.fftSize = 1024
-    src.connect(gain)
+    // Run the monitor through RNNoise when it's selected, so what you hear here
+    // is what the call actually sends.
+    if (voiceSettings.noiseMode === 'rnnoise') {
+      try {
+        rnNode = await createRnnoiseNode(micCtx)
+        src.connect(rnNode)
+        rnNode.connect(gain)
+      } catch (e) {
+        console.warn('[mic-test] RNNoise unavailable, monitoring raw input', e)
+        src.connect(gain)
+      }
+    } else {
+      src.connect(gain)
+    }
     gain.connect(analyser)
     gain.connect(micCtx.destination)   // monitor — hear yourself
     const data = new Uint8Array(analyser.frequencyBinCount)
@@ -73,6 +86,8 @@ const startMicTest = async () => {
 const stopMicTest = () => {
   cancelAnimationFrame(micRaf)
   micStream?.getTracks().forEach(t => t.stop()); micStream = null
+  try { rnNode?.disconnect(); rnNode?.destroy() } catch { /* ignore */ }
+  rnNode = null
   micCtx?.close().catch(() => {}); micCtx = null
   micLevel.value = 0
   if (micTesting.value) {

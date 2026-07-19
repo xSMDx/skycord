@@ -21,6 +21,18 @@ const getWasm = async () => {
   return wasmBinary
 }
 
+/**
+ * Build a ready-to-connect RNNoise node on an existing context. Shared with the
+ * mic test so "Mic Test" hears exactly what the call publishes — testing against
+ * an unfiltered monitor is how you conclude the filter "does nothing".
+ * The context MUST be 48kHz; RNNoise assumes it.
+ */
+export const createRnnoiseNode = async (ctx: AudioContext): Promise<RnnoiseWorkletNode> => {
+  const binary = await getWasm()
+  await ctx.audioWorklet.addModule(rnnoiseWorkletUrl)
+  return new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: binary })
+}
+
 export const createRnnoiseProcessor = (): TrackProcessor<Track.Kind.Audio, AudioProcessorOptions> => {
   let ctx: AudioContext | null = null
   let source: MediaStreamAudioSourceNode | null = null
