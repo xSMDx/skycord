@@ -1,6 +1,12 @@
 import { ref } from 'vue'
 import { io, Socket } from 'socket.io-client'
 import { useAuth }    from './useAuth'
+import { isMuted }    from './useConvPrefs'
+
+/** The DM's real conversation id, matching the server's dmConvId: both user ids
+ *  sorted and joined, so each side derives the same string. Used for "Copy
+ *  Channel ID" — NOT as the convPrefs key, which is the partner's user id. */
+export const dmConvId = (a: string, b: string) => [a, b].sort().join('_')
 
 let _socket: Socket | null = null
 const connected   = ref(false)
@@ -11,6 +17,11 @@ const activeCalls = ref<Record<string, string[]>>({})
 
 let _activeDMPartnerId: string | null = null
 export const setActiveDMPartner = (id: string | null) => { _activeDMPartnerId = id }
+
+// Same idea for groups, which previously had no "am I looking at this?" concept
+// and so played a sound even for the conversation on screen.
+let _activeGroupId: string | null = null
+export const setActiveGroup = (id: string | null) => { _activeGroupId = id }
 
 type CB<T> = (p: T) => void
 const _h: Record<string, CB<any>> = {
@@ -99,10 +110,14 @@ export const useSocket = () => {
     _socket.on('disconnect',    () => { connected.value = false; console.log('[WS] disconnected') })
     _socket.on('connect_error', e  =>   console.warn('[WS]', e.message))
 
-    // Incoming DM — suppress sound if already in that chat
+    // Incoming DM — silent if you're already in that chat, or it's muted.
     _socket.on('dm:receive', (p: any) => {
       if (p.authorId !== user.value?.id) {
-        if (_activeDMPartnerId !== p.authorId) soundMessage()
+        // DM prefs are keyed by the PARTNER'S user id — the same `dm.id` the
+        // sidebar and the menus use. (Keying them by the synthetic dmConvId
+        // instead would look more correct and silently never match, because
+        // nothing else in the client refers to a DM that way.)
+        if (_activeDMPartnerId !== p.authorId && !isMuted(p.authorId)) soundMessage()
       }
       _h.onMessage(p)
     })
@@ -132,7 +147,13 @@ export const useSocket = () => {
     // Group events
     _socket.on('group:created', (p: any) => _h.onGroupCreated(p))
     _socket.on('group:updated', (p: any) => _h.onGroupUpdated(p))
-    _socket.on('group:receive', (p: any) => { soundMessage(); _h.onGroupMessage(p) })
+    // Groups used to ding unconditionally — even while you had that group open,
+    // which DMs never did. Same gate as DMs now, plus mute.
+    _socket.on('group:receive', (p: any) => {
+      const gid = p.conversationId || p.groupId
+      if (p.authorId !== user.value?.id && _activeGroupId !== gid && !isMuted(gid)) soundMessage()
+      _h.onGroupMessage(p)
+    })
 
     // @everyone ping — distinct notification sound + a toast in the UI
     _socket.on('mention:everyone', (p: any) => { soundNotification(); _h.onMentionEveryone(p) })

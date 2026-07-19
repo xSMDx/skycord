@@ -3,6 +3,7 @@
  * Uses the access token from useAuth automatically.
  */
 import { useAuth } from './useAuth'
+import type { ConvPref } from './useConvPrefs'
 
 export const useApi = () => {
   const { accessToken } = useAuth()
@@ -57,6 +58,23 @@ export const useApi = () => {
 
   const acceptFriendRequest = (requestId: string) =>
     patch<{ message: string }>(`/users/friends/accept/${requestId}`)
+
+  const declineFriendRequest = (requestId: string) =>
+    patch<{ message: string }>(`/users/friends/decline/${requestId}`)
+
+  const removeFriend = (userId: string) =>
+    del<{ message: string }>(`/users/friends/${userId}`)
+
+  // ── Conversation prefs (pin / mute) ──────────────────────────────────────
+  const getConvPrefs = () =>
+    get<{ prefs: Record<string, ConvPref> }>('/users/me/conversations')
+
+  // `mute`: null unmutes, 'forever' mutes indefinitely, an ISO string mutes
+  // until then. Deliberately a different shape from the stored mutedUntil —
+  // collapsing them would make "mute forever" and "unmute" identical on the wire.
+  const setConvPref = (convId: string, body: { pinned?: boolean; mute?: string | null }) =>
+    patch<{ convId: string; pref: ConvPref; prefs: Record<string, ConvPref> }>(
+      `/users/me/conversations/${encodeURIComponent(convId)}`, body)
 
   // ── Messages ─────────────────────────────────────────────────────────────
   const getDMMessages = (partnerId: string, before?: string) =>
@@ -115,7 +133,8 @@ export const useApi = () => {
 
   return {
     searchUsers, getFriends, getPending,
-    sendFriendRequest, acceptFriendRequest,
+    sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend,
+    getConvPrefs, setConvPref,
     getDMMessages, sendDMRest,
     createGroup, getMyGroups, getGroupMessages, sendGroupRest,
     createGroupInvite, getInvite, joinViaInvite, leaveGroup,

@@ -17,10 +17,29 @@ export interface IUserDocument extends Document {
   isVerified:    boolean
   tokenVersion:  number
   lastSeenAt:    Date
+  convPrefs:     Map<string, IConvPref>
   createdAt:     Date
   updatedAt:     Date
   comparePassword(candidate: string): Promise<boolean>
   toPublicJSON(): PublicUser
+}
+
+/**
+ * Per-user, per-conversation preferences, keyed by conversation id.
+ *
+ * Lives on the user rather than the conversation because 1:1 DMs have no
+ * Conversation document at all — their id is synthesised from the two user ids
+ * — and because pin/mute are personal either way: muting a group must not mute
+ * it for the other nineteen people in it.
+ *
+ * `muted` and `mutedUntil` are separate on purpose. Collapsing them into one
+ * nullable date makes "muted forever" and "not muted" both read as "no end
+ * date", which is indistinguishable on read and on the wire.
+ */
+export interface IConvPref {
+  pinned:     boolean
+  muted:      boolean
+  mutedUntil: Date | null   // null while muted = indefinitely
 }
 
 export interface PublicUser {
@@ -78,6 +97,20 @@ const UserSchema = new Schema<IUserDocument, IUserModel>(
     isVerified:   { type: Boolean, default: false },
     tokenVersion: { type: Number,  default: 0, select: false },
     lastSeenAt:   { type: Date,    default: Date.now },
+    // select:false — these are private settings, and User docs are also read to
+    // build OTHER people's public profiles (search, friends, group members).
+    // Excluding them by default means they can only ever leave via the /me
+    // routes that opt in explicitly.
+    convPrefs: {
+      type: Map,
+      of: new Schema<IConvPref>({
+        pinned:     { type: Boolean, default: false },
+        muted:      { type: Boolean, default: false },
+        mutedUntil: { type: Date,    default: null },
+      }, { _id: false }),
+      default: () => new Map(),
+      select: false,
+    },
   },
   { timestamps: true, versionKey: false }
 )

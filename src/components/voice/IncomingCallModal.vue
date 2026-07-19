@@ -2,12 +2,16 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import { PhPhone, PhX } from '@phosphor-icons/vue'
 import { soundRingStart, soundRingStop } from '@/composables/useSocket'
+import { isMuted } from '@/composables/useConvPrefs'
 
-defineProps<{ name: string; avatar: string }>()
+// `convId` is the caller's DM key, used only to check mute.
+const props = defineProps<{ name: string; avatar: string; convId?: string }>()
 const emit = defineEmits<{ accept: []; decline: [] }>()
 
 // Ring while the modal is up; always stop on teardown (answer / decline / unmount).
-onMounted(soundRingStart)
+// A muted conversation still SHOWS the call — mute silences, it doesn't hide.
+// You can see who's calling; you just don't hear it.
+onMounted(() => { if (!props.convId || !isMuted(props.convId)) soundRingStart() })
 onBeforeUnmount(soundRingStop)
 </script>
 

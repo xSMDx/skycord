@@ -16,7 +16,7 @@ import { useAuth }                          from '@/composables/useAuth'
 import { useMessages }                      from '@/composables/useMessages'
 import { useApi, type ApiUser, type PendingRequest, type ApiMessage } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
-import { useSocket, setActiveDMPartner, soundMute, soundUnmute, soundDeafen, soundUndeafen } from '@/composables/useSocket'
+import { useSocket, setActiveDMPartner, setActiveGroup, dmConvId, soundMute, soundUnmute, soundDeafen, soundUndeafen } from '@/composables/useSocket'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
 import UserProfileModal    from '@/components/modals/UserProfileModal.vue'
@@ -45,6 +45,7 @@ import AppContextMenu        from '@/components/ui/ContextMenu.vue'
 import { openMenu }          from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
+import { convPref, isPinned, isMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
 import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
 
@@ -52,13 +53,14 @@ import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } 
 const { user: authUser } = useAuth()
 
 // ── API ────────────────────────────────────────────────────────────────────
+const api = useApi()
 const {
   getFriends, getPending, acceptFriendRequest,
   getDMMessages: fetchDMMessages, sendDMRest,
   createGroup, getMyGroups,
   getGroupMessages: fetchGroupMessages, sendGroupRest,
   leaveGroup,
-} = useApi()
+} = api
 
 // ── Messages ───────────────────────────────────────────────────────────────
 const {
@@ -454,7 +456,10 @@ const conversations = computed<Convo[]>(() => {
     ...dmsData.value.map(dm => ({ kind: 'dm' as const, id: dm.id, ts: dm.lastActiveAt ?? 0, dm })),
     ...groupsData.value.map(group => ({ kind: 'group' as const, id: group.id, ts: new Date(group.lastMessageAt).getTime() || 0, group })),
   ].filter(c => !hiddenIds.value.has(c.id))
-  return items.sort((a, b) => b.ts - a.ts)
+  // Pinned float to the top; recency still orders within each group, so a
+  // pinned conversation that just got a message rises among the pinned ones.
+  return items.sort((a, b) =>
+    (Number(isPinned(b.id)) - Number(isPinned(a.id))) || (b.ts - a.ts))
 })
 
 const currentMessages = computed<Message[]>(() => {
@@ -487,7 +492,11 @@ const currentTypers = computed(() => {
 const loadFriends = async () => {
   apiLoading.value = true
   try {
-    const [fr, pnd] = await Promise.all([getFriends(), getPending()])
+    // Prefs ride along with the boot fetch: the sidebar can't order itself
+    // correctly until it knows what's pinned, and a late arrival would visibly
+    // reshuffle the list after first paint.
+    const [fr, pnd, cp] = await Promise.all([getFriends(), getPending(), api.getConvPrefs()])
+    setAllConvPrefs(cp.prefs || {})
     apiFriends.value = fr.friends.map((f: any) => ({
       id:            f._id?.toString() || f.id,
       username:      f.username,
@@ -637,6 +646,7 @@ const openGroup = async (group: Group) => {
   const g = groupsData.value.find(x => x.id === group.id)
   if (g) g.unread = undefined
   setActiveDMPartner(null)
+  setActiveGroup(group.id)
   await loadGroupHistory(group.id)
 }
 
@@ -866,6 +876,7 @@ const openDM = async (dm: DM) => {
   if (d) d.unread = undefined
   // Tell socket which DM is open so sounds are suppressed
   setActiveDMPartner(dm.id)
+  setActiveGroup(null)
   // Load history from DB
   await loadDMHistory(dm.id)
 }
@@ -902,9 +913,26 @@ const copyText = (text: string, what: string) => {
     .then(() => showToast(`${what} copied`))
     .catch(() => showToast(`Couldn’t copy the ${what}`))
 }
-const markConvRead = (convId: string) => {
-  const c = dmsData.value.find(d => d.id === convId); if (c) c.unread = undefined
-  const g = groupsData.value.find(x => x.id === convId); if (g) g.unread = undefined
+
+// Pin/mute write through optimistically so the sidebar reorders on the same
+// frame as the click; the server's echo is authoritative and corrects it if the
+// write failed.
+const convActions = {
+  setPinned: async (convId: string, pinned: boolean) => {
+    const prev = convPref(convId)
+    setConvPrefLocal(convId, { ...prev, pinned })
+    try { const r = await api.setConvPref(convId, { pinned }); setConvPrefLocal(convId, r.pref) }
+    catch { setConvPrefLocal(convId, prev); showToast('Couldn’t update pin') }
+  },
+  setMute: async (convId: string, mute: string | null) => {
+    const prev = convPref(convId)
+    setConvPrefLocal(convId, {
+      ...prev, muted: mute !== null, mutedUntil: mute === 'forever' || mute === null ? null : mute,
+    })
+    try { const r = await api.setConvPref(convId, { mute }); setConvPrefLocal(convId, r.pref) }
+    catch { setConvPrefLocal(convId, prev); showToast('Couldn’t update mute') }
+  },
+  copy: copyText,
 }
 
 // Right-click AND the row's ⋯ button both land here, so the two can no longer
@@ -912,25 +940,27 @@ const markConvRead = (convId: string) => {
 const openConversationMenu = (e: MouseEvent, c: any) => {
   if (c.kind === 'dm') {
     openMenu(e, dmMenu(
-      { id: c.dm.id, unread: c.dm.unread, user: { id: c.dm.id, displayName: c.dm.name, avatar: c.dm.avatar, status: c.dm.status } },
       {
-        markRead:    markConvRead,
+        id: c.dm.id,
+        channelId: dmConvId(authUser?.value?.id || '', c.dm.id),
+        user: { id: c.dm.id, displayName: c.dm.name, avatar: c.dm.avatar, status: c.dm.status },
+      },
+      {
+        ...convActions,
         openProfile: (u) => { showUserProfile.value = u },
         startCall:   userMenuHandlers.startCall,
         closeDM:     hideConv,
         deleteDM,
-        copy:        copyText,
       }))
   } else {
-    openMenu(e, groupMenu({ id: c.group.id, unread: c.group.unread }, {
-      markRead: markConvRead,
+    openMenu(e, groupMenu({ id: c.group.id }, {
+      ...convActions,
       // Both modals read `activeGroup`, so the group has to be opened first or
       // they'd act on whichever group happened to be selected.
       openInvites: () => { openGroup(c.group); showInviteGroup.value = true },
       editGroup:   () => { openGroup(c.group); showEditGroup.value = true },
       hideGroup:   hideConv,
       leaveGroup:  (id) => doLeaveGroup(id),
-      copy:        copyText,
     }))
   }
 }
@@ -939,12 +969,14 @@ const openFriends = () => {
   view.value = 'friends'
   activeDM.value = null
   setActiveDMPartner(null)
+  setActiveGroup(null)
 }
 
 const openServer = (srv: Server) => {
   activeServer.value = srv.id
   view.value = 'server'
   setActiveDMPartner(null)
+  setActiveGroup(null)
 }
 
 // ── Send message ───────────────────────────────────────────────────────────
@@ -1355,6 +1387,7 @@ onBeforeUnmount(() => {
       v-if="incomingCall"
       :name="incomingCall.name"
       :avatar="incomingCall.avatar"
+      :conv-id="incomingCall.convId"
       @accept="acceptIncomingCall"
       @decline="declineIncomingCall"
     />
@@ -1518,8 +1551,9 @@ onBeforeUnmount(() => {
                 <span class="dm-name">{{ c.dm.name }}</span>
                 <span class="dm-last">{{ c.dm.lastMsg }}</span>
               </div>
+              <span v-if="isPinned(c.dm.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
               <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
-              <span v-if="c.dm.unread" class="dm-unread">{{ c.dm.unread }}</span>
+              <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isMuted(c.dm.id) }">{{ c.dm.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <PhX :size="13" weight="light" />
               </button>
@@ -1539,8 +1573,9 @@ onBeforeUnmount(() => {
                 <span class="dm-name">{{ groupDisplayName(c.group) }}</span>
                 <span class="dm-last">{{ c.group.lastMsg || `${c.group.memberCount} Members` }}</span>
               </div>
+              <span v-if="isPinned(c.group.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
               <span v-if="convHasCall('group', c.group.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
-              <span v-if="c.group.unread" class="dm-unread">{{ c.group.unread }}</span>
+              <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isMuted(c.group.id) }">{{ c.group.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <PhX :size="13" weight="light" />
               </button>
@@ -2028,6 +2063,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-unread{min-width:18px;height:18px;padding:0 5px;background:#ed4245;color:white;font-size:11px;font-weight:700;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+/* Muted: the count still matters, it just stops shouting. */
+.dm-unread.muted{background:var(--text-3);opacity:.6}
+.dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
 .dm-call{width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}

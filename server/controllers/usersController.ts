@@ -270,3 +270,136 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     res.json({ message: 'Password updated' })
   } catch (err) { next(err) }
 }
+
+// ── Conversation preferences (pin / mute) ────────────────────────────────────
+// Keyed by conversation id: a group's ObjectId, or a DM's synthetic dmConvId.
+// Expiry is applied on READ, so a mute that has run out needs no cron sweeper
+// and no write — it simply stops reporting as muted.
+
+const liveConvPref = (p: any) => {
+  const expired = p?.muted && p?.mutedUntil && new Date(p.mutedUntil).getTime() <= Date.now()
+  return {
+    pinned:     !!p?.pinned,
+    muted:      !!p?.muted && !expired,
+    mutedUntil: expired ? null : (p?.mutedUntil ?? null),
+  }
+}
+
+const prefsToObject = (prefs: Map<string, any> | undefined) => {
+  const out: Record<string, ReturnType<typeof liveConvPref>> = {}
+  if (!prefs) return out
+  prefs.forEach((v, k) => {
+    const live = liveConvPref(v)
+    // Skip entries that carry no information — an expired mute on an unpinned
+    // conversation is just noise the client would have to filter anyway.
+    if (live.pinned || live.muted) out[k] = live
+  })
+  return out
+}
+
+export const getConvPrefs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = await User.findById(req.user!.sub).select('+convPrefs')
+    if (!user) { res.status(404).json({ message: 'User not found' }); return }
+    res.json({ prefs: prefsToObject(user.convPrefs as any) })
+  } catch (err) { next(err) }
+}
+
+export const setConvPref = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { convId } = req.params
+    // convId is only ever a Map key on this user's own document, so it can't
+    // reach another user's data — but an over-long key would still bloat the
+    // doc, and Mongo forbids dots in map keys.
+    if (!convId || convId.length > 128 || convId.includes('.')) {
+      res.status(400).json({ message: 'Invalid conversation id' }); return
+    }
+
+    const user = await User.findById(req.user!.sub).select('+convPrefs')
+    if (!user) { res.status(404).json({ message: 'User not found' }); return }
+
+    const prefs  = (user.convPrefs ?? new Map()) as Map<string, any>
+    const cur    = liveConvPref(prefs.get(convId))
+    const { pinned, mute } = req.body as { pinned?: boolean; mute?: string | null }
+
+    const next_: any = { ...cur }
+    if (pinned !== undefined) next_.pinned = !!pinned
+
+    if (mute !== undefined) {
+      if (mute === null) {
+        next_.muted = false; next_.mutedUntil = null
+      } else if (mute === 'forever') {
+        next_.muted = true;  next_.mutedUntil = null
+      } else {
+        const until = new Date(mute)
+        if (isNaN(until.getTime()) || until.getTime() <= Date.now()) {
+          res.status(400).json({ message: 'mute must be null, "forever", or a future timestamp' }); return
+        }
+        next_.muted = true; next_.mutedUntil = until
+      }
+    }
+
+    // Drop the key entirely once nothing is set, so the map doesn't accumulate
+    // an entry for every conversation the user has ever right-clicked.
+    if (!next_.pinned && !next_.muted) prefs.delete(convId)
+    else prefs.set(convId, next_)
+
+    user.convPrefs = prefs as any
+    user.markModified('convPrefs')
+    await user.save({ validateModifiedOnly: true })
+
+    res.json({ convId, pref: liveConvPref(prefs.get(convId)), prefs: prefsToObject(prefs) })
+  } catch (err) { next(err) }
+}
+
+
+// ── Decline a pending friend request ─────────────────────────────────────────
+// The client had a decline button that only filtered the row out of local
+// state, so the request reappeared on refresh. This is what it should have
+// been calling. Scoped to receiver + pending so it can't be used to cancel
+// someone else's request or to delete an established friendship.
+export const declineFriendRequest = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId        = req.user!.sub
+    const { requestId } = req.params
+
+    const result = await Friendship.deleteOne({
+      _id: requestId,
+      receiver: userId,
+      status: 'pending',
+    })
+    if (!result.deletedCount) { res.status(404).json({ message: 'Request not found' }); return }
+
+    res.json({ message: 'Friend request declined' })
+  } catch (err) { next(err) }
+}
+
+// ── Remove a friend ──────────────────────────────────────────────────────────
+// Either side may remove, so the match is direction-agnostic. Restricted to
+// 'accepted' so this can't be repurposed to silently drop a pending request
+// (that's decline) or to clear a block (that's a separate, unbuilt flow).
+export const removeFriend = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId   = req.user!.sub
+    const { userId: otherId } = req.params
+
+    if (!mongoose.Types.ObjectId.isValid(otherId)) {
+      res.status(400).json({ message: 'Invalid user id' }); return
+    }
+
+    const result = await Friendship.deleteOne({
+      status: 'accepted',
+      $or: [
+        { requester: userId,  receiver: otherId },
+        { requester: otherId, receiver: userId  },
+      ],
+    })
+    if (!result.deletedCount) { res.status(404).json({ message: 'Friendship not found' }); return }
+
+    // Tell the other side so their list updates without a refresh.
+    const io = getIO()
+    if (io) io.to(`user:${otherId}`).emit('friend:removed', { friendId: userId })
+
+    res.json({ message: 'Friend removed' })
+  } catch (err) { next(err) }
+}

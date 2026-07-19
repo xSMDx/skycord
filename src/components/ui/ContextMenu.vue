@@ -9,12 +9,17 @@
  * size), click-away, Escape, arrow-key navigation and focus return.
  */
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { PhCheck } from '@phosphor-icons/vue'
-import { menu, closeMenu, isSeparator, type MenuAction } from '@/composables/useContextMenu'
+import { PhCheck, PhCaretRight } from '@phosphor-icons/vue'
+import { menu, closeMenu, isSeparator, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 
 const el   = ref<HTMLElement | null>(null)
+const subEl = ref<HTMLElement | null>(null)
 const pos  = ref({ x: 0, y: 0 })
 const active = ref(-1)
+
+// Open submenu: which row owns it, its items, and where the flyout sits.
+const sub = ref<{ index: number; items: MenuItem[]; x: number; y: number } | null>(null)
+const subActive = ref(-1)
 
 // Indices of items that can actually be focused — separators and disabled rows
 // are skipped by the arrow keys rather than swallowing a keypress.
@@ -46,31 +51,102 @@ const place = async () => {
 }
 
 watch(() => menu.open, async (open) => {
-  if (!open) { active.value = -1; return }
+  if (!open) { active.value = -1; closeSub(); return }
   await place()
   el.value?.focus()
 })
 
+// ── Submenus (Mute ▸ durations) ─────────────────────────────────────────────
+const closeSub = () => { sub.value = null; subActive.value = -1 }
+
+// Opens to the right of the parent row, flipping to its left when there isn't
+// room. Anchored to the ROW, not the cursor, so it lines up with what opened it.
+const openSub = async (index: number, items: MenuItem[], rowEl: HTMLElement) => {
+  if (sub.value?.index === index) return
+  const r = rowEl.getBoundingClientRect()
+  sub.value = { index, items, x: r.right - 4, y: r.top - 6 }
+  subActive.value = -1
+  await nextTick()
+  const n = subEl.value; if (!n) return
+  const w = n.offsetWidth, h = n.offsetHeight
+  let { x, y } = sub.value
+  // Flip across the PARENT so the flyout never lands on top of it.
+  if (x + w > window.innerWidth - GAP)  x = Math.max(GAP, r.left + 4 - w)
+  if (y + h > window.innerHeight - GAP) y = Math.max(GAP, window.innerHeight - GAP - h)
+  sub.value = { ...sub.value, x, y }
+}
+
+const onRowEnter = (i: number, item: MenuAction, e: MouseEvent) => {
+  active.value = i
+  if (hasSubmenu(item)) void openSub(i, item.submenu!, e.currentTarget as HTMLElement)
+  else closeSub()   // moving onto a plain row dismisses a sibling's flyout
+}
+
 const select = (item: MenuAction) => {
   if (item.disabled) return
+  // A submenu parent has no action of its own — clicking it just opens the
+  // flyout, so swallow the click rather than closing the whole menu.
+  if (hasSubmenu(item)) return
   closeMenu()
-  void item.onSelect()
+  void item.onSelect?.()
 }
 
 const move = (dir: 1 | -1) => {
   const nav = navigable(); if (!nav.length) return
   const at = nav.indexOf(active.value)
   active.value = nav[(at + dir + nav.length) % nav.length] ?? nav[0]
+  closeSub()
 }
+
+const subNavigable = () => (sub.value?.items ?? [])
+  .map((it, i) => (!isSeparator(it) && !it.disabled ? i : -1))
+  .filter(i => i !== -1)
 
 const onKey = (e: KeyboardEvent) => {
   if (!menu.open) return
+
+  // While a flyout is open the arrows drive IT, so keyboard users aren't stuck
+  // moving the parent selection underneath an open submenu.
+  if (sub.value) {
+    const nav = subNavigable()
+    switch (e.key) {
+      case 'Escape':
+      case 'ArrowLeft': e.preventDefault(); closeSub(); el.value?.focus(); return
+      case 'ArrowDown':
+      case 'ArrowUp': {
+        e.preventDefault()
+        const dir = e.key === 'ArrowDown' ? 1 : -1
+        const at  = nav.indexOf(subActive.value)
+        subActive.value = nav[(at + dir + nav.length) % nav.length] ?? nav[0]
+        return
+      }
+      case 'Enter':
+      case ' ': {
+        const it = sub.value.items[subActive.value]
+        if (it && !isSeparator(it)) { e.preventDefault(); select(it) }
+        return
+      }
+    }
+    return
+  }
+
   switch (e.key) {
     case 'Escape':    e.preventDefault(); closeMenu(); break
     case 'ArrowDown': e.preventDefault(); move(1);  break
     case 'ArrowUp':   e.preventDefault(); move(-1); break
     case 'Home':      e.preventDefault(); active.value = navigable()[0] ?? -1; break
     case 'End':       e.preventDefault(); active.value = navigable().slice(-1)[0] ?? -1; break
+    case 'ArrowRight': {
+      // → opens the flyout on a submenu row, mirroring native menus.
+      const it = menu.items[active.value]
+      if (it && hasSubmenu(it)) {
+        e.preventDefault()
+        const row = el.value?.querySelectorAll('.cm-row')[
+          menu.items.slice(0, active.value).filter(x => !isSeparator(x)).length] as HTMLElement | undefined
+        if (row) void openSub(active.value, it.submenu!, row)
+      }
+      break
+    }
     case 'Enter':
     case ' ': {
       const it = menu.items[active.value]
@@ -120,8 +196,41 @@ onBeforeUnmount(() => {
           role="menuitem"
           :class="{ danger: item.danger, active: i === active, disabled: item.disabled }"
           :disabled="item.disabled"
+          :aria-haspopup="item.submenu ? 'menu' : undefined"
+          :aria-expanded="item.submenu ? sub?.index === i : undefined"
           @click="select(item)"
-          @mouseenter="active = i"
+          @mouseenter="onRowEnter(i, item, $event)"
+        >
+          <component :is="item.icon" v-if="item.icon" :size="15" weight="light" />
+          <span class="cm-label">{{ item.label }}</span>
+          <PhCheck v-if="item.check" :size="14" weight="bold" class="cm-check" />
+          <PhCaretRight v-if="item.submenu" :size="12" weight="bold" class="cm-caret" />
+        </button>
+      </template>
+    </div>
+
+    <!-- Submenu flyout. A sibling of the parent menu, not a child, so it can't
+         be clipped by the parent's rounded corners or overflow. -->
+    <div
+      v-if="sub"
+      ref="subEl"
+      class="cm cm-sub"
+      role="menu"
+      :style="{ left: sub.x + 'px', top: sub.y + 'px' }"
+      @click.stop
+      @contextmenu.prevent.stop
+      @mouseleave="closeSub()"
+    >
+      <template v-for="(item, j) in sub.items" :key="j">
+        <div v-if="isSeparator(item)" class="cm-sep" />
+        <button
+          v-else
+          class="cm-row"
+          role="menuitem"
+          :class="{ danger: item.danger, active: j === subActive, disabled: item.disabled }"
+          :disabled="item.disabled"
+          @click="select(item)"
+          @mouseenter="subActive = j"
         >
           <component :is="item.icon" v-if="item.icon" :size="15" weight="light" />
           <span class="cm-label">{{ item.label }}</span>
@@ -170,4 +279,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm-row.disabled:hover                { background: none; color: var(--text-3); }
 .cm-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-check { flex: none; }
+.cm-caret { flex: none; opacity: .55; }
+.cm-row:hover .cm-caret, .cm-row.active .cm-caret { opacity: 1; }
+/* Above the parent, so an overlapping flyout is never rendered behind it. */
+.cm-sub { z-index: 9002; }
 </style>

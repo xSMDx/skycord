@@ -16,12 +16,17 @@ export interface MenuAction {
   disabled?: boolean
   /** Renders a checkmark — for toggles like "Show Own Camera". */
   check?:    boolean
-  onSelect:  () => void | Promise<void>
+  /** Nested items (Mute ▸ durations). A submenu item has no onSelect of its
+   *  own — opening the flyout IS its action. */
+  submenu?:  MenuItem[]
+  onSelect?: () => void | Promise<void>
 }
 export interface MenuSeparator { sep: true }
 export type MenuItem = MenuAction | MenuSeparator
 
 export const isSeparator = (i: MenuItem): i is MenuSeparator => 'sep' in i
+export const hasSubmenu  = (i: MenuItem): i is MenuAction & { submenu: MenuItem[] } =>
+  !isSeparator(i) && !!i.submenu?.length
 
 interface MenuState {
   open:  boolean
@@ -37,6 +42,13 @@ export const menu = reactive<MenuState>({ open: false, x: 0, y: 0, items: [] })
 // Restored when the menu closes, so keyboard users land back where they were.
 let lastFocused: HTMLElement | null = null
 
+const prepare = (items: MenuItem[]): MenuItem[] =>
+  items.map(i => isSeparator(i) ? i : {
+    ...i,
+    icon:    i.icon ? markRaw(i.icon) : undefined,
+    submenu: i.submenu ? prepare(i.submenu) : undefined,
+  })
+
 export const openMenu = (e: MouseEvent, items: MenuItem[]) => {
   if (!items.length) return
   e.preventDefault()
@@ -45,8 +57,9 @@ export const openMenu = (e: MouseEvent, items: MenuItem[]) => {
   e.stopPropagation()
   lastFocused = document.activeElement as HTMLElement | null
   // markRaw: icons are component definitions, and making them reactive is both
-  // pointless and noisy in devtools.
-  menu.items = items.map(i => (isSeparator(i) ? i : { ...i, icon: i.icon ? markRaw(i.icon) : undefined }))
+  // pointless and noisy in devtools. Applied through submenus too, or a nested
+  // icon would slip back into the reactive graph.
+  menu.items = prepare(items)
   menu.x = e.clientX
   menu.y = e.clientY
   menu.open = true
