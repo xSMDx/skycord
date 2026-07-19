@@ -210,18 +210,21 @@ const menuHandlers = {
   toggleShowOwnCamera: () => setVoiceSettings({ showOwnCamera: !voiceSettings.showOwnCamera }),
 }
 
+// Passed as BUILDERS, not arrays: these menus contain live state (checkmarks
+// for mute/deafen, the volume readout), and an array is a snapshot that can
+// never update while the menu is open.
 const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean }) => {
   const u = { id: t.id, displayName: t.name, avatar: t.avatar }
-  const base = {
+  const base = () => ({
     selfMuted: voice.localMuted, selfDeafened: voice.localDeafened,
     showNonVideo: voiceSettings.showNonVideo, showOwnCamera: voiceSettings.showOwnCamera,
     channelId: props.convId,
-  }
-  if (t.local) openCtxMenu(e, ownTileMenu(u, base, menuHandlers))
-  else {
+  })
+  if (t.local) openCtxMenu(e, () => ownTileMenu(u, base(), menuHandlers))
+  else openCtxMenu(e, () => {
     const p = userPref(t.id)
-    openCtxMenu(e, participantMenu(u, { ...base, volume: p.volume, muted: p.muted, videoOff: p.videoOff }, menuHandlers))
-  }
+    return participantMenu(u, { ...base(), volume: p.volume, muted: p.muted, videoOff: p.videoOff }, menuHandlers)
+  })
 }
 
 // Right-clicking the mic / camera buttons opens the same flyout their chevron

@@ -1,52 +1,103 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount } from 'vue'
-// Anchored popover for call-bar controls. The parent wraps the anchor button in
-// a position:relative container and v-if's this component inside it. The panel
-// opens UPWARD, centered on the anchor. A fixed backdrop catches outside
-// clicks; Esc closes too.
-// Direction is the caller's call because it depends on where the anchor sits:
-// the call bar is at the TOP of the chat column so its menus drop downward,
-// while the user panel is pinned to the BOTTOM and must open upward or the menu
-// would render off-screen.
-withDefaults(defineProps<{ dir?: 'down' | 'up' }>(), { dir: 'down' })
+/**
+ * Anchored popover for call controls. The parent wraps the anchor button in a
+ * position:relative container and v-if's this component inside it.
+ *
+ * Positioning is FIXED, measured from the anchor, not absolute. Absolute
+ * positioning is clipped by any ancestor with `overflow: hidden` — which the
+ * left sidebar has — so the user-panel menus rendered squashed inside the panel
+ * instead of floating above it. Fixed escapes the clip, at the cost of having
+ * to compute coordinates and re-measure on resize.
+ */
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 
+const props = withDefaults(defineProps<{ dir?: 'down' | 'up' }>(), { dir: 'down' })
 const emit = defineEmits<{ close: [] }>()
+
+const root  = ref<HTMLElement | null>(null)
+const panel = ref<HTMLElement | null>(null)
+const pos   = ref<{ left: number; top: number } | null>(null)
+
+const GAP = 12
+const EDGE = 8   // keep this clear of the viewport
+
+const place = async () => {
+  await nextTick()
+  // The anchor is this component's own placeholder — its parent is the
+  // relative container the caller wrapped the button in.
+  const anchor = root.value?.parentElement
+  const p = panel.value
+  if (!anchor || !p) return
+
+  const a = anchor.getBoundingClientRect()
+  const w = p.offsetWidth, h = p.offsetHeight
+
+  let left = a.left + a.width / 2 - w / 2
+  left = Math.min(Math.max(EDGE, left), window.innerWidth - w - EDGE)
+
+  // Preferred side, then flip if there isn't room for it.
+  let top = props.dir === 'up' ? a.top - h - GAP : a.bottom + GAP
+  if (props.dir === 'up' && top < EDGE)                       top = a.bottom + GAP
+  if (props.dir === 'down' && top + h > window.innerHeight - EDGE) top = a.top - h - GAP
+  top = Math.min(Math.max(EDGE, top), window.innerHeight - h - EDGE)
+
+  pos.value = { left, top }
+}
+
 const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+const onResize = () => { void place() }
+
+onMounted(() => {
+  void place()
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('resize', onResize)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('resize', onResize)
+})
 </script>
 
 <template>
-  <div>
-    <div class="fly-backdrop" @mousedown="emit('close')" @contextmenu.prevent />
-    <div class="fly" :class="`fly-${dir}`" @click.stop>
-      <slot />
-    </div>
+  <div ref="root" class="fly-anchor">
+    <Teleport to="body">
+      <div class="fly-backdrop" @mousedown="emit('close')" @contextmenu.prevent />
+      <div
+        ref="panel"
+        class="fly"
+        :class="`fly-${dir}`"
+        :style="pos ? { left: pos.left + 'px', top: pos.top + 'px' } : { opacity: 0 }"
+        @click.stop
+      >
+        <slot />
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
+/* Zero-size marker: exists only so `parentElement` gives us the anchor to
+   measure. The panel itself is teleported to <body>. */
+.fly-anchor { position: absolute; width: 0; height: 0; }
+
 .fly-backdrop { position: fixed; inset: 0; z-index: 8000; }
 .fly {
-  position: absolute; left: 50%; transform: translateX(-50%);
-  z-index: 8001; min-width: 236px; max-height: 62vh; overflow-y: auto;
+  position: fixed; z-index: 8001;
+  min-width: 236px; max-height: 62vh; overflow-y: auto;
   background: var(--bg-floor); border: 1px solid rgba(255,255,255,.1);
   border-radius: 8px; padding: 6px;
   box-shadow: 0 8px 32px rgba(0,0,0,.85);
 }
-/* Call bar sits at the top of the chat column: drop over the messages rather
-   than covering the call stage. */
-.fly-down { top: calc(100% + 12px); animation: fly-pop-down .12s cubic-bezier(.4,0,.2,1); }
-/* User panel is pinned to the bottom: opening downward would go off-screen. */
-.fly-up   { bottom: calc(100% + 12px); animation: fly-pop-up .12s cubic-bezier(.4,0,.2,1); }
+.fly-down { animation: fly-pop-down .12s cubic-bezier(.4,0,.2,1); }
+.fly-up   { animation: fly-pop-up   .12s cubic-bezier(.4,0,.2,1); }
 
 @keyframes fly-pop-down {
-  from { opacity: 0; transform: translateX(-50%) scale(.94) translateY(-4px); }
-  to   { opacity: 1; transform: translateX(-50%) scale(1)   translateY(0); }
+  from { opacity: 0; transform: scale(.94) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
 }
 @keyframes fly-pop-up {
-  from { opacity: 0; transform: translateX(-50%) scale(.94) translateY(4px); }
-  to   { opacity: 1; transform: translateX(-50%) scale(1)   translateY(0); }
+  from { opacity: 0; transform: scale(.94) translateY(4px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
 }
 </style>
 

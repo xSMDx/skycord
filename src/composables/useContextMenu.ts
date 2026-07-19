@@ -6,7 +6,7 @@
  * no per-surface component, no duplicated backdrop/positioning/keyboard code.
  * Adding a menu to a new surface is one line in the template.
  */
-import { reactive, markRaw, type Component } from 'vue'
+import { reactive, computed, shallowRef, markRaw, type Component } from 'vue'
 
 export interface MenuAction {
   label:     string
@@ -19,6 +19,10 @@ export interface MenuAction {
   /** Nested items (Mute ▸ durations). A submenu item has no onSelect of its
    *  own — opening the flyout IS its action. */
   submenu?:  MenuItem[]
+  /** Leave the menu open after selecting. For toggles: closing on every click
+   *  means you never see the checkbox you just ticked, and flipping two of them
+   *  takes two round trips through the right-click. */
+  keepOpen?: boolean
   onSelect?: () => void | Promise<void>
 }
 export interface MenuSeparator { sep: true }
@@ -68,8 +72,19 @@ const prepare = (items: MenuItem[]): MenuItem[] =>
     submenu: i.submenu ? prepare(i.submenu) : undefined,
   })
 
-export const openMenu = (e: MouseEvent, items: MenuItem[]) => {
-  if (!items.length) return
+// A menu may be given either a fixed array or a BUILDER. With a builder the
+// items are recomputed whenever anything they read changes, which is what makes
+// a checkbox tick and a slider's readout move while the menu is still open —
+// a snapshot array can never do that, because the items were built once at
+// open time and nothing rewrites them.
+const builder = shallowRef<(() => MenuItem[]) | null>(null)
+
+export const menuItems = computed<MenuItem[]>(() =>
+  builder.value ? prepare(builder.value()) : menu.items)
+
+export const openMenu = (e: MouseEvent, items: MenuItem[] | (() => MenuItem[])) => {
+  const initial = typeof items === 'function' ? items() : items
+  if (!initial.length) return
   e.preventDefault()
   // Right-clicking a second target while a menu is open should move the menu,
   // not stack a second one — so this is a reopen, not a toggle.
@@ -78,7 +93,8 @@ export const openMenu = (e: MouseEvent, items: MenuItem[]) => {
   // markRaw: icons are component definitions, and making them reactive is both
   // pointless and noisy in devtools. Applied through submenus too, or a nested
   // icon would slip back into the reactive graph.
-  menu.items = prepare(items)
+  if (typeof items === 'function') { builder.value = items; menu.items = [] }
+  else { builder.value = null; menu.items = prepare(items) }
   menu.x = e.clientX
   menu.y = e.clientY
   menu.open = true
@@ -88,6 +104,7 @@ export const closeMenu = () => {
   if (!menu.open) return
   menu.open = false
   menu.items = []
+  builder.value = null
   lastFocused?.focus?.()
   lastFocused = null
 }

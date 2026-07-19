@@ -189,8 +189,12 @@ const audioOwner = new Map<string, string>()
 
 export const setUserPref = (identity: string, patch: Partial<UserAudioPref>) => {
   userPrefs[identity] = { ...userPref(identity), ...patch }
-  // Re-apply to that participant's live elements immediately.
-  audioEls.forEach((el, sid) => { if (audioOwner.get(sid) === identity) applyAudioEl(el, identity) })
+  // Re-apply to EVERY element, not just the ones audioOwner claims belong to
+  // this identity. Each element is recomputed from its own owner, so this is
+  // idempotent for the others — and it means a missing owner entry (a track
+  // subscribed before the map existed, a reconnect) degrades to "applies late"
+  // rather than "unmute silently does nothing".
+  audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
 }
 
 const applyAudioEl = (el: HTMLAudioElement, identity?: string) => {

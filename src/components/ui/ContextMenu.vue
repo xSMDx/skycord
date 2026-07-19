@@ -10,7 +10,7 @@
  */
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { PhCheck, PhCaretRight } from '@phosphor-icons/vue'
-import { menu, closeMenu, isSeparator, isSlider, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
+import { menu, menuItems as items, closeMenu, isSeparator, isSlider, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 
 const el   = ref<HTMLElement | null>(null)
 const subEl = ref<HTMLElement | null>(null)
@@ -25,11 +25,19 @@ const subActive = ref(-1)
 // are skipped by the arrow keys rather than swallowing a keypress.
 // Sliders are skipped too — they're dragged, not selected, so landing keyboard
 // focus on one would be a dead stop.
-const navigable = () => menu.items
+const navigable = () => items.value
   .map((it, i) => (!isSeparator(it) && !isSlider(it) && !it.disabled ? i : -1))
   .filter(i => i !== -1)
 
 const GAP = 8   // keep this far from the viewport edge
+
+// A range input has no native "filled" side, so the track is a gradient with a
+// hard stop at the current value.
+const sliderFill = (item: { value: number; min?: number; max?: number }) => {
+  const min = item.min ?? 0, max = item.max ?? 200
+  const pct = max === min ? 0 : ((item.value - min) / (max - min)) * 100
+  return `linear-gradient(to right, var(--accent) 0 ${pct}%, rgba(255,255,255,.14) ${pct}% 100%)`
+}
 
 // Measure AFTER render: the menu's size depends on its items, so it can only be
 // clamped once it exists. Until then it's rendered invisible to avoid a flash at
@@ -89,6 +97,7 @@ const select = (item: MenuAction) => {
   // A submenu parent has no action of its own — clicking it just opens the
   // flyout, so swallow the click rather than closing the whole menu.
   if (hasSubmenu(item)) return
+  if (item.keepOpen) { void item.onSelect?.(); return }   // toggles stay open
   closeMenu()
   void item.onSelect?.()
 }
@@ -140,18 +149,18 @@ const onKey = (e: KeyboardEvent) => {
     case 'End':       e.preventDefault(); active.value = navigable().slice(-1)[0] ?? -1; break
     case 'ArrowRight': {
       // → opens the flyout on a submenu row, mirroring native menus.
-      const it = menu.items[active.value]
+      const it = items.value[active.value]
       if (it && hasSubmenu(it)) {
         e.preventDefault()
         const row = el.value?.querySelectorAll('.cm-row')[
-          menu.items.slice(0, active.value).filter(x => !isSeparator(x)).length] as HTMLElement | undefined
+          items.value.slice(0, active.value).filter(x => !isSeparator(x)).length] as HTMLElement | undefined
         if (row) void openSub(active.value, it.submenu!, row)
       }
       break
     }
     case 'Enter':
     case ' ': {
-      const it = menu.items[active.value]
+      const it = items.value[active.value]
       if (it && !isSeparator(it)) { e.preventDefault(); select(it) }
       break
     }
@@ -190,7 +199,7 @@ onBeforeUnmount(() => {
            quick-reaction strip is the one real case). -->
       <slot name="header" />
 
-      <template v-for="(item, i) in menu.items" :key="i">
+      <template v-for="(item, i) in items" :key="i">
         <div v-if="isSeparator(item)" class="cm-sep" />
         <!-- Slider: a live control, so clicks inside must NOT close the menu. -->
         <div v-else-if="isSlider(item)" class="cm-slider" @click.stop>
@@ -200,6 +209,7 @@ onBeforeUnmount(() => {
           </div>
           <input type="range"
                  :min="item.min ?? 0" :max="item.max ?? 200" :value="item.value"
+                 :style="{ background: sliderFill(item) }"
                  @input="item.onInput(+($event.target as HTMLInputElement).value)" />
         </div>
         <button
