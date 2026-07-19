@@ -530,6 +530,10 @@ const loadDMHistory = async (partnerId: string) => {
     const msgs: Message[] = data.messages.map((m: ApiMessage) => ({
       id:          parseInt((m._id || m.id || '0').slice(-8), 16) || Date.now(),
       dbId:        m._id || m.id || undefined,
+      // Without these, call logs load as ordinary messages (avatar + name) and
+      // lose their system styling and phone icon — group history already maps them.
+      kind:        m.kind,
+      systemType:  m.systemType,
       author:      m.authorName,
       authorId:    m.authorId,
       content:     m.content,
@@ -689,6 +693,9 @@ const setupSocket = () => {
     const msg: Message = {
       id:          parseInt((payload._id || '0').slice(-8), 16) || Date.now(),
       dbId:        payload._id,
+      // Same reason as the history mapping: call logs arrive as system messages.
+      kind:        payload.kind,
+      systemType:  payload.systemType,
       author:      payload.authorName,
       authorId:    payload.authorId,
       content:     payload.content,

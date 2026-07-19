@@ -24,7 +24,7 @@ export interface VoiceSettings {
   noiseMode:        NoiseMode
   echoCancellation: boolean
   screenAudio:      boolean   // capture system/tab audio when screen sharing
-  callHeightPct:    number    // call bar height as a fraction of the chat column
+  callHeightPx:     number    // call bar height in px (drag-resizable)
   showOwnCamera:    boolean   // render your own camera tile in the grid
   showNonVideo:     boolean   // render avatar tiles for participants without video
 }
@@ -36,7 +36,7 @@ const DEFAULTS: VoiceSettings = {
   inputMode: 'voice', pttKey: 'Space', sensitivity: 30,
   noiseMode: 'standard', echoCancellation: true,
   screenAudio: true, showOwnCamera: true, showNonVideo: true,
-  callHeightPct: 0.3,
+  callHeightPx: 220,
 }
 
 const load = (): Partial<VoiceSettings> => {
@@ -48,6 +48,10 @@ const load = (): Partial<VoiceSettings> => {
     raw.noiseMode = raw.noiseSuppression ? 'standard' : 'off'
   }
   delete raw.noiseSuppression
+  // The call bar height moved from a fraction of the column to plain px, so an
+  // old 0.3 would otherwise be read as a 0.3px-tall bar.
+  if (raw.callHeightPx === undefined) raw.callHeightPx = 220
+  delete raw.callHeightPct
   return raw
 }
 

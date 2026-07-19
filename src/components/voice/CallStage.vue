@@ -158,8 +158,11 @@ button { border: none; }
   grid-auto-rows: minmax(0, 1fr);
   align-content: stretch; justify-content: center; overflow: hidden;
 }
+/* No aspect-ratio: it derives height from width and so OVERRIDES the grid row,
+   making tiles taller than a short call bar. Cells fill their row instead and
+   the video letterboxes inside — so a share always fits, at any bar height. */
 .g-cell {
-  position: relative; aspect-ratio: 16 / 9; min-height: 0; border-radius: 8px; overflow: hidden;
+  position: relative; height: 100%; min-height: 0; border-radius: 8px; overflow: hidden;
   background: #0b0b0f; border: 2px solid transparent; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color .15s;

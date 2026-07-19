@@ -115,8 +115,8 @@ const showFilmstrip = computed(() => expanded.value || isFullscreen.value)
 // column so it stays proportional across window sizes. Dragging past EXPAND_AT
 // slides straight into hide-chat; dragging back down leaves it again.
 const MIN_PX    = 140
-const EXPAND_AT = 0.9
-const heightPct = ref(voiceSettings.callHeightPct ?? 0.4)
+const EXPAND_AT = 0.9    // fraction of the column past which we flip to hide-chat
+const heightPx  = ref(voiceSettings.callHeightPx ?? 220)
 const dragging  = ref(false)
 let stopDrag: (() => void) | null = null
 
@@ -125,10 +125,9 @@ let stopDrag: (() => void) | null = null
 const barStyle = computed(() => {
   // Resizable in ANY call — audio-only too, not just when video is on the stage.
   if (!(inCall.value && !expanded.value && !isFullscreen.value)) return {}
-  // Clamp on read too: a hand-edited or legacy localStorage value must never
-  // render the bar unusably small or swallow the whole column.
-  const pct = Math.min(Math.max(heightPct.value, 0.15), EXPAND_AT)
-  return { flex: '0 0 auto', height: (pct * 100).toFixed(2) + '%' }
+  // Clamp on read too: a hand-edited or legacy value must never render the bar
+  // unusably small.
+  return { flex: '0 0 auto', height: Math.max(heightPx.value, MIN_PX) + 'px' }
 })
 
 const onResizeDown = (e: PointerEvent) => {
@@ -142,18 +141,17 @@ const onResizeDown = (e: PointerEvent) => {
   dragging.value = true
 
   const move = (ev: PointerEvent) => {
-    const pct = (ev.clientY - barTop) / colHeight
-    if (pct >= EXPAND_AT) {                       // slide into hide-chat
+    const px = ev.clientY - barTop
+    if (px >= colHeight * EXPAND_AT) {            // slide into hide-chat
       if (!expanded.value) { expanded.value = true; emit('expand', true) }
       return
     }
     if (expanded.value) { expanded.value = false; emit('expand', false) }
-    const minPct = MIN_PX / colHeight
-    heightPct.value = Math.min(Math.max(pct, minPct), EXPAND_AT)
+    heightPx.value = Math.min(Math.max(px, MIN_PX), colHeight * EXPAND_AT)
   }
   const up = () => {
     dragging.value = false
-    setVoiceSettings({ callHeightPct: heightPct.value })
+    setVoiceSettings({ callHeightPx: Math.round(heightPx.value) })
     stopDrag?.()
   }
   stopDrag = () => {
@@ -172,8 +170,8 @@ const onResizeDown = (e: PointerEvent) => {
 
 // "Reset all Voice & Video settings" can fire mid-call — follow it, but never
 // yank the bar out from under an active drag.
-watch(() => voiceSettings.callHeightPct, (v) => {
-  if (!dragging.value && typeof v === 'number') heightPct.value = v
+watch(() => voiceSettings.callHeightPx, (v) => {
+  if (!dragging.value && typeof v === 'number') heightPx.value = v
 })
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {
@@ -192,7 +190,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'is-fs': isFullscreen, 'is-dragging': dragging }">
+  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'is-expanded': expanded, 'is-fs': isFullscreen, 'is-dragging': dragging }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
@@ -374,13 +372,19 @@ onBeforeUnmount(() => {
 /* When video is on the stage, let the call bar grow to fill the chat column.
    The stage lives in .cb-stagewrap (positioning context for the ⛶ overlay);
    growth applies to the wrapper, and the stage fills it. */
-.callbar.has-video { flex: 1 1 auto; min-height: 0; }
+/* Growth: with video on the stage, in hide-chat, or fullscreen. Hide-chat MUST
+   be here independently — the message list is gone, so if the bar didn't grow
+   the column was left half empty (and the ⌄/⛶ buttons stranded up top). */
+.callbar.has-video,
+.callbar.is-expanded { flex: 1 1 auto; min-height: 0; }
 .cb-stagewrap { position: relative; width: 100%; display: flex; }
 .cb-callstage { width: 100%; }
-.callbar.has-video .cb-stagewrap,
-.callbar.is-fs   .cb-stagewrap { flex: 1 1 auto; min-height: 0; }
-.callbar.has-video .cb-callstage,
-.callbar.is-fs   .cb-callstage { flex: 1 1 auto; min-height: 0; }
+.callbar.has-video   .cb-stagewrap,
+.callbar.is-expanded .cb-stagewrap,
+.callbar.is-fs       .cb-stagewrap { flex: 1 1 auto; min-height: 0; }
+.callbar.has-video   .cb-callstage,
+.callbar.is-expanded .cb-callstage,
+.callbar.is-fs       .cb-callstage { flex: 1 1 auto; min-height: 0; }
 
 /* Fullscreen (⛶) — bottom-right OF THE STAGE (wrapper-relative, so it never
    drops down onto the control-bar row). */
