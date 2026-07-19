@@ -64,6 +64,20 @@ export const setVoiceSettings = (patch: Partial<VoiceSettings>) => {
 
 export const resetVoiceSettings = () => setVoiceSettings({ ...DEFAULTS })
 
+// Sensitivity 0..100 → the same 0..1 scale the level meter draws on. Single
+// source of truth for the meter's marker, the speaking ring and the gate that
+// actually runs on the published track, so all three agree on "loud enough".
+// 0 means the gate never closes.
+export const gateThreshold = () => (voiceSettings.sensitivity / 100) * 0.5
+
+// Whether the mic needs the processing chain at all. A user with suppression
+// off, no gate and unity gain gets the raw capture — no AudioContext, no
+// worklet, nothing to fail.
+export const micChainNeeded = () =>
+  voiceSettings.noiseMode === 'rnnoise' ||
+  voiceSettings.sensitivity > 0 ||
+  voiceSettings.inputVolume !== 100
+
 // Capture constraints for livekit-client's mic track, derived from the settings.
 export const micCaptureOptions = () => ({
   deviceId: voiceSettings.inputDeviceId || undefined,

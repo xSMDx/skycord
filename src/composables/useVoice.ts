@@ -9,7 +9,7 @@ import {
   Room, RoomEvent, Track,
   type RemoteTrack, type RemoteParticipant, type Participant, type LocalAudioTrack,
 } from 'livekit-client'
-import { createRnnoiseProcessor } from './rnnoiseProcessor'
+import { createMicChainProcessor, type MicChainProcessor } from './micChain'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import {
@@ -17,7 +17,7 @@ import {
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
-import { voiceSettings, setVoiceSettings, micCaptureOptions } from './useVoiceSettings'
+import { voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded } from './useVoiceSettings'
 import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia } from './useVoiceMedia'
 
 export interface VoiceParticipant {
@@ -150,10 +150,14 @@ const levelTick = () => {
   levelAnalyser.getByteTimeDomainData(levelData)
   let peak = 0
   for (const v of levelData) peak = Math.max(peak, Math.abs(v - 128))
-  // sensitivity 0..100 → byte-peak threshold ~4..44 (higher setting = less sensitive)
-  const threshold = 4 + (voiceSettings.sensitivity / 100) * 40
+  // Same 0..1 scale, and the same maths, the gate and the settings meter use —
+  // so the ring lights exactly when you are actually transmitting. (This reads
+  // the PUBLISHED track, which is the gate's output once the chain is on.) The
+  // floor stops sensitivity 0, a gate that never closes, pinning the ring lit.
+  const level     = Math.min(1, (peak / 128) * 1.6)
+  const threshold = Math.max(gateThreshold(), 0.02)
   const now = performance.now()
-  if (peak >= threshold) lastLoudAt = now
+  if (level >= threshold) lastLoudAt = now
   setLocalSpeaking(!voice.localMuted && !voice.localDeafened && now - lastLoudAt < SPEAK_HANGOVER_MS)
 }
 
@@ -217,9 +221,9 @@ const wireRoom = (r: Room) => {
   r.on(RoomEvent.LocalTrackUnpublished, (pub) => { onLocalTrackUnpublished(pub); syncParticipants() })
   // Catches EVERY way a mic track appears — normal join, a push-to-talk keypress
   // (which publishes on demand, and so never hit the join-time call), or a device
-  // switch — so the chosen noise mode is always applied to the live track.
+  // switch — so the chain is always applied to the live track.
   r.on(RoomEvent.LocalTrackPublished, (pub) => {
-    if (pub.source === Track.Source.Microphone) void applyNoiseMode()
+    if (pub.source === Track.Source.Microphone) void applyMicChain()
   })
   r.on(RoomEvent.ParticipantConnected, () => { soundUserJoin(); syncParticipants() })
   r.on(RoomEvent.ParticipantDisconnected, (p) => { purgeParticipantVideos(p.identity); soundUserLeave(); syncParticipants() })
@@ -312,42 +316,58 @@ const unbindPtt = () => {
   pttBound = false
 }
 
-// ── Noise suppression ───────────────────────────────────────────────────────
-// RNNoise rides on the mic publication as a LiveKit processor, so mute, PTT,
-// device switching and the speaking analyser all keep working on the same track.
-// A failure here must never cost the user their microphone: fall back to the
-// browser's own suppression instead.
-// Serialised: toggling the mode twice quickly would otherwise let the second
-// call read getProcessor() before the first setProcessor() resolved, leaving the
-// pipeline out of sync with the setting. Each run re-reads the CURRENT mode, so
-// the last intent always wins.
-let noiseChain: Promise<void> = Promise.resolve()
+// ── Mic processing chain ────────────────────────────────────────────────────
+// RNNoise, the sensitivity gate and the input-volume stage all ride on the mic
+// publication as one LiveKit processor, so mute, PTT, device switching and the
+// speaking analyser keep working on the same track.
+// A failure here must never cost the user their microphone: drop back to the
+// raw capture (plus the browser's own suppression) instead.
+// Serialised: toggling twice quickly would otherwise let the second call read
+// getProcessor() before the first setProcessor() resolved, leaving the pipeline
+// out of sync with the setting. Each run re-reads the CURRENT settings, so the
+// last intent always wins.
+let micChainQueue: Promise<void> = Promise.resolve()
 
-const applyNoiseModeNow = async () => {
+const applyMicChainNow = async () => {
   const room = getRoom(); if (!room) return
   const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined
   if (!mic) return
-  const want = voiceSettings.noiseMode === 'rnnoise'
-  const has  = mic.getProcessor()?.name === 'rnnoise'
+  const want    = micChainNeeded()
+  const wantRnn = voiceSettings.noiseMode === 'rnnoise'
+  const current = mic.getProcessor() as MicChainProcessor | undefined
+  const has     = current?.name === 'mic-chain'
   try {
-    if (want && !has) await mic.setProcessor(createRnnoiseProcessor())
+    if (want && has) {
+      // Adding or removing RNNoise changes the shape of the graph, so that one
+      // needs a rebuild. Slider moves are just parameter changes — updating in
+      // place avoids a rebuild's brief gap in the outgoing audio.
+      if (current!.usesRnnoise !== wantRnn) await mic.setProcessor(createMicChainProcessor(wantRnn))
+      else current!.update()
+    }
+    else if (want && !has) await mic.setProcessor(createMicChainProcessor(wantRnn))
     else if (!want && has) await mic.stopProcessor()
   } catch (e) {
-    console.warn('[voice] RNNoise unavailable — falling back to browser suppression', e)
-    setVoiceSettings({ noiseMode: 'standard' })
+    console.warn('[voice] mic chain unavailable — publishing the raw capture', e)
+    // Only the RNNoise leg can realistically fail (wasm/worklet load). Fall back
+    // to the browser filter rather than leaving the user on a dead processor.
+    if (wantRnn) setVoiceSettings({ noiseMode: 'standard' })
     try { await mic.stopProcessor() } catch { /* ignore */ }
     // Re-apply capture constraints so the browser filter actually comes back on.
     try { await room.localParticipant.setMicrophoneEnabled(true, micCaptureOptions()) } catch { /* ignore */ }
   }
 }
 
-const applyNoiseMode = (): Promise<void> => {
-  noiseChain = noiseChain.then(applyNoiseModeNow, applyNoiseModeNow)
-  return noiseChain
+const applyMicChain = (): Promise<void> => {
+  micChainQueue = micChainQueue.then(applyMicChainNow, applyMicChainNow)
+  return micChainQueue
 }
 
-// Switching mode mid-call takes effect immediately — no rejoin.
-watch(() => voiceSettings.noiseMode, () => { void applyNoiseMode() })
+// Every one of these takes effect immediately mid-call — no rejoin. Sensitivity
+// and volume in particular were previously wired only into the mic test, so
+// moving them did nothing to what the other side actually heard.
+watch(() => [voiceSettings.noiseMode, voiceSettings.sensitivity,
+             voiceSettings.inputVolume, voiceSettings.inputMode],
+      () => { void applyMicChain() })
 
 // Module-scoped (not inside useVoice) so wireRoom's Disconnected handler can
 // reach attemptConnect to auto-reconnect. useApi/useAuth are plain singletons,
@@ -403,7 +423,7 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
       } else if (canCapture) {
         try { await r.localParticipant.setMicrophoneEnabled(true, micCaptureOptions()) }
         catch (e) { console.warn('[voice] mic unavailable — joining listen-only', e) }
-        await applyNoiseMode()
+        await applyMicChain()
       }
       voice.connected = true
       voice.connecting = false

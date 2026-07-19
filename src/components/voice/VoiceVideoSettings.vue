@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { PhCaretDown } from '@phosphor-icons/vue'
-import { useVoiceSettings, micCaptureOptions } from '@/composables/useVoiceSettings'
+import { useVoiceSettings, micCaptureOptions, gateThreshold as sharedGateThreshold } from '@/composables/useVoiceSettings'
 import { createRnnoiseNode } from '@/composables/rnnoiseProcessor'
 import { useVoice } from '@/composables/useVoice'
 import { soundDeafen, soundUndeafen } from '@/composables/useSocket'
@@ -37,9 +37,9 @@ let volNode: GainNode | null = null    // input-volume stage (live-updated)
 let gateNode: GainNode | null = null   // sensitivity gate
 const micOpen = ref(false)             // is the gate currently passing audio?
 
-// Sensitivity 0..100 maps onto the same 0..1 scale the meter uses, so the
-// marker sits exactly where the gate opens. Higher = needs a louder voice.
-const gateThreshold = computed(() => (voiceSettings.sensitivity / 100) * 0.5)
+// Shared with the gate that runs on the published track, so the marker sits
+// exactly where the call really opens up. Higher = needs a louder voice.
+const gateThreshold = computed(() => sharedGateThreshold())
 
 // Both sliders now take effect DURING a test — previously the gain was read
 // once at start, so dragging them appeared to do nothing.
