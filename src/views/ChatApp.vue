@@ -4,7 +4,7 @@ import {
   PhHash, PhLock, PhSpeakerHigh, PhPlus, PhCaretRight,
   PhMagnifyingGlass, PhUsers, PhCaretDown,
   PhMicrophone, PhMicrophoneSlash, PhHeadphones, PhGear,
-  PhPushPin, PhSidebar, PhCompass,
+  PhPushPin, PhBellSlash, PhSidebar, PhCompass,
   PhChatDots, PhX, PhUserPlus, PhEnvelope,
   PhCheck, PhCircleNotch, PhDotsThree,
   PhPencilSimple, PhUsersThree,
@@ -1583,6 +1583,7 @@ onBeforeUnmount(() => {
                 <span class="dm-last">{{ c.dm.lastMsg }}</span>
               </div>
               <span v-if="isPinned(c.dm.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
+              <span v-if="isConvMuted(c.dm.id)" class="dm-muted" title="Muted"><PhBellSlash :size="12" weight="fill"/></span>
               <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
               <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isConvMuted(c.dm.id) }">{{ c.dm.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
@@ -1605,6 +1606,7 @@ onBeforeUnmount(() => {
                 <span class="dm-last">{{ c.group.lastMsg || `${c.group.memberCount} Members` }}</span>
               </div>
               <span v-if="isPinned(c.group.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
+              <span v-if="isConvMuted(c.group.id)" class="dm-muted" title="Muted"><PhBellSlash :size="12" weight="fill"/></span>
               <span v-if="convHasCall('group', c.group.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
               <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isConvMuted(c.group.id) }">{{ c.group.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
@@ -2104,6 +2106,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Muted: the count still matters, it just stops shouting. */
 .dm-unread.muted{background:var(--text-3);opacity:.6}
 .dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
+.dm-muted{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
+/* The NAME also reads back a shade, so muted state is legible while scanning the
+   list rather than only from the icon. Deliberately scoped to the name: dimming
+   the whole row would also fade the close button and the in-a-call badge, which
+   still need to be noticeable. The active row stays at full strength — you're
+   reading it. */
+.dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
 .dm-call{width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
