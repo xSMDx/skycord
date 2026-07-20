@@ -134,6 +134,7 @@ const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: stri
       if (!pair.includes(myId)) continue
       const partnerId = pair[0] === myId ? pair[1] : pair[0]
       if (!ids.includes(partnerId)) continue
+      if (isConvMuted(partnerId)) continue   // muted → no ring, no modal
       const f = apiFriends.value.find(x => x.id === partnerId)
       return {
         room, kind: 'dm', convId: partnerId,
@@ -146,6 +147,7 @@ const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: stri
       const groupId = room.slice(6)
       const g = groupsData.value.find(x => x.id === groupId)
       if (!g) continue   // not one of my groups (or not loaded yet)
+      if (isConvMuted(groupId)) continue   // muted → no ring, no modal
       return {
         room, kind: 'group', convId: groupId,
         name:   groupDisplayName(g),
@@ -1416,7 +1418,6 @@ onBeforeUnmount(() => {
       v-if="incomingCall"
       :name="incomingCall.name"
       :avatar="incomingCall.avatar"
-      :conv-id="incomingCall.convId"
       @accept="acceptIncomingCall"
       @decline="declineIncomingCall"
     />

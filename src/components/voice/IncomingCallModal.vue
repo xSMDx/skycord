@@ -2,16 +2,19 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import { PhPhone, PhX } from '@phosphor-icons/vue'
 import { soundRingStart, soundRingStop } from '@/composables/useSocket'
-import { isMuted } from '@/composables/useConvPrefs'
 
-// `convId` is the caller's DM key, used only to check mute.
-const props = defineProps<{ name: string; avatar: string; convId?: string }>()
+defineProps<{ name: string; avatar: string }>()
 const emit = defineEmits<{ accept: []; decline: [] }>()
 
-// Ring while the modal is up; always stop on teardown (answer / decline / unmount).
-// A muted conversation still SHOWS the call — mute silences, it doesn't hide.
-// You can see who's calling; you just don't hear it.
-onMounted(() => { if (!props.convId || !isMuted(props.convId)) soundRingStart() })
+// Ring for as long as this is up; always stop on teardown (answer/decline/unmount).
+//
+// Mute is NOT checked here. It used to be, as a one-shot onMounted test, and that
+// was the wrong shape: `incomingCall` is a computed that returns a fresh object,
+// so when it changes without passing through null Vue patches this component
+// rather than remounting it — and the gate never re-ran. The single gate now
+// lives in ChatApp's incomingCall computed, so a muted conversation produces no
+// modal at all and there is nothing here to silence.
+onMounted(soundRingStart)
 onBeforeUnmount(soundRingStop)
 </script>
 
