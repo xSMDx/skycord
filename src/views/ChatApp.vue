@@ -8,7 +8,7 @@ import {
   PhChatDots, PhX, PhUserPlus, PhEnvelope,
   PhCheck, PhCircleNotch, PhDotsThree,
   PhPencilSimple, PhUsersThree,
-  PhUser, PhPaperclip, PhAt, PhSlidersHorizontal,
+  PhUser, PhPaperclip, PhAt, PhSlidersHorizontal, PhCopy,
   PhPhone, PhVideoCamera, PhPhoneCall, PhPhoneX
 } from '@phosphor-icons/vue'
 
@@ -1365,6 +1365,18 @@ const handleGifSelect = (url: string) => {
 // ── Context menu ───────────────────────────────────────────────────────────
 const openCtx = (e: MouseEvent, msg: Message) => {
   e.preventDefault(); e.stopPropagation()
+  // System logs (call started/ended, renames, joins) aren't authored messages:
+  // Reply, Edit, Pin and Delete are all meaningless on them. They get their own
+  // short menu, built on the shared primitive rather than the older bespoke one.
+  if (msg.kind === 'system') {
+    openMenu(e, [
+      { label: 'Copy Text', icon: PhCopy, onSelect: () => copyText(msg.content, 'Text') },
+      ...(msg.dbId
+        ? [{ label: 'Copy Message ID', icon: PhCopy, onSelect: () => copyText(msg.dbId!, 'Message ID') }]
+        : []),
+    ])
+    return
+  }
   const mH = 340, mW = 220
   const y  = e.clientY + mH > window.innerHeight ? e.clientY - mH : e.clientY
   const x  = e.clientX + mW > window.innerWidth  ? e.clientX - mW : e.clientX

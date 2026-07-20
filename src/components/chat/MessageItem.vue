@@ -113,7 +113,8 @@ const onReplyPillLeave = () => {
 </script>
 <template>
   <!-- System log line (group rename / icon / add / join / leave) -->
-  <div v-if="msg.kind === 'system'" class="msg-system" :class="['sys-' + (msg.systemType || 'rename'), { 'call-ended': callEnded }]">
+  <div v-if="msg.kind === 'system'" class="msg-system" :class="['sys-' + (msg.systemType || 'rename'), { 'call-ended': callEnded }]"
+       @contextmenu.prevent="emit('openCtx', $event, msg)">
     <span class="msg-system-icon"><component :is="systemIcon" :size="16" weight="bold" /></span>
     <span class="msg-system-text">{{ msg.content }}</span>
     <span v-if="msg.systemType === 'rename' || msg.systemType === 'icon'" class="msg-system-link">Edit Group</span>

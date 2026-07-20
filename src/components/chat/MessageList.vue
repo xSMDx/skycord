@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue'
+import { PhCaretDown } from '@phosphor-icons/vue'
 import MessageItem    from './MessageItem.vue'
 import TypingIndicator from './TypingIndicator.vue'
 import type { Message } from '@/types'
@@ -74,9 +75,58 @@ const isConsecutive = (i: number) => {
 }
 const isOwn         = (m: Message) => m.authorId === props.myId
 
-watch(() => props.messages.length, async () => { await nextTick(); if (el.value) el.value.scrollTop = el.value.scrollHeight })
+// ── Scroll anchoring ────────────────────────────────────────────────────────
+// This used to scroll to the bottom on EVERY new message with no check for
+// where you were, so reading history and having someone say something yanked you
+// out of it mid-sentence. Now it only follows when you're already at the bottom;
+// otherwise the new messages are counted and a jump pill appears.
+const NEAR_BOTTOM_PX = 120   // "at the bottom" tolerance, so a stray pixel doesn't count as scrolled-up
 
-const scrollToBottom = async () => { await nextTick(); if (el.value) el.value.scrollTop = el.value.scrollHeight }
+const atBottom  = ref(true)
+const missed    = ref(0)
+
+const distanceFromBottom = () => {
+  const n = el.value; if (!n) return 0
+  return n.scrollHeight - n.scrollTop - n.clientHeight
+}
+
+const onScroll = () => {
+  const wasAtBottom = atBottom.value
+  atBottom.value = distanceFromBottom() <= NEAR_BOTTOM_PX
+  // Scrolling back down to the bottom clears the badge — you've seen them.
+  if (atBottom.value && !wasAtBottom) missed.value = 0
+}
+
+/**
+ * Jump to the newest message.
+ *
+ * Deliberately INSTANT, by assigning scrollTop rather than scrollTo({behavior:
+ * 'smooth'}). Smooth scrolling is animated on the rAF clock, so it silently
+ * never advances in a throttled or backgrounded tab, and it can be interrupted
+ * or disabled by prefers-reduced-motion. When that happens the user is left
+ * where they were with the pill flicking back on — the one outcome this button
+ * must never produce. Measured: the smooth version moved scrollTop 0 → 0.
+ *
+ * An instant assignment also means the single scroll event it emits already
+ * reports the final position, so the handler agrees rather than fighting it.
+ */
+const scrollToBottom = async () => {
+  await nextTick()
+  const n = el.value; if (!n) return
+  n.scrollTop = n.scrollHeight
+  atBottom.value = true
+  missed.value = 0
+}
+
+watch(() => props.messages.length, async (len, prev) => {
+  const grew = len > (prev ?? 0)
+  if (atBottom.value) { await scrollToBottom(); return }
+  // Held in place. Count what arrived so the pill can say how much.
+  if (grew) missed.value += len - (prev ?? 0)
+})
+
+// Switching conversation should always land at the newest message.
+watch(() => props.channelName, () => { missed.value = 0; void scrollToBottom() })
 
 const startEdit = (msg: Message) => { editingId.value = msg.id; editingText.value = msg.content }
 const startEditExternal = (msg: Message) => startEdit(msg)
@@ -91,7 +141,10 @@ const saveEdit  = () => {
 const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 </script>
 <template>
-  <div class="ml" ref="el">
+  <!-- Wrapper so the jump pill can sit OVER the scroller rather than scroll
+       away with it. The scroller keeps its own class and ref. -->
+  <div class="ml-wrap">
+  <div class="ml" ref="el" @scroll.passive="onScroll">
     <div class="welcome">
       <template v-if="isDM && dmPartner">
         <div class="dm-av"><img :src="dmPartner.avatar ?? undefined" :alt="dmPartner.name"/></div>
@@ -151,10 +204,33 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 
     <TypingIndicator :typers="typers" />
   </div>
+
+    <Transition name="jump">
+      <button v-if="!atBottom" class="ml-jump" @click="scrollToBottom()">
+        <span v-if="missed">{{ missed }} new message{{ missed === 1 ? '' : 's' }}</span>
+        <span v-else>Jump to present</span>
+        <PhCaretDown :size="13" weight="bold" />
+      </button>
+    </Transition>
+  </div>
 </template>
 <style scoped>
 *{box-sizing:border-box;margin:0;padding:0}img{display:block;width:100%;height:100%;object-fit:cover}
+/* min-height:0 — without it the flex child refuses to shrink and the scroller
+   never actually scrolls. */
+.ml-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
 .ml{flex:1;overflow-y:auto;padding:8px 0 0;display:flex;flex-direction:column}
+.ml-jump{
+  position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:5;
+  display:flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:999px;border:none;cursor:pointer;
+  background:var(--accent);color:var(--text-on-accent);
+  font:inherit;font-size:13px;font-weight:600;
+  box-shadow:0 4px 16px rgba(0,0,0,.45);
+}
+.ml-jump:hover{filter:brightness(1.08)}
+.jump-enter-active,.jump-leave-active{transition:opacity .14s,transform .14s}
+.jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
 .welcome{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:8px}
 .ch-icon{width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
 .dm-av{width:64px;height:64px;border-radius:50%;overflow:hidden;margin-bottom:14px;border:3px solid var(--bg-panel)}

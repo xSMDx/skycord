@@ -47,6 +47,12 @@ const safeY = Math.min(props.y, window.innerHeight - 380)
 
       <div class="ctx-sep" />
 
+      <!-- Named row as well as the quick strip above it: the strip only offers
+           five, and "Add Reaction" is what people look for when they want any
+           other emoji. -->
+      <button class="ctx-row" @click="emit('openEmoji', msg); emit('close')">
+        <PhSmiley :size="15" weight="light" /><span>Add Reaction</span>
+      </button>
       <button class="ctx-row" @click="emit('reply', msg); emit('close')">
         <PhArrowBendUpLeft :size="15" weight="light" /><span>Reply</span>
       </button>
