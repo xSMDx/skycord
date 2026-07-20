@@ -197,6 +197,44 @@ export const setUserPref = (identity: string, patch: Partial<UserAudioPref>) => 
   audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
 }
 
+/**
+ * Diagnostic for the per-user audio controls, callable from the console during
+ * a call: `(await import('/src/composables/useVoice.ts')).debugAudio()`.
+ *
+ * Reports the whole chain at once — who the room thinks is present, what the
+ * owner map believes each audio element belongs to, the prefs recorded against
+ * each identity, and the element's ACTUAL live muted/volume state. A mismatch
+ * between any two of those localises the bug immediately, which reading the
+ * code could not.
+ */
+export const debugAudio = () => {
+  const room = getRoom()
+  const els: any[] = []
+  audioEls.forEach((el, sid) => {
+    const owner = audioOwner.get(sid)
+    els.push({
+      sid,
+      owner: owner ?? '(NO OWNER — mute cannot target this element)',
+      prefForOwner: owner ? userPref(owner) : null,
+      liveElementMuted:  el.muted,
+      liveElementVolume: +el.volume.toFixed(3),
+      elementInDom: document.body.contains(el),
+      readyState: el.readyState,
+      paused: el.paused,
+      srcObjectTracks: (el.srcObject as MediaStream | null)?.getAudioTracks().length ?? 0,
+    })
+  })
+  return {
+    roomIdentities: room ? [...room.remoteParticipants.values()].map(p => p.identity) : [],
+    localIdentity: room?.localParticipant.identity,
+    tileIdentities: voice.participants.map(p => ({ id: p.id, local: p.local })),
+    prefsKeys: Object.keys(userPrefs),
+    prefs: JSON.parse(JSON.stringify(userPrefs)),
+    audioElements: els,
+    deafened: voice.localDeafened,
+  }
+}
+
 const applyAudioEl = (el: HTMLAudioElement, identity?: string) => {
   const u = identity ? userPref(identity) : { volume: 100, muted: false, videoOff: false }
   // Per-user volume multiplies the global output level rather than replacing it.
