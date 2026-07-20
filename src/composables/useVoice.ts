@@ -112,7 +112,7 @@ const readRtt = async () => {
 let levelCtx: AudioContext | null = null
 let levelAnalyser: AnalyserNode | null = null
 let levelSrc: MediaStreamAudioSourceNode | null = null
-let levelData: Uint8Array | null = null
+let levelData: Uint8Array<ArrayBuffer> | null = null
 let levelTrack: MediaStreamTrack | null = null
 let levelRaf = 0
 let lastLoudAt = 0
@@ -137,7 +137,7 @@ const bindLevelSource = async (t: MediaStreamTrack | null) => {
     levelAnalyser = levelCtx.createAnalyser()
     levelAnalyser.fftSize = 512
     levelSrc.connect(levelAnalyser)   // analysis only — never to destination
-    levelData = new Uint8Array(levelAnalyser.frequencyBinCount)
+    levelData = new Uint8Array(new ArrayBuffer(levelAnalyser.frequencyBinCount))
   } catch { /* bind failed — local ring stays off until the next track change */ }
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { PhX, PhMagnifyingGlass, PhHash, PhChatDots, PhUsersThree } from '@phosphor-icons/vue'
+import { PhMagnifyingGlass, PhChatDots, PhUsersThree } from '@phosphor-icons/vue'
 import { useApi, type ApiUser } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import type { DM, Group } from '@/types'

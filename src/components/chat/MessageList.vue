@@ -4,7 +4,7 @@ import MessageItem    from './MessageItem.vue'
 import TypingIndicator from './TypingIndicator.vue'
 import type { Message } from '@/types'
 
-const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string }; group?: { name: string; avatar?: string }; loadingMsgs: boolean }>()
+const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string | null }; group?: { name: string; avatar?: string | null }; loadingMsgs: boolean }>()
 const emit  = defineEmits<{
   react:         [msgId: number, emoji: string]
   openEmoji:     [msgId: number]
@@ -94,7 +94,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
   <div class="ml" ref="el">
     <div class="welcome">
       <template v-if="isDM && dmPartner">
-        <div class="dm-av"><img :src="dmPartner.avatar" :alt="dmPartner.name"/></div>
+        <div class="dm-av"><img :src="dmPartner.avatar ?? undefined" :alt="dmPartner.name"/></div>
         <h3>{{ dmPartner.name }}</h3>
         <p>This is the beginning of your direct message history with <strong>{{ dmPartner.name }}</strong>.</p>
       </template>

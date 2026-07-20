@@ -10,7 +10,7 @@
  */
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { PhCheck, PhCaretRight } from '@phosphor-icons/vue'
-import { menu, menuItems as items, closeMenu, isSeparator, isSlider, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
+import { menu, menuItems as items, closeMenu, isSeparator, isSlider, isAction, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 
 const el   = ref<HTMLElement | null>(null)
 const subEl = ref<HTMLElement | null>(null)
@@ -110,7 +110,7 @@ const move = (dir: 1 | -1) => {
 }
 
 const subNavigable = () => (sub.value?.items ?? [])
-  .map((it, i) => (!isSeparator(it) && !it.disabled ? i : -1))
+  .map((it, i) => (isAction(it) && !it.disabled ? i : -1))
   .filter(i => i !== -1)
 
 const onKey = (e: KeyboardEvent) => {
@@ -219,7 +219,7 @@ onBeforeUnmount(() => {
       <template v-for="(item, i) in items" :key="i">
         <div v-if="isSeparator(item)" class="cm-sep" />
         <!-- Slider: a live control, so clicks inside must NOT close the menu. -->
-        <div v-else-if="isSlider(item)" class="cm-slider" @click.stop>
+        <div v-if="isSlider(item)" class="cm-slider" @click.stop>
           <div class="cm-slider-top">
             <span>{{ item.label }}</span>
             <span class="cm-slider-val">{{ (item.format ?? (v => String(v)))(item.value) }}</span>
@@ -229,8 +229,12 @@ onBeforeUnmount(() => {
                  :style="{ background: sliderFill(item) }"
                  @input="item.onInput(+($event.target as HTMLInputElement).value)" />
         </div>
+        <!-- A positive `isAction` guard rather than v-else: type narrowing does
+             not carry across a v-if/v-else chain, so under v-else this branch
+             still sees the whole union and every action-only field below is
+             unchecked. Same runtime behaviour, real coverage. -->
         <button
-          v-else
+          v-if="isAction(item)"
           class="cm-row"
           role="menuitem"
           :class="{ danger: item.danger, active: i === active, disabled: item.disabled }"
@@ -263,7 +267,7 @@ onBeforeUnmount(() => {
       <template v-for="(item, j) in sub.items" :key="j">
         <div v-if="isSeparator(item)" class="cm-sep" />
         <button
-          v-else
+          v-if="isAction(item)"
           class="cm-row"
           role="menuitem"
           :class="{ danger: item.danger, active: j === subActive, disabled: item.disabled }"

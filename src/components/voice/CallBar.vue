@@ -6,7 +6,7 @@ import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
 import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
-import { useVoiceMedia } from '@/composables/useVoiceMedia'
+import { useVoiceMedia, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
 import { userPref, setUserPref } from '@/composables/useVoice'
 import { soundDialStart, soundDialStop } from '@/composables/useSocket'
@@ -27,7 +27,7 @@ const props = defineProps<{
   // Server-presence participants resolved to display info (incl. you, if joined).
   participants: { id: string; name: string; avatar: string; local: boolean }[]
   // The local user, for the optimistic self-tile shown while connecting.
-  me?: { name: string; avatar: string }
+  me?: { name: string; avatar: string | null }
   dismissed?: boolean
 }>()
 const emit = defineEmits<{
@@ -106,7 +106,7 @@ const stageTiles = computed<Tile[]>(() => {
 // Camera/screen buttons are disabled until joinedHere: publishing during the
 // connecting window would register under the real LiveKit identity while the
 // optimistic stage tile still uses the 'me' placeholder id → duplicate self-cells.
-const videoList = computed(() => [...media.videoTracks.values()])
+const videoList = computed(() => [...media.videoTracks.values()] as VideoTrackInfo[])
 
 const join = () => { connect(props.convId, props.kind, props.name).catch(() => {}) }
 

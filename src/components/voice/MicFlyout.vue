@@ -47,7 +47,7 @@ let disposed = false
 let boundTrack: MediaStreamTrack | null = null
 let analyser: AnalyserNode | null = null
 let src: MediaStreamAudioSourceNode | null = null
-let data: Uint8Array | null = null
+let data: Uint8Array<ArrayBuffer> | null = null
 
 const currentMicTrack = () =>
   getRoom()?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null
@@ -59,7 +59,7 @@ const bindTrack = (t: MediaStreamTrack) => {
   analyser = ctx.createAnalyser()
   analyser.fftSize = 1024
   src.connect(analyser)   // analysis only — never to destination
-  data = new Uint8Array(analyser.frequencyBinCount)
+  data = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount))
   boundTrack = t
 }
 

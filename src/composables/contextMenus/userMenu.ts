@@ -17,7 +17,7 @@ export interface MenuUser {
   id:           string
   username?:    string
   displayName?: string
-  avatar?:      string
+  avatar?:      string | null
   status?:      string
 }
 

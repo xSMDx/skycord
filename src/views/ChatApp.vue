@@ -4,7 +4,7 @@ import {
   PhHash, PhLock, PhSpeakerHigh, PhPlus, PhCaretRight,
   PhMagnifyingGlass, PhUsers, PhCaretDown,
   PhMicrophone, PhMicrophoneSlash, PhHeadphones, PhGear,
-  PhPushPin, PhSidebar, PhCompass, PhWaveform,
+  PhPushPin, PhSidebar, PhCompass,
   PhChatDots, PhX, PhUserPlus, PhEnvelope,
   PhCheck, PhCircleNotch, PhDotsThree,
   PhPencilSimple, PhUsersThree,
@@ -47,7 +47,12 @@ import AppContextMenu        from '@/components/ui/ContextMenu.vue'
 import { openMenu }          from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
-import { convPref, isPinned, isMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
+// isMuted is aliased: this file already has its own `isMuted` ref for YOUR mic
+// state (line ~243). Importing the conversation-mute helper under the same name
+// shadowed it, so the template called a ref and threw on every render — which
+// aborted ChatApp's update entirely, taking the sidebar and the incoming-call
+// modal down with it.
+import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
 import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
 
@@ -1578,7 +1583,7 @@ onBeforeUnmount(() => {
               </div>
               <span v-if="isPinned(c.dm.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
               <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
-              <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isMuted(c.dm.id) }">{{ c.dm.unread }}</span>
+              <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isConvMuted(c.dm.id) }">{{ c.dm.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <PhX :size="13" weight="light" />
               </button>
@@ -1600,7 +1605,7 @@ onBeforeUnmount(() => {
               </div>
               <span v-if="isPinned(c.group.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
               <span v-if="convHasCall('group', c.group.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
-              <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isMuted(c.group.id) }">{{ c.group.unread }}</span>
+              <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isConvMuted(c.group.id) }">{{ c.group.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <PhX :size="13" weight="light" />
               </button>
