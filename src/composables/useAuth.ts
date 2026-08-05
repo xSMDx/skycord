@@ -1,5 +1,12 @@
 import { ref, computed } from 'vue'
  
+/** A custom status line. `clearAt` null = it never expires. The server already
+ *  filters expired ones out, so anything present here is live. */
+export interface CustomStatus {
+  text:    string
+  clearAt: string | null
+}
+
 export interface PublicUser {
   id:            string
   username:      string
@@ -11,6 +18,8 @@ export interface PublicUser {
   role:          'owner' | 'admin' | 'mod' | 'vip' | 'member'
   status:        string
   isVerified:    boolean
+  bannerColor:   string | null
+  customStatus:  CustomStatus | null
   createdAt:     string
 }
  

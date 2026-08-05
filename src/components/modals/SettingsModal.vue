@@ -9,6 +9,12 @@ import { avatarFor } from '@/composables/useAvatar'
 import { useAppearance, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Theme, type Density } from '@/composables/useAppearance'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
+import ChangeIconModal from './ChangeIconModal.vue'
+import EditImageModal from './EditImageModal.vue'
+import GifPickerModal from './GifPickerModal.vue'
+import ColorPicker from '@/components/ui/ColorPicker.vue'
+import ProfileCard from '@/components/profile/ProfileCard.vue'
+import SetStatusModal from '@/components/profile/SetStatusModal.vue'
 import VoiceVideoSettings from '@/components/voice/VoiceVideoSettings.vue'
 
 const emit = defineEmits<{ close: [] }>()
@@ -208,6 +214,84 @@ const onModalDone = () => {
 
 const flashSaved = () => setTimeout(() => saveMsg.value = '', 2500)
 
+// ── Profile page ────────────────────────────────────────────────────────────
+// Every control here writes straight through to PATCH /users/me and updates the
+// auth user on success, so the card reflects what's actually stored rather than
+// an optimistic guess that could disagree with the server.
+const profileErr = ref('')
+const savingProfile = ref(false)
+
+const patchProfile = async (body: Record<string, unknown>, okMsg: string) => {
+  if (savingProfile.value) return false
+  savingProfile.value = true; profileErr.value = ''
+  try {
+    const res = await authFetch('/users/me', { method: 'PATCH', body: JSON.stringify(body) })
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}))
+      profileErr.value = b.message || 'Couldn’t save that'
+      return false
+    }
+    const data = await res.json()
+    updateUser(data.user)
+    saveMsg.value = okMsg; flashSaved()
+    return true
+  } catch {
+    profileErr.value = 'Network error — try again'
+    return false
+  } finally { savingProfile.value = false }
+}
+
+// Banner colour — the picker fires on every drag frame, so the network write is
+// debounced while the card updates immediately from local state.
+const bannerDraft = ref<string | null>(null)
+const bannerColor = computed(() => bannerDraft.value ?? authUser.value?.bannerColor ?? null)
+let bannerTimer: ReturnType<typeof setTimeout> | null = null
+const onBannerColor = (hex: string) => {
+  bannerDraft.value = hex
+  if (bannerTimer) clearTimeout(bannerTimer)
+  bannerTimer = setTimeout(() => { void patchProfile({ bannerColor: hex }, 'Banner colour updated') }, 400)
+}
+const showBannerPicker = ref(false)
+
+// Avatar — reuses the group-icon chain: pick source → crop → save.
+const avatarPicker = ref<null | 'menu' | 'change' | 'edit' | 'gif'>(null)
+const avatarUploadSrc = ref('')
+const onAvatarUpload = (dataUrl: string) => { avatarUploadSrc.value = dataUrl; avatarPicker.value = 'edit' }
+const onAvatarCropped = async (dataUrl: string) => {
+  avatarPicker.value = null
+  await patchProfile({ avatar: dataUrl }, 'Avatar updated')
+}
+const onAvatarGif = async (url: string) => {
+  avatarPicker.value = null
+  await patchProfile({ avatar: url }, 'Avatar updated')
+}
+const removeAvatar = async () => {
+  avatarPicker.value = null
+  await patchProfile({ avatar: null }, 'Avatar removed')
+}
+
+// Custom status
+const showStatusModal = ref(false)
+const saveStatus = async (payload: { text: string; clearAt: string | null }) => {
+  const ok = await patchProfile(
+    { customStatus: payload.text ? payload : null },
+    payload.text ? 'Status updated' : 'Status cleared',
+  )
+  if (ok) showStatusModal.value = false
+}
+const clearStatus = () => patchProfile({ customStatus: null }, 'Status cleared')
+
+// About me — debounced like the colour, since it's a free-text field.
+const bioDraft = ref<string | null>(null)
+const bioValue = computed(() => bioDraft.value ?? authUser.value?.bio ?? '')
+let bioTimer: ReturnType<typeof setTimeout> | null = null
+const onBioInput = (e: Event) => {
+  const v = (e.target as HTMLTextAreaElement).value
+  bioDraft.value = v
+  if (bioTimer) clearTimeout(bioTimer)
+  bioTimer = setTimeout(() => { void patchProfile({ bio: v }, 'About me updated') }, 600)
+}
+
 interface NavSection { label: string; items: NavItem[] }
 interface NavItem    { id: string; label: string; icon?: any }
 
@@ -216,6 +300,7 @@ const navSections: NavSection[] = [
     label: '',
     items: [
       { id: 'account',         label: 'Account'           },
+      { id: 'profile',         label: 'Profile'           },
       { id: 'content-social',  label: 'Content & Social'  },
       { id: 'data-privacy',    label: 'Data & Privacy'    },
       { id: 'authorized-apps', label: 'Authorized Apps'   },
@@ -328,19 +413,8 @@ const handleLogout = () => { emit('close'); logout() }
 
           <!-- ── Account page ── -->
           <template v-if="page === 'account'">
-            <!-- Banner + avatar -->
-            <div class="acc-banner">
-              <div class="acc-banner-bg" />
-              <div class="acc-av-wrap">
-                <img :src="avatarFor(authUser?.username||'you', authUser?.avatar)" class="acc-av" />
-                <div class="acc-av-status" />
-              </div>
-              <div class="acc-av-names">
-                <span class="acc-display">{{ authUser?.displayName || 'You' }}</span>
-                <span class="acc-tag">{{ authUser?.username || 'you' }}#{{ authUser?.discriminator || '0000' }}</span>
-              </div>
-            </div>
-
+            <!-- The profile header card used to sit here; it moved to its own
+                 Profile page, where it's editable rather than decorative. -->
             <div v-if="saveMsg" class="acc-save-msg">{{ saveMsg }}</div>
 
             <!-- Account Info -->
@@ -417,6 +491,99 @@ const handleLogout = () => { emit('close'); logout() }
               </div>
             </div>
 
+          </template>
+
+          <!-- ── Profile ── -->
+          <template v-else-if="page === 'profile'">
+            <h2 class="acc-section-title">Profile</h2>
+            <p class="pf-sub">Changes save as you make them and show on your card straight away.</p>
+
+            <div v-if="saveMsg" class="acc-save-msg">{{ saveMsg }}</div>
+            <div v-if="profileErr" class="pf-err">{{ profileErr }}</div>
+
+            <div class="pf-grid">
+              <!-- controls -->
+              <div class="pf-rail">
+                <div class="pf-field">
+                  <span class="acc-row-label">Avatar</span>
+                  <div class="pf-avrow">
+                    <img :src="avatarFor(authUser?.username||'you', authUser?.avatar)" class="pf-av" alt="" />
+                    <div class="pf-avbtns">
+                      <button class="acc-btn" @click="avatarPicker = 'change'">Change</button>
+                      <button class="acc-btn pf-danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pf-field">
+                  <span class="acc-row-label">Banner colour</span>
+                  <div class="pf-bnwrap">
+                    <button
+                      class="pf-bnbox" :style="{ background: bannerColor || '#1e1f22' }"
+                      aria-label="Pick banner colour" @click="showBannerPicker = !showBannerPicker"
+                    />
+                    <div v-if="showBannerPicker" class="pf-pop">
+                      <div class="pf-pop-backdrop" @click="showBannerPicker = false" />
+                      <div class="pf-pop-panel">
+                        <ColorPicker :model-value="bannerColor" @update:model-value="onBannerColor" />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="pf-hex">{{ bannerColor || 'Default' }}</div>
+                </div>
+
+                <div class="pf-field">
+                  <span class="acc-row-label">Custom status</span>
+                  <div class="pf-statusrow">
+                    <span class="pf-statustext" :class="{ muted: !authUser?.customStatus?.text }">
+                      {{ authUser?.customStatus?.text || 'None set' }}
+                    </span>
+                    <div class="pf-avbtns">
+                      <button class="acc-btn" @click="showStatusModal = true">Set</button>
+                      <button class="acc-btn pf-danger" :disabled="!authUser?.customStatus?.text" @click="clearStatus">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- live card -->
+              <div class="pf-cardcol">
+                <ProfileCard
+                  editable
+                  :username="authUser?.username || 'you'"
+                  :display-name="authUser?.displayName"
+                  :discriminator="authUser?.discriminator"
+                  :avatar="authUser?.avatar"
+                  :banner-color="bannerColor"
+                  :bio="bioValue"
+                  :status="authUser?.status"
+                  :custom-status="authUser?.customStatus"
+                  :member-since="authUser?.createdAt"
+                  @edit-banner="showBannerPicker = true"
+                  @edit-avatar="avatarPicker = 'menu'"
+                  @edit-status="showStatusModal = true"
+                />
+
+                <div class="pf-fields">
+                  <div class="pf-field">
+                    <span class="acc-row-label">Display name</span>
+                    <div class="pf-inline">
+                      <span class="acc-row-value">{{ authUser?.displayName || '—' }}</span>
+                      <button class="acc-btn" @click="openModal('displayName', authUser?.displayName||'')">Edit</button>
+                    </div>
+                  </div>
+                  <div class="pf-field">
+                    <span class="acc-row-label">About me</span>
+                    <textarea
+                      class="pf-textarea" maxlength="190" rows="3"
+                      placeholder="Describe yourself like a game character"
+                      :value="bioValue" @input="onBioInput"
+                    />
+                    <div class="pf-count">{{ bioValue.length }} / 190</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </template>
 
           <!-- ── Appearance ── -->
@@ -695,12 +862,121 @@ const handleLogout = () => { emit('close'); logout() }
     </div>
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
   </EditFieldModal>
+
+  <!-- Avatar options, anchored over the card's avatar -->
+  <div v-if="avatarPicker === 'menu'" class="pf-menu-backdrop" @click="avatarPicker = null">
+    <div class="pf-menu" @click.stop>
+      <button @click="avatarPicker = 'change'">Change avatar</button>
+      <button class="danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove avatar</button>
+    </div>
+  </div>
+
+  <!-- Avatar sub-flow: pick source → crop, or pick a GIF. Same chain the group
+       icon uses, so both stay consistent. -->
+  <ChangeIconModal
+    v-if="avatarPicker === 'change'"
+    @upload="onAvatarUpload"
+    @chooseGif="avatarPicker = 'gif'"
+    @close="avatarPicker = null"
+  />
+  <EditImageModal
+    v-if="avatarPicker === 'edit'"
+    :src="avatarUploadSrc"
+    @apply="onAvatarCropped"
+    @cancel="avatarPicker = 'change'"
+    @close="avatarPicker = null"
+  />
+  <GifPickerModal
+    v-if="avatarPicker === 'gif'"
+    @select="onAvatarGif"
+    @close="avatarPicker = null"
+  />
+
+  <SetStatusModal
+    v-if="showStatusModal"
+    :user="{
+      username:      authUser?.username || 'you',
+      displayName:   authUser?.displayName,
+      discriminator: authUser?.discriminator,
+      avatar:        authUser?.avatar,
+      bannerColor:   bannerColor,
+      status:        authUser?.status,
+    }"
+    :text="authUser?.customStatus?.text || ''"
+    :saving="savingProfile"
+    @save="saveStatus"
+    @close="showStatusModal = false"
+  />
 </template>
 
 <style scoped>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img    { display: block; object-fit: cover; }
+
+/* ── Profile page ── */
+.pf-sub { font-size: 13.5px; color: var(--text-3); margin: -6px 0 20px; }
+.pf-err {
+  padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 13px;
+  background: rgba(237,66,69,.14); border: 1px solid rgba(237,66,69,.32); color: #f0716f;
+}
+.pf-grid { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
+.pf-rail { width: 240px; flex: none; display: flex; flex-direction: column; gap: 22px; }
+.pf-cardcol { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 18px; }
+.pf-field { display: flex; flex-direction: column; }
+.pf-field .acc-row-label { margin-bottom: 9px; }
+
+.pf-avrow { display: flex; align-items: center; gap: 12px; }
+.pf-av { width: 56px; height: 56px; border-radius: 50%; flex: none; }
+.pf-avbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.pf-danger { color: #f0716f; background: none; }
+.pf-danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
+.pf-danger:disabled { opacity: .4; cursor: not-allowed; }
+
+.pf-bnwrap { position: relative; }
+.pf-bnbox {
+  width: 100%; height: 50px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(0,0,0,.35); transition: filter .12s;
+}
+.pf-bnbox:hover { filter: brightness(1.25); }
+.pf-hex { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 7px; }
+/* The backdrop is a sibling of the panel, not a wrapper — a full-screen layer
+   ABOVE the panel would swallow the very clicks the picker needs. */
+.pf-pop-backdrop { position: fixed; inset: 0; z-index: 40; }
+.pf-pop-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 41;
+  background: var(--bg-floor); border-radius: 8px; padding: 14px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.65);
+}
+
+.pf-statusrow { display: flex; flex-direction: column; gap: 10px; }
+.pf-statustext { font-size: 14px; color: var(--text-1); word-break: break-word; }
+.pf-statustext.muted { color: var(--text-3); }
+
+.pf-fields { width: 340px; max-width: 100%; display: flex; flex-direction: column; gap: 18px; }
+.pf-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pf-textarea {
+  width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
+  border-radius: 5px; padding: 10px 12px; color: var(--text-1);
+  font: inherit; font-size: 14.5px; line-height: 1.5; resize: vertical; min-height: 74px;
+}
+.pf-textarea:focus { outline: none; border-color: var(--accent); }
+.pf-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 5px; font-variant-numeric: tabular-nums; }
+
+.pf-menu-backdrop { position: fixed; inset: 0; z-index: 1400; }
+.pf-menu {
+  position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%);
+  background: var(--bg-floor); border-radius: 6px; padding: 6px; min-width: 210px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.6);
+}
+.pf-menu button {
+  display: block; width: 100%; text-align: left; padding: 9px 11px;
+  border-radius: 4px; font-size: 14px; color: var(--text-2);
+}
+.pf-menu button:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.pf-menu button.danger { color: #f0716f; }
+.pf-menu button.danger:hover:not(:disabled) { background: #ed4245; color: #fff; }
+.pf-menu button:disabled { opacity: .4; cursor: not-allowed; }
 
 .sm-overlay {
   position: fixed; inset: 0;

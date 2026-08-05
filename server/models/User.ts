@@ -17,6 +17,8 @@ export interface IUserDocument extends Document {
   isVerified:    boolean
   tokenVersion:  number
   lastSeenAt:    Date
+  bannerColor:   string | null
+  customStatus:  ICustomStatus | null
   convPrefs:     Map<string, IConvPref>
   createdAt:     Date
   updatedAt:     Date
@@ -42,6 +44,25 @@ export interface IConvPref {
   mutedUntil: Date | null   // null while muted = indefinitely
 }
 
+/**
+ * A custom status line, shown beside the name on the profile card.
+ *
+ * `clearAt` null means it never expires. Expiry is applied on READ (see
+ * liveStatus below) rather than by a sweeper, matching how conversation mute
+ * already works — a status that has run out simply stops being reported.
+ */
+export interface ICustomStatus {
+  text:    string
+  clearAt: Date | null
+}
+
+/** Null once expired, so callers never have to check the clock themselves. */
+export const liveStatus = (s: ICustomStatus | null | undefined): ICustomStatus | null => {
+  if (!s || !s.text) return null
+  if (s.clearAt && new Date(s.clearAt).getTime() <= Date.now()) return null
+  return { text: s.text, clearAt: s.clearAt ?? null }
+}
+
 export interface PublicUser {
   id:            string
   username:      string
@@ -53,6 +74,8 @@ export interface PublicUser {
   role:          string
   status:        string
   isVerified:    boolean
+  bannerColor:   string | null
+  customStatus:  ICustomStatus | null
   createdAt:     Date
 }
 
@@ -97,6 +120,15 @@ const UserSchema = new Schema<IUserDocument, IUserModel>(
     isVerified:   { type: Boolean, default: false },
     tokenVersion: { type: Number,  default: 0, select: false },
     lastSeenAt:   { type: Date,    default: Date.now },
+    // Solid hex (#rrggbb) behind the profile card. null = the app's default.
+    bannerColor:  { type: String,  default: null },
+    customStatus: {
+      type: new Schema<ICustomStatus>({
+        text:    { type: String, default: '', maxlength: 128 },
+        clearAt: { type: Date,   default: null },
+      }, { _id: false }),
+      default: null,
+    },
     // select:false — these are private settings, and User docs are also read to
     // build OTHER people's public profiles (search, friends, group members).
     // Excluding them by default means they can only ever leave via the /me
@@ -140,6 +172,9 @@ UserSchema.methods.toPublicJSON = function (): PublicUser {
     role:          this.role,
     status:        this.status,
     isVerified:    this.isVerified,
+    bannerColor:   this.bannerColor ?? null,
+    // Expired statuses are filtered here, so no caller can render a stale one.
+    customStatus:  liveStatus(this.customStatus),
     createdAt:     this.createdAt,
   }
 }

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
-import { User } from '../models/User'
+import { User, liveStatus } from '../models/User'
 import { Friendship } from '../models/Friendship'
 import mongoose from 'mongoose'
 import { getIO, isUserOnline } from '../sockets/chatSocket'
@@ -128,7 +128,10 @@ export const getFriends = async (req: Request, res: Response, next: NextFunction
     const friendships = await Friendship.find({
       $or: [{ requester: userId }, { receiver: userId }],
       status: 'accepted',
-    }).populate('requester receiver', 'username displayName discriminator avatar status bio')
+      // bannerColor/customStatus ride along so a friend's profile card renders
+      // fully from the list — without them the card would be right for you and
+      // blank for everyone else.
+    }).populate('requester receiver', 'username displayName discriminator avatar status bio bannerColor customStatus createdAt')
 
     // Presence comes from the LIVE socket registry, not the stored status. A
     // crash, deploy or missed disconnect can leave `status: 'online'` in the DB
@@ -137,6 +140,7 @@ export const getFriends = async (req: Request, res: Response, next: NextFunction
       const friend: any = f.requester._id.toString() === userId ? f.receiver : f.requester
       const o = friend.toObject ? friend.toObject() : { ...friend }
       o.status = presenceFor(o._id.toString(), o.status)
+      o.customStatus = liveStatus(o.customStatus)   // never hand back an expired one
       return o
     })
 
@@ -158,12 +162,49 @@ export const getPendingRequests = async (req: Request, res: Response, next: Next
 export const updateProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user!.sub
-    const { displayName, bio, status } = req.body
+    const { displayName, bio, status, avatar, bannerColor, customStatus } = req.body
 
     const allowed: Record<string, any> = {}
     if (displayName) allowed.displayName = String(displayName).trim().slice(0, 50)
     if (bio !== undefined) allowed.bio   = String(bio).slice(0, 190)
     if (status && ['online','idle','dnd','invisible'].includes(status)) allowed.status = status
+
+    // null clears the avatar back to the generated default. Otherwise it's
+    // either a data URL from the cropper or a remote GIF url — both are just
+    // strings here, but bounded so a document can't be pushed toward Mongo's
+    // 16MB ceiling by one oversized paste.
+    if (avatar !== undefined) {
+      if (avatar === null) allowed.avatar = null
+      else {
+        const a = String(avatar)
+        if (a.length > 2_000_000) { res.status(413).json({ message: 'That image is too large' }); return }
+        allowed.avatar = a
+      }
+    }
+
+    if (bannerColor !== undefined) {
+      if (bannerColor === null) allowed.bannerColor = null
+      else if (/^#[0-9a-f]{6}$/i.test(String(bannerColor))) allowed.bannerColor = String(bannerColor).toLowerCase()
+      else { res.status(400).json({ message: 'Banner colour must be a #rrggbb hex' }); return }
+    }
+
+    if (customStatus !== undefined) {
+      if (customStatus === null || !String(customStatus.text ?? '').trim()) {
+        allowed.customStatus = null
+      } else {
+        const text = String(customStatus.text).slice(0, 128)
+        let clearAt: Date | null = null
+        if (customStatus.clearAt) {
+          const d = new Date(customStatus.clearAt)
+          if (isNaN(d.getTime())) { res.status(400).json({ message: 'Invalid clear time' }); return }
+          // A past date would save a status that's already expired — treat it
+          // as "no status" rather than storing something dead on arrival.
+          if (d.getTime() <= Date.now()) { allowed.customStatus = null; clearAt = null }
+          else clearAt = d
+        }
+        if (allowed.customStatus !== null) allowed.customStatus = { text, clearAt }
+      }
+    }
 
     const user = await User.findByIdAndUpdate(userId, allowed, { new: true })
     if (!user) { res.status(404).json({ message: 'User not found' }); return }
