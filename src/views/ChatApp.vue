@@ -36,6 +36,7 @@ import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
+import SelfProfilePopout   from '@/components/profile/SelfProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
@@ -57,7 +58,7 @@ import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPre
 import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
 
 // ── Auth ───────────────────────────────────────────────────────────────────
-const { user: authUser } = useAuth()
+const { user: authUser, authFetch, updateUser } = useAuth()
 
 // ── API ────────────────────────────────────────────────────────────────────
 const api = useApi()
@@ -367,7 +368,30 @@ const acceptingId = ref<string | null>(null)
 const showSettings      = ref(false)
 // Which settings pane to open on. Reset to 'account' by the plain entry points
 // so a deep-link from a menu doesn't stick for the next normal open.
-const settingsPage      = ref<'account' | 'appearance' | 'voice'>('account')
+const settingsPage      = ref<'account' | 'profile' | 'appearance' | 'voice'>('account')
+
+// ── Self profile popout ─────────────────────────────────────────────────────
+// The anchor comes from the click event rather than a template ref: the two
+// sidebar variants each render a user panel, and a shared ref can be nulled by
+// whichever one unmounts last when you switch views.
+const selfPopoutAnchor = ref<HTMLElement | null>(null)
+const showSelfPopout   = ref(false)
+const toggleSelfPopout = (e: MouseEvent) => {
+  if (showSelfPopout.value) { showSelfPopout.value = false; return }
+  selfPopoutAnchor.value = e.currentTarget as HTMLElement
+  showSelfPopout.value = true
+}
+const setPresence = async (status: string) => {
+  showSelfPopout.value = false
+  try {
+    const res = await authFetch('/users/me', { method: 'PATCH', body: JSON.stringify({ status }) })
+    if (res.ok) updateUser((await res.json()).user)
+  } catch { showToast('Couldn’t update your status') }
+}
+const copySelfId = () => {
+  showSelfPopout.value = false
+  copyText(authUser.value?.id || '', 'User ID')
+}
 const showCameraPreview = ref(false)
 // Which user-panel device menu is open. Same flyouts as the call bar, but
 // anchored upward — the panel is pinned to the bottom of the sidebar.
@@ -378,7 +402,7 @@ const onCameraConfirmed = () => {
   showCameraPreview.value = false
   callBarRef.value?.startCameraNow?.()
 }
-const openSettings = (p: 'account' | 'appearance' | 'voice' = 'account') => {
+const openSettings = (p: 'account' | 'profile' | 'appearance' | 'voice' = 'account') => {
   settingsPage.value = p
   showSettings.value = true
 }
@@ -1456,6 +1480,17 @@ onBeforeUnmount(() => {
     />
     <SettingsModal    v-if="showSettings"      :initial-page="settingsPage" @close="showSettings = false" />
     <CameraPreviewModal v-if="showCameraPreview" @close="showCameraPreview = false" @confirm="onCameraConfirmed" />
+
+    <SelfProfilePopout
+      v-if="showSelfPopout && authUser"
+      :user="authUser"
+      :anchor="selfPopoutAnchor"
+      @close="showSelfPopout = false"
+      @edit-profile="showSelfPopout = false; openSettings('profile')"
+      @set-status="showSelfPopout = false; openSettings('profile')"
+      @set-presence="setPresence"
+      @copy-id="copySelfId"
+    />
     <AddFriendModal   v-if="showAddFriend"     @close="showAddFriend = false" />
     <QuickSwitcherModal
       v-if="showQuickSwitcher"
@@ -1630,7 +1665,7 @@ onBeforeUnmount(() => {
         <!-- Voice connected strip + user panel -->
         <VoiceConnectedPanel />
         <div class="user-panel">
-          <div class="up-left" @click.stop="openSettings()">
+          <div class="up-left" @click.stop="toggleSelfPopout($event)">
             <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me" /></div><span class="up-status-dot"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
@@ -1694,7 +1729,7 @@ onBeforeUnmount(() => {
         </div>
         <VoiceConnectedPanel />
         <div class="user-panel">
-          <div class="up-left" @click.stop="openSettings()">
+          <div class="up-left" @click.stop="toggleSelfPopout($event)">
             <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me"/></div><span class="up-status-dot"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>

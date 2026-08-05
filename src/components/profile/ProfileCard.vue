@@ -21,8 +21,14 @@ const props = withDefaults(defineProps<{
   status?:       string
   customStatus?: { text: string } | null
   memberSince?:  string | Date | null
+  /** Pencils on the banner and avatar — the settings editor. */
   editable?:     boolean
-}>(), { editable: false })
+  /** Makes the status pill a button (and shows "Add status" when empty) even
+   *  when the rest of the card isn't editable — the popout wants exactly this. */
+  statusButton?: boolean
+  /** Hide the member-since block; the popout is tighter than the editor. */
+  compact?:      boolean
+}>(), { editable: false, statusButton: false, compact: false })
 
 const emit = defineEmits<{ editBanner: []; editAvatar: []; editStatus: [] }>()
 
@@ -73,7 +79,7 @@ const memberSinceLabel = computed(() => {
       </div>
       <span class="pc-dot" :style="{ background: dotColor }" />
 
-      <button v-if="editable" class="pc-status" @click.stop="emit('editStatus')">
+      <button v-if="editable || statusButton" class="pc-status" @click.stop="emit('editStatus')">
         <PhPlus v-if="!statusText" :size="13" weight="bold" class="pc-status-plus" />
         <span class="pc-status-txt">{{ statusText || 'Add status' }}</span>
       </button>
@@ -88,14 +94,18 @@ const memberSinceLabel = computed(() => {
         {{ username }}<template v-if="discriminator">#{{ discriminator }}</template>
       </div>
 
-      <p class="pc-bio" :class="{ placeholder: !bio }">
+      <!-- Compact drops the bio too: the popout is a launcher, not a full
+           profile read, and an empty placeholder there is just noise. -->
+      <p v-if="!compact || bio" class="pc-bio" :class="{ placeholder: !bio }">
         {{ bio || 'Describe yourself like a game character' }}
       </p>
 
-      <template v-if="memberSinceLabel">
+      <template v-if="memberSinceLabel && !compact">
         <div class="pc-label">Member since</div>
         <div class="pc-val">{{ memberSinceLabel }}</div>
       </template>
+
+      <slot name="footer" />
     </div>
   </div>
 </template>

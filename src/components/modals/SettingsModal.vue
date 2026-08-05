@@ -104,7 +104,7 @@ const fillPct = (value: number, min: number, max: number) =>
 // Which pane to land on. Context-menu items like "Voice Settings" have to open
 // the voice pane directly — dumping the user on the account page and making
 // them find it is the difference between a shortcut and a nuisance.
-const props = withDefaults(defineProps<{ initialPage?: 'account' | 'appearance' | 'voice' }>(),
+const props = withDefaults(defineProps<{ initialPage?: 'account' | 'profile' | 'appearance' | 'voice' }>(),
   { initialPage: 'account' })
 const page = ref<string>(props.initialPage)
 
