@@ -81,6 +81,7 @@ onBeforeUnmount(() => {
         :display-name="user.displayName"
         :discriminator="user.discriminator"
         :avatar="user.avatar"
+        :banner="user.banner"
         :banner-color="user.bannerColor"
         :status="user.status"
         :custom-status="user.customStatus"

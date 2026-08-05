@@ -4,7 +4,7 @@ import {
   searchUsers, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
   removeFriend, getFriends, getPendingRequests, updateProfile,
   changeUsername, changeEmail, changePassword,
-  getConvPrefs, setConvPref
+  getConvPrefs, setConvPref, getUserProfile
 } from '../controllers/usersController'
 
 const router = Router()
@@ -26,5 +26,7 @@ router.patch('/me/password',             changePassword)
 // Per-conversation pin/mute. One route for both — they're the same write.
 router.get('/me/conversations',           getConvPrefs)
 router.patch('/me/conversations/:convId', setConvPref)
+// LAST: '/me/...' above would otherwise be swallowed by ':userId'.
+router.get('/:userId/profile',            getUserProfile)
 
 export default router

@@ -17,6 +17,8 @@ const props = withDefaults(defineProps<{
   discriminator?: string
   avatar?:       string | null
   bannerColor?:  string | null
+  /** Image or GIF banner. Wins over bannerColor when present. */
+  banner?:       string | null
   bio?:          string
   status?:       string
   customStatus?: { text: string } | null
@@ -36,7 +38,13 @@ const DEFAULT_BANNER = '#1e1f22'
 
 const name    = computed(() => props.displayName || props.username)
 const avatarSrc = computed(() => avatarFor(props.username, props.avatar ?? null))
-const banner  = computed(() => props.bannerColor || DEFAULT_BANNER)
+// The colour sits underneath as the element background, and any image goes in a
+// real <img> on top. Building a `url(...)` string instead would mean escaping
+// quotes and backslashes inside data URLs by hand — an <img> src has no such
+// parsing to get wrong, and animates GIFs identically.
+// Named bannerBg, not banner: a computed sharing the prop's name would shadow
+// it in the template and feed a hex string into the <img> src.
+const bannerBg = computed(() => props.bannerColor || DEFAULT_BANNER)
 const statusText = computed(() => props.customStatus?.text?.trim() || '')
 
 const STATUS_COLORS: Record<string, string> = {
@@ -55,13 +63,14 @@ const memberSinceLabel = computed(() => {
 <template>
   <div class="pc">
     <div
-      class="pc-banner" :class="{ editable }" :style="{ background: banner }"
+      class="pc-banner" :class="{ editable }" :style="{ background: bannerBg }"
       :role="editable ? 'button' : undefined" :tabindex="editable ? 0 : undefined"
       :aria-label="editable ? 'Change banner colour' : undefined"
       @click="editable && emit('editBanner')"
       @keydown.enter.prevent="editable && emit('editBanner')"
       @keydown.space.prevent="editable && emit('editBanner')"
     >
+      <img v-if="banner" :src="banner" alt="" class="pc-bimg" />
       <span v-if="editable" class="pc-bpencil"><PhPencilSimple :size="15" weight="bold" /></span>
     </div>
 
@@ -120,7 +129,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   box-shadow: 0 8px 30px rgba(0,0,0,.45);
 }
 
-.pc-banner { height: 106px; position: relative; transition: background .15s; }
+.pc-banner { height: 106px; position: relative; transition: background .15s; overflow: hidden; }
+.pc-bimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-banner.editable { cursor: pointer; }
 .pc-bpencil {
   position: absolute; right: 12px; top: 12px;

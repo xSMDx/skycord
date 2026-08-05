@@ -62,6 +62,15 @@ export const useApi = () => {
   const declineFriendRequest = (requestId: string) =>
     patch<{ message: string }>(`/users/friends/decline/${requestId}`)
 
+  // One call for the whole profile modal — person, relationship, mutuals.
+  const getUserProfile = (userId: string) =>
+    get<{
+      user: Record<string, any>
+      relationship: 'none' | 'friends' | 'incoming' | 'outgoing' | 'blocked'
+      friendsSince: string | null
+      mutualFriends: Record<string, any>[]
+    }>(`/users/${userId}/profile`)
+
   const removeFriend = (userId: string) =>
     del<{ message: string }>(`/users/friends/${userId}`)
 
@@ -133,7 +142,7 @@ export const useApi = () => {
 
   return {
     searchUsers, getFriends, getPending,
-    sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend,
+    sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getUserProfile,
     getConvPrefs, setConvPref,
     getDMMessages, sendDMRest,
     createGroup, getMyGroups, getGroupMessages, sendGroupRest,

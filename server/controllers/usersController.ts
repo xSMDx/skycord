@@ -162,7 +162,7 @@ export const getPendingRequests = async (req: Request, res: Response, next: Next
 export const updateProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user!.sub
-    const { displayName, bio, status, avatar, bannerColor, customStatus } = req.body
+    const { displayName, bio, status, avatar, bannerColor, banner, customStatus } = req.body
 
     const allowed: Record<string, any> = {}
     if (displayName) allowed.displayName = String(displayName).trim().slice(0, 50)
@@ -179,6 +179,17 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
         const a = String(avatar)
         if (a.length > 2_000_000) { res.status(413).json({ message: 'That image is too large' }); return }
         allowed.avatar = a
+      }
+    }
+
+    // Banner image/GIF. Same bounds as the avatar — a data URL from the cropper
+    // or a remote GIF url. null removes it and reveals bannerColor underneath.
+    if (banner !== undefined) {
+      if (banner === null) allowed.banner = null
+      else {
+        const b = String(banner)
+        if (b.length > 4_000_000) { res.status(413).json({ message: 'That banner is too large' }); return }
+        allowed.banner = b
       }
     }
 
@@ -442,5 +453,70 @@ export const removeFriend = async (req: Request, res: Response, next: NextFuncti
     if (io) io.to(`user:${otherId}`).emit('friend:removed', { friendId: userId })
 
     res.json({ message: 'Friend removed' })
+  } catch (err) { next(err) }
+}
+
+
+// ── Profile of another user, with the relationship between you ───────────────
+// One call rather than several: the modal needs the person, whether you're
+// friends, since when, and who you both know. Splitting that across endpoints
+// would show the card in pieces as each landed.
+export const getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const meId = req.user!.sub
+    const { userId } = req.params
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(400).json({ message: 'Invalid user id' }); return
+    }
+
+    const user = await User.findById(userId)
+    if (!user) { res.status(404).json({ message: 'User not found' }); return }
+
+    const profile: any = user.toPublicJSON()
+    // toPublicJSON carries the account's own email; nobody else may see it.
+    delete profile.email
+    profile.status = presenceFor(userId, user.status)
+
+    // Relationship with the viewer.
+    const rel = await Friendship.findOne({
+      $or: [{ requester: meId, receiver: userId }, { requester: userId, receiver: meId }],
+    })
+    const relationship = !rel ? 'none'
+      : rel.status === 'accepted' ? 'friends'
+      : rel.status === 'blocked'  ? 'blocked'
+      : rel.requester.toString() === meId ? 'outgoing' : 'incoming'
+
+    // Mutual friends: everyone accepted on both sides, intersected.
+    const friendIdsOf = async (id: string) => {
+      const rows = await Friendship.find({
+        status: 'accepted',
+        $or: [{ requester: id }, { receiver: id }],
+      }).select('requester receiver').lean()
+      return new Set(rows.map(r =>
+        r.requester.toString() === id ? r.receiver.toString() : r.requester.toString()))
+    }
+    const [mine, theirs] = await Promise.all([friendIdsOf(meId), friendIdsOf(userId)])
+    const mutualIds = [...mine].filter(id => theirs.has(id) && id !== meId && id !== userId)
+
+    const mutualFriends = mutualIds.length
+      ? (await User.find({ _id: { $in: mutualIds } })
+          .select('username displayName discriminator avatar status customStatus').lean())
+          .map((u: any) => ({
+            id: u._id.toString(),
+            username: u.username,
+            displayName: u.displayName,
+            discriminator: u.discriminator,
+            avatar: u.avatar ?? null,
+            status: presenceFor(u._id.toString(), u.status),
+            customStatus: liveStatus(u.customStatus),
+          }))
+      : []
+
+    res.json({
+      user: profile,
+      relationship,
+      friendsSince: rel && rel.status === 'accepted' ? rel.createdAt : null,
+      mutualFriends,
+    })
   } catch (err) { next(err) }
 }

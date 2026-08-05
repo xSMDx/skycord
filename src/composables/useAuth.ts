@@ -19,6 +19,7 @@ export interface PublicUser {
   status:        string
   isVerified:    boolean
   bannerColor:   string | null
+  banner:        string | null
   customStatus:  CustomStatus | null
   createdAt:     string
 }

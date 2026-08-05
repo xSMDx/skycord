@@ -18,6 +18,7 @@ export interface IUserDocument extends Document {
   tokenVersion:  number
   lastSeenAt:    Date
   bannerColor:   string | null
+  banner:        string | null
   customStatus:  ICustomStatus | null
   convPrefs:     Map<string, IConvPref>
   createdAt:     Date
@@ -75,6 +76,7 @@ export interface PublicUser {
   status:        string
   isVerified:    boolean
   bannerColor:   string | null
+  banner:        string | null
   customStatus:  ICustomStatus | null
   createdAt:     Date
 }
@@ -122,6 +124,10 @@ const UserSchema = new Schema<IUserDocument, IUserModel>(
     lastSeenAt:   { type: Date,    default: Date.now },
     // Solid hex (#rrggbb) behind the profile card. null = the app's default.
     bannerColor:  { type: String,  default: null },
+    // An image or GIF banner. When set it WINS over bannerColor, which stays
+    // stored so removing the image falls back to the colour you had rather
+    // than to the default.
+    banner:       { type: String,  default: null },
     customStatus: {
       type: new Schema<ICustomStatus>({
         text:    { type: String, default: '', maxlength: 128 },
@@ -173,6 +179,7 @@ UserSchema.methods.toPublicJSON = function (): PublicUser {
     status:        this.status,
     isVerified:    this.isVerified,
     bannerColor:   this.bannerColor ?? null,
+    banner:        this.banner ?? null,
     // Expired statuses are filtered here, so no caller can render a stale one.
     customStatus:  liveStatus(this.customStatus),
     createdAt:     this.createdAt,

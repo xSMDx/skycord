@@ -253,22 +253,65 @@ const onBannerColor = (hex: string) => {
 }
 const showBannerPicker = ref(false)
 
-// Avatar — reuses the group-icon chain: pick source → crop → save.
+// Avatar and banner both reuse the group-icon chain: pick source → crop → save.
+// `imageTarget` decides which field the result lands on, so one set of modals
+// serves both rather than two near-identical copies.
+type ImgTarget = 'avatar' | 'banner'
+const imageTarget = ref<ImgTarget>('avatar')
 const avatarPicker = ref<null | 'menu' | 'change' | 'edit' | 'gif'>(null)
 const avatarUploadSrc = ref('')
-const onAvatarUpload = (dataUrl: string) => { avatarUploadSrc.value = dataUrl; avatarPicker.value = 'edit' }
-const onAvatarCropped = async (dataUrl: string) => {
-  avatarPicker.value = null
-  await patchProfile({ avatar: dataUrl }, 'Avatar updated')
+
+const openImagePicker = (target: ImgTarget) => {
+  imageTarget.value = target
+  avatarPicker.value = 'change'
 }
-const onAvatarGif = async (url: string) => {
-  avatarPicker.value = null
-  await patchProfile({ avatar: url }, 'Avatar updated')
+/**
+ * Downscale a raw upload so a phone photo doesn't arrive as a multi-megabyte
+ * data URL. GIFs are passed through untouched — drawing one to a canvas
+ * flattens it to a single frame, which is exactly what an animated banner
+ * shouldn't be. An oversized GIF is refused by the server instead, and that
+ * message is surfaced.
+ */
+const downscale = (dataUrl: string, maxW: number): Promise<string> =>
+  new Promise(resolve => {
+    if (/^data:image\/gif/i.test(dataUrl)) { resolve(dataUrl); return }
+    const img = new Image()
+    img.onload = () => {
+      if (img.width <= maxW) { resolve(dataUrl); return }
+      const c = document.createElement('canvas')
+      const scale = maxW / img.width
+      c.width = maxW
+      c.height = Math.round(img.height * scale)
+      c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height)
+      resolve(c.toDataURL('image/jpeg', 0.86))
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+
+const onAvatarUpload = async (dataUrl: string) => {
+  // Banners skip the cropper entirely: it's a 256px SQUARE exporter built for
+  // avatars, and a square image stretched across a wide banner strip looks
+  // wrong. The card already crops with object-fit: cover.
+  if (imageTarget.value === 'banner') {
+    await saveImage(await downscale(dataUrl, 960))
+    return
+  }
+  avatarUploadSrc.value = dataUrl
+  avatarPicker.value = 'edit'
 }
-const removeAvatar = async () => {
+const saveImage = async (value: string | null) => {
+  const t = imageTarget.value
   avatarPicker.value = null
-  await patchProfile({ avatar: null }, 'Avatar removed')
+  const label = t === 'avatar'
+    ? (value ? 'Avatar updated' : 'Avatar removed')
+    : (value ? 'Banner updated' : 'Banner removed')
+  await patchProfile({ [t]: value }, label)
 }
+const onAvatarCropped = (dataUrl: string) => saveImage(dataUrl)
+const onAvatarGif     = (url: string)     => saveImage(url)
+const removeAvatar = () => { imageTarget.value = 'avatar'; return saveImage(null) }
+const removeBanner = () => { imageTarget.value = 'banner'; return saveImage(null) }
 
 // Custom status
 const showStatusModal = ref(false)
@@ -509,19 +552,21 @@ const handleLogout = () => { emit('close'); logout() }
                   <div class="pf-avrow">
                     <img :src="avatarFor(authUser?.username||'you', authUser?.avatar)" class="pf-av" alt="" />
                     <div class="pf-avbtns">
-                      <button class="acc-btn" @click="avatarPicker = 'change'">Change</button>
+                      <button class="acc-btn" @click="openImagePicker('avatar')">Change</button>
                       <button class="acc-btn pf-danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove</button>
                     </div>
                   </div>
                 </div>
 
                 <div class="pf-field">
-                  <span class="acc-row-label">Banner colour</span>
+                  <span class="acc-row-label">Banner</span>
                   <div class="pf-bnwrap">
                     <button
                       class="pf-bnbox" :style="{ background: bannerColor || '#1e1f22' }"
                       aria-label="Pick banner colour" @click="showBannerPicker = !showBannerPicker"
-                    />
+                    >
+                      <img v-if="authUser?.banner" :src="authUser.banner" alt="" class="pf-bnimg" />
+                    </button>
                     <div v-if="showBannerPicker" class="pf-pop">
                       <div class="pf-pop-backdrop" @click="showBannerPicker = false" />
                       <div class="pf-pop-panel">
@@ -529,7 +574,15 @@ const handleLogout = () => { emit('close'); logout() }
                       </div>
                     </div>
                   </div>
-                  <div class="pf-hex">{{ bannerColor || 'Default' }}</div>
+                  <div class="pf-avbtns pf-bnbtns">
+                    <button class="acc-btn" @click="openImagePicker('banner')">Image / GIF</button>
+                    <button class="acc-btn pf-danger" :disabled="!authUser?.banner" @click="removeBanner">Remove</button>
+                  </div>
+                  <!-- The colour is still live underneath, so say so rather than
+                       leaving the swatch looking like it did nothing. -->
+                  <div class="pf-hex">
+                    {{ authUser?.banner ? `Image · ${bannerColor || 'default'} behind it` : (bannerColor || 'Default') }}
+                  </div>
                 </div>
 
                 <div class="pf-field">
@@ -554,6 +607,7 @@ const handleLogout = () => { emit('close'); logout() }
                   :display-name="authUser?.displayName"
                   :discriminator="authUser?.discriminator"
                   :avatar="authUser?.avatar"
+                  :banner="authUser?.banner"
                   :banner-color="bannerColor"
                   :bio="bioValue"
                   :status="authUser?.status"
@@ -939,6 +993,9 @@ img    { display: block; object-fit: cover; }
   border: 1px solid rgba(0,0,0,.35); transition: filter .12s;
 }
 .pf-bnbox:hover { filter: brightness(1.25); }
+.pf-bnbox { position: relative; overflow: hidden; padding: 0; }
+.pf-bnimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pf-bnbtns { margin-top: 9px; }
 .pf-hex { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 7px; }
 /* The backdrop is a sibling of the panel, not a wrapper — a full-screen layer
    ABOVE the panel would swallow the very clicks the picker needs. */
