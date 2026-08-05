@@ -36,7 +36,7 @@ import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
-import SelfProfilePopout   from '@/components/profile/SelfProfilePopout.vue'
+import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
@@ -370,27 +370,33 @@ const showSettings      = ref(false)
 // so a deep-link from a menu doesn't stick for the next normal open.
 const settingsPage      = ref<'account' | 'profile' | 'appearance' | 'voice'>('account')
 
-// ── Self profile popout ─────────────────────────────────────────────────────
-// The anchor comes from the click event rather than a template ref: the two
-// sidebar variants each render a user panel, and a shared ref can be nulled by
-// whichever one unmounts last when you switch views.
-const selfPopoutAnchor = ref<HTMLElement | null>(null)
-const showSelfPopout   = ref(false)
-const toggleSelfPopout = (e: MouseEvent) => {
-  if (showSelfPopout.value) { showSelfPopout.value = false; return }
-  selfPopoutAnchor.value = e.currentTarget as HTMLElement
-  showSelfPopout.value = true
+// ── Profile popout ──────────────────────────────────────────────────────────
+// One popout for your own card and other people's. The anchor comes from the
+// click event rather than a template ref: several rows can open it, and a
+// shared ref would be nulled by whichever element unmounts last on a view
+// switch.
+const profilePopout = ref<{
+  id: string; anchor: HTMLElement; seed: Record<string, any> | null
+  placement: 'above' | 'left'
+} | null>(null)
+
+const openProfilePopout = (
+  e: MouseEvent, id: string,
+  seed: Record<string, any> | null = null,
+  placement: 'above' | 'left' = 'above',
+) => {
+  // Clicking the same row again closes it rather than re-opening in place.
+  if (profilePopout.value?.id === id) { profilePopout.value = null; return }
+  profilePopout.value = { id, anchor: e.currentTarget as HTMLElement, seed, placement }
 }
+const toggleSelfPopout = (e: MouseEvent) =>
+  openProfilePopout(e, authUser.value?.id || '', authUser.value as any, 'above')
 const setPresence = async (status: string) => {
-  showSelfPopout.value = false
+  profilePopout.value = null
   try {
     const res = await authFetch('/users/me', { method: 'PATCH', body: JSON.stringify({ status }) })
     if (res.ok) updateUser((await res.json()).user)
   } catch { showToast('Couldn’t update your status') }
-}
-const copySelfId = () => {
-  showSelfPopout.value = false
-  copyText(authUser.value?.id || '', 'User ID')
 }
 const showCameraPreview = ref(false)
 // Which user-panel device menu is open. Same flyouts as the call bar, but
@@ -1493,15 +1499,20 @@ onBeforeUnmount(() => {
     <SettingsModal    v-if="showSettings"      :initial-page="settingsPage" @close="showSettings = false" />
     <CameraPreviewModal v-if="showCameraPreview" @close="showCameraPreview = false" @confirm="onCameraConfirmed" />
 
-    <SelfProfilePopout
-      v-if="showSelfPopout && authUser"
-      :user="authUser"
-      :anchor="selfPopoutAnchor"
-      @close="showSelfPopout = false"
-      @edit-profile="showSelfPopout = false; openSettings('profile')"
-      @set-status="showSelfPopout = false; openSettings('profile')"
+    <ProfilePopout
+      v-if="profilePopout"
+      :key="profilePopout.id"
+      :user-id="profilePopout.id"
+      :anchor="profilePopout.anchor"
+      :seed="profilePopout.seed"
+      :placement="profilePopout.placement"
+      @close="profilePopout = null"
+      @edit-profile="profilePopout = null; openSettings('profile')"
+      @set-status="profilePopout = null; openSettings('profile')"
       @set-presence="setPresence"
-      @copy-id="copySelfId"
+      @message="(u) => { profilePopout = null; openDMFromUser(u) }"
+      @view-full="(id) => { profilePopout = null; showUserProfile = id }"
+      @toast="showToast"
     />
     <AddFriendModal   v-if="showAddFriend"     @close="showAddFriend = false" />
     <QuickSwitcherModal
@@ -2060,7 +2071,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="mp-list">
             <div class="mp-section-label">Online — {{ onlineMembers.length }}</div>
-            <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="showUserProfile = m.id"
+            <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av"><img :src="m.avatar" :alt="m.name"/><span class="mp-dot" :style="{ background: statusColor(m.status) }"/></div>
               <div class="mp-info"><span class="mp-name">{{ m.name }}</span><span class="mp-status" :style="{ color: statusColor(m.status) }">{{ statusLabel(m.status) }}</span></div>
@@ -2072,7 +2083,7 @@ onBeforeUnmount(() => {
         <aside v-if="view==='group' && activeGroup" class="members-panel" :class="{ closed: !membersOpen }">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeGroup.memberCount }}</span></h3></div>
           <div class="mp-list">
-            <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="showUserProfile = m.id"
+            <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <img v-if="m.avatar" :src="m.avatar" :alt="m.displayName || m.username"/>
