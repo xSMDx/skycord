@@ -51,11 +51,21 @@ const load = async (id: string) => {
     error.value = e?.message || 'Couldn’t load that profile'
   } finally { loading.value = false }
 }
-watch(currentId, id => { tab.value = 'mutuals'; moreOpen.value = false; void load(id) }, { immediate: true })
-
-const tab      = ref<'mutuals'>('mutuals')
-const moreOpen = ref(false)
+const tab        = ref<'mutuals'>('mutuals')
+const moreOpen   = ref(false)
 const friendOpen = ref(false)
+
+// Declared AFTER the refs it touches. `immediate: true` runs this callback
+// synchronously during setup, so refs declared below it are still in the
+// temporal dead zone — that threw, setup failed, and the modal silently never
+// rendered. Type-checking can't catch it: the access is inside a callback, and
+// nothing tells the compiler that watch invokes it right away.
+watch(currentId, id => {
+  tab.value = 'mutuals'
+  moreOpen.value = false
+  friendOpen.value = false
+  void load(id)
+}, { immediate: true })
 
 const name = computed(() => user.value?.displayName || user.value?.username || 'Unknown')
 const fmt = (d: string | null) => {
