@@ -151,6 +151,7 @@ onBeforeUnmount(() => {
         v-if="view"
         compact
         :status-button="isSelf"
+        avatar-opens
         :username="view.username || ''"
         :display-name="view.displayName || view.name"
         :discriminator="view.discriminator"
@@ -160,6 +161,7 @@ onBeforeUnmount(() => {
         :status="view.status"
         :custom-status="view.customStatus"
         @edit-status="emit('setStatus')"
+        @open-profile="isSelf ? emit('editProfile') : emit('viewFull', userId)"
       >
         <template #footer>
           <!-- ── your own ── -->

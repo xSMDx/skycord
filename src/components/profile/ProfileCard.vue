@@ -30,9 +30,19 @@ const props = withDefaults(defineProps<{
   statusButton?: boolean
   /** Hide the member-since block; the popout is tighter than the editor. */
   compact?:      boolean
-}>(), { editable: false, statusButton: false, compact: false })
+  /** Avatar opens the full profile. Ignored while `editable` — there the
+   *  avatar belongs to the change/remove menu instead. */
+  avatarOpens?:  boolean
+}>(), { editable: false, statusButton: false, compact: false, avatarOpens: false })
 
-const emit = defineEmits<{ editBanner: []; editAvatar: []; editStatus: [] }>()
+const emit = defineEmits<{ editBanner: []; editAvatar: []; editStatus: []; openProfile: [] }>()
+
+// Only one of the two can own the avatar: editing wins where both are asked for.
+const avatarActs = computed(() => props.editable || props.avatarOpens)
+const onAvatar = () => {
+  if (props.editable) emit('editAvatar')
+  else if (props.avatarOpens) emit('openProfile')
+}
 
 const DEFAULT_BANNER = '#1e1f22'
 
@@ -76,12 +86,12 @@ const memberSinceLabel = computed(() => {
 
     <div class="pc-avwrap">
       <div
-        class="pc-av" :class="{ editable }"
-        :role="editable ? 'button' : undefined" :tabindex="editable ? 0 : undefined"
-        :aria-label="editable ? 'Avatar options' : undefined"
-        @click="editable && emit('editAvatar')"
-        @keydown.enter.prevent="editable && emit('editAvatar')"
-        @keydown.space.prevent="editable && emit('editAvatar')"
+        class="pc-av" :class="{ editable: avatarActs }"
+        :role="avatarActs ? 'button' : undefined" :tabindex="avatarActs ? 0 : undefined"
+        :aria-label="editable ? 'Avatar options' : avatarOpens ? `View ${name}'s profile` : undefined"
+        @click="avatarActs && onAvatar()"
+        @keydown.enter.prevent="avatarActs && onAvatar()"
+        @keydown.space.prevent="avatarActs && onAvatar()"
       >
         <img :src="avatarSrc" :alt="name" />
         <span v-if="editable" class="pc-apencil"><PhPencilSimple :size="19" weight="bold" /></span>
@@ -149,6 +159,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   overflow: hidden; position: relative;
 }
 .pc-av.editable { cursor: pointer; }
+/* A ring on hover so a clickable avatar reads as clickable without needing a
+   pencil, which belongs to edit mode only. */
+.pc-av.editable:hover, .pc-av.editable:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
 .pc-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-apencil {
   position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff;
