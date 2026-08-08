@@ -1,176 +1,143 @@
 # Context Menu Inventory
 
 Living map of every right-clickable surface in Skycord: what has a menu, what
-doesn't, and what each one should offer. Built piece by piece — update the
-Status column as menus land.
+doesn't, and what each one should offer.
 
-Audited 2026-07-19 against `video-screenshare` @ `9ee6cbf`.
+Audited **2026-08-08** against `main` @ `38766ea`.
 
 **Status key**
-`DONE` real right-click menu · `BUTTON` menu exists but only opens from a click
-target, right-click does nothing · `NONE` no menu · `PARTIAL` menu exists but
-incomplete or partly dead
+`DONE` real right-click menu · `PARTIAL` menu exists but incomplete or on the
+old implementation · `NONE` no menu, nothing happens on right-click
 
 ---
 
-## Ground truth
+## Summary
 
-The entire `src/` tree contains **six** `@contextmenu` handlers. Everything not
-listed under "Existing" below has no right-click behaviour at all — the browser's
-native menu appears instead.
+| | Surfaces |
+|---|---|
+| **Has a menu** | 11 |
+| **No menu** | 19 |
 
-Two things to settle before building:
-
-**1. Nested targets fall through.** The handler sits on the whole message row
-(`MessageItem.vue:126`), so right-clicking the avatar, the username, a reaction,
-a link or an image all open the *message* menu. Per-target menus need `.stop`
-handlers on the children, and a decision per target: does it get its own menu, or
-deliberately inherit the parent's?
-
-**2. There are two menu implementations already.** `chat/ContextMenu.vue` and a
-separate inline copy inside `ReplyTreeModal.vue`. The generic primitive should
-absorb both rather than becoming a third.
+Native browser menu is suppressed app-wide (`main.ts:26`), except inside text
+inputs and over a live text selection — right-click is how people copy. So a
+`NONE` surface right-clicks into *nothing at all*, not into the browser menu.
 
 ---
 
-## Existing
+## 1. App shell
 
-| Surface | Target | Status | Where |
+| Part | Status | Menu | Where |
 |---|---|---|---|
-| Message list | Message row | `PARTIAL` | `MessageItem.vue:126` → `chat/ContextMenu.vue` |
-| Reply-tree modal | Message node | `DONE` | `ReplyTreeModal.vue:179` (own inline menu — duplicate) |
-| Message input | Text selection | `DONE` | `MessageInput.vue:39` — formatting toolbar, only with a selection; falls through to native menu otherwise |
-| Left sidebar | DM conversation | `BUTTON` | `ChatApp.vue:1471` `.dm-x` → Close DM / Delete Conversation |
-| Left sidebar | Group conversation | `BUTTON` | `ChatApp.vue:1491` `.dm-x` → Hide Group / Leave Group |
+| Conversation row — DM | `DONE` | Profile · Start a Call · **Pin** · **Mute ▸** (15m/1h/3h/8h/24h/Until I turn it back on) · Copy User ID · Copy Channel ID · Close DM · Delete Conversation | `ChatApp.vue:1643` → `conversationMenu.ts:64` |
+| Conversation row — group | `DONE` | Invites · Edit Group · **Pin** · **Mute ▸** · Copy Channel ID · Hide Group · Leave Group | `ChatApp.vue:1666` → `conversationMenu.ts:83` |
+| User panel — mic button | `DONE` | Opens the input-device flyout (upward) | `ChatApp.vue:1698,1762` |
+| User panel — headphones button | `DONE` | Opens the output-device flyout (upward) | `ChatApp.vue:1706,1770` |
+| Server rail (`.rail`) | `NONE` | — | `ChatApp.vue:1592` |
+| Sidebar nav items (Friends / Shop / …) | `NONE` | — | `ChatApp.vue:1626` |
+| User panel — own avatar / name | `NONE` | Should be: Profile · Set Status ▸ · Copy User ID | `ChatApp.vue` user panel |
+| User panel — settings cog | `NONE` | — | |
+| DM list section header (`+` add) | `NONE` | — | |
 
-**Message menu is `PARTIAL`** — `Mark as Unread` (`ContextMenu.vue:70`) only emits
-`close`. It's a dead row that looks functional. Either wire it or drop it.
+## 2. Home / Friends page
 
-**Both sidebar menus are `BUTTON`** — right-clicking a conversation does nothing
-today, which is the single most expected right-click in a Discord-like app.
+| Part | Status | Menu | Where |
+|---|---|---|---|
+| Friend row (Online / All) | `DONE` | Profile · Message · Call · Copy User ID | `ChatApp.vue:1835` → `userMenu.ts:38` |
+| Pending request row | `DONE` | same user menu | `ChatApp.vue:1862` |
+| Active Now entry | `DONE` | same user menu | `ChatApp.vue:1892` |
+| Friends tab bar (Online/All/Pending/Blocked) | `NONE` | — | |
+| Search field | `NONE` | native (input) | |
+| "Add friends" button | `NONE` | — | |
 
----
+**Known gap in the user menu:** no *Remove Friend* or *Block*. Deliberate —
+neither has a backend (no decline/remove routes; `Friendship.status` has
+`blocked` in the enum but nothing writes or reads it). See `userMenu.ts:61`.
 
-## To build
+## 3. Chat — DM & group
 
-### Call surface — already specced (P3)
-| Target | Status | Notes |
-|---|---|---|
-| Other participant tile | `NONE` | Profile · Message · Start Call · User Volume · Mute (local) · Disable Video (local) · Add Friend · Copy ID. **Block has no backend** — leave out. |
-| Own tile / avatar | `NONE` | Profile · Preview Camera · Mute · Deafen · Show Non-Video ✓ · Show Own Camera ✓ · Copy ID |
-| Own screen-share tile | `NONE` | Stop Sharing · Change Stream · Stream Quality ▸ · Share Stream Audio ✓ · Pop Out (deferred) |
-| Call bar buttons (mic/cam/share/leave) | `NONE` | Mic/cam already have ▾ flyouts — decide whether right-click duplicates them |
+| Part | Status | Menu | Where |
+|---|---|---|---|
+| Message row | `PARTIAL` | Quick reactions (👍❤️😂😮😢 + more) · Add Reaction · Reply · View Reply Chain · Edit Message · Copy Text · **Pin/Unpin Message** · Mark as Unread · Copy Message ID · Delete Message | `MessageItem.vue:126` → `chat/ContextMenu.vue` |
+| System / call-log row | `DONE` | same menu, shares the handler | `MessageItem.vue:116` |
+| Message input, with selection | `DONE` | Formatting toolbar (bold/italic/etc.), not a menu | `MessageInput.vue:39` |
+| Reply-tree node | `DONE` | own inline copy of the message menu | `ReplyTreeModal.vue` |
+| Members panel — member row | `DONE` | Profile · Message · Call · Copy User ID | `ChatApp.vue:2075,2087` |
+| Message **avatar** | `NONE` | falls through to the message menu | |
+| Message **username** | `NONE` | falls through to the message menu | |
+| Message **reaction pill** | `NONE` | should be: see who reacted · remove | |
+| Message **image / attachment** | `NONE` | should be: Copy Image · Save Image · Open Original | |
+| Message **link** | `NONE` | should be: Copy Link · Open | |
+| Chat header (name / call buttons) | `NONE` | — | |
+| Pinned-messages panel row | `NONE` | should be: Jump · Unpin | |
+| Members panel section headers | `NONE` | — | |
 
-Per-user local mute/volume/disable-video is **new client state** — `useVoice` has
-none. Audio elements live in the `audioEls` map: volume = `el.volume`, local mute
-= `el.muted`, disable video = filter in `CallStage`.
+**Two things still outstanding here.**
 
-### Message area
-| Target | Status | Notes |
-|---|---|---|
-| Author avatar | `NONE` | Currently inherits message menu. Wants user menu. |
-| Author username | `NONE` | Same as avatar. |
-| Reaction pill | `NONE` | Who reacted · remove own · copy emoji |
-| Link in message text | `NONE` | Copy link · open in new tab |
-| Image / GIF / attachment | `NONE` | Save · copy · copy link · open original |
-| System message (call log, rename) | `NONE` | Decide: any menu at all? |
-| Date divider | `NONE` | Probably intentionally none |
+1. *Message row is `PARTIAL`* — it's the only surface still on the old bespoke
+   `chat/ContextMenu.vue` rather than the generic `ui/ContextMenu.vue` +
+   builder registry. `ReplyTreeModal` carries yet another copy. That's three
+   implementations where there should be one. **Mark as Unread is a dead row —
+   it closes the menu and does nothing.** *Copy Message Link* is also missing,
+   and blocked on deep links (task #50).
 
-### Reference menus (user-supplied screenshots, 2026-07-19)
+2. *Nested targets fall through.* The handler sits on the whole row, so
+   right-clicking the avatar, username, a reaction, a link or an image all open
+   the *message* menu. Per-target menus need `.stop` handlers on the children.
 
-Discord's equivalents, mapped onto what Skycord can actually back today.
-`✅` buildable now · `🔨` needs the small endpoints already agreed · `❌` no backend · `➖` not applicable to Skycord
+## 4. Call bar & call stage
 
-**DM conversation** (right-click a DM in the sidebar)
+| Part | Status | Menu | Where |
+|---|---|---|---|
+| Own tile | `DONE` | Profile · Preview Camera · Mute ✓ · Deafen ✓ · Voice Settings · Show Non-Video Participants ✓ · Show My Own Camera ✓ · Copy User ID · Copy Channel ID | `CallStage.vue` → `callMenu.ts:53` |
+| Participant tile | `DONE` | Profile · **User Volume slider (0–200)** · Mute ✓ · Disable Video ✓ · Show Non-Video Participants ✓ · Copy User ID · Copy Channel ID · Remove Friend | `CallStage.vue` → `callMenu.ts:75` |
+| Call bar mic button | `DONE` | Opens the mic flyout | `CallBar.vue` |
+| Call bar camera button | `DONE` | Opens the camera flyout | `CallBar.vue` |
+| Screen-share tile | `NONE` | should be: Fullscreen · Pop Out · Stop Watching | |
+| Call bar — screen-share button | `NONE` | should open the share-picker flyout | |
+| Call bar — disconnect / more | `NONE` | — | |
 
-| Item | Status | Note |
-|---|---|---|
-| Mark As Read | ✅ | `unread` is client state already (`openDM` clears it) |
-| Profile | ✅ | |
-| Start a Call | ✅ | open the DM, then `toggleCall` |
-| Close DM | ✅ | existing `hideConv` |
-| Copy User ID / Copy Channel ID | ✅ | |
-| Remove Friend | 🔨 | endpoint agreed |
-| Pin conversation | ❌ | no field, no route |
-| Add Note | ❌ | no notes anywhere in the schema |
-| Add Friend Nickname | ❌ | no per-relationship nickname |
-| Mute @user ▸ | ❌ | no mute state |
-| Ignore | ❌ | distinct from Block; no backend |
-| Block | ❌ | `Friendship.status` has the enum value, nothing writes/reads it |
-| Apps ▸ | ➖ | Skycord has no app platform |
-| Invite to Server ▸ | ➖ | servers are mock data (see below) |
+## 5. Profile surfaces
 
-**Group DM** (right-click a group in the sidebar)
+| Part | Status | Menu | Where |
+|---|---|---|---|
+| Profile popout (self or other) | `NONE` | has a `⋯` button menu; right-click does nothing | `ProfilePopout.vue` |
+| Full profile modal | `NONE` | has a `⋯` button menu; right-click does nothing | `UserProfileModal.vue` |
+| Profile card banner / avatar | `NONE` | should be: Copy Image · Change Banner (self) | `ProfileCard.vue` |
+| Mutual friends row | `NONE` | should be the standard user menu | `UserProfileModal.vue` |
 
-| Item | Status | Note |
-|---|---|---|
-| Mark As Read | ✅ | |
-| Invites | ✅ | `POST /conversations/groups/:id/invites` |
-| Edit Group | ✅ | `PATCH /groups/:id` — existing EditGroupModal |
-| Leave Group | ✅ | `POST /groups/:id/leave` — already in the ⋯ menu |
-| Copy Channel ID | ✅ | |
-| Pin conversation | ❌ | |
-| Mute Conversation ▸ | ❌ | |
+## 6. Modals & pickers
 
-**Server icon** — ⚠️ **BLOCKED, belongs with the channels milestone.**
-
-`ChatApp.vue:403` and `:409` are hardcoded arrays of four fake servers and their
-channels, with dicebear placeholder images. There is no `Server` model, no
-server routes, no channel routes. Every item on this menu (Create Channel,
-Create Category, Create Event, Server Settings, Privacy Settings, Notification
-Settings, Mute Server, Hide Muted Channels, Invite to Server, Edit Per-server
-Profile) acts on data that does not exist, and Copy Server ID would copy the
-string `'sykord'`. Build this menu when servers/channels become real.
-
-### Sidebars & rails
-| Target | Status | Notes |
-|---|---|---|
-| DM / group conversation (right-click) | `BUTTON` | Promote the existing `.dm-x` menu to right-click; likely extend with Mark as Read, Mute, Profile |
-| Server rail — server icon | `NONE` | |
-| Server rail — Home button | `NONE` | |
-| Channel sidebar — channel | `NONE` | Blocked on channels existing |
-| Channel sidebar — category header | `NONE` | Blocked on channels existing |
-| Members panel — member row | `NONE` | `ChatApp.vue:1876` (server) / `:1886` (group DM). Click opens profile; right-click should give the user menu. |
-| Members panel — section label | `NONE` | Probably none |
-
-### User panel (bottom-left)
-| Target | Status | Notes |
-|---|---|---|
-| Own avatar / name | `NONE` | Set status · copy ID · profile |
-| Mic button | `NONE` | Device picker (chevron is `disabled`, "coming soon") |
-| Headphones button | `NONE` | Output picker (same) |
-| Settings button | `NONE` | Jump to a settings section |
-
-### Friends view
-| Target | Status | Notes |
-|---|---|---|
-| Friend row | `NONE` | `ChatApp.vue:1640` `.f-row` |
-| Pending request row | `NONE` | `ChatApp.vue:1667` |
-| Active Now entry | `NONE` | `ChatApp.vue:1689` |
-
-### Chat header
-| Target | Status | Notes |
-|---|---|---|
-| Conversation title / icon | `NONE` | |
-| Call / video buttons | `NONE` | |
-| Pinned / search buttons | `NONE` | |
-
-### Modals & cards
-| Target | Status | Notes |
-|---|---|---|
-| Pinned-messages entry | `NONE` | Jump to message · unpin |
-| GIF / emoji / sticker picker item | `NONE` | Favourite · copy link |
-| Theme card in chat | `NONE` | Apply · copy · save |
-| Group invite card | `NONE` | Copy invite · revoke |
-| User profile modal | `NONE` | |
+| Part | Status | Menu | Where |
+|---|---|---|---|
+| Emoji picker — emoji | `NONE` | — | `EmojiPickerModal.vue` |
+| GIF picker — GIF | `NONE` | should be: Copy GIF Link | `GifPickerModal.vue` |
+| Settings — any row | `NONE` | — | `SettingsModal.vue` |
+| Invites modal — invite row | `NONE` | should be: Copy Link · Revoke | |
 
 ---
 
-## Open questions for the user
+## Implementation notes
 
-1. **Right-click on a message avatar/username** — user menu, or keep the message
-   menu? (Discord gives the user menu.)
-2. **Suppress the native browser menu everywhere**, or only where we provide our
-   own? Blanket suppression breaks Inspect Element and native text actions.
-3. **Touch/long-press** — same menus on mobile, or defer?
-4. `Mark as Unread` — wire it up or remove it?
+Menus are **data, not markup**. A surface costs one `@contextmenu` handler and
+one builder call:
+
+```
+ui/ContextMenu.vue          the only renderer (teleported, click-away, clamped)
+useContextMenu.ts           open/close + a shallowRef *builder*, so items
+                            re-evaluate on every render — a snapshotted array
+                            froze checkmarks mid-menu
+contextMenus/userMenu.ts    one person, everywhere a person appears
+contextMenus/conversationMenu.ts   DM + group rows
+contextMenus/callMenu.ts    own tile + participant tile
+```
+
+Item kinds: action · separator · **slider** (user volume) · **submenu** (mute
+durations) · `check` for toggles · `keepOpen` so toggling doesn't dismiss.
+
+**Next, in order:**
+1. Migrate the message menu onto the registry, killing `chat/ContextMenu.vue`
+   and the `ReplyTreeModal` copy — 3 implementations → 1.
+2. Delete or implement *Mark as Unread*.
+3. Nested chat targets: avatar, username, reaction, link, image.
+4. Profile surfaces — right-click should give what the `⋯` button gives.
+5. *Remove Friend* / *Block* once the backend routes exist.
