@@ -33,7 +33,17 @@ const props = withDefaults(defineProps<{
   /** Avatar opens the full profile. Ignored while `editable` — there the
    *  avatar belongs to the change/remove menu instead. */
   avatarOpens?:  boolean
-}>(), { editable: false, statusButton: false, compact: false, avatarOpens: false })
+  /** Page scale: taller banner, bigger avatar, display-size name. The popout
+   *  and the settings preview stay at the default scale. */
+  large?:        boolean
+  /** Fills its container with no radius or shadow of its own — for when the
+   *  card IS the panel rather than sitting on one. Card-inside-a-card is what
+   *  makes a profile read as blocky. */
+  flush?:        boolean
+}>(), {
+  editable: false, statusButton: false, compact: false,
+  avatarOpens: false, large: false, flush: false,
+})
 
 const emit = defineEmits<{ editBanner: []; editAvatar: []; editStatus: []; openProfile: [] }>()
 
@@ -71,7 +81,7 @@ const memberSinceLabel = computed(() => {
 </script>
 
 <template>
-  <div class="pc">
+  <div class="pc" :class="{ 'pc-lg': large, 'pc-flush': flush }">
     <div
       class="pc-banner" :class="{ editable }" :style="{ background: bannerBg }"
       :role="editable ? 'button' : undefined" :tabindex="editable ? 0 : undefined"
@@ -138,6 +148,12 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   background: var(--bg-panel); border-radius: 10px; overflow: hidden;
   box-shadow: 0 8px 30px rgba(0,0,0,.45);
 }
+/* The card IS the panel here, so it drops its own frame. Nesting a shadowed,
+   rounded card inside an already-rounded panel is what reads as blocky. */
+.pc-flush {
+  width: 100%; height: 100%; border-radius: 0; box-shadow: none;
+  display: flex; flex-direction: column;
+}
 
 .pc-banner { height: 106px; position: relative; transition: background .15s; overflow: hidden; }
 .pc-bimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -158,10 +174,16 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   border: 6px solid var(--bg-panel); background: var(--bg-floor);
   overflow: hidden; position: relative;
 }
+.pc-av { transition: box-shadow .14s, transform .1s ease-out; }
 .pc-av.editable { cursor: pointer; }
 /* A ring on hover so a clickable avatar reads as clickable without needing a
    pencil, which belongs to edit mode only. */
 .pc-av.editable:hover, .pc-av.editable:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
+.pc-av.editable:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) {
+  .pc-av, .pc-status { transition: box-shadow .14s, background .12s, color .12s; }
+  .pc-av.editable:active, .pc-status:not(.static):active { transform: none; }
+}
 .pc-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-apencil {
   position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff;
@@ -176,14 +198,23 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 
 /* Sits beside the avatar, overlapping the banner — the "Add status" pill. */
+/* A speech bubble, not a black slab. --bg-floor is near-black and read as a
+   hole punched in the banner; a raised surface with a hairline and a soft
+   shadow sits ON the banner instead. The squared bottom-left corner is the
+   tail, pointing back at the avatar it belongs to. */
 .pc-status {
   position: absolute; left: 96px; top: 2px; max-width: 200px;
   display: flex; align-items: center; gap: 7px;
-  background: var(--bg-floor); border-radius: 16px 16px 16px 4px;
-  padding: 7px 12px; font-size: 13px; color: var(--text-2);
+  background: var(--bg-raised); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px 16px 16px 4px;
+  padding: 7px 12px; font-size: 13px; color: var(--text-1);
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
   transition: background .12s, color .12s;
 }
 .pc-status:not(.static):hover { background: var(--bg-deep); color: var(--text-1); }
+/* Feedback lands on the press itself rather than waiting for release. */
+.pc-status:not(.static):active { transform: scale(.97); }
+.pc-status { transition: background .12s, color .12s, transform .1s ease-out; }
 .pc-status.static { cursor: default; }
 .pc-status-plus {
   flex: none; width: 16px; height: 16px; border-radius: 50%;
@@ -192,8 +223,24 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-status-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .pc-body { padding: 12px 18px 20px; }
-.pc-name { font-size: 21px; font-weight: 800; color: var(--text-strong); letter-spacing: -.01em; }
+.pc-name { font-size: 21px; font-weight: 800; color: var(--text-strong); letter-spacing: -.01em; line-height: 1.15; }
 .pc-tag  { font-size: 13.5px; color: var(--text-2); margin-top: 2px; }
+
+/* ── Page scale ──
+   Tracking is size-specific: large text reads too loose at the same spacing
+   that suits body copy, so the display name tightens as it grows while the
+   uppercase micro-labels stay slightly open. Leading tightens with size too. */
+.pc-lg .pc-banner  { height: 138px; }
+.pc-lg .pc-avwrap  { margin: -62px 0 0 22px; width: 124px; height: 124px; }
+.pc-lg .pc-av      { width: 124px; height: 124px; border-width: 8px; }
+.pc-lg .pc-apencil { inset: 8px; border-radius: 50%; }
+.pc-lg .pc-dot     { width: 30px; height: 30px; border-width: 7px; right: 4px; bottom: 4px; }
+.pc-lg .pc-status  { left: 136px; top: 6px; max-width: 230px; }
+.pc-lg .pc-body    { padding: 16px 22px 24px; }
+.pc-lg .pc-name    { font-size: 26px; letter-spacing: -.022em; line-height: 1.1; }
+.pc-lg .pc-tag     { font-size: 14.5px; margin-top: 3px; }
+.pc-lg .pc-bio     { font-size: 14px; margin-top: 18px; line-height: 1.55; }
+.pc-lg .pc-label   { margin-top: 20px; }
 .pc-bio  {
   font-size: 13.5px; color: var(--text-2); margin-top: 14px; line-height: 1.5;
   white-space: pre-wrap; word-break: break-word;

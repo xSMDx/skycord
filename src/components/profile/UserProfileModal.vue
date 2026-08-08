@@ -106,7 +106,7 @@ const STATUS_COLORS: Record<string, string> = {
 </script>
 
 <template>
-  <ModalBase width="940px" @close="emit('close')">
+  <ModalBase width="960px" @close="emit('close')">
     <div class="up">
       <button class="up-close" aria-label="Close" @click="emit('close')"><PhX :size="18" weight="bold" /></button>
 
@@ -114,10 +114,10 @@ const STATUS_COLORS: Record<string, string> = {
       <div v-else-if="error" class="up-state err">{{ error }}</div>
 
       <div v-else-if="user" class="up-cols">
-        <!-- left: the card -->
+        <!-- left: the card IS the panel — no nested frame -->
         <div class="up-left">
           <ProfileCard
-            compact
+            compact large flush
             :username="user.username"
             :display-name="user.displayName"
             :discriminator="user.discriminator"
@@ -129,7 +129,7 @@ const STATUS_COLORS: Record<string, string> = {
           >
             <template #footer>
               <div class="up-actions">
-                <button class="up-btn primary" @click="emit('message', user)">
+                <button class="up-btn primary up-grow" @click="emit('message', user)">
                   <PhChatDots :size="16" weight="fill" /> Message
                 </button>
 
@@ -219,38 +219,58 @@ const STATUS_COLORS: Record<string, string> = {
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img { display: block; object-fit: cover; }
 
-.up { position: relative; background: var(--bg-raised); border-radius: 12px; overflow: hidden; }
+.up { position: relative; background: var(--bg-raised); border-radius: 16px; overflow: hidden; }
+/* Sits outside both columns so it never fights the banner for the corner. */
 .up-close {
   position: absolute; top: 14px; right: 14px; z-index: 5;
-  width: 30px; height: 30px; border-radius: 50%;
+  width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-2); background: rgba(0,0,0,.35);
+  color: var(--text-2); background: rgba(0,0,0,.4);
+  transition: background .12s, color .12s, transform .1s ease-out;
 }
-.up-close:hover { color: var(--text-strong); background: rgba(0,0,0,.6); }
+.up-close:hover  { color: var(--text-strong); background: rgba(0,0,0,.65); }
+.up-close:active { transform: scale(.94); }
 
-.up-state { padding: 60px 24px; text-align: center; color: var(--text-3); font-size: 14px; }
+.up-state { padding: 72px 24px; text-align: center; color: var(--text-3); font-size: 14px; }
 .up-state.err { color: #f0716f; }
 
-.up-cols { display: flex; gap: 0; min-height: 480px; }
-.up-left { width: 380px; flex: none; padding: 18px; }
-.up-left :deep(.pc) { width: 100%; box-shadow: none; }
+.up-cols { display: flex; gap: 0; min-height: 560px; max-height: 86vh; }
+/* Inset panel with its own radius: the banner bleeds to the panel's edges
+   instead of floating as a smaller card inside a larger one. */
+.up-left {
+  width: 390px; flex: none; margin: 14px 0 14px 14px;
+  border-radius: 12px; overflow: hidden auto;
+  background: var(--bg-panel);
+}
+/* Top padding matches the left panel's margin so the tab row and the banner
+   start on the same line — a few pixels out reads as a mistake. */
 .up-right {
-  flex: 1; min-width: 0; padding: 22px 22px 22px 4px;
+  flex: 1; min-width: 0; padding: 14px 26px 26px 22px;
   display: flex; flex-direction: column;
 }
+.up-left::-webkit-scrollbar { width: 4px; }
+.up-left::-webkit-scrollbar-track { background: transparent; }
+.up-left::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
 
-.up-actions { display: flex; gap: 8px; margin-top: 14px; }
+.up-actions { display: flex; gap: 8px; margin-top: 18px; }
 .up-anchor { position: relative; }
 .up-btn {
-  display: flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 9px 16px; border-radius: 6px; font-size: 14px; font-weight: 600;
-  background: var(--hover-strong); color: var(--text-strong); transition: background .12s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  background: var(--hover-strong); color: var(--text-strong);
+  transition: background .12s, transform .1s ease-out;
 }
-.up-btn:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+.up-btn:hover:not(:disabled)  { background: rgba(255,255,255,.16); }
+.up-btn:active:not(:disabled) { transform: scale(.97); }
 .up-btn:disabled { opacity: .5; cursor: not-allowed; }
-.up-btn.primary { background: var(--accent); flex: 1; }
+.up-btn.primary { background: var(--accent); }
 .up-btn.primary:hover { background: var(--accent-hover); }
-.up-btn.icon { width: 38px; padding: 0; height: 38px; }
+.up-btn.icon { width: 40px; padding: 0; height: 40px; }
+/* Message takes the room; the icon buttons stay square beside it. */
+.up-grow { flex: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .up-btn:active:not(:disabled), .up-close:active { transform: none; }
+}
 
 .up-menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
@@ -265,21 +285,23 @@ img { display: block; object-fit: cover; }
 .up-menu button.danger { color: #f0716f; }
 .up-menu button.danger:hover { background: #ed4245; color: #fff; }
 
-.up-bio { font-size: 13.5px; color: var(--text-2); line-height: 1.5; margin-top: 16px; white-space: pre-wrap; word-break: break-word; }
-.up-meta { margin-top: 16px; }
+.up-bio { font-size: 14px; color: var(--text-2); line-height: 1.55; margin-top: 18px; white-space: pre-wrap; word-break: break-word; }
+.up-meta { margin-top: 8px; }
+/* Slightly open tracking on the small uppercase labels — the inverse of the
+   display name, which tightens as it grows. */
 .up-meta-l {
   font-size: 11.5px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .4px; color: var(--text-3); margin-top: 12px; margin-bottom: 3px;
+  letter-spacing: .06em; color: var(--text-3); margin-top: 20px; margin-bottom: 4px;
 }
-.up-meta-v { font-size: 13.5px; color: var(--text-1); }
+.up-meta-v { font-size: 14px; color: var(--text-1); }
 .up-pending {
-  margin-top: 14px; font-size: 12.5px; color: var(--text-3);
-  background: var(--hover); border-radius: 6px; padding: 8px 10px;
+  margin-top: 18px; font-size: 12.5px; color: var(--text-3);
+  background: var(--hover); border-radius: 8px; padding: 9px 12px;
 }
 
-.up-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+.up-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
 .up-tab {
-  padding: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--text-strong);
+  padding: 0 0 12px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
   border-bottom: 2px solid var(--accent); margin-bottom: -1px;
 }
 
@@ -289,12 +311,15 @@ img { display: block; object-fit: cover; }
 
 .up-mutuals { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .up-mutual {
-  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 8px 10px; border-radius: 6px; transition: background .1s;
+  display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+  padding: 9px 11px; border-radius: 8px;
+  transition: background .1s, transform .1s ease-out;
 }
-.up-mutual:hover { background: var(--hover-strong); }
-.up-mav { position: relative; width: 34px; height: 34px; flex: none; }
-.up-mav img { width: 34px; height: 34px; border-radius: 50%; }
+.up-mutual:hover  { background: var(--hover-strong); }
+.up-mutual:active { transform: scale(.99); }
+@media (prefers-reduced-motion: reduce) { .up-mutual:active { transform: none; } }
+.up-mav { position: relative; width: 38px; height: 38px; flex: none; }
+.up-mav img { width: 38px; height: 38px; border-radius: 50%; }
 .up-mdot {
   position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px;
   border-radius: 50%; border: 3px solid var(--bg-raised);
