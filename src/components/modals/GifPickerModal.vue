@@ -2,11 +2,11 @@
 import { ref, watch, onMounted } from 'vue'
 import { PhMagnifyingGlass, PhX } from '@phosphor-icons/vue'
 import ModalBase from './ModalBase.vue'
-import { useGiphy, gifPreviewUrl, gifFullUrl } from '@/composables/useGiphy'
+import { useGifs, gifPreviewUrl, gifFullUrl } from '@/composables/useGifs'
 
 const emit = defineEmits<{ select: [url: string]; close: [] }>()
 
-const { gifs, loading, error, fetchGifs } = useGiphy()
+const { gifs, loading, error, fetchGifs } = useGifs()
 const search = ref('')
 let _debounce: ReturnType<typeof setTimeout> | null = null
 

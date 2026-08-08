@@ -44,8 +44,7 @@ const systemIcon = computed(() => {
 
 // A message whose ENTIRE content is a .gif URL (what GIF picker sends —
 // see ChatApp's handleGifSelect) renders as an actual image instead of text.
-// Matches any source, not just Giphy, and tolerates query params like
-// Giphy's own URLs include (?cid=...&rid=giphy.gif&...).
+// Matches any source and tolerates query params, which some GIF CDNs append.
 const GIF_URL_RE = /^https?:\/\/\S+\.gif(\?\S*)?$/i
 const gifUrl = (content: string): string | null => {
   const trimmed = content.trim()

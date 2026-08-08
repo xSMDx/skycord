@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { PhX, PhImageSquare } from '@phosphor-icons/vue'
 import ModalBase from './ModalBase.vue'
-import { useGiphy, gifPreviewUrl } from '@/composables/useGiphy'
+import { useGifs, gifPreviewUrl } from '@/composables/useGifs'
 
 const emit = defineEmits<{ upload: [dataUrl: string]; chooseGif: []; close: [] }>()
 
@@ -10,7 +10,7 @@ const fileEl = ref<HTMLInputElement | null>(null)
 const error  = ref('')
 
 // A few trending GIFs power the 2×2 preview on the "Choose GIF" card.
-const { gifs, fetchGifs } = useGiphy()
+const { gifs, fetchGifs } = useGifs()
 onMounted(() => fetchGifs(''))
 
 const pickFile = () => fileEl.value?.click()

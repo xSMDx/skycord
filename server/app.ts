@@ -11,6 +11,7 @@ import stickersRoutes from './routes/stickers'
 import conversationsRoutes from './routes/conversations'
 import themesRoutes   from './routes/themes'
 import voiceRoutes    from './routes/voice'
+import gifsRoutes     from './routes/gifs'
 import { errorHandler, notFound } from './middleware/errorHandler'
 
 export const createApp = () => {
@@ -51,6 +52,7 @@ export const createApp = () => {
   app.use('/conversations', conversationsRoutes)
   app.use('/themes',        themesRoutes)
   app.use('/voice',         voiceRoutes)
+  app.use('/gifs',          gifsRoutes)
 
   app.use(notFound)
   app.use(errorHandler)

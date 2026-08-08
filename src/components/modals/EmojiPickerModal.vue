@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { PhMagnifyingGlass, PhX } from '@phosphor-icons/vue'
-import { useGiphy, gifPreviewUrl, gifFullUrl } from '@/composables/useGiphy'
+import { useGifs, gifPreviewUrl, gifFullUrl } from '@/composables/useGifs'
 
 const emit = defineEmits<{ select: [value: string]; selectGif: [url: string]; close: [] }>()
 
@@ -165,8 +165,8 @@ const filteredEmojis = computed(() => {
   })).filter(c => c.emojis.length > 0)
 })
 
-// ── Giphy GIF integration (shared composable) ───────────────────────────────
-const { gifs, loading: gifsLoading, error: gifsError, fetchGifs } = useGiphy()
+// ── GIF integration (shared composable, provider-neutral) ──────────────────
+const { gifs, loading: gifsLoading, error: gifsError, fetchGifs } = useGifs()
 let _gifDebounce: ReturnType<typeof setTimeout> | null = null
 
 watch(activeTab, tab => {
@@ -213,7 +213,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
       <input
         v-model="search"
         type="text"
-        :placeholder="activeTab === 'gifs' ? 'Search GIPHY…' : activeTab === 'stickers' ? 'Search stickers…' : 'Find the perfect emoji…'"
+        :placeholder="activeTab === 'gifs' ? 'Search GIFs…' : activeTab === 'stickers' ? 'Search stickers…' : 'Find the perfect emoji…'"
         autofocus
       />
       <button v-if="search" class="ps-clear" @click="search = ''">
@@ -259,7 +259,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
         </div>
         <div v-else-if="gifsError" class="picker-empty">
           <div>😕</div>
-          <p>Couldn't reach GIPHY</p>
+          <p>Couldn’t reach the GIF service</p>
           <span>Check your connection and try again</span>
         </div>
         <div v-else-if="gifs.length === 0" class="picker-empty">
@@ -280,8 +280,8 @@ const select = (v: string) => { emit('select', v); emit('close') }
               />
             </div>
           </div>
-          <!-- Required by GIPHY's API Terms of Service whenever their content is displayed -->
-          <div class="giphy-attribution">Powered by GIPHY</div>
+          <!-- Provider attribution — required by the GIF API terms whenever their content is shown -->
+          <div class="gif-attribution">Powered by KLIPY</div>
         </template>
       </div>
     </template>
@@ -379,7 +379,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 }
 .gif-item:hover { opacity: .85; transform: scale(1.02); }
 .gif-item img { border-radius: 6px; width: 100%; height: auto; display: block; }
-.giphy-attribution {
+.gif-attribution {
   text-align: center; font-size: 10px; color: var(--text-faint);
   padding: 6px 0 2px; letter-spacing: .2px;
 }
