@@ -3,10 +3,13 @@ import { requireAuth } from '../middleware/auth'
 import {
   createGroup, getMyConversations, getGroupMessages, sendGroupMessage, getGroupMembers,
   addGroupMembers, updateGroup, leaveGroup, createGroupInvite, getInvite, joinViaInvite,
+  getMyDMs,
 } from '../controllers/conversationsController'
 
 const router = Router()
 router.use(requireAuth)
+
+router.get('/dms',                     getMyDMs)
 
 router.post('/groups',                 createGroup)
 router.get('/groups',                  getMyConversations)

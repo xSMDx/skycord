@@ -140,6 +140,11 @@ export const useApi = () => {
   const getVoiceToken = (conversationId: string, kind: 'dm' | 'group') =>
     post<{ token: string; url: string; room: string }>('/voice/token', { conversationId, kind })
 
+  // Conversations you actually have, from message history — independent of
+  // whether you're still friends with the person.
+  const getMyDMs = () =>
+    get<{ dms: ApiDM[] }>('/conversations/dms')
+
   // ── GIFs ─────────────────────────────────────────────────────────────────
   // Our own endpoints, not the provider's — the key stays server-side.
   const searchGifs = (q: string) =>
@@ -149,7 +154,7 @@ export const useApi = () => {
     get<{ gifs: ApiGif[] }>('/gifs/trending')
 
   return {
-    searchGifs, trendingGifs,
+    searchGifs, trendingGifs, getMyDMs,
     searchUsers, getFriends, getPending,
     sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getUserProfile,
     getConvPrefs, setConvPref,
@@ -163,6 +168,17 @@ export const useApi = () => {
 }
 
 // ── API types ──────────────────────────────────────────────────────────────
+/** A DM that exists because messages exist — not because of a friendship. */
+export interface ApiDM {
+  id:            string
+  username:      string
+  displayName:   string
+  avatar:        string | null
+  status:        string
+  lastMessage:   string
+  lastMessageAt: string
+}
+
 /** Provider-neutral: the server normalises whatever the GIF provider returns. */
 export interface ApiGif {
   id:      string

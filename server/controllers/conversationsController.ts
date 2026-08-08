@@ -147,6 +147,70 @@ export const getMyConversations = async (req: Request, res: Response, next: Next
   } catch (err) { next(err) }
 }
 
+// ── DM conversations you actually have ───────────────────────────────────────
+// Sourced from message history, NOT from the friends list. The client used to
+// rebuild its DM list purely from friends, so unfriending someone made the
+// whole conversation vanish on the next load even though every message was
+// still here. A conversation exists because you talked, not because you're
+// currently friends; only hiding it should take it off the list.
+export const getMyDMs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user!.sub
+
+    // conversationId for a DM is the two user ids sorted and joined with '_',
+    // so the caller is either the prefix or the suffix. Anchored so the prefix
+    // form can use the conversationId index. `userId` comes from a verified
+    // JWT and is checked here anyway — it interpolates into a regex.
+    if (!/^[a-f0-9]{24}$/i.test(userId)) { res.status(400).json({ message: 'Invalid user' }); return }
+
+    const rows = await Message.aggregate([
+      { $match: {
+        kind: 'dm',
+        $or: [
+          { conversationId: { $regex: `^${userId}_` } },
+          { conversationId: { $regex: `_${userId}$` } },
+        ],
+      }},
+      { $sort: { createdAt: -1 } },
+      { $group: {
+        _id:           '$conversationId',
+        lastMessageAt: { $first: '$createdAt' },
+        lastMessage:   { $first: '$content' },
+        lastKind:      { $first: '$systemType' },
+      }},
+    ])
+
+    // Map each conversation to the other participant.
+    const byPartner = new Map<string, typeof rows[number]>()
+    for (const r of rows) {
+      const [a, b] = String(r._id).split('_')
+      const other  = a === userId ? b : a
+      if (!other || other === userId || !mongoose.isValidObjectId(other)) continue
+      byPartner.set(other, r)
+    }
+
+    const partners = await User.find({ _id: { $in: [...byPartner.keys()] } })
+      .select('username displayName avatar status').lean()
+
+    // A deleted account leaves messages behind; skip those rather than
+    // shipping a row the client can't render a name for.
+    const dms = partners.map(p => {
+      const r = byPartner.get(p._id.toString())!
+      return {
+        id:            p._id.toString(),
+        username:      p.username,
+        displayName:   p.displayName,
+        avatar:        p.avatar,
+        status:        p.status || 'offline',
+        lastMessage:   r.lastKind ? '' : String(r.lastMessage || ''),
+        lastMessageAt: r.lastMessageAt,
+      }
+    }).sort((x, y) => +new Date(y.lastMessageAt) - +new Date(x.lastMessageAt))
+
+    res.json({ dms })
+  } catch (err) { next(err) }
+}
+
 // ── Get a group's messages (paginated) ────────────────────────────────────────
 export const getGroupMessages = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {

@@ -545,6 +545,30 @@ const currentTypers = computed(() => {
 })
 
 // ── API loaders ────────────────────────────────────────────────────────────
+/**
+ * Fold a batch of DM rows into the sidebar list. Strictly additive: nothing
+ * here ever removes a conversation, which is the whole point. The list used to
+ * be *rebuilt* from friends on every load, so unfriending someone deleted the
+ * conversation from view while every message sat untouched in the database.
+ * A DM leaves the sidebar only when the user hides it (`hiddenIds`).
+ *
+ * Two sources feed this — message history and the friends list — and they
+ * arrive in either order, so a row already carrying a real last message must
+ * not be flattened by the blank one a friend row supplies.
+ */
+const mergeDMs = (incoming: DM[]) => {
+  const byId = new Map(dmsData.value.map(d => [d.id, d]))
+  for (const next of incoming) {
+    const cur = byId.get(next.id)
+    if (!cur) { dmsData.value.push(next); byId.set(next.id, next); continue }
+    cur.name   = next.name
+    cur.avatar = next.avatar
+    cur.status = next.status
+    if (next.lastMsg) cur.lastMsg = next.lastMsg
+    if (next.lastActiveAt) cur.lastActiveAt = next.lastActiveAt
+  }
+}
+
 const loadFriends = async () => {
   apiLoading.value = true
   try {
@@ -566,23 +590,29 @@ const loadFriends = async () => {
       avatar:        f.avatar,
       status:        f.status || 'offline',
     }))
-    // Rebuild DM list from friends
-    const existing = new Set(dmsData.value.map(d => d.id))
-    for (const f of apiFriends.value) {
-      if (!existing.has(f.id)) {
-        dmsData.value.push({
-          id:      f.id,
-          name:    f.displayName || f.username,
-          avatar:  avatarFor(f.username, f.avatar),
-          status:  f.status as any,
-          lastMsg: '',
-        })
-      } else {
-        // Update status in existing DM
-        const dm = dmsData.value.find(d => d.id === f.id)
-        if (dm) { dm.status = f.status as any; dm.name = f.displayName || f.username }
-      }
-    }
+    // Conversations you've actually had, whoever you're friends with now.
+    // Detached like prefs above: if this fails you lose history-only DMs for
+    // the session, not the whole sidebar.
+    api.getMyDMs()
+      .then(({ dms }) => mergeDMs(dms.map(d => ({
+        id:       d.id,
+        name:     d.displayName || d.username,
+        avatar:   avatarFor(d.username, d.avatar),
+        status:   d.status as any,
+        lastMsg:  d.lastMessage || '',
+        lastActiveAt: d.lastMessageAt ? +new Date(d.lastMessageAt) : 0,
+      }))))
+      .catch(e => console.warn('[dms] history unavailable — showing friends only', e))
+
+    // Friends get a row too, so you can start a conversation that doesn't
+    // exist yet. Additive only — never a source of removal.
+    mergeDMs(apiFriends.value.map(f => ({
+      id:      f.id,
+      name:    f.displayName || f.username,
+      avatar:  avatarFor(f.username, f.avatar),
+      status:  f.status as any,
+      lastMsg: '',
+    })))
     pendingReqs.value = pnd.requests
   } catch (e) {
     console.error('[loadFriends]', e)
