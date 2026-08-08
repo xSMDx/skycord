@@ -140,7 +140,16 @@ export const useApi = () => {
   const getVoiceToken = (conversationId: string, kind: 'dm' | 'group') =>
     post<{ token: string; url: string; room: string }>('/voice/token', { conversationId, kind })
 
+  // ── GIFs ─────────────────────────────────────────────────────────────────
+  // Our own endpoints, not the provider's — the key stays server-side.
+  const searchGifs = (q: string) =>
+    get<{ gifs: ApiGif[] }>(`/gifs/search?q=${encodeURIComponent(q)}`)
+
+  const trendingGifs = () =>
+    get<{ gifs: ApiGif[] }>('/gifs/trending')
+
   return {
+    searchGifs, trendingGifs,
     searchUsers, getFriends, getPending,
     sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getUserProfile,
     getConvPrefs, setConvPref,
@@ -154,6 +163,16 @@ export const useApi = () => {
 }
 
 // ── API types ──────────────────────────────────────────────────────────────
+/** Provider-neutral: the server normalises whatever the GIF provider returns. */
+export interface ApiGif {
+  id:      string
+  title:   string
+  preview: string
+  full:    string
+  width:   number
+  height:  number
+}
+
 export interface ApiUser {
   id:            string
   username:      string

@@ -54,9 +54,12 @@ inputs and over a live text selection — right-click is how people copy. So a
 | Search field | `NONE` | native (input) | |
 | "Add friends" button | `NONE` | — | |
 
-**Known gap in the user menu:** no *Remove Friend* or *Block*. Deliberate —
-neither has a backend (no decline/remove routes; `Friendship.status` has
-`blocked` in the enum but nothing writes or reads it). See `userMenu.ts:61`.
+**Known gap in the user menu:** no *Remove Friend* or *Block*.
+
+*Block* has no backend — `Friendship.status` has `blocked` in the enum but
+nothing writes or reads it. *Remove Friend* is only missing: the route exists
+(`DELETE /users/friends/:userId`) and `callMenu` already offers it, so this menu
+should too, behind a confirm step.
 
 ## 3. Chat — DM & group
 

@@ -38,6 +38,7 @@ export default defineConfig(({ mode }) => {
         '/voice':         { target: api, changeOrigin: true },
         '/health':        { target: api, changeOrigin: true },
         '/conversations': { target: api, changeOrigin: true },
+        '/gifs':          { target: api, changeOrigin: true },
         '/socket.io':     { target: api, changeOrigin: true, ws: true },
       }
     }

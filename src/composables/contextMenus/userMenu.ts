@@ -58,8 +58,11 @@ export const userMenu = (
     { label: 'Copy User ID', icon: PhCopy, onSelect: () => h.copyId(u.id) },
   )
 
-  // NOT here yet, deliberately: Remove Friend and Block have no backend
-  // (no decline/remove routes; Friendship.status has 'blocked' in the enum but
-  // nothing writes or reads it). Adding them now would ship rows that lie.
+  // Block is NOT here: Friendship.status has 'blocked' in the enum but nothing
+  // writes or reads it, so the row would lie.
+  //
+  // Remove Friend is a different case — DELETE /users/friends/:userId exists and
+  // callMenu already offers it. It belongs here too; it just needs a confirm
+  // step first, since this menu opens on rows people click by accident.
   return items
 }

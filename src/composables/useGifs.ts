@@ -8,23 +8,16 @@
  * nothing here knows which provider is behind it.
  */
 import { ref } from 'vue'
-import { useAuth } from './useAuth'
+import { useApi, type ApiGif } from './useApi'
 
-export interface Gif {
-  id:      string
-  title:   string
-  preview: string
-  full:    string
-  width:   number
-  height:  number
-}
+export type Gif = ApiGif
 
 // Kept as functions so the call sites read the same as before the swap.
 export const gifPreviewUrl = (g: Gif | any): string => g?.preview ?? ''
 export const gifFullUrl    = (g: Gif | any): string => g?.full ?? g?.preview ?? ''
 
 export const useGifs = () => {
-  const { accessToken } = useAuth()
+  const api = useApi()
 
   const gifs    = ref<Gif[]>([])
   const loading = ref(false)
@@ -41,13 +34,7 @@ export const useGifs = () => {
     error.value   = false
     try {
       const q = query.trim()
-      const path = q ? `/gifs/search?q=${encodeURIComponent(q)}` : '/gifs/trending'
-      const res = await fetch(path, {
-        headers: accessToken.value ? { Authorization: `Bearer ${accessToken.value}` } : {},
-        credentials: 'include',
-      })
-      if (!res.ok) throw new Error('gif fetch failed')
-      const data = await res.json()
+      const data = q ? await api.searchGifs(q) : await api.trendingGifs()
       if (mine !== seq) return
       gifs.value = data.gifs ?? []
     } catch {
