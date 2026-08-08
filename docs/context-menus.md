@@ -13,10 +13,15 @@ old implementation · `NONE` no menu, nothing happens on right-click
 
 ## Summary
 
-| | Surfaces |
-|---|---|
-| **Has a menu** | 11 |
-| **No menu** | 19 |
+43 surfaces audited.
+
+| | Shell | Friends | Chat | Call | Profile | Modals | **Total** |
+|---|---|---|---|---|---|---|---|
+| **Has a menu** | 4 | 3 | 5 | 4 | 0 | 0 | **16** |
+| **No menu** | 5 | 3 | 8 | 3 | 4 | 4 | **27** |
+
+Profile surfaces and modals have zero right-click coverage — those are the two
+whole areas still untouched.
 
 Native browser menu is suppressed app-wide (`main.ts:26`), except inside text
 inputs and over a live text selection — right-click is how people copy. So a
