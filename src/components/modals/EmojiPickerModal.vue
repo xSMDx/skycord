@@ -227,7 +227,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
         <button
           v-for="c in categories" :key="c.id"
           class="cat-btn" :class="{ active: activeCategory === c.id }"
-          :title="c.name"
+          v-tip="c.name"
           @click="activeCategory = c.id; search = ''"
         >{{ c.label }}</button>
       </div>
@@ -242,7 +242,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
           <div class="emoji-grid">
             <button
               v-for="e in cat.emojis" :key="e"
-              class="emoji-btn" :title="e"
+              class="emoji-btn" v-tip="e"
               @click="select(e)"
             >{{ e }}</button>
           </div>

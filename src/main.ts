@@ -4,6 +4,7 @@ import './style.css'
 import App from './App.vue'
 import { applyAppearance } from './composables/useAppearance'
 import { installLongPress } from './composables/useLongPress'
+import { vTip } from './directives/vTip'
 
 applyAppearance()   // restore saved theme/accent/density before first paint
 
@@ -35,4 +36,6 @@ window.addEventListener('contextmenu', (e) => {
   e.preventDefault()
 })
 
-createApp(App).mount('#app')
+createApp(App)
+  .directive('tip', vTip)
+  .mount('#app')

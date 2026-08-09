@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
                 'is-thumb': inSpotlight && c.key !== focusedKey,
                 'is-cell-fs': fsKey === c.key }"
       role="button"
-      :title="inSpotlight && c.key === focusedKey ? 'Back to grid' : `Focus ${c.name}`"
+      v-tip="inSpotlight && c.key === focusedKey ? 'Back to grid' : `Focus ${c.name}`"
       @click="inSpotlight && c.key === focusedKey ? unfocus() : focus(c.key)"
       @contextmenu="emit('tileCtx', $event, { id: cellOwner(c), name: c.name, avatar: cellAvatar(c), local: cellOwner(c) === localId })"
     >
@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
                    :fit="fsKey === c.key || c.source === 'screen' ? 'contain' : 'cover'" />
         <span v-if="c.source === 'screen'" class="g-live">LIVE</span>
         <button class="g-fs"
-                :title="fsKey === c.key ? 'Exit fullscreen' : `Fullscreen ${c.name}`"
+                v-tip="fsKey === c.key ? 'Exit fullscreen' : `Fullscreen ${c.name}`"
                 @click="toggleCellFs(c.key, $event)">
           <component :is="fsKey === c.key ? Minimize2 : Maximize2" :size="15" :stroke-width="2.25" />
         </button>

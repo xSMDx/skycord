@@ -7,6 +7,7 @@ import AuthPage        from '@/views/AuthPage.vue'
 import ChatApp         from '@/views/ChatApp.vue'
 import SkycordIcon     from '@/components/SkycordIcon.vue'
 import ThemePreviewBanner from '@/components/appearance/ThemePreviewBanner.vue'
+import TooltipLayer       from '@/components/ui/TooltipLayer.vue'
 
 const { isAuthed, initialized, initialize } = useAuth()
 const { getTheme } = useApi()
@@ -74,6 +75,10 @@ onMounted(async () => {
 
   <!-- Theme-preview banner — floats above everything while previewing a shared theme -->
   <ThemePreviewBanner />
+
+  <!-- The single tooltip element every v-tip drives. At the root so it covers
+       the auth page too, and teleported to <body> so no ancestor can clip it. -->
+  <TooltipLayer />
 </template>
 
 

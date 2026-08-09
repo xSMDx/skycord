@@ -9,7 +9,7 @@
  * nothing is worse than no row.
  */
 import {
-  User, PhoneCall, Pin, PinOff, BellOff, Bell,
+  User, Phone, Pin, PinOff, BellOff, Bell,
   X, Trash2, Copy, LogOut, Pencil, Link,
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
@@ -70,7 +70,7 @@ export const dmMenu = (
   ...pinAndMute(conv.id, h),
   { sep: true },
   { label: 'Profile',      icon: User,      onSelect: () => h.openProfile(conv.user) },
-  { label: 'Start a Call', icon: PhoneCall, onSelect: () => void h.startCall(conv.user) },
+  { label: 'Start a Call', icon: Phone, onSelect: () => void h.startCall(conv.user) },
   { sep: true },
   { label: 'Copy User ID',    icon: Copy, onSelect: () => h.copy(conv.user.id, 'User ID') },
   { label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(conv.channelId, 'Channel ID') },

@@ -7,7 +7,7 @@
  * than by forking the menu.
  */
 import {
-  User, MessageCircle, PhoneCall, Copy,
+  User, MessageCircle, Phone, Copy,
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 
@@ -48,7 +48,7 @@ export const userMenu = (
     items.push(
       { label: 'Message', icon: MessageCircle, disabled: ctx.isCurrentDM,
         onSelect: () => void h.openDM(u) },
-      { label: 'Call', icon: PhoneCall,
+      { label: 'Call', icon: Phone,
         onSelect: () => void h.startCall(u) },
     )
   }

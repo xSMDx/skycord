@@ -135,7 +135,7 @@ const STATUS_COLORS: Record<string, string> = {
 
                 <div class="up-anchor">
                   <button
-                    class="up-btn icon" :title="relationship === 'friends' ? 'Friend options' : 'Add friend'"
+                    class="up-btn icon" v-tip="relationship === 'friends' ? 'Friend options' : 'Add friend'"
                     :disabled="busy"
                     @click="relationship === 'friends' ? (friendOpen = !friendOpen, moreOpen = false) : addFriend()"
                   >
@@ -148,7 +148,7 @@ const STATUS_COLORS: Record<string, string> = {
                 </div>
 
                 <div class="up-anchor">
-                  <button class="up-btn icon" title="More" @click="moreOpen = !moreOpen; friendOpen = false">
+                  <button class="up-btn icon" v-tip="'More'" @click="moreOpen = !moreOpen; friendOpen = false">
                     <Ellipsis :size="18" :stroke-width="2.25" />
                   </button>
                   <div v-if="moreOpen" class="up-menu" @click.stop>

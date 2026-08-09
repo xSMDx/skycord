@@ -60,7 +60,7 @@ const close   = () => { stop(); emit('close') }
       <div class="cp-card" role="dialog" aria-label="Camera preview">
         <div class="cp-head">
           <h2>Ready to video chat?</h2>
-          <button class="cp-x" title="Close" @click="close"><X :size="18" :stroke-width="2.25" /></button>
+          <button class="cp-x" v-tip="'Close'" @click="close"><X :size="18" :stroke-width="2.25" /></button>
         </div>
 
         <div class="cp-stage">

@@ -140,7 +140,7 @@ const onReplyPillLeave = () => {
           @mousedown.stop="onReplyPillDown"
           @mouseup.stop="onReplyPillUp(p.id)"
           @mouseleave="onReplyPillLeave"
-          title="Click to jump · hold to see reply chain">
+          v-tip="'Click to jump · hold to see reply chain'">
           <svg class="reply-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 17l-5-5 5-5M4 12h11a4 4 0 0 1 4 4v1"/>
           </svg>
@@ -191,10 +191,10 @@ const onReplyPillLeave = () => {
 
     <div v-show="hoveredId === msg.id && !isEditing" class="msg-actions"
       @mouseenter="emit('hover', msg.id)" @click.stop>
-      <button class="ap" @click.stop="emit('openEmoji', msg.id)" title="React">😀</button>
-      <button class="ap" @click.stop="emit('reply', msg)" title="Reply"><CornerUpLeft :size="15" :stroke-width="1.5"/></button>
-      <button v-if="isOwn" class="ap" @click.stop="emit('edit', msg)" title="Edit"><Pencil :size="15" :stroke-width="1.5"/></button>
-      <button class="ap" @click.stop="emit('openCtx', $event, msg)" title="More"><Ellipsis :size="15" :stroke-width="1.5"/></button>
+      <button class="ap" @click.stop="emit('openEmoji', msg.id)" v-tip="'React'">😀</button>
+      <button class="ap" @click.stop="emit('reply', msg)" v-tip="'Reply'"><CornerUpLeft :size="15" :stroke-width="1.5"/></button>
+      <button v-if="isOwn" class="ap" @click.stop="emit('edit', msg)" v-tip="'Edit'"><Pencil :size="15" :stroke-width="1.5"/></button>
+      <button class="ap" @click.stop="emit('openCtx', $event, msg)" v-tip="'More'"><Ellipsis :size="15" :stroke-width="1.5"/></button>
     </div>
   </div>
 </template>

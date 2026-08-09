@@ -30,8 +30,8 @@ onBeforeUnmount(soundRingStop)
         <div class="ic-name">{{ name }}</div>
         <div class="ic-sub">Incoming Call…</div>
         <div class="ic-actions">
-          <button class="ic-btn decline" title="Decline" @click="emit('decline')"><X :size="24" :stroke-width="2.25" /></button>
-          <button class="ic-btn accept" title="Accept" @click="emit('accept')"><Phone :size="24" :stroke-width="2.25" /></button>
+          <button class="ic-btn decline" v-tip="'Decline'" @click="emit('decline')"><X :size="24" :stroke-width="2.25" /></button>
+          <button class="ic-btn accept" v-tip="'Accept'" @click="emit('accept')"><Phone :size="24" :stroke-width="2.25" /></button>
         </div>
       </div>
     </div>

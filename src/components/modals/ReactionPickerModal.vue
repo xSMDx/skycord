@@ -88,7 +88,7 @@ const select = (emoji: string) => {
             v-for="c in categories" :key="c.id"
             class="rp-cat-btn"
             :class="{ active: activeCategory === c.id }"
-            :title="c.name"
+            v-tip="c.name"
             @click="activeCategory = c.id; search = ''"
           >{{ c.label }}</button>
         </div>

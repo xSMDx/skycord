@@ -140,9 +140,9 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
             <p>Every branch of replies that led to this point</p>
           </div>
           <div class="rt-header-actions">
-            <button class="rt-zoom-btn" @click="zoomOut" title="Zoom out"><ZoomOut :size="15" :stroke-width="1.5" /></button>
-            <button class="rt-zoom-btn" @click="zoomReset" title="Reset zoom"><Expand :size="14" :stroke-width="1.5" /></button>
-            <button class="rt-zoom-btn" @click="zoomIn" title="Zoom in"><ZoomIn :size="15" :stroke-width="1.5" /></button>
+            <button class="rt-zoom-btn" @click="zoomOut" v-tip="'Zoom out'"><ZoomOut :size="15" :stroke-width="1.5" /></button>
+            <button class="rt-zoom-btn" @click="zoomReset" v-tip="'Reset zoom'"><Expand :size="14" :stroke-width="1.5" /></button>
+            <button class="rt-zoom-btn" @click="zoomIn" v-tip="'Zoom in'"><ZoomIn :size="15" :stroke-width="1.5" /></button>
             <button class="rt-close" @click="emit('close')"><X :size="18" :stroke-width="1.5" /></button>
           </div>
         </div>

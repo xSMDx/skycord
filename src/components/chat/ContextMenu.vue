@@ -40,7 +40,7 @@ const safeY = Math.min(props.y, window.innerHeight - 380)
         <button class="ctx-qr" @click="emit('react', msg, '😂'); emit('close')">😂</button>
         <button class="ctx-qr" @click="emit('react', msg, '😮'); emit('close')">😮</button>
         <button class="ctx-qr" @click="emit('react', msg, '😢'); emit('close')">😢</button>
-        <button class="ctx-qr ctx-qr-more" @click="emit('openEmoji', msg); emit('close')" title="More reactions">
+        <button class="ctx-qr ctx-qr-more" @click="emit('openEmoji', msg); emit('close')" v-tip="'More reactions'">
           <Smile :size="18" :stroke-width="1.5" />
         </button>
       </div>

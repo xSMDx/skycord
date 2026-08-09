@@ -735,12 +735,12 @@ const handleLogout = () => { emit('close'); logout() }
               <button
                 v-for="p in ACCENT_PRESETS" :key="p.hex"
                 class="ap-swatch" :class="{ active: appearance.accent.toLowerCase() === p.hex }"
-                :style="{ background: p.hex }" :title="p.name"
+                :style="{ background: p.hex }" v-tip="p.name"
                 @click="setAppearance({ accent: p.hex })"
               >
                 <svg v-if="appearance.accent.toLowerCase() === p.hex" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <label class="ap-custom" :class="{ active: isCustomAccent }" title="Custom accent" :style="{ background: appearance.accent }">
+              <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: appearance.accent }">
                 <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
                 <input type="color" :value="appearance.accent" @input="setAppearance({ accent: ($event.target as HTMLInputElement).value })" />
               </label>

@@ -212,13 +212,13 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
       <template v-if="toolbar">
         <div class="fmt-overlay" @mousedown="toolbar = null"></div>
         <div class="fmt-toolbar" :style="{ left: toolbar.x + 'px', top: (toolbar.y - 46) + 'px' }" @mousedown.prevent>
-          <button title="Bold" @click="wrapSelection('**')"><Bold :size="16" :stroke-width="2.25" /></button>
-          <button title="Italic" @click="wrapSelection('*')"><Italic :size="16" /></button>
-          <button title="Underline" @click="wrapSelection('__')"><Underline :size="16" /></button>
-          <button title="Strikethrough" @click="wrapSelection('~~')"><Strikethrough :size="16" /></button>
-          <button title="Quote" @click="wrapSelection('> ', '')"><Quote :size="16" /></button>
-          <button title="Code" @click="wrapSelection('`')"><Code :size="16" /></button>
-          <button title="Link" @click="wrapSelection('[', '](https://)')"><Link :size="16" /></button>
+          <button v-tip="'Bold'" @click="wrapSelection('**')"><Bold :size="16" :stroke-width="2.25" /></button>
+          <button v-tip="'Italic'" @click="wrapSelection('*')"><Italic :size="16" /></button>
+          <button v-tip="'Underline'" @click="wrapSelection('__')"><Underline :size="16" /></button>
+          <button v-tip="'Strikethrough'" @click="wrapSelection('~~')"><Strikethrough :size="16" /></button>
+          <button v-tip="'Quote'" @click="wrapSelection('> ', '')"><Quote :size="16" /></button>
+          <button v-tip="'Code'" @click="wrapSelection('`')"><Code :size="16" /></button>
+          <button v-tip="'Link'" @click="wrapSelection('[', '](https://)')"><Link :size="16" /></button>
         </div>
       </template>
     </Teleport>
@@ -232,19 +232,19 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
           <span v-for="t in replyTargets" :key="t.id" class="reply-chip">
             <CornerUpLeft :size="12" :stroke-width="2.25" />
             <span class="reply-chip-name">{{ t.author }}</span>
-            <button class="reply-chip-x" title="Remove" @click.stop="emit('clearReply', t.id)">
+            <button class="reply-chip-x" v-tip="'Remove'" @click.stop="emit('clearReply', t.id)">
               <X :size="11" :stroke-width="2.25" />
             </button>
           </span>
         </div>
-        <button class="reply-strip-close" title="Cancel all" @click.stop="emit('clearAllReply')">
+        <button class="reply-strip-close" v-tip="'Cancel all'" @click.stop="emit('clearAllReply')">
           <X :size="14" :stroke-width="2.25" />
         </button>
       </div>
     </Transition>
 
     <div class="input-wrapper" :class="{ sending, 'with-reply': replyTargets && replyTargets.length }">
-      <button class="input-attach btn-attach" title="Attach file">
+      <button class="input-attach btn-attach" v-tip="'Attach file'">
         <Paperclip :size="20" :stroke-width="1.5" />
       </button>
 
@@ -263,10 +263,10 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
       />
 
       <div class="input-actions">
-        <button class="input-action-btn btn-gif" title="GIF">
+        <button class="input-action-btn btn-gif" v-tip="'GIF'">
           <span class="gif-label">GIF</span>
         </button>
-        <button class="input-action-btn btn-emoji" title="Emoji" @click.stop="emit('openEmoji')">
+        <button class="input-action-btn btn-emoji" v-tip="'Emoji'" @click.stop="emit('openEmoji')">
           <Smile :size="18" :stroke-width="1.5" />
         </button>
       </div>
@@ -277,7 +277,7 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         :class="{ ready: modelValue.trim() && !sending }"
         @click.stop="submit"
         :disabled="!modelValue.trim() || sending"
-        title="Send"
+        v-tip="'Send'"
       >
         <svg v-if="sending" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin">
           <path d="M21 12a9 9 0 1 1-6.219-8.56"/>

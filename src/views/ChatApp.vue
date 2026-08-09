@@ -9,7 +9,7 @@ import {
   Check, LoaderCircle, Ellipsis,
   Pencil, UsersRound,
   User, Paperclip, AtSign, SlidersHorizontal, Copy,
-  Phone, Video, PhoneCall, PhoneOff
+  Phone, Camera, PhoneOff
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
@@ -1669,7 +1669,7 @@ onBeforeUnmount(() => {
       <!-- Server Rail -->
       <nav class="rail">
         <!-- Home -->
-        <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" title="Home" @click.stop="openFriends">
+        <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip="'Home'" @click.stop="openFriends">
           <div class="ri-pip" />
           <div class="ri-icon home-icon">
             <SkycordIcon mode="lucky" :color="homeActive ? appearance.accent : 'currentColor'" :size="26" />
@@ -1679,14 +1679,14 @@ onBeforeUnmount(() => {
         <!-- Servers -->
         <div v-for="srv in servers" :key="srv.id"
           class="ri" :class="{ active: view==='server' && activeServer===srv.id }"
-          :title="srv.name" @click.stop="openServer(srv)">
+          v-tip="srv.name" @click.stop="openServer(srv)">
           <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
           <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
         </div>
         <div class="ri-divider" />
-        <button class="ri add"     title="Add server">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
-        <button class="ri explore" title="Explore">     <div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri add"     v-tip="'Add server'">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri explore" v-tip="'Explore'">     <div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
       </nav>
 
       <!-- ── Left sidebar ──────────────────────────────────────────────── -->
@@ -1707,7 +1707,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="sb-section-label">
             Direct Messages
-            <button class="sb-add-btn" @click.stop="showNewDM = true" title="New Message">
+            <button class="sb-add-btn" @click.stop="showNewDM = true" v-tip="'New Message'">
               <Pencil :size="14" :stroke-width="1.5" />
             </button>
           </div>
@@ -1728,9 +1728,9 @@ onBeforeUnmount(() => {
                 <span class="dm-name">{{ c.dm.name }}</span>
                 <span class="dm-last">{{ c.dm.lastMsg }}</span>
               </div>
-              <span v-if="isPinned(c.dm.id)" class="dm-pin" title="Pinned"><Pin :size="11" :stroke-width="2.25"/></span>
-              <span v-if="isConvMuted(c.dm.id)" class="dm-muted" title="Muted"><BellOff :size="12" :stroke-width="2.25"/></span>
-              <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" title="In a call"><Phone :size="12" :stroke-width="2.25"/></span>
+              <span v-if="isPinned(c.dm.id)" class="dm-pin" v-tip="'Pinned'"><Pin :size="11" :stroke-width="2.25"/></span>
+              <span v-if="isConvMuted(c.dm.id)" class="dm-muted" v-tip="'Muted'"><BellOff :size="12" :stroke-width="2.25"/></span>
+              <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" v-tip="'In a call'"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isConvMuted(c.dm.id) }">{{ c.dm.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <X :size="13" :stroke-width="1.5" />
@@ -1751,9 +1751,9 @@ onBeforeUnmount(() => {
                 <span class="dm-name">{{ groupDisplayName(c.group) }}</span>
                 <span class="dm-last">{{ c.group.lastMsg || `${c.group.memberCount} Members` }}</span>
               </div>
-              <span v-if="isPinned(c.group.id)" class="dm-pin" title="Pinned"><Pin :size="11" :stroke-width="2.25"/></span>
-              <span v-if="isConvMuted(c.group.id)" class="dm-muted" title="Muted"><BellOff :size="12" :stroke-width="2.25"/></span>
-              <span v-if="convHasCall('group', c.group.id)" class="dm-call" title="In a call"><Phone :size="12" :stroke-width="2.25"/></span>
+              <span v-if="isPinned(c.group.id)" class="dm-pin" v-tip="'Pinned'"><Pin :size="11" :stroke-width="2.25"/></span>
+              <span v-if="isConvMuted(c.group.id)" class="dm-muted" v-tip="'Muted'"><BellOff :size="12" :stroke-width="2.25"/></span>
+              <span v-if="convHasCall('group', c.group.id)" class="dm-call" v-tip="'In a call'"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isConvMuted(c.group.id) }">{{ c.group.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
                 <X :size="13" :stroke-width="1.5" />
@@ -1773,21 +1773,21 @@ onBeforeUnmount(() => {
           </div>
           <div class="up-btns">
             <div class="up-split">
-              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" :title="micOff ? 'Unmute' : 'Mute'">
+              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" v-tip="micOff ? 'Unmute' : 'Mute'">
                 <MicOff v-if="micOff" :size="16" :stroke-width="1.5"/>
                 <Mic v-else :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" v-tip="'Input device'" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
-              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" :title="deafOff ? 'Undeafen' : 'Deafen'">
+              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" v-tip="deafOff ? 'Undeafen' : 'Deafen'">
                 <Headphones :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
-            <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
+            <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
               <Settings :size="16" :stroke-width="1.5"/>
             </button>
           </div>
@@ -1837,21 +1837,21 @@ onBeforeUnmount(() => {
           </div>
           <div class="up-btns">
             <div class="up-split">
-              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" :title="micOff ? 'Unmute' : 'Mute'">
+              <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" v-tip="micOff ? 'Unmute' : 'Mute'">
                 <MicOff v-if="micOff" :size="16" :stroke-width="1.5"/>
                 <Mic v-else :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" v-tip="'Input device'" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
-              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" :title="deafOff ? 'Undeafen' : 'Deafen'">
+              <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" v-tip="deafOff ? 'Undeafen' : 'Deafen'">
                 <Headphones :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
-            <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
+            <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
               <Settings :size="16" :stroke-width="1.5"/>
             </button>
           </div>
@@ -1925,10 +1925,10 @@ onBeforeUnmount(() => {
                   <span class="f-sub">{{ statusLabel(f.status) }}</span>
                 </div>
                 <div class="f-actions" @click.stop>
-                  <button class="f-btn" title="Message" @click.stop="openDM({ id:f.id, name:f.displayName||f.username, avatar:avatarFor(f.username,f.avatar), status:f.status as any, lastMsg:'' })">
+                  <button class="f-btn" v-tip="'Message'" @click.stop="openDM({ id:f.id, name:f.displayName||f.username, avatar:avatarFor(f.username,f.avatar), status:f.status as any, lastMsg:'' })">
                     <MessageCircle :size="18" :stroke-width="1.5"/>
                   </button>
-                  <button class="f-btn" title="More" @click.stop="openUserMenu($event, f)"><Ellipsis :size="18" :stroke-width="1.5"/></button>
+                  <button class="f-btn" v-tip="'More'" @click.stop="openUserMenu($event, f)"><Ellipsis :size="18" :stroke-width="1.5"/></button>
                 </div>
               </div>
             </template>
@@ -2014,7 +2014,7 @@ onBeforeUnmount(() => {
                   <UsersRound v-else :size="17" :stroke-width="2.25"/>
                 </div>
                 <h2 class="chat-title">{{ groupDisplayName(activeGroup) }}</h2>
-                <button class="ch-edit-btn" title="Edit Group" @click.stop="showEditGroup = true">
+                <button class="ch-edit-btn" v-tip="'Edit Group'" @click.stop="showEditGroup = true">
                   <Pencil :size="15" :stroke-width="1.5"/>
                 </button>
                 <div class="ch-topic-sep"/>
@@ -2030,17 +2030,19 @@ onBeforeUnmount(() => {
             <div class="chat-header-right">
               <!-- Voice / video call -->
               <template v-if="view==='dm' || view==='group'">
-                <button class="icon-btn call-btn" :class="{ calling: callActiveHere }" :title="callActiveHere ? 'Leave Call' : 'Start Voice Call'" @click.stop="toggleCall">
-                  <component :is="callActiveHere ? PhoneOff : PhoneCall" :size="18" :stroke-width="2.25"/>
+                <button class="icon-btn call-btn" :class="{ calling: callActiveHere }" v-tip="callActiveHere ? 'Leave Call' : 'Start Voice Call'" @click.stop="toggleCall">
+                  <!-- Phone, not PhoneCall: the waves read as "ringing", which is
+                       wrong for a button that starts a call. -->
+                  <component :is="callActiveHere ? PhoneOff : Phone" :size="18" :stroke-width="2.25"/>
                 </button>
-                <button class="icon-btn call-btn video" title="Start Video Call" @click.stop="showToast('Video calls are coming soon')">
-                  <Video :size="18" :stroke-width="2.25"/>
+                <button class="icon-btn call-btn video" v-tip="'Start Video Call'" @click.stop="showToast('Video calls are coming soon')">
+                  <Camera :size="18" :stroke-width="2.25"/>
                 </button>
               </template>
               <button class="icon-btn icon-btn-pin" :class="{ active: showPinned }" @click.stop="showPinned=!showPinned">
                 <Pin :size="18" :stroke-width="1.5"/>
               </button>
-              <button v-if="view==='group' && activeGroup" class="icon-btn" title="Add friends to DM" @click.stop="showInviteGroup = true">
+              <button v-if="view==='group' && activeGroup" class="icon-btn" v-tip="'Add friends to DM'" @click.stop="showInviteGroup = true">
                 <UserPlus :size="18" :stroke-width="1.5"/>
               </button>
               <button v-if="view==='server' || view==='group'" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" @click.stop="membersOpen=!membersOpen">
@@ -2049,7 +2051,7 @@ onBeforeUnmount(() => {
 
               <!-- Expanding search + filters popup (placeholder) -->
               <div class="ch-search" :class="{ open: searchOpen }" @click.stop>
-                <button v-if="!searchOpen" class="icon-btn icon-btn-search" title="Search" @click.stop="openSearch">
+                <button v-if="!searchOpen" class="icon-btn icon-btn-search" v-tip="'Search'" @click.stop="openSearch">
                   <Search :size="18" :stroke-width="1.5"/>
                 </button>
                 <Transition name="search-box">

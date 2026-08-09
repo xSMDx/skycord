@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhoneOff, Video, ScreenShare } from 'lucide-vue-next'
+import { PhoneOff, Camera, MonitorUp } from 'lucide-vue-next'
 import { useVoice } from '@/composables/useVoice'
 
 // Persistent "Voice Connected" strip above the user panel — stays put while you
@@ -61,7 +61,7 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
 
     <div class="vcp-top">
       <!-- Animated signal bars, height + colour reflect quality -->
-      <div class="vcp-bars" :title="q.label">
+      <div class="vcp-bars" v-tip="q.label">
         <i v-for="n in 3" :key="n" :class="{ on: n <= q.bars }" :style="{ background: n <= q.bars ? q.color : undefined, animationDelay: (n * 0.12) + 's' }" />
       </div>
       <div class="vcp-meta">
@@ -69,15 +69,15 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
         <span v-if="voice.micBlocked && voice.connected" class="vcp-name vcp-warn">Listen-only · mic needs HTTPS</span>
         <span v-else class="vcp-name">{{ voice.connecting ? voice.activeName : `${pingText} · ${voice.activeName}` }}</span>
       </div>
-      <button class="vcp-leave" :title="voice.connecting ? 'Cancel' : 'Disconnect'" @click="leave"><PhoneOff :size="18" :stroke-width="2.25" /></button>
+      <button class="vcp-leave" v-tip="voice.connecting ? 'Cancel' : 'Disconnect'" @click="leave"><PhoneOff :size="18" :stroke-width="2.25" /></button>
     </div>
 
     <div class="vcp-controls">
-      <button class="vcp-btn" disabled title="Camera — coming soon">
-        <Video :size="18" :stroke-width="2.25" />
+      <button class="vcp-btn" disabled v-tip="'Camera — coming soon'">
+        <Camera :size="18" :stroke-width="2.25" />
       </button>
-      <button class="vcp-btn" disabled title="Screen share — coming soon">
-        <ScreenShare :size="18" :stroke-width="2.25" />
+      <button class="vcp-btn" disabled v-tip="'Screen share — coming soon'">
+        <MonitorUp :size="18" :stroke-width="2.25" />
       </button>
     </div>
   </div>

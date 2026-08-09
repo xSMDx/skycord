@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Mic, MicOff, PhoneOff, Video, VideoOff, ScreenShare, Ellipsis, ChevronDown, PhoneCall, X, Maximize2, Minimize2 } from 'lucide-vue-next'
+import { Mic, MicOff, PhoneOff, Video, VideoOff, MonitorUp, Ellipsis, ChevronDown, Phone, X, Maximize2, Minimize2 } from 'lucide-vue-next'
 import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
@@ -271,11 +271,11 @@ onBeforeUnmount(() => {
            button sits over the video area (not down at the control-bar row) -->
       <div class="cb-stagewrap">
         <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" :show-filmstrip="showFilmstrip" @tile-ctx="onTileCtx" />
-        <button class="cb-expand" :title="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
+        <button class="cb-expand" v-tip="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
           <!-- points DOWN normally; flips UP once the chat is hidden -->
           <ChevronDown :size="16" :stroke-width="2.25" :style="expanded ? 'transform: rotate(180deg)' : ''" />
         </button>
-        <button class="cb-fs" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
+        <button class="cb-fs" v-tip="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
           <component :is="isFullscreen ? Minimize2 : Maximize2" :size="18" :stroke-width="2.25" />
         </button>
       </div>
@@ -285,37 +285,37 @@ onBeforeUnmount(() => {
         <div class="cb-group">
           <!-- mic/camera + their ▾ read as ONE control: hovering either lights the pair -->
           <div class="cb-split" :class="{ menuopen: openMenu === 'mic' }">
-            <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" :title="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute" @contextmenu="onCtrlCtx($event, 'mic')">
+            <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" v-tip="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute" @contextmenu="onCtrlCtx($event, 'mic')">
               <component :is="voice.localMuted ? MicOff : Mic" :size="20" :stroke-width="2.25" />
             </button>
-            <button class="cb-chev" title="Audio settings" @click="toggleMenu('mic')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
+            <button class="cb-chev" v-tip="'Audio settings'" @click="toggleMenu('mic')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
             <MicFlyout v-if="openMenu === 'mic'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
           <div class="cb-split" :class="{ menuopen: openMenu === 'cam' }">
-            <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" :title="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera" @contextmenu="onCtrlCtx($event, 'cam')">
+            <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" v-tip="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera" @contextmenu="onCtrlCtx($event, 'cam')">
               <component :is="media.localCamOn ? Video : VideoOff" :size="20" :stroke-width="2.25" />
             </button>
-            <button class="cb-chev" :disabled="!joinedHere" title="Video settings" @click="toggleMenu('cam')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
+            <button class="cb-chev" :disabled="!joinedHere" v-tip="'Video settings'" @click="toggleMenu('cam')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
             <CameraFlyout v-if="openMenu === 'cam'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
         </div>
         <div class="cb-group">
-          <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" :title="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="onShare">
-            <ScreenShare :size="20" :stroke-width="2.25" />
+          <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" v-tip="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="onShare">
+            <MonitorUp :size="20" :stroke-width="2.25" />
           </button>
           <div class="cb-split" :class="{ menuopen: openMenu === 'more' }">
-            <button class="cb-b cb-more" title="More" @click="toggleMenu('more')"><Ellipsis :size="20" :stroke-width="2.25" /></button>
+            <button class="cb-b cb-more" v-tip="'More'" @click="toggleMenu('more')"><Ellipsis :size="20" :stroke-width="2.25" /></button>
             <MoreFlyout v-if="openMenu === 'more'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
         </div>
-        <button class="cb-leave" :title="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhoneOff :size="20" :stroke-width="2.25" /></button>
+        <button class="cb-leave" v-tip="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhoneOff :size="20" :stroke-width="2.25" /></button>
       </div>
 
       <!-- Drag the bottom edge to resize; past the top it becomes hide-chat -->
       <div
         v-if="!isFullscreen"
         class="cb-resize" :class="{ on: dragging }"
-        title="Drag to resize the call"
+        v-tip="'Drag to resize the call'"
         @pointerdown="onResizeDown"
       />
     </template>
@@ -332,8 +332,8 @@ onBeforeUnmount(() => {
         {{ others.length === 1 ? `${others[0].name} is in a call` : `${others.length} people in a call` }}
       </div>
       <div class="cb-join-row">
-        <button class="cb-join" @click="join"><PhoneCall :size="18" :stroke-width="2.25" /> Join Call</button>
-        <button v-if="kind === 'dm'" class="cb-dismiss" title="Dismiss" @click="emit('dismiss')"><X :size="18" :stroke-width="2.25" /></button>
+        <button class="cb-join" @click="join"><Phone :size="18" :stroke-width="2.25" /> Join Call</button>
+        <button v-if="kind === 'dm'" class="cb-dismiss" v-tip="'Dismiss'" @click="emit('dismiss')"><X :size="18" :stroke-width="2.25" /></button>
       </div>
     </template>
   </div>

@@ -120,7 +120,7 @@ const apply = () => {
           aria-label="Zoom"
         />
         <ImageIcon :size="22" :stroke-width="2.25" class="ei-zoom-ico" />
-        <button class="ei-rotate" title="Rotate" @click="rotate">
+        <button class="ei-rotate" v-tip="'Rotate'" @click="rotate">
           <RotateCw :size="18" :stroke-width="2.25" />
         </button>
       </div>

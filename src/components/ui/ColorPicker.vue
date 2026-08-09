@@ -112,7 +112,7 @@ const pickFromScreen = async () => {
     <div class="cp-hex">
       <span>#</span>
       <input :value="hexText" maxlength="6" spellcheck="false" aria-label="Hex colour" @input="onHexInput" />
-      <button v-if="hasEyedropper" class="cp-eye" title="Pick from screen" @click="pickFromScreen">
+      <button v-if="hasEyedropper" class="cp-eye" v-tip="'Pick from screen'" @click="pickFromScreen">
         <Pipette :size="15" :stroke-width="1.75" />
       </button>
     </div>
@@ -120,7 +120,7 @@ const pickFromScreen = async () => {
     <div class="cp-presets">
       <button
         v-for="p in (presets || DEFAULT_PRESETS)" :key="p"
-        :style="{ background: p }" :title="p" :aria-label="p"
+        :style="{ background: p }" v-tip="p" :aria-label="p"
         @click="adopt(p); emit('update:modelValue', p)"
       />
     </div>
