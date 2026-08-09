@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { PhX, PhMagnifyingGlass } from '@phosphor-icons/vue'
+import { X, Search } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import type { Friend } from '@/types'
 
@@ -43,13 +43,13 @@ const create = () => {
           <p class="ndm-sub">Group DMs can have up to 10 members.</p>
         </div>
         <button class="ndm-close" @click="emit('close')">
-          <PhX :size="20" weight="light" />
+          <X :size="20" :stroke-width="1.5" />
         </button>
       </div>
 
       <!-- Search -->
       <div class="ndm-search">
-        <PhMagnifyingGlass :size="14" weight="light" />
+        <Search :size="14" :stroke-width="1.5" />
         <input
           v-model="search"
           type="text"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import { PhX } from '@phosphor-icons/vue'
+import { X } from 'lucide-vue-next'
 
 const props = defineProps<{
   title: string
@@ -27,7 +27,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             <h3 class="efm-title">{{ title }}</h3>
             <p v-if="description" class="efm-desc">{{ description }}</p>
           </div>
-          <button class="efm-x" @click="emit('close')"><PhX :size="18" weight="bold" /></button>
+          <button class="efm-x" @click="emit('close')"><X :size="18" :stroke-width="2.25" /></button>
         </div>
 
         <div class="efm-body">

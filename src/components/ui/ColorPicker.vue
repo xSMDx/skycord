@@ -10,7 +10,7 @@
  * where the user put them.
  */
 import { ref, watch, onMounted } from 'vue'
-import { PhEyedropper } from '@phosphor-icons/vue'
+import { Pipette } from 'lucide-vue-next'
 
 const props = defineProps<{ modelValue: string | null; presets?: string[] }>()
 const emit  = defineEmits<{ 'update:modelValue': [hex: string] }>()
@@ -113,7 +113,7 @@ const pickFromScreen = async () => {
       <span>#</span>
       <input :value="hexText" maxlength="6" spellcheck="false" aria-label="Hex colour" @input="onHexInput" />
       <button v-if="hasEyedropper" class="cp-eye" title="Pick from screen" @click="pickFromScreen">
-        <PhEyedropper :size="15" weight="regular" />
+        <Pipette :size="15" :stroke-width="1.75" />
       </button>
     </div>
 

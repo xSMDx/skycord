@@ -11,8 +11,8 @@
  */
 import { ref, watch, computed } from 'vue'
 import {
-  PhX, PhChatDots, PhUserPlus, PhUserMinus, PhDotsThree, PhIdentificationCard, PhCheck,
-} from '@phosphor-icons/vue'
+  X, MessageCircle, UserPlus, UserMinus, Ellipsis, IdCard, Check,
+} from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import ProfileCard from './ProfileCard.vue'
 import { useApi } from '@/composables/useApi'
@@ -108,7 +108,7 @@ const STATUS_COLORS: Record<string, string> = {
 <template>
   <ModalBase width="960px" @close="emit('close')">
     <div class="up">
-      <button class="up-close" aria-label="Close" @click="emit('close')"><PhX :size="18" weight="bold" /></button>
+      <button class="up-close" aria-label="Close" @click="emit('close')"><X :size="18" :stroke-width="2.25" /></button>
 
       <div v-if="loading" class="up-state">Loading…</div>
       <div v-else-if="error" class="up-state err">{{ error }}</div>
@@ -130,7 +130,7 @@ const STATUS_COLORS: Record<string, string> = {
             <template #footer>
               <div class="up-actions">
                 <button class="up-btn primary up-grow" @click="emit('message', user)">
-                  <PhChatDots :size="16" weight="fill" /> Message
+                  <MessageCircle :size="16" :stroke-width="2.25" /> Message
                 </button>
 
                 <div class="up-anchor">
@@ -139,8 +139,8 @@ const STATUS_COLORS: Record<string, string> = {
                     :disabled="busy"
                     @click="relationship === 'friends' ? (friendOpen = !friendOpen, moreOpen = false) : addFriend()"
                   >
-                    <PhUserPlus v-if="relationship !== 'friends'" :size="16" weight="bold" />
-                    <PhCheck v-else :size="16" weight="bold" />
+                    <UserPlus v-if="relationship !== 'friends'" :size="16" :stroke-width="2.25" />
+                    <Check v-else :size="16" :stroke-width="2.25" />
                   </button>
                   <div v-if="friendOpen" class="up-menu" @click.stop>
                     <button class="danger" @click="unfriend">Remove friend</button>
@@ -149,14 +149,14 @@ const STATUS_COLORS: Record<string, string> = {
 
                 <div class="up-anchor">
                   <button class="up-btn icon" title="More" @click="moreOpen = !moreOpen; friendOpen = false">
-                    <PhDotsThree :size="18" weight="bold" />
+                    <Ellipsis :size="18" :stroke-width="2.25" />
                   </button>
                   <div v-if="moreOpen" class="up-menu" @click.stop>
                     <button @click="copyId">
-                      <PhIdentificationCard :size="15" weight="bold" /> Copy user ID
+                      <IdCard :size="15" :stroke-width="2.25" /> Copy user ID
                     </button>
                     <button v-if="relationship === 'friends'" class="danger" @click="unfriend">
-                      <PhUserMinus :size="15" weight="bold" /> Remove friend
+                      <UserMinus :size="15" :stroke-width="2.25" /> Remove friend
                     </button>
                   </div>
                 </div>

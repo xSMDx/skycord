@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { PhMicrophoneSlash, PhMonitor, PhArrowsIn, PhArrowsOut } from '@phosphor-icons/vue'
+import { MicOff, Monitor, Minimize2, Maximize2 } from 'lucide-vue-next'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
 import { voiceSettings } from '@/composables/useVoiceSettings'
@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
       <div class="s-av" :class="{ speaking: t.speaking }">
         <img v-if="t.avatar" :src="t.avatar" :alt="t.name" />
         <template v-else>{{ initial(t.name) }}</template>
-        <span v-if="t.muted" class="s-mute"><PhMicrophoneSlash :size="13" weight="fill" /></span>
+        <span v-if="t.muted" class="s-mute"><MicOff :size="13" :stroke-width="2.25" /></span>
       </div>
       <span class="s-name">{{ t.name }}</span>
     </div>
@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
         <button class="g-fs"
                 :title="fsKey === c.key ? 'Exit fullscreen' : `Fullscreen ${c.name}`"
                 @click="toggleCellFs(c.key, $event)">
-          <component :is="fsKey === c.key ? PhArrowsIn : PhArrowsOut" :size="15" weight="bold" />
+          <component :is="fsKey === c.key ? Minimize2 : Maximize2" :size="15" :stroke-width="2.25" />
         </button>
       </template>
       <template v-else>
@@ -188,10 +188,10 @@ onBeforeUnmount(() => {
             <template v-else>{{ initial(c.name) }}</template>
           </div>
         </div>
-        <span v-if="c.muted" class="g-mute"><PhMicrophoneSlash :size="13" weight="fill" /></span>
+        <span v-if="c.muted" class="g-mute"><MicOff :size="13" :stroke-width="2.25" /></span>
       </template>
       <span class="g-name">
-        <PhMonitor v-if="c.kind === 'video' && c.source === 'screen'" :size="13" weight="fill" />
+        <Monitor v-if="c.kind === 'video' && c.source === 'screen'" :size="13" :stroke-width="2.25" />
         {{ c.name }}
       </span>
     </div>

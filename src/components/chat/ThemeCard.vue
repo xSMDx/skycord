@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { PhPalette } from '@phosphor-icons/vue'
+import { Palette } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { useAppearance, type Appearance } from '@/composables/useAppearance'
 
@@ -67,12 +67,12 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
     </template>
 
     <template v-else-if="state === 'error'">
-      <div class="tc-icon tc-icon--err"><PhPalette :size="20" weight="bold" /></div>
+      <div class="tc-icon tc-icon--err"><Palette :size="20" :stroke-width="2.25" /></div>
       <div class="tc-body"><span class="tc-name">Theme unavailable</span><span class="tc-sub">This theme code or link is invalid.</span></div>
     </template>
 
     <template v-else>
-      <div class="tc-icon"><PhPalette :size="20" weight="bold" /></div>
+      <div class="tc-icon"><Palette :size="20" :stroke-width="2.25" /></div>
       <div class="tc-body">
         <span class="tc-name">{{ name }}</span>
         <span class="tc-sub">

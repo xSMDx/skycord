@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {
-  PhPencilSimple, PhArrowBendUpLeft, PhCopy,
-  PhPushPin, PhEnvelope, PhTrash, PhSmiley
-} from '@phosphor-icons/vue'
+  Pencil, CornerUpLeft, Copy,
+  Pin, Mail, Trash2, Smile
+} from 'lucide-vue-next'
 import type { Message } from '@/types'
 
 const props = defineProps<{
@@ -41,7 +41,7 @@ const safeY = Math.min(props.y, window.innerHeight - 380)
         <button class="ctx-qr" @click="emit('react', msg, '😮'); emit('close')">😮</button>
         <button class="ctx-qr" @click="emit('react', msg, '😢'); emit('close')">😢</button>
         <button class="ctx-qr ctx-qr-more" @click="emit('openEmoji', msg); emit('close')" title="More reactions">
-          <PhSmiley :size="18" weight="light" />
+          <Smile :size="18" :stroke-width="1.5" />
         </button>
       </div>
 
@@ -51,39 +51,39 @@ const safeY = Math.min(props.y, window.innerHeight - 380)
            five, and "Add Reaction" is what people look for when they want any
            other emoji. -->
       <button class="ctx-row" @click="emit('openEmoji', msg); emit('close')">
-        <PhSmiley :size="15" weight="light" /><span>Add Reaction</span>
+        <Smile :size="15" :stroke-width="1.5" /><span>Add Reaction</span>
       </button>
       <button class="ctx-row" @click="emit('reply', msg); emit('close')">
-        <PhArrowBendUpLeft :size="15" weight="light" /><span>Reply</span>
+        <CornerUpLeft :size="15" :stroke-width="1.5" /><span>Reply</span>
       </button>
       <button v-if="msg.replyTo" class="ctx-row" @click="emit('openTree', msg); emit('close')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 6.8L15.7 11M8.3 17.2L15.7 13"/></svg>
         <span>View Reply Chain</span>
       </button>
       <button v-if="isOwn" class="ctx-row" @click="emit('edit', msg); emit('close')">
-        <PhPencilSimple :size="15" weight="light" /><span>Edit Message</span>
+        <Pencil :size="15" :stroke-width="1.5" /><span>Edit Message</span>
       </button>
 
       <div class="ctx-sep" />
 
       <button class="ctx-row" @click="emit('copy', msg); emit('close')">
-        <PhCopy :size="15" weight="light" /><span>Copy Text</span>
+        <Copy :size="15" :stroke-width="1.5" /><span>Copy Text</span>
       </button>
       <button class="ctx-row" @click="emit('pin', msg); emit('close')">
-        <PhPushPin :size="15" weight="light" />
+        <Pin :size="15" :stroke-width="1.5" />
         <span>{{ msg.pinned ? 'Unpin Message' : 'Pin Message' }}</span>
       </button>
       <button class="ctx-row" @click="emit('close')">
-        <PhEnvelope :size="15" weight="light" /><span>Mark as Unread</span>
+        <Mail :size="15" :stroke-width="1.5" /><span>Mark as Unread</span>
       </button>
       <button class="ctx-row" @click="emit('copyId', msg); emit('close')">
-        <PhCopy :size="15" weight="light" /><span>Copy Message ID</span>
+        <Copy :size="15" :stroke-width="1.5" /><span>Copy Message ID</span>
       </button>
 
       <div class="ctx-sep" />
 
       <button class="ctx-row danger" @click="emit('delete', msg); emit('close')">
-        <PhTrash :size="15" weight="light" /><span>Delete Message</span>
+        <Trash2 :size="15" :stroke-width="1.5" /><span>Delete Message</span>
       </button>
 
     </div>

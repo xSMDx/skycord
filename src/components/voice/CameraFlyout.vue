@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { PhCaretRight, PhCheck, PhGear, PhEye, PhEyeSlash } from '@phosphor-icons/vue'
+import { ChevronRight, Check, Settings, Eye, EyeOff } from 'lucide-vue-next'
 import { Track } from 'livekit-client'
 import CallFlyout from './CallFlyout.vue'
 import { useCallDevices } from '@/composables/useCallDevices'
@@ -67,22 +67,22 @@ onBeforeUnmount(() => {
   <CallFlyout @close="emit('close')">
     <button class="fr" @click="showDevices = !showDevices">
       <span>Camera<span class="fr-sub">{{ currentCamLabel() }}</span></span>
-      <PhCaretRight :size="13" weight="bold" :style="showDevices ? 'transform:rotate(90deg)' : ''" />
+      <ChevronRight :size="13" :stroke-width="2.25" :style="showDevices ? 'transform:rotate(90deg)' : ''" />
     </button>
     <template v-if="showDevices">
       <button class="fr" @click="setCameraDevice('')">
-        <span>Default</span><PhCheck v-if="!voiceSettings.cameraDeviceId" class="fr-check" :size="15" weight="bold" />
+        <span>Default</span><Check v-if="!voiceSettings.cameraDeviceId" class="fr-check" :size="15" :stroke-width="2.25" />
       </button>
       <button v-for="(d,i) in cameras" :key="d.deviceId" class="fr" @click="setCameraDevice(d.deviceId)">
         <span>{{ deviceLabel(d, `Camera ${i+1}`) }}</span>
-        <PhCheck v-if="voiceSettings.cameraDeviceId===d.deviceId" class="fr-check" :size="15" weight="bold" />
+        <Check v-if="voiceSettings.cameraDeviceId===d.deviceId" class="fr-check" :size="15" :stroke-width="2.25" />
       </button>
     </template>
 
     <div class="fr-sep" />
     <button class="fr" @click="togglePreview">
       <span>{{ previewing ? 'Hide Preview' : 'Preview Camera' }}<span v-if="media.localCamOn" class="fr-sub">Showing your live camera</span></span>
-      <component :is="previewing ? PhEyeSlash : PhEye" :size="15" weight="fill" />
+      <component :is="previewing ? EyeOff : Eye" :size="15" :stroke-width="2.25" />
     </button>
     <div v-show="previewing" class="cf-prevbox">
       <video ref="videoEl" class="cf-video" muted playsinline />
@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
 
     <div class="fr-sep" />
     <button class="fr" @click="emit('openSettings'); emit('close')">
-      <span>Video Settings</span><PhGear :size="15" weight="fill" />
+      <span>Video Settings</span><Settings :size="15" :stroke-width="2.25" />
     </button>
   </CallFlyout>
 </template>

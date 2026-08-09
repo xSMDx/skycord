@@ -8,7 +8,7 @@
  * card is purely presentational.
  */
 import { computed } from 'vue'
-import { PhPencilSimple, PhPlus } from '@phosphor-icons/vue'
+import { Pencil, Plus } from 'lucide-vue-next'
 import { avatarFor } from '@/composables/useAvatar'
 
 const props = withDefaults(defineProps<{
@@ -91,7 +91,7 @@ const memberSinceLabel = computed(() => {
       @keydown.space.prevent="editable && emit('editBanner')"
     >
       <img v-if="banner" :src="banner" alt="" class="pc-bimg" />
-      <span v-if="editable" class="pc-bpencil"><PhPencilSimple :size="15" weight="bold" /></span>
+      <span v-if="editable" class="pc-bpencil"><Pencil :size="15" :stroke-width="2.25" /></span>
     </div>
 
     <div class="pc-avwrap">
@@ -104,12 +104,12 @@ const memberSinceLabel = computed(() => {
         @keydown.space.prevent="avatarActs && onAvatar()"
       >
         <img :src="avatarSrc" :alt="name" />
-        <span v-if="editable" class="pc-apencil"><PhPencilSimple :size="19" weight="bold" /></span>
+        <span v-if="editable" class="pc-apencil"><Pencil :size="19" :stroke-width="2.25" /></span>
       </div>
       <span class="pc-dot" :style="{ background: dotColor }" />
 
       <button v-if="editable || statusButton" class="pc-status" @click.stop="emit('editStatus')">
-        <PhPlus v-if="!statusText" :size="13" weight="bold" class="pc-status-plus" />
+        <Plus v-if="!statusText" :size="13" :stroke-width="2.25" class="pc-status-plus" />
         <span class="pc-status-txt">{{ statusText || 'Add status' }}</span>
       </button>
       <div v-else-if="statusText" class="pc-status static">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PhPencilSimple, PhArrowBendUpLeft, PhDotsThree, PhUserPlus, PhArrowRight, PhArrowLeft, PhPhoneCall, PhPhoneX } from '@phosphor-icons/vue'
+import { Pencil, CornerUpLeft, Ellipsis, UserPlus, ArrowRight, ArrowLeft, PhoneCall, PhoneOff } from 'lucide-vue-next'
 import type { Message } from '@/types'
 import GroupInviteCard from './GroupInviteCard.vue'
 import ThemeCard from './ThemeCard.vue'
@@ -34,11 +34,11 @@ const callEnded = computed(() =>
 // System log line (join/leave/add/rename/icon/call) — icon + colour per type.
 const systemIcon = computed(() => {
   switch (props.msg.systemType) {
-    case 'add':   return PhUserPlus
-    case 'join':  return PhArrowRight
-    case 'leave': return PhArrowLeft
-    case 'call':  return callEnded.value ? PhPhoneX : PhPhoneCall
-    default:      return PhPencilSimple   // rename / icon
+    case 'add':   return UserPlus
+    case 'join':  return ArrowRight
+    case 'leave': return ArrowLeft
+    case 'call':  return callEnded.value ? PhoneOff : PhoneCall
+    default:      return Pencil   // rename / icon
   }
 })
 
@@ -114,7 +114,7 @@ const onReplyPillLeave = () => {
   <!-- System log line (group rename / icon / add / join / leave) -->
   <div v-if="msg.kind === 'system'" class="msg-system" :class="['sys-' + (msg.systemType || 'rename'), { 'call-ended': callEnded }]"
        @contextmenu.prevent="emit('openCtx', $event, msg)">
-    <span class="msg-system-icon"><component :is="systemIcon" :size="16" weight="bold" /></span>
+    <span class="msg-system-icon"><component :is="systemIcon" :size="16" :stroke-width="2.25" /></span>
     <span class="msg-system-text">{{ msg.content }}</span>
     <span v-if="msg.systemType === 'rename' || msg.systemType === 'icon'" class="msg-system-link">Edit Group</span>
     <span class="msg-system-time">{{ msg.time }}</span>
@@ -192,9 +192,9 @@ const onReplyPillLeave = () => {
     <div v-show="hoveredId === msg.id && !isEditing" class="msg-actions"
       @mouseenter="emit('hover', msg.id)" @click.stop>
       <button class="ap" @click.stop="emit('openEmoji', msg.id)" title="React">😀</button>
-      <button class="ap" @click.stop="emit('reply', msg)" title="Reply"><PhArrowBendUpLeft :size="15" weight="light"/></button>
-      <button v-if="isOwn" class="ap" @click.stop="emit('edit', msg)" title="Edit"><PhPencilSimple :size="15" weight="light"/></button>
-      <button class="ap" @click.stop="emit('openCtx', $event, msg)" title="More"><PhDotsThree :size="15" weight="light"/></button>
+      <button class="ap" @click.stop="emit('reply', msg)" title="Reply"><CornerUpLeft :size="15" :stroke-width="1.5"/></button>
+      <button v-if="isOwn" class="ap" @click.stop="emit('edit', msg)" title="Edit"><Pencil :size="15" :stroke-width="1.5"/></button>
+      <button class="ap" @click.stop="emit('openCtx', $event, msg)" title="More"><Ellipsis :size="15" :stroke-width="1.5"/></button>
     </div>
   </div>
 </template>

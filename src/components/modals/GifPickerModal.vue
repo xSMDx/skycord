@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { PhMagnifyingGlass, PhX } from '@phosphor-icons/vue'
+import { Search, X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useGifs, gifPreviewUrl, gifFullUrl } from '@/composables/useGifs'
 
@@ -29,12 +29,12 @@ const pick = (gif: any) => {
       <div class="gp-header">
         <h2 class="gp-title">Choose GIF</h2>
         <button class="gp-close" @click="emit('close')" aria-label="Close">
-          <PhX :size="20" weight="light" />
+          <X :size="20" :stroke-width="1.5" />
         </button>
       </div>
 
       <div class="gp-search">
-        <PhMagnifyingGlass :size="15" weight="light" />
+        <Search :size="15" :stroke-width="1.5" />
         <input v-model="search" type="text" placeholder="Search GIFs" autofocus />
       </div>
 

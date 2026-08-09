@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import {
-  PhPaperclip, PhSmiley, PhPaperPlaneTilt, PhX, PhArrowBendUpLeft,
-  PhTextB, PhTextItalic, PhTextUnderline, PhTextStrikethrough, PhQuotes, PhCode, PhLink,
-} from '@phosphor-icons/vue'
+  Paperclip, Smile, Send, X, CornerUpLeft,
+  Bold, Italic, Underline, Strikethrough, Quote, Code, Link,
+} from 'lucide-vue-next'
 import AutocompletePopup from './AutocompletePopup.vue'
 import TimeTokenPicker from './TimeTokenPicker.vue'
 import { slashCommands, matchCommands } from '@/composables/useChatCommands'
@@ -212,13 +212,13 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
       <template v-if="toolbar">
         <div class="fmt-overlay" @mousedown="toolbar = null"></div>
         <div class="fmt-toolbar" :style="{ left: toolbar.x + 'px', top: (toolbar.y - 46) + 'px' }" @mousedown.prevent>
-          <button title="Bold" @click="wrapSelection('**')"><PhTextB :size="16" weight="bold" /></button>
-          <button title="Italic" @click="wrapSelection('*')"><PhTextItalic :size="16" /></button>
-          <button title="Underline" @click="wrapSelection('__')"><PhTextUnderline :size="16" /></button>
-          <button title="Strikethrough" @click="wrapSelection('~~')"><PhTextStrikethrough :size="16" /></button>
-          <button title="Quote" @click="wrapSelection('> ', '')"><PhQuotes :size="16" /></button>
-          <button title="Code" @click="wrapSelection('`')"><PhCode :size="16" /></button>
-          <button title="Link" @click="wrapSelection('[', '](https://)')"><PhLink :size="16" /></button>
+          <button title="Bold" @click="wrapSelection('**')"><Bold :size="16" :stroke-width="2.25" /></button>
+          <button title="Italic" @click="wrapSelection('*')"><Italic :size="16" /></button>
+          <button title="Underline" @click="wrapSelection('__')"><Underline :size="16" /></button>
+          <button title="Strikethrough" @click="wrapSelection('~~')"><Strikethrough :size="16" /></button>
+          <button title="Quote" @click="wrapSelection('> ', '')"><Quote :size="16" /></button>
+          <button title="Code" @click="wrapSelection('`')"><Code :size="16" /></button>
+          <button title="Link" @click="wrapSelection('[', '](https://)')"><Link :size="16" /></button>
         </div>
       </template>
     </Teleport>
@@ -230,22 +230,22 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         <span class="reply-strip-label">Replying to</span>
         <div class="reply-chips">
           <span v-for="t in replyTargets" :key="t.id" class="reply-chip">
-            <PhArrowBendUpLeft :size="12" weight="bold" />
+            <CornerUpLeft :size="12" :stroke-width="2.25" />
             <span class="reply-chip-name">{{ t.author }}</span>
             <button class="reply-chip-x" title="Remove" @click.stop="emit('clearReply', t.id)">
-              <PhX :size="11" weight="bold" />
+              <X :size="11" :stroke-width="2.25" />
             </button>
           </span>
         </div>
         <button class="reply-strip-close" title="Cancel all" @click.stop="emit('clearAllReply')">
-          <PhX :size="14" weight="bold" />
+          <X :size="14" :stroke-width="2.25" />
         </button>
       </div>
     </Transition>
 
     <div class="input-wrapper" :class="{ sending, 'with-reply': replyTargets && replyTargets.length }">
       <button class="input-attach btn-attach" title="Attach file">
-        <PhPaperclip :size="20" weight="light" />
+        <Paperclip :size="20" :stroke-width="1.5" />
       </button>
 
       <input
@@ -267,7 +267,7 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
           <span class="gif-label">GIF</span>
         </button>
         <button class="input-action-btn btn-emoji" title="Emoji" @click.stop="emit('openEmoji')">
-          <PhSmiley :size="18" weight="light" />
+          <Smile :size="18" :stroke-width="1.5" />
         </button>
       </div>
 
@@ -282,7 +282,7 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         <svg v-if="sending" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin">
           <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
         </svg>
-        <PhPaperPlaneTilt v-else :size="16" weight="light" />
+        <Send v-else :size="16" :stroke-width="1.5" />
       </button>
     </div>
   </div>

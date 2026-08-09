@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  PhHash, PhLock, PhSpeakerHigh, PhPlus, PhCaretRight, PhCaretLeft,
-  PhMagnifyingGlass, PhUsers, PhCaretDown,
-  PhMicrophone, PhMicrophoneSlash, PhHeadphones, PhGear,
-  PhPushPin, PhBellSlash, PhSidebar, PhCompass,
-  PhChatDots, PhX, PhUserPlus, PhEnvelope,
-  PhCheck, PhCircleNotch, PhDotsThree,
-  PhPencilSimple, PhUsersThree,
-  PhUser, PhPaperclip, PhAt, PhSlidersHorizontal, PhCopy,
-  PhPhone, PhVideoCamera, PhPhoneCall, PhPhoneX
-} from '@phosphor-icons/vue'
+  Hash, Lock, Volume2, Plus, ChevronRight, ChevronLeft,
+  Search, Users, ChevronDown,
+  Mic, MicOff, Headphones, Settings,
+  Pin, BellOff, PanelLeft, Compass,
+  MessageCircle, X, UserPlus, Mail,
+  Check, LoaderCircle, Ellipsis,
+  Pencil, UsersRound,
+  User, Paperclip, AtSign, SlidersHorizontal, Copy,
+  Phone, Video, PhoneCall, PhoneOff
+} from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
 import { useViewport }                      from '@/composables/useViewport'
@@ -48,6 +48,7 @@ import { useVoice }          from '@/composables/useVoice'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
 // above still owns its own surface until it's migrated onto this one.
 import AppContextMenu        from '@/components/ui/ContextMenu.vue'
+import ConnectionBanner      from '@/components/ui/ConnectionBanner.vue'
 import { openMenu }          from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
@@ -1476,9 +1477,9 @@ const openCtx = (e: MouseEvent, msg: Message) => {
   // short menu, built on the shared primitive rather than the older bespoke one.
   if (msg.kind === 'system') {
     openMenu(e, [
-      { label: 'Copy Text', icon: PhCopy, onSelect: () => copyText(msg.content, 'Text') },
+      { label: 'Copy Text', icon: Copy, onSelect: () => copyText(msg.content, 'Text') },
       ...(msg.dbId
-        ? [{ label: 'Copy Message ID', icon: PhCopy, onSelect: () => copyText(msg.dbId!, 'Message ID') }]
+        ? [{ label: 'Copy Message ID', icon: Copy, onSelect: () => copyText(msg.dbId!, 'Message ID') }]
         : []),
     ])
     return
@@ -1649,6 +1650,10 @@ onBeforeUnmount(() => {
     <!-- App-wide right-click menu — mounted once, driven by openMenu() -->
     <AppContextMenu />
 
+    <!-- Connection status. Mounted at app level rather than inside a pane so it
+         survives navigation and can't be covered by a modal. -->
+    <ConnectionBanner />
+
     <!-- ══ SHELL ════════════════════════════════════════════════════════════ -->
     <!-- `--m` is the 0..1 pane position. The CSS below reads it, so a drag can
          sit anywhere between the two screens instead of only at the ends.
@@ -1680,8 +1685,8 @@ onBeforeUnmount(() => {
           <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
         </div>
         <div class="ri-divider" />
-        <button class="ri add"     title="Add server">  <div class="ri-pip"/><div class="ri-icon add-icon"><PhPlus :size="20" weight="light"/></div></button>
-        <button class="ri explore" title="Explore">     <div class="ri-pip"/><div class="ri-icon exp-icon"><PhCompass :size="20" weight="light"/></div></button>
+        <button class="ri add"     title="Add server">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri explore" title="Explore">     <div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
       </nav>
 
       <!-- ── Left sidebar ──────────────────────────────────────────────── -->
@@ -1690,20 +1695,20 @@ onBeforeUnmount(() => {
       <aside v-if="view==='friends'||view==='dm'||view==='group'" class="sidebar">
         <div class="sb-search">
           <button class="sb-search-btn" @click.stop="showQuickSwitcher = true">
-            <PhMagnifyingGlass :size="14" weight="light" />
+            <Search :size="14" :stroke-width="1.5" />
             <span>Find or start a conversation</span>
           </button>
         </div>
         <div class="sb-body">
           <div class="sb-nav">
             <button class="sb-nav-item" :class="{ active: view==='friends' }" @click="openFriends">
-              <PhUsers :size="18" weight="light" /> Friends
+              <Users :size="18" :stroke-width="1.5" /> Friends
             </button>
           </div>
           <div class="sb-section-label">
             Direct Messages
             <button class="sb-add-btn" @click.stop="showNewDM = true" title="New Message">
-              <PhPencilSimple :size="14" weight="light" />
+              <Pencil :size="14" :stroke-width="1.5" />
             </button>
           </div>
           <!-- Unified conversation list: 1:1 DMs and group DMs together -->
@@ -1723,12 +1728,12 @@ onBeforeUnmount(() => {
                 <span class="dm-name">{{ c.dm.name }}</span>
                 <span class="dm-last">{{ c.dm.lastMsg }}</span>
               </div>
-              <span v-if="isPinned(c.dm.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
-              <span v-if="isConvMuted(c.dm.id)" class="dm-muted" title="Muted"><PhBellSlash :size="12" weight="fill"/></span>
-              <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
+              <span v-if="isPinned(c.dm.id)" class="dm-pin" title="Pinned"><Pin :size="11" :stroke-width="2.25"/></span>
+              <span v-if="isConvMuted(c.dm.id)" class="dm-muted" title="Muted"><BellOff :size="12" :stroke-width="2.25"/></span>
+              <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" title="In a call"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isConvMuted(c.dm.id) }">{{ c.dm.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
-                <PhX :size="13" weight="light" />
+                <X :size="13" :stroke-width="1.5" />
               </button>
             </div>
             <!-- Group DM -->
@@ -1740,18 +1745,18 @@ onBeforeUnmount(() => {
             >
               <div class="grp-av">
                 <img v-if="c.group.avatar" :src="c.group.avatar" :alt="groupDisplayName(c.group)" />
-                <PhUsersThree v-else :size="17" weight="bold" />
+                <UsersRound v-else :size="17" :stroke-width="2.25" />
               </div>
               <div class="dm-info">
                 <span class="dm-name">{{ groupDisplayName(c.group) }}</span>
                 <span class="dm-last">{{ c.group.lastMsg || `${c.group.memberCount} Members` }}</span>
               </div>
-              <span v-if="isPinned(c.group.id)" class="dm-pin" title="Pinned"><PhPushPin :size="11" weight="fill"/></span>
-              <span v-if="isConvMuted(c.group.id)" class="dm-muted" title="Muted"><PhBellSlash :size="12" weight="fill"/></span>
-              <span v-if="convHasCall('group', c.group.id)" class="dm-call" title="In a call"><PhPhone :size="12" weight="fill"/></span>
+              <span v-if="isPinned(c.group.id)" class="dm-pin" title="Pinned"><Pin :size="11" :stroke-width="2.25"/></span>
+              <span v-if="isConvMuted(c.group.id)" class="dm-muted" title="Muted"><BellOff :size="12" :stroke-width="2.25"/></span>
+              <span v-if="convHasCall('group', c.group.id)" class="dm-call" title="In a call"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isConvMuted(c.group.id) }">{{ c.group.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
-                <PhX :size="13" weight="light" />
+                <X :size="13" :stroke-width="1.5" />
               </button>
             </div>
           </template>
@@ -1769,21 +1774,21 @@ onBeforeUnmount(() => {
           <div class="up-btns">
             <div class="up-split">
               <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" :title="micOff ? 'Unmute' : 'Mute'">
-                <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
-                <PhMicrophone v-else :size="16" weight="light"/>
+                <MicOff v-if="micOff" :size="16" :stroke-width="1.5"/>
+                <Mic v-else :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" :title="deafOff ? 'Undeafen' : 'Deafen'">
-                <PhHeadphones :size="16" weight="light"/>
+                <Headphones :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
-              <PhGear :size="16" weight="light"/>
+              <Settings :size="16" :stroke-width="1.5"/>
             </button>
           </div>
         </div>
@@ -1793,29 +1798,29 @@ onBeforeUnmount(() => {
       <aside v-else class="sidebar" :class="{ collapsed: !sidebarOpen }">
         <div class="sb-header">
           <span>{{ currentServer?.name }}</span>
-          <PhCaretDown :size="14" weight="light"/>
+          <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
         <div class="sb-body">
           <div class="ch-group">
             <div class="ch-group-label">
-              <PhCaretRight :size="10" weight="bold"/><span>Text Channels</span>
-              <button class="ch-add-btn"><PhPlus :size="14" weight="light"/></button>
+              <ChevronRight :size="10" :stroke-width="2.25"/><span>Text Channels</span>
+              <button class="ch-add-btn"><Plus :size="14" :stroke-width="1.5"/></button>
             </div>
             <button v-for="ch in textChannels" :key="ch.id"
               class="ch-item" :class="{ active: activeChannel===ch.id, unread: ch.unread }"
               @click="activeChannel=ch.id">
-              <PhLock v-if="ch.locked" class="ch-icon" :size="15" weight="light"/>
-              <PhHash v-else class="ch-icon" :size="15" weight="light"/>
+              <Lock v-if="ch.locked" class="ch-icon" :size="15" :stroke-width="1.5"/>
+              <Hash v-else class="ch-icon" :size="15" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
               <span v-if="ch.unread" class="ch-unread">{{ ch.unread }}</span>
             </button>
           </div>
           <div class="ch-group">
             <div class="ch-group-label">
-              <PhCaretRight :size="10" weight="bold"/><span>Voice Channels</span>
+              <ChevronRight :size="10" :stroke-width="2.25"/><span>Voice Channels</span>
             </div>
             <button v-for="ch in voiceChannels" :key="ch.id" class="ch-item voice">
-              <PhSpeakerHigh class="ch-icon" :size="15" weight="light"/>
+              <Volume2 class="ch-icon" :size="15" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
               <span class="vc-live">LIVE</span>
             </button>
@@ -1833,21 +1838,21 @@ onBeforeUnmount(() => {
           <div class="up-btns">
             <div class="up-split">
               <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" :title="micOff ? 'Unmute' : 'Mute'">
-                <PhMicrophoneSlash v-if="micOff" :size="16" weight="light"/>
-                <PhMicrophone v-else :size="16" weight="light"/>
+                <MicOff v-if="micOff" :size="16" :stroke-width="1.5"/>
+                <Mic v-else :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Input device" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" :title="deafOff ? 'Undeafen' : 'Deafen'">
-                <PhHeadphones :size="16" weight="light"/>
+                <Headphones :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><PhCaretDown :size="9" weight="bold"/></button>
+              <button class="up-chev" title="Output device" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" title="User Settings">
-              <PhGear :size="16" weight="light"/>
+              <Settings :size="16" :stroke-width="1.5"/>
             </button>
           </div>
         </div>
@@ -1860,9 +1865,9 @@ onBeforeUnmount(() => {
         <div class="friends-header">
           <!-- Friends is a pushed screen on mobile, so it needs its own way back. -->
           <button v-if="isMobile" class="icon-btn m-back" aria-label="Back to conversations" @click.stop="mobileNav.backToList()">
-            <PhCaretLeft :size="20" weight="bold"/>
+            <ChevronLeft :size="20" :stroke-width="2.25"/>
           </button>
-          <PhUsers :size="20" weight="light" class="fh-icon"/>
+          <Users :size="20" :stroke-width="1.5" class="fh-icon"/>
           <span class="fh-title">Friends</span>
           <div class="fh-tabs">
             <button class="ftab" :class="{active:friendsTab==='online'}"  @click="friendsTab='online'">Online</button>
@@ -1873,7 +1878,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <button class="add-friend-btn" @click.stop="showAddFriend=true">
-            <PhUserPlus :size="15" weight="light"/> Add Friend
+            <UserPlus :size="15" :stroke-width="1.5"/> Add Friend
           </button>
         </div>
 
@@ -1887,7 +1892,7 @@ onBeforeUnmount(() => {
 
             <template v-else-if="friendsTab!=='pending'">
               <div class="f-search">
-                <PhMagnifyingGlass :size="14" weight="light"/>
+                <Search :size="14" :stroke-width="1.5"/>
                 <input v-model="friendSearch" type="text" placeholder="Search"/>
               </div>
               <div class="f-section-label">
@@ -1901,7 +1906,7 @@ onBeforeUnmount(() => {
                 <p>No friends yet</p>
                 <span>Click <strong>Add Friend</strong> to find people on Skycord</span>
                 <button class="f-empty-btn" @click.stop="showAddFriend=true">
-                  <PhUserPlus :size="15" weight="light"/> Add Friend
+                  <UserPlus :size="15" :stroke-width="1.5"/> Add Friend
                 </button>
               </div>
               <!-- Friend rows -->
@@ -1921,9 +1926,9 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="f-actions" @click.stop>
                   <button class="f-btn" title="Message" @click.stop="openDM({ id:f.id, name:f.displayName||f.username, avatar:avatarFor(f.username,f.avatar), status:f.status as any, lastMsg:'' })">
-                    <PhChatDots :size="18" weight="light"/>
+                    <MessageCircle :size="18" :stroke-width="1.5"/>
                   </button>
-                  <button class="f-btn" title="More" @click.stop="openUserMenu($event, f)"><PhDotsThree :size="18" weight="light"/></button>
+                  <button class="f-btn" title="More" @click.stop="openUserMenu($event, f)"><Ellipsis :size="18" :stroke-width="1.5"/></button>
                 </div>
               </div>
             </template>
@@ -1948,10 +1953,10 @@ onBeforeUnmount(() => {
                 <div class="f-actions" @click.stop>
                   <button class="f-btn accept" :disabled="acceptingId===req._id" @click.stop="doAccept(req)">
                     <svg v-if="acceptingId===req._id" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                    <PhCheck v-else :size="18" weight="light"/>
+                    <Check v-else :size="18" :stroke-width="1.5"/>
                   </button>
                   <button class="f-btn decline" @click.stop="pendingReqs=pendingReqs.filter(r=>r._id!==req._id)">
-                    <PhX :size="18" weight="light"/>
+                    <X :size="18" :stroke-width="1.5"/>
                   </button>
                 </div>
               </div>
@@ -1989,10 +1994,10 @@ onBeforeUnmount(() => {
                    back. It's also the platform-conventional affordance — a
                    gesture with no visible control is undiscoverable. -->
               <button v-if="isMobile" class="icon-btn m-back" aria-label="Back to conversations" @click.stop="mobileNav.backToList()">
-                <PhCaretLeft :size="20" weight="bold"/>
+                <ChevronLeft :size="20" :stroke-width="2.25"/>
               </button>
               <button v-if="view==='server'" class="icon-btn icon-btn-sidebar" @click.stop="sidebarOpen=!sidebarOpen">
-                <PhSidebar :size="18" weight="light"/>
+                <PanelLeft :size="18" :stroke-width="1.5"/>
               </button>
               <template v-if="view==='dm' && activeDM">
                 <div class="dm-header-av" @click.stop="showUserProfile = activeDM?.id || null">
@@ -2006,17 +2011,17 @@ onBeforeUnmount(() => {
               <template v-else-if="view==='group' && activeGroup">
                 <div class="grp-header-av">
                   <img v-if="activeGroup.avatar" :src="activeGroup.avatar" :alt="groupDisplayName(activeGroup)"/>
-                  <PhUsersThree v-else :size="17" weight="bold"/>
+                  <UsersRound v-else :size="17" :stroke-width="2.25"/>
                 </div>
                 <h2 class="chat-title">{{ groupDisplayName(activeGroup) }}</h2>
                 <button class="ch-edit-btn" title="Edit Group" @click.stop="showEditGroup = true">
-                  <PhPencilSimple :size="15" weight="light"/>
+                  <Pencil :size="15" :stroke-width="1.5"/>
                 </button>
                 <div class="ch-topic-sep"/>
                 <span class="ch-topic">{{ activeGroup.memberCount }} Members</span>
               </template>
               <template v-else>
-                <PhHash class="ch-hash" :size="18" weight="light"/>
+                <Hash class="ch-hash" :size="18" :stroke-width="1.5"/>
                 <h2 class="chat-title">{{ currentChannel?.name }}</h2>
                 <div class="ch-topic-sep"/>
                 <span class="ch-topic">Discuss anything on Skycord</span>
@@ -2026,26 +2031,26 @@ onBeforeUnmount(() => {
               <!-- Voice / video call -->
               <template v-if="view==='dm' || view==='group'">
                 <button class="icon-btn call-btn" :class="{ calling: callActiveHere }" :title="callActiveHere ? 'Leave Call' : 'Start Voice Call'" @click.stop="toggleCall">
-                  <component :is="callActiveHere ? PhPhoneX : PhPhoneCall" :size="18" weight="fill"/>
+                  <component :is="callActiveHere ? PhoneOff : PhoneCall" :size="18" :stroke-width="2.25"/>
                 </button>
                 <button class="icon-btn call-btn video" title="Start Video Call" @click.stop="showToast('Video calls are coming soon')">
-                  <PhVideoCamera :size="18" weight="fill"/>
+                  <Video :size="18" :stroke-width="2.25"/>
                 </button>
               </template>
               <button class="icon-btn icon-btn-pin" :class="{ active: showPinned }" @click.stop="showPinned=!showPinned">
-                <PhPushPin :size="18" weight="light"/>
+                <Pin :size="18" :stroke-width="1.5"/>
               </button>
               <button v-if="view==='group' && activeGroup" class="icon-btn" title="Add friends to DM" @click.stop="showInviteGroup = true">
-                <PhUserPlus :size="18" weight="light"/>
+                <UserPlus :size="18" :stroke-width="1.5"/>
               </button>
               <button v-if="view==='server' || view==='group'" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" @click.stop="membersOpen=!membersOpen">
-                <PhUsers :size="18" weight="light"/>
+                <Users :size="18" :stroke-width="1.5"/>
               </button>
 
               <!-- Expanding search + filters popup (placeholder) -->
               <div class="ch-search" :class="{ open: searchOpen }" @click.stop>
                 <button v-if="!searchOpen" class="icon-btn icon-btn-search" title="Search" @click.stop="openSearch">
-                  <PhMagnifyingGlass :size="18" weight="light"/>
+                  <Search :size="18" :stroke-width="1.5"/>
                 </button>
                 <Transition name="search-box">
                   <div v-if="searchOpen" class="ch-search-box">
@@ -2058,24 +2063,24 @@ onBeforeUnmount(() => {
                       @focus="searchFocused = true"
                       @blur="onSearchBlur"
                     />
-                    <PhMagnifyingGlass class="ch-search-ico" :size="15" weight="light"/>
+                    <Search class="ch-search-ico" :size="15" :stroke-width="1.5"/>
                     <Transition name="filters-pop">
                       <div v-if="searchFocused" class="ch-filters" @mousedown.prevent>
                         <div class="ch-filters-label">Filters</div>
                         <button class="ch-filter-row">
-                          <PhUser :size="18" weight="light"/>
+                          <User :size="18" :stroke-width="1.5"/>
                           <div class="cf-text"><span class="cf-title">From a specific user</span><span class="cf-sub">from: <em>user</em></span></div>
                         </button>
                         <button class="ch-filter-row">
-                          <PhPaperclip :size="18" weight="light"/>
+                          <Paperclip :size="18" :stroke-width="1.5"/>
                           <div class="cf-text"><span class="cf-title">Includes a specific type of data</span><span class="cf-sub">has: <em>link, embed or file</em></span></div>
                         </button>
                         <button class="ch-filter-row">
-                          <PhAt :size="18" weight="light"/>
+                          <AtSign :size="18" :stroke-width="1.5"/>
                           <div class="cf-text"><span class="cf-title">Mentions a specific user</span><span class="cf-sub">mentions: <em>user</em></span></div>
                         </button>
                         <button class="ch-filter-row">
-                          <PhSlidersHorizontal :size="18" weight="light"/>
+                          <SlidersHorizontal :size="18" :stroke-width="1.5"/>
                           <div class="cf-text"><span class="cf-title">More filters</span><span class="cf-sub">dates, author type, and more</span></div>
                         </button>
                       </div>
@@ -2151,7 +2156,7 @@ onBeforeUnmount(() => {
         <aside v-if="view==='server'" class="members-panel" :class="{ closed: !membersOpen }">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ members.length }}</span></h3></div>
           <div class="mp-search">
-            <PhMagnifyingGlass :size="13" weight="light"/>
+            <Search :size="13" :stroke-width="1.5"/>
             <input type="text" placeholder="Search members…"/>
           </div>
           <div class="mp-list">
@@ -2182,7 +2187,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <button class="mp-invite" @click.stop="showInviteGroup = true">
-            <PhUserPlus :size="16" weight="bold"/> Invite to Group DM
+            <UserPlus :size="16" :stroke-width="2.25"/> Invite to Group DM
           </button>
         </aside>
       </template>
@@ -2215,9 +2220,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
      without subtracting it here the composer ends up underneath the keyboard
      and the message list scrolls behind it. It's 0 whenever the keyboard is
      closed, so this is inert on desktop. */
-  height:calc((100dvh - var(--keyboard-h, 0px)) / var(--zoom-factor, 1));
+  /* --conn-h is the connection strip's measured height (0 when it's hidden).
+     Shifting down by it, and shrinking to match, keeps the strip from covering
+     the chat header — it was hiding the back button. */
+  height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
+  margin-top:var(--conn-h, 0px);
   overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
-  transition:height .18s ease-out;
+  transition:height .18s ease-out, margin-top .26s cubic-bezier(.32,.72,0,1);
 }
 .shell{display:flex;height:100%;overflow:hidden}
 

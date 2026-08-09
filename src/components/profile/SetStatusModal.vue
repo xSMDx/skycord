@@ -8,7 +8,7 @@
  * expire.
  */
 import { ref, computed } from 'vue'
-import { PhX } from '@phosphor-icons/vue'
+import { X } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import ProfileCard from './ProfileCard.vue'
 
@@ -63,7 +63,7 @@ const submit = () => emit('save', { text: text.value.trim(), clearAt: text.value
     <div class="ss">
       <div class="ss-head">
         <h2>Set your status</h2>
-        <button class="ss-x" aria-label="Close" @click="emit('close')"><PhX :size="18" weight="bold" /></button>
+        <button class="ss-x" aria-label="Close" @click="emit('close')"><X :size="18" :stroke-width="2.25" /></button>
       </div>
 
       <div class="ss-preview">

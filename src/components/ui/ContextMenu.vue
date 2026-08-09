@@ -9,7 +9,7 @@
  * size), click-away, Escape, arrow-key navigation and focus return.
  */
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { PhCheck, PhCaretRight } from '@phosphor-icons/vue'
+import { Check, ChevronRight } from 'lucide-vue-next'
 import { menu, menuItems as items, closeMenu, isSeparator, isSlider, isAction, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 
 const el   = ref<HTMLElement | null>(null)
@@ -244,10 +244,10 @@ onBeforeUnmount(() => {
           @click="select(item)"
           @mouseenter="onRowEnter(i, item, $event)"
         >
-          <component :is="item.icon" v-if="item.icon" :size="15" weight="light" />
+          <component :is="item.icon" v-if="item.icon" :size="15" :stroke-width="1.5" />
           <span class="cm-label">{{ item.label }}</span>
-          <PhCheck v-if="item.check" :size="14" weight="bold" class="cm-check" />
-          <PhCaretRight v-if="item.submenu" :size="12" weight="bold" class="cm-caret" />
+          <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
+          <ChevronRight v-if="item.submenu" :size="12" :stroke-width="2.25" class="cm-caret" />
         </button>
       </template>
     </div>
@@ -275,9 +275,9 @@ onBeforeUnmount(() => {
           @click="select(item)"
           @mouseenter="subActive = j"
         >
-          <component :is="item.icon" v-if="item.icon" :size="15" weight="light" />
+          <component :is="item.icon" v-if="item.icon" :size="15" :stroke-width="1.5" />
           <span class="cm-label">{{ item.label }}</span>
-          <PhCheck v-if="item.check" :size="14" weight="bold" class="cm-check" />
+          <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
         </button>
       </template>
     </div>

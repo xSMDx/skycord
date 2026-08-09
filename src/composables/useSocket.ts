@@ -10,6 +10,20 @@ export const dmConvId = (a: string, b: string) => [a, b].sort().join('_')
 
 let _socket: Socket | null = null
 const connected   = ref(false)
+
+/**
+ * Three-state connection status for the UI.
+ *
+ * `connected` alone can't drive an indicator: it's false both while a reconnect
+ * is in flight and when we've given up, and those need to say different things.
+ * "Reconnecting…" is reassurance; "Can't reach Skycord" is a call to action.
+ *
+ *   connected  — socket is up, messages flow
+ *   connecting — dropped, Socket.IO is retrying (it does this on its own)
+ *   offline    — retries exhausted, or the tab reports no network
+ */
+export type ConnState = 'connected' | 'connecting' | 'offline'
+const connState = ref<ConnState>('connecting')
 const typingUsers = ref<Record<string, { username: string; timer: ReturnType<typeof setTimeout> }>>({})
 // Active voice calls: LiveKit room name -> userIds currently in it (server-tracked
 // presence, so the UI can show Join / "In a call" without being in the room).
@@ -71,9 +85,30 @@ export const useSocket = () => {
       reconnectionDelay:    2000,
     })
 
-    _socket.on('connect',       () => { connected.value = true;  console.log('[WS] connected') })
-    _socket.on('disconnect',    () => { connected.value = false; console.log('[WS] disconnected') })
-    _socket.on('connect_error', e  =>   console.warn('[WS]', e.message))
+    _socket.on('connect',    () => { connected.value = true;  connState.value = 'connected';  console.log('[WS] connected') })
+    _socket.on('disconnect', () => {
+      connected.value = false
+      // A disconnect isn't automatically fatal — Socket.IO starts retrying by
+      // itself, so this is 'connecting' until those attempts run out.
+      connState.value = 'connecting'
+      console.log('[WS] disconnected')
+    })
+    _socket.on('connect_error', e => { connState.value = 'connecting'; console.warn('[WS]', e.message) })
+
+    // Fired once reconnectionAttempts is exhausted. Past this point nothing
+    // will retry on its own, so the UI has to offer the user a way out.
+    _socket.io.on('reconnect_failed', () => { connState.value = 'offline'; console.warn('[WS] gave up reconnecting') })
+
+    // The OS knows we're offline before any socket timeout does — going
+    // straight to 'offline' avoids a pointless "Reconnecting…" on a dead link.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('offline', () => { if (!connected.value) connState.value = 'offline' })
+      window.addEventListener('online',  () => {
+        if (connected.value) return
+        connState.value = 'connecting'
+        _socket?.connect()   // nudge, rather than waiting out the backoff
+      })
+    }
 
     // Incoming DM — silent if you're already in that chat, or it's muted.
     _socket.on('dm:receive', (p: any) => {
@@ -178,7 +213,9 @@ export const useSocket = () => {
   const on = (event: string, cb: CB<any>) => { _h[event] = cb }
 
   return {
-    connected, typingUsers, activeCalls,
+    connected, connState, typingUsers, activeCalls,
+    /** Manual retry, for the "Try again" affordance once we've given up. */
+    retry: () => { connState.value = 'connecting'; _socket?.connect() },
     connect, disconnect,
     sendDMSocket, sendReplySocket,
     sendEditSocket, sendDeleteSocket,

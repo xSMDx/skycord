@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { PhX } from '@phosphor-icons/vue'
+import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
 import type { Group, Friend } from '@/types'
@@ -103,7 +103,7 @@ onMounted(async () => {
           <p class="ig-sub">You can add {{ remaining }} more {{ remaining === 1 ? 'person' : 'people' }}.</p>
         </div>
         <button class="ig-close" @click="emit('close')" aria-label="Close">
-          <PhX :size="20" weight="light" />
+          <X :size="20" :stroke-width="1.5" />
         </button>
       </div>
 

@@ -26,6 +26,7 @@
     "livekit-client": "^2.20.0",
     "livekit-server-sdk": "^2.15.5",
     "lottie-web": "^5.13.0",
+    "lucide-vue-next": "^1.0.0",
     "mongoose": "^8.3.1",
     "morgan": "^1.10.0",
     "socket.io": "^4.7.5",

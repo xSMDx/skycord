@@ -7,7 +7,7 @@
  * already live, and closing it must never kill one.
  */
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { PhX, PhVideoCamera, PhWarning } from '@phosphor-icons/vue'
+import { X, Video, TriangleAlert } from 'lucide-vue-next'
 import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
 
 const emit = defineEmits<{ close: []; confirm: [] }>()
@@ -60,13 +60,13 @@ const close   = () => { stop(); emit('close') }
       <div class="cp-card" role="dialog" aria-label="Camera preview">
         <div class="cp-head">
           <h2>Ready to video chat?</h2>
-          <button class="cp-x" title="Close" @click="close"><PhX :size="18" weight="bold" /></button>
+          <button class="cp-x" title="Close" @click="close"><X :size="18" :stroke-width="2.25" /></button>
         </div>
 
         <div class="cp-stage">
           <video ref="videoEl" class="cp-video" autoplay playsinline muted></video>
           <div v-if="error" class="cp-err">
-            <PhWarning :size="22" weight="fill" /><span>{{ error }}</span>
+            <TriangleAlert :size="22" :stroke-width="2.25" /><span>{{ error }}</span>
           </div>
           <div v-else-if="starting" class="cp-err"><span>Starting camera…</span></div>
         </div>
@@ -92,7 +92,7 @@ const close   = () => { stop(); emit('close') }
             <span>Always preview video</span>
           </label>
           <button class="cp-go" :disabled="!!error" @click="confirm">
-            <PhVideoCamera :size="17" weight="fill" /> Turn On Camera
+            <Video :size="17" :stroke-width="2.25" /> Turn On Camera
           </button>
         </div>
       </div>

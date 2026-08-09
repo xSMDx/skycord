@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { PhCaretDown } from '@phosphor-icons/vue'
+import { ChevronDown } from 'lucide-vue-next'
 import { useVoiceSettings, micCaptureOptions, gateThreshold as sharedGateThreshold } from '@/composables/useVoiceSettings'
 import { createRnnoiseNode } from '@/composables/rnnoiseProcessor'
 import { useVoice } from '@/composables/useVoice'
@@ -184,7 +184,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
             <option value="">Default</option>
             <option v-for="(d,i) in mics" :key="d.deviceId" :value="d.deviceId">{{ label(d, `Microphone ${i+1}`) }}</option>
           </select>
-          <PhCaretDown class="vv-selchev" :size="14" weight="bold" />
+          <ChevronDown class="vv-selchev" :size="14" :stroke-width="2.25" />
         </div>
       </label>
       <label class="vv-field">
@@ -194,7 +194,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
             <option value="">Default</option>
             <option v-for="(d,i) in speakers" :key="d.deviceId" :value="d.deviceId">{{ label(d, `Speaker ${i+1}`) }}</option>
           </select>
-          <PhCaretDown class="vv-selchev" :size="14" weight="bold" />
+          <ChevronDown class="vv-selchev" :size="14" :stroke-width="2.25" />
         </div>
       </label>
     </div>
@@ -269,7 +269,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
           <option value="">Default</option>
           <option v-for="(d,i) in cameras" :key="d.deviceId" :value="d.deviceId">{{ label(d, `Camera ${i+1}`) }}</option>
         </select>
-        <PhCaretDown class="vv-selchev" :size="14" weight="bold" />
+        <ChevronDown class="vv-selchev" :size="14" :stroke-width="2.25" />
       </div>
     </label>
     <button v-if="camTesting" class="vv-btn vv-stopcam" @click="stopCamTest">Stop Test</button>

@@ -18,9 +18,9 @@
  *   Stop Ringing              — no per-callee ring state yet
  */
 import {
-  PhUser, PhMicrophoneSlash, PhHeadphones, PhVideoCameraSlash, PhCopy,
-  PhEye, PhUsersThree, PhVideoCamera, PhSlidersHorizontal, PhUserMinus,
-} from '@phosphor-icons/vue'
+  User, MicOff, Headphones, VideoOff, Copy,
+  Eye, UsersRound, Video, SlidersHorizontal, UserMinus,
+} from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
 
@@ -53,21 +53,21 @@ export interface CallMenuState {
 export const ownTileMenu = (
   me: MenuUser, s: CallMenuState, h: CallMenuHandlers,
 ): MenuItem[] => [
-  { label: 'Profile',        icon: PhUser,        onSelect: () => h.openProfile(me) },
-  { label: 'Preview Camera', icon: PhVideoCamera, onSelect: () => h.previewCamera() },
+  { label: 'Profile',        icon: User,        onSelect: () => h.openProfile(me) },
+  { label: 'Preview Camera', icon: Video, onSelect: () => h.previewCamera() },
   { sep: true },
-  { label: 'Mute',   icon: PhMicrophoneSlash, check: s.selfMuted, keepOpen: true, onSelect: () => h.toggleMute() },
-  { label: 'Deafen', icon: PhHeadphones,      check: s.selfDeafened, keepOpen: true, onSelect: () => h.toggleDeafen() },
-  { label: 'Voice Settings', icon: PhSlidersHorizontal, onSelect: () => h.openVoiceSettings() },
+  { label: 'Mute',   icon: MicOff, check: s.selfMuted, keepOpen: true, onSelect: () => h.toggleMute() },
+  { label: 'Deafen', icon: Headphones,      check: s.selfDeafened, keepOpen: true, onSelect: () => h.toggleDeafen() },
+  { label: 'Voice Settings', icon: SlidersHorizontal, onSelect: () => h.openVoiceSettings() },
   { sep: true },
-  { label: 'Show Non-Video Participants', icon: PhUsersThree, check: s.showNonVideo, keepOpen: true,
+  { label: 'Show Non-Video Participants', icon: UsersRound, check: s.showNonVideo, keepOpen: true,
     onSelect: () => h.toggleShowNonVideo() },
-  { label: 'Show My Own Camera', icon: PhEye, check: s.showOwnCamera, keepOpen: true,
+  { label: 'Show My Own Camera', icon: Eye, check: s.showOwnCamera, keepOpen: true,
     onSelect: () => h.toggleShowOwnCamera() },
   { sep: true },
-  { label: 'Copy User ID', icon: PhCopy, onSelect: () => h.copy(me.id, 'User ID') },
+  { label: 'Copy User ID', icon: Copy, onSelect: () => h.copy(me.id, 'User ID') },
   ...(s.channelId
-    ? [{ label: 'Copy Channel ID', icon: PhCopy, onSelect: () => h.copy(s.channelId!, 'Channel ID') }]
+    ? [{ label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(s.channelId!, 'Channel ID') }]
     : []),
 ]
 
@@ -77,28 +77,28 @@ export const participantMenu = (
   s: CallMenuState & { volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean },
   h: CallMenuHandlers,
 ): MenuItem[] => [
-  { label: 'Profile', icon: PhUser, onSelect: () => h.openProfile(p) },
+  { label: 'Profile', icon: User, onSelect: () => h.openProfile(p) },
   { sep: true },
   // 0–200%: above 100 is a real need when someone's mic is quiet, and it's the
   // only fix available from this side.
   { slider: true, label: 'User Volume', value: s.volume, min: 0, max: 200,
     format: v => `${v}%`, onInput: v => h.setUserVolume(p.id, v) },
   { sep: true },
-  { label: 'Mute',          icon: PhMicrophoneSlash,  check: s.muted, keepOpen: true,
+  { label: 'Mute',          icon: MicOff,  check: s.muted, keepOpen: true,
     onSelect: () => h.toggleUserMute(p.id) },
-  { label: 'Disable Video', icon: PhVideoCameraSlash, check: s.videoOff, keepOpen: true,
+  { label: 'Disable Video', icon: VideoOff, check: s.videoOff, keepOpen: true,
     onSelect: () => h.toggleUserVideo(p.id) },
   { sep: true },
-  { label: 'Show Non-Video Participants', icon: PhUsersThree, check: s.showNonVideo, keepOpen: true,
+  { label: 'Show Non-Video Participants', icon: UsersRound, check: s.showNonVideo, keepOpen: true,
     onSelect: () => h.toggleShowNonVideo() },
   { sep: true },
-  { label: 'Copy User ID', icon: PhCopy, onSelect: () => h.copy(p.id, 'User ID') },
+  { label: 'Copy User ID', icon: Copy, onSelect: () => h.copy(p.id, 'User ID') },
   ...(s.channelId
-    ? [{ label: 'Copy Channel ID', icon: PhCopy, onSelect: () => h.copy(s.channelId!, 'Channel ID') }]
+    ? [{ label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(s.channelId!, 'Channel ID') }]
     : []),
   ...(s.isFriend && h.removeFriend
     ? [{ sep: true } as MenuItem,
-       { label: 'Remove Friend', icon: PhUserMinus, danger: true,
+       { label: 'Remove Friend', icon: UserMinus, danger: true,
          onSelect: () => h.removeFriend!(p.id) } as MenuItem]
     : []),
 ]

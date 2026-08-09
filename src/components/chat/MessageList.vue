@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue'
-import { PhCaretDown } from '@phosphor-icons/vue'
+import { ChevronDown } from 'lucide-vue-next'
 import MessageItem    from './MessageItem.vue'
 import TypingIndicator from './TypingIndicator.vue'
 import type { Message } from '@/types'
@@ -209,7 +209,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
       <button v-if="!atBottom" class="ml-jump" @click="scrollToBottom()">
         <span v-if="missed">{{ missed }} new message{{ missed === 1 ? '' : 's' }}</span>
         <span v-else>Jump to present</span>
-        <PhCaretDown :size="13" weight="bold" />
+        <ChevronDown :size="13" :stroke-width="2.25" />
       </button>
     </Transition>
   </div>

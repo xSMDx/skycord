@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { PhMagnifyingGlass, PhX } from '@phosphor-icons/vue'
+import { Search, X } from 'lucide-vue-next'
 import { useGifs, gifPreviewUrl, gifFullUrl } from '@/composables/useGifs'
 
 const emit = defineEmits<{ select: [value: string]; selectGif: [url: string]; close: [] }>()
@@ -209,7 +209,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
 
     <!-- Search -->
     <div class="picker-search">
-      <PhMagnifyingGlass :size="13" weight="light" class="ps-icon" />
+      <Search :size="13" :stroke-width="1.5" class="ps-icon" />
       <input
         v-model="search"
         type="text"
@@ -217,7 +217,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
         autofocus
       />
       <button v-if="search" class="ps-clear" @click="search = ''">
-        <PhX :size="12" weight="bold" />
+        <X :size="12" :stroke-width="2.25" />
       </button>
     </div>
 

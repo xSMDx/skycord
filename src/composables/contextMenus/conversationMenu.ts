@@ -9,9 +9,9 @@
  * nothing is worse than no row.
  */
 import {
-  PhUser, PhPhoneCall, PhPushPin, PhPushPinSlash, PhBellSlash, PhBell,
-  PhX, PhTrash, PhCopy, PhSignOut, PhPencilSimple, PhLink,
-} from '@phosphor-icons/vue'
+  User, PhoneCall, Pin, PinOff, BellOff, Bell,
+  X, Trash2, Copy, LogOut, Pencil, Link,
+} from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
 import { convPref, MUTE_OPTIONS } from '../useConvPrefs'
@@ -47,12 +47,12 @@ const pinAndMute = (convId: string, h: ConvActions): MenuItem[] => {
   const p = convPref(convId)
   return [
     p.pinned
-      ? { label: 'Unpin Conversation', icon: PhPushPinSlash, onSelect: () => h.setPinned(convId, false) }
-      : { label: 'Pin Conversation',   icon: PhPushPin,      onSelect: () => h.setPinned(convId, true) },
+      ? { label: 'Unpin Conversation', icon: PinOff, onSelect: () => h.setPinned(convId, false) }
+      : { label: 'Pin Conversation',   icon: Pin,      onSelect: () => h.setPinned(convId, true) },
     p.muted
-      ? { label: 'Unmute Conversation', icon: PhBell, onSelect: () => h.setMute(convId, null) }
+      ? { label: 'Unmute Conversation', icon: Bell, onSelect: () => h.setMute(convId, null) }
       : {
-          label: 'Mute Conversation', icon: PhBellSlash,
+          label: 'Mute Conversation', icon: BellOff,
           submenu: MUTE_OPTIONS.map(o => ({
             label: o.label,
             onSelect: () => h.setMute(convId, o.value()),
@@ -69,14 +69,14 @@ export const dmMenu = (
 ): MenuItem[] => [
   ...pinAndMute(conv.id, h),
   { sep: true },
-  { label: 'Profile',      icon: PhUser,      onSelect: () => h.openProfile(conv.user) },
-  { label: 'Start a Call', icon: PhPhoneCall, onSelect: () => void h.startCall(conv.user) },
+  { label: 'Profile',      icon: User,      onSelect: () => h.openProfile(conv.user) },
+  { label: 'Start a Call', icon: PhoneCall, onSelect: () => void h.startCall(conv.user) },
   { sep: true },
-  { label: 'Copy User ID',    icon: PhCopy, onSelect: () => h.copy(conv.user.id, 'User ID') },
-  { label: 'Copy Channel ID', icon: PhCopy, onSelect: () => h.copy(conv.channelId, 'Channel ID') },
+  { label: 'Copy User ID',    icon: Copy, onSelect: () => h.copy(conv.user.id, 'User ID') },
+  { label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(conv.channelId, 'Channel ID') },
   { sep: true },
-  { label: 'Close DM', icon: PhX, onSelect: () => h.closeDM(conv.id) },
-  { label: 'Delete Conversation', icon: PhTrash, danger: true,
+  { label: 'Close DM', icon: X, onSelect: () => h.closeDM(conv.id) },
+  { label: 'Delete Conversation', icon: Trash2, danger: true,
     onSelect: () => h.deleteDM(conv.id) },
 ]
 
@@ -86,14 +86,14 @@ export const groupMenu = (
 ): MenuItem[] => [
   ...pinAndMute(conv.id, h),
   { sep: true },
-  { label: 'Invites',    icon: PhLink,         onSelect: () => h.openInvites(conv.id) },
-  { label: 'Edit Group', icon: PhPencilSimple, onSelect: () => h.editGroup(conv.id) },
+  { label: 'Invites',    icon: Link,         onSelect: () => h.openInvites(conv.id) },
+  { label: 'Edit Group', icon: Pencil, onSelect: () => h.editGroup(conv.id) },
   { sep: true },
-  { label: 'Copy Channel ID', icon: PhCopy, onSelect: () => h.copy(conv.id, 'Channel ID') },
+  { label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(conv.id, 'Channel ID') },
   { sep: true },
   // Hide removes it from your sidebar without leaving; Leave actually exits the
   // group. Both were in the old ⋯ menu and neither should be lost.
-  { label: 'Hide Group',  icon: PhX,       onSelect: () => h.hideGroup(conv.id) },
-  { label: 'Leave Group', icon: PhSignOut, danger: true,
+  { label: 'Hide Group',  icon: X,       onSelect: () => h.hideGroup(conv.id) },
+  { label: 'Leave Group', icon: LogOut, danger: true,
     onSelect: () => h.leaveGroup(conv.id) },
 ]

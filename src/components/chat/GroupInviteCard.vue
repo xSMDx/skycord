@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { PhUsers } from '@phosphor-icons/vue'
+import { Users } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 
 const props = defineProps<{ code: string }>()
@@ -53,7 +53,7 @@ const join = async () => {
 
     <template v-else-if="state === 'error'">
       <div class="ic-error">
-        <div class="ic-icon ic-icon--err"><PhUsers :size="22" weight="bold" /></div>
+        <div class="ic-icon ic-icon--err"><Users :size="22" :stroke-width="2.25" /></div>
         <div class="ic-body">
           <span class="ic-name">Invite Invalid</span>
           <span class="ic-sub">This invite is invalid or has expired.</span>
@@ -63,7 +63,7 @@ const join = async () => {
 
     <template v-else>
       <div class="ic-icon">
-        <PhUsers :size="22" weight="bold" />
+        <Users :size="22" :stroke-width="2.25" />
       </div>
       <div class="ic-body">
         <span class="ic-name">{{ displayName(groupInfo) }}</span>

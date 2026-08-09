@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { PhMagnifyingGlass, PhChatDots, PhUsersThree } from '@phosphor-icons/vue'
+import { Search, MessageCircle, UsersRound } from 'lucide-vue-next'
 import { useApi, type ApiUser } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import type { DM, Group } from '@/types'
@@ -66,7 +66,7 @@ const selectUser = (u: ApiUser) => {
       <div class="qs-modal">
         <!-- Search input -->
         <div class="qs-search">
-          <PhMagnifyingGlass :size="16" weight="light" class="qs-icon" />
+          <Search :size="16" :stroke-width="1.5" class="qs-icon" />
           <input
             v-model="query"
             type="text"
@@ -96,7 +96,7 @@ const selectUser = (u: ApiUser) => {
                 <span class="qs-name">{{ dm.name }}</span>
                 <span class="qs-sub">{{ dm.lastMsg }}</span>
               </div>
-              <PhChatDots :size="16" weight="light" class="qs-arrow" />
+              <MessageCircle :size="16" :stroke-width="1.5" class="qs-arrow" />
             </div>
           </template>
 
@@ -110,13 +110,13 @@ const selectUser = (u: ApiUser) => {
             >
               <div class="qs-av qs-av-group">
                 <img v-if="g.avatar" :src="g.avatar" :alt="groupLabel(g)" />
-                <PhUsersThree v-else :size="16" weight="bold" />
+                <UsersRound v-else :size="16" :stroke-width="2.25" />
               </div>
               <div class="qs-info">
                 <span class="qs-name">{{ groupLabel(g) }}</span>
                 <span class="qs-sub">{{ g.memberCount }} Members</span>
               </div>
-              <PhChatDots :size="16" weight="light" class="qs-arrow" />
+              <MessageCircle :size="16" :stroke-width="1.5" class="qs-arrow" />
             </div>
           </template>
 
@@ -136,7 +136,7 @@ const selectUser = (u: ApiUser) => {
                 <span class="qs-name">{{ u.displayName }}</span>
                 <span class="qs-sub">{{ u.username }}#{{ u.discriminator }}</span>
               </div>
-              <PhChatDots :size="16" weight="light" class="qs-arrow" />
+              <MessageCircle :size="16" :stroke-width="1.5" class="qs-arrow" />
             </div>
           </template>
 

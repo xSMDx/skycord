@@ -7,8 +7,8 @@
  * than by forking the menu.
  */
 import {
-  PhUser, PhChatDots, PhPhoneCall, PhCopy,
-} from '@phosphor-icons/vue'
+  User, MessageCircle, PhoneCall, Copy,
+} from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 
 /** The shape every caller can supply — deliberately loose, since friends,
@@ -41,21 +41,21 @@ export const userMenu = (
   ctx: UserMenuCtx = {},
 ): MenuItem[] => {
   const items: MenuItem[] = [
-    { label: 'Profile', icon: PhUser, onSelect: () => h.openProfile(u) },
+    { label: 'Profile', icon: User, onSelect: () => h.openProfile(u) },
   ]
 
   if (!ctx.isSelf) {
     items.push(
-      { label: 'Message', icon: PhChatDots, disabled: ctx.isCurrentDM,
+      { label: 'Message', icon: MessageCircle, disabled: ctx.isCurrentDM,
         onSelect: () => void h.openDM(u) },
-      { label: 'Call', icon: PhPhoneCall,
+      { label: 'Call', icon: PhoneCall,
         onSelect: () => void h.startCall(u) },
     )
   }
 
   items.push(
     { sep: true },
-    { label: 'Copy User ID', icon: PhCopy, onSelect: () => h.copyId(u.id) },
+    { label: 'Copy User ID', icon: Copy, onSelect: () => h.copyId(u.id) },
   )
 
   // Block is NOT here: Friendship.status has 'blocked' in the enum but nothing

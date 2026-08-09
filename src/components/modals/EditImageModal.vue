@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { PhX, PhImage, PhImageSquare, PhArrowClockwise } from '@phosphor-icons/vue'
+// Aliased, for two reasons: PhImage and PhImageSquare both map to Lucide's
+// single Image, which would be a duplicate identifier; and an unaliased `Image`
+// shadows the DOM constructor that `new Image()` below relies on for cropping.
+import { X, Image as ImageIcon, RotateCw } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 
 const props = defineProps<{ src: string }>()
@@ -85,7 +88,7 @@ const apply = () => {
       <div class="ei-header">
         <h2 class="ei-title">Edit Image</h2>
         <button class="ei-close" @click="emit('close')" aria-label="Close">
-          <PhX :size="20" weight="light" />
+          <X :size="20" :stroke-width="1.5" />
         </button>
       </div>
 
@@ -109,16 +112,16 @@ const apply = () => {
       <p v-if="isGif" class="ei-gifnote">GIFs keep their animation, so they're used as-is.</p>
 
       <div v-if="!isGif" class="ei-controls">
-        <PhImageSquare :size="18" weight="fill" class="ei-zoom-ico" />
+        <ImageIcon :size="18" :stroke-width="2.25" class="ei-zoom-ico" />
         <input
           v-model.number="scale"
           class="ei-slider"
           type="range" min="1" max="3" step="0.01"
           aria-label="Zoom"
         />
-        <PhImage :size="22" weight="fill" class="ei-zoom-ico" />
+        <ImageIcon :size="22" :stroke-width="2.25" class="ei-zoom-ico" />
         <button class="ei-rotate" title="Rotate" @click="rotate">
-          <PhArrowClockwise :size="18" weight="bold" />
+          <RotateCw :size="18" :stroke-width="2.25" />
         </button>
       </div>
 

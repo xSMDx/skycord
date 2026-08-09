@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { PhX, PhPencilSimple, PhUsersThree } from '@phosphor-icons/vue'
+import { X, Pencil, UsersRound } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
 import EditImageModal from './EditImageModal.vue'
@@ -51,7 +51,7 @@ const save = async () => {
       <div class="eg-header">
         <h2 class="eg-title">Edit Group</h2>
         <button class="eg-close" @click="emit('close')" aria-label="Close">
-          <PhX :size="20" weight="light" />
+          <X :size="20" :stroke-width="1.5" />
         </button>
       </div>
 
@@ -60,9 +60,9 @@ const save = async () => {
         <button class="eg-avatar" @click="picker = 'change'" aria-label="Change group icon">
           <span class="eg-avatar-inner">
             <img v-if="avatar" :src="avatar" alt="Group icon" />
-            <PhUsersThree v-else :size="40" weight="bold" />
+            <UsersRound v-else :size="40" :stroke-width="2.25" />
           </span>
-          <span class="eg-avatar-edit"><PhPencilSimple :size="15" weight="bold" /></span>
+          <span class="eg-avatar-edit"><Pencil :size="15" :stroke-width="2.25" /></span>
         </button>
 
         <label class="eg-label" for="eg-name">Group Name</label>

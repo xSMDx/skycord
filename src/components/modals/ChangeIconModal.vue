@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { PhX, PhImageSquare } from '@phosphor-icons/vue'
+import { X, Image } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useGifs, gifPreviewUrl } from '@/composables/useGifs'
 
@@ -32,14 +32,14 @@ const onFile = (e: Event) => {
       <div class="ci-header">
         <h2 class="ci-title">Change Icon</h2>
         <button class="ci-close" @click="emit('close')" aria-label="Close">
-          <PhX :size="20" weight="light" />
+          <X :size="20" :stroke-width="1.5" />
         </button>
       </div>
 
       <div class="ci-body">
         <!-- Upload Image -->
         <button class="ci-card ci-upload" @click="pickFile">
-          <PhImageSquare :size="34" weight="light" />
+          <Image :size="34" :stroke-width="1.5" />
           <span class="ci-card-label">Upload Image</span>
         </button>
         <input ref="fileEl" type="file" accept="image/*" class="ci-file" @change="onFile" />

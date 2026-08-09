@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PhX, PhPushPin } from '@phosphor-icons/vue'
+import { X, Pin } from 'lucide-vue-next'
 import type { Message } from '@/types'
 
 const props = defineProps<{ messages: Message[] }>()
@@ -11,10 +11,10 @@ const pinned = props.messages.filter(m => m.pinned)
 <template>
   <div class="pinned">
     <div class="pinned-header">
-      <PhPushPin :size="16" weight="fill" style="color:#f0a500" />
+      <Pin :size="16" :stroke-width="2.25" style="color:#f0a500" />
       <span>Pinned Messages</span>
       <button class="pinned-close" @click="emit('close')">
-        <PhX :size="16" weight="light" />
+        <X :size="16" :stroke-width="1.5" />
       </button>
     </div>
 

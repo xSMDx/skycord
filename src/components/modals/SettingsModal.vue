@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
 import {
-  PhX, PhCheckCircle, PhArrowRight, PhSignOut, PhCaretLeft, PhCaretRight,
-} from '@phosphor-icons/vue'
+  X, CircleCheck, ArrowRight, LogOut, ChevronLeft, ChevronRight,
+} from 'lucide-vue-next'
 import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
@@ -458,7 +458,7 @@ const handleLogout = () => { emit('close'); logout() }
           <div v-if="isMobile" class="sm-mhead">
             <h2 class="sm-mhead-title">Settings</h2>
             <button class="sm-mhead-btn" aria-label="Close settings" @click="emit('close')">
-              <PhX :size="22" weight="light" />
+              <X :size="22" :stroke-width="1.5" />
             </button>
           </div>
           <div v-for="section in navSections" :key="section.label" class="sm-nav-section">
@@ -472,7 +472,7 @@ const handleLogout = () => { emit('close'); logout() }
                 {{ item.label }}
                 <!-- A chevron says "this pushes a screen". Without it a phone
                      user can't tell a list row from a toggle. -->
-                <PhCaretRight v-if="isMobile" class="sm-nav-chev" :size="14" weight="bold" />
+                <ChevronRight v-if="isMobile" class="sm-nav-chev" :size="14" :stroke-width="2.25" />
               </button>
 
               <!-- In-page sub-nav — shown while that page is selected. A
@@ -489,7 +489,7 @@ const handleLogout = () => { emit('close'); logout() }
           </div>
           <div class="sm-nav-divider" />
           <button class="sm-nav-item danger" @click="handleLogout">
-            <PhSignOut :size="14" weight="light" /> Log Out
+            <LogOut :size="14" :stroke-width="1.5" /> Log Out
           </button>
         </div>
 
@@ -499,15 +499,15 @@ const handleLogout = () => { emit('close'); logout() }
                back control that scrolls away strands the user. -->
           <div v-if="isMobile" class="sm-mhead sm-mhead-detail">
             <button class="sm-mhead-btn" aria-label="Back to settings list" @click="mobileDetail = false">
-              <PhCaretLeft :size="22" weight="bold" />
+              <ChevronLeft :size="22" :stroke-width="2.25" />
             </button>
             <h2 class="sm-mhead-title">{{ currentPageLabel }}</h2>
             <button class="sm-mhead-btn" aria-label="Close settings" @click="emit('close')">
-              <PhX :size="22" weight="light" />
+              <X :size="22" :stroke-width="1.5" />
             </button>
           </div>
           <button v-if="!isMobile" class="sm-close" @click="emit('close')">
-            <PhX :size="20" weight="light" />
+            <X :size="20" :stroke-width="1.5" />
           </button>
 
           <!-- ── Account page ── -->
@@ -572,7 +572,7 @@ const handleLogout = () => { emit('close'); logout() }
                   <span class="acc-row-value muted">1 device</span>
                 </div>
                 <button class="acc-btn-arrow">
-                  <PhArrowRight :size="16" weight="light" />
+                  <ArrowRight :size="16" :stroke-width="1.5" />
                 </button>
               </div>
             </div>
@@ -581,12 +581,12 @@ const handleLogout = () => { emit('close'); logout() }
             <h2 id="acc-standing" class="acc-section-title">Account Standing</h2>
             <div class="acc-card">
               <div class="acc-standing">
-                <PhCheckCircle :size="24" weight="fill" style="color:#23a55a; flex-shrink:0" />
+                <CircleCheck :size="24" :stroke-width="2.25" style="color:#23a55a; flex-shrink:0" />
                 <div style="flex:1">
                   <div class="acc-standing-title">Your account is all good</div>
                   <div class="acc-standing-sub">No violations. Thanks for keeping Skycord safe 🙏</div>
                 </div>
-                <PhArrowRight :size="16" weight="light" style="color:#949ba4;flex-shrink:0" />
+                <ArrowRight :size="16" :stroke-width="1.5" style="color:#949ba4;flex-shrink:0" />
               </div>
             </div>
 

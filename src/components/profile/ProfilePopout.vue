@@ -10,9 +10,9 @@
  */
 import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
 import {
-  PhPencilSimple, PhCaretRight, PhIdentificationCard, PhCheck,
-  PhChatDots, PhUserPlus, PhUserMinus, PhArrowSquareOut,
-} from '@phosphor-icons/vue'
+  Pencil, ChevronRight, IdCard, Check,
+  MessageCircle, UserPlus, UserMinus, ExternalLink,
+} from 'lucide-vue-next'
 import ProfileCard from './ProfileCard.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
@@ -167,13 +167,13 @@ onBeforeUnmount(() => {
           <!-- ── your own ── -->
           <div v-if="isSelf" class="pp-rows">
             <button class="pp-row" @click="emit('editProfile')">
-              <PhPencilSimple :size="16" weight="bold" /><span>Edit profile</span>
+              <Pencil :size="16" :stroke-width="2.25" /><span>Edit profile</span>
             </button>
 
             <button class="pp-row" @click="togglePresence">
               <span class="pp-dot" :style="{ background: currentPresence.color }" />
               <span>{{ currentPresence.label }}</span>
-              <PhCaretRight :size="13" weight="bold" class="pp-chev" :class="{ open: showPresence }" />
+              <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
             </button>
             <div v-if="showPresence" class="pp-sub">
               <button
@@ -182,35 +182,35 @@ onBeforeUnmount(() => {
               >
                 <span class="pp-dot" :style="{ background: p.color }" />
                 <span>{{ p.label }}</span>
-                <PhCheck v-if="p.id === view.status" :size="14" weight="bold" class="pp-chev" />
+                <Check v-if="p.id === view.status" :size="14" :stroke-width="2.25" class="pp-chev" />
               </button>
             </div>
 
             <button class="pp-row" @click="copyId">
-              <PhIdentificationCard :size="16" weight="bold" /><span>Copy user ID</span>
+              <IdCard :size="16" :stroke-width="2.25" /><span>Copy user ID</span>
             </button>
           </div>
 
           <!-- ── someone else ── -->
           <div v-else class="pp-rows">
             <button class="pp-row" @click="emit('message', view!)">
-              <PhChatDots :size="16" weight="bold" /><span>Message</span>
+              <MessageCircle :size="16" :stroke-width="2.25" /><span>Message</span>
             </button>
 
             <button v-if="relationship === 'none'" class="pp-row" :disabled="busy" @click="addFriend">
-              <PhUserPlus :size="16" weight="bold" /><span>Add friend</span>
+              <UserPlus :size="16" :stroke-width="2.25" /><span>Add friend</span>
             </button>
             <button v-else-if="relationship === 'friends'" class="pp-row danger" :disabled="busy" @click="unfriend">
-              <PhUserMinus :size="16" weight="bold" /><span>Remove friend</span>
+              <UserMinus :size="16" :stroke-width="2.25" /><span>Remove friend</span>
             </button>
             <div v-else-if="relationship === 'outgoing'" class="pp-note">Friend request sent</div>
             <div v-else-if="relationship === 'incoming'" class="pp-note">Wants to be your friend</div>
 
             <button class="pp-row" @click="emit('viewFull', userId)">
-              <PhArrowSquareOut :size="16" weight="bold" /><span>View full profile</span>
+              <ExternalLink :size="16" :stroke-width="2.25" /><span>View full profile</span>
             </button>
             <button class="pp-row" @click="copyId">
-              <PhIdentificationCard :size="16" weight="bold" /><span>Copy user ID</span>
+              <IdCard :size="16" :stroke-width="2.25" /><span>Copy user ID</span>
             </button>
           </div>
         </template>

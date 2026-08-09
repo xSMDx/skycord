@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { PhX, PhMagnifyingGlassPlus, PhMagnifyingGlassMinus, PhArrowsOutSimple } from '@phosphor-icons/vue'
+import { X, ZoomIn, ZoomOut, Expand } from 'lucide-vue-next'
 import type { Message, ReplyGraph } from '@/types'
 import { stripMarkers } from '@/utils/richText'
 
@@ -140,10 +140,10 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
             <p>Every branch of replies that led to this point</p>
           </div>
           <div class="rt-header-actions">
-            <button class="rt-zoom-btn" @click="zoomOut" title="Zoom out"><PhMagnifyingGlassMinus :size="15" weight="light" /></button>
-            <button class="rt-zoom-btn" @click="zoomReset" title="Reset zoom"><PhArrowsOutSimple :size="14" weight="light" /></button>
-            <button class="rt-zoom-btn" @click="zoomIn" title="Zoom in"><PhMagnifyingGlassPlus :size="15" weight="light" /></button>
-            <button class="rt-close" @click="emit('close')"><PhX :size="18" weight="light" /></button>
+            <button class="rt-zoom-btn" @click="zoomOut" title="Zoom out"><ZoomOut :size="15" :stroke-width="1.5" /></button>
+            <button class="rt-zoom-btn" @click="zoomReset" title="Reset zoom"><Expand :size="14" :stroke-width="1.5" /></button>
+            <button class="rt-zoom-btn" @click="zoomIn" title="Zoom in"><ZoomIn :size="15" :stroke-width="1.5" /></button>
+            <button class="rt-close" @click="emit('close')"><X :size="18" :stroke-width="1.5" /></button>
           </div>
         </div>
 

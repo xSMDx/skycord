@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { PhX, PhMagnifyingGlass } from '@phosphor-icons/vue'
+import { X, Search } from 'lucide-vue-next'
 
 const emit = defineEmits<{ select: [emoji: string]; close: [] }>()
 
@@ -72,13 +72,13 @@ const select = (emoji: string) => {
         <div class="rp-header">
           <h3>Pick a Reaction</h3>
           <button class="rp-close" @click="emit('close')">
-            <PhX :size="18" weight="light" />
+            <X :size="18" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- Search -->
         <div class="rp-search">
-          <PhMagnifyingGlass :size="14" weight="light" class="rp-search-icon" />
+          <Search :size="14" :stroke-width="1.5" class="rp-search-icon" />
           <input v-model="search" type="text" placeholder="Find the perfect emoji…" autofocus />
         </div>
 

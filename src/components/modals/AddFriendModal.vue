@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { PhX, PhMagnifyingGlass, PhUserPlus, PhCheck } from '@phosphor-icons/vue'
+import { X, Search, UserPlus, Check } from 'lucide-vue-next'
 import { useApi, type ApiUser } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 
@@ -57,14 +57,14 @@ const statusColor: Record<string, string> = {
             <p class="af-sub">Search by username to send a friend request.</p>
           </div>
           <button class="af-close" @click="emit('close')">
-            <PhX :size="20" weight="light" />
+            <X :size="20" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- Search bar -->
         <div class="af-search-wrap">
           <div class="af-search" :class="{ focused: query.length > 0 }">
-            <PhMagnifyingGlass :size="16" weight="light" class="af-search-icon" />
+            <Search :size="16" :stroke-width="1.5" class="af-search-icon" />
             <input
               v-model="query"
               type="text"
@@ -96,8 +96,8 @@ const statusColor: Record<string, string> = {
                 @click="send(u)"
                 :disabled="sentIds.has(u.id)"
               >
-                <PhCheck v-if="sentIds.has(u.id)" :size="15" weight="bold" />
-                <PhUserPlus v-else :size="15" weight="light" />
+                <Check v-if="sentIds.has(u.id)" :size="15" :stroke-width="2.25" />
+                <UserPlus v-else :size="15" :stroke-width="1.5" />
                 {{ sentIds.has(u.id) ? 'Sent' : 'Add Friend' }}
               </button>
             </div>

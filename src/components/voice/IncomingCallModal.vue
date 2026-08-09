@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount } from 'vue'
-import { PhPhone, PhX } from '@phosphor-icons/vue'
+import { Phone, X } from 'lucide-vue-next'
 import { soundRingStart, soundRingStop } from '@/composables/useSocket'
 
 defineProps<{ name: string; avatar: string }>()
@@ -30,8 +30,8 @@ onBeforeUnmount(soundRingStop)
         <div class="ic-name">{{ name }}</div>
         <div class="ic-sub">Incoming Call…</div>
         <div class="ic-actions">
-          <button class="ic-btn decline" title="Decline" @click="emit('decline')"><PhX :size="24" weight="bold" /></button>
-          <button class="ic-btn accept" title="Accept" @click="emit('accept')"><PhPhone :size="24" weight="fill" /></button>
+          <button class="ic-btn decline" title="Decline" @click="emit('decline')"><X :size="24" :stroke-width="2.25" /></button>
+          <button class="ic-btn accept" title="Accept" @click="emit('accept')"><Phone :size="24" :stroke-width="2.25" /></button>
         </div>
       </div>
     </div>
