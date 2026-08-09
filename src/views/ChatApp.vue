@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  PhHash, PhLock, PhSpeakerHigh, PhPlus, PhCaretRight,
+  PhHash, PhLock, PhSpeakerHigh, PhPlus, PhCaretRight, PhCaretLeft,
   PhMagnifyingGlass, PhUsers, PhCaretDown,
   PhMicrophone, PhMicrophoneSlash, PhHeadphones, PhGear,
   PhPushPin, PhBellSlash, PhSidebar, PhCompass,
@@ -13,6 +13,9 @@ import {
 } from '@phosphor-icons/vue'
 
 import { useAuth }                          from '@/composables/useAuth'
+import { useViewport }                      from '@/composables/useViewport'
+import { useMobileNav }                     from '@/composables/useMobileNav'
+import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
 import { useMessages }                      from '@/composables/useMessages'
 import { useApi, type ApiUser, type PendingRequest, type ApiMessage } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
@@ -59,6 +62,30 @@ import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } 
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 const { user: authUser, authFetch, updateUser } = useAuth()
+
+// ── Mobile ─────────────────────────────────────────────────────────────────
+// The desktop shell can't fit a phone: the rail (68px) plus the sidebar (234px)
+// take 302px of a 375px screen, leaving 73px for the conversation. Below the
+// breakpoint the two become a stack — list is the root, a conversation pushes
+// on top of it — driven entirely by CSS off `mobileProgress`, so none of the
+// existing markup has to change.
+const { isMobile, canOwnEdgeSwipe } = useViewport()
+const mobileNav = useMobileNav()
+const mobileProgress = mobileNav.progress
+const shellRef = ref<HTMLElement | null>(null)
+
+const edgeSwipe = useEdgeSwipe({
+  enabled: () => canOwnEdgeSwipe.value && mobileNav.onConversation.value,
+  width: () => shellRef.value?.offsetWidth || window.innerWidth,
+  onDragStart: () => mobileNav.setDragging(true),
+  onProgress: p => mobileNav.setProgress(p),
+  onSettle: toList => { mobileNav.setDragging(false); mobileNav.settle(!toList) },
+})
+
+watch(shellRef, (el, prev) => {
+  if (prev) edgeSwipe.unbind(prev)
+  if (el) edgeSwipe.bind(el)
+})
 
 // ── API ────────────────────────────────────────────────────────────────────
 const api = useApi()
@@ -733,6 +760,7 @@ const openGroup = async (group: Group) => {
   activeGroup.value = group
   activeDM.value    = null
   view.value        = 'group'
+  mobileNav.openConversation()   // no-op on desktop; pushes the screen on a phone
   membersOpen.value = true   // group member panel shown by default, like Discord
   const g = groupsData.value.find(x => x.id === group.id)
   if (g) g.unread = undefined
@@ -962,6 +990,7 @@ const openDM = async (dm: DM) => {
   if (!dmsData.value.find(d => d.id === dm.id)) dmsData.value.unshift(dm)
   activeDM.value = dm
   view.value = 'dm'
+  mobileNav.openConversation()   // no-op on desktop; pushes the screen on a phone
   // Clear unread
   const d = dmsData.value.find(x => x.id === dm.id)
   if (d) d.unread = undefined
@@ -1070,6 +1099,11 @@ const openDMFromUser = (u: Record<string, any>) => {
 
 const openFriends = () => {
   view.value = 'friends'
+  // On a phone the root screen is the conversation list, and Friends is
+  // reached FROM it — so this pushes, exactly like opening a conversation.
+  // Boot lands on view==='friends' with the stack unpushed, which is why the
+  // list is what you see first rather than this.
+  mobileNav.openConversation()
   activeDM.value = null
   setActiveDMPartner(null)
   setActiveGroup(null)
@@ -1616,7 +1650,16 @@ onBeforeUnmount(() => {
     <AppContextMenu />
 
     <!-- ══ SHELL ════════════════════════════════════════════════════════════ -->
-    <div class="shell">
+    <!-- `--m` is the 0..1 pane position. The CSS below reads it, so a drag can
+         sit anywhere between the two screens instead of only at the ends.
+         `m-drag` kills the transition while a finger is driving it, so the pane
+         tracks 1:1 rather than lagging behind by the transition duration. -->
+    <div
+      class="shell"
+      ref="shellRef"
+      :class="{ mobile: isMobile, 'm-chat': mobileNav.onConversation.value, 'm-drag': mobileNav.dragging.value }"
+      :style="isMobile ? { '--m': mobileProgress } : undefined"
+    >
 
       <!-- Server Rail -->
       <nav class="rail">
@@ -1815,6 +1858,10 @@ onBeforeUnmount(() => {
       <!-- Friends view -->
       <div v-if="view==='friends'" class="main-content">
         <div class="friends-header">
+          <!-- Friends is a pushed screen on mobile, so it needs its own way back. -->
+          <button v-if="isMobile" class="icon-btn m-back" aria-label="Back to conversations" @click.stop="mobileNav.backToList()">
+            <PhCaretLeft :size="20" weight="bold"/>
+          </button>
           <PhUsers :size="20" weight="light" class="fh-icon"/>
           <span class="fh-title">Friends</span>
           <div class="fh-tabs">
@@ -1936,6 +1983,14 @@ onBeforeUnmount(() => {
           <!-- Chat header -->
           <div class="chat-header">
             <div class="chat-header-left">
+              <!-- Always present on mobile, not just as a fallback: the edge
+                   swipe only activates when installed as a PWA (in a browser
+                   tab the OS owns that edge), so in a tab this is the only way
+                   back. It's also the platform-conventional affordance — a
+                   gesture with no visible control is undiscoverable. -->
+              <button v-if="isMobile" class="icon-btn m-back" aria-label="Back to conversations" @click.stop="mobileNav.backToList()">
+                <PhCaretLeft :size="20" weight="bold"/>
+              </button>
               <button v-if="view==='server'" class="icon-btn icon-btn-sidebar" @click.stop="sidebarOpen=!sidebarOpen">
                 <PhSidebar :size="18" weight="light"/>
               </button>
@@ -2349,6 +2404,88 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* ── Friends view ──────────────────────────────────────────────────────── */
 .main-content{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0}
+
+/* ══ MOBILE ══════════════════════════════════════════════════════════════════
+   Two screens on one horizontal track rather than three columns side by side.
+   Everything keys off --m (0 = list, 1 = conversation), which the gesture layer
+   writes continuously — so a half-finished drag renders correctly instead of
+   snapping between two states.
+
+   Only transform and opacity animate: both are compositor-only, so the pane
+   moves without triggering layout on every frame. */
+.shell.mobile{position:relative}
+
+/* The rail is 68px of permanent chrome whose only real content today is Home.
+   Servers aren't real until channels ship, so it's hidden rather than ported
+   as an empty strip — it gets designed alongside channels. */
+.shell.mobile .rail{display:none}
+
+.shell.mobile .sidebar{
+  position:absolute;inset:0;width:100%;
+  border-right:none;
+  /* Parallax: the list trails the conversation rather than moving with it, so
+     the two read as separate layers instead of one sliding sheet. Same trick
+     iOS uses on a navigation push. */
+  transform:translate3d(calc(var(--m, 0) * -28%), 0, 0);
+  opacity:calc(1 - (var(--m, 0) * 0.35));
+  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  z-index:1;
+}
+
+/* Both the friends view and the chat section are "the conversation screen". */
+.shell.mobile .main-content,
+.shell.mobile .chat{
+  position:absolute;inset:0;
+  transform:translate3d(calc((1 - var(--m, 0)) * 100%), 0, 0);
+  transition:transform .34s cubic-bezier(.32,.72,0,1);
+  z-index:2;
+  /* A shadow along the leading edge separates the pushed screen from the list
+     underneath, which is what makes the parallax legible. */
+  box-shadow:-8px 0 24px rgba(0,0,0,.45);
+}
+
+/* Mid-drag the finger owns the position; a transition here would fight it. */
+.shell.mobile.m-drag .sidebar,
+.shell.mobile.m-drag .main-content,
+.shell.mobile.m-drag .chat{transition:none}
+
+/* Safe areas: the sidebar header and the user panel are the top and bottom
+   edges of the screen once the rail is gone, so they carry the insets. */
+.shell.mobile .sb-header{padding-top:env(safe-area-inset-top)}
+.shell.mobile .user-panel{padding-bottom:env(safe-area-inset-bottom)}
+.shell.mobile .chat-header{padding-top:env(safe-area-inset-top)}
+
+/* Touch targets. The desktop sizes are built for a cursor; 44px is the floor
+   for a fingertip, and the taller rows also make the list easier to scan. */
+.shell.mobile .dm-item{padding:10px 12px;margin:0 8px;min-height:56px}
+.shell.mobile .icon-btn{min-width:44px;min-height:44px}
+.shell.mobile .sb-nav-item{min-height:44px}
+.shell.mobile .f-row{min-height:60px}
+
+/* Press feedback belongs on pointer-down, and hover doesn't exist on a phone —
+   a :hover rule either never fires or sticks after the tap. */
+.shell.mobile .dm-item:active{background:var(--hover)}
+.shell.mobile .icon-btn:active{opacity:.6}
+
+/* The X on a conversation row is hover-revealed on desktop, which on touch
+   means it's either invisible or permanently showing. Long-press opens the
+   context menu instead, which is the same set of actions. */
+.shell.mobile .dm-x{display:none}
+
+/* Back button: 44px hit area, sat at the leading edge where the platform puts
+   it, with instant press feedback rather than a hover state. */
+.m-back{
+  display:flex;align-items:center;justify-content:center;
+  min-width:44px;min-height:44px;margin-left:-6px;
+  color:var(--text-2);border-radius:8px;flex-shrink:0;
+}
+.m-back:active{background:var(--hover);color:var(--text-strong)}
+
+@media (prefers-reduced-motion: reduce){
+  .shell.mobile .sidebar,
+  .shell.mobile .main-content,
+  .shell.mobile .chat{transition:opacity .2s ease}
+}
 .friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;gap:8px;padding:0 16px}
 .fh-icon{color:var(--text-3);flex-shrink:0}
 .fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right:4px;white-space:nowrap}
