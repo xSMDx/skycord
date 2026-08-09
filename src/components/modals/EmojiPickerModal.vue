@@ -5,8 +5,14 @@ import { useGifs, gifPreviewUrl, gifFullUrl } from '@/composables/useGifs'
 
 const emit = defineEmits<{ select: [value: string]; selectGif: [url: string]; close: [] }>()
 
+/** Which tab to open on. The composer's GIF button opens this same picker
+ *  rather than a second modal — one picker, landing where the user asked. */
+const props = withDefaults(defineProps<{ initialTab?: 'emojis' | 'gifs' | 'stickers' }>(), {
+  initialTab: 'emojis',
+})
+
 const search    = ref('')
-const activeTab = ref<'emojis' | 'gifs' | 'stickers'>('emojis')
+const activeTab = ref<'emojis' | 'gifs' | 'stickers'>(props.initialTab)
 const activeCategory = ref('recent')
 
 // ── Emoji data ────────────────────────────────────────────────────────────
@@ -169,9 +175,12 @@ const filteredEmojis = computed(() => {
 const { gifs, loading: gifsLoading, error: gifsError, fetchGifs } = useGifs()
 let _gifDebounce: ReturnType<typeof setTimeout> | null = null
 
+// immediate, because the composer's GIF button opens this picker ALREADY on the
+// gifs tab — a change-only watcher never fires in that case and the grid would
+// sit empty. The tab guard means opening on emojis still costs no request.
 watch(activeTab, tab => {
   if (tab === 'gifs') fetchGifs(search.value)
-})
+}, { immediate: true })
 
 watch(search, q => {
   if (activeTab.value !== 'gifs') return

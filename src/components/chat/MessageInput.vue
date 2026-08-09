@@ -24,6 +24,7 @@ const emit = defineEmits<{
   send:                []
   typing:              []
   openEmoji:           []
+  openGif:             []
   clearReply:          [id: string]
   clearAllReply:       []
 }>()
@@ -263,7 +264,7 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
       />
 
       <div class="input-actions">
-        <button class="input-action-btn btn-gif" v-tip="'GIF'">
+        <button class="input-action-btn btn-gif" v-tip="'GIF'" @click.stop="emit('openGif')">
           <span class="gif-label">GIF</span>
         </button>
         <button class="input-action-btn btn-emoji" v-tip="'Emoji'" @click.stop="emit('openEmoji')">

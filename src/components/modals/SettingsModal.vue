@@ -873,7 +873,7 @@ const handleLogout = () => { emit('close'); logout() }
               <button class="acc-btn" :disabled="!themeCodeInput.trim()" @click="previewThemeCode">Preview</button>
               <button class="acc-btn primary" :disabled="!themeCodeInput.trim()" @click="applyThemeCode">Apply</button>
             </div>
-            <p class="ap-hint ap-hint-top">Preview applies the theme temporarily — use <strong>Keep</strong> or <strong>Revert</strong> in the banner. Apply saves it right away.</p>
+            <p class="ap-hint ap-hint-under">Preview applies the theme temporarily — use <strong>Keep</strong> or <strong>Revert</strong> in the banner. Apply saves it right away.</p>
           </template>
 
           <!-- ── Voice & Video ── -->
@@ -1315,7 +1315,11 @@ img    { display: block; object-fit: cover; }
 /* Share theme */
 .acc-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .acc-btn.primary:hover { background: var(--accent-hover); }
-.ap-share { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.ap-share { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+/* The other .ap-hint-top uses sit directly under a HEADING, where a negative
+   top margin correctly tightens them to it. This one sits under a BUTTON ROW,
+   where that same rule crushed the text against the buttons. */
+.ap-hint-under { margin: 12px 0 4px; }
 .ap-share-input {
   width: 100%; max-width: 520px; resize: vertical; min-height: 46px;
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;

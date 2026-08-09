@@ -1450,7 +1450,12 @@ const jumpToMessage = (dbId: string) => {
 
 // ── Emoji picker for input box (float, unchanged) ──────────────────────────
 const openEmojiForMsg   = (msgId: number) => { emojiTargetMsgId.value = msgId; showEmojiPicker.value = true }
-const openEmojiForInput = ()               => { emojiTargetMsgId.value = null;  showEmojiPicker.value = true }
+const emojiPickerTab    = ref<'emojis' | 'gifs' | 'stickers'>('emojis')
+const openEmojiForInput = ()               => { emojiTargetMsgId.value = null;  emojiPickerTab.value = 'emojis'; showEmojiPicker.value = true }
+// The composer's GIF button was inert — no handler at all. It opens the same
+// picker as the emoji button, just landing on the GIF tab, rather than adding a
+// second modal that would need its own search, loading and error states.
+const openGifForInput   = ()               => { emojiTargetMsgId.value = null;  emojiPickerTab.value = 'gifs';   showEmojiPicker.value = true }
 const handleEmojiSelect = (emoji: string)  => {
   if (emojiTargetMsgId.value !== null) handleReact(emojiTargetMsgId.value, emoji)
   else newMessage.value += emoji
@@ -1613,7 +1618,7 @@ onBeforeUnmount(() => {
     <!-- Emoji picker float (for input box) -->
     <Teleport to="body">
       <div v-if="showEmojiPicker" class="emoji-float" @click.stop>
-        <EmojiPickerModal @select="handleEmojiSelect" @selectGif="handleGifSelect" @close="showEmojiPicker = false" />
+        <EmojiPickerModal :initialTab="emojiPickerTab" @select="handleEmojiSelect" @selectGif="handleGifSelect" @close="showEmojiPicker = false" />
       </div>
     </Teleport>
 
@@ -2039,7 +2044,7 @@ onBeforeUnmount(() => {
                   <Camera :size="18" :stroke-width="2.25"/>
                 </button>
               </template>
-              <button class="icon-btn icon-btn-pin" :class="{ active: showPinned }" @click.stop="showPinned=!showPinned">
+              <button class="icon-btn icon-btn-pin" :class="{ active: showPinned }" v-tip="'Pinned Messages'" @click.stop="showPinned=!showPinned">
                 <Pin :size="18" :stroke-width="1.5"/>
               </button>
               <button v-if="view==='group' && activeGroup" class="icon-btn" v-tip="'Add friends to DM'" @click.stop="showInviteGroup = true">
@@ -2149,6 +2154,7 @@ onBeforeUnmount(() => {
             @send="doSend"
             @typing="handleTyping"
             @openEmoji="openEmojiForInput"
+            @openGif="openGifForInput"
             @clearReply="clearReplyTarget"
             @clearAllReply="replyTargets = []"
           />
@@ -2575,8 +2581,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .chat{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0;position:relative}
 /* Call "hide chat": the call takes the whole column — messages and composer step
    aside (rails stay). Beats the :has() 34% split rule below via the extra class. */
+/* Hide-chat: the whole point is that the call gets the column, so everything
+   that competes for it goes — not just the message list and composer.
+   The pinned panel floated OVER the call stage, and the members panel kept its
+   width because it's a SIBLING of .chat, so `.chat.call-expanded` never reached
+   it. Hidden with CSS rather than closed, so both come back in the state the
+   user left them when hide-chat is turned off. */
 .chat.call-expanded .ml,
-.chat.call-expanded .input-area { display: none; }
+.chat.call-expanded .input-area,
+.chat.call-expanded .pinned-sidebar { display: none; }
+.chat.call-expanded ~ .members-panel { display: none; }
 /* With video on the call stage, split the column: stage takes the majority,
    messages keep a usable minimum and stay scrollable. */
 /* The call bar owns an explicit height (drag-resizable, default 40%); messages

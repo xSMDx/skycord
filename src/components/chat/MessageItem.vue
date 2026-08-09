@@ -31,6 +31,23 @@ const emit  = defineEmits<{
 const callEnded = computed(() =>
   props.msg.systemType === 'call' && /\bended\b/i.test(props.msg.content || ''))
 
+/**
+ * Tooltip for a reaction pill.
+ *
+ * Discord names the reactors ("reacted by SMD"). We can't yet: the server sends
+ * `userIds` with every reaction, but the client's Reaction type drops them and
+ * this component only receives `myId` — there's no id→name map here to resolve
+ * against. Rather than print a name we haven't got, this says what's actually
+ * known. Plumbing userIds through the type and passing a member map would make
+ * the full Discord version possible.
+ */
+const reactionTip = (r: { emoji: string; count: number; reacted: boolean }) => {
+  const others = r.reacted ? r.count - 1 : r.count
+  if (r.reacted && others === 0) return `${r.emoji}  you reacted`
+  if (r.reacted) return `${r.emoji}  you and ${others} ${others === 1 ? 'other' : 'others'} reacted`
+  return `${r.emoji}  ${r.count} ${r.count === 1 ? 'reaction' : 'reactions'}`
+}
+
 // System log line (join/leave/add/rename/icon/call) — icon + colour per type.
 const systemIcon = computed(() => {
   switch (props.msg.systemType) {
@@ -182,10 +199,11 @@ const onReplyPillLeave = () => {
       <div v-if="msg.reactions?.length" class="msg-reactions">
         <button v-for="r in msg.reactions" :key="r.emoji"
           class="rp" :class="{ active: r.reacted }"
+          v-tip="reactionTip(r)"
           @click.stop="emit('react', msg.id, r.emoji)">
           {{ r.emoji }} <span>{{ r.count }}</span>
         </button>
-        <button class="rp-add" @click.stop="emit('openEmoji', msg.id)">+</button>
+        <button class="rp-add" v-tip="'Add Reaction'" @click.stop="emit('openEmoji', msg.id)">+</button>
       </div>
     </div>
 
