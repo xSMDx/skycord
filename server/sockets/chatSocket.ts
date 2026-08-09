@@ -4,7 +4,8 @@ import { verifyAccessToken } from '../utils/jwt'
 import { Message }  from '../models/Message'
 import { User }     from '../models/User'
 import { Conversation } from '../models/Conversation'
-import { dmConvId } from '../controllers/messagesController'
+import { Friendship } from '../models/Friendship'
+import { dmConvId, canDM } from '../controllers/messagesController'
 import { config }   from '../config/env'
 
 // userId -> the socket ids that user currently has open. A user is online while
@@ -102,33 +103,27 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     const wasOffline = sockets.size === 0
     sockets.add(socket.id)
     socket.join(`user:${userId}`)
-    const me = await User.findByIdAndUpdate(
-      userId, { status: 'online', lastSeenAt: new Date() }, { new: true }
-    ).select('avatar').lean()
-    // Announce only on the first socket; extra tabs shouldn't re-broadcast.
-    if (wasOffline) io.emit('presence', { userId, status: 'online' })
 
-    // Looked up once per connection rather than trusting whatever the client
-    // sends per-message — avatars are no longer frozen onto each message at
-    // send time. A reconnect (e.g. after the user changes their avatar) picks
-    // up the new value naturally, without needing a per-message DB lookup.
-    const myAvatar = me?.avatar ?? null
-
-    // Join a room for each group this user is in, so group:send broadcasts
-    // reach every connected member. Room name is the group's _id.
-    const myGroups = await Conversation.find({ members: userId }).select('_id').lean()
-    myGroups.forEach(g => socket.join(`group:${g._id.toString()}`))
-
-    // Catch up on calls already in progress. Without this, someone who was
-    // offline when the call started sees no ringing/indicator when they come
-    // online — call:state is only broadcast on join/leave, which they missed.
-    for (const [room, participants] of activeCalls) {
-      if (participants.size === 0) continue
-      const belongs = room.startsWith('group:')
-        ? myGroups.some(g => `group:${g._id.toString()}` === room)
-        : room.slice(3).split('_').includes(userId)
-      if (belongs) socket.emit('call:state', { room, userIds: [...participants] })
-    }
+    /*
+     * These are filled in by the async setup at the bottom of this callback,
+     * but they must EXIST before the socket.on(...) handlers are registered.
+     *
+     * Handler registration used to happen after two awaits, which left a window
+     * between the client's `connect` event and any listener existing. Anything
+     * emitted in that window hit no handler at all: silently dropped, ack never
+     * fired. It cost a message on every fresh connection that sent immediately,
+     * and during the security sweep it faked two "safe" results by swallowing
+     * the probe's first event.
+     *
+     * Handlers read these at call time, so a message arriving in the first few
+     * milliseconds gets a null avatar and the JWT's username rather than being
+     * lost — a far better failure than silence.
+     */
+    let myAvatar: string | null = null
+    let myName = username
+    let myGroups: { _id: any }[] = []
+    // Who is allowed to hear about this user's presence. Populated below.
+    let myFriendIds: string[] = []
 
     // ── Send DM ───────────────────────────────────────────────────────────
     socket.on('dm:send', async (data: {
@@ -137,11 +132,16 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     }, ack) => {
       try {
         if (!data.content?.trim()) { ack?.({ ok: false, error: 'Empty' }); return }
+        if (!await canDM(userId, data.partnerId)) {
+          ack?.({ ok: false, error: 'Not allowed' }); return
+        }
         const msg = await Message.create({
           conversationId: dmConvId(userId, data.partnerId),
           kind:           'dm',
           authorId:       userId,
-          authorName:     data.authorName || username,
+          // Server-side name, never the client's. data.authorName let a sender
+          // attribute its own message to "Skycord System" or to someone else.
+          authorName:     myName,
           authorAvatar:   myAvatar,
           content:        data.content.trim(),
           replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
@@ -302,12 +302,15 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     }, ack) => {
       try {
         if (!data.content?.trim()) { ack?.({ ok: false, error: 'Empty' }); return }
+        if (!await canDM(userId, data.partnerId)) {
+          ack?.({ ok: false, error: 'Not allowed' }); return
+        }
 
         const msg = await Message.create({
           conversationId: dmConvId(userId, data.partnerId),
           kind:           'dm',
           authorId:       userId,
-          authorName:     data.authorName || username,
+          authorName:     myName,
           authorAvatar:   myAvatar,
           content:        data.content.trim(),
           replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
@@ -354,7 +357,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           conversationId: data.groupId,
           kind:           'group',
           authorId:       userId,
-          authorName:     data.authorName || username,
+          authorName:     myName,
           authorAvatar:   myAvatar,
           content:        data.content.trim(),
           replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
@@ -511,9 +514,60 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       if (set && set.size === 0) {
         onlineUsers.delete(userId)
         await User.findByIdAndUpdate(userId, { status: 'offline', lastSeenAt: new Date() })
-        io.emit('presence', { userId, status: 'offline' })
+        for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: 'offline' })
       }
     })
+
+    // ── Async setup ────────────────────────────────────────────────────────
+    // Deliberately LAST: every handler above is registered synchronously first,
+    // so nothing a client sends immediately after `connect` can fall into a gap
+    // where no listener exists yet.
+    try {
+      const me = await User.findByIdAndUpdate(
+        userId, { status: 'online', lastSeenAt: new Date() }, { new: true }
+      ).select('avatar displayName username').lean()
+
+      // Looked up once per connection rather than trusting what the client
+      // sends per-message. A reconnect after changing your avatar or display
+      // name picks the new value up naturally, with no per-message lookup.
+      myAvatar = me?.avatar ?? null
+      myName   = me?.displayName || me?.username || username
+
+      // Join a room per group so group:send broadcasts reach every member.
+      myGroups = await Conversation.find({ members: userId }).select('_id').lean()
+      myGroups.forEach(g => socket.join(`group:${g._id.toString()}`))
+
+      // Presence goes to friends only. It used to be io.emit(...), so every
+      // connected client learned every other user's online/offline transitions
+      // — a behavioural-pattern leak, and friends are the only people with a UI
+      // that displays it.
+      const fr = await Friendship.find({
+        status: 'accepted',
+        $or: [{ requester: userId }, { receiver: userId }],
+      }).select('requester receiver').lean()
+      myFriendIds = fr.map(f =>
+        f.requester.toString() === userId ? f.receiver.toString() : f.requester.toString())
+
+      // Announce only on the first socket; extra tabs shouldn't re-broadcast.
+      if (wasOffline) {
+        for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: 'online' })
+      }
+
+      // Catch up on calls already in progress. Without this, someone who was
+      // offline when the call started sees no ringing/indicator when they come
+      // online — call:state is only broadcast on join/leave, which they missed.
+      for (const [room, participants] of activeCalls) {
+        if (participants.size === 0) continue
+        const belongs = room.startsWith('group:')
+          ? myGroups.some(g => `group:${g._id.toString()}` === room)
+          : room.slice(3).split('_').includes(userId)
+        if (belongs) socket.emit('call:state', { room, userIds: [...participants] })
+      }
+    } catch (err) {
+      // A failed setup must not take the connection down — the handlers are
+      // already live and usable with their fallback values.
+      console.error('[WS] connection setup failed', err)
+    }
   })
 
   return io

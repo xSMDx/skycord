@@ -13,6 +13,7 @@ import themesRoutes   from './routes/themes'
 import voiceRoutes    from './routes/voice'
 import gifsRoutes     from './routes/gifs'
 import { errorHandler, notFound } from './middleware/errorHandler'
+import { apiLimit } from './middleware/rateLimit'
 
 export const createApp = () => {
   const app = express()
@@ -36,6 +37,16 @@ export const createApp = () => {
     allowedHeaders: ['Content-Type','Authorization'],
   }))
 
+  // Profile updates carry base64 data URLs and are bounded by the controller at
+  // 2MB avatar + 4MB banner — which the 2mb global limit made unreachable, so a
+  // 3MB banner died on Express's generic error instead of the intended message.
+  // Scoped to exactly this one route rather than raising the global ceiling:
+  // every other endpoint takes small JSON and has no business accepting 8MB.
+  // Must run BEFORE the global parser, or that one rejects the body first.
+  const profileJson = express.json({ limit: '8mb' })
+  app.use((req, res, next) =>
+    req.method === 'PATCH' && req.path === '/users/me' ? profileJson(req, res, next) : next())
+
   // Raised from 10kb to 2mb to allow base64-encoded sticker image uploads.
   app.use(express.json({ limit: '2mb' }))
   app.use(express.urlencoded({ extended: false }))
@@ -45,7 +56,15 @@ export const createApp = () => {
 
   app.get('/health', (_, res) => res.json({ status: 'ok', ts: new Date().toISOString() }))
 
+  // /auth keeps its own tighter limiters and is deliberately outside this one —
+  // a login attempt shouldn't consume the same budget as reading messages.
   app.use('/auth',          authRoutes)
+
+  // Backstop for everything authenticated. Per-route limiters below are tighter
+  // where the work is expensive; this catches the rest, including any route
+  // added later that forgets one.
+  app.use(apiLimit)
+
   app.use('/users',         usersRoutes)
   app.use('/messages',      messagesRoutes)
   app.use('/stickers',      stickersRoutes)

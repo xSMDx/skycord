@@ -12,15 +12,49 @@ the code path.
 | 1 | **CRITICAL** | Stored XSS in message rendering | `PROVEN` | **FIXED** |
 | 2 | **HIGH** | `message:pin` — no authorization | `PROVEN` | **FIXED** |
 | 3 | **HIGH** | `message:react` — no authorization + reactor-id leak | `PROVEN` | **FIXED** |
-| 4 | **HIGH** | Prod runs in dev mode → non-Secure session cookie over plaintext | `CODE` | open — do with SSL |
+| 4 | **HIGH** | Prod runs in dev mode → non-Secure session cookie over plaintext | `CODE` | **OPEN — do with SSL** |
 | 5 | **HIGH** | `ws` / `socket.io-parser` memory-exhaustion DoS | `PROVEN` | **FIXED** |
-| 6 | MEDIUM | DM send: no friendship check, spoofable `authorName` | `PROVEN` | open |
-| 7 | MEDIUM | `searchUsers` ReDoS — unescaped `$regex`, unthrottled | `CODE` | open |
-| 8 | MEDIUM | Rate limiting covers 3 of ~35 routes | `CODE` | open |
-| 9 | MEDIUM | Presence broadcast to every user | `CODE` | open |
-| 10 | LOW | Body limit 2 MB vs 4 MB banner bound — dead branch | `CODE` | open |
+| 6 | MEDIUM | DM send: no friendship check, spoofable `authorName` | `PROVEN` | **FIXED** |
+| 7 | MEDIUM | `searchUsers` ReDoS — unescaped `$regex`, unthrottled | `CODE` | **FIXED** |
+| 8 | MEDIUM | Rate limiting covers 3 of ~35 routes | `CODE` | **FIXED** |
+| 9 | MEDIUM | Presence broadcast to every user | `CODE` | **FIXED** |
+| 10 | LOW | Body limit 2 MB vs 4 MB banner bound — dead branch | `CODE` | **FIXED** |
 | 11 | LOW | `renderMessage` sentinel is user-injectable | `CODE` | **FIXED** |
-| 12 | — | Socket handlers registered after `await` — early events dropped | `PROVEN` | open (reliability) |
+| 12 | — | Socket handlers registered after `await` — early events dropped | `PROVEN` | **FIXED** |
+
+**11 of 12 fixed.** Only #4 remains, and it is deliberately deferred: flipping
+`NODE_ENV` turns on `Secure` cookies over a plaintext origin and breaks login,
+so it must land in the same session as the Cloudflare origin certificate.
+
+### The DM policy chosen for #6
+
+`canDM` (`messagesController.ts`) permits: friends · anyone you share a group
+with · anyone you already have message history with. It stops the cold DM to a
+stranger's user id, which was the actual abuse vector.
+
+Deliberately permissive about *existing* relationships, because blocking still
+does not exist. An unfriended thread stays usable — matching both Discord and
+the decision that unfriending hides nothing. Once blocking ships, it becomes the
+mechanism for stopping messages.
+
+### Rate limits applied for #8
+
+Keyed per authenticated user, falling back to IP — IP alone lets one user behind
+a NAT exhaust everyone's budget, and lets an attacker rotate addresses.
+
+| Limiter | Budget | Applied to |
+|---|---|---|
+| `apiLimit` | 300/min | everything authenticated (backstop, catches future routes) |
+| `searchLimit` | 30/min | `/users/search` |
+| `gifLimit` | 60/min | `/gifs/*` — KLIPY quota protection |
+| `uploadLimit` | 20/min | `PATCH /users/me`, `POST /stickers` |
+| `writeLimit` | 120/min | friend requests, credential changes |
+
+`/auth` keeps its own tighter limiters and sits outside `apiLimit` — a login
+attempt should not consume the same budget as reading messages.
+
+**Socket events are still unthrottled.** Sockets bypass Express middleware
+entirely, so `apiLimit` does not cover them. Worth a follow-up.
 
 ## 12. Socket handlers are registered after two awaits
 
@@ -65,6 +99,34 @@ XSS re-tested with `DOMParser` after the fix: attribute list is
 links still render (`https://example.com/a?b=1&c=2`).
 
 Re-run after the `npm audit fix` socket.io bump: all still green.
+
+Second round (#6, #7, #8, #9, #10, #12):
+
+```
+#12  first emit on a fresh socket now gets an ack       (was silently dropped)
+
+#6   cold DM to a stranger rejected                     socket + REST 403
+     DM between friends allowed
+     authorName spoof ignored — "Skycord System" became the real display name
+     existing thread still usable after unfriend
+
+#7   catastrophic pattern "(a+)+$" returns in 10ms, 200
+     "bob4" and "bob" still match bob484632
+     "bo.b" now returns 0 — the dot is literal, no longer a wildcard
+
+#9   friend received online AND offline presence
+     stranger received neither                          (was io.emit to all)
+
+#10  3MB banner reaches the controller                  (was a generic 413)
+     5MB banner still rejected                          413
+
+#8   search limiter engaged: 12 of 40 rapid searches got 429
+     /health unaffected
+```
+
+One trap worth recording: a "0 results" search failure during this round was the
+new rate limiter throttling the *test*, not broken search. Verified against a
+second, unthrottled user before believing it.
 
 ---
 

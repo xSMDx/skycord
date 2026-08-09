@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth'
 import { searchGifs, trendingGifs } from '../controllers/gifsController'
+import { gifLimit } from '../middleware/rateLimit'
 
 const router = Router()
 
@@ -8,7 +9,8 @@ const router = Router()
 // open endpoint anyone on the internet can burn the quota through.
 router.use(requireAuth)
 
-router.get('/search',   searchGifs)
-router.get('/trending', trendingGifs)
+// Each call spends a KLIPY request — quota protection as much as abuse control.
+router.get('/search',   gifLimit, searchGifs)
+router.get('/trending', gifLimit, trendingGifs)
 
 export default router

@@ -13,16 +13,22 @@ const presenceFor = (userId: string, stored: string): string =>
 // ── Search users by username/displayName ────────────────────────────────────
 export const searchUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const q = String(req.query.q || '').trim()
+    const q = String(req.query.q || '').trim().slice(0, 64)
     if (!q || q.length < 2) { res.json({ users: [] }); return }
+
+    // Escape before this reaches $regex. String() already blocks operator
+    // injection, but not a catastrophic-backtracking pattern — the query ran
+    // unanchored across the whole collection, and /users/search has no rate
+    // limit, so `(a+)+$` was a one-request DoS.
+    const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
     const users = await User.find({
       $and: [
         { _id: { $ne: req.user?.sub } },  // exclude self
         {
           $or: [
-            { username:    { $regex: q, $options: 'i' } },
-            { displayName: { $regex: q, $options: 'i' } },
+            { username:    { $regex: safe, $options: 'i' } },
+            { displayName: { $regex: safe, $options: 'i' } },
           ]
         }
       ]

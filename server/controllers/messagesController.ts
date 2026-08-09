@@ -7,6 +7,48 @@ import mongoose from 'mongoose'
 export const dmConvId = (a: string, b: string) =>
   [a, b].sort().join('_')
 
+/**
+ * May this user open a DM with that one?
+ *
+ * There was no check at all: any authenticated user could DM any valid user id,
+ * which makes cold-messaging every account on the instance a scripted loop.
+ * `group:send` has always checked membership — DMs just never got the same
+ * treatment.
+ *
+ * Deliberately permissive about *existing* relationships, because blocking
+ * doesn't exist yet and this must not break real flows:
+ *   · friends
+ *   · members of a group you're both in (you can DM someone you met in a group)
+ *   · anyone you already have history with — unfriending hides nothing and
+ *     removes nothing, so an existing thread stays usable. Discord behaves the
+ *     same way; stopping messages is what blocking is for, and that is still
+ *     unimplemented (Friendship.status has 'blocked' but nothing reads it).
+ *
+ * What it does stop is the cold DM to a stranger's id, which is the actual
+ * abuse vector.
+ */
+export const canDM = async (userId: string, partnerId: string): Promise<boolean> => {
+  if (!mongoose.isValidObjectId(partnerId) || partnerId === userId) return false
+
+  const { Friendship } = await import('../models/Friendship')
+  const friends = await Friendship.exists({
+    status: 'accepted',
+    $or: [
+      { requester: userId, receiver: partnerId },
+      { requester: partnerId, receiver: userId },
+    ],
+  })
+  if (friends) return true
+
+  // Existing thread — one indexed lookup on conversationId.
+  const prior = await Message.exists({ conversationId: dmConvId(userId, partnerId) })
+  if (prior) return true
+
+  const { Conversation } = await import('../models/Conversation')
+  const shared = await Conversation.exists({ members: { $all: [userId, partnerId] } })
+  return !!shared
+}
+
 // Shape of a resolved reply preview, matching what chatSocket.ts's message:get
 // already produces over the socket path. Kept in one place so REST and socket
 // never silently drift apart on what a "resolved" replyTo actually looks like.
@@ -90,21 +132,27 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
   try {
     const userId = req.user!.sub
     const { partnerId } = req.params
-    const { content, authorName, replyToIds } = req.body as { content: string; authorName?: string; replyToIds?: string[] }
+    // authorName is accepted in the body by older clients but deliberately ignored.
+    const { content, replyToIds } = req.body as { content: string; replyToIds?: string[] }
 
     if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
 
-    // authorAvatar is no longer trusted from the request body — looked up
-    // live from the User document instead, so (a) it's always current, not
-    // a stale snapshot, and (b) a client can't spoof an arbitrary avatar URL
-    // for someone else's-looking message.
-    const sender = await User.findById(userId).select('avatar').lean()
+    if (!await canDM(userId, partnerId)) {
+      res.status(403).json({ message: 'You can’t message this user' }); return
+    }
+
+    // Neither authorAvatar nor authorName is trusted from the request body —
+    // both are looked up live from the User document, so (a) they're always
+    // current rather than a stale snapshot, and (b) a client can't attribute
+    // its own message to "Skycord System" or to another user's display name.
+    // The avatar was hardened previously; the name beside it was missed.
+    const sender = await User.findById(userId).select('avatar displayName username').lean()
 
     const msg = await Message.create({
       conversationId: dmConvId(userId, partnerId),
       kind:           'dm',
       authorId:       userId,
-      authorName:     authorName || 'Unknown',
+      authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       content:        content.trim(),
       replyToIds:     Array.isArray(replyToIds) ? replyToIds : [],
