@@ -2210,8 +2210,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .app{
   width:calc(100vw / var(--zoom-factor, 1));
   height:calc(100vh / var(--zoom-factor, 1));
-  height:calc(100dvh / var(--zoom-factor, 1));
-  overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui)
+  /* --keyboard-h is written by useViewport from visualViewport. On iOS the
+     keyboard does NOT resize the layout viewport — it slides over the top — so
+     without subtracting it here the composer ends up underneath the keyboard
+     and the message list scrolls behind it. It's 0 whenever the keyboard is
+     closed, so this is inert on desktop. */
+  height:calc((100dvh - var(--keyboard-h, 0px)) / var(--zoom-factor, 1));
+  overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
+  transition:height .18s ease-out;
 }
 .shell{display:flex;height:100%;overflow:hidden}
 
@@ -2471,6 +2477,17 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    means it's either invisible or permanently showing. Long-press opens the
    context menu instead, which is the same set of actions. */
 .shell.mobile .dm-x{display:none}
+
+/* iOS pops its own callout ("Copy / Look Up") on a long press, which would race
+   our menu. Suppressing the callout is enough — user-select is deliberately NOT
+   touched, because that would also stop people copying message text, and
+   selection is still reachable by double-tap. */
+.shell.mobile{-webkit-touch-callout:none}
+/* The composer keeps its own callout: that menu carries Paste, Undo and
+   spellcheck, and replacing it would make the input worse than a plain field. */
+.shell.mobile input, .shell.mobile textarea, .shell.mobile [contenteditable]{
+  -webkit-touch-callout:default;
+}
 
 /* Back button: 44px hit area, sat at the leading edge where the platform puts
    it, with instant press feedback rather than a hover state. */

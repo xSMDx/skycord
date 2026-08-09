@@ -3,8 +3,13 @@ import './styles/tokens.css'
 import './style.css'
 import App from './App.vue'
 import { applyAppearance } from './composables/useAppearance'
+import { installLongPress } from './composables/useLongPress'
 
 applyAppearance()   // restore saved theme/accent/density before first paint
+
+// Touch has no right-click, so every context menu in the app would be
+// unreachable on a phone. This synthesises one at the touch point after a hold.
+installLongPress()
 
 /**
  * Suppress the browser's own right-click menu app-wide.
