@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import {
-  PhX, PhCheckCircle, PhArrowRight, PhSignOut,
+  PhX, PhCheckCircle, PhArrowRight, PhSignOut, PhCaretLeft, PhCaretRight,
 } from '@phosphor-icons/vue'
+import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
@@ -383,10 +384,41 @@ const PAGE_SUBSECTIONS: Record<string, { id: string; label: string }[]> = {
 const activeSubSection = ref('acc-info')
 const contentEl = ref<HTMLElement | null>(null)
 
+/*
+ * Mobile: same two-screen stack as the app shell.
+ *
+ * The nav is 268px wide, which leaves 92px of content on a 375px screen — so
+ * side-by-side isn't a layout that can be shrunk into, it has to become a
+ * stack. The category list is the root; picking one pushes the page over it.
+ *
+ * `mobileDetail` only means anything while isMobile is true; on desktop both
+ * panes are always visible and this is ignored.
+ */
+const { isMobile } = useViewport()
+const mobileDetail = ref(false)
+
+// Opened via a deep link (Voice Settings, "open settings at X") — that names a
+// page, so on a phone it should land ON that page rather than on the list the
+// user then has to navigate again.
+if (props.initialPage && props.initialPage !== 'account') mobileDetail.value = true
+
+// Dragging the window across the breakpoint mid-session shouldn't strand the
+// user on a detail pane that no longer exists as a separate screen.
+watch(isMobile, m => { if (!m) mobileDetail.value = false })
+
+const currentPageLabel = computed(() => {
+  for (const s of navSections) {
+    const hit = s.items.find(i => i.id === page.value)
+    if (hit) return hit.label
+  }
+  return 'Settings'
+})
+
 const selectPage = (id: string) => {
   page.value = id
   activeSubSection.value = PAGE_SUBSECTIONS[id]?.[0]?.id || ''
   contentEl.value?.scrollTo({ top: 0 })
+  if (isMobile.value) mobileDetail.value = true
 }
 
 const scrollToSection = async (id: string) => {
@@ -417,10 +449,18 @@ const handleLogout = () => { emit('close'); logout() }
 <template>
   <Teleport to="body">
     <div class="sm-overlay" @click.self="emit('close')">
-      <div class="sm-modal">
+      <div class="sm-modal" :class="{ mobile: isMobile, 'm-detail': mobileDetail }">
 
         <!-- Nav sidebar -->
         <div class="sm-nav">
+          <!-- On a phone the nav IS a screen, so it needs its own title and a
+               way out — the content pane's close button is off-screen here. -->
+          <div v-if="isMobile" class="sm-mhead">
+            <h2 class="sm-mhead-title">Settings</h2>
+            <button class="sm-mhead-btn" aria-label="Close settings" @click="emit('close')">
+              <PhX :size="22" weight="light" />
+            </button>
+          </div>
           <div v-for="section in navSections" :key="section.label" class="sm-nav-section">
             <div v-if="section.label" class="sm-nav-label">{{ section.label }}</div>
             <template v-for="item in section.items" :key="item.id">
@@ -428,7 +468,12 @@ const handleLogout = () => { emit('close'); logout() }
                 class="sm-nav-item"
                 :class="{ active: page === item.id }"
                 @click="selectPage(item.id)"
-              >{{ item.label }}</button>
+              >
+                {{ item.label }}
+                <!-- A chevron says "this pushes a screen". Without it a phone
+                     user can't tell a list row from a toggle. -->
+                <PhCaretRight v-if="isMobile" class="sm-nav-chev" :size="14" weight="bold" />
+              </button>
 
               <!-- In-page sub-nav — shown while that page is selected. A
                    continuous rail runs down the left; the active item lights up. -->
@@ -450,7 +495,18 @@ const handleLogout = () => { emit('close'); logout() }
 
         <!-- Content -->
         <div class="sm-content" ref="contentEl" @scroll="onContentScroll">
-          <button class="sm-close" @click="emit('close')">
+          <!-- Sticky so it survives a long settings page being scrolled — a
+               back control that scrolls away strands the user. -->
+          <div v-if="isMobile" class="sm-mhead sm-mhead-detail">
+            <button class="sm-mhead-btn" aria-label="Back to settings list" @click="mobileDetail = false">
+              <PhCaretLeft :size="22" weight="bold" />
+            </button>
+            <h2 class="sm-mhead-title">{{ currentPageLabel }}</h2>
+            <button class="sm-mhead-btn" aria-label="Close settings" @click="emit('close')">
+              <PhX :size="22" weight="light" />
+            </button>
+          </div>
+          <button v-if="!isMobile" class="sm-close" @click="emit('close')">
             <PhX :size="20" weight="light" />
           </button>
 
@@ -1286,6 +1342,95 @@ img    { display: block; object-fit: cover; }
 .wip-page p  { font-size: 14px; line-height: 1.6; }
 
 /* Scrollbar */
+/* ══ MOBILE ═══════════════════════════════════════════════════════════════
+   The nav is 268px wide, so on a 375px screen the content pane gets 92px.
+   That's not a layout you can shrink into — it has to become a stack, the same
+   two-screen model the app shell uses. Nav is the root; picking a category
+   pushes the page over it. */
+.sm-modal.mobile {
+  width: 100%; height: 100%;
+  max-width: none; border-radius: 0;
+  position: relative; box-shadow: none;
+}
+/* Full-bleed, so it reads as a screen rather than a card floating on a phone. */
+.sm-overlay:has(.sm-modal.mobile) { background: var(--bg-raised); }
+
+.sm-modal.mobile .sm-nav,
+.sm-modal.mobile .sm-content {
+  position: absolute; inset: 0;
+  width: 100%; padding-left: 0; padding-right: 0;
+  transition: transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+}
+.sm-modal.mobile .sm-nav     { padding-top: 0; z-index: 1; }
+/* Explicit background is required, not decorative. Side by side these panes sat
+   on the modal's own background; stacked, the content pane is a transparent
+   layer over the nav, and the category list shows straight through the page. */
+.sm-modal.mobile .sm-content {
+  padding-top: 0; z-index: 2;
+  transform: translate3d(100%, 0, 0);
+  background: var(--bg-raised);
+}
+
+/* Same parallax as the shell, so the two stacks feel like one system. */
+.sm-modal.mobile.m-detail .sm-nav     { transform: translate3d(-28%, 0, 0); opacity: .65; }
+.sm-modal.mobile.m-detail .sm-content { transform: translate3d(0, 0, 0); box-shadow: -8px 0 24px rgba(0,0,0,.45); }
+
+/* Nav rows become list rows: full-bleed, 48px tall, chevron pushed right. */
+/* flex-start + gap, NOT space-between: rows like "Log Out" have an icon next to
+   their label, and space-between flings the two to opposite edges. The chevron
+   is pushed right by its own margin-left:auto, which is all that was needed. */
+.sm-modal.mobile .sm-nav-item {
+  display: flex; align-items: center; justify-content: flex-start; gap: 10px;
+  min-height: 48px; padding: 12px 16px; border-radius: 0; font-size: 15px;
+}
+.sm-modal.mobile .sm-nav-item:active { background: var(--hover); }
+/* Highlighting the "current" row is desktop grammar — the two panes are visible
+   at once there. In a stack you're either on the list or on the page, so a
+   permanently-lit row just looks like a stuck selection. */
+.sm-modal.mobile .sm-nav-item.active { background: transparent; color: var(--text-1); }
+.sm-nav-chev { color: var(--text-3); flex-shrink: 0; margin-left: auto; }
+.sm-modal.mobile .sm-nav-label { padding-left: 16px; }
+.sm-modal.mobile .sm-nav-divider { margin: 8px 0; }
+/* The in-page sub-nav duplicates headings that are already in the scrolling
+   page; on a narrow screen it's a second nav competing with the first. */
+.sm-modal.mobile .sm-subnav { display: none; }
+
+/* Sticky header on both panes, with the top safe-area inset baked in. */
+.sm-mhead {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 4px;
+  padding: env(safe-area-inset-top) 8px 0;
+  min-height: calc(56px + env(safe-area-inset-top));
+  background: var(--bg-floor);
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  margin-bottom: 8px;
+}
+.sm-mhead-detail { background: var(--bg-raised); }
+.sm-mhead-title {
+  font-size: 17px; font-weight: 700; color: var(--text-strong);
+  flex: 1; text-align: center;
+  /* Tighter tracking as the size grows, per the type scale. */
+  letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The list pane has no back button, so its title would sit off-centre against
+   a lone close button — left-aligning it is honest rather than faking balance. */
+.sm-nav .sm-mhead-title { text-align: left; padding-left: 8px; }
+.sm-mhead-btn {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px;
+  color: var(--text-2); border-radius: 8px; flex-shrink: 0;
+}
+.sm-mhead-btn:active { background: var(--hover); color: var(--text-strong); }
+
+/* Page content needs its own gutter now that the pane padding is gone. */
+.sm-modal.mobile .sm-content > :not(.sm-mhead) { padding-left: 16px; padding-right: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sm-modal.mobile .sm-nav,
+  .sm-modal.mobile .sm-content { transition: opacity .2s ease; }
+}
+
 .sm-content::-webkit-scrollbar, .sm-nav::-webkit-scrollbar { width: 4px; }
 .sm-content::-webkit-scrollbar-track, .sm-nav::-webkit-scrollbar-track { background: transparent; }
 .sm-content::-webkit-scrollbar-thumb, .sm-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
