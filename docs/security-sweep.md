@@ -5,21 +5,66 @@ Covered: authentication, authorization/IDOR, injection, XSS, secrets, rate
 limiting, SSRF, Socket.IO, dependencies.
 
 **Evidence key** — `PROVEN` demonstrated at runtime · `CODE` verified by reading
-the code path, probe written but blocked on local Mongo being down.
+the code path.
 
-| # | Severity | Finding | Evidence |
-|---|---|---|---|
-| 1 | **CRITICAL** | Stored XSS in message rendering | `PROVEN` |
-| 2 | **HIGH** | `message:pin` — no authorization | `CODE` |
-| 3 | **HIGH** | `message:react` — no authorization + reactor-id leak | `CODE` |
-| 4 | **HIGH** | Prod runs in dev mode → non-Secure session cookie over plaintext | `CODE` |
-| 5 | **HIGH** | `ws` / `socket.io-parser` memory-exhaustion DoS | `PROVEN` (npm audit) |
-| 6 | MEDIUM | DM send: no friendship check, spoofable `authorName` | `CODE` |
-| 7 | MEDIUM | `searchUsers` ReDoS — unescaped `$regex`, unthrottled | `CODE` |
-| 8 | MEDIUM | Rate limiting covers 3 of ~35 routes | `CODE` |
-| 9 | MEDIUM | Presence broadcast to every user | `CODE` |
-| 10 | LOW | Body limit 2 MB vs 4 MB banner bound — dead branch | `CODE` |
-| 11 | LOW | `renderMessage` sentinel is user-injectable | `CODE` |
+| # | Severity | Finding | Evidence | Status |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | Stored XSS in message rendering | `PROVEN` | **FIXED** |
+| 2 | **HIGH** | `message:pin` — no authorization | `PROVEN` | **FIXED** |
+| 3 | **HIGH** | `message:react` — no authorization + reactor-id leak | `PROVEN` | **FIXED** |
+| 4 | **HIGH** | Prod runs in dev mode → non-Secure session cookie over plaintext | `CODE` | open — do with SSL |
+| 5 | **HIGH** | `ws` / `socket.io-parser` memory-exhaustion DoS | `PROVEN` | **FIXED** |
+| 6 | MEDIUM | DM send: no friendship check, spoofable `authorName` | `PROVEN` | open |
+| 7 | MEDIUM | `searchUsers` ReDoS — unescaped `$regex`, unthrottled | `CODE` | open |
+| 8 | MEDIUM | Rate limiting covers 3 of ~35 routes | `CODE` | open |
+| 9 | MEDIUM | Presence broadcast to every user | `CODE` | open |
+| 10 | LOW | Body limit 2 MB vs 4 MB banner bound — dead branch | `CODE` | open |
+| 11 | LOW | `renderMessage` sentinel is user-injectable | `CODE` | **FIXED** |
+| 12 | — | Socket handlers registered after `await` — early events dropped | `PROVEN` | open (reliability) |
+
+## 12. Socket handlers are registered after two awaits
+
+Not a security issue, but found while testing and it invalidated results twice.
+
+`chatSocket.ts:72` — `io.on('connection', async socket => { … })` performs
+`await User.findByIdAndUpdate(...)` and `await Conversation.find(...)` **before**
+the first `socket.on(...)` at line 111. Anything a client emits between its
+`connect` event and that registration hits no listener: silently dropped, ack
+never fires.
+
+Proven three times during this sweep — the first emit on a fresh socket vanished
+every time, and warming the socket made it work. A real client that sends
+immediately on connect (a queued message, `group:subscribe`) loses that event.
+
+Fix: register handlers synchronously, then do the async setup, with the values
+they close over (`myAvatar`, group rooms) declared up front and filled in after.
+
+## Verification of the fixes
+
+Runtime, against a live API and database:
+
+```
+ATTACKER (not in the conversation)
+  pin rejected                          {"ok":false,"error":"Not allowed"}
+  react rejected                        {"ok":false,"error":"Not allowed"}
+  no reactor ids leaked in the ack
+  nothing persisted                     pinned=false reactions=0
+
+LEGITIMATE PARTICIPANT (must still work)
+  can pin the other person's message    ok
+  can react                             ok
+  persisted                             pinned=true reactions=1
+  re-react removes it (toggle intact)   reactions=0
+
+INPUT BOUNDS
+  50KB emoji rejected / empty rejected
+```
+
+XSS re-tested with `DOMParser` after the fix: attribute list is
+`[href, target, rel, class]`, no event handlers, payload inert as text. Normal
+links still render (`https://example.com/a?b=1&c=2`).
+
+Re-run after the `npm audit fix` socket.io bump: all still green.
 
 ---
 

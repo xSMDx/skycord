@@ -13,8 +13,17 @@
 
 import { appearance } from '@/composables/useAppearance'
 
+// Quotes matter as much as angle brackets here: several rules below interpolate
+// into a double-quoted attribute (href, title). Escaping only < and > left an
+// attribute-context hole — a URL containing a quote closed `href` early, and
+// since `/` separates attributes in the HTML5 tokenizer, no whitespace was
+// needed to add `onmouseover=` to the tag. `<script>` was never the way in.
 const escapeHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  s.replace(/&/g, '&amp;')
+   .replace(/</g, '&lt;')
+   .replace(/>/g, '&gt;')
+   .replace(/"/g, '&quot;')
+   .replace(/'/g, '&#39;')
 
 // ── Emoji packs — render native emoji as images from a CDN (your client only) ─
 const EMOJI_CDN: Record<string, ((cps: string[]) => string) | null> = {
@@ -83,18 +92,24 @@ export const renderMessage = (raw: string): string => {
   const ph: string[] = []
   const stash = (html: string) => S + (ph.push(html) - 1) + S
 
-  let s = raw
+  // The sentinel is assumed absent from user text — so enforce that rather than
+  // trust it. A message containing U+F8FF could otherwise forge a placeholder
+  // reference and duplicate a stashed element. Not an injection (everything
+  // stashed is already escaped), but the assumption shouldn't be load-bearing.
+  let s = raw.split(S).join('')
 
   // 1. Code first — content shown literally, no markers parsed inside.
   s = s.replace(/```([\s\S]+?)```/g, (_m, code) => stash(`<pre class="msg-cb">${escapeHtml(String(code).replace(/^\n|\n$/g, ''))}</pre>`))
   s = s.replace(/`([^`\n]+?)`/g, (_m, code) => stash(`<code class="ic">${escapeHtml(code)}</code>`))
 
   // 2. Markdown links [label](url) — http/https only.
-  s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, url) =>
+  //    Quotes are excluded from the URL match as well as escaped on the way
+  //    out: escaping is the fix, this is the belt to its braces.
+  s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)"'<>]+)\)/g, (_m, label, url) =>
     stash(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="msg-link">${escapeHtml(label)}</a>`))
 
   // 3. Bare URLs.
-  s = s.replace(/(https?:\/\/[^\s<]+)/g, (url) =>
+  s = s.replace(/(https?:\/\/[^\s<>"']+)/g, (url) =>
     stash(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="msg-link">${escapeHtml(url)}</a>`))
 
   // 4. Mentions + time tokens.

@@ -28,6 +28,29 @@ export const getIO = (): IOServer | null => _io
 const getPartner = (convId: string, myId: string) =>
   convId.split('_').find(p => p !== myId) ?? null
 
+/**
+ * May this user touch this message at all?
+ *
+ * Pin and react previously had no check whatsoever — findById, mutate, save —
+ * so any authenticated user could pin or react to ANY message in the database
+ * by id, including DMs between other people. Mongo ObjectIds embed a timestamp
+ * and counter, so they enumerate; this was not protected by obscurity.
+ *
+ * Edit and delete were fine because they check authorship, but authorship is
+ * the wrong test for pin/react: both are things a participant may legitimately
+ * do to someone else's message. The right test is membership of the
+ * conversation, which is what this does.
+ */
+const canAccessMessage = async (msg: { conversationId: string; kind: string }, userId: string) => {
+  if (msg.kind === 'group') {
+    const group = await Conversation.findById(msg.conversationId).select('members').lean()
+    return !!group && group.members.some(m => m.toString() === userId)
+  }
+  // DM/system: the conversationId is the two participant ids joined, so
+  // membership is simply being one of them.
+  return msg.conversationId.split('_').includes(userId)
+}
+
 // Resolve a list of parent message ids into reply previews, preserving order
 // and dropping any that no longer exist.
 const buildReplyPreviews = async (ids?: string[]) => {
@@ -196,6 +219,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       try {
         const msg = await Message.findById(data.messageId)
         if (!msg) { ack?.({ ok: false, error: 'Not found' }); return }
+        if (!await canAccessMessage(msg, userId)) {
+          ack?.({ ok: false, error: 'Not allowed' }); return
+        }
 
         msg.pinned = data.pinned
         await msg.save()
@@ -217,21 +243,34 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       try {
         const msg = await Message.findById(data.messageId)
         if (!msg) { ack?.({ ok: false, error: 'Not found' }); return }
+        // Without this, the ack below also leaked the userIds of everyone who
+        // reacted to any message an attacker could name.
+        if (!await canAccessMessage(msg, userId)) {
+          ack?.({ ok: false, error: 'Not allowed' }); return
+        }
 
-        const existing  = msg.reactions.find(r => r.emoji === data.emoji)
+        // An emoji is a handful of codepoints. Unbounded, this field accepted
+        // arbitrary strings of arbitrary length straight into the document.
+        const emoji = String(data.emoji ?? '')
+        if (!emoji || [...emoji].length > 8) { ack?.({ ok: false, error: 'Invalid emoji' }); return }
+        if (msg.reactions.length >= 40 && !msg.reactions.some(r => r.emoji === emoji)) {
+          ack?.({ ok: false, error: 'Too many reactions' }); return
+        }
+
+        const existing  = msg.reactions.find(r => r.emoji === emoji)
 
         if (existing) {
           const hasReacted = existing.userIds.some(id => id.toString() === userId)
           if (hasReacted) {
             existing.userIds = existing.userIds.filter(id => id.toString() !== userId)
             if (existing.userIds.length === 0) {
-              msg.reactions = msg.reactions.filter(r => r.emoji !== data.emoji)
+              msg.reactions = msg.reactions.filter(r => r.emoji !== emoji)
             }
           } else {
             existing.userIds.push(userId as any)
           }
         } else {
-          msg.reactions.push({ emoji: data.emoji, userIds: [userId as any] })
+          msg.reactions.push({ emoji, userIds: [userId as any] })
         }
         await msg.save()
 
