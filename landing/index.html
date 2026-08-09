@@ -218,6 +218,24 @@
   .chip.imp { background: rgba(88,101,242,.14); color: #aab4ff; }
   .chip.fix { background: rgba(242,63,67,.12); color: #f87171; }
 
+  /* ── Roadmap ───────────────────────────────────────────────────────── */
+  /* Deliberately reuses .rel so roadmap and changelog read as one timeline —
+     the future half is just the same track, dimmer and unfilled. */
+  .road-note { color: var(--dim); font-size: 14.5px; margin: -14px 0 34px; }
+  .rel.road::before { background: transparent; border: 2px solid rgba(255,255,255,.22); box-shadow: none; }
+  .rel.road.now::before { background: var(--blurple); border-color: transparent; box-shadow: 0 0 0 4px rgba(88,101,242,.18); }
+  .rel.road .v { color: var(--faint); }
+  .rel.road.now .v { color: #aab4ff; }
+  .rel.road h3 { color: var(--dim); }
+  .rel.road.now h3 { color: var(--text); }
+  .rel.road li { color: var(--dim); }
+  .rel.road.now li { color: #c8cbd8; }
+  .rel.road .dot {
+    flex-shrink: 0; width: 4px; height: 4px; border-radius: 50%;
+    background: rgba(255,255,255,.28); transform: translateY(-3px);
+  }
+  .rel.road.now .dot { background: var(--blurple); }
+
   /* ── Footer ────────────────────────────────────────────────────────── */
   footer { border-top: 1px solid var(--border); padding: 26px 0 34px; color: var(--faint); font-size: 13px; }
   footer .wrap { display: flex; align-items: center; gap: 8px; }
@@ -241,6 +259,13 @@
     .bar { gap: 12px; }
     .cta-mini { display: none; }
     .hero { padding-top: 56px; }
+    /* Three tabs at full size overflow a phone. Tightening them keeps all
+       three reachable instead of clipping the last one off the screen. */
+    .tab { padding: 7px 11px; font-size: 13px; }
+  }
+  /* Narrowest phones: drop the wordmark, keep the logo. */
+  @media (max-width: 400px) {
+    .mark b { display: none; }
   }
 </style>
 </head>
@@ -258,6 +283,7 @@
     </a>
     <nav class="tabs" aria-label="Page sections">
       <button class="tab on" id="t-features" onclick="show('features')">Features</button>
+      <button class="tab" id="t-roadmap" onclick="show('roadmap')">Roadmap</button>
       <button class="tab" id="t-changelog" onclick="show('changelog')">Changelog</button>
     </nav>
     <a class="cta-mini" href="https://app.skycord.xyz">Open Skycord</a>
@@ -342,6 +368,16 @@
 </main>
 
 <!-- ── CHANGELOG ────────────────────────────────────────────────────── -->
+<main id="p-roadmap" class="panel">
+  <section class="log">
+    <div class="wrap">
+      <h2>Roadmap</h2>
+      <p class="road-note">What’s being built, roughly in order. No dates — it ships when it’s good.</p>
+      <div id="roadmap"></div>
+    </div>
+  </section>
+</main>
+
 <main id="p-changelog" class="panel">
   <section class="log">
     <div class="wrap">
@@ -467,6 +503,65 @@ const RELEASES = [
   },
 ];
 
+/* ── Roadmap ──────────────────────────────────────────────────────────
+   stage: 'now' (in progress) | 'next' (committed) | 'idea' (not decided)  */
+const ROADMAP = [
+  {
+    stage: 'now', label: 'Building now', title: 'Mobile app',
+    items: [
+      'Skycord on your phone — the whole app, not a cut-down version',
+      'Built for touch rather than a desktop layout squeezed narrow',
+    ],
+  },
+  {
+    stage: 'next', label: 'Next', title: 'Channels',
+    items: [
+      'Servers with real channels, not just group DMs',
+      'Roles and permissions',
+      'Search with tags across a server',
+    ],
+  },
+  {
+    stage: 'next', label: 'Next', title: 'End-to-end encryption',
+    items: [
+      'Tick a box when you make a chat and nobody but the people in it can read it — not even whoever runs the server',
+      'New devices approved from a device you’re already signed in on',
+      'A backup code, so losing your laptop doesn’t lose your history',
+      'Encrypted calls as well as messages',
+      'Designed and written down; being built after channels',
+    ],
+  },
+  {
+    stage: 'next', label: 'Next', title: 'Desktop app',
+    items: [
+      'A real desktop app instead of a browser tab',
+      'Pick which server you connect to — self-host your own, like TeamSpeak',
+      'Your own screen-share picker, and push-to-talk that works unfocused',
+      'Per-app audio capture, so sharing a game doesn’t echo the call back',
+    ],
+  },
+  {
+    stage: 'idea', label: 'Being looked at', title: 'Quality of life',
+    items: [
+      'Sharper screen share — it currently softens when the tile is small',
+      'A stronger noise filter for voices, keyboards and fans',
+      'Link previews in chat',
+      'Jump straight to any message from a link',
+    ],
+  },
+];
+
+// No per-item chip here, unlike the changelog. There, each line has its own
+// type (Added/Improved/Fixed) so the chip carries information. Here every item
+// in a section shares the section's stage, so repeating it on each line just
+// says the same word three times down the page.
+document.getElementById('roadmap').innerHTML = ROADMAP.map(r => `
+  <div class="rel road ${r.stage === 'now' ? 'now' : ''}">
+    <div class="vrow"><span class="v">${r.label}</span></div>
+    <h3>${r.title}</h3>
+    <ul>${r.items.map(txt => `<li><span class="dot"></span><span>${txt}</span></li>`).join('')}</ul>
+  </div>`).join('');
+
 const CHIP = { add: 'Added', imp: 'Improved', fix: 'Fixed' };
 document.getElementById('releases').innerHTML = RELEASES.map(r => `
   <div class="rel">
@@ -476,16 +571,21 @@ document.getElementById('releases').innerHTML = RELEASES.map(r => `
   </div>`).join('');
 
 /* ── Tabs (hash-routed: #changelog / #features) ──────────────────────── */
+const PANELS = ['features', 'roadmap', 'changelog'];
 function show(which) {
-  for (const p of ['features', 'changelog']) {
+  if (!PANELS.includes(which)) which = 'features';
+  for (const p of PANELS) {
     document.getElementById('p-' + p).classList.toggle('on', p === which);
     document.getElementById('t-' + p).classList.toggle('on', p === which);
   }
   if (location.hash !== '#' + which) history.replaceState(null, '', '#' + which);
   window.scrollTo({ top: 0 });
 }
-if (location.hash === '#changelog') show('changelog');
-window.addEventListener('hashchange', () => show(location.hash === '#changelog' ? 'changelog' : 'features'));
+// Only act on load when the hash names a real panel — otherwise a clean URL
+// would get rewritten to #features for no reason.
+const fromHash = () => { const h = location.hash.slice(1); if (PANELS.includes(h)) show(h); };
+fromHash();
+window.addEventListener('hashchange', fromHash);
 </script>
 </body>
 </html>

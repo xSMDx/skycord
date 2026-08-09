@@ -51,7 +51,12 @@ const pingText = computed(() => (voice.ping !== null ? `${voice.ping} ms` : '—
       </div>
       <div class="vcp-pop-row"><span>Ping</span><strong>{{ pingText }}</strong></div>
       <div class="vcp-pop-row"><span>Region</span><strong>{{ voice.activeName || 'Voice' }}</strong></div>
-      <div class="vcp-pop-foot">LiveKit · end-to-end media</div>
+      <!-- Was "LiveKit · end-to-end media", which was untrue: LiveKit runs as an
+           SFU here with no e2ee configured, so the server decrypts and
+           re-encrypts every stream. Encrypted in transit is the accurate claim.
+           Restore an E2E label only once E2EE is actually implemented — see
+           docs/superpowers/specs/2026-08-09-e2ee-design.md -->
+      <div class="vcp-pop-foot">LiveKit · encrypted in transit</div>
     </div>
 
     <div class="vcp-top">
