@@ -2144,8 +2144,20 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* Counter-scale by the zoom factor: `zoom` magnifies 100vw/100vh past the real
    viewport (clipping the bottom user panel at >100%), so divide the root box by
-   the factor — after zoom it lands back at exactly one viewport. */
-.app{width:calc(100vw / var(--zoom-factor, 1));height:calc(100vh / var(--zoom-factor, 1));overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui)}
+   the factor — after zoom it lands back at exactly one viewport.
+
+   Height uses dvh, not vh. On mobile browsers 100vh means the viewport with the
+   URL bar HIDDEN, which is taller than what you can actually see while it's
+   showing — so the bottom of the app (the composer, the user panel) sits below
+   the fold until you scroll. dvh tracks the real visible height as the bar
+   collapses and expands. The vh line stays first as a fallback for browsers
+   that don't know dvh. */
+.app{
+  width:calc(100vw / var(--zoom-factor, 1));
+  height:calc(100vh / var(--zoom-factor, 1));
+  height:calc(100dvh / var(--zoom-factor, 1));
+  overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui)
+}
 .shell{display:flex;height:100%;overflow:hidden}
 
 /* ── Rail ──────────────────────────────────────────────────────────────── */

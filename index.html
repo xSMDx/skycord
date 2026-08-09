@@ -3,7 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/skycord-icon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the app paint into the notch/home-indicator
+         area; env(safe-area-inset-*) then keeps content out of it. Without
+         cover, those insets all report 0 and the phone letterboxes us.
+         maximum-scale is deliberately NOT set — capping zoom breaks
+         accessibility for anyone who needs to pinch in. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Tints the browser/OS chrome to match the app so the seam disappears. -->
+    <meta name="theme-color" content="#0b0c0f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Skycord" />
+    <link rel="apple-touch-icon" href="/skycord-icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Skycord</title>
     <!-- Selectable interface + monospace fonts (Appearance settings) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

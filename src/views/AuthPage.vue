@@ -235,10 +235,14 @@ button{background:none;border:none;cursor:pointer;color:inherit;font:inherit}
 input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .shell {
-  width:100vw; min-height:100vh;
+  width:100vw; min-height:100vh; min-height:100dvh;
   background:#0d0e10;
   display:flex; align-items:center; justify-content:center;
-  padding:24px; position:relative; overflow:hidden;
+  /* Safe-area padding so the card clears the notch and home indicator once
+     viewport-fit=cover lets us paint into them. */
+  padding:max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+          max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  position:relative; overflow:hidden;
   font-family: var(--font-ui);
 }
 

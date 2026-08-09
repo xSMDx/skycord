@@ -82,7 +82,7 @@ onMounted(async () => {
 
 .splash {
   position: fixed; inset: 0;
-  width: 100vw; height: 100vh;
+  width: 100vw; height: 100vh; height: 100dvh;
   background: #0d0e10;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
