@@ -36,9 +36,38 @@ const isStandalone = ref(
 const keyboardHeight = ref(0)
 
 if (typeof window !== 'undefined') {
-  mobileQuery?.addEventListener('change', e => { isMobile.value = e.matches })
-  coarseQuery?.addEventListener('change', e => { isCoarse.value = e.matches })
-  standaloneQuery?.addEventListener('change', e => { isStandalone.value = e.matches })
+  /*
+   * Re-read the queries rather than trusting `e.matches`, and drive it from
+   * BOTH the matchMedia change event and window resize.
+   *
+   * The change event alone is not reliable enough to be the only signal: it was
+   * observed not firing on a viewport change during testing, which left the app
+   * stuck in mobile layout at 1280px — desktop with the server rail hidden. A
+   * fresh load at the same width was correct, so the initial read was fine and
+   * only the notification was missing. Rotating a phone or dragging a window is
+   * the same code path, so this is worth being defensive about.
+   *
+   * Resize fires a lot, so the read is coalesced to one per frame.
+   */
+  let queued = false
+  const sync = () => {
+    queued = false
+    isMobile.value     = !!mobileQuery?.matches
+    isCoarse.value     = !!coarseQuery?.matches
+    isStandalone.value = !!standaloneQuery?.matches
+      || (navigator as any).standalone === true
+  }
+  const scheduleSync = () => {
+    if (queued) return
+    queued = true
+    requestAnimationFrame(sync)
+  }
+
+  mobileQuery?.addEventListener('change', scheduleSync)
+  coarseQuery?.addEventListener('change', scheduleSync)
+  standaloneQuery?.addEventListener('change', scheduleSync)
+  window.addEventListener('resize', scheduleSync, { passive: true })
+  window.addEventListener('orientationchange', scheduleSync, { passive: true })
 
   /*
    * The keyboard doesn't resize the layout viewport on iOS — it slides over the

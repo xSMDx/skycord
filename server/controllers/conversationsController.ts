@@ -246,7 +246,8 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
   try {
     const userId = req.user!.sub
     const { groupId } = req.params
-    const { content, authorName, replyToIds } = req.body as { content: string; authorName?: string; replyToIds?: string[] }
+    // authorName is still accepted in the body by older clients, and ignored.
+    const { content, replyToIds } = req.body as { content: string; replyToIds?: string[] }
 
     if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
     if (!mongoose.isValidObjectId(groupId)) { res.status(400).json({ message: 'Invalid group' }); return }
@@ -257,7 +258,11 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       res.status(403).json({ message: 'You are not a member of this group' }); return
     }
 
-    const sender = await User.findById(userId).select('avatar').lean()
+    // Name and avatar both come from the User document, never the request body.
+    // The three socket send paths and the DM REST path were hardened when
+    // authorName spoofing was fixed; this one was missed, leaving a client able
+    // to post into a group as "Skycord System" or as another member.
+    const sender = await User.findById(userId).select('avatar displayName username').lean()
 
     const ids = Array.isArray(replyToIds) ? replyToIds : []
     const targets = ids.length
@@ -273,7 +278,7 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       conversationId: groupId,
       kind:           'group',
       authorId:       userId,
-      authorName:     authorName || 'Unknown',
+      authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       content:        content.trim(),
       replyToIds:     ids,
