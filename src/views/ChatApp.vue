@@ -319,6 +319,24 @@ const currentCall = computed<{ id: string; kind: 'dm' | 'group'; name: string } 
   return null
 })
 const callActiveHere = computed(() => !!currentCall.value && voice.connected && voice.activeConvId === currentCall.value.id)
+
+/**
+ * Jump back to whichever conversation the live call belongs to.
+ *
+ * `currentCall` describes the conversation you're LOOKING at, not the one
+ * you're talking in — those diverge the moment you navigate away, which is
+ * exactly when the pill exists. So this resolves from the voice state instead.
+ */
+const returnToCall = () => {
+  const id = voice.activeConvId || voice.connectingConvId
+  if (!id) return
+  if (voice.activeKind === 'group') {
+    const g = groupsData.value.find(x => x.id === id)
+    if (g) { openGroup(g); return }
+  }
+  const dm = dmsData.value.find(d => d.id === id)
+  if (dm) openDM(dm)
+}
 const toggleCall = async () => {
   const c = currentCall.value; if (!c) return
   if (callActiveHere.value) { await vLeave(); return }
@@ -1658,7 +1676,6 @@ onBeforeUnmount(() => {
     <!-- Connection status. Mounted at app level rather than inside a pane so it
          survives navigation and can't be covered by a modal. -->
     <ConnectionBanner />
-
     <!-- ══ SHELL ════════════════════════════════════════════════════════════ -->
     <!-- `--m` is the 0..1 pane position. The CSS below reads it, so a drag can
          sit anywhere between the two screens instead of only at the ends.
@@ -1776,6 +1793,19 @@ onBeforeUnmount(() => {
               <span class="up-tag">#{{ authUser?.discriminator || '0000' }}</span>
             </div>
           </div>
+          <!-- Return to an ongoing call. Lives in the gap the user panel
+               already has, rather than as a separate floating widget — the
+               panel is visible on every screen that matters and this is dead
+               space otherwise. Only appears while a call is actually up. -->
+          <button
+            v-if="voice.connected || voice.connecting"
+            class="up-callback" :class="{ connecting: voice.connecting }"
+            v-tip="voice.connecting ? 'Connecting…' : 'Back to call'"
+            @click.stop="returnToCall"
+          >
+            <span class="up-cb-dot" />
+            <span class="up-cb-text">{{ voice.connecting ? 'Connecting…' : 'Back to call' }}</span>
+          </button>
           <div class="up-btns">
             <div class="up-split">
               <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" v-tip="micOff ? 'Unmute' : 'Mute'">
@@ -1840,6 +1870,19 @@ onBeforeUnmount(() => {
               <span class="up-tag">#{{ authUser?.discriminator||'0000' }}</span>
             </div>
           </div>
+          <!-- Return to an ongoing call. Lives in the gap the user panel
+               already has, rather than as a separate floating widget — the
+               panel is visible on every screen that matters and this is dead
+               space otherwise. Only appears while a call is actually up. -->
+          <button
+            v-if="voice.connected || voice.connecting"
+            class="up-callback" :class="{ connecting: voice.connecting }"
+            v-tip="voice.connecting ? 'Connecting…' : 'Back to call'"
+            @click.stop="returnToCall"
+          >
+            <span class="up-cb-dot" />
+            <span class="up-cb-text">{{ voice.connecting ? 'Connecting…' : 'Back to call' }}</span>
+          </button>
           <div class="up-btns">
             <div class="up-split">
               <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" v-tip="micOff ? 'Unmute' : 'Mute'">
@@ -2160,6 +2203,11 @@ onBeforeUnmount(() => {
           />
         </section>
 
+        <!-- Scrim behind the members sheet. Mobile only — on desktop the panel
+             is part of the layout, not something laid over it. -->
+        <div v-if="isMobile && membersOpen && (view==='server' || view==='group')"
+             class="m-sheet-scrim" @click="membersOpen = false" />
+
         <!-- Members sidebar (server) -->
         <aside v-if="view==='server'" class="members-panel" :class="{ closed: !membersOpen }">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ members.length }}</span></h3></div>
@@ -2408,6 +2456,27 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-info{display:flex;flex-direction:column;gap:1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
+/* Back-to-call, sat in the gap between the name and the device buttons.
+   .up-left is flex:1, so it would swallow this space — it shrinks to make room
+   while a call is up and takes it back when the button goes. */
+.up-callback{
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+  height:26px;padding:0 9px;margin-right:4px;border-radius:13px;
+  background:rgba(35,165,90,.16);color:#3ba55d;
+  font-size:11.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap;
+  cursor:pointer;transition:background .12s,color .12s,transform .1s;
+}
+.up-callback:hover{background:rgba(35,165,90,.26);color:#4ade80}
+.up-callback:active{transform:scale(.96)}
+.up-callback.connecting{background:rgba(240,178,50,.16);color:#f0b232}
+.up-cb-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.up-callback.connecting .up-cb-dot{animation:up-cb-pulse 1.1s ease-in-out infinite}
+@keyframes up-cb-pulse{0%,100%{opacity:.4}50%{opacity:1}}
+/* Narrow panels (and phones) keep the dot as the affordance and drop the words
+   rather than squeezing the name column. */
+@media (max-width: 420px){ .up-cb-text{display:none} .up-callback{padding:0 7px} }
+.shell.mobile .up-callback{height:30px;border-radius:15px}
+
 .up-btns{display:flex;gap:1px;flex-shrink:0}
 .up-btn{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .12s}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
@@ -2581,13 +2650,62 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .chat{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0;position:relative}
 /* Call "hide chat": the call takes the whole column — messages and composer step
    aside (rails stay). Beats the :has() 34% split rule below via the extra class. */
+/* ── Members as a bottom sheet (mobile) ──────────────────────────────────────
+   A 240px side panel can't sit beside a 375px conversation. Members is a glance
+   at context rather than a destination, so it becomes a sheet over the chat
+   instead of a pushed screen — you check who's in the group and dismiss without
+   losing your place.
+
+   Presentation-only, so every row keeps the handlers it already has: tap for the
+   profile popout, long-press for the user menu. Duplicating this markup into a
+   sheet component would have meant duplicating those too. */
+.shell.mobile .members-panel{
+  position:fixed;left:0;right:0;bottom:0;top:auto;
+  width:100%;max-width:none;height:70dvh;
+  z-index:960;
+  border-left:none;border-radius:16px 16px 0 0;
+  box-shadow:0 -12px 40px rgba(0,0,0,.5);
+  padding-bottom:env(safe-area-inset-bottom);
+  transform:translate3d(0,0,0);
+  transition:transform .34s cubic-bezier(.32,.72,0,1);
+}
+/* .closed is the desktop collapse (width:0). On mobile it has to mean
+   "off the bottom" instead, or the sheet would still occupy the screen. */
+.shell.mobile .members-panel.closed{
+  width:100%;transform:translate3d(0,100%,0);
+}
+/* Grab handle, so it reads as a sheet rather than a panel that appeared. */
+.shell.mobile .members-panel::before{
+  content:'';position:absolute;top:8px;left:50%;margin-left:-18px;
+  width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.22);
+}
+.shell.mobile .mp-header{padding-top:20px}
+.shell.mobile .mp-member{min-height:56px}
+
+.m-sheet-scrim{
+  position:fixed;inset:0;z-index:955;
+  background:rgba(0,0,0,.55);
+  animation:m-scrim-in .28s ease;
+}
+@keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
+
+@media (prefers-reduced-motion: reduce){
+  .shell.mobile .members-panel{transition:opacity .2s ease}
+}
+
 /* Hide-chat: the whole point is that the call gets the column, so everything
    that competes for it goes — not just the message list and composer.
    The pinned panel floated OVER the call stage, and the members panel kept its
    width because it's a SIBLING of .chat, so `.chat.call-expanded` never reached
    it. Hidden with CSS rather than closed, so both come back in the state the
    user left them when hide-chat is turned off. */
-.chat.call-expanded .ml,
+/* .ml-wrap, NOT .ml. MessageList's root is the wrapper (added so the
+   jump-to-present pill can sit over the scroller); .ml is a child inside it.
+   Scoped CSS only stamps this component's id onto a child's ROOT element, so
+   `.chat.call-expanded .ml` silently matched nothing and the message list
+   stayed on screen through hide-chat — the composer vanished, the list didn't,
+   and the call bar was left with ~60% of the column. */
+.chat.call-expanded .ml-wrap,
 .chat.call-expanded .input-area,
 .chat.call-expanded .pinned-sidebar { display: none; }
 .chat.call-expanded ~ .members-panel { display: none; }
@@ -2595,7 +2713,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    messages keep a usable minimum and stay scrollable. */
 /* The call bar owns an explicit height (drag-resizable, default 40%); messages
    simply take whatever's left. */
-.chat:has(.callbar.has-video) .ml { flex: 1 1 auto; min-height: 0; }
+/* Same reason as above — the child's root is .ml-wrap, so targeting .ml from
+   here does nothing and the split never applied when video was on the stage. */
+.chat:has(.callbar.has-video) .ml-wrap { flex: 1 1 auto; min-height: 0; }
 .chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 12px}
 .chat-header-left,.chat-header-right{display:flex;align-items:center;gap:4px}
 /* Voice/video call header buttons — animated + colour-coded */
