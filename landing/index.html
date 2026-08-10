@@ -399,6 +399,24 @@
    type: 'add' (green) | 'imp' (blurple) | 'fix' (red)                  */
 const RELEASES = [
   {
+    v: 'v0.8', date: 'Aug 9, 2026', title: 'Skycord on your phone',
+    items: [
+      ['add', 'Skycord works properly on a phone now — add it to your home screen and it opens like an app'],
+      ['add', 'Tap a conversation for a full screen of it, and swipe or tap back for your list'],
+      ['add', 'Press and hold anything for its menu, the way right-click works on desktop'],
+      ['add', 'Double-tap a word or triple-tap to select everything, then bold, italic or quote it'],
+      ['add', 'Settings rebuilt for a phone — pick a section, get a full screen of it'],
+      ['add', 'A connection strip that tells you when you drop out and when you’re back'],
+      ['add', 'A “back to call” button next to your name, so an ongoing call is never more than one tap away'],
+      ['imp', 'Security hardening throughout — Skycord is meaningfully more secure than it was'],
+      ['imp', 'A new icon set across the whole app, with the right icon for each thing'],
+      ['imp', 'Hover text on buttons is ours now, not the browser’s — faster and readable'],
+      ['fix', 'The GIF button in the message box actually opens GIFs'],
+      ['fix', 'Hide chat now hides the whole chat instead of leaving half of it behind'],
+      ['fix', 'The app no longer sits below the bottom of the screen on a phone'],
+    ],
+  },
+  {
     v: 'v0.7.1', date: 'Aug 8, 2026', title: 'Chats stay put',
     items: [
       ['fix', 'Removing someone as a friend no longer makes your conversation with them disappear'],
@@ -509,8 +527,9 @@ const ROADMAP = [
   {
     stage: 'now', label: 'Building now', title: 'Mobile app',
     items: [
-      'Skycord on your phone — the whole app, not a cut-down version',
-      'Built for touch rather than a desktop layout squeezed narrow',
+      'Shipped in v0.8 — installable, touch-first, and the whole app rather than a cut-down version',
+      'Still to come: members and profiles as pull-up sheets',
+      'Then push notifications, once the desktop and mobile apps can receive them',
     ],
   },
   {
