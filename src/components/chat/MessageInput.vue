@@ -35,7 +35,9 @@ const setValue = (v: string, caret = v.length) => {
   nextTick(() => { inputEl.value?.focus(); inputEl.value?.setSelectionRange(caret, caret) })
 }
 
-// ── Selection formatting toolbar (right-click a selection) ──────────────────
+// ── Selection formatting toolbar ────────────────────────────────────────────
+// Desktop opens it by right-clicking a selection. Touch has no right-click, so
+// the whole formatting feature was unreachable on a phone.
 const toolbar = ref<{ x: number; y: number } | null>(null)
 const onContextMenu = (e: MouseEvent) => {
   const el = inputEl.value; if (!el) return
@@ -43,6 +45,78 @@ const onContextMenu = (e: MouseEvent) => {
   if (end <= start) return            // no selection → allow native menu
   e.preventDefault()
   toolbar.value = { x: e.clientX, y: e.clientY }
+}
+
+/*
+ * Touch selection.
+ *
+ * Two taps select the word under the finger, three select everything — the same
+ * grammar as a mouse, which is what people already expect from a text field.
+ * We implement it rather than relying on the browser because a double-tap on
+ * mobile is just as likely to be interpreted as zoom, and the result differs
+ * per engine.
+ *
+ * The toolbar is then anchored to the INPUT, not to the touch point: a finger
+ * has no cursor, and a menu under the fingertip is a menu you're covering.
+ */
+const TAP_WINDOW = 320   // ms within which taps count as one gesture
+const TAP_SLOP   = 12    // px of movement still considered a tap
+
+let tapCount = 0
+let lastTapAt = 0
+let tapX = 0, tapY = 0
+let tapTimer: ReturnType<typeof setTimeout> | null = null
+
+const showToolbarForSelection = () => {
+  const el = inputEl.value; if (!el) return
+  const start = el.selectionStart ?? 0, end = el.selectionEnd ?? 0
+  if (end <= start) { toolbar.value = null; return }
+  const r = el.getBoundingClientRect()
+  toolbar.value = { x: r.left + r.width / 2, y: r.top }
+}
+
+/** Expand the caret to the word around it. */
+const selectWordAt = (pos: number) => {
+  const el = inputEl.value; if (!el) return
+  const v = props.modelValue
+  if (!v) return
+  const isWord = (c: string) => /[\p{L}\p{N}_]/u.test(c)
+  let s = Math.min(pos, v.length - 1), e = s
+  if (!isWord(v[s] ?? '')) { // tapped whitespace/punctuation — take it alone
+    el.setSelectionRange(s, Math.min(s + 1, v.length)); showToolbarForSelection(); return
+  }
+  while (s > 0 && isWord(v[s - 1])) s--
+  while (e < v.length && isWord(v[e])) e++
+  el.setSelectionRange(s, e)
+  showToolbarForSelection()
+}
+
+const onInputPointerUp = (e: PointerEvent) => {
+  // Mouse keeps the browser's own double/triple-click behaviour.
+  if (e.pointerType === 'mouse') return
+  const now = performance.now()
+  const near = Math.abs(e.clientX - tapX) < TAP_SLOP && Math.abs(e.clientY - tapY) < TAP_SLOP
+  tapCount = (now - lastTapAt < TAP_WINDOW && near) ? tapCount + 1 : 1
+  lastTapAt = now; tapX = e.clientX; tapY = e.clientY
+
+  if (tapTimer) clearTimeout(tapTimer)
+  // Wait out the window before acting, so a triple isn't handled as a double
+  // first and then corrected — that flash of the wrong selection is the thing
+  // that makes multi-tap feel broken.
+  tapTimer = setTimeout(() => {
+    const el = inputEl.value
+    if (!el) return
+    if (tapCount === 2)      selectWordAt(el.selectionStart ?? 0)
+    else if (tapCount >= 3)  { el.setSelectionRange(0, props.modelValue.length); showToolbarForSelection() }
+    tapCount = 0
+  }, TAP_WINDOW)
+}
+
+/** Native long-press selection (and the handles that drag it) also deserves the
+ *  toolbar — it's a selection like any other. */
+const onSelect = () => {
+  if (!toolbar.value) return          // don't pop up unbidden while typing
+  showToolbarForSelection()
 }
 const wrapSelection = (pre: string, post = pre) => {
   const el = inputEl.value; if (!el) return
@@ -211,8 +285,11 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
     <!-- Selection formatting toolbar -->
     <Teleport to="body">
       <template v-if="toolbar">
-        <div class="fmt-overlay" @mousedown="toolbar = null"></div>
-        <div class="fmt-toolbar" :style="{ left: toolbar.x + 'px', top: (toolbar.y - 46) + 'px' }" @mousedown.prevent>
+        <!-- pointerdown as well as mousedown: on touch, pointerdown fires first
+             and blurs the input, collapsing the selection before the button's
+             click ever runs — so the format would apply to nothing. -->
+        <div class="fmt-overlay" @mousedown="toolbar = null" @pointerdown="toolbar = null"></div>
+        <div class="fmt-toolbar" :style="{ left: toolbar.x + 'px', top: (toolbar.y - 46) + 'px' }" @mousedown.prevent @pointerdown.prevent>
           <button v-tip="'Bold'" @click="wrapSelection('**')"><Bold :size="16" :stroke-width="2.25" /></button>
           <button v-tip="'Italic'" @click="wrapSelection('*')"><Italic :size="16" /></button>
           <button v-tip="'Underline'" @click="wrapSelection('__')"><Underline :size="16" /></button>
@@ -256,6 +333,8 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         @keydown="onKeydown"
         @paste="onPaste"
         @contextmenu="onContextMenu"
+        @pointerup="onInputPointerUp"
+        @select="onSelect"
         @blur="onBlur"
         type="text"
         :placeholder="placeholder"
