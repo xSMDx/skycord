@@ -1799,12 +1799,11 @@ onBeforeUnmount(() => {
                space otherwise. Only appears while a call is actually up. -->
           <button
             v-if="voice.connected || voice.connecting"
-            class="up-callback" :class="{ connecting: voice.connecting }"
+            class="up-btn up-callback" :class="{ connecting: voice.connecting }"
             v-tip="voice.connecting ? 'Connecting…' : 'Back to call'"
             @click.stop="returnToCall"
           >
-            <span class="up-cb-dot" />
-            <span class="up-cb-text">{{ voice.connecting ? 'Connecting…' : 'Back to call' }}</span>
+            <Phone :size="16" :stroke-width="2" />
           </button>
           <div class="up-btns">
             <div class="up-split">
@@ -1876,12 +1875,11 @@ onBeforeUnmount(() => {
                space otherwise. Only appears while a call is actually up. -->
           <button
             v-if="voice.connected || voice.connecting"
-            class="up-callback" :class="{ connecting: voice.connecting }"
+            class="up-btn up-callback" :class="{ connecting: voice.connecting }"
             v-tip="voice.connecting ? 'Connecting…' : 'Back to call'"
             @click.stop="returnToCall"
           >
-            <span class="up-cb-dot" />
-            <span class="up-cb-text">{{ voice.connecting ? 'Connecting…' : 'Back to call' }}</span>
+            <Phone :size="16" :stroke-width="2" />
           </button>
           <div class="up-btns">
             <div class="up-split">
@@ -2151,6 +2149,7 @@ onBeforeUnmount(() => {
             :name="currentCall.name"
             :participants="callParticipantsHere"
             :me="{ name: authUser?.displayName || authUser?.username || 'You', avatar: myAvatar }"
+            :callee="currentCall.kind === 'dm' && activeDM ? { name: activeDM.name, avatar: activeDM.avatar } : undefined"
             :dismissed="currentCallDismissed"
             @dismiss="dismissCurrentCall"
             @toast="showToast"
@@ -2456,26 +2455,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-info{display:flex;flex-direction:column;gap:1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
-/* Back-to-call, sat in the gap between the name and the device buttons.
-   .up-left is flex:1, so it would swallow this space — it shrinks to make room
-   while a call is up and takes it back when the button goes. */
-.up-callback{
-  display:flex;align-items:center;gap:6px;flex-shrink:0;
-  height:26px;padding:0 9px;margin-right:4px;border-radius:13px;
-  background:rgba(35,165,90,.16);color:#3ba55d;
-  font-size:11.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap;
-  cursor:pointer;transition:background .12s,color .12s,transform .1s;
-}
-.up-callback:hover{background:rgba(35,165,90,.26);color:#4ade80}
-.up-callback:active{transform:scale(.96)}
-.up-callback.connecting{background:rgba(240,178,50,.16);color:#f0b232}
-.up-cb-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
-.up-callback.connecting .up-cb-dot{animation:up-cb-pulse 1.1s ease-in-out infinite}
-@keyframes up-cb-pulse{0%,100%{opacity:.4}50%{opacity:1}}
-/* Narrow panels (and phones) keep the dot as the affordance and drop the words
-   rather than squeezing the name column. */
-@media (max-width: 420px){ .up-cb-text{display:none} .up-callback{padding:0 7px} }
-.shell.mobile .up-callback{height:30px;border-radius:15px}
+/* Back-to-call. Icon-only, and sized like every other control in this panel.
+   It was a text pill; the sidebar is 234px and already carries an avatar, a
+   name column and five 30px buttons, so the words had nowhere to go and the
+   pill overlapped the name. The width guard I had used a VIEWPORT media query
+   (max-width:420px) when the constraint is the CONTAINER — on a 1280px window
+   it never fired. Sizing it like its neighbours removes the problem instead of
+   trying to measure around it. */
+.up-callback{color:#3ba55d}
+.up-callback:hover{background:rgba(35,165,90,.16);color:#4ade80}
+.up-callback.connecting{color:#f0b232}
+.up-callback.connecting svg{animation:up-cb-pulse 1.1s ease-in-out infinite}
+@keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
 .up-btns{display:flex;gap:1px;flex-shrink:0}
 .up-btn{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .12s}

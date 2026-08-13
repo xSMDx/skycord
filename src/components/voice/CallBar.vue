@@ -28,6 +28,10 @@ const props = defineProps<{
   participants: { id: string; name: string; avatar: string; local: boolean }[]
   // The local user, for the optimistic self-tile shown while connecting.
   me?: { name: string; avatar: string | null }
+  // Who we're calling, in a DM. They aren't a call participant until they
+  // answer, so without this there is nothing on the stage to ring — the caller
+  // stares at their own tile with no sign anyone is being called.
+  callee?: { name: string; avatar: string }
   dismissed?: boolean
 }>()
 const emit = defineEmits<{
@@ -89,16 +93,24 @@ const avatarById = computed(() => {
 // Tiles for the in-call stage. Joined → live LiveKit participants. Connecting →
 // an optimistic self tile (so you "land" in the call instantly) plus anyone
 // already present.
-type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean }
+type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ringing?: boolean }
 const stageTiles = computed<Tile[]>(() => {
   if (joinedHere.value) {
-    return voice.participants.map(p => ({
+    const live = voice.participants.map(p => ({
       id: p.id,
       name: p.local ? (props.me?.name || p.name) : p.name,
       avatar: avatarById.value[p.id] || (p.local ? (props.me?.avatar || '') : ''),
       speaking: p.speaking && !p.muted,
       muted: p.muted,
     }))
+    // Nobody has answered yet — show who we're calling, ringing, beside you.
+    if (dialing.value && props.callee) {
+      live.push({
+        id: 'ringing', name: props.callee.name, avatar: props.callee.avatar,
+        speaking: false, muted: false, ringing: true,
+      } as Tile)
+    }
+    return live
   }
   const meTile: Tile = { id: 'me', name: props.me?.name || 'You', avatar: props.me?.avatar || '', speaking: false, muted: voice.localMuted }
   return [meTile, ...others.value.map(o => ({ id: o.id, name: o.name, avatar: o.avatar, speaking: false, muted: false }))]
@@ -107,6 +119,12 @@ const stageTiles = computed<Tile[]>(() => {
 // connecting window would register under the real LiveKit identity while the
 // optimistic stage tile still uses the 'me' placeholder id → duplicate self-cells.
 const videoList = computed(() => [...media.videoTracks.values()] as VideoTrackInfo[])
+
+/** Anything on the stage at all — a camera or a screen. */
+const hasVideo = computed(() => videoList.value.length > 0)
+/** Screen share specifically. A shared screen is mostly small text, so it needs
+ *  far more room than a face does to be worth looking at. */
+const hasScreen = computed(() => videoList.value.some(v => v.source === 'screen'))
 
 const join = () => { connect(props.convId, props.kind, props.name).catch(() => {}) }
 
@@ -131,9 +149,29 @@ const showFilmstrip = computed(() => expanded.value || isFullscreen.value)
 // Drag the call bar's bottom edge to size it. Stored as a FRACTION of the chat
 // column so it stays proportional across window sizes. Dragging past EXPAND_AT
 // slides straight into hide-chat; dragging back down leaves it again.
-const MIN_PX    = 140
+/*
+ * Minimum height depends on what's on the stage.
+ *
+ * An audio call is avatars and a control row — 212px holds that comfortably. A
+ * shared screen is mostly small text, and below roughly 500px it's present but
+ * unreadable, which is worse than not showing it: the space is spent and the
+ * content still can't be used. So the floor rises when a screen appears, and
+ * the bar grows to meet it rather than leaving the user to drag.
+ */
+const MIN_AUDIO_PX  = 212
+const MIN_SCREEN_PX = 500
+const minPx = computed(() => (hasScreen.value ? MIN_SCREEN_PX : MIN_AUDIO_PX))
+
 const EXPAND_AT = 0.9    // fraction of the column past which we flip to hide-chat
 const heightPx  = ref(voiceSettings.callHeightPx ?? 220)
+
+// Grow to meet the new floor the moment a screen appears, and don't shrink back
+// when it ends — the user's own sizing is remembered, and yanking the layout
+// out from under them the instant someone stops sharing is worse than leaving
+// the extra room.
+watch(hasScreen, on => {
+  if (on && heightPx.value < MIN_SCREEN_PX) heightPx.value = MIN_SCREEN_PX
+})
 const dragging  = ref(false)
 let stopDrag: (() => void) | null = null
 
@@ -144,7 +182,7 @@ const barStyle = computed(() => {
   if (!(inCall.value && !expanded.value && !isFullscreen.value)) return {}
   // Clamp on read too: a hand-edited or legacy value must never render the bar
   // unusably small.
-  return { flex: '0 0 auto', height: Math.max(heightPx.value, MIN_PX) + 'px' }
+  return { flex: '0 0 auto', height: Math.max(heightPx.value, minPx.value) + 'px' }
 })
 
 const onResizeDown = (e: PointerEvent) => {
@@ -164,7 +202,7 @@ const onResizeDown = (e: PointerEvent) => {
       return
     }
     if (expanded.value) { expanded.value = false; emit('expand', false) }
-    heightPx.value = Math.min(Math.max(px, MIN_PX), colHeight * EXPAND_AT)
+    heightPx.value = Math.min(Math.max(px, minPx.value), colHeight * EXPAND_AT)
   }
   const up = () => {
     dragging.value = false
@@ -236,16 +274,41 @@ const onCtrlCtx = (e: MouseEvent, which: 'mic' | 'cam') => {
   openMenu.value = which     // open, not toggle — right-click shouldn't close it
 }
 
-// ── Outgoing dial tone ──────────────────────────────────────────────────────
+// ── Outgoing dial ───────────────────────────────────────────────────────────
 // You're in a 1:1 call and nobody else has picked up yet: without this the
 // caller gets total silence and can't tell whether the call is even trying.
 // Stops the instant anyone joins, and on leave/unmount.
-watch(
-  () => joinedHere.value && props.kind === 'dm' && others.value.length === 0,
-  (waiting) => { waiting ? soundDialStart() : soundDialStop() },
-  { immediate: true },
-)
-onBeforeUnmount(soundDialStop)
+//
+// It also gives up. Ringing forever means a caller who walked away leaves a
+// tone playing into an empty room and a callee being pestered indefinitely;
+// 40s is long enough to reach a phone in another room and short enough not to
+// become noise. After that the call stays OPEN — they can still answer — but
+// the tone stops and the stage offers to ring again.
+const RING_FOR_MS = 40_000
+
+/** True while we're dialling and nobody has answered. */
+const dialing   = computed(() => joinedHere.value && props.kind === 'dm' && others.value.length === 0)
+const rangOut   = ref(false)
+let ringTimer: ReturnType<typeof setTimeout> | null = null
+
+const clearRingTimer = () => { if (ringTimer) { clearTimeout(ringTimer); ringTimer = null } }
+
+const startRinging = () => {
+  clearRingTimer()
+  rangOut.value = false
+  soundDialStart()
+  ringTimer = setTimeout(() => { soundDialStop(); rangOut.value = true; ringTimer = null }, RING_FOR_MS)
+}
+
+/** Offered once the ring times out — same call, fresh attempt. */
+const ringAgain = () => { if (dialing.value) startRinging() }
+
+watch(dialing, (on) => {
+  if (on) startRinging()
+  else { clearRingTimer(); soundDialStop(); rangOut.value = false }
+}, { immediate: true })
+
+onBeforeUnmount(() => { clearRingTimer(); soundDialStop() })
 
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {
@@ -264,20 +327,22 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'is-expanded': expanded, 'is-fs': isFullscreen, 'is-dragging': dragging }">
+  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': expanded, 'is-fs': isFullscreen, 'is-dragging': dragging }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
            button sits over the video area (not down at the control-bar row) -->
       <div class="cb-stagewrap">
         <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" :show-filmstrip="showFilmstrip" @tile-ctx="onTileCtx" />
-        <button class="cb-expand" v-tip="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
-          <!-- points DOWN normally; flips UP once the chat is hidden -->
-          <ChevronDown :size="16" :stroke-width="2.25" :style="expanded ? 'transform: rotate(180deg)' : ''" />
-        </button>
-        <button class="cb-fs" v-tip="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
-          <component :is="isFullscreen ? Minimize2 : Maximize2" :size="18" :stroke-width="2.25" />
-        </button>
+        <!-- The ring gave up, but the call is still open — they can answer at
+             any time. So this offers another attempt rather than hanging up
+             for the user. -->
+        <div v-if="rangOut" class="cb-noanswer">
+          <span>No answer</span>
+          <button class="cb-ringagain" @click="ringAgain">
+            <Phone :size="14" :stroke-width="2.25" /> Ring again
+          </button>
+        </div>
       </div>
 
       <!-- Discord-style grouped pill controls -->
@@ -308,6 +373,20 @@ onBeforeUnmount(() => {
             <MoreFlyout v-if="openMenu === 'more'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
         </div>
+        <!-- Hide-chat and fullscreen only exist once there's something worth
+             enlarging. On an audio call they were two controls that changed
+             nothing visible. They live in the control row rather than floating
+             over the stage corners so every call action sits on one line. -->
+        <div v-if="hasVideo" class="cb-group">
+          <button class="cb-b" v-tip="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
+            <!-- points DOWN normally; flips UP once the chat is hidden -->
+            <ChevronDown :size="20" :stroke-width="2.25" :style="expanded ? 'transform: rotate(180deg)' : ''" />
+          </button>
+          <button class="cb-b" v-tip="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
+            <component :is="isFullscreen ? Minimize2 : Maximize2" :size="20" :stroke-width="2.25" />
+          </button>
+        </div>
+
         <button class="cb-leave" v-tip="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhoneOff :size="20" :stroke-width="2.25" /></button>
       </div>
 
@@ -460,33 +539,50 @@ onBeforeUnmount(() => {
 .callbar.is-expanded .cb-callstage,
 .callbar.is-fs       .cb-callstage { flex: 1 1 auto; min-height: 0; }
 
-/* Fullscreen (⛶) — bottom-right OF THE STAGE (wrapper-relative, so it never
-   drops down onto the control-bar row). */
-.cb-fs {
-  position: absolute; right: 12px; bottom: 12px; z-index: 2;
-  width: 34px; height: 34px; border-radius: 8px;
-  background: rgba(0,0,0,.55); color: #e8eaf0;
-  display: flex; align-items: center; justify-content: center;
+/* Controls pinned to the BOTTOM of the bar. The stage takes whatever is left,
+   so the control row lands in the same place at every bar height instead of
+   drifting up as the call grows. */
+.cb-bar { margin-top: auto; flex-shrink: 0; }
+
+/* No-answer strip — sits over the stage's bottom edge, above the control row,
+   so it reads as a status about the call rather than another control. */
+.cb-noanswer {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 10px; z-index: 3;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px 6px 14px; border-radius: 999px;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.08);
+  font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  white-space: nowrap;
+}
+.cb-ringagain {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  background: rgba(35,165,90,.18); color: #3ba55d;
+  font-size: 12.5px; font-weight: 700;
   transition: background .12s, color .12s, transform .1s;
 }
-.cb-fs:hover { background: rgba(0,0,0,.8); color: #fff; }
-.cb-fs:active { transform: scale(.92); }
-/* Expand / hide-chat — mirrors ⛶ at the stage's bottom-LEFT (user's pic 1) */
-.cb-expand {
-  position: absolute; left: 12px; bottom: 12px; z-index: 2;
-  width: 34px; height: 34px; border-radius: 8px;
-  background: rgba(0,0,0,.55); color: #e8eaf0;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s, transform .1s;
-}
-.cb-expand:hover { background: rgba(0,0,0,.8); color: #fff; }
-.cb-expand:active { transform: scale(.92); }
-/* Rest dimmed so they don't fight tile name labels in the stage corners; full
-   strength as soon as the pointer is on the stage. Only on hover-capable
-   pointers — touch has no hover, so phones/tablets keep them fully visible. */
+.cb-ringagain:hover { background: rgba(35,165,90,.3); color: #4ade80; }
+.cb-ringagain:active { transform: scale(.96); }
+
+/* While a screen is shared, the controls fade out and come back on hover.
+   A shared screen is the content — a permanent control row over it is a strip
+   of someone else's desktop you cannot see. Hover-capable pointers only:
+   touch has no hover, so phones keep the controls visible or they would be
+   unreachable. */
 @media (hover: hover) {
-  .cb-expand, .cb-fs { opacity: .45; }
-  .cb-stagewrap:hover .cb-expand, .cb-stagewrap:hover .cb-fs { opacity: 1; }
+  .callbar.sharing .cb-bar {
+    opacity: 0; transform: translateY(6px); pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .callbar.sharing:hover .cb-bar,
+  .callbar.sharing:focus-within .cb-bar {
+    opacity: 1; transform: none; pointer-events: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .callbar.sharing .cb-bar { transition: opacity .15s ease; transform: none; }
 }
 /* Vertical resize grip along the call bar's bottom edge */
 .cb-resize {

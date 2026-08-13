@@ -9,7 +9,10 @@ import { getRoom } from '@/composables/voiceRoom'
 import { userPref } from '@/composables/useVoice'
 
 const props = defineProps<{
-  tiles:  { id: string; name: string; avatar: string; speaking: boolean; muted: boolean }[]
+  // `ringing` = we're calling this person and they haven't picked up. Their
+  // tile is dimmed with pulsing rings so it reads as "waiting on them" rather
+  // than as a participant who is simply silent.
+  tiles:  { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ringing?: boolean }[]
   videos: VideoTrackInfo[]
   // Show the filmstrip of non-focused tiles in spotlight. False in compact
   // spotlight (chat visible) → focused tile only; true in expand/fullscreen.
@@ -36,7 +39,7 @@ const cellAvatar = (c: Cell) => c.kind === 'avatar' ? c.avatar
 // avatar cell. A participant sharing screen + camera yields two video cells.
 type Cell =
   | { kind: 'video'; key: string; name: string; speaking: boolean; source: 'camera' | 'screen'; video: VideoTrackInfo }
-  | { kind: 'avatar'; key: string; name: string; speaking: boolean; muted: boolean; avatar: string }
+  | { kind: 'avatar'; key: string; name: string; speaking: boolean; muted: boolean; avatar: string; ringing?: boolean }
 
 const cells = computed<Cell[]>(() => {
   const out: Cell[] = []
@@ -54,7 +57,7 @@ const cells = computed<Cell[]>(() => {
         out.push({ kind: 'video', key: keyFor(t.id, v.source), name: t.name, speaking: t.speaking, source: v.source, video: v })
       }
     } else if (voiceSettings.showNonVideo) {
-      out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar })
+      out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar, ringing: t.ringing })
     }
   }
   // Videos whose participant hasn't landed in `tiles` yet (presence lag):
@@ -142,12 +145,18 @@ onBeforeUnmount(() => {
   <div v-if="!hasVideo" class="stage">
     <div v-for="t in tiles" :key="t.id" class="s-tile"
          @contextmenu="emit('tileCtx', $event, { id: t.id, name: t.name, avatar: t.avatar, local: t.id === localId })">
-      <div class="s-av" :class="{ speaking: t.speaking }">
+      <div class="s-av" :class="{ speaking: t.speaking, ringing: t.ringing }">
         <img v-if="t.avatar" :src="t.avatar" :alt="t.name" />
         <template v-else>{{ initial(t.name) }}</template>
         <span v-if="t.muted" class="s-mute"><MicOff :size="13" :stroke-width="2.25" /></span>
+        <!-- Dialling happens BEFORE any video exists, so this layout — not the
+             grid — is where a ringing tile actually appears. -->
+        <template v-if="t.ringing">
+          <span class="s-wave" />
+          <span class="s-wave s-wave2" />
+        </template>
       </div>
-      <span class="s-name">{{ t.name }}</span>
+      <span class="s-name">{{ t.name }}<template v-if="t.ringing"> · ringing…</template></span>
     </div>
   </div>
 
@@ -182,7 +191,13 @@ onBeforeUnmount(() => {
         </button>
       </template>
       <template v-else>
-        <div class="g-avwrap" :style="{ background: colorForUsername(c.name) }">
+        <div class="g-avwrap" :class="{ ringing: c.ringing }" :style="{ background: colorForUsername(c.name) }">
+          <!-- Rings are SIBLINGS of .g-av, not children: .g-av is overflow:hidden
+               to clip the avatar into a circle, which would clip these too. -->
+          <template v-if="c.ringing">
+            <span class="g-wave" />
+            <span class="g-wave g-wave2" />
+          </template>
           <div class="g-av">
             <img v-if="c.avatar" :src="c.avatar" :alt="c.name" />
             <template v-else>{{ initial(c.name) }}</template>
@@ -212,6 +227,28 @@ button { border: none; }
 }
 .s-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .s-av.speaking { box-shadow: 0 0 0 3px #23a55a; }
+
+/* Ringing — calling them, no answer yet. Dimmed so they read as not-here-yet
+   rather than present-and-silent, with two rings on an offset delay so the
+   pulse is continuous rather than one shape blinking. */
+.s-av.ringing { opacity: .55; filter: saturate(.7); }
+.s-av.ringing img { filter: brightness(.75); }
+.s-wave {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid rgba(88,101,242,.75);
+  animation: s-wave 1.8s cubic-bezier(.2,.6,.35,1) infinite;
+  pointer-events: none;
+}
+.s-wave2 { animation-delay: .9s; }
+@keyframes s-wave {
+  0%   { transform: scale(1);    opacity: .85; }
+  100% { transform: scale(1.9);  opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .s-wave  { animation: s-wave-fade 1.6s ease-in-out infinite; transform: none; }
+  .s-wave2 { animation-delay: .8s; }
+  @keyframes s-wave-fade { 0%,100% { opacity: .2 } 50% { opacity: .8 } }
+}
 .s-mute {
   position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%;
   background: #f23f43; color: #fff; display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
@@ -265,6 +302,34 @@ button { border: none; }
   font-size: 26px; font-weight: 700;
 }
 .g-av img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Ringing — we're calling them and they haven't answered.
+   Dimmed so they read as not-here-yet rather than present-and-quiet, with two
+   rings expanding outward on an offset delay so the pulse is continuous. */
+.g-avwrap.ringing .g-av { opacity: .55; filter: saturate(.7); }
+.g-avwrap.ringing .g-av img { filter: brightness(.75); }
+.g-avwrap.ringing { position: relative; }
+.g-wave {
+  /* Sized and centred on the 72px avatar rather than inset:0, because the wrap
+     fills the whole cell — inset:0 would ring the tile, not the person. */
+  position: absolute; top: 50%; left: 50%;
+  width: 72px; height: 72px; margin: -36px 0 0 -36px;
+  border-radius: 50%;
+  border: 2px solid rgba(88,101,242,.75);
+  animation: g-wave 1.8s cubic-bezier(.2,.6,.35,1) infinite;
+  pointer-events: none;
+}
+.g-wave2 { animation-delay: .9s; }
+@keyframes g-wave {
+  0%   { transform: scale(1);    opacity: .85; }
+  100% { transform: scale(1.85); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Vestibular-safe equivalent: still clearly "waiting", no expanding motion. */
+  .g-wave  { animation: g-wave-fade 1.6s ease-in-out infinite; transform: none; }
+  .g-wave2 { animation-delay: .8s; }
+  @keyframes g-wave-fade { 0%,100% { opacity: .2 } 50% { opacity: .8 } }
+}
 .g-name {
   position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 5px;
   max-width: calc(100% - 16px); padding: 3px 8px; border-radius: 6px;
