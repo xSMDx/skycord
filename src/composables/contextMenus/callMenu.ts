@@ -15,11 +15,10 @@
  *   Ignore, Block             — no backend; Block needs its own design
  *   View Verification Code    — no E2EE
  *   Pop Out User              — deferred with the rest of pop-out
- *   Stop Ringing              — no per-callee ring state yet
  */
 import {
-  User, MicOff, Headphones, VideoOff, Copy,
-  Eye, UsersRound, Video, SlidersHorizontal, UserMinus,
+  User, MicOff, Headphones, VideoOff, Copy, BellOff,
+  Eye, UsersRound, Video, SlidersHorizontal, UserMinus, Phone,
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
@@ -68,6 +67,30 @@ export const ownTileMenu = (
   { label: 'Copy User ID', icon: Copy, onSelect: () => h.copy(me.id, 'User ID') },
   ...(s.channelId
     ? [{ label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(s.channelId!, 'Channel ID') }]
+    : []),
+]
+
+/**
+ * The person you're calling, before they pick up. They aren't in the call yet,
+ * so none of the per-participant controls (volume, local mute, disable video)
+ * have anything to act on — this menu is only about the ring itself.
+ */
+export const calleeMenu = (
+  c: MenuUser,
+  s: { ringing: boolean; channelId?: string },
+  h: { ringAgain: () => void; stopRinging: () => void
+       openProfile: (u: MenuUser) => void; copy: (t: string, w: string) => void },
+): MenuItem[] => [
+  { label: 'Profile', icon: User, onSelect: () => h.openProfile(c) },
+  { sep: true },
+  s.ringing
+    ? { label: 'Stop Ringing', icon: BellOff, onSelect: () => h.stopRinging() }
+    : { label: 'Ring Again',   icon: Phone,   onSelect: () => h.ringAgain() },
+  { sep: true },
+  { label: 'Copy User ID', icon: Copy, onSelect: () => h.copy(c.id, 'User ID') },
+  ...(s.channelId
+    ? [{ label: 'Copy Channel ID', icon: Copy,
+         onSelect: () => h.copy(s.channelId!, 'Channel ID') } as MenuItem]
     : []),
 ]
 

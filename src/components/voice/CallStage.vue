@@ -8,11 +8,15 @@ import { keyFor, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { getRoom } from '@/composables/voiceRoom'
 import { userPref } from '@/composables/useVoice'
 
+/** Dialling state of a tile that belongs to someone who hasn't joined yet. */
+type RingState = 'ringing' | 'no-answer'
+
 const props = defineProps<{
-  // `ringing` = we're calling this person and they haven't picked up. Their
-  // tile is dimmed with pulsing rings so it reads as "waiting on them" rather
-  // than as a participant who is simply silent.
-  tiles:  { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ringing?: boolean }[]
+  // `ring` = we're calling this person and they haven't picked up. Their tile
+  // is dimmed so it reads as "waiting on them" rather than as a participant who
+  // is simply silent. 'ringing' adds the pulsing rings; 'no-answer' is the same
+  // tile after the ring gives up — the call stays open, so they can still join.
+  tiles:  { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ring?: RingState }[]
   videos: VideoTrackInfo[]
   // Show the filmstrip of non-focused tiles in spotlight. False in compact
   // spotlight (chat visible) → focused tile only; true in expand/fullscreen.
@@ -39,7 +43,7 @@ const cellAvatar = (c: Cell) => c.kind === 'avatar' ? c.avatar
 // avatar cell. A participant sharing screen + camera yields two video cells.
 type Cell =
   | { kind: 'video'; key: string; name: string; speaking: boolean; source: 'camera' | 'screen'; video: VideoTrackInfo }
-  | { kind: 'avatar'; key: string; name: string; speaking: boolean; muted: boolean; avatar: string; ringing?: boolean }
+  | { kind: 'avatar'; key: string; name: string; speaking: boolean; muted: boolean; avatar: string; ring?: RingState }
 
 const cells = computed<Cell[]>(() => {
   const out: Cell[] = []
@@ -57,7 +61,7 @@ const cells = computed<Cell[]>(() => {
         out.push({ kind: 'video', key: keyFor(t.id, v.source), name: t.name, speaking: t.speaking, source: v.source, video: v })
       }
     } else if (voiceSettings.showNonVideo) {
-      out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar, ringing: t.ringing })
+      out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar, ring: t.ring })
     }
   }
   // Videos whose participant hasn't landed in `tiles` yet (presence lag):
@@ -145,18 +149,18 @@ onBeforeUnmount(() => {
   <div v-if="!hasVideo" class="stage">
     <div v-for="t in tiles" :key="t.id" class="s-tile"
          @contextmenu="emit('tileCtx', $event, { id: t.id, name: t.name, avatar: t.avatar, local: t.id === localId })">
-      <div class="s-av" :class="{ speaking: t.speaking, ringing: t.ringing }">
+      <div class="s-av" :class="{ speaking: t.speaking, ringing: !!t.ring }">
         <img v-if="t.avatar" :src="t.avatar" :alt="t.name" />
         <template v-else>{{ initial(t.name) }}</template>
         <span v-if="t.muted" class="s-mute"><MicOff :size="13" :stroke-width="2.25" /></span>
         <!-- Dialling happens BEFORE any video exists, so this layout — not the
              grid — is where a ringing tile actually appears. -->
-        <template v-if="t.ringing">
+        <template v-if="t.ring === 'ringing'">
           <span class="s-wave" />
           <span class="s-wave s-wave2" />
         </template>
       </div>
-      <span class="s-name">{{ t.name }}<template v-if="t.ringing"> · ringing…</template></span>
+      <span class="s-name">{{ t.name }}<template v-if="t.ring"> · {{ t.ring === 'ringing' ? 'ringing…' : 'no answer' }}</template></span>
     </div>
   </div>
 
@@ -191,10 +195,10 @@ onBeforeUnmount(() => {
         </button>
       </template>
       <template v-else>
-        <div class="g-avwrap" :class="{ ringing: c.ringing }" :style="{ background: colorForUsername(c.name) }">
+        <div class="g-avwrap" :class="{ ringing: !!c.ring }" :style="{ background: colorForUsername(c.name) }">
           <!-- Rings are SIBLINGS of .g-av, not children: .g-av is overflow:hidden
                to clip the avatar into a circle, which would clip these too. -->
-          <template v-if="c.ringing">
+          <template v-if="c.ring === 'ringing'">
             <span class="g-wave" />
             <span class="g-wave g-wave2" />
           </template>
@@ -207,7 +211,7 @@ onBeforeUnmount(() => {
       </template>
       <span class="g-name">
         <Monitor v-if="c.kind === 'video' && c.source === 'screen'" :size="13" :stroke-width="2.25" />
-        {{ c.name }}
+        {{ c.name }}<template v-if="c.kind === 'avatar' && c.ring"> · {{ c.ring === 'ringing' ? 'ringing…' : 'no answer' }}</template>
       </span>
     </div>
   </div>
@@ -217,7 +221,14 @@ onBeforeUnmount(() => {
 button { border: none; }
 
 /* Layout 1 — circular avatar tiles */
-.stage { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-content: center; }
+/* height:100% + align-items:center is what actually centres the avatars.
+   align-content alone only does anything once the flex container WRAPS onto a
+   second line, so with one row of tiles it did nothing and they sat at the top. */
+.stage {
+  display: flex; flex-wrap: wrap; gap: 24px;
+  justify-content: center; align-content: center; align-items: center;
+  height: 100%; min-height: 0;
+}
 .s-tile { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .s-av {
   width: 72px; height: 72px; border-radius: 50%; position: relative;

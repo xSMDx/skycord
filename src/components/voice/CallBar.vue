@@ -12,7 +12,7 @@ import { userPref, setUserPref } from '@/composables/useVoice'
 import { soundDialStart, soundDialStop } from '@/composables/useSocket'
 // Aliased: this component already has its own `openMenu` ref for the flyouts.
 import { openMenu as openCtxMenu } from '@/composables/useContextMenu'
-import { ownTileMenu, participantMenu } from '@/composables/contextMenus/callMenu'
+import { ownTileMenu, participantMenu, calleeMenu } from '@/composables/contextMenus/callMenu'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
 // in THIS conversation — joined, connecting, or ongoing-not-joined.
@@ -31,7 +31,7 @@ const props = defineProps<{
   // Who we're calling, in a DM. They aren't a call participant until they
   // answer, so without this there is nothing on the stage to ring — the caller
   // stares at their own tile with no sign anyone is being called.
-  callee?: { name: string; avatar: string }
+  callee?: { id: string; name: string; avatar: string }
   dismissed?: boolean
 }>()
 const emit = defineEmits<{
@@ -93,7 +93,7 @@ const avatarById = computed(() => {
 // Tiles for the in-call stage. Joined → live LiveKit participants. Connecting →
 // an optimistic self tile (so you "land" in the call instantly) plus anyone
 // already present.
-type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ringing?: boolean }
+type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ring?: 'ringing' | 'no-answer' }
 const stageTiles = computed<Tile[]>(() => {
   if (joinedHere.value) {
     const live = voice.participants.map(p => ({
@@ -104,10 +104,13 @@ const stageTiles = computed<Tile[]>(() => {
       muted: p.muted,
     }))
     // Nobody has answered yet — show who we're calling, ringing, beside you.
+    // The tile stays after the ring times out (as "no answer") so the call
+    // doesn't silently become a room with one person in it, and so there's
+    // something to right-click for "Ring Again".
     if (dialing.value && props.callee) {
       live.push({
         id: 'ringing', name: props.callee.name, avatar: props.callee.avatar,
-        speaking: false, muted: false, ringing: true,
+        speaking: false, muted: false, ring: rangOut.value ? 'no-answer' : 'ringing',
       } as Tile)
     }
     return live
@@ -259,6 +262,15 @@ const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string;
     showNonVideo: voiceSettings.showNonVideo, showOwnCamera: voiceSettings.showOwnCamera,
     channelId: props.convId,
   })
+  // The callee hasn't joined, so they have no LiveKit id and no per-participant
+  // state — their tile gets the ring controls instead of the usual menu.
+  if (t.id === 'ringing' && props.callee) {
+    const c = { id: props.callee.id, displayName: props.callee.name, avatar: props.callee.avatar }
+    openCtxMenu(e, () => calleeMenu(c, { ringing: !rangOut.value, channelId: props.convId }, {
+      ringAgain, stopRinging, openProfile: (x: any) => emit('profile', x), copy: copyText,
+    }))
+    return
+  }
   if (t.local) openCtxMenu(e, () => ownTileMenu(u, base(), menuHandlers))
   else openCtxMenu(e, () => {
     const p = userPref(t.id)
@@ -302,6 +314,8 @@ const startRinging = () => {
 
 /** Offered once the ring times out — same call, fresh attempt. */
 const ringAgain = () => { if (dialing.value) startRinging() }
+/** Give up early. The call stays open; only the tone and the timer stop. */
+const stopRinging = () => { clearRingTimer(); soundDialStop(); rangOut.value = true }
 
 watch(dialing, (on) => {
   if (on) startRinging()
@@ -334,15 +348,6 @@ onBeforeUnmount(() => {
            button sits over the video area (not down at the control-bar row) -->
       <div class="cb-stagewrap">
         <CallStage class="cb-callstage" :tiles="stageTiles" :videos="videoList" :show-filmstrip="showFilmstrip" @tile-ctx="onTileCtx" />
-        <!-- The ring gave up, but the call is still open — they can answer at
-             any time. So this offers another attempt rather than hanging up
-             for the user. -->
-        <div v-if="rangOut" class="cb-noanswer">
-          <span>No answer</span>
-          <button class="cb-ringagain" @click="ringAgain">
-            <Phone :size="14" :stroke-width="2.25" /> Ring again
-          </button>
-        </div>
       </div>
 
       <!-- Discord-style grouped pill controls -->
@@ -530,41 +535,18 @@ onBeforeUnmount(() => {
    the column was left half empty (and the ⌄/⛶ buttons stranded up top). */
 .callbar.has-video,
 .callbar.is-expanded { flex: 1 1 auto; min-height: 0; }
-.cb-stagewrap { position: relative; width: 100%; display: flex; }
-.cb-callstage { width: 100%; }
-.callbar.has-video   .cb-stagewrap,
-.callbar.is-expanded .cb-stagewrap,
-.callbar.is-fs       .cb-stagewrap { flex: 1 1 auto; min-height: 0; }
-.callbar.has-video   .cb-callstage,
-.callbar.is-expanded .cb-callstage,
-.callbar.is-fs       .cb-callstage { flex: 1 1 auto; min-height: 0; }
+/* The stage ALWAYS takes the space left above the control row — not only when
+   there's video. Previously an audio call left the wrapper at content height,
+   so the avatars sat pinned to the top and resizing the bar just added empty
+   space underneath them instead of re-centring. */
+.cb-stagewrap { position: relative; width: 100%; display: flex; flex: 1 1 auto; min-height: 0; }
+.cb-callstage { width: 100%; flex: 1 1 auto; min-height: 0; }
 
 /* Controls pinned to the BOTTOM of the bar. The stage takes whatever is left,
    so the control row lands in the same place at every bar height instead of
    drifting up as the call grows. */
 .cb-bar { margin-top: auto; flex-shrink: 0; }
 
-/* No-answer strip — sits over the stage's bottom edge, above the control row,
-   so it reads as a status about the call rather than another control. */
-.cb-noanswer {
-  position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: 10px; z-index: 3;
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px 8px 6px 14px; border-radius: 999px;
-  background: rgba(0,0,0,.7); backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,.08);
-  font-size: 12.5px; font-weight: 600; color: var(--text-2);
-  white-space: nowrap;
-}
-.cb-ringagain {
-  display: flex; align-items: center; gap: 6px;
-  padding: 5px 12px; border-radius: 999px; cursor: pointer;
-  background: rgba(35,165,90,.18); color: #3ba55d;
-  font-size: 12.5px; font-weight: 700;
-  transition: background .12s, color .12s, transform .1s;
-}
-.cb-ringagain:hover { background: rgba(35,165,90,.3); color: #4ade80; }
-.cb-ringagain:active { transform: scale(.96); }
 
 /* While a screen is shared, the controls fade out and come back on hover.
    A shared screen is the content — a permanent control row over it is a strip

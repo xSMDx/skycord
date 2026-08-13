@@ -2149,7 +2149,7 @@ onBeforeUnmount(() => {
             :name="currentCall.name"
             :participants="callParticipantsHere"
             :me="{ name: authUser?.displayName || authUser?.username || 'You', avatar: myAvatar }"
-            :callee="currentCall.kind === 'dm' && activeDM ? { name: activeDM.name, avatar: activeDM.avatar } : undefined"
+            :callee="currentCall.kind === 'dm' && activeDM ? { id: activeDM.id, name: activeDM.name, avatar: activeDM.avatar } : undefined"
             :dismissed="currentCallDismissed"
             @dismiss="dismissCurrentCall"
             @toast="showToast"
