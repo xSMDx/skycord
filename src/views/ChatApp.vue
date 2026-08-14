@@ -547,6 +547,35 @@ const myAvatar = computed(() =>
 // choosing Invisible showed a grey dot labelled with the literal word
 // "invisible" — the fallback, not a real branch.
 
+// ── Mobile chat header ──────────────────────────────────────────────────────
+/** Live members in the open group, for the header's "N Online" subtitle. */
+const groupOnlineCount = computed(() =>
+  (activeGroup.value?.members ?? []).filter(m => m.status && m.status !== 'offline').length)
+
+/**
+ * Unread across every OTHER conversation, for the badge on the back arrow.
+ * Excludes the one you're reading — a count that includes the open chat tells
+ * you to go back to something you're already looking at.
+ */
+const otherUnread = computed(() => {
+  const openId = activeDM.value?.id ?? activeGroup.value?.id ?? null
+  let n = 0
+  for (const d of dmsData.value)    if (d.id !== openId) n += d.unread ?? 0
+  for (const g of groupsData.value) if (g.id !== openId) n += g.unread ?? 0
+  return n
+})
+
+/**
+ * Tapping the title opens whatever "details" means for this conversation.
+ * The group details SCREEN isn't built yet, so groups fall back to the edit
+ * modal — the chevron promises somewhere to go, and that promise has to be
+ * kept from the moment it's on screen.
+ */
+const openConversationDetails = () => {
+  if (view.value === 'dm' && activeDM.value) { showUserProfile.value = activeDM.value.id; return }
+  if (view.value === 'group' && activeGroup.value) showEditGroup.value = true
+}
+
 // ── Computed ───────────────────────────────────────────────────────────────
 const textChannels    = computed(() => channels.filter(c => c.type === 'text'  && c.serverId === activeServer.value))
 const voiceChannels   = computed(() => channels.filter(c => c.type === 'voice' && c.serverId === activeServer.value))
@@ -2054,7 +2083,8 @@ onBeforeUnmount(() => {
                    tab the OS owns that edge), so in a tab this is the only way
                    back. It's also the platform-conventional affordance — a
                    gesture with no visible control is undiscoverable. -->
-              <button v-if="isMobile" class="icon-btn m-back" aria-label="Back to conversations" @click.stop="mobileNav.backToList()">
+              <button v-if="isMobile" class="icon-btn m-back" :aria-label="otherUnread ? `Back to conversations, ${otherUnread} unread` : 'Back to conversations'" @click.stop="mobileNav.backToList()">
+                <span v-if="otherUnread" class="m-back-badge">{{ otherUnread > 99 ? '99+' : otherUnread }}</span>
                 <ChevronLeft :size="20" :stroke-width="2.25"/>
               </button>
               <button v-if="view==='server'" class="icon-btn icon-btn-sidebar" @click.stop="sidebarOpen=!sidebarOpen">
@@ -2065,27 +2095,53 @@ onBeforeUnmount(() => {
                   <img :src="activeDM.avatar" :alt="activeDM.name"/>
                   <span class="dm-header-dot" :style="{ background: statusColor(activeDM.status) }"/>
                 </div>
-                <h2 class="chat-title">{{ activeDM.name }}</h2>
-                <div class="ch-topic-sep"/>
-                <span class="ch-topic">{{ statusLabel(activeDM.status) }}</span>
+                <!-- `display: contents` on desktop, so the row below is laid out
+                     exactly as it was; a flex column on mobile, where the title
+                     and its subtitle stack. Wrapping rather than duplicating
+                     keeps one source of truth for the header's content. -->
+                <button class="ch-ident" @click.stop="openConversationDetails">
+                  <span class="ch-ident-row">
+                    <h2 class="chat-title">{{ activeDM.name }}</h2>
+                    <ChevronRight class="ch-chev" :size="16" :stroke-width="2.25"/>
+                  </span>
+                  <div class="ch-topic-sep"/>
+                  <span class="ch-topic">
+                    <span class="ch-topic-dot" :style="{ background: statusColor(activeDM.status) }"/>
+                    {{ statusLabel(activeDM.status) }}
+                  </span>
+                </button>
               </template>
               <template v-else-if="view==='group' && activeGroup">
                 <div class="grp-header-av">
                   <img v-if="activeGroup.avatar" :src="activeGroup.avatar" :alt="groupDisplayName(activeGroup)"/>
                   <UsersRound v-else :size="17" :stroke-width="2.25"/>
                 </div>
-                <h2 class="chat-title">{{ groupDisplayName(activeGroup) }}</h2>
+                <button class="ch-ident" @click.stop="openConversationDetails">
+                  <span class="ch-ident-row">
+                    <h2 class="chat-title">{{ groupDisplayName(activeGroup) }}</h2>
+                    <ChevronRight class="ch-chev" :size="16" :stroke-width="2.25"/>
+                  </span>
+                  <div class="ch-topic-sep"/>
+                  <span class="ch-topic">
+                    <template v-if="groupOnlineCount > 0">
+                      <span class="ch-topic-dot online"/>{{ groupOnlineCount }} Online
+                    </template>
+                    <template v-else>{{ activeGroup.memberCount }} Members</template>
+                  </span>
+                </button>
                 <button class="ch-edit-btn" v-tip="'Edit Group'" @click.stop="showEditGroup = true">
                   <Pencil :size="15" :stroke-width="1.5"/>
                 </button>
-                <div class="ch-topic-sep"/>
-                <span class="ch-topic">{{ activeGroup.memberCount }} Members</span>
               </template>
               <template v-else>
                 <Hash class="ch-hash" :size="18" :stroke-width="1.5"/>
-                <h2 class="chat-title">{{ currentChannel?.name }}</h2>
-                <div class="ch-topic-sep"/>
-                <span class="ch-topic">Discuss anything on Skycord</span>
+                <div class="ch-ident ch-ident-static">
+                  <span class="ch-ident-row">
+                    <h2 class="chat-title">{{ currentChannel?.name }}</h2>
+                  </span>
+                  <div class="ch-topic-sep"/>
+                  <span class="ch-topic">Discuss anything on Skycord</span>
+                </div>
               </template>
             </div>
             <div class="chat-header-right">
@@ -2103,7 +2159,7 @@ onBeforeUnmount(() => {
               <button class="icon-btn icon-btn-pin" :class="{ active: showPinned }" v-tip="'Pinned Messages'" @click.stop="showPinned=!showPinned">
                 <Pin :size="18" :stroke-width="1.5"/>
               </button>
-              <button v-if="view==='group' && activeGroup" class="icon-btn" v-tip="'Add friends to DM'" @click.stop="showInviteGroup = true">
+              <button v-if="view==='group' && activeGroup" class="icon-btn icon-btn-invite" v-tip="'Add friends to DM'" @click.stop="showInviteGroup = true">
                 <UserPlus :size="18" :stroke-width="1.5"/>
               </button>
               <button v-if="view==='server' || view==='group'" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" @click.stop="membersOpen=!membersOpen">
@@ -2550,7 +2606,79 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    edges of the screen once the rail is gone, so they carry the insets. */
 .shell.mobile .sb-header{padding-top:env(safe-area-inset-top)}
 .shell.mobile .user-panel{padding-bottom:env(safe-area-inset-bottom)}
-.shell.mobile .chat-header{padding-top:env(safe-area-inset-top)}
+/* ── Mobile chat header ────────────────────────────────────────────────────
+   The old rule added padding-top for the notch on top of a FIXED 48px height.
+   With border-box that comes out of the content box, so on a phone with a
+   59px inset the header had nothing left to draw in. Height now GROWS by the
+   inset instead, and the row sits below it. */
+.shell.mobile .chat-header{
+  height:calc(56px + env(safe-area-inset-top));
+  padding:env(safe-area-inset-top) 4px 0 4px;
+  align-items:stretch;
+  gap:2px;
+}
+.shell.mobile .chat-header-left{flex:1;min-width:0;gap:2px;align-items:center}
+.shell.mobile .m-back{margin-left:0}
+.shell.mobile .chat-header-right{gap:0;align-items:center}
+
+/* Title + subtitle stack, and the whole block is the tap target for details. */
+.shell.mobile .ch-ident{
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
+  gap:1px;min-width:0;flex:1;height:100%;
+  padding:0 4px;border-radius:8px;text-align:left;
+  transition:background .12s;
+}
+.shell.mobile .ch-ident:active{background:var(--hover)}
+.shell.mobile .ch-ident-static:active{background:none}
+.shell.mobile .ch-ident-row{display:flex;align-items:center;gap:3px;min-width:0;max-width:100%}
+.shell.mobile .ch-ident .chat-title{
+  font-size:16px;font-weight:600;line-height:1.15;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+}
+/* The chevron is the affordance that says the title goes somewhere. Dimmer
+   than the title so it reads as a hint, not a second piece of content. */
+.shell.mobile .ch-chev{display:block;flex-shrink:0;color:var(--text-3);opacity:.9}
+/* The desktop separator dot is meaningless once the two lines are stacked. */
+.shell.mobile .ch-topic-sep{display:none}
+.shell.mobile .ch-topic{
+  display:flex;align-items:center;gap:5px;
+  font-size:12px;line-height:1.2;color:var(--text-3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+}
+.shell.mobile .ch-topic-dot{
+  display:block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
+}
+.shell.mobile .ch-topic-dot.online{background:#23a55a}
+
+/* Bigger avatar to match the two-line block beside it. */
+.shell.mobile .dm-header-av,
+.shell.mobile .grp-header-av{width:32px;height:32px;flex-shrink:0}
+.shell.mobile .dm-header-av img,
+.shell.mobile .grp-header-av img{width:100%;height:100%}
+
+/* Unread on the way back. Sits on the arrow rather than beside it so the
+   44px target is unchanged. */
+.m-back{position:relative}
+.shell.mobile .m-back-badge{
+  display:flex;align-items:center;justify-content:center;
+  position:absolute;top:3px;right:0;
+  min-width:18px;height:18px;padding:0 5px;
+  background:#f23f43;color:#fff;
+  font-size:11px;font-weight:700;line-height:1;
+  border-radius:9px;border:2px solid var(--bg-chat);
+  pointer-events:none;
+}
+
+/* Pin, invite and members are desktop affordances — on a phone they belong on
+   the details screen, and crowding them in here costs the title its room. */
+.shell.mobile .icon-btn-pin,
+.shell.mobile .icon-btn-members,
+.shell.mobile .icon-btn-invite,
+.shell.mobile .ch-edit-btn{display:none}
+
+@media (prefers-reduced-motion: reduce){
+  .shell.mobile .ch-ident{transition:none}
+}
 
 /* Touch targets. The desktop sizes are built for a cursor; 44px is the floor
    for a fingertip, and the taller rows also make the list easier to scan. */
@@ -2723,6 +2851,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .chat:has(.callbar.has-video) .ml-wrap { flex: 1 1 auto; min-height: 0; }
 .chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 12px}
 .chat-header-left,.chat-header-right{display:flex;align-items:center;gap:4px}
+.ch-ident{display:contents}
+.ch-ident-row{display:contents}
+.ch-chev,.ch-topic-dot,.m-back-badge{display:none}
 /* Voice/video call header buttons — animated + colour-coded */
 .call-btn{transition:transform .12s,color .12s,background .12s}
 .call-btn:hover{transform:translateY(-1px) scale(1.08)}
