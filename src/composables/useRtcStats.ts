@@ -161,13 +161,21 @@ export const outLossPct = (): number | null => {
 // ── Peer connection discovery ───────────────────────────────────────────────
 // LiveKit's engine internals are private and shift between versions, so every
 // path is probed and guarded rather than assumed.
-const pcs = (): { pub?: RTCPeerConnection; sub?: RTCPeerConnection } => {
+const pcs = (): RTCPeerConnection[] => {
   const eng: any = (getRoom() as any)?.engine
-  if (!eng) return {}
-  return {
-    pub: eng?.pcManager?.publisher?.pc  ?? eng?.publisher?.pc,
-    sub: eng?.pcManager?.subscriber?.pc ?? eng?.subscriber?.pc,
-  }
+  if (!eng) return []
+  const found = [
+    eng?.pcManager?.publisher?.pc,
+    eng?.pcManager?.subscriber?.pc,
+    eng?.publisher?.pc,
+    eng?.subscriber?.pc,
+  ].filter(Boolean) as RTCPeerConnection[]
+  // Deduped: LiveKit frequently answers several of these paths with the SAME
+  // object, and in single-PC negotiation the subscriber path is undefined
+  // entirely. Keying collection off "which one is the subscriber" therefore
+  // silently dropped every inbound stat — read what each connection actually
+  // reports instead of trusting the topology.
+  return [...new Set(found)]
 }
 
 // Previous cumulative counters, so per-second deltas can be derived. WebRTC
@@ -200,15 +208,24 @@ const addrOf = (c: any): string | null => {
   return null
 }
 
-const collectFrom = async (pc: RTCPeerConnection | undefined, side: 'pub' | 'sub', now: number) => {
+const collectFrom = async (pc: RTCPeerConnection, now: number) => {
   if (!pc?.getStats) return
   const report = await pc.getStats()
   const byId = new Map<string, any>()
   report.forEach((r: any) => byId.set(r.id, r))
 
-  // ── Transport: only the publisher's selected pair is reported, since that's
-  // the path the popover's ping refers to.
-  if (side === 'pub') {
+  // What does this connection actually carry? With one PC it's both.
+  let hasOut = false, hasIn = false
+  report.forEach((r: any) => {
+    if (r.type === 'outbound-rtp' && r.kind === 'audio') hasOut = true
+    if (r.type === 'inbound-rtp'  && r.kind === 'audio') hasIn  = true
+  })
+  // The sending side owns the transport readout, because that's the path the
+  // popover's ping refers to. If nothing is being sent yet, any connection
+  // with a candidate pair will do rather than showing nothing at all.
+  const ownsTransport = hasOut || pcs().length === 1
+
+  if (ownsTransport) {
     let pair: any = null
     report.forEach((r: any) => {
       if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && !pair) pair = r
@@ -253,8 +270,8 @@ const collectFrom = async (pc: RTCPeerConnection | undefined, side: 'pub' | 'sub
     }
   }
 
-  // ── Outbound audio (publisher side).
-  if (side === 'pub') {
+  // ── Outbound audio.
+  if (hasOut) {
     let rtp: any = null, remoteIn: any = null, source: any = null
     report.forEach((r: any) => {
       if (r.type === 'outbound-rtp' && r.kind === 'audio') rtp = r
@@ -296,9 +313,9 @@ const collectFrom = async (pc: RTCPeerConnection | undefined, side: 'pub' | 'sub
     }
   }
 
-  // ── Inbound audio (subscriber side). Summed across every remote speaker:
-  // what you care about here is "is audio reaching me", not per-track detail.
-  if (side === 'sub') {
+  // ── Inbound audio. Summed across every remote speaker: what you care about
+  // here is "is audio reaching me", not per-track detail.
+  if (hasIn) {
     let bytes = 0, packets = 0, lost = 0, discarded = 0, concealed = 0
     let jitter: number | null = null, level: number | null = null
     let ssrc: number | null = null, codec: string | null = null, clock: number | null = null
@@ -339,11 +356,11 @@ const collectFrom = async (pc: RTCPeerConnection | undefined, side: 'pub' | 'sub
 }
 
 const collect = async () => {
-  const { pub, sub } = pcs()
-  if (!pub && !sub) { rtc.error = 'No peer connection'; return }
+  const list = pcs()
+  if (!list.length) { rtc.error = 'No peer connection'; return }
   const now = Date.now()
   try {
-    await Promise.all([collectFrom(pub, 'pub', now), collectFrom(sub, 'sub', now)])
+    await Promise.all(list.map(pc => collectFrom(pc, now)))
     rtc.error = ''
     rtc.updatedAt = now
   } catch (e: any) {

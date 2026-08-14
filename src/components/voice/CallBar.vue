@@ -311,8 +311,17 @@ const onCtrlCtx = (e: MouseEvent, which: 'mic' | 'cam') => {
 // the tone stops and the stage offers to ring again.
 const RING_FOR_MS = 40_000
 
-/** True while we're dialling and nobody has answered. */
-const dialing   = computed(() => joinedHere.value && props.kind === 'dm' && others.value.length === 0)
+/**
+ * True while we're dialling and nobody has answered.
+ *
+ * Counts LiveKit participants, NOT socket presence. Presence can drop out from
+ * under someone whose media session is still up — do this off `others` and a
+ * friend's socket blip makes the app decide they never answered, adding a
+ * phantom "ringing…" tile and starting the dial tone at a person you are
+ * mid-sentence with. The room is the authority on who is in the call.
+ */
+const dialing   = computed(() =>
+  joinedHere.value && props.kind === 'dm' && !voice.participants.some(p => !p.local))
 const rangOut   = ref(false)
 let ringTimer: ReturnType<typeof setTimeout> | null = null
 
