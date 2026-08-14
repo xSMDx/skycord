@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import {
   PhoneOff, Camera, MonitorUp, Phone,
   SignalZero, SignalLow, SignalMedium, SignalHigh, Bug,
@@ -77,12 +77,66 @@ const onShare = async () => {
   if (!ready.value) return
   const err = await toggleScreenShare(); if (err) emit('toast', err)
 }
+
+// ── Popover open state ──────────────────────────────────────────────────────
+// Hover alone couldn't hold this open long enough to click Debug. Pure
+// :hover meant the popover was only alive while the cursor was inside .vcp or
+// .vcp-pop, and there's a gap between them — cross it and BOTH selectors fail
+// for a frame, so the popover vanished out from under the cursor on its way up.
+//
+// So: explicit state, with a grace period on the way out (pointer-events stay
+// live during it, or moving back in couldn't re-open it), plus a bridge element
+// covering the gap. Clicking the strip pins it open, for anyone who'd rather
+// not hold a hover at all.
+const popOpen   = ref(false)
+const popPinned = ref(false)
+let popTimer: ReturnType<typeof setTimeout> | null = null
+const CLOSE_GRACE_MS = 260
+
+const clearPopTimer = () => { if (popTimer) { clearTimeout(popTimer); popTimer = null } }
+const openPop  = () => { clearPopTimer(); popOpen.value = true }
+const closePop = () => {
+  clearPopTimer()
+  if (popPinned.value) return
+  popTimer = setTimeout(() => { popOpen.value = false; popTimer = null }, CLOSE_GRACE_MS)
+}
+/** Click the strip to pin, click again to release. */
+const togglePin = () => {
+  popPinned.value = !popPinned.value
+  if (popPinned.value) openPop()
+  else closePop()
+}
+const onDebug = () => { popPinned.value = false; popOpen.value = false; clearPopTimer(); emit('openDebug') }
+
+// A pinned popover needs a way out that isn't "find the strip again".
+const onDocClick = (e: MouseEvent) => {
+  if (!popPinned.value) return
+  const el = e.target as HTMLElement
+  if (el.closest('.vcp')) return
+  popPinned.value = false; popOpen.value = false
+}
+const onEsc = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && popPinned.value) { popPinned.value = false; popOpen.value = false }
+}
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onEsc)
+})
+onBeforeUnmount(() => {
+  clearPopTimer()
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onEsc)
+})
 </script>
 
 <template>
-  <div v-if="voice.connected || voice.connecting || voice.connectStage === 'failed'" class="vcp">
-    <!-- Hover popover: the connection readout, Discord-style -->
-    <div class="vcp-pop">
+  <div
+    v-if="voice.connected || voice.connecting || voice.connectStage === 'failed'"
+    class="vcp" :class="{ 'pop-open': popOpen }"
+    @mouseenter="openPop" @mouseleave="closePop"
+  >
+    <!-- Connection readout, Discord-style. Hover to peek, click the strip to pin. -->
+    <div class="vcp-pop" @mouseenter="openPop" @mouseleave="closePop">
       <div class="vcp-pop-tab">Connection</div>
 
       <Sparkline class="vcp-pop-graph" :data="rtc.series.ping" :height="62"
@@ -99,8 +153,8 @@ const onShare = async () => {
         loss rate is over 10%. If the problem persists, disconnect and try again.
       </p>
 
-      <button class="vcp-pop-btn" @click.stop="emit('openDebug')">
-        <Bug :size="14" :stroke-width="2" /> Debug
+      <button class="vcp-pop-btn" @click.stop="onDebug">
+        <Bug :size="16" :stroke-width="2" /> Debug
       </button>
 
       <!-- Discord says "End-to-end encrypted" here. We can't: LiveKit runs as an
@@ -111,7 +165,7 @@ const onShare = async () => {
       <div class="vcp-pop-foot">Encrypted in transit (DTLS-SRTP)</div>
     </div>
 
-    <div class="vcp-top">
+    <div class="vcp-top" @click="togglePin">
       <div class="vcp-sig" :class="{ pulse: voice.connecting }" v-tip="q.label" :style="{ color: q.color }">
         <component :is="q.icon" :size="18" :stroke-width="2.5" />
       </div>
@@ -120,7 +174,7 @@ const onShare = async () => {
         <span v-if="voice.micBlocked && voice.connected" class="vcp-name vcp-warn">Listen-only · mic needs HTTPS</span>
         <span v-else class="vcp-name">{{ voice.connecting ? voice.activeName : `${pingText} · ${voice.activeName}` }}</span>
       </div>
-      <button class="vcp-leave" v-tip="voice.connecting ? 'Cancel' : 'Disconnect'" @click="leave"><PhoneOff :size="18" :stroke-width="2.25" /></button>
+      <button class="vcp-leave" v-tip="voice.connecting ? 'Cancel' : 'Disconnect'" @click.stop="leave"><PhoneOff :size="18" :stroke-width="2.25" /></button>
     </div>
 
     <!-- Camera · back to call · screen share. The middle slot used to be a
@@ -154,7 +208,9 @@ const onShare = async () => {
 .vcp button { border: none; cursor: pointer; box-sizing: border-box; }
 @keyframes vcp-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-.vcp-top { display: flex; align-items: center; gap: 8px; }
+.vcp-top { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+/* Buttons inside the strip keep their own cursor — only the empty space pins. */
+.vcp-top button { cursor: pointer; }
 
 /* Signal icon. The bars grow in on connect and lift on hover — a static icon
    in a panel that's reporting a live measurement reads as a dead indicator. */
@@ -214,8 +270,15 @@ const onShare = async () => {
   opacity: 0; transform: translateY(6px); pointer-events: none;
   transition: opacity .14s, transform .14s;
 }
-/* pointer-events flip so the Debug button inside is actually clickable */
-.vcp:hover .vcp-pop, .vcp-pop:hover { opacity: 1; transform: none; pointer-events: auto; }
+/* The gap between strip and popover is unhoverable, and crossing it used to
+   drop both :hover targets for a frame and close the popover mid-travel. This
+   bridges it so the cursor never leaves the component. */
+.vcp-pop::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 10px;
+}
+.vcp.pop-open .vcp-pop { opacity: 1; transform: none; pointer-events: auto; }
+/* Pointer-events stay live through the closing grace period — otherwise moving
+   back toward the popover during the fade can't re-open it. */
 
 .vcp-pop-tab {
   font-size: 13px; font-weight: 700; color: var(--text-1);
@@ -232,12 +295,13 @@ const onShare = async () => {
 .vcp-pop-row strong.bad { color: #f23f43; }
 .vcp-pop-help { font-size: 11px; line-height: 1.45; color: var(--text-faint); margin: 10px 0 0; }
 .vcp-pop-btn {
-  width: 100%; margin-top: 10px; height: 30px; border-radius: 6px;
+  width: 100%; margin-top: 10px; height: 38px; border-radius: 8px;
+  font-weight: 600;
   background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: background .12s, color .12s;
 }
-.vcp-pop-btn:hover { background: rgba(255,255,255,.12); color: var(--text-1); }
+.vcp-pop-btn:hover { background: var(--accent); color: #fff; }
 .vcp-pop-btn:active { transform: scale(.98); }
 .vcp-pop-foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 10px; color: var(--text-faint); }
 
