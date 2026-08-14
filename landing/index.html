@@ -399,6 +399,25 @@
    type: 'add' (green) | 'imp' (blurple) | 'fix' (red)                  */
 const RELEASES = [
   {
+    v: 'v0.9', date: 'Aug 14, 2026', title: 'Calls that tell you the truth',
+    items: [
+      ['add', 'A connection panel with a live ping graph, your average and last ping, and packet loss'],
+      ['add', 'A Debug button in it, for when a call sounds wrong and you want to know why — codec, bitrate, jitter, packet loss, and what’s arriving from the other side'],
+      ['add', 'Save or copy those readings as a file, so a bug report can carry the evidence'],
+      ['add', 'Camera and screen share moved next to the call status, so you can start either one from any chat'],
+      ['add', 'Right-click whoever you’re calling to ring them again, or stop ringing'],
+      ['add', 'The person you’re calling now appears on the call, dimmed with a ring around them, and stays there as “no answer” if they miss it'],
+      ['imp', 'The connection indicator is a proper signal meter — green through orange to red, blue while it reconnects'],
+      ['imp', 'Call controls stay pinned to the bottom of the call, and slide out of the way while you share your screen'],
+      ['imp', 'The call keeps a sensible minimum height, taller when someone is sharing a screen'],
+      ['imp', 'Fullscreen and hide-chat only appear when there’s a camera or screen to fill them'],
+      ['fix', 'When someone’s connection wobbles mid-call, their picture no longer turns into a grey letter while you can still hear them'],
+      ['fix', 'And Skycord no longer starts ringing at a person you’re already talking to'],
+      ['fix', 'Faces stay centred in the call while you drag it bigger or smaller'],
+      ['fix', 'The back-to-call button no longer squashes your name in the corner'],
+    ],
+  },
+  {
     v: 'v0.8', date: 'Aug 9, 2026', title: 'Skycord on your phone',
     items: [
       ['add', 'Skycord works properly on a phone now — add it to your home screen and it opens like an app'],
