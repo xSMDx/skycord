@@ -3,6 +3,7 @@ import { User, liveStatus } from '../models/User'
 import { Friendship } from '../models/Friendship'
 import mongoose from 'mongoose'
 import { getIO, isUserOnline } from '../sockets/chatSocket'
+import { effectiveStatus } from '../state/presence'
 
 // Anyone without a live socket is offline, whatever the DB says. Connected
 // users keep their chosen status (idle/dnd/invisible) rather than being forced
@@ -225,8 +226,35 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
 
     const user = await User.findByIdAndUpdate(userId, allowed, { new: true })
     if (!user) { res.status(404).json({ message: 'User not found' }); return }
-    res.json({ user: user.toPublicJSON() })
+
+    // Changing your status over HTTP has to reach your friends immediately.
+    // Without this the database was updated and nobody was told, so picking
+    // "Do Not Disturb" did nothing visible until the other side reconnected.
+    if (allowed.status) await broadcastStatusToFriends(userId, allowed.status)
+
+    // Your OWN response carries the raw choice, so the picker can show
+    // "Invisible" ticked while everyone else is told you're offline.
+    res.json({ user: user.toSelfJSON() })
   } catch (err) { next(err) }
+}
+
+/**
+ * Push a status change out over the socket layer to everyone entitled to see
+ * it. Mirrors the socket handler's `broadcastPresence`, for the HTTP path.
+ */
+const broadcastStatusToFriends = async (userId: string, chosen: string) => {
+  const io = getIO()
+  if (!io) return
+  const status = effectiveStatus(chosen, userId)
+  const fr = await Friendship.find({
+    status: 'accepted',
+    $or: [{ requester: userId }, { receiver: userId }],
+  }).select('requester receiver').lean()
+  for (const f of fr) {
+    const fid = f.requester.toString() === userId ? f.receiver.toString() : f.requester.toString()
+    io.to(`user:${fid}`).emit('presence', { userId, status })
+  }
+  io.to(`user:${userId}`).emit('presence:self', { status: chosen, effective: status })
 }
 
 // ── Change username (requires current password) ──────────────────────────────

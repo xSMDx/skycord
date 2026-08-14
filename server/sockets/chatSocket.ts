@@ -6,15 +6,17 @@ import { User }     from '../models/User'
 import { Conversation } from '../models/Conversation'
 import { Friendship } from '../models/Friendship'
 import { dmConvId, canDM } from '../controllers/messagesController'
+import * as presence from '../state/presence'
 import { config }   from '../config/env'
 
-// userId -> the socket ids that user currently has open. A user is online while
-// they hold AT LEAST ONE socket: tracking a single id meant a second tab (or the
-// brief overlap during a refresh, where the new socket connects before the old
-// one disconnects) could mark a live user offline — or leave a closed tab online.
-const onlineUsers = new Map<string, Set<string>>()
-export const getOnlineUsers = () => onlineUsers
-export const isUserOnline = (userId: string) => (onlineUsers.get(userId)?.size ?? 0) > 0
+// Presence (who holds a socket, who is away) lives in server/state/presence.ts
+// so the User model can derive a wire-safe status without importing this file,
+// which would be a cycle. A user is online while they hold AT LEAST ONE socket:
+// tracking a single id meant a second tab (or the brief overlap during a
+// refresh, where the new socket connects before the old one disconnects) could
+// mark a live user offline — or leave a closed tab online.
+export const isUserOnline = presence.isOnline
+export const getOnlineUserIds = presence.onlineUserIds
 
 // Active voice calls: LiveKit room name -> set of userIds currently in it. Lets
 // members who AREN'T in the room yet see "a call is happening / who's in it"
@@ -75,12 +77,16 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
   })
   _io = io
 
-  // Nobody can still be connected across a restart: clear stale presence left
-  // by a crash, deploy or missed disconnect, which otherwise sticks in the DB
-  // forever and makes closed tabs read as online.
-  void User.updateMany({ status: { $ne: 'offline' } }, { $set: { status: 'offline' } })
-    .then(r => { if (r.modifiedCount) console.log(`[WS] reset ${r.modifiedCount} stale online user(s)`) })
-    .catch(err => console.error('[WS] presence reset failed', err))
+  // Connectivity is in-memory, so a restart clears it for free — there is no
+  // longer any stale presence to scrub from the database.
+  //
+  // What DOES need scrubbing is the legacy value: 'offline' used to be written
+  // into `status`, which now means "the user's choice" and has no such option.
+  // Rows left that way would be stuck outside the enum, so they become
+  // 'online' (the default choice) once, on the first boot after this ships.
+  void User.updateMany({ status: { $nin: presence.CHOSEN_STATUSES } }, { $set: { status: 'online' } })
+    .then(r => { if (r.modifiedCount) console.log(`[WS] migrated ${r.modifiedCount} user(s) to a chosen status`) })
+    .catch(err => console.error('[WS] status migration failed', err))
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined
@@ -98,10 +104,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     const username = (socket as any).username as string
     console.log(`[WS] + ${username}`)
 
-    let sockets = onlineUsers.get(userId)
-    if (!sockets) { sockets = new Set(); onlineUsers.set(userId, sockets) }
-    const wasOffline = sockets.size === 0
-    sockets.add(socket.id)
+    const wasOffline = presence.addSocket(userId, socket.id)
     socket.join(`user:${userId}`)
 
     /*
@@ -124,6 +127,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     let myGroups: { _id: any }[] = []
     // Who is allowed to hear about this user's presence. Populated below.
     let myFriendIds: string[] = []
+    // The user's CHOSEN status, read once at connect. Kept here so the
+    // presence handlers below can re-derive what friends should see without a
+    // database round-trip on every idle flicker.
+    let myStatus: presence.ChosenStatus = 'online'
 
     // ── Send DM ───────────────────────────────────────────────────────────
     socket.on('dm:send', async (data: {
@@ -502,6 +509,46 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       leaveCall(callRoom(data.kind, data.conversationId))
     })
 
+    // ── Presence ───────────────────────────────────────────────────────────
+    /**
+     * Fan the user's current effective status out to everyone entitled to it.
+     * One place, so the "invisible reads as offline" rule can't be forgotten
+     * at one of the call sites.
+     */
+    const broadcastPresence = () => {
+      const status = presence.effectiveStatus(myStatus, userId)
+      for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status })
+      // Your own other tabs get the RAW choice — you must see your own
+      // "Invisible", even while your friends are being told you're offline.
+      io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status })
+    }
+
+    /** The user picked a status. Persist the choice, then tell people. */
+    socket.on('presence:set', async (raw: unknown, ack?: (r: any) => void) => {
+      const next = typeof raw === 'string' ? raw : (raw as any)?.status
+      if (!presence.isChosenStatus(next)) { ack?.({ ok: false, error: 'Unknown status' }); return }
+      myStatus = next
+      // Choosing a status explicitly means you're at the keyboard.
+      presence.setAway(userId, false)
+      try {
+        await User.findByIdAndUpdate(userId, { status: next })
+      } catch { ack?.({ ok: false, error: 'Could not save that' }); return }
+      broadcastPresence()
+      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId) })
+    })
+
+    /**
+     * The client reports inactivity. Deliberately NOT persisted: idleness is a
+     * property of this session, not of the account, so a fresh sign-in never
+     * starts you as away. effectiveStatus() only lets it apply to 'online'.
+     */
+    socket.on('presence:away', (raw: unknown) => {
+      const away = raw === true || (raw as any)?.away === true
+      if (presence.isAway(userId) === away) return   // no-op, don't spam friends
+      presence.setAway(userId, away)
+      broadcastPresence()
+    })
+
     // ── Disconnect ─────────────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       console.log(`[WS] - ${username}`)
@@ -509,11 +556,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       for (const room of [...joinedCallRooms]) leaveCall(room)
       // Only go offline once the user's LAST socket closes — otherwise closing
       // one of two tabs (or a refresh) would falsely mark them offline.
-      const set = onlineUsers.get(userId)
-      set?.delete(socket.id)
-      if (set && set.size === 0) {
-        onlineUsers.delete(userId)
-        await User.findByIdAndUpdate(userId, { status: 'offline', lastSeenAt: new Date() })
+      if (presence.removeSocket(userId, socket.id)) {
+        // lastSeenAt only. Writing status: 'offline' here is exactly what used
+        // to erase the user's Do Not Disturb every time they closed the app.
+        await User.findByIdAndUpdate(userId, { lastSeenAt: new Date() })
         for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: 'offline' })
       }
     })
@@ -523,9 +569,12 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // so nothing a client sends immediately after `connect` can fall into a gap
     // where no listener exists yet.
     try {
+      // Reads the chosen status rather than stamping 'online' over it. That
+      // write was the reason Do Not Disturb never survived a sign-in.
       const me = await User.findByIdAndUpdate(
-        userId, { status: 'online', lastSeenAt: new Date() }, { new: true }
-      ).select('avatar displayName username').lean()
+        userId, { lastSeenAt: new Date() }, { new: true }
+      ).select('avatar displayName username status').lean()
+      myStatus = presence.isChosenStatus(me?.status) ? me!.status : 'online'
 
       // Looked up once per connection rather than trusting what the client
       // sends per-message. A reconnect after changing your avatar or display
@@ -550,7 +599,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
       // Announce only on the first socket; extra tabs shouldn't re-broadcast.
       if (wasOffline) {
-        for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: 'online' })
+        const eff = presence.effectiveStatus(myStatus, userId)
+        for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: eff })
       }
 
       // Catch up on calls already in progress. Without this, someone who was

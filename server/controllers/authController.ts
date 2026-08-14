@@ -35,7 +35,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
     setRefreshCookie(res, refreshToken)
 
     console.log(`[Auth] Registered: ${user.username}`)
-    res.status(201).json({ message: 'Account created', accessToken, user: user.toPublicJSON() })
+    res.status(201).json({ message: 'Account created', accessToken, user: user.toSelfJSON() })
   } catch (err) { next(err) }
 }
 
@@ -69,7 +69,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     setRefreshCookie(res, refreshToken)
 
     console.log(`[Auth] Login: ${user.username}`)
-    res.status(200).json({ message: 'Logged in', accessToken, user: user.toPublicJSON() })
+    res.status(200).json({ message: 'Logged in', accessToken, user: user.toSelfJSON() })
   } catch (err) { next(err) }
 }
 
@@ -126,6 +126,6 @@ export const me = async (req: Request, res: Response, next: NextFunction): Promi
     if (!req.user) { res.status(401).json({ message: 'Unauthenticated' }); return }
     const user = await User.findById(req.user.sub)
     if (!user)  { res.status(404).json({ message: 'User not found' }); return }
-    res.status(200).json({ user: user.toPublicJSON() })
+    res.status(200).json({ user: user.toSelfJSON() })
   } catch (err) { next(err) }
 }

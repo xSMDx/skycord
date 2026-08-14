@@ -57,10 +57,27 @@ if (typeof window !== 'undefined') {
     isStandalone.value = !!standaloneQuery?.matches
       || (navigator as any).standalone === true
   }
+  /*
+   * Coalesced to one read per frame — but NEVER on requestAnimationFrame
+   * alone. rAF doesn't run in a hidden or throttled tab, so a resize while
+   * backgrounded left `queued` stuck true, and from then on every scheduleSync
+   * returned early at the guard: the viewport state wedged permanently, and
+   * stayed wedged after the tab came back. That is the real cause of the
+   * "stuck in mobile layout at desktop width" bug, which an earlier fix
+   * misattributed to the matchMedia change event and tried to solve by adding
+   * a resize listener — which routes through this same scheduler and so
+   * changed nothing.
+   *
+   * A timer is the backstop: timers are throttled in hidden tabs but they do
+   * still fire. Whichever callback wins runs sync(), the loser sees queued
+   * already false and no-ops.
+   */
   const scheduleSync = () => {
     if (queued) return
     queued = true
-    requestAnimationFrame(sync)
+    const run = () => { if (queued) sync() }
+    requestAnimationFrame(run)
+    setTimeout(run, 100)
   }
 
   mobileQuery?.addEventListener('change', scheduleSync)

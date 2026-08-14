@@ -19,6 +19,7 @@ import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
 import { useMessages }                      from '@/composables/useMessages'
 import { useApi, type ApiUser, type PendingRequest, type ApiMessage } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
+import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, dmConvId, soundMute, soundUnmute, soundDeafen, soundUndeafen } from '@/composables/useSocket'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
@@ -440,11 +441,20 @@ const openProfilePopout = (
 }
 const toggleSelfPopout = (e: MouseEvent) =>
   openProfilePopout(e, authUser.value?.id || '', authUser.value as any, 'above')
+/**
+ * Pick a status. Goes over the socket, which persists it AND fans it out to
+ * friends in the same step — the old HTTP-only path wrote the database and
+ * told nobody, so the change wasn't visible to anyone until they reconnected.
+ * Falls back to HTTP when the socket is down, so it still saves offline.
+ */
 const setPresence = async (status: string) => {
   profilePopout.value = null
+  const s = status as ChosenStatus
+  if (await setChosenStatus(s)) { if (authUser.value) updateUser({ ...authUser.value, status: s } as any); return }
   try {
-    const res = await authFetch('/users/me', { method: 'PATCH', body: JSON.stringify({ status }) })
+    const res = await authFetch('/users/me', { method: 'PATCH', body: JSON.stringify({ status: s }) })
     if (res.ok) updateUser((await res.json()).user)
+    else showToast('Couldn’t update your status')
   } catch { showToast('Couldn’t update your status') }
 }
 const showCameraPreview = ref(false)
@@ -532,10 +542,10 @@ const myAvatar = computed(() =>
   avatarFor(authUser.value?.username || 'me', authUser.value?.avatar)
 )
 
-const statusColor = (s: string) =>
-  ({ online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e' }[s] ?? '#80848e')
-const statusLabel = (s: string) =>
-  ({ online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb', offline: 'Offline' }[s] ?? s)
+// statusColor / statusLabel now live in usePresence, shared with every other
+// surface that draws a status dot. The copies here had no 'invisible' case, so
+// choosing Invisible showed a grey dot labelled with the literal word
+// "invisible" — the fallback, not a real branch.
 
 // ── Computed ───────────────────────────────────────────────────────────────
 const textChannels    = computed(() => channels.filter(c => c.type === 'text'  && c.serverId === activeServer.value))
@@ -788,7 +798,12 @@ const openGroup = async (group: Group) => {
   activeDM.value    = null
   view.value        = 'group'
   mobileNav.openConversation()   // no-op on desktop; pushes the screen on a phone
-  membersOpen.value = true   // group member panel shown by default, like Discord
+  // Members shown by default on desktop, where it's a side panel sitting next
+  // to the chat like Discord's. NOT on mobile: the same flag renders a sheet
+  // over the conversation, so defaulting it open meant every group you opened
+  // greeted you with the member list and an "Invite to Group DM" button
+  // covering the messages you came to read.
+  membersOpen.value = !isMobile.value
   const g = groupsData.value.find(x => x.id === group.id)
   if (g) g.unread = undefined
   setActiveDMPartner(null)
@@ -1539,6 +1554,10 @@ const onClick = () => { closeCtx(); showEmojiPicker.value = false }
 onMounted(async () => {
   socketConnect()
   setupSocket()
+  // Watch for inactivity so auto-idle can kick in. Only ever downgrades a
+  // chosen status of 'online' — see server/state/presence.ts.
+  startIdleWatch()
+  if (authUser.value?.status) chosenStatus.value = authUser.value.status as any
   await loadFriends()
   await loadMyGroups()
 
@@ -1553,6 +1572,7 @@ onMounted(async () => {
   document.addEventListener('click',   onClick)
 })
 onBeforeUnmount(() => {
+  stopIdleWatch()
   socketDisconnect()
   if (_typingTimer) clearTimeout(_typingTimer)
   document.removeEventListener('keydown', onKey)
@@ -1801,7 +1821,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me" /></div><span class="up-status-dot"/></div>
+            <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator || '0000' }}</span>
@@ -1870,7 +1890,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me"/></div><span class="up-status-dot"/></div>
+            <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me"/></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator||'0000' }}</span>
@@ -2445,7 +2465,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius:50%;overflow:hidden}
 .up-av-img img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#23a55a;border-radius:50%;border:2px solid var(--bg-deep)}
+.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#80848e;border-radius:50%;border:2px solid var(--bg-deep);transition:background .15s}
 .up-info{display:flex;flex-direction:column;gap:1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}

@@ -9,6 +9,8 @@ import { isMuted }    from './useConvPrefs'
 export const dmConvId = (a: string, b: string) => [a, b].sort().join('_')
 
 let _socket: Socket | null = null
+/** The live socket, for modules that need to emit outside a component. */
+export const getSocket = (): Socket | null => _socket
 const connected   = ref(false)
 
 /**
@@ -65,6 +67,7 @@ export {
   soundDisconnect, soundRingStart, soundRingStop,
   soundDialStart, soundDialStop,
 } from './useSounds'
+import { applySelfPresence } from './usePresence'
 import { soundMessage, soundNotification } from './useSounds'
 
 // Call presence emitters — module-level (not closure-bound) so non-component code
@@ -123,6 +126,9 @@ export const useSocket = () => {
     })
 
     _socket.on('presence', (p: any) => _h.onPresence(p))
+    // Our OWN status, echoed back with the raw choice — friends get the
+    // derived one on 'presence', we get to see 'invisible' as invisible.
+    _socket.on('presence:self', (p: any) => applySelfPresence(p))
 
     _socket.on('friend:request_received', (p: any) => { soundNotification(); _h.onFriendRequest(p) })
     _socket.on('friend:request_accepted', (p: any) => { soundNotification(); _h.onFriendAccepted(p) })

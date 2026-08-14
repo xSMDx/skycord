@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Model, Types } from 'mongoose'
 import bcrypt from 'bcrypt'
+import { effectiveStatus, CHOSEN_STATUSES, type ChosenStatus } from '../state/presence'
 
 const SALT_ROUNDS = 12
 
@@ -13,7 +14,9 @@ export interface IUserDocument extends Document {
   avatar:        string | null
   bio:           string
   role:          'owner' | 'admin' | 'mod' | 'vip' | 'member'
-  status:        'online' | 'idle' | 'dnd' | 'offline' | 'invisible'
+  /** The user's OWN choice, persisted. Never written by connect/disconnect.
+    *  What others see is derived — see server/state/presence.ts. */
+  status:        ChosenStatus
   isVerified:    boolean
   tokenVersion:  number
   lastSeenAt:    Date
@@ -25,6 +28,7 @@ export interface IUserDocument extends Document {
   updatedAt:     Date
   comparePassword(candidate: string): Promise<boolean>
   toPublicJSON(): PublicUser
+  toSelfJSON(): PublicUser
 }
 
 /**
@@ -114,10 +118,13 @@ const UserSchema = new Schema<IUserDocument, IUserModel>(
       enum: ['owner', 'admin', 'mod', 'vip', 'member'],
       default: 'member',
     },
+    // 'offline' is deliberately NOT in this enum. Offline is a fact about
+    // whether a socket is open, not something a person selects; storing it
+    // here is what let a disconnect erase someone's Do Not Disturb.
     status: {
       type: String,
-      enum: ['online', 'idle', 'dnd', 'offline', 'invisible'],
-      default: 'offline',
+      enum: CHOSEN_STATUSES,
+      default: 'online',
     },
     isVerified:   { type: Boolean, default: false },
     tokenVersion: { type: Number,  default: 0, select: false },
@@ -176,7 +183,11 @@ UserSchema.methods.toPublicJSON = function (): PublicUser {
     avatar:        this.avatar,
     bio:           this.bio,
     role:          this.role,
-    status:        this.status,
+    // DERIVED, not stored: offline when they have no socket, and offline
+    // (never "invisible") when they've chosen to be invisible. This method
+    // feeds every payload that reaches another user, so the mapping lives
+    // here rather than at each call site where one could be forgotten.
+    status:        effectiveStatus(this.status, this._id.toString()),
     isVerified:    this.isVerified,
     bannerColor:   this.bannerColor ?? null,
     banner:        this.banner ?? null,
@@ -184,6 +195,15 @@ UserSchema.methods.toPublicJSON = function (): PublicUser {
     customStatus:  liveStatus(this.customStatus),
     createdAt:     this.createdAt,
   }
+}
+
+/**
+ * Your own view of yourself. Identical to toPublicJSON except that `status`
+ * is your actual choice, so the status picker can show "Invisible" ticked
+ * while everyone else is being told you're offline.
+ */
+UserSchema.methods.toSelfJSON = function () {
+  return { ...this.toPublicJSON(), status: this.status as ChosenStatus }
 }
 
 // Find by email OR username — includes password + tokenVersion for auth
