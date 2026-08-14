@@ -19,6 +19,7 @@ import {
 } from './useSocket'
 import { voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded } from './useVoiceSettings'
 import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia } from './useVoiceMedia'
+import { resetRtcStats } from './useRtcStats'
 
 export interface VoiceParticipant {
   id:       string   // userId (LiveKit identity)
@@ -355,6 +356,8 @@ const cleanup = () => {
   voice.ping = null
   voice.quality = 'unknown'
   voice.micBlocked = false
+  // Graphs and counters belong to one call; the next one starts empty.
+  resetRtcStats()
 }
 
 // ── Push-to-talk ────────────────────────────────────────────────────────────

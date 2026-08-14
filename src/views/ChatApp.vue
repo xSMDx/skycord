@@ -39,12 +39,14 @@ import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
+import RtcDebugModal         from '@/components/voice/RtcDebugModal.vue'
 import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance }        from '@/composables/useAppearance'
 import { useVoice }          from '@/composables/useVoice'
+import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
 // above still owns its own surface until it's migrated onto this one.
 import AppContextMenu        from '@/components/ui/ContextMenu.vue'
@@ -130,6 +132,7 @@ const {
 } = useSocket()
 
 const { voice, connect: vConnect, leave: vLeave, toggleMute: vToggleMute, toggleDeafen: vToggleDeafen, voiceRoomName } = useVoice()
+const { toggleCamera } = useVoiceMedia()
 
 // ── Incoming DM call ─────────────────────────────────────────────────────────
 // Derived from call presence: a DM room (stable per friend-pair id) where the
@@ -448,11 +451,16 @@ const showCameraPreview = ref(false)
 // Which user-panel device menu is open. Same flyouts as the call bar, but
 // anchored upward — the panel is pinned to the bottom of the sidebar.
 const upMenu = ref<'' | 'mic' | 'out'>('')
-const callBarRef        = ref<any>(null)
-// Confirming the preview is what actually publishes the camera.
-const onCameraConfirmed = () => {
+// RTC debug panel, opened from the connection popover.
+const showRtcDebug = ref(false)
+// Confirming the preview is what actually publishes the camera. Goes straight
+// to the media singleton rather than through CallBar's exposed method: the
+// camera can now be started from the voice panel while you're reading a
+// different conversation, where no CallBar is mounted to forward the call.
+const onCameraConfirmed = async () => {
   showCameraPreview.value = false
-  callBarRef.value?.startCameraNow?.()
+  const err = await toggleCamera()
+  if (err) showToast(err)
 }
 const openSettings = (p: 'account' | 'profile' | 'appearance' | 'voice' = 'account') => {
   settingsPage.value = p
@@ -1586,6 +1594,7 @@ onBeforeUnmount(() => {
     />
     <SettingsModal    v-if="showSettings"      :initial-page="settingsPage" @close="showSettings = false" />
     <CameraPreviewModal v-if="showCameraPreview" @close="showCameraPreview = false" @confirm="onCameraConfirmed" />
+    <RtcDebugModal v-if="showRtcDebug" @close="showRtcDebug = false" @toast="showToast" />
 
     <ProfilePopout
       v-if="profilePopout"
@@ -1784,7 +1793,12 @@ onBeforeUnmount(() => {
           </template>
         </div>
         <!-- Voice connected strip + user panel -->
-        <VoiceConnectedPanel />
+        <VoiceConnectedPanel
+          @return-to-call="returnToCall"
+          @preview-camera="showCameraPreview = true"
+          @open-debug="showRtcDebug = true"
+          @toast="showToast"
+        />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
             <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me" /></div><span class="up-status-dot"/></div>
@@ -1793,18 +1807,6 @@ onBeforeUnmount(() => {
               <span class="up-tag">#{{ authUser?.discriminator || '0000' }}</span>
             </div>
           </div>
-          <!-- Return to an ongoing call. Lives in the gap the user panel
-               already has, rather than as a separate floating widget — the
-               panel is visible on every screen that matters and this is dead
-               space otherwise. Only appears while a call is actually up. -->
-          <button
-            v-if="voice.connected || voice.connecting"
-            class="up-btn up-callback" :class="{ connecting: voice.connecting }"
-            v-tip="voice.connecting ? 'Connecting…' : 'Back to call'"
-            @click.stop="returnToCall"
-          >
-            <Phone :size="16" :stroke-width="2" />
-          </button>
           <div class="up-btns">
             <div class="up-split">
               <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" v-tip="micOff ? 'Unmute' : 'Mute'">
@@ -1860,7 +1862,12 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-        <VoiceConnectedPanel />
+        <VoiceConnectedPanel
+          @return-to-call="returnToCall"
+          @preview-camera="showCameraPreview = true"
+          @open-debug="showRtcDebug = true"
+          @toast="showToast"
+        />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
             <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me"/></div><span class="up-status-dot"/></div>
@@ -1869,18 +1876,6 @@ onBeforeUnmount(() => {
               <span class="up-tag">#{{ authUser?.discriminator||'0000' }}</span>
             </div>
           </div>
-          <!-- Return to an ongoing call. Lives in the gap the user panel
-               already has, rather than as a separate floating widget — the
-               panel is visible on every screen that matters and this is dead
-               space otherwise. Only appears while a call is actually up. -->
-          <button
-            v-if="voice.connected || voice.connecting"
-            class="up-btn up-callback" :class="{ connecting: voice.connecting }"
-            v-tip="voice.connecting ? 'Connecting…' : 'Back to call'"
-            @click.stop="returnToCall"
-          >
-            <Phone :size="16" :stroke-width="2" />
-          </button>
           <div class="up-btns">
             <div class="up-split">
               <button class="up-btn btn-mic" :class="{ danger: micOff }" @click.stop="onToggleMute" @contextmenu.prevent.stop="upMenu = 'mic'" v-tip="micOff ? 'Unmute' : 'Mute'">
@@ -2143,7 +2138,6 @@ onBeforeUnmount(() => {
                call is happening here, joined or not) -->
           <CallBar
             v-if="currentCall"
-            ref="callBarRef"
             :conv-id="currentCall.id"
             :kind="currentCall.kind"
             :name="currentCall.name"

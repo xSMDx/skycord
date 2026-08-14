@@ -52,9 +52,6 @@ const onCamera = async () => {
   if (!media.localCamOn && voiceSettings.alwaysPreviewVideo) { emit('previewCamera'); return }
   const err = await toggleCamera(); if (err) emit('toast', err)
 }
-/** Called once the preview is confirmed — bypasses the gate. */
-const startCameraNow = async () => { const err = await toggleCamera(); if (err) emit('toast', err) }
-defineExpose({ startCameraNow })
 const onShare  = async () => { const err = await toggleScreenShare(); if (err) emit('toast', err) }
 
 const openMenu = ref<'' | 'mic' | 'cam' | 'more'>('')
@@ -84,11 +81,27 @@ const others = computed(() => props.participants.filter(p => !p.local))
 const initial = (n: string) => (n || '?').charAt(0).toUpperCase()
 // id → avatar, so joined-mode tiles (live LiveKit participants don't carry
 // avatars) can show real avatars from server presence.
-const avatarById = computed(() => {
-  const m: Record<string, string> = {}
-  for (const p of props.participants) if (p.avatar) m[p.id] = p.avatar
-  return m
-})
+//
+// Sticky for the life of the call, and that is the whole point. Socket presence
+// and the LiveKit room are two independent connections that can disagree: if
+// someone's socket drops while their media session is still up, they fall out
+// of `participants` while you can still hear them talking. Deriving this map
+// fresh each tick meant their photo silently became a grey initial mid-sentence.
+// LiveKit decides who is IN the call; presence only ever adds detail to that.
+const avatarCache = ref<Record<string, string>>({})
+watch(() => props.participants, (list) => {
+  let next: Record<string, string> | null = null
+  for (const p of list) {
+    if (p.avatar && avatarCache.value[p.id] !== p.avatar) {
+      next ??= { ...avatarCache.value }
+      next[p.id] = p.avatar
+    }
+  }
+  if (next) avatarCache.value = next
+}, { immediate: true, deep: true })
+// A new call must not inherit the last one's faces.
+watch(inCall, (on) => { if (!on) avatarCache.value = {} })
+const avatarById = computed(() => avatarCache.value)
 
 // Tiles for the in-call stage. Joined → live LiveKit participants. Connecting →
 // an optimistic self tile (so you "land" in the call instantly) plus anyone
