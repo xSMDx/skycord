@@ -18,6 +18,10 @@ import { convPref, MUTE_OPTIONS } from '../useConvPrefs'
 
 interface ConvActions {
   setPinned: (convId: string, pinned: boolean) => void
+  /** Pinned MESSAGES (distinct from pinning the conversation itself). Lives
+   *  here rather than in the chat header: the header slot is scarce on a
+   *  phone, and pins are folding into search once channels land anyway. */
+  openPins:  (convId: string) => void
   setMute:   (convId: string, mute: string | null) => void
   copy:      (text: string, what: string) => void
 }
@@ -46,6 +50,8 @@ export interface GroupMenuHandlers extends ConvActions {
 const pinAndMute = (convId: string, h: ConvActions): MenuItem[] => {
   const p = convPref(convId)
   return [
+    { label: 'Pinned Messages', icon: Pin, onSelect: () => h.openPins(convId) },
+    { sep: true },
     p.pinned
       ? { label: 'Unpin Conversation', icon: PinOff, onSelect: () => h.setPinned(convId, false) }
       : { label: 'Pin Conversation',   icon: Pin,      onSelect: () => h.setPinned(convId, true) },

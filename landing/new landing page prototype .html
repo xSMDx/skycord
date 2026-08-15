@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Skycord — your crew's place to talk</title>
+<meta name="description" content="Voice and video calls, screen share, and themes you can send in chat — on our own server." />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%235865f2' stroke-linecap='round' stroke-linejoin='round' stroke-width='16' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='12' fill='%235865f2'/%3E%3Ccircle cx='164' cy='140' r='12' fill='%235865f2'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  /* ── Tokens ─────────────────────────────────────────── */
+  :root {
+    --ink:     #0b0c0f;
+    --floor:   #111214;
+    --panel:   #1a1b1f;
+    --border:  rgba(255,255,255,.07);
+    --blurple: #5865f2;
+    --blurple-deep: #4752c4;
+    --speak:   #23a55a;
+    --live:    #f23f43;
+    --text:    #e8eaf0;
+    --dim:     #86899a;
+    --faint:   #5c5f6e;
+    --gradient: linear-gradient(135deg, #5865f2 0%, #7c5cbf 100%);
+    --pink:    #eb459e;
+    --yellow:  #faa61a;
+    --green:   #3ba55c;
+    --red:     #ed4245;
+    --cyan:    #00b0f4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--ink); color: var(--text);
+    font: 400 16px/1.6 Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; border: none; background: none; cursor: pointer; color: inherit; }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── Top bar ───────────────────────────────────────────────────────── */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11,12,15,.85); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    animation: slideDown .5s ease-out;
+  }
+  @keyframes slideDown {
+    from { transform: translateY(-100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .bar { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .mark { display: flex; align-items: center; gap: 10px; margin-right: auto; transition: opacity .2s; }
+  .mark:hover { opacity: .8; }
+  .logo-container {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .logo-svg {
+    width: 100%;
+    height: 100%;
+    animation: logoPulse 2s ease-in-out infinite;
+  }
+  @keyframes logoPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+  .logo-svg .eye {
+    animation: eyeBlink 3s ease-in-out infinite;
+    transform-origin: center;
+  }
+  @keyframes eyeBlink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    93%, 97% { transform: scaleY(0.1); }
+  }
+  .mark b { font: 700 19px 'Space Grotesk', Inter, sans-serif; letter-spacing: .3px; }
+  .tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .tab {
+    padding: 7px 18px; border-radius: 7px; font-size: 14px; font-weight: 600; color: var(--dim);
+    transition: all .2s cubic-bezier(.4,0,.2,1);
+    position: relative;
+  }
+  .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
+  .tab.on { 
+    background: rgba(88,101,242,.16); 
+    color: #aab4ff;
+    box-shadow: 0 2px 8px rgba(88,101,242,.2);
+  }
+  .tab.on::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 2px;
+    background: var(--blurple);
+    border-radius: 2px;
+  }
+  .cta-mini {
+    padding: 9px 18px; border-radius: 9px; font-size: 14px; font-weight: 700;
+    background: var(--gradient); color: #fff; 
+    transition: all .2s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 4px 12px rgba(88,101,242,.3);
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-mini:hover { 
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(88,101,242,.4);
+  }
+
+  /* ── Panels ─────────────────────────────────────────────────── */
+  .panel { display: none; }
+  .panel.on { display: block; animation: fadeIn .4s ease-out; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Hero ──────────────────────────────────────────────────────────── */
+  .hero { 
+    padding: 100px 0 50px; 
+    text-align: center; 
+    position: relative; 
+    overflow: hidden;
+  }
+  .hero::before {
+    content: ''; 
+    position: absolute; 
+    inset: -40% -20% auto; 
+    height: 130%;
+    background:
+      radial-gradient(560px 300px at 30% 20%, rgba(88,101,242,.2), transparent 65%),
+      radial-gradient(480px 280px at 72% 12%, rgba(35,165,90,.1), transparent 60%),
+      radial-gradient(600px 400px at 50% 50%, rgba(124,92,191,.05), transparent 70%);
+    pointer-events: none;
+    animation: pulse 8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .8; }
+  }
+  .hero h1 {
+    position: relative;
+    font: 700 clamp(40px, 6vw, 68px)/1.1 'Space Grotesk', Inter, sans-serif;
+    letter-spacing: -.5px;
+    animation: fadeUp .6s ease-out;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hero h1 em { 
+    font-style: normal; 
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero p.sub {
+    position: relative; 
+    margin: 20px auto 35px; 
+    max-width: 560px;
+    color: var(--dim); 
+    font-size: 18px;
+    animation: fadeUp .6s ease-out .2s both;
+  }
+  .cta {
+    position: relative; 
+    display: inline-block;
+    padding: 16px 42px; 
+    border-radius: 12px; 
+    font-size: 17px; 
+    font-weight: 700;
+    background: var(--gradient); 
+    color: #fff;
+    box-shadow: 0 8px 34px rgba(88,101,242,.4);
+    transition: all .25s cubic-bezier(.4,0,.2,1);
+    animation: fadeUp .6s ease-out .4s both;
+    overflow: hidden;
+  }
+  .cta:hover { 
+    transform: translateY(-3px); 
+    box-shadow: 0 14px 44px rgba(88,101,242,.5);
+  }
+  .cta small { 
+    display: block; 
+    font-weight: 500; 
+    font-size: 12px; 
+    opacity: .8;
+    margin-top: 2px;
+  }
+
+  /* ── Signature: the call stage ─────────────────────────────────────── */
+  .stage {
+    position: relative; 
+    display: grid; 
+    grid-template-columns: 1.45fr 1fr; 
+    gap: 12px;
+    max-width: 780px; 
+    margin: 60px auto 0; 
+    padding: 14px;
+    background: var(--floor); 
+    border: 1px solid var(--border); 
+    border-radius: 18px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.6);
+    animation: fadeUp .6s ease-out .6s both;
+    transition: transform .3s ease;
+  }
+  .stage:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 35px 90px rgba(0,0,0,.7);
+  }
+  .tile {
+    position: relative; 
+    aspect-ratio: 16/9; 
+    border-radius: 10px; 
+    overflow: hidden;
+    background: var(--panel); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    transition: all .3s ease;
+  }
+  .tile:hover {
+    transform: scale(1.02);
+    z-index: 2;
+  }
+  .tile .name {
+    position: absolute; 
+    left: 10px; 
+    bottom: 10px;
+    padding: 3px 9px; 
+    border-radius: 6px; 
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(8px);
+    font-size: 12px; 
+    font-weight: 600; 
+    display: flex; 
+    align-items: center; 
+    gap: 5px;
+  }
+  .tile .live {
+    position: absolute; 
+    right: 10px; 
+    top: 10px;
+    padding: 2px 8px; 
+    border-radius: 5px; 
+    background: var(--live);
+    font: 600 10px/1.7 Inter, sans-serif; 
+    letter-spacing: .06em; 
+    color: #fff;
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .7; }
+  }
+  .tile .q {
+    position: absolute; 
+    right: 66px; 
+    top: 10px;
+    padding: 2px 8px; 
+    border-radius: 5px; 
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(8px);
+    font: 600 10px/1.7 'JetBrains Mono', monospace; 
+    color: var(--dim);
+  }
+  .tile.share { 
+    background: linear-gradient(160deg, #17181d 0%, #101116 100%);
+    cursor: pointer;
+  }
+  .fakewin { 
+    width: 74%; 
+    border-radius: 8px; 
+    background: #1e2027; 
+    border: 1px solid var(--border); 
+    overflow: hidden;
+    transition: all .3s ease;
+  }
+  .fakewin .fbar { 
+    height: 14px; 
+    background: #262933; 
+    display: flex; 
+    align-items: center; 
+    gap: 4px; 
+    padding: 0 7px; 
+  }
+  .fakewin .fbar i { 
+    width: 5px; 
+    height: 5px; 
+    border-radius: 50%; 
+    background: #3d414f;
+  }
+  .fakewin .frow { 
+    height: 8px; 
+    margin: 8px 10px; 
+    border-radius: 4px; 
+    background: #2b2e3a;
+    animation: shimmer 2s ease-in-out infinite;
+  }
+  .fakewin .frow.w60 { width: 60%; } 
+  .fakewin .frow.w80 { width: 80%; } 
+  .fakewin .frow.w45 { width: 45%; animation-delay: .5s; }
+  @keyframes shimmer {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .6; }
+  }
+  .tile.cat { 
+    grid-row: span 2; 
+    aspect-ratio: auto; 
+    padding-bottom: 54px;
+    background: linear-gradient(180deg, #1a1b1f 0%, #0f1014 100%);
+  }
+  .avatarball {
+    width: 108px; 
+    height: 108px; 
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, #6b77ff, #3d47b8);
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    box-shadow: 0 0 0 4px var(--speak), 0 0 26px rgba(35,165,90,.45);
+    animation: ring 2.2s ease-in-out infinite, float 3s ease-in-out infinite;
+    transition: transform .3s;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes ring {
+    0%, 100% { box-shadow: 0 0 0 4px var(--speak), 0 0 22px rgba(35,165,90,.35); }
+    50%      { box-shadow: 0 0 0 6px var(--speak), 0 0 38px rgba(35,165,90,.6); }
+  }
+  .avatar-svg {
+    width: 58px;
+    height: 58px;
+    animation: avatarBob 3s ease-in-out infinite;
+  }
+  @keyframes avatarBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+  .avatar-svg .eye {
+    animation: eyeBlink 4s ease-in-out infinite;
+    transform-origin: center;
+  }
+  .pill {
+    position: absolute; 
+    left: 50%; 
+    bottom: 12px; 
+    transform: translateX(-50%);
+    display: flex; 
+    align-items: center; 
+    gap: 7px;
+    background: rgba(17,18,22,.95); 
+    border: 1px solid var(--border); 
+    border-radius: 13px; 
+    padding: 6px 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.6);
+    backdrop-filter: blur(12px);
+    transition: all .3s ease;
+  }
+  .pill i {
+    width: 34px; 
+    height: 34px; 
+    border-radius: 8px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    color: #d6d9e4; 
+    background: rgba(255,255,255,.05); 
+    font-style: normal;
+    cursor: pointer; 
+    transition: all .2s;
+    position: relative;
+  }
+  .pill i:hover { 
+    background: rgba(255,255,255,.15);
+    transform: scale(1.1);
+  }
+  .pill i.green { background: #248046; color: #fff; }
+  .pill i.red { 
+    background: var(--live); 
+    color: #fff; 
+    width: 46px; 
+    border-radius: 10px; 
+  }
+  .pill svg { width: 18px; height: 18px; }
+
+  @keyframes wig   { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 45% { transform: rotate(11deg); } 70% { transform: rotate(-6deg); } }
+  @keyframes pop   { 0%,100% { transform: scale(1); } 45% { transform: scale(1.28); } }
+  @keyframes lift  { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px) scale(1.12); } }
+  @keyframes swing { 0%,100% { transform: rotate(0); } 30% { transform: rotate(20deg); } 65% { transform: rotate(-12deg); } }
+  .pill i.mic:hover   svg { animation: wig .5s ease; }
+  .pill i.green:hover svg { animation: pop .4s ease; }
+  .pill i.scr:hover   svg { animation: lift .45s ease; }
+  .pill i.red:hover   svg { animation: swing .5s ease; }
+  .mark:hover .logo-container { animation: wig .5s ease; }
+
+  /* ── Features grid ─────────────────────────────────────────────────── */
+  .feats { padding: 96px 0 90px; }
+  .feats h2 {
+    font: 700 15px 'JetBrains Mono', monospace; 
+    letter-spacing: .16em; 
+    text-transform: uppercase;
+    color: var(--faint); 
+    margin-bottom: 28px;
+    position: relative;
+    display: inline-block;
+  }
+  .feats h2::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 40px;
+    height: 3px;
+    background: var(--gradient);
+    border-radius: 2px;
+  }
+  .grid { 
+    display: grid; 
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 16px; 
+  }
+  .card {
+    background: var(--floor); 
+    border: 1px solid var(--border); 
+    border-radius: 14px;
+    padding: 24px 22px; 
+    transition: all .3s cubic-bezier(.4,0,.2,1);
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--gradient);
+    transform: scaleX(0);
+    transition: transform .3s ease;
+  }
+  .card:hover::before {
+    transform: scaleX(1);
+  }
+  .card:hover { 
+    border-color: rgba(88,101,242,.4); 
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,.4);
+  }
+  .card .ic {
+    width: 42px; 
+    height: 42px; 
+    border-radius: 12px; 
+    margin-bottom: 16px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    background: rgba(88,101,242,.13); 
+    color: var(--blurple);
+    transition: all .3s cubic-bezier(.4,0,.2,1);
+  }
+  .card:hover .ic { 
+    background: var(--gradient); 
+    color: #fff;
+    transform: rotate(-5deg) scale(1.1);
+  }
+  .card .ic svg { width: 20px; height: 20px; }
+  .card h3 { 
+    font: 600 16px/1.3 Inter, sans-serif; 
+    margin-bottom: 8px;
+  }
+  .card p { 
+    font-size: 13.5px; 
+    color: var(--dim); 
+    line-height: 1.6;
+  }
+  .card .features-list {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .card .features-list li {
+    font-size: 12.5px;
+    color: var(--dim);
+    padding-left: 16px;
+    position: relative;
+    list-style: none;
+  }
+  .card .features-list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--blurple);
+    font-weight: bold;
+  }
+
+  /* ── Roadmap page ─────────────────────────────────────────────────── */
+  .roadmap-hero {
+    padding: 60px 0 40px;
+    text-align: center;
+    position: relative;
+  }
+  .roadmap-hero h1 {
+    font: 700 clamp(32px, 4vw, 48px)/1.2 'Space Grotesk', Inter, sans-serif;
+    margin-bottom: 16px;
+  }
+  .roadmap-hero p {
+    color: var(--dim);
+    font-size: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .roadmap-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding: 40px 0 60px;
+  }
+  .roadmap-card {
+    background: var(--floor);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    transition: all .3s ease;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .roadmap-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 32px rgba(0,0,0,.4);
+  }
+  .roadmap-card.now {
+    border-color: rgba(88,101,242,.4);
+    background: linear-gradient(135deg, rgba(88,101,242,.15) 0%, var(--floor) 100%);
+    border-left: 4px solid var(--blurple);
+  }
+  .roadmap-card.next {
+    border-color: rgba(250,166,26,.4);
+    background: linear-gradient(135deg, rgba(250,166,26,.1) 0%, var(--floor) 100%);
+    border-left: 4px solid var(--yellow);
+  }
+  .roadmap-card.idea {
+    border-color: rgba(235,69,158,.4);
+    background: linear-gradient(135deg, rgba(235,69,158,.1) 0%, var(--floor) 100%);
+    border-left: 4px solid var(--pink);
+  }
+  .roadmap-card .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font: 600 11px/1.5 'JetBrains Mono', monospace;
+    letter-spacing: .05em;
+    margin-bottom: 16px;
+  }
+  .roadmap-card.now .status {
+    background: rgba(88,101,242,.2);
+    color: #aab4ff;
+  }
+  .roadmap-card.next .status {
+    background: rgba(250,166,26,.2);
+    color: #fbbf24;
+  }
+  .roadmap-card.idea .status {
+    background: rgba(235,69,158,.2);
+    color: #f472b6;
+  }
+  .roadmap-card h3 {
+    font: 700 20px 'Space Grotesk', Inter, sans-serif;
+    margin-bottom: 12px;
+  }
+  .roadmap-card .card-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .4s ease;
+  }
+  .roadmap-card.expanded .card-content {
+    max-height: 500px;
+  }
+  .roadmap-card ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 12px;
+  }
+  .roadmap-card li {
+    color: var(--dim);
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 20px;
+    position: relative;
+  }
+  .roadmap-card li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--blurple);
+  }
+  .roadmap-card.next li::before {
+    background: var(--yellow);
+  }
+  .roadmap-card.idea li::before {
+    background: var(--pink);
+  }
+  .expand-icon {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 24px;
+    height: 24px;
+    transition: transform .3s ease;
+  }
+  .roadmap-card.expanded .expand-icon {
+    transform: rotate(180deg);
+  }
+
+  /* ── Changelog page ───────────────────────────────────────────────── */
+  .changelog-hero {
+    padding: 60px 0 40px;
+    text-align: center;
+    position: relative;
+  }
+  .changelog-hero h1 {
+    font: 700 clamp(32px, 4vw, 48px)/1.2 'Space Grotesk', Inter, sans-serif;
+    margin-bottom: 16px;
+  }
+  .changelog-hero p {
+    color: var(--dim);
+    font-size: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .changelog-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 0 60px;
+  }
+  .release {
+    background: var(--floor);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    transition: all .3s ease;
+    cursor: pointer;
+    position: relative;
+  }
+  .release:hover {
+    border-color: rgba(88,101,242,.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  .release-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .release-version {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .version-badge {
+    padding: 4px 12px;
+    background: rgba(88,101,242,.15);
+    color: #aab4ff;
+    border-radius: 6px;
+    font: 600 14px 'JetBrains Mono', monospace;
+  }
+  .release-date {
+    color: var(--faint);
+    font: 400 13px 'JetBrains Mono', monospace;
+  }
+  .release-title {
+    font: 700 18px 'Space Grotesk', Inter, sans-serif;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+  .release-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .4s ease;
+  }
+  .release.expanded .release-items {
+    max-height: 1000px;
+  }
+  .release-items li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: #c8cbd8;
+    line-height: 1.5;
+  }
+  .change-type {
+    flex-shrink: 0;
+    min-width: 72px;
+    text-align: center;
+    font: 600 10.5px/1.9 'JetBrains Mono', monospace;
+    letter-spacing: .05em;
+    border-radius: 5px;
+    padding: 0 8px;
+  }
+  .change-type.added { background: rgba(35,165,90,.14); color: #4ade80; }
+  .change-type.improved { background: rgba(88,101,242,.14); color: #aab4ff; }
+  .change-type.fixed { background: rgba(242,63,67,.12); color: #f87171; }
+  .release .expand-icon {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    width: 24px;
+    height: 24px;
+    transition: transform .3s ease;
+  }
+  .release.expanded .expand-icon {
+    transform: rotate(180deg);
+  }
+
+  /* ── Footer ────────────────────────────────────────────────────────── */
+  footer { 
+    border-top: 1px solid var(--border); 
+    padding: 26px 0 34px; 
+    color: var(--faint); 
+    font-size: 13px;
+  }
+  footer .wrap { display: flex; align-items: center; gap: 8px; }
+  footer a { 
+    color: var(--dim); 
+    transition: all .3s;
+  }
+  footer a:hover { color: var(--text); }
+  footer .sp { margin-left: auto; }
+
+  /* ── Responsive + a11y ─────────────────────────────────────────────── */
+  :focus-visible { 
+    outline: 2px solid var(--blurple); 
+    outline-offset: 2px; 
+    border-radius: 6px; 
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .stage { grid-template-columns: 1fr; }
+    .tile.cat { grid-row: auto; aspect-ratio: 16/9; }
+    .hero { padding-top: 60px; }
+    .roadmap-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: 1fr; }
+    .bar { gap: 12px; }
+    .cta-mini { display: none; }
+    .hero { padding-top: 40px; }
+    .tab { padding: 7px 10px; font-size: 12px; }
+    .hero h1 { font-size: 36px; }
+    .hero p.sub { font-size: 16px; }
+    .feats { padding: 60px 0; }
+    .release-header { flex-direction: column; align-items: flex-start; }
+  }
+  @media (max-width: 400px) {
+    .mark b { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <a class="mark" href="#" onclick="show('features'); return false;">
+      <div class="logo-container">
+        <svg class="logo-svg" viewBox="0 0 256 256" fill="none">
+          <path stroke="#5865f2" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+            d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>
+          <circle class="eye" cx="92" cy="140" r="12" fill="#5865f2"/>
+          <circle class="eye" cx="164" cy="140" r="12" fill="#5865f2"/>
+        </svg>
+      </div>
+      <b>skycord</b>
+    </a>
+    <nav class="tabs" aria-label="Page sections">
+      <button class="tab on" id="t-features" onclick="show('features')">Features</button>
+      <button class="tab" id="t-roadmap" onclick="show('roadmap')">Roadmap</button>
+      <button class="tab" id="t-changelog" onclick="show('changelog')">Changelog</button>
+    </nav>
+    <a class="cta-mini" href="https://app.skycord.xyz">Open Skycord</a>
+  </div>
+</header>
+
+<!-- ── FEATURES ─────────────────────────────────────────────────────── -->
+<main id="p-features" class="panel on">
+  <section class="hero">
+    <div class="wrap">
+      <h1>Your crew's<br/>place to <em>talk</em>.</h1>
+      <p class="sub">Voice and video calls, screen share, and themes you can send in chat — running on our own server, not someone else's.</p>
+      <a class="cta" href="https://app.skycord.xyz">Open Skycord<small>runs in your browser — no install</small></a>
+
+      <div class="stage" aria-hidden="true">
+        <div class="tile share">
+          <div class="fakewin">
+            <div class="fbar"><i></i><i></i><i></i></div>
+            <div class="frow w80"></div><div class="frow w60"></div><div class="frow w45"></div>
+          </div>
+          <span class="q">1080p&nbsp;30</span><span class="live">LIVE</span>
+          <span class="name">🖥 SMD</span>
+        </div>
+        <div class="tile cat">
+          <div class="avatarball">
+            <svg class="avatar-svg" viewBox="0 0 256 256" fill="none">
+              <path stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+                d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>
+              <circle class="eye" cx="92" cy="140" r="12" fill="#fff"/>
+              <circle class="eye" cx="164" cy="140" r="12" fill="#fff"/>
+            </svg>
+          </div>
+          <span class="name">sky</span>
+          <div class="pill">
+            <i class="mic" title="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></i>
+            <i class="green" title="Camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></i>
+            <i class="scr" title="Share your screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></i>
+            <i class="red" title="Leave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feats" id="features">
+    <div class="wrap">
+      <h2>What's inside</h2>
+      <div class="grid">
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+          <h3>Video calls &amp; screen share</h3>
+          <p>Turn on your camera or share a screen mid-call. Sharing never loops the call's own audio back at your friends.</p>
+          <ul class="features-list">
+            <li>Big screen mode with spotlighted streams</li>
+            <li>Fullscreen and hide-chat options</li>
+            <li>Screen share with LIVE badge</li>
+            <li>Camera preview before going live</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
+          <h3>Voice calls &amp; controls</h3>
+          <p>Instant speaking rings, noise suppression, and full control over your audio setup.</p>
+          <ul class="features-list">
+            <li>RNNoise noise filtering</li>
+            <li>Input sensitivity as noise gate</li>
+            <li>Per-person volume controls</li>
+            <li>Live device switching without rejoining</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <h3>Connection monitoring</h3>
+          <p>Real-time diagnostics so you always know what's happening with your call.</p>
+          <ul class="features-list">
+            <li>Live ping graph and packet loss stats</li>
+            <li>Debug panel for codec and bitrate info</li>
+            <li>Signal meter with color indicators</li>
+            <li>Save diagnostics for bug reports</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M19 11c1.5 1.5 2 4 2 4s-2.5.5-4-1-2-4-2-4 2.5-.5 4 1z"/><path d="M12 22a10 10 0 1 1 10-10c0 1.5-1 2-2 2h-3a3 3 0 0 0-3 3v3c0 1-1 2-2 2z"/></svg></div>
+          <h3>Customization &amp; themes</h3>
+          <p>Make Skycord yours with themes you can share and apply instantly.</p>
+          <ul class="features-list">
+            <li>Theme sharing in chat</li>
+            <li>Custom banners with GIF support</li>
+            <li>Custom status with timers</li>
+            <li>Profile page with all your settings</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/></svg></div>
+          <h3>Groups &amp; conversations</h3>
+          <p>Rich chat features with full control over your conversations.</p>
+          <ul class="features-list">
+            <li>Group DMs with invite links</li>
+            <li>Pin and mute conversations</li>
+            <li>Reply threads and pins</li>
+            <li>Right-click menus everywhere</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+          <h3>Fun &amp; expression</h3>
+          <p>Express yourself with stickers, GIFs, and reactions.</p>
+          <ul class="features-list">
+            <li>Custom stickers and emoji</li>
+            <li>GIF search</li>
+            <li>Emoji reactions</li>
+            <li>Rich text formatting</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
+          <h3>Mobile support</h3>
+          <p>Skycord works on your phone like a native app.</p>
+          <ul class="features-list">
+            <li>Installable to home screen</li>
+            <li>Touch-first interface</li>
+            <li>Press-and-hold for menus</li>
+            <li>Full-screen conversations</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <h3>Security &amp; privacy</h3>
+          <p>Your conversations are yours, with security hardening throughout.</p>
+          <ul class="features-list">
+            <li>Security hardening</li>
+            <li>Privacy controls</li>
+            <li>Encrypted calls coming soon</li>
+            <li>Self-host option planned</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+          <h3>Quick actions</h3>
+          <p>Everything you need, right where you expect it.</p>
+          <ul class="features-list">
+            <li>Quick switcher</li>
+            <li>Jump to present button</li>
+            <li>Right-click context menus</li>
+            <li>Back to call button</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ── ROADMAP ─────────────────────────────────────────────────────── -->
+<main id="p-roadmap" class="panel">
+  <section class="roadmap-hero">
+    <div class="wrap">
+      <h1>Roadmap</h1>
+      <p>What's being built, roughly in order. No dates — it ships when it's good.</p>
+    </div>
+  </section>
+  
+  <section class="roadmap-content">
+    <div class="wrap">
+      <div class="roadmap-grid" id="roadmap-grid"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ── CHANGELOG ───────────────────────────────────────────────────── -->
+<main id="p-changelog" class="panel">
+  <section class="changelog-hero">
+    <div class="wrap">
+      <h1>Changelog</h1>
+      <p>Every update, big and small. Here's what's new and what's fixed.</p>
+    </div>
+  </section>
+  
+  <section class="changelog-content">
+    <div class="wrap">
+      <div class="changelog-container" id="changelog-container"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>skycord</span><span>·</span><a href="https://app.skycord.xyz">open the app</a>
+    <span class="sp">built by SMD</span>
+  </div>
+</footer>
+
+<script>
+// Roadmap data
+const ROADMAP = [
+  {
+    stage: 'now', label: 'Building now', title: 'Mobile app',
+    items: [
+      'Installable, touch-first, and the whole app rather than a cut-down version',
+      'Members and profiles as pull-up sheets',
+      'Push notifications, once the desktop and mobile apps can receive them'
+    ]
+  },
+  {
+    stage: 'next', label: 'Next up', title: 'Channels',
+    items: [
+      'Servers with real channels, not just group DMs',
+      'Roles and permissions',
+      'Search with tags across a server'
+    ]
+  },
+  {
+    stage: 'next', label: 'Next up', title: 'End-to-end encryption',
+    items: [
+      'Tick a box when you make a chat and nobody but the people in it can read it',
+      'New devices approved from a device you are already signed in on',
+      'A backup code, so losing your laptop does not lose your history',
+      'Encrypted calls as well as messages'
+    ]
+  },
+  {
+    stage: 'next', label: 'Next up', title: 'Desktop app',
+    items: [
+      'A real desktop app instead of a browser tab',
+      'Pick which server you connect to — self-host your own, like TeamSpeak',
+      'Your own screen-share picker, and push-to-talk that works unfocused',
+      'Per-app audio capture, so sharing a game does not echo the call back'
+    ]
+  },
+  {
+    stage: 'idea', label: 'Being looked at', title: 'Quality of life',
+    items: [
+      'Sharper screen share — it currently softens when the tile is small',
+      'A stronger noise filter for voices, keyboards and fans',
+      'Link previews in chat',
+      'Jump straight to any message from a link'
+    ]
+  },
+  {
+    stage: 'idea', label: 'Being looked at', title: 'Fun stuff',
+    items: [
+      'Custom emoji uploads',
+      'Soundboard for calls',
+      'Activity status like "Listening to Spotify"',
+      'More themes and customization options'
+    ]
+  }
+];
+
+// Changelog data
+const RELEASES = [
+  {
+    v: 'v0.9', date: 'Aug 14, 2026', title: 'Calls that tell you the truth',
+    items: [
+      ['add', 'A connection panel with a live ping graph, your average and last ping, and packet loss'],
+      ['add', 'A Debug button in it, for when a call sounds wrong and you want to know why'],
+      ['add', 'Save or copy those readings as a file, so a bug report can carry the evidence'],
+      ['add', 'Camera and screen share moved next to the call status'],
+      ['add', 'Right-click whoever you are calling to ring them again, or stop ringing'],
+      ['add', 'The person you are calling now appears on the call, dimmed with a ring around them'],
+      ['imp', 'The connection indicator is a proper signal meter'],
+      ['imp', 'Call controls stay pinned to the bottom of the call'],
+      ['imp', 'The call keeps a sensible minimum height'],
+      ['imp', 'Fullscreen and hide-chat only appear when there is a camera or screen'],
+      ['fix', 'Connection wobbles no longer turn pictures into grey letters'],
+      ['fix', 'Skycord no longer starts ringing at a person you are already talking to'],
+      ['fix', 'Faces stay centred in the call while you drag it bigger or smaller'],
+      ['fix', 'The back-to-call button no longer squashes your name']
+    ]
+  },
+  {
+    v: 'v0.8', date: 'Aug 9, 2026', title: 'Skycord on your phone',
+    items: [
+      ['add', 'Skycord works properly on a phone now'],
+      ['add', 'Tap a conversation for a full screen of it'],
+      ['add', 'Press and hold anything for its menu'],
+      ['add', 'Double-tap a word to select everything'],
+      ['add', 'Settings rebuilt for a phone'],
+      ['add', 'A connection strip that tells you when you drop out'],
+      ['add', 'A back to call button next to your name'],
+      ['imp', 'Security hardening throughout'],
+      ['imp', 'A new icon set across the whole app'],
+      ['imp', 'Hover text on buttons is ours now'],
+      ['fix', 'The GIF button in the message box actually opens GIFs'],
+      ['fix', 'Hide chat now hides the whole chat'],
+      ['fix', 'The app no longer sits below the bottom of the screen']
+    ]
+  },
+  {
+    v: 'v0.7.1', date: 'Aug 8, 2026', title: 'Chats stay put',
+    items: [
+      ['fix', 'Removing someone as a friend no longer makes your conversation disappear'],
+      ['imp', 'Your chat list is built from conversations you have actually had']
+    ]
+  },
+  {
+    v: 'v0.7', date: 'Aug 8, 2026', title: 'A profile worth showing',
+    items: [
+      ['add', 'A Profile page in settings'],
+      ['add', 'Banner colour: pick anything you like'],
+      ['add', 'Or upload a banner image — GIFs animate'],
+      ['add', 'Custom status with a timer'],
+      ['add', 'Click anyone avatar for their full profile'],
+      ['imp', 'Profile popouts rebuilt'],
+      ['imp', 'Softer edges, fewer boxes inside boxes'],
+      ['fix', 'Clicking your avatar opens your profile'],
+      ['fix', 'GIF search no longer shows old results']
+    ]
+  },
+  {
+    v: 'v0.6', date: 'Jul 20, 2026', title: 'Right-click everything',
+    items: [
+      ['add', 'Right-click menus across the app'],
+      ['add', 'Pin a conversation to keep it at the top'],
+      ['add', 'Mute a conversation for 15 minutes, an hour, 8 hours, a day'],
+      ['add', 'Per-person volume, mute and hide-video inside a call'],
+      ['add', 'Fullscreen a single stream'],
+      ['add', 'A camera preview before you go live'],
+      ['add', 'Device menus on the mic and headphone buttons'],
+      ['add', 'A dial tone while you wait'],
+      ['imp', 'New sound palette — lower, warmer'],
+      ['imp', 'The ringtone carries properly on laptop speakers'],
+      ['imp', 'Reading older messages no longer yanks you to the bottom'],
+      ['imp', 'A jump-to-present button that counts what you missed'],
+      ['fix', 'A crash that could stop the app updating'],
+      ['fix', 'The camera now fits the call bar at any height'],
+      ['fix', 'Muting a conversation silences its calls too'],
+      ['fix', 'Groups no longer ding while you have them open']
+    ]
+  },
+  {
+    v: 'v0.5', date: 'Jul 19, 2026', title: 'Calls, your way',
+    items: [
+      ['add', 'Big screen — click any tile to focus it'],
+      ['add', 'Fullscreen the call, and a hide-chat mode'],
+      ['add', 'Drag the call bar bottom edge to resize it'],
+      ['add', 'RNNoise — a stronger noise filter'],
+      ['add', 'Input sensitivity now works as a noise gate'],
+      ['imp', 'Calls now open at a comfortable size'],
+      ['imp', 'A spotlighted stream automatically comes through at higher quality'],
+      ['imp', 'Call logs in DMs now show a green start / red end marker'],
+      ['fix', 'Input sensitivity and input volume now apply to real calls'],
+      ['fix', 'People no longer show as online after closing Skycord'],
+      ['fix', 'Calls already running are visible the moment you come online']
+    ]
+  },
+  {
+    v: 'v0.4.1', date: 'Jul 12, 2026', title: 'Call menus & polish',
+    items: [
+      ['add', 'Mic, camera and menu buttons on the call bar'],
+      ['add', 'Instant speaking ring for your own voice'],
+      ['imp', 'Shared-theme cards in chat got a cleaner look'],
+      ['fix', 'Turning your camera off now clears your tile for everyone'],
+      ['fix', 'Chrome stop-sharing bar stays in sync']
+    ]
+  },
+  {
+    v: 'v0.4', date: 'Jul 11, 2026', title: 'Calls got eyes',
+    items: [
+      ['add', 'Video calls — everyone can turn on a camera'],
+      ['add', 'Screen share with a LIVE badge'],
+      ['add', 'Clear errors when a camera or the server is unavailable']
+    ]
+  },
+  {
+    v: 'v0.3', date: 'Jun 24, 2026', title: 'Make it yours',
+    items: [
+      ['add', 'Theme sharing — send your look in chat'],
+      ['add', 'Settings got sections, visual density options'],
+      ['imp', 'Voice settings: input modes, push-to-talk, mic test']
+    ]
+  },
+  {
+    v: 'v0.2', date: 'Jun 23, 2026', title: 'Better together',
+    items: [
+      ['add', 'Group DMs with invite links and member management'],
+      ['add', 'Reply threads, pins, and a quick switcher'],
+      ['imp', 'Rich text, stickers, GIF search and reactions']
+    ]
+  },
+  {
+    v: 'v0.1', date: 'Jun 20, 2026', title: 'Hello, Skycord',
+    items: [
+      ['add', 'Voice calls in DMs and groups with self-healing reconnect'],
+      ['add', 'Friends, DMs, and real-time everything']
+    ]
+  }
+];
+
+// Render roadmap
+document.getElementById('roadmap-grid').innerHTML = ROADMAP.map(function(r) {
+  return '<div class="roadmap-card ' + r.stage + '" onclick="toggleCard(this)">' +
+    '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+      '<polyline points="6 9 12 15 18 9"></polyline>' +
+    '</svg>' +
+    '<div class="status">' + r.label + '</div>' +
+    '<h3>' + r.title + '</h3>' +
+    '<div class="card-content">' +
+      '<ul>' + r.items.map(function(item) {
+        return '<li>' + item + '</li>';
+      }).join('') + '</ul>' +
+    '</div>' +
+  '</div>';
+}).join('');
+
+// Render changelog
+const CHIP = { add: 'Added', imp: 'Improved', fix: 'Fixed' };
+document.getElementById('changelog-container').innerHTML = RELEASES.map(function(r) {
+  return '<div class="release" onclick="toggleRelease(this)">' +
+    '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+      '<polyline points="6 9 12 15 18 9"></polyline>' +
+    '</svg>' +
+    '<div class="release-header">' +
+      '<div class="release-version">' +
+        '<span class="version-badge">' + r.v + '</span>' +
+        '<span class="release-date">' + r.date + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<h3 class="release-title">' + r.title + '</h3>' +
+    '<ul class="release-items">' +
+      r.items.map(function(item) {
+        return '<li>' +
+          '<span class="change-type ' + item[0] + '">' + CHIP[item[0]] + '</span>' +
+          '<span>' + item[1] + '</span>' +
+        '</li>';
+      }).join('') +
+    '</ul>' +
+  '</div>';
+}).join('');
+
+// Toggle functions
+function toggleCard(el) {
+  el.classList.toggle('expanded');
+}
+
+function toggleRelease(el) {
+  el.classList.toggle('expanded');
+}
+
+// Tab navigation
+const PANELS = ['features', 'roadmap', 'changelog'];
+
+function show(which) {
+  if (PANELS.indexOf(which) === -1) which = 'features';
+  
+  PANELS.forEach(function(p) {
+    document.getElementById('p-' + p).classList.toggle('on', p === which);
+    document.getElementById('t-' + p).classList.toggle('on', p === which);
+  });
+  
+  if (location.hash !== '#' + which) {
+    history.replaceState(null, '', '#' + which);
+  }
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Handle hash on load
+const fromHash = function() {
+  const h = location.hash.slice(1);
+  if (PANELS.indexOf(h) !== -1) show(h);
+};
+
+fromHash();
+window.addEventListener('hashchange', fromHash);
+</script>
+</body>
+</html>

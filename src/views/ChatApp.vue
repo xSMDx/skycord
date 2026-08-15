@@ -548,9 +548,29 @@ const myAvatar = computed(() =>
 // "invisible" — the fallback, not a real branch.
 
 // ── Mobile chat header ──────────────────────────────────────────────────────
-/** Live members in the open group, for the header's "N Online" subtitle. */
-const groupOnlineCount = computed(() =>
-  (activeGroup.value?.members ?? []).filter(m => m.status && m.status !== 'offline').length)
+/**
+ * Header subtitles name WHO the conversation is with, not how they're feeling.
+ * Status lives on the avatar dot, which is glanceable and doesn't cost a line
+ * of text that only has room for one thing.
+ */
+/** The other person's @username — falls back to nothing rather than guessing. */
+const dmSubtitle = computed(() => {
+  const id = activeDM.value?.id
+  if (!id) return ''
+  const f = apiFriends.value.find(x => x.id === id)
+  return f?.username ? `@${f.username}` : ''
+})
+
+/** Everyone in the group, by username. When the group HAS a name the title
+ *  shows that instead of the members, so this line is the only thing naming
+ *  them; when it doesn't, the title is display names and this is the handles. */
+const groupSubtitle = computed(() => {
+  const ms = activeGroup.value?.members ?? []
+  if (!ms.length) return ''
+  const names = ms.map(m => m.username).filter(Boolean)
+  if (names.length <= 3) return names.join(', ')
+  return `${names.slice(0, 3).join(', ')} +${names.length - 3}`
+})
 
 /**
  * Unread across every OTHER conversation, for the badge on the back arrow.
@@ -1109,6 +1129,13 @@ const copyText = (text: string, what: string) => {
 // frame as the click; the server's echo is authoritative and corrects it if the
 // write failed.
 const convActions = {
+  /** Open that conversation, then show its pinned messages. */
+  openPins: (convId: string) => {
+    const dm = dmsData.value.find(d => d.id === convId)
+    if (dm) openDM(dm)
+    else { const g = groupsData.value.find(x => x.id === convId); if (g) openGroup(g) }
+    showPinned.value = true
+  },
   setPinned: async (convId: string, pinned: boolean) => {
     const prev = convPref(convId)
     setConvPrefLocal(convId, { ...prev, pinned })
@@ -2105,10 +2132,7 @@ onBeforeUnmount(() => {
                     <ChevronRight class="ch-chev" :size="16" :stroke-width="2.25"/>
                   </span>
                   <div class="ch-topic-sep"/>
-                  <span class="ch-topic">
-                    <span class="ch-topic-dot" :style="{ background: statusColor(activeDM.status) }"/>
-                    {{ statusLabel(activeDM.status) }}
-                  </span>
+                  <span class="ch-topic">{{ dmSubtitle }}</span>
                 </button>
               </template>
               <template v-else-if="view==='group' && activeGroup">
@@ -2122,12 +2146,7 @@ onBeforeUnmount(() => {
                     <ChevronRight class="ch-chev" :size="16" :stroke-width="2.25"/>
                   </span>
                   <div class="ch-topic-sep"/>
-                  <span class="ch-topic">
-                    <template v-if="groupOnlineCount > 0">
-                      <span class="ch-topic-dot online"/>{{ groupOnlineCount }} Online
-                    </template>
-                    <template v-else>{{ activeGroup.memberCount }} Members</template>
-                  </span>
+                  <span class="ch-topic">{{ groupSubtitle }}</span>
                 </button>
                 <button class="ch-edit-btn" v-tip="'Edit Group'" @click.stop="showEditGroup = true">
                   <Pencil :size="15" :stroke-width="1.5"/>
@@ -2156,9 +2175,6 @@ onBeforeUnmount(() => {
                   <Camera :size="18" :stroke-width="2.25"/>
                 </button>
               </template>
-              <button class="icon-btn icon-btn-pin" :class="{ active: showPinned }" v-tip="'Pinned Messages'" @click.stop="showPinned=!showPinned">
-                <Pin :size="18" :stroke-width="1.5"/>
-              </button>
               <button v-if="view==='group' && activeGroup" class="icon-btn icon-btn-invite" v-tip="'Add friends to DM'" @click.stop="showInviteGroup = true">
                 <UserPlus :size="18" :stroke-width="1.5"/>
               </button>

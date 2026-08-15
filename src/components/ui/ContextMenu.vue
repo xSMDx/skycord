@@ -8,8 +8,9 @@
  * hardcoded `innerWidth - 230`, which mispositions any menu of a different
  * size), click-away, Escape, arrow-key navigation and focus return.
  */
-import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { Check, ChevronRight } from 'lucide-vue-next'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { Check, ChevronRight, ChevronLeft } from 'lucide-vue-next'
+import { useViewport } from '@/composables/useViewport'
 import { menu, menuItems as items, closeMenu, isSeparator, isSlider, isAction, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 
 const el   = ref<HTMLElement | null>(null)
@@ -19,6 +20,76 @@ const active = ref(-1)
 
 // Open submenu: which row owns it, its items, and where the flyout sits.
 const sub = ref<{ index: number; items: MenuItem[]; x: number; y: number } | null>(null)
+
+// ── Mobile: the menu is a bottom sheet, not a popover ───────────────────────
+// A cursor-anchored popover has no meaning on a touch screen — there's no
+// cursor to anchor to, and a menu pinned to wherever your thumb landed can
+// open half off-screen or under it. It comes up from the bottom edge instead,
+// where a thumb already is.
+const { isMobile } = useViewport()
+
+/**
+ * Submenus DRILL on a phone rather than flying out sideways: there is no room
+ * beside a full-width sheet, and a floating child popover over a sheet reads
+ * as two competing surfaces. Holds the submenu currently being shown.
+ */
+const drill = ref<{ label: string; items: MenuItem[] } | null>(null)
+/** What the sheet is currently listing — the menu, or a submenu drilled into. */
+const rows = computed<MenuItem[]>(() => drill.value?.items ?? items.value)
+
+/** Live drag offset while the sheet is being pulled down. 0 = fully open. */
+const sheetY = ref(0)
+const sheetDragging = ref(false)
+let dragStart = 0
+let dragSamples: { y: number; t: number }[] = []
+
+/** Fraction of the sheet's own height past which release dismisses. A flat
+ *  pixel threshold punishes tall sheets and lets short ones close too easily. */
+const DISMISS_AT = 0.35
+const DECELERATION = 0.998
+/** Where a flick would come to rest — a short fast flick should close even
+ *  though it never travelled far, which distance alone can't express. */
+const project = (v: number) => (v / 1000) * DECELERATION / (1 - DECELERATION)
+/** Only the last 100ms counts toward velocity. Averaging over the whole
+ *  gesture means a drag that moved then STOPPED still reads as fast, and the
+ *  projection multiplier (~499) turns that into a dismiss the user didn't ask
+ *  for — a finger resting still has no momentum. */
+const RECENT_MS = 100
+
+const onSheetDown = (e: PointerEvent) => {
+  if (!isMobile.value) return
+  sheetDragging.value = true
+  dragStart = e.clientY
+  dragSamples = [{ y: e.clientY, t: performance.now() }]
+  ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+}
+const onSheetMove = (e: PointerEvent) => {
+  if (!sheetDragging.value) return
+  const dy = e.clientY - dragStart
+  // Rubber-band upward: the sheet is already at its top, so resist rather
+  // than letting it fly up and leave a gap under it.
+  sheetY.value = dy < 0 ? dy / 4 : dy
+  dragSamples.push({ y: e.clientY, t: performance.now() })
+  if (dragSamples.length > 6) dragSamples.shift()
+}
+const onSheetUp = () => {
+  if (!sheetDragging.value) return
+  sheetDragging.value = false
+  const now = performance.now()
+  const recent = dragSamples.filter(s => now - s.t <= RECENT_MS)
+  const first = recent[0], last = recent[recent.length - 1]
+  const dt = first && last ? last.t - first.t : 0
+  const v  = dt > 0 ? ((last.y - first.y) / dt) * 1000 : 0
+  const height = el.value?.getBoundingClientRect().height ?? 300
+  if (sheetY.value + project(v) > height * DISMISS_AT) closeMenu()
+  else sheetY.value = 0
+}
+
+// Reset per-open state, or the next menu inherits the last one's drill depth
+// and a half-finished drag offset.
+watch(() => menu.open, (open) => {
+  if (open) { drill.value = null; sheetY.value = 0; sheetDragging.value = false }
+})
 const subActive = ref(-1)
 
 // Indices of items that can actually be focused — separators and disabled rows
@@ -87,6 +158,9 @@ const openSub = async (index: number, items: MenuItem[], rowEl: HTMLElement) => 
 }
 
 const onRowEnter = (i: number, item: MenuAction, e: MouseEvent) => {
+  // Hover means nothing on a touch screen, and letting it fire would open a
+  // flyout the moment a finger grazes a row while scrolling.
+  if (isMobile.value) return
   active.value = i
   if (hasSubmenu(item)) void openSub(i, item.submenu!, e.currentTarget as HTMLElement)
   else closeSub()   // moving onto a plain row dismisses a sibling's flyout
@@ -96,7 +170,10 @@ const select = (item: MenuAction) => {
   if (item.disabled) return
   // A submenu parent has no action of its own — clicking it just opens the
   // flyout, so swallow the click rather than closing the whole menu.
-  if (hasSubmenu(item)) return
+  if (hasSubmenu(item)) {
+    if (isMobile.value) drill.value = { label: item.label, items: item.submenu! }
+    return
+  }
   if (item.keepOpen) { void item.onSelect?.(); return }   // toggles stay open
   closeMenu()
   void item.onSelect?.()
@@ -203,20 +280,40 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport v-if="menu.open" to="body">
+    <!-- Scrim, mobile only: a sheet needs something to sit against, and a
+         tappable area to dismiss into that isn't a 44px target. -->
+    <div v-if="isMobile" class="cm-scrim" @click="closeMenu" @contextmenu.prevent />
     <div
       ref="el"
       class="cm"
+      :class="{ sheet: isMobile, dragging: sheetDragging }"
       tabindex="-1"
       role="menu"
-      :style="{ left: pos.x + 'px', top: pos.y + 'px' }"
+      :style="isMobile
+        ? { transform: sheetY ? `translateY(${sheetY}px)` : undefined }
+        : { left: pos.x + 'px', top: pos.y + 'px' }"
       @click.stop
       @contextmenu.prevent.stop
     >
+      <!-- Grab area: the handle and the title row are the drag surface, so a
+           drag never starts on a row you meant to tap. -->
+      <div
+        v-if="isMobile"
+        class="cm-grab"
+        @pointerdown="onSheetDown" @pointermove="onSheetMove"
+        @pointerup="onSheetUp" @pointercancel="onSheetUp"
+      >
+        <span class="cm-handle" />
+        <button v-if="drill" class="cm-back" @click.stop="drill = null">
+          <ChevronLeft :size="16" :stroke-width="2.25" /> {{ drill.label }}
+        </button>
+      </div>
+
       <!-- Escape hatch for menus that aren't a list of rows (the message menu's
            quick-reaction strip is the one real case). -->
-      <slot name="header" />
+      <slot v-if="!drill" name="header" />
 
-      <template v-for="(item, i) in items" :key="i">
+      <template v-for="(item, i) in rows" :key="i">
         <div v-if="isSeparator(item)" class="cm-sep" />
         <!-- Slider: a live control, so clicks inside must NOT close the menu. -->
         <div v-if="isSlider(item)" class="cm-slider" @click.stop>
@@ -255,7 +352,7 @@ onBeforeUnmount(() => {
     <!-- Submenu flyout. A sibling of the parent menu, not a child, so it can't
          be clipped by the parent's rounded corners or overflow. -->
     <div
-      v-if="sub"
+      v-if="sub && !isMobile"
       ref="subEl"
       class="cm cm-sub"
       role="menu"
@@ -300,6 +397,64 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   animation: cm-pop .12s cubic-bezier(.4,0,.2,1);
   outline: none;
 }
+/* ── Mobile: bottom sheet ──────────────────────────────────────────────────
+   Anchoring a menu to a tap point is a desktop idea. On a phone it comes up
+   from the bottom edge, full width, where the thumb already is and where
+   nothing can push it off-screen. */
+.cm-scrim {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,.5);
+  animation: cm-scrim-in .18s ease;
+}
+@keyframes cm-scrim-in { from { opacity: 0 } to { opacity: 1 } }
+
+.cm.sheet {
+  left: 0; right: 0; bottom: 0; top: auto;
+  width: 100%; min-width: 0; max-width: none;
+  border: none; border-top: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px 16px 0 0;
+  padding: 0 0 max(8px, env(safe-area-inset-bottom));
+  max-height: 75vh; overflow-y: auto;
+  animation: cm-sheet-up .22s cubic-bezier(.2,.8,.3,1);
+  /* No transition while a finger is on it: the drag IS the position, and
+     easing it would put the sheet behind the thumb. */
+  transition: transform .22s cubic-bezier(.2,.8,.3,1);
+}
+.cm.sheet.dragging { transition: none; }
+@keyframes cm-sheet-up { from { transform: translateY(100%) } to { transform: translateY(0) } }
+
+.cm-grab {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg-floor);
+  padding: 8px 0 4px;
+  touch-action: none;          /* the sheet owns vertical drags here */
+  cursor: grab;
+}
+.cm-handle {
+  display: block; width: 36px; height: 4px; margin: 0 auto;
+  background: var(--text-faint); border-radius: 2px; opacity: .6;
+}
+.cm-back {
+  display: flex; align-items: center; gap: 4px;
+  width: 100%; min-height: 44px; padding: 0 14px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-2); font-size: 13px; font-weight: 600;
+}
+.cm-back:active { color: var(--text-1); }
+
+/* Rows get real touch targets. 8px 14px is a mouse-sized row. */
+.cm.sheet .cm-row {
+  min-height: 48px; padding: 0 18px; font-size: 15px; gap: 14px;
+}
+.cm.sheet .cm-row:active { background: var(--hover); }
+.cm.sheet .cm-sep { margin: 4px 0; }
+.cm.sheet .cm-slider { padding: 10px 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cm.sheet { animation: none; transition: none; }
+  .cm-scrim { animation: none; }
+}
+
 @keyframes cm-pop {
   from { opacity: 0; transform: scale(.94) translateY(-4px); }
   to   { opacity: 1; transform: scale(1)   translateY(0);    }
