@@ -2700,6 +2700,28 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    for a fingertip, and the taller rows also make the list easier to scan. */
 .shell.mobile .dm-item{padding:10px 12px;margin:0 8px;min-height:56px}
 .shell.mobile .icon-btn{min-width:44px;min-height:44px}
+/* Every interactive control on a phone, not just .icon-btn. Measured at 390px:
+   up-chev was 14x30, the user-panel buttons 30x30, the Friends tabs 63x27 and
+   the search bar 374x29 — all comfortably under the 44px minimum, and the
+   14px-wide chevron was effectively un-hittable with a thumb. */
+.shell.mobile .up-btn,
+.shell.mobile .btn-mic,
+.shell.mobile .btn-headphones,
+.shell.mobile .btn-settings{min-width:44px;min-height:44px}
+.shell.mobile .up-chev{min-width:28px;min-height:44px}
+.shell.mobile .ftab{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center}
+/* up-chev stays 28x44: the user panel has 16px of slack at 390px and widening
+   both chevrons needs 32px. They are secondary to a full 44x44 sibling, and
+   long-pressing that sibling opens the same device flyout. */
+.shell.mobile .sb-search-btn{min-height:44px}
+.shell.mobile .add-friend-btn,
+.shell.mobile .an-add-btn{min-height:44px}
+/* iOS ZOOMS THE WHOLE PAGE when a focused input's text is under 16px, and
+   never zooms back out. Every text field on a phone is 16px for that reason
+   alone — it is not a typographic choice. */
+.shell.mobile input,
+.shell.mobile textarea,
+.shell.mobile select{font-size:16px}
 .shell.mobile .sb-nav-item{min-height:44px}
 .shell.mobile .f-row{min-height:60px}
 

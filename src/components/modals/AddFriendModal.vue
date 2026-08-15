@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { X, Search, UserPlus, Check } from 'lucide-vue-next'
 import { useApi, type ApiUser } from '@/composables/useApi'
+import ModalBase from './ModalBase.vue'
 import { avatarFor } from '@/composables/useAvatar'
 
 const emit = defineEmits<{ close: [] }>()
@@ -47,9 +48,8 @@ const statusColor: Record<string, string> = {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="af-overlay" @click.self="emit('close')">
-      <div class="af-modal">
+  <ModalBase width="min(520px, 95vw)" @close="emit('close')">
+    <div class="af-modal">
         <!-- Header -->
         <div class="af-header">
           <div>
@@ -114,9 +114,8 @@ const statusColor: Record<string, string> = {
           <span class="af-hint-tip">PROTIP:</span>
           Skycord usernames are case-sensitive. Try their exact username.
         </div>
-      </div>
     </div>
-  </Teleport>
+  </ModalBase>
 </template>
 
 <style scoped>
@@ -125,20 +124,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 input  { background: none; border: none; outline: none; color: inherit; font: inherit; }
 img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
-.af-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.75);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1000; animation: fade .15s ease;
-}
-@keyframes fade { from{opacity:0} to{opacity:1} }
-
-.af-modal {
-  width: min(520px, 95vw); background: var(--bg-panel); border-radius: 12px;
-  box-shadow: 0 24px 80px rgba(0,0,0,.7);
-  animation: slide .18s cubic-bezier(.4,0,.2,1);
-  overflow: hidden;
-}
-@keyframes slide { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
+/* ModalBase owns the overlay, the box chrome and the phone sheet. What's
+   left here is only the content inside it. */
+.af-modal { overflow: hidden; }
 
 .af-header {
   display: flex; align-items: flex-start; justify-content: space-between;

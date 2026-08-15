@@ -11,6 +11,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Check, ChevronRight, ChevronLeft } from 'lucide-vue-next'
 import { useViewport } from '@/composables/useViewport'
+import { useSheetDrag } from '@/composables/useSheetDrag'
 import { menu, menuItems as items, closeMenu, isSeparator, isSlider, isAction, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 
 const el   = ref<HTMLElement | null>(null)
@@ -37,58 +38,21 @@ const drill = ref<{ label: string; items: MenuItem[] } | null>(null)
 /** What the sheet is currently listing — the menu, or a submenu drilled into. */
 const rows = computed<MenuItem[]>(() => drill.value?.items ?? items.value)
 
-/** Live drag offset while the sheet is being pulled down. 0 = fully open. */
-const sheetY = ref(0)
-const sheetDragging = ref(false)
-let dragStart = 0
-let dragSamples: { y: number; t: number }[] = []
-
-/** Fraction of the sheet's own height past which release dismisses. A flat
- *  pixel threshold punishes tall sheets and lets short ones close too easily. */
-const DISMISS_AT = 0.35
-const DECELERATION = 0.998
-/** Where a flick would come to rest — a short fast flick should close even
- *  though it never travelled far, which distance alone can't express. */
-const project = (v: number) => (v / 1000) * DECELERATION / (1 - DECELERATION)
-/** Only the last 100ms counts toward velocity. Averaging over the whole
- *  gesture means a drag that moved then STOPPED still reads as fast, and the
- *  projection multiplier (~499) turns that into a dismiss the user didn't ask
- *  for — a finger resting still has no momentum. */
-const RECENT_MS = 100
-
-const onSheetDown = (e: PointerEvent) => {
-  if (!isMobile.value) return
-  sheetDragging.value = true
-  dragStart = e.clientY
-  dragSamples = [{ y: e.clientY, t: performance.now() }]
-  ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
-}
-const onSheetMove = (e: PointerEvent) => {
-  if (!sheetDragging.value) return
-  const dy = e.clientY - dragStart
-  // Rubber-band upward: the sheet is already at its top, so resist rather
-  // than letting it fly up and leave a gap under it.
-  sheetY.value = dy < 0 ? dy / 4 : dy
-  dragSamples.push({ y: e.clientY, t: performance.now() })
-  if (dragSamples.length > 6) dragSamples.shift()
-}
-const onSheetUp = () => {
-  if (!sheetDragging.value) return
-  sheetDragging.value = false
-  const now = performance.now()
-  const recent = dragSamples.filter(s => now - s.t <= RECENT_MS)
-  const first = recent[0], last = recent[recent.length - 1]
-  const dt = first && last ? last.t - first.t : 0
-  const v  = dt > 0 ? ((last.y - first.y) / dt) * 1000 : 0
-  const height = el.value?.getBoundingClientRect().height ?? 300
-  if (sheetY.value + project(v) > height * DISMISS_AT) closeMenu()
-  else sheetY.value = 0
-}
+// Physics live in useSheetDrag, shared with ModalBase.
+const sheetDrag = useSheetDrag(
+  () => el.value?.getBoundingClientRect().height ?? 0,
+  () => closeMenu(),
+)
+const sheetY = sheetDrag.offset
+const sheetDragging = sheetDrag.dragging
+const onSheetDown = sheetDrag.onPointerDown
+const onSheetMove = sheetDrag.onPointerMove
+const onSheetUp   = sheetDrag.onPointerUp
 
 // Reset per-open state, or the next menu inherits the last one's drill depth
 // and a half-finished drag offset.
 watch(() => menu.open, (open) => {
-  if (open) { drill.value = null; sheetY.value = 0; sheetDragging.value = false }
+  if (open) { drill.value = null; sheetDrag.reset() }
 })
 const subActive = ref(-1)
 

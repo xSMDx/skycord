@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { X } from 'lucide-vue-next'
+import ModalBase from './ModalBase.vue'
 
 const props = defineProps<{
   title: string
@@ -19,9 +20,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="efm-overlay" @click.self="emit('close')">
-      <div class="efm-modal">
+  <ModalBase width="440px" :z="1100" @close="emit('close')">
+    <div class="efm-modal">
         <div class="efm-header">
           <div>
             <h3 class="efm-title">{{ title }}</h3>
@@ -42,27 +42,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             @click="emit('done')"
           >{{ saving ? '...' : (doneLabel || 'Done') }}</button>
         </div>
-      </div>
     </div>
-  </Teleport>
+  </ModalBase>
 </template>
 
 <style scoped>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 
-.efm-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.7);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1100; /* above SettingsModal's own overlay */
-}
-
-.efm-modal {
-  width: 440px; max-width: calc(100vw - 32px);
-  background: var(--bg-chat); border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0,0,0,.5);
-  font-family: var(--font-ui);
-}
+/* ModalBase owns the overlay, the box chrome and (on a phone) the sheet
+   presentation. All that's left here is what's INSIDE it. */
+.efm-modal { font-family: var(--font-ui); }
 
 .efm-header {
   display: flex; align-items: flex-start; justify-content: space-between;
