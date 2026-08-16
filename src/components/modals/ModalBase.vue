@@ -21,6 +21,10 @@ defineProps<{
   /** Stack above another modal. EditField opens on top of Settings, which
    *  already owns an overlay — without this it would render underneath it. */
   z?: number
+  /** Desktop placement. 'top' is for command-palette-style surfaces (the quick
+   *  switcher) that belong high on screen near the typing focus. Ignored on a
+   *  phone, where everything is a sheet at the bottom edge. */
+  align?: 'center' | 'top'
 }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -45,9 +49,9 @@ const sheetStyle = computed(() =>
   <Teleport to="body">
     <div
       class="overlay"
-      :class="{ mobile: isMobile }"
+      :class="{ mobile: isMobile, top: align === 'top' && !isMobile }"
       :style="z ? { zIndex: z } : undefined"
-      @click.self="emit('close')"
+      @mousedown.self="emit('close')"
     >
       <div
         ref="sheet"
@@ -98,7 +102,8 @@ const sheetStyle = computed(() =>
 @keyframes slide-up { from { transform: translateY(16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
 
 /* ── Phone: bottom sheet ──────────────────────────────────────────────── */
-.overlay.mobile { align-items: flex-end; }
+.overlay.top { align-items: flex-start; padding-top: 15vh; }
+.overlay.mobile { align-items: flex-end; padding-top: 0; }
 .modal.sheet {
   width: 100%; max-width: none;
   /* Not 100%: leaving the top of the screen uncovered keeps the app visible

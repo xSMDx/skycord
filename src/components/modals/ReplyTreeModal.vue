@@ -2,6 +2,7 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { X, ZoomIn, ZoomOut, Expand } from 'lucide-vue-next'
 import type { Message, ReplyGraph } from '@/types'
+import ModalBase from './ModalBase.vue'
 import { stripMarkers } from '@/utils/richText'
 
 const props = defineProps<{
@@ -130,9 +131,8 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="rt-overlay" @mousedown.self="emit('close')">
-      <div class="rt-modal" @click.stop>
+  <ModalBase width="min(900px, 94vw)" :z="2000" @close="emit('close')">
+    <div class="rt-modal" @click.stop>
 
         <div class="rt-header">
           <div class="rt-header-text">
@@ -203,32 +203,17 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
           <button class="rt-ctx-item" @click="ctxCopy">Copy text</button>
           <button v-if="isOwn(ctx.msg)" class="rt-ctx-item" @click="ctxEdit">Edit message</button>
         </div>
-      </div>
     </div>
-  </Teleport>
+  </ModalBase>
 </template>
 
 <style scoped>
+/* ModalBase owns the overlay, box chrome and the phone sheet; only the
+   inner layout belongs here now. */
+.rt-modal { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
-
-.rt-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.65);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 2000;
-  animation: rt-fade .12s ease;
-}
 @keyframes rt-fade { from{opacity:0} to{opacity:1} }
-
-.rt-modal {
-  width: min(900px, 94vw); max-width: 94vw;
-  background: var(--bg-panel); border-radius: 12px;
-  display: flex; flex-direction: column;
-  max-height: 78vh; overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0,0,0,.8);
-  animation: rt-pop .15s cubic-bezier(.4,0,.2,1);
-}
 @keyframes rt-pop { from{opacity:0;transform:scale(.93) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
 
 .rt-header {

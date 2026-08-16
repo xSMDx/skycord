@@ -458,6 +458,37 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .send-btn.ready:active { transform: scale(.93); }
 .send-btn:disabled { cursor: not-allowed; }
 
+/* ── Phone ────────────────────────────────────────────────────────────────
+   A media query rather than a .shell.mobile class: this is the composer, the
+   most tapped surface in the app, and it should not depend on a JS-set class
+   to get usable targets. The breakpoint matches useViewport's MOBILE_MAX.
+
+   These could NOT be fixed from ChatApp's stylesheet. Vue scoped CSS stamps
+   its data attribute on the LAST element of a selector, so ChatApp's rule for
+   "input" compiles to input[data-v-chatapp] and never matches a field that
+   lives inside this component. */
+@media (max-width: 768px) {
+  /* Measured at 390px: attach 36x36, GIF and emoji 30x30, send 32x32 — every
+     one of them under the 44px minimum, on the controls used most often. */
+  /* flex-shrink matters here: widening these three made the row wide enough
+     to compete for space, and send — the only one without it — was squeezed
+     to 16px wide. A fixed width is not a width if the parent can override it. */
+  .input-attach,
+  .input-action-btn,
+  .send-btn { width: 44px; height: 44px; flex-shrink: 0; }
+  .input-actions { gap: 0; flex-shrink: 0; }
+
+  /* iOS zooms the page when a focused field is under 16px and never zooms
+     back. This is a platform constraint, not a type choice. */
+  .msg-input { font-size: 16px; }
+
+  /* Hover does not exist on touch, so the only feedback these had was a
+     transform that never fired. Press states, on pointer-down. */
+  .input-attach:active,
+  .input-action-btn:active { color: var(--text-1); transform: scale(.92); }
+  .send-btn:active { transform: scale(.92); }
+}
+
 @keyframes spin { to { transform: rotate(360deg) } }
 .spin { animation: spin .8s linear infinite; }
 

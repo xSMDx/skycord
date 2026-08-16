@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import { Search, MessageCircle, UsersRound } from 'lucide-vue-next'
 import { useApi, type ApiUser } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
+import ModalBase from './ModalBase.vue'
 import type { DM, Group } from '@/types'
 
 const props = defineProps<{ dms: DM[]; groups?: Group[] }>()
@@ -61,9 +62,8 @@ const selectUser = (u: ApiUser) => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="qs-overlay" @click.self="emit('close')">
-      <div class="qs-modal">
+  <ModalBase width="min(520px, 95vw)" align="top" @close="emit('close')">
+    <div class="qs-modal">
         <!-- Search input -->
         <div class="qs-search">
           <Search :size="16" :stroke-width="1.5" class="qs-icon" />
@@ -146,31 +146,17 @@ const selectUser = (u: ApiUser) => {
             Search by username to find any user on Skycord.
           </div>
         </div>
-      </div>
     </div>
-  </Teleport>
+  </ModalBase>
 </template>
 
 <style scoped>
+.qs-modal { overflow: hidden; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 input  { background: none; border: none; outline: none; color: inherit; font: inherit; }
 img    { display: block; width: 100%; height: 100%; object-fit: cover; }
-
-.qs-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.75);
-  display: flex; align-items: flex-start; justify-content: center;
-  padding-top: 15vh; z-index: 1000;
-  animation: fade .12s ease;
-}
 @keyframes fade { from{opacity:0} to{opacity:1} }
-
-.qs-modal {
-  width: min(520px, 95vw); background: var(--bg-chat); border-radius: 10px;
-  box-shadow: 0 16px 64px rgba(0,0,0,.8);
-  animation: drop .15s cubic-bezier(.4,0,.2,1);
-  overflow: hidden;
-}
 @keyframes drop { from{transform:translateY(-12px);opacity:0} to{transform:translateY(0);opacity:1} }
 
 .qs-search {

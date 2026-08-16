@@ -8,6 +8,7 @@
  */
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { X, Video, TriangleAlert } from 'lucide-vue-next'
+import ModalBase from '../modals/ModalBase.vue'
 import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
 
 const emit = defineEmits<{ close: []; confirm: [] }>()
@@ -55,9 +56,8 @@ const close   = () => { stop(); emit('close') }
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="cp-overlay" @mousedown.self="close">
-      <div class="cp-card" role="dialog" aria-label="Camera preview">
+  <ModalBase width="min(480px, 100%)" :z="9500" @close="close">
+    <div class="cp-card" role="dialog" aria-label="Camera preview">
         <div class="cp-head">
           <h2>Ready to video chat?</h2>
           <button class="cp-x" v-tip="'Close'" @click="close"><X :size="18" :stroke-width="2.25" /></button>
@@ -95,26 +95,14 @@ const close   = () => { stop(); emit('close') }
             <Video :size="17" :stroke-width="2.25" /> Turn On Camera
           </button>
         </div>
-      </div>
     </div>
-  </Teleport>
+  </ModalBase>
 </template>
 
 <style scoped>
+.cp-card { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
-
-.cp-overlay {
-  position: fixed; inset: 0; z-index: 9500;
-  background: rgba(0,0,0,.7);
-  display: flex; align-items: center; justify-content: center; padding: 20px;
-}
-.cp-card {
-  width: min(480px, 100%); background: var(--bg-floor);
-  border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
-  padding: 20px; display: flex; flex-direction: column; gap: 14px;
-  box-shadow: 0 16px 48px rgba(0,0,0,.6);
-}
 .cp-head { display: flex; align-items: center; justify-content: space-between; }
 .cp-head h2 { font-size: 18px; font-weight: 700; color: var(--text-1); }
 .cp-x { color: var(--text-3); display: flex; }

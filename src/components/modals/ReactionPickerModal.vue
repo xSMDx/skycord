@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import ModalBase from './ModalBase.vue'
 import { X, Search } from 'lucide-vue-next'
 
 const emit = defineEmits<{ select: [emoji: string]; close: [] }>()
@@ -65,9 +66,8 @@ const select = (emoji: string) => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="rp-overlay" @mousedown.self="emit('close')">
-      <div class="rp-modal" @click.stop>
+  <ModalBase width="420px" :z="2000" @close="emit('close')">
+    <div class="rp-modal" @click.stop>
         <!-- Header -->
         <div class="rp-header">
           <h3>Pick a Reaction</h3>
@@ -110,33 +110,16 @@ const select = (emoji: string) => {
             <p>No emoji found for "{{ search }}"</p>
           </div>
         </div>
-      </div>
     </div>
-  </Teleport>
+  </ModalBase>
 </template>
 
 <style scoped>
+.rp-modal { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 input  { background: none; border: none; outline: none; color: inherit; font: inherit; }
-
-.rp-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.65);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 2000;
-  animation: fade .12s ease;
-}
 @keyframes fade { from{opacity:0} to{opacity:1} }
-
-.rp-modal {
-  width: 420px; max-width: 95vw;
-  background: var(--bg-panel); border-radius: 12px;
-  display: flex; flex-direction: column;
-  max-height: 80vh; overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0,0,0,.8);
-  animation: pop .15s cubic-bezier(.4,0,.2,1);
-}
 @keyframes pop { from{opacity:0;transform:scale(.92) translateY(12px)} to{opacity:1;transform:scale(1) translateY(0)} }
 
 .rp-header {
