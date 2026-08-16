@@ -78,7 +78,7 @@ const save = async () => {
         <!-- Avatar with pencil overlay (badge lives outside the clipped circle) -->
         <button class="eg-avatar" @click="picker = 'change'" aria-label="Change group icon">
           <span class="eg-avatar-inner">
-            <img v-if="avatar" :src="avatar" alt="Group icon" />
+            <Avatar v-if="avatar" :src="avatar" alt="Group icon" />
             <UsersRound v-else :size="40" :stroke-width="2.25" />
           </span>
           <span class="eg-avatar-edit"><Pencil :size="15" :stroke-width="2.25" /></span>

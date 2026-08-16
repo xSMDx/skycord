@@ -128,7 +128,7 @@ onMounted(async () => {
           @click="toggle(f.id)"
         >
           <div class="ig-avatar">
-            <img :src="f.avatar" :alt="f.name" />
+            <Avatar :src="f.avatar" :alt="f.name" :crop="(f as any).avatarCrop" />
             <span class="ig-status" :style="{ background: statusColor[f.status] }" />
           </div>
           <div class="ig-info">

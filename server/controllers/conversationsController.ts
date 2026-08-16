@@ -23,6 +23,7 @@ const shapeGroup = (group: any, memberDocs: any[]) => ({
     username:    m.username,
     displayName: m.displayName,
     avatar:      m.avatar ?? null,
+    avatarCrop:  m.avatarCrop ?? null,
     status:      m.status,
   })),
   lastMessageAt: group.lastMessageAt,
@@ -113,7 +114,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
     })
 
     const memberDocs = await User.find({ _id: { $in: uniqueMembers } })
-      .select('username displayName avatar status').lean()
+      .select('username displayName avatar avatarCrop status').lean()
 
     // Notify every other member in real time so the group shows up in their
     // conversation list immediately.
@@ -137,7 +138,7 @@ export const getMyConversations = async (req: Request, res: Response, next: Next
 
     const allMemberIds = [...new Set(groups.flatMap(g => g.members.map(m => m.toString())))]
     const memberDocs = await User.find({ _id: { $in: allMemberIds } })
-      .select('username displayName avatar status').lean()
+      .select('username displayName avatar avatarCrop status').lean()
     const memberById = new Map(memberDocs.map(m => [m._id.toString(), m]))
 
     const shaped = groups.map(g =>
@@ -190,7 +191,7 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
     }
 
     const partners = await User.find({ _id: { $in: [...byPartner.keys()] } })
-      .select('username displayName avatar status').lean()
+      .select('username displayName avatar avatarCrop status').lean()
 
     // A deleted account leaves messages behind; skip those rather than
     // shipping a row the client can't render a name for.
@@ -201,6 +202,7 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
         username:      p.username,
         displayName:   p.displayName,
         avatar:        p.avatar,
+        avatarCrop:    p.avatarCrop ?? null,
         status:        p.status || 'offline',
         lastMessage:   r.lastKind ? '' : String(r.lastMessage || ''),
         lastMessageAt: r.lastMessageAt,
@@ -262,7 +264,7 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
     // The three socket send paths and the DM REST path were hardened when
     // authorName spoofing was fixed; this one was missed, leaving a client able
     // to post into a group as "Skycord System" or as another member.
-    const sender = await User.findById(userId).select('avatar displayName username').lean()
+    const sender = await User.findById(userId).select('avatar avatarCrop displayName username').lean()
 
     const ids = Array.isArray(replyToIds) ? replyToIds : []
     const targets = ids.length
@@ -280,6 +282,7 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       authorId:       userId,
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
+      authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:        content.trim(),
       replyToIds:     ids,
     })
@@ -292,6 +295,7 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       authorId:       userId,
       authorName:     msg.authorName,
       authorAvatar:   sender?.avatar ?? null,
+      authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:        msg.content,
       reactions:      [],
       pinned:         false,
@@ -326,7 +330,7 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
     }
 
     const members = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar status').lean()
+      .select('username displayName avatar avatarCrop status').lean()
 
     res.json({
       members: members.map(m => ({
@@ -334,6 +338,7 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
         username:    m.username,
         displayName: m.displayName,
         avatar:      m.avatar ?? null,
+        avatarCrop:  m.avatarCrop ?? null,
         status:      m.status,
         isOwner:     group.owner.toString() === m._id.toString(),
       })),
@@ -371,7 +376,7 @@ export const addGroupMembers = async (req: Request, res: Response, next: NextFun
     await group.save()
 
     const memberDocs = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar status').lean()
+      .select('username displayName avatar avatarCrop status').lean()
 
     const io = getIO()
     if (io) {
@@ -429,7 +434,7 @@ export const updateGroup = async (req: Request, res: Response, next: NextFunctio
     await group.save()
 
     const memberDocs = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar status').lean()
+      .select('username displayName avatar avatarCrop status').lean()
     const shaped = shapeGroup(group, memberDocs)
 
     const io = getIO()
@@ -482,7 +487,7 @@ export const leaveGroup = async (req: Request, res: Response, next: NextFunction
 
     if (io) {
       const memberDocs = await User.find({ _id: { $in: group.members } })
-        .select('username displayName avatar status').lean()
+        .select('username displayName avatar avatarCrop status').lean()
       const shaped = shapeGroup(group, memberDocs)
       group.members.forEach(m => io.to(`user:${m.toString()}`).emit('group:updated', shaped))
     }
@@ -542,7 +547,7 @@ export const getInvite = async (req: Request, res: Response, next: NextFunction)
     if (!group) { res.status(404).json({ message: 'This group no longer exists' }); return }
 
     const memberDocs = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar').lean()
+      .select('username displayName avatar avatarCrop').lean()
 
     res.json({
       code:        invite.code,
@@ -585,7 +590,7 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
     }
 
     const memberDocs = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar status').lean()
+      .select('username displayName avatar avatarCrop status').lean()
     const shaped = shapeGroup(group, memberDocs)
 
     if (!alreadyIn) {

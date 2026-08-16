@@ -430,7 +430,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <div class="cb-stage">
         <div v-for="p in others" :key="p.id" class="cb-tile">
-          <div class="cb-av"><img v-if="p.avatar" :src="p.avatar" :alt="p.name" /><template v-else>{{ initial(p.name) }}</template></div>
+          <div class="cb-av"><Avatar v-if="p.avatar" :src="p.avatar" :alt="p.name" :crop="(p as any).avatarCrop" /><template v-else>{{ initial(p.name) }}</template></div>
           <span class="cb-name">{{ p.name }}</span>
         </div>
       </div>

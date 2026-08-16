@@ -9,6 +9,14 @@ export interface Reaction {
  
 export type SystemType = 'rename' | 'icon' | 'add' | 'join' | 'leave' | 'call'
 
+/**
+ * Framing for an animated avatar, as a percentage of the box it is drawn in.
+ * A static avatar is cropped by canvas at upload and needs none, so this is
+ * null for everything but GIFs — and it has to ride along with the avatar
+ * itself, because a GIF drawn without it is framed from its centre.
+ */
+export interface AvatarCrop { zoom: number; x: number; y: number }
+
 export interface Message {
   id:          number
   author:      string
@@ -17,6 +25,7 @@ export interface Message {
   time:        string
   timestamp:   number
   avatar:      string
+  avatarCrop?: AvatarCrop | null
   avatarColor: string
   kind?:       'dm' | 'group' | 'channel' | 'system'
   systemType?: SystemType
@@ -36,6 +45,7 @@ export interface DM {
   id:      string
   name:    string
   avatar:  string
+  avatarCrop?: AvatarCrop | null
   status:  Status
   lastMsg: string
   unread?: number
@@ -47,6 +57,7 @@ export interface Friend {
   name:      string
   username?: string
   avatar:    string
+  avatarCrop?: AvatarCrop | null
   status:    Status
   activity?: string
 }
@@ -56,6 +67,7 @@ export interface GroupMember {
   username:    string
   displayName: string
   avatar:      string | null
+  avatarCrop?: AvatarCrop | null
   status:      Status
   isOwner?:    boolean
 }
@@ -76,6 +88,7 @@ export interface Member {
   id:          string
   name:        string
   avatar:      string
+  avatarCrop?: AvatarCrop | null
   avatarColor: string
   status:      Status
   role?:       Role

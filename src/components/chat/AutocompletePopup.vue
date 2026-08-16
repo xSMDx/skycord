@@ -18,7 +18,7 @@ const emit = defineEmits<{ select: [key: string]; hover: [index: number] }>()
         @click="emit('select', it.key)"
       >
         <span class="ac-icon">
-          <img v-if="it.avatar" :src="it.avatar" :alt="it.title" />
+          <Avatar v-if="it.avatar" :src="it.avatar" :alt="it.title" :crop="(it as any).avatarCrop" />
           <span v-else class="ac-glyph">{{ it.glyph || '/' }}</span>
         </span>
         <span class="ac-text">

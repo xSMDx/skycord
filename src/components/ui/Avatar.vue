@@ -23,8 +23,12 @@ import { useGifBurst, hasHover, motionAllowed, freezeFrame } from '@/composables
 const props = withDefaults(defineProps<{
   src: string
   alt?: string
-  /** Rendered size in px. Square; avatars always are. */
-  size?: number
+  /**
+   * Rendered size in px. Omit to fill the parent instead — most call sites
+   * already have a wrapper with the size baked into its own stylesheet, and
+   * restating that number here would be a second place to change it.
+   */
+  size?: number | null
   crop?: Crop | null
   /** Square instead of round — group icons on some surfaces. */
   square?: boolean
@@ -33,7 +37,7 @@ const props = withDefaults(defineProps<{
   /** Opt out of the motion policy — the profile editor wants to see the real
    *  thing move while you're choosing it. */
   alwaysAnimate?: boolean
-}>(), { alt: '', size: 32, crop: null, square: false, ring: null, alwaysAnimate: false })
+}>(), { alt: '', size: null, crop: null, square: false, ring: null, alwaysAnimate: false })
 
 const animated = computed(() => isAnimated(props.src))
 const { bursting } = useGifBurst()
@@ -65,12 +69,18 @@ const playing = computed(() => {
 
 const shownSrc = computed(() => (playing.value || !poster.value) ? props.src : poster.value)
 
-const boxStyle = computed(() => ({
-  width:  `${props.size}px`,
-  height: `${props.size}px`,
-  borderRadius: props.square ? `${Math.max(4, props.size * 0.22)}px` : '50%',
-  ...(props.ring ? { boxShadow: `0 0 0 2px ${props.ring}` } : {}),
-}))
+const boxStyle = computed(() => {
+  const s = props.size
+  // Without a size the span is 100%/100% and the parent decides, so a wrapper
+  // that already says 32px keeps saying it. The rounding for a square icon
+  // then has no pixel value to scale from, hence the flat radius.
+  return {
+    width:  s ? `${s}px` : '100%',
+    height: s ? `${s}px` : '100%',
+    borderRadius: props.square ? (s ? `${Math.max(4, s * 0.22)}px` : '30%') : '50%',
+    ...(props.ring ? { boxShadow: `0 0 0 2px ${props.ring}` } : {}),
+  }
+})
 
 /** A null crop must cost nothing: object-fit already frames a centred image,
  *  so emit no transform at all rather than an identity one. */

@@ -83,7 +83,7 @@ const statusColor: Record<string, string> = {
           <template v-if="results.length > 0">
             <div v-for="u in results" :key="u.id" class="af-user">
               <div class="af-user-av">
-                <img :src="avatarUrl(u)" :alt="u.displayName" />
+                <Avatar :src="avatarUrl(u)" :alt="u.displayName" :crop="(u as any).avatarCrop" />
                 <span class="af-user-dot" :style="{ background: statusColor[u.status] || '#80848e' }" />
               </div>
               <div class="af-user-info">

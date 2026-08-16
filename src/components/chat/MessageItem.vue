@@ -144,7 +144,7 @@ const onReplyPillLeave = () => {
 
     <div class="msg-left">
       <div v-if="!consecutive && !compact" class="msg-av" @click.stop="emit('clickAuthor', msg.authorId)">
-        <img :src="msg.avatar" :alt="msg.author" />
+        <Avatar :src="msg.avatar" :alt="msg.author" :crop="(msg as any).avatarCrop" />
       </div>
       <span v-else class="msg-ts">{{ msg.time }}</span>
     </div>

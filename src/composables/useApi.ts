@@ -212,6 +212,8 @@ export interface ApiMessage {
   authorId:     string
   authorName:   string
   authorAvatar: string | null
+  /** Framing for an animated authorAvatar; null for static ones. */
+  authorAvatarCrop?: { zoom: number; x: number; y: number } | null
   content:      string
   reactions:    { emoji: string; userIds: string[] }[]
   pinned:       boolean

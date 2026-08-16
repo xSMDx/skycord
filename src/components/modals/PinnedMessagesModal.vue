@@ -31,7 +31,7 @@ const pinned = props.messages.filter(m => m.pinned)
       </template>
       <template v-else>
         <div v-for="m in pinned" :key="m.id" class="pinned-msg">
-          <div class="pm-avatar"><img :src="m.avatar" :alt="m.author" /></div>
+          <div class="pm-avatar"><Avatar :src="m.avatar" :alt="m.author" :crop="(m as any).avatarCrop" /></div>
           <div class="pm-body">
             <div class="pm-meta">
               <span class="pm-author">{{ m.author }}</span>

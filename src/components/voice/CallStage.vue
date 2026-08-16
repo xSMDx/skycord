@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
     <div v-for="t in tiles" :key="t.id" class="s-tile"
          @contextmenu="emit('tileCtx', $event, { id: t.id, name: t.name, avatar: t.avatar, local: t.id === localId })">
       <div class="s-av" :class="{ speaking: t.speaking, ringing: !!t.ring }">
-        <img v-if="t.avatar" :src="t.avatar" :alt="t.name" />
+        <Avatar v-if="t.avatar" :src="t.avatar" :alt="t.name" :crop="(t as any).avatarCrop" />
         <template v-else>{{ initial(t.name) }}</template>
         <span v-if="t.muted" class="s-mute"><MicOff :size="13" :stroke-width="2.25" /></span>
         <!-- Dialling happens BEFORE any video exists, so this layout — not the
@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
             <span class="g-wave g-wave2" />
           </template>
           <div class="g-av">
-            <img v-if="c.avatar" :src="c.avatar" :alt="c.name" />
+            <Avatar v-if="c.avatar" :src="c.avatar" :alt="c.name" :crop="(c as any).avatarCrop" />
             <template v-else>{{ initial(c.name) }}</template>
           </div>
         </div>

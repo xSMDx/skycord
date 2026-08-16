@@ -89,7 +89,7 @@ const selectUser = (u: ApiUser) => {
               @click="emit('openDM', dm); emit('close')"
             >
               <div class="qs-av">
-                <img :src="dm.avatar" :alt="dm.name" />
+                <Avatar :src="dm.avatar" :alt="dm.name" :crop="(dm as any).avatarCrop" />
                 <span class="qs-dot" :style="{ background: statusColor[dm.status] || '#80848e' }" />
               </div>
               <div class="qs-info">
@@ -109,7 +109,7 @@ const selectUser = (u: ApiUser) => {
               @click="emit('openGroup', g); emit('close')"
             >
               <div class="qs-av qs-av-group">
-                <img v-if="g.avatar" :src="g.avatar" :alt="groupLabel(g)" />
+                <Avatar v-if="g.avatar" :src="g.avatar" :alt="groupLabel(g)" />
                 <UsersRound v-else :size="16" :stroke-width="2.25" />
               </div>
               <div class="qs-info">
@@ -129,7 +129,7 @@ const selectUser = (u: ApiUser) => {
               @click="selectUser(u)"
             >
               <div class="qs-av">
-                <img :src="avatarUrl(u)" :alt="u.displayName" />
+                <Avatar :src="avatarUrl(u)" :alt="u.displayName" :crop="(u as any).avatarCrop" />
                 <span class="qs-dot" :style="{ background: statusColor[u.status] || '#80848e' }" />
               </div>
               <div class="qs-info">

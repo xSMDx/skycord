@@ -123,6 +123,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * lost — a far better failure than silence.
      */
     let myAvatar: string | null = null
+    let myAvatarCrop: { zoom: number; x: number; y: number } | null = null
     let myName = username
     let myGroups: { _id: any }[] = []
     // Who is allowed to hear about this user's presence. Populated below.
@@ -150,6 +151,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           // attribute its own message to "Skycord System" or to someone else.
           authorName:     myName,
           authorAvatar:   myAvatar,
+          authorAvatarCrop: myAvatarCrop,
           content:        data.content.trim(),
           replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
         })
@@ -319,6 +321,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorId:       userId,
           authorName:     myName,
           authorAvatar:   myAvatar,
+          authorAvatarCrop: myAvatarCrop,
           content:        data.content.trim(),
           replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
         })
@@ -366,6 +369,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorId:       userId,
           authorName:     myName,
           authorAvatar:   myAvatar,
+          authorAvatarCrop: myAvatarCrop,
           content:        data.content.trim(),
           replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
         })
@@ -380,6 +384,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorId:       userId,
           authorName:     msg.authorName,
           authorAvatar:   myAvatar,
+          authorAvatarCrop: myAvatarCrop,
           content:        msg.content,
           reactions:      [],
           pinned:         false,
@@ -573,13 +578,14 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // write was the reason Do Not Disturb never survived a sign-in.
       const me = await User.findByIdAndUpdate(
         userId, { lastSeenAt: new Date() }, { new: true }
-      ).select('avatar displayName username status').lean()
+      ).select('avatar avatarCrop displayName username status').lean()
       myStatus = presence.isChosenStatus(me?.status) ? me!.status : 'online'
 
       // Looked up once per connection rather than trusting what the client
       // sends per-message. A reconnect after changing your avatar or display
       // name picks the new value up naturally, with no per-message lookup.
       myAvatar = me?.avatar ?? null
+      myAvatarCrop = (me as any)?.avatarCrop ?? null
       myName   = me?.displayName || me?.username || username
 
       // Join a room per group so group:send broadcasts reach every member.

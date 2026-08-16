@@ -799,6 +799,7 @@ const loadDMHistory = async (partnerId: string) => {
       time:        new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp:   new Date(m.createdAt).getTime(),
       avatar:      m.authorAvatar || avatarFor(m.authorName),
+      avatarCrop:  (m as any).authorAvatarCrop ?? null,
       avatarColor: '#5865f2',
       reactions:   (m.reactions || []).map((r: any) => ({
         emoji:   r.emoji,
@@ -868,6 +869,7 @@ const loadGroupHistory = async (groupId: string) => {
       time:        new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp:   new Date(m.createdAt).getTime(),
       avatar:      m.authorAvatar || avatarFor(m.authorName),
+      avatarCrop:  (m as any).authorAvatarCrop ?? null,
       avatarColor: '#5865f2',
       reactions:   (m.reactions || []).map((r: any) => ({
         emoji:   r.emoji,
@@ -968,6 +970,7 @@ const setupSocket = () => {
       time:        new Date(payload.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp:   new Date(payload.createdAt).getTime(),
       avatar:      payload.authorAvatar || avatarFor(payload.authorName),
+      avatarCrop:  payload.authorAvatarCrop ?? null,
       avatarColor: '#5865f2',
       reactions:   [],
       pinned:      false,
@@ -991,6 +994,7 @@ const setupSocket = () => {
         id:      partnerId,
         name:    payload.authorName,
         avatar:  payload.authorAvatar || avatarFor(payload.authorName),
+        avatarCrop: payload.authorAvatarCrop ?? null,
         status:  'online' as any,
         lastMsg: payload.content,
         unread:  1,
@@ -1061,6 +1065,7 @@ const setupSocket = () => {
       time:        new Date(payload.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp:   new Date(payload.createdAt).getTime(),
       avatar:      payload.authorAvatar || avatarFor(payload.authorName),
+      avatarCrop:  payload.authorAvatarCrop ?? null,
       avatarColor: '#5865f2',
       reactions:   [],
       pinned:      false,
@@ -1514,6 +1519,7 @@ const resolveMessageById = async (id: string): Promise<Message | null> => {
       time:        new Date(fetched.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp:   new Date(fetched.createdAt).getTime(),
       avatar:      fetched.authorAvatar || avatarFor(fetched.authorName),
+      avatarCrop:  (fetched as any).authorAvatarCrop ?? null,
       avatarColor: '#5865f2',
       reactions:   [],
       pinned:      fetched.pinned,
@@ -1895,7 +1901,7 @@ onBeforeUnmount(() => {
               @contextmenu="openConversationMenu($event, c)"
             >
               <div class="dm-av">
-                <img :src="c.dm.avatar" :alt="c.dm.name" />
+                <Avatar :src="c.dm.avatar" :alt="c.dm.name" :crop="(c.dm as any).avatarCrop" />
                 <span class="dm-dot" :style="{ background: statusColor(c.dm.status) }" />
               </div>
               <div class="dm-info">
@@ -1918,7 +1924,7 @@ onBeforeUnmount(() => {
               @contextmenu="openConversationMenu($event, c)"
             >
               <div class="grp-av">
-                <img v-if="c.group.avatar" :src="c.group.avatar" :alt="groupDisplayName(c.group)" />
+                <Avatar v-if="c.group.avatar" :src="c.group.avatar" :alt="groupDisplayName(c.group)" />
                 <UsersRound v-else :size="17" :stroke-width="2.25" />
               </div>
               <div class="dm-info">
@@ -1944,7 +1950,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
+            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator || '0000' }}</span>
@@ -2013,7 +2019,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><img :src="myAvatar" alt="me"/></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
+            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator||'0000' }}</span>
@@ -2101,7 +2107,7 @@ onBeforeUnmount(() => {
                 @contextmenu="openUserMenu($event, f)"
               >
                 <div class="f-av">
-                  <img :src="avatarFor(f.username,f.avatar)" :alt="f.displayName"/>
+                  <Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" />
                   <span class="f-dot" :style="{ background: statusColor(f.status) }"/>
                 </div>
                 <div class="f-info">
@@ -2127,7 +2133,7 @@ onBeforeUnmount(() => {
               <div v-for="req in pendingReqs" :key="req._id" class="f-row"
                    @contextmenu="openUserMenu($event, req.requester)">
                 <div class="f-av">
-                  <img :src="avatarFor(req.requester.username,req.requester.avatar)" :alt="req.requester.displayName"/>
+                  <Avatar :src="avatarFor(req.requester.username,req.requester.avatar)" :alt="req.requester.displayName" :crop="(req.requester as any).avatarCrop" />
                   <span class="f-dot" :style="{ background: statusColor(req.requester.status) }"/>
                 </div>
                 <div class="f-info">
@@ -2156,7 +2162,7 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
                  @contextmenu="openUserMenu($event, f)">
-              <div class="an-av"><img :src="avatarFor(f.username,f.avatar)" :alt="f.displayName"/><span class="an-dot" :style="{ background: statusColor(f.status) }"/></div>
+              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><span class="an-dot" :style="{ background: statusColor(f.status) }"/></div>
               <div class="an-info">
                 <span class="an-name">{{ f.displayName||f.username }}</span>
                 <span class="an-sub">{{ statusLabel(f.status) }}</span>
@@ -2186,7 +2192,7 @@ onBeforeUnmount(() => {
               </button>
               <template v-if="view==='dm' && activeDM">
                 <div class="dm-header-av" @click.stop="showUserProfile = activeDM?.id || null">
-                  <img :src="activeDM.avatar" :alt="activeDM.name"/>
+                  <Avatar :src="activeDM.avatar" :alt="activeDM.name" :crop="(activeDM as any).avatarCrop" />
                   <span class="dm-header-dot" :style="{ background: statusColor(activeDM.status) }"/>
                 </div>
                 <!-- `display: contents` on desktop, so the row below is laid out
@@ -2204,7 +2210,7 @@ onBeforeUnmount(() => {
               </template>
               <template v-else-if="view==='group' && activeGroup">
                 <div class="grp-header-av">
-                  <img v-if="activeGroup.avatar" :src="activeGroup.avatar" :alt="groupDisplayName(activeGroup)"/>
+                  <Avatar v-if="activeGroup.avatar" :src="activeGroup.avatar" :alt="groupDisplayName(activeGroup)" />
                   <UsersRound v-else :size="17" :stroke-width="2.25"/>
                 </div>
                 <button class="ch-ident" @click.stop="openConversationDetails">
@@ -2371,7 +2377,7 @@ onBeforeUnmount(() => {
             <div class="mp-section-label">Online — {{ onlineMembers.length }}</div>
             <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
-              <div class="mp-av"><img :src="m.avatar" :alt="m.name"/><span class="mp-dot" :style="{ background: statusColor(m.status) }"/></div>
+              <div class="mp-av"><Avatar :src="m.avatar" :alt="m.name" :crop="(m as any).avatarCrop" /><span class="mp-dot" :style="{ background: statusColor(m.status) }"/></div>
               <div class="mp-info"><span class="mp-name">{{ m.name }}</span><span class="mp-status" :style="{ color: statusColor(m.status) }">{{ statusLabel(m.status) }}</span></div>
             </div>
           </div>
@@ -2384,8 +2390,7 @@ onBeforeUnmount(() => {
             <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
-                <img v-if="m.avatar" :src="m.avatar" :alt="m.displayName || m.username"/>
-                <img v-else :src="avatarFor(m.username)" :alt="m.displayName || m.username"/>
+                <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="(m as any).avatarCrop" />
                 <span class="mp-dot" :style="{ background: statusColor(m.status) }"/>
               </div>
               <div class="mp-info">

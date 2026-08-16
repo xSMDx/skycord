@@ -41,6 +41,7 @@ export const searchUsers = async (req: Request, res: Response, next: NextFunctio
       displayName:   u.displayName,
       discriminator: u.discriminator,
       avatar:        u.avatar,
+      avatarCrop:    u.avatarCrop ?? null,
       status:        presenceFor(u._id.toString(), u.status),
     })) })
   } catch (err) { next(err) }
@@ -89,6 +90,7 @@ export const sendFriendRequest = async (req: Request, res: Response, next: NextF
           displayName:   requester?.displayName   ?? '',
           discriminator: requester?.discriminator ?? '0000',
           avatar:        requester?.avatar        ?? null,
+          avatarCrop:    requester?.avatarCrop    ?? null,
           status:        requester?.status        ?? 'offline',
         },
         createdAt: friendship.createdAt.toISOString(),
@@ -555,13 +557,14 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
 
     const mutualFriends = mutualIds.length
       ? (await User.find({ _id: { $in: mutualIds } })
-          .select('username displayName discriminator avatar status customStatus').lean())
+          .select('username displayName discriminator avatar avatarCrop status customStatus').lean())
           .map((u: any) => ({
             id: u._id.toString(),
             username: u.username,
             displayName: u.displayName,
             discriminator: u.discriminator,
             avatar: u.avatar ?? null,
+            avatarCrop: u.avatarCrop ?? null,
             status: presenceFor(u._id.toString(), u.status),
             customStatus: liveStatus(u.customStatus),
           }))

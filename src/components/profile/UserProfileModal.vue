@@ -201,7 +201,8 @@ const STATUS_COLORS: Record<string, string> = {
               @click="currentId = m.id"
             >
               <span class="up-mav">
-                <img :src="avatarFor(m.username, m.avatar)" :alt="m.displayName || m.username" />
+                <Avatar :src="avatarFor(m.username, m.avatar)" :alt="m.displayName || m.username"
+                       :size="38" :crop="(m as any).avatarCrop" />
                 <span class="up-mdot" :style="{ background: STATUS_COLORS[m.status] || STATUS_COLORS.offline }" />
               </span>
               <span class="up-minfo">

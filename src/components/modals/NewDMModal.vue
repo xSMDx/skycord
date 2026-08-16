@@ -67,7 +67,7 @@ const create = () => {
           @click="toggle(f.id)"
         >
           <div class="ndm-avatar">
-            <img :src="f.avatar" :alt="f.name" />
+            <Avatar :src="f.avatar" :alt="f.name" :crop="(f as any).avatarCrop" />
             <span class="ndm-status" :style="{ background: statusColor[f.status] }" />
           </div>
           <div class="ndm-info">

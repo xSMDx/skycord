@@ -86,15 +86,18 @@ export const resolveMessages = async (messages: any[]) => {
 
   const authorIds = [...new Set(messages.map(m => m.authorId.toString()))]
   const authors = await User.find({ _id: { $in: authorIds } })
-    .select('avatar')
+    .select('avatar avatarCrop')
     .lean()
+  // The crop has to travel with the avatar. Resolving one live and leaving the
+  // other frozen would frame a new GIF with an old author's numbers.
   const avatarByAuthorId = new Map(
-    authors.map(a => [a._id.toString(), a.avatar ?? null])
+    authors.map(a => [a._id.toString(), { src: a.avatar ?? null, crop: (a as any).avatarCrop ?? null }])
   )
 
   return messages.map(m => ({
     ...m,
-    authorAvatar: avatarByAuthorId.get(m.authorId.toString()) ?? null,
+    authorAvatar:     avatarByAuthorId.get(m.authorId.toString())?.src  ?? null,
+    authorAvatarCrop: avatarByAuthorId.get(m.authorId.toString())?.crop ?? null,
     // replyTo is now an array of resolved previews (drop ids that 404 / were deleted).
     replyTo: parentIdsOf(m)
       .map(id => replyPreviewById.get(id))
@@ -146,7 +149,7 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
     // current rather than a stale snapshot, and (b) a client can't attribute
     // its own message to "Skycord System" or to another user's display name.
     // The avatar was hardened previously; the name beside it was missed.
-    const sender = await User.findById(userId).select('avatar displayName username').lean()
+    const sender = await User.findById(userId).select('avatar avatarCrop displayName username').lean()
 
     const msg = await Message.create({
       conversationId: dmConvId(userId, partnerId),
@@ -154,6 +157,7 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
       authorId:       userId,
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
+      authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:        content.trim(),
       replyToIds:     Array.isArray(replyToIds) ? replyToIds : [],
     })

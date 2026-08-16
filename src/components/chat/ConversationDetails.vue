@@ -153,7 +153,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
     <!-- Identity -->
     <div class="cd-id">
       <div class="cd-av">
-        <img v-if="avatar" :src="avatar" :alt="title" />
+        <Avatar v-if="avatar" :src="avatar" :alt="title" />
         <UsersRound v-else-if="kind === 'group'" :size="26" :stroke-width="2" />
         <template v-else>{{ initial(title) }}</template>
       </div>
@@ -188,7 +188,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
           <li v-for="m in members" :key="m.id">
             <button class="cd-member" @click="emit('openMember', m.id)">
               <span class="cd-m-av">
-                <img v-if="m.avatar" :src="m.avatar" :alt="m.displayName || m.username" />
+                <Avatar v-if="m.avatar" :src="m.avatar" :alt="m.displayName || m.username" :crop="(m as any).avatarCrop" />
                 <template v-else>{{ initial(m.displayName || m.username) }}</template>
                 <span
                   class="cd-m-dot"

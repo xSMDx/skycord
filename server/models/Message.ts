@@ -9,6 +9,9 @@ export interface IMessage extends Document {
   authorId:   Types.ObjectId
   authorName: string
   authorAvatar: string | null
+  /** Framing for an animated authorAvatar. Static avatars are cropped at
+   *  upload, so this is null for all but GIFs. */
+  authorAvatarCrop: { zoom: number; x: number; y: number } | null
   content:    string
   systemType: SystemType | null
   reactions:  { emoji: string; userIds: Types.ObjectId[] }[]
@@ -27,6 +30,7 @@ const MessageSchema = new Schema<IMessage>(
     authorId:       { type: Schema.Types.ObjectId, ref: 'User', required: true },
     authorName:     { type: String, required: true },
     authorAvatar:   { type: String, default: null },
+    authorAvatarCrop: { type: { zoom: Number, x: Number, y: Number }, default: null, _id: false },
     content:        { type: String, required: true, maxlength: 4000 },
     systemType:     { type: String, enum: ['rename','icon','add','join','leave','call'], default: null },
     reactions:      [{ emoji: String, userIds: [{ type: Schema.Types.ObjectId, ref: 'User' }] }],

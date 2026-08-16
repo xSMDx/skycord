@@ -3,7 +3,7 @@ import { onMounted, onBeforeUnmount } from 'vue'
 import { Phone, X } from 'lucide-vue-next'
 import { soundRingStart, soundRingStop } from '@/composables/useSocket'
 
-defineProps<{ name: string; avatar: string }>()
+defineProps<{ name: string; avatar: string; avatarCrop?: { zoom: number; x: number; y: number } | null }>()
 const emit = defineEmits<{ accept: []; decline: [] }>()
 
 // Ring for as long as this is up; always stop on teardown (answer/decline/unmount).
@@ -25,7 +25,7 @@ onBeforeUnmount(soundRingStop)
         <div class="ic-av-wrap">
           <span class="ic-ring" />
           <span class="ic-ring ic-ring2" />
-          <img class="ic-av" :src="avatar" :alt="name" />
+          <Avatar class="ic-av" :size="96" :src="avatar" :alt="name" :crop="avatarCrop" />
         </div>
         <div class="ic-name">{{ name }}</div>
         <div class="ic-sub">Incoming Call…</div>

@@ -5,6 +5,10 @@ import App from './App.vue'
 import { applyAppearance } from './composables/useAppearance'
 import { installLongPress } from './composables/useLongPress'
 import { vTip } from './directives/vTip'
+// Registered globally rather than imported thirteen times: an avatar is drawn
+// in nearly every list in the app, and a GIF one is only framed correctly if
+// it goes through this component.
+import Avatar from './components/ui/Avatar.vue'
 
 applyAppearance()   // restore saved theme/accent/density before first paint
 
@@ -37,5 +41,6 @@ window.addEventListener('contextmenu', (e) => {
 })
 
 createApp(App)
+  .component('Avatar', Avatar)
   .directive('tip', vTip)
   .mount('#app')
