@@ -589,6 +589,8 @@ const otherUnread = computed(() => {
 // ── Conversation details ────────────────────────────────────────────────────
 /** Which details screen is open on a phone, and which of its tabs. */
 const showDetails = ref(false)
+/** Open the details screen with its search field already expanded. */
+const detailsSearching = ref(false)
 const detailsTab  = ref<'members' | 'media' | 'pins' | 'links' | 'files'>('members')
 
 /**
@@ -596,6 +598,22 @@ const detailsTab  = ref<'members' | 'media' | 'pins' | 'links' | 'files'>('membe
  * no room grammar for a pushed screen and the panels already exist, so it
  * keeps the old behaviour: a DM opens the profile, a group opens its editor.
  */
+/**
+ * The header's search icon. On a phone the expanding field has nowhere to go —
+ * the row is a back button, a two-line title and three actions — so it opens
+ * the details screen, where search owns the whole header. Desktop keeps the
+ * in-place expansion it has room for.
+ */
+const onSearchTap = () => {
+  if (isMobile.value && (view.value === 'dm' || view.value === 'group')) {
+    detailsTab.value = 'members'
+    detailsSearching.value = true
+    showDetails.value = true
+    return
+  }
+  openSearch()
+}
+
 const openConversationDetails = () => {
   if (isMobile.value && (view.value === 'dm' || view.value === 'group')) {
     detailsTab.value = 'members'
@@ -1712,7 +1730,8 @@ onBeforeUnmount(() => {
       :max-members="view === 'group' ? 10 : undefined"
       :owner-id="activeGroup?.owner"
       v-model:tab="detailsTab"
-      @close="showDetails = false"
+      :start-searching="detailsSearching"
+      @close="showDetails = false; detailsSearching = false"
       @add-members="showInviteGroup = true"
       @open-member="id => { showDetails = false; showUserProfile = id }"
       @open-settings="showEditGroup = true"
@@ -2232,7 +2251,7 @@ onBeforeUnmount(() => {
 
               <!-- Expanding search + filters popup (placeholder) -->
               <div class="ch-search" :class="{ open: searchOpen }" @click.stop>
-                <button v-if="!searchOpen" class="icon-btn icon-btn-search" v-tip="'Search'" @click.stop="openSearch">
+                <button v-if="!searchOpen" class="icon-btn icon-btn-search" v-tip="'Search'" @click.stop="onSearchTap">
                   <Search :size="18" :stroke-width="1.5"/>
                 </button>
                 <Transition name="search-box">

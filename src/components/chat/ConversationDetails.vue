@@ -12,10 +12,10 @@
  * worse than one that admits what isn't built: the shape of the screen is the
  * promise, and hiding it means redesigning the header again later.
  */
-import { computed } from 'vue'
+import { computed, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
   ChevronLeft, Search, Bell, Settings as SettingsIcon,
-  UserPlus, UsersRound, Crown, ChevronRight,
+  UserPlus, UsersRound, Crown, ChevronRight, SlidersHorizontal,
 } from 'lucide-vue-next'
 import { statusColor, statusLabel } from '@/composables/usePresence'
 
@@ -32,6 +32,9 @@ const props = defineProps<{
   maxMembers?: number
   ownerId?: string
   tab: DetailsTab
+  /** Open with the search field already expanded — the chat header's search
+   *  icon lands here rather than expanding in place. */
+  startSearching?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -60,20 +63,84 @@ const countLabel = computed(() => {
 
 const initial = (n: string) => (n || '?').charAt(0).toUpperCase()
 const pick = (t: DetailsTab, ready: boolean) => { if (ready) emit('update:tab', t) }
+
+// ── Search ──────────────────────────────────────────────────────────────────
+/**
+ * The field TAKES OVER the header row rather than appearing beside the action
+ * icons. At 390px there is no room for a usable input plus three 44px buttons,
+ * and a field squeezed into what's left is worse than no field. Bell and
+ * settings step aside while you're typing and come back when you're done —
+ * they aren't gone, they're just not what you're doing right now.
+ */
+const searching = ref(!!props.startSearching)
+const query = ref('')
+const inputEl = ref<HTMLInputElement | null>(null)
+const shell = ref<HTMLElement | null>(null)
+
+const openSearch = async () => {
+  searching.value = true
+  await nextTick()
+  inputEl.value?.focus()
+}
+const closeSearch = () => { searching.value = false; query.value = '' }
+
+/**
+ * Anywhere outside the field and the filter button collapses it. Listens on
+ * pointerdown, not click: a click fires on the nearest common ancestor of its
+ * down and up targets, so dragging to select text in the field and releasing
+ * outside would close the very thing you were using.
+ */
+const onOutside = (e: PointerEvent) => {
+  if (!searching.value) return
+  const t = e.target as HTMLElement
+  if (t.closest('.cd-searchwrap')) return
+  closeSearch()
+}
+onMounted(() => document.addEventListener('pointerdown', onOutside, true))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutside, true))
+
+if (props.startSearching) nextTick(() => inputEl.value?.focus())
 </script>
 
 <template>
   <div class="cd">
     <!-- Header. Back sits where back always sits; the actions match the ones
          the chat header offers, so moving between the two doesn't relearn. -->
-    <header class="cd-head">
-      <button class="cd-icon" aria-label="Back to conversation" @click="emit('close')">
+    <header ref="shell" class="cd-head" :class="{ searching }">
+      <button class="cd-icon cd-back" aria-label="Back to conversation" @click="emit('close')">
         <ChevronLeft :size="22" :stroke-width="2.25" />
       </button>
-      <div class="cd-head-actions">
-        <button class="cd-icon" aria-label="Search this conversation" @click="emit('search')">
-          <Search :size="20" :stroke-width="2" />
+
+      <!-- The field and the filter travel together: the filter only means
+           anything while there's a query to filter. -->
+      <div class="cd-searchwrap">
+        <div class="cd-searchfield" @click="openSearch">
+          <Search class="cd-search-ico" :size="20" :stroke-width="2" />
+          <input
+            v-show="searching"
+            ref="inputEl"
+            v-model="query"
+            class="cd-search-input"
+            type="search"
+            enterkeyhint="search"
+            :placeholder="`Search in ${title}`"
+            :aria-label="`Search in ${title}`"
+            @keydown.esc="closeSearch"
+          />
+        </div>
+        <button
+          v-show="searching"
+          class="cd-icon cd-filter"
+          aria-label="Search filters"
+          @click.stop
+        >
+          <SlidersHorizontal :size="20" :stroke-width="2" />
         </button>
+      </div>
+
+      <!-- Hidden while searching, not removed: keeping them in the layout
+           means the row doesn't reflow when the field opens and closes. -->
+      <div class="cd-head-actions">
         <button class="cd-icon" aria-label="Notification settings" @click="emit('mute')">
           <Bell :size="20" :stroke-width="2" />
         </button>
@@ -161,10 +228,58 @@ const pick = (t: DetailsTab, ready: boolean) => { if (ready) emit('update:tab', 
 
 .cd-head {
   flex-shrink: 0; height: 56px;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 2px;
   padding: 0 4px;
 }
-.cd-head-actions { display: flex; align-items: center; }
+.cd-head-actions { display: flex; align-items: center; flex-shrink: 0; }
+
+/* ── Search ─────────────────────────────────────────────────────────────
+   Collapsed, the field is a 44px circle that reads as an icon. Expanded, it
+   grows along the row and the trailing actions fold away. One element the
+   whole time, so open and close are the same path run in both directions
+   rather than two effects that have to be kept in sync. */
+.cd-searchwrap {
+  display: flex; align-items: center; gap: 2px;
+  flex: 1; min-width: 0; justify-content: flex-end;
+}
+.cd-searchfield {
+  display: flex; align-items: center; gap: 8px;
+  height: 44px; width: 44px; min-width: 44px;
+  padding: 0 11px; border-radius: 22px;
+  border: 1.5px solid transparent; background: transparent;
+  color: var(--text-2); cursor: pointer; overflow: hidden;
+  transition: width .28s cubic-bezier(.2,.8,.3,1),
+              background .2s ease, border-color .2s ease, padding .28s cubic-bezier(.2,.8,.3,1);
+}
+.cd-head.searching .cd-searchfield {
+  width: 100%; cursor: text;
+  background: var(--bg-raised);
+  border-color: var(--accent);
+  padding: 0 14px;
+}
+.cd-search-ico { flex-shrink: 0; }
+.cd-head.searching .cd-search-ico { color: var(--text-3); }
+.cd-search-input {
+  flex: 1; min-width: 0; height: 100%;
+  border: none; background: none; outline: none;
+  color: var(--text-1); font-size: 16px;   /* 16px or iOS zooms the page */
+  /* Cancel the UA's search-field affordances so it matches the app. */
+  appearance: none; -webkit-appearance: none;
+}
+.cd-search-input::-webkit-search-cancel-button { display: none; }
+.cd-search-input::placeholder { color: var(--text-faint); }
+
+/* The trailing actions collapse to zero width so the field can take the row,
+   and animate on width rather than being removed — removing them makes the
+   row jump instead of moving. */
+.cd-head.searching .cd-head-actions { width: 0; overflow: hidden; }
+.cd-head-actions { transition: width .28s cubic-bezier(.2,.8,.3,1); }
+.cd-filter { flex-shrink: 0; color: var(--text-2); }
+.cd-filter:active { background: var(--hover); color: var(--text-1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cd-searchfield, .cd-head-actions { transition: none; }
+}
 .cd-icon {
   display: flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px;
