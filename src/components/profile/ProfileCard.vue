@@ -70,7 +70,14 @@ const avatarSrc = computed(() => avatarFor(props.username, props.avatar ?? null)
 // parsing to get wrong, and animates GIFs identically.
 // Named bannerBg, not banner: a computed sharing the prop's name would shadow
 // it in the template and feed a hex string into the <img> src.
-const bannerBg = computed(() => props.bannerColor || DEFAULT_BANNER)
+// The chosen colour is what you see INSTEAD of an image, never behind one.
+// Painting it underneath meant any transparency in the banner — which older
+// exports had, since they were PNGs with no background fill — showed up as a
+// band of the user's colour across the top of their own profile. A neutral
+// surface behind the image makes that failure invisible instead of alarming,
+// and the colour still does its job the moment the image is removed.
+const bannerBg = computed(() =>
+  props.banner ? DEFAULT_BANNER : (props.bannerColor || DEFAULT_BANNER))
 const statusText = computed(() => props.customStatus?.text?.trim() || '')
 
 const STATUS_COLORS: Record<string, string> = {

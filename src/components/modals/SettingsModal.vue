@@ -647,7 +647,7 @@ const handleLogout = () => { emit('close'); logout() }
                   <span class="acc-row-label">Banner</span>
                   <div class="pf-bnwrap">
                     <button
-                      class="pf-bnbox" :style="{ background: bannerColor || '#1e1f22' }"
+                      class="pf-bnbox" :style="{ background: authUser?.banner ? '#1e1f22' : (bannerColor || '#1e1f22') }"
                       aria-label="Pick banner colour" @click="showBannerPicker = !showBannerPicker"
                     >
                       <AnimatedImage v-if="authUser?.banner" :src="authUser.banner" class="pf-bnimg"
@@ -667,7 +667,7 @@ const handleLogout = () => { emit('close'); logout() }
                   <!-- The colour is still live underneath, so say so rather than
                        leaving the swatch looking like it did nothing. -->
                   <div class="pf-hex">
-                    {{ authUser?.banner ? `Image · ${bannerColor || 'default'} behind it` : (bannerColor || 'Default') }}
+                    {{ authUser?.banner ? `Image · ${bannerColor || 'default'} if removed` : (bannerColor || 'Default') }}
                   </div>
                 </div>
 
