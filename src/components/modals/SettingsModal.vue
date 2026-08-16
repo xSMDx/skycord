@@ -1079,7 +1079,9 @@ img    { display: block; object-fit: cover; }
 
 .pf-bnwrap { position: relative; }
 .pf-bnbox {
-  width: 100%; height: 50px; border-radius: 8px; cursor: pointer;
+  /* 16:5, matching .pc-banner and the crop window. A preview in a different
+     shape is not a preview. */
+  width: 100%; aspect-ratio: 16 / 5; border-radius: 8px; cursor: pointer;
   border: 1px solid rgba(0,0,0,.35); transition: filter .12s;
 }
 .pf-bnbox:hover { filter: brightness(1.25); }
