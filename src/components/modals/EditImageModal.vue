@@ -5,16 +5,40 @@ import { ref, onMounted } from 'vue'
 // shadows the DOM constructor that `new Image()` below relies on for cropping.
 import { X, Image as ImageIcon, RotateCw } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
+import { isAnimated, clampCrop, type Crop } from '@/composables/useCrop'
 
-const props = defineProps<{ src: string }>()
-const emit  = defineEmits<{ apply: [dataUrl: string]; cancel: []; close: [] }>()
+const props = withDefaults(defineProps<{
+  src: string
+  /** 'avatar' is square; 'banner' is the 16:5 strip on the profile card. */
+  shape?: 'avatar' | 'banner'
+}>(), { shape: 'avatar' })
 
-// A canvas export flattens an animated GIF to a single frame, so GIFs are used
-// as-is — animation intact — and the crop/zoom/rotate controls are hidden.
-const isGif = /^data:image\/gif/i.test(props.src) || /\.gif($|\?)/i.test(props.src)
+/**
+ * Two ways out, because there are two kinds of image.
+ *
+ *   apply(dataUrl)  a static image, already cropped by canvas.
+ *   applyCrop(src, crop)  an animated GIF, untouched, plus the framing to
+ *                         re-apply as CSS wherever it's drawn.
+ *
+ * A GIF has to take the second path: drawing it to a canvas would flatten it
+ * to a single frame and the animation — the whole reason it's a GIF — is gone.
+ */
+const emit = defineEmits<{
+  apply: [dataUrl: string]
+  applyCrop: [src: string, crop: Crop]
+  cancel: []
+  close: []
+}>()
 
-const VIEWPORT = 300   // logical px of the square preview
-const OUTPUT   = 256   // exported avatar size
+const animated = isAnimated(props.src)
+
+// The preview is the real aspect of the thing being framed, so what you see
+// while dragging is what lands on the profile.
+const BANNER_RATIO = 16 / 5
+const VIEWPORT   = 300
+const VIEWPORT_H = props.shape === 'banner' ? Math.round(VIEWPORT / BANNER_RATIO) : VIEWPORT
+const OUTPUT     = props.shape === 'banner' ? 1024 : 256
+const OUTPUT_H   = props.shape === 'banner' ? Math.round(1024 / BANNER_RATIO) : 256
 
 const img      = new Image()
 const ready    = ref(false)
@@ -34,7 +58,10 @@ const imgStyle = () => ({
 
 onMounted(() => {
   img.onload = () => {
-    baseCover = VIEWPORT / Math.min(img.naturalWidth, img.naturalHeight)
+    // Cover the viewport in BOTH axes — for a banner the limiting dimension is
+    // usually the height, and fitting to the shorter side alone would leave a
+    // gap down the sides of a wide crop.
+    baseCover = Math.max(VIEWPORT / img.naturalWidth, VIEWPORT_H / img.naturalHeight)
     ready.value = true
   }
   img.src = props.src
@@ -59,19 +86,31 @@ const rotate = () => { rot.value = (rot.value + 90) % 360 }
 const reset  = () => { scale.value = 1; rot.value = 0; tx.value = 0; ty.value = 0 }
 
 const apply = () => {
-  // Pass GIFs straight through — re-encoding through canvas would kill the animation.
-  if (isGif) { emit('apply', props.src); return }
+  /*
+   * Animated: hand back the original plus the framing, expressed in PERCENT of
+   * the container rather than pixels. Percent survives being rendered at a
+   * different size — the same numbers frame the same face at 20px in a message
+   * list and at 300px here, which pixels could never do.
+   */
+  if (animated) {
+    emit('applyCrop', props.src, clampCrop({
+      zoom: scale.value,
+      x: (tx.value / VIEWPORT)   * 100,
+      y: (ty.value / VIEWPORT_H) * 100,
+    }))
+    return
+  }
 
   const canvas = document.createElement('canvas')
-  canvas.width = OUTPUT; canvas.height = OUTPUT
+  canvas.width = OUTPUT; canvas.height = OUTPUT_H
   const ctx = canvas.getContext('2d')
   if (!ctx) { emit('cancel'); return }
 
   const k = OUTPUT / VIEWPORT
   ctx.fillStyle = '#000'
-  ctx.fillRect(0, 0, OUTPUT, OUTPUT)
+  ctx.fillRect(0, 0, OUTPUT, OUTPUT_H)
   ctx.save()
-  ctx.translate(OUTPUT / 2 + tx.value * k, OUTPUT / 2 + ty.value * k)
+  ctx.translate(OUTPUT / 2 + tx.value * k, OUTPUT_H / 2 + ty.value * k)
   ctx.rotate((rot.value * Math.PI) / 180)
   const drawScale = baseCover * scale.value * k
   ctx.scale(drawScale, drawScale)
@@ -92,26 +131,24 @@ const apply = () => {
         </button>
       </div>
 
-      <div class="ei-stage">
-        <!-- GIF: show it whole and animated; cropping would flatten it -->
-        <div v-if="isGif" class="ei-viewport">
-          <img :src="src" class="ei-gif" draggable="false" />
-          <div class="ei-mask"></div>
-        </div>
+      <!-- One viewport for both kinds of image. A GIF used to get its own
+           undraggable preview, which is precisely what made it uncroppable. -->
+      <div class="ei-stage" :class="`ei-${shape}`">
         <div
-          v-else
           class="ei-viewport"
           @pointerdown="onDown" @pointermove="onMove"
           @pointerup="onUp" @pointercancel="onUp"
         >
           <img v-if="ready" :src="src" class="ei-img" :style="imgStyle()" draggable="false" />
-          <div class="ei-mask"></div>
+          <div class="ei-mask" :class="{ 'ei-mask-banner': shape === 'banner' }"></div>
         </div>
       </div>
 
-      <p v-if="isGif" class="ei-gifnote">GIFs keep their animation, so they're used as-is.</p>
+      <p v-if="animated" class="ei-gifnote">
+        Animation is kept — the framing is applied when it's shown, not baked in.
+      </p>
 
-      <div v-if="!isGif" class="ei-controls">
+      <div class="ei-controls">
         <ImageIcon :size="18" :stroke-width="2.25" class="ei-zoom-ico" />
         <input
           v-model.number="scale"
@@ -120,16 +157,16 @@ const apply = () => {
           aria-label="Zoom"
         />
         <ImageIcon :size="22" :stroke-width="2.25" class="ei-zoom-ico" />
-        <button class="ei-rotate" v-tip="'Rotate'" @click="rotate">
+        <button v-if="!animated" class="ei-rotate" v-tip="'Rotate'" @click="rotate">
           <RotateCw :size="18" :stroke-width="2.25" />
         </button>
       </div>
 
       <div class="ei-footer">
-        <button v-if="!isGif" class="ei-reset" @click="reset">Reset</button>
+        <button v-if="true" class="ei-reset" @click="reset">Reset</button>
         <div class="ei-actions">
           <button class="ei-cancel" @click="emit('cancel')">Cancel</button>
-          <button class="ei-apply" :disabled="!isGif && !ready" @click="apply">Apply</button>
+          <button class="ei-apply" :disabled="!animated && !ready" @click="apply">Apply</button>
         </div>
       </div>
     </div>
@@ -150,7 +187,10 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .ei-close:hover { background: var(--hover); color: var(--text-strong); }
 
-.ei-stage { display: flex; justify-content: center; padding: 18px; }
+.ei-stage {
+  aspect-ratio: var(--ei-ratio, 1); display: flex; justify-content: center; padding: 18px; }
+.ei-stage.ei-banner { aspect-ratio: 16 / 5; }
+.ei-mask-banner { border-radius: 8px !important; }
 .ei-viewport {
   position: relative; width: 300px; height: 300px;
   border-radius: 8px; overflow: hidden; background: var(--bg-input);
@@ -159,7 +199,6 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ei-viewport:active { cursor: grabbing; }
 .ei-img { position: absolute; left: 50%; top: 50%; transform-origin: center; will-change: transform; }
 /* GIF preview: whole frame, centred, animation untouched */
-.ei-gif { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; }
 .ei-gifnote { text-align: center; font-size: 12.5px; color: var(--text-3); margin: 10px 0 0; }
 /* Circular alignment mask: darken everything outside the circle + white ring */
 .ei-mask {

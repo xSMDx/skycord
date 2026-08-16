@@ -123,6 +123,7 @@ const STATUS_COLORS: Record<string, string> = {
             :discriminator="user.discriminator"
             :avatar="user.avatar"
             :banner="user.banner"
+            :banner-crop="(user as any).bannerCrop"
             :banner-color="user.bannerColor"
             :status="user.status"
             :custom-status="user.customStatus"

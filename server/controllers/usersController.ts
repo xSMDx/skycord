@@ -169,12 +169,28 @@ export const getPendingRequests = async (req: Request, res: Response, next: Next
 export const updateProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user!.sub
-    const { displayName, bio, status, avatar, bannerColor, banner, customStatus } = req.body
+    const { displayName, bio, status, avatar, bannerColor, banner, customStatus,
+            avatarCrop, bannerCrop } = req.body
 
     const allowed: Record<string, any> = {}
     if (displayName) allowed.displayName = String(displayName).trim().slice(0, 50)
     if (bio !== undefined) allowed.bio   = String(bio).slice(0, 190)
     if (status && ['online','idle','dnd','invisible'].includes(status)) allowed.status = status
+
+    // Crops are three bounded numbers or null. Validated rather than trusted:
+    // they become a CSS transform on every viewer's screen, and an absurd zoom
+    // would blow the avatar out of its container everywhere it appears.
+    const crop = (v: any) => {
+      if (v === null) return null
+      if (!v || typeof v !== 'object') return undefined
+      const n = (x: any, lo: number, hi: number) =>
+        typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : null
+      const zoom = n(v.zoom, 1, 5), x = n(v.x, -100, 100), y = n(v.y, -100, 100)
+      if (zoom === null || x === null || y === null) return undefined
+      return { zoom, x, y }
+    }
+    const ac = crop(avatarCrop); if (ac !== undefined) allowed.avatarCrop = ac
+    const bc = crop(bannerCrop); if (bc !== undefined) allowed.bannerCrop = bc
 
     // null clears the avatar back to the generated default. Otherwise it's
     // either a data URL from the cropper or a remote GIF url — both are just

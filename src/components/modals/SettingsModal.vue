@@ -16,6 +16,7 @@ import GifPickerModal from './GifPickerModal.vue'
 import ColorPicker from '@/components/ui/ColorPicker.vue'
 import ProfileCard from '@/components/profile/ProfileCard.vue'
 import SetStatusModal from '@/components/profile/SetStatusModal.vue'
+import { cropStyle } from '@/composables/useCrop'
 import VoiceVideoSettings from '@/components/voice/VoiceVideoSettings.vue'
 
 const emit = defineEmits<{ close: [] }>()
@@ -290,15 +291,18 @@ const downscale = (dataUrl: string, maxW: number): Promise<string> =>
     img.src = dataUrl
   })
 
+/**
+ * Everything goes through the cropper now — avatars and banners, static and
+ * animated. Banners used to skip it because it was a square 256px exporter,
+ * so a wide strip was left to object-fit and you had no say in the framing.
+ * It takes a shape now, so there's nothing left to skip for.
+ */
 const onAvatarUpload = async (dataUrl: string) => {
-  // Banners skip the cropper entirely: it's a 256px SQUARE exporter built for
-  // avatars, and a square image stretched across a wide banner strip looks
-  // wrong. The card already crops with object-fit: cover.
-  if (imageTarget.value === 'banner') {
-    await saveImage(await downscale(dataUrl, 960))
-    return
-  }
-  avatarUploadSrc.value = dataUrl
+  // Downscale a banner BEFORE editing: the source can be huge, and a 960px
+  // wide working copy is still far more than the 1024px export needs.
+  avatarUploadSrc.value = imageTarget.value === 'banner'
+    ? await downscale(dataUrl, 1600)
+    : dataUrl
   avatarPicker.value = 'edit'
 }
 const saveImage = async (value: string | null) => {
@@ -307,10 +311,33 @@ const saveImage = async (value: string | null) => {
   const label = t === 'avatar'
     ? (value ? 'Avatar updated' : 'Avatar removed')
     : (value ? 'Banner updated' : 'Banner removed')
-  await patchProfile({ [t]: value }, label)
+  await patchProfile(
+    { [t]: value, [t === 'avatar' ? 'avatarCrop' : 'bannerCrop']: null },
+    label,
+  )
 }
 const onAvatarCropped = (dataUrl: string) => saveImage(dataUrl)
-const onAvatarGif     = (url: string)     => saveImage(url)
+
+/**
+ * An animated image comes back untouched, with its framing as numbers. Saving
+ * the crop alongside the source is the only way to keep both the animation and
+ * the framing — baking it would cost the animation, dropping it would cost the
+ * framing.
+ */
+const onAvatarCroppedAnimated = async (src: string, crop: { zoom: number; x: number; y: number }) => {
+  const t = imageTarget.value
+  avatarPicker.value = null
+  await patchProfile(
+    { [t]: src, [t === 'avatar' ? 'avatarCrop' : 'bannerCrop']: crop },
+    t === 'avatar' ? 'Avatar updated' : 'Banner updated',
+  )
+}
+
+/** A GIF from the picker gets framed too, rather than being saved as-is. */
+const onAvatarGif = (url: string) => {
+  avatarUploadSrc.value = url
+  avatarPicker.value = 'edit'
+}
 const removeAvatar = () => { imageTarget.value = 'avatar'; return saveImage(null) }
 const removeBanner = () => { imageTarget.value = 'banner'; return saveImage(null) }
 
@@ -621,7 +648,8 @@ const handleLogout = () => { emit('close'); logout() }
                       class="pf-bnbox" :style="{ background: bannerColor || '#1e1f22' }"
                       aria-label="Pick banner colour" @click="showBannerPicker = !showBannerPicker"
                     >
-                      <img v-if="authUser?.banner" :src="authUser.banner" alt="" class="pf-bnimg" />
+                      <img v-if="authUser?.banner" :src="authUser.banner" alt="" class="pf-bnimg"
+                           :style="cropStyle((authUser as any).bannerCrop)" />
                     </button>
                     <div v-if="showBannerPicker" class="pf-pop">
                       <div class="pf-pop-backdrop" @click="showBannerPicker = false" />
@@ -664,6 +692,7 @@ const handleLogout = () => { emit('close'); logout() }
                   :discriminator="authUser?.discriminator"
                   :avatar="authUser?.avatar"
                   :banner="authUser?.banner"
+                  :banner-crop="(authUser as any)?.bannerCrop"
                   :banner-color="bannerColor"
                   :bio="bioValue"
                   :status="authUser?.status"
@@ -992,7 +1021,9 @@ const handleLogout = () => { emit('close'); logout() }
   <EditImageModal
     v-if="avatarPicker === 'edit'"
     :src="avatarUploadSrc"
+    :shape="imageTarget === 'banner' ? 'banner' : 'avatar'"
     @apply="onAvatarCropped"
+    @apply-crop="onAvatarCroppedAnimated"
     @cancel="avatarPicker = 'change'"
     @close="avatarPicker = null"
   />

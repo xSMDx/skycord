@@ -9,6 +9,7 @@
  */
 import { computed } from 'vue'
 import { Pencil, Plus } from 'lucide-vue-next'
+import { cropStyle, type Crop } from '@/composables/useCrop'
 import { avatarFor } from '@/composables/useAvatar'
 
 const props = withDefaults(defineProps<{
@@ -19,6 +20,9 @@ const props = withDefaults(defineProps<{
   bannerColor?:  string | null
   /** Image or GIF banner. Wins over bannerColor when present. */
   banner?:       string | null
+  /** Framing for a banner that couldn't be baked (a GIF). Static banners are
+   *  stored already-cropped and carry none. */
+  bannerCrop?:   Crop | null
   bio?:          string
   status?:       string
   customStatus?: { text: string } | null
@@ -90,7 +94,7 @@ const memberSinceLabel = computed(() => {
       @keydown.enter.prevent="editable && emit('editBanner')"
       @keydown.space.prevent="editable && emit('editBanner')"
     >
-      <img v-if="banner" :src="banner" alt="" class="pc-bimg" />
+      <img v-if="banner" :src="banner" alt="" class="pc-bimg" :style="cropStyle(bannerCrop)" />
       <span v-if="editable" class="pc-bpencil"><Pencil :size="15" :stroke-width="2.25" /></span>
     </div>
 

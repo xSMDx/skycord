@@ -22,6 +22,9 @@ export interface IUserDocument extends Document {
   lastSeenAt:    Date
   bannerColor:   string | null
   banner:        string | null
+  /** Render-time framing for images that can't be baked. See ICrop. */
+  avatarCrop:    ICrop | null
+  bannerCrop:    ICrop | null
   customStatus:  ICustomStatus | null
   convPrefs:     Map<string, IConvPref>
   createdAt:     Date
@@ -43,6 +46,24 @@ export interface IUserDocument extends Document {
  * nullable date makes "muted forever" and "not muted" both read as "no end
  * date", which is indistinguishable on read and on the wire.
  */
+/**
+ * A crop applied at RENDER time rather than baked into the image.
+ *
+ * Static images are cropped by canvas on upload and stored already-cropped.
+ * An animated GIF cannot be: drawing it to a canvas flattens it to a single
+ * frame and the animation is gone. So a GIF's framing is stored as numbers
+ * and re-applied as a CSS transform wherever the image is drawn.
+ *
+ *   zoom  1 = fitted (cover). Above 1 magnifies.
+ *   x, y  offset from centre as a PERCENTAGE of the container, so one crop
+ *         renders the same at 20px in a message list and at 80px on a profile.
+ */
+export interface ICrop {
+  zoom: number
+  x:    number
+  y:    number
+}
+
 export interface IConvPref {
   pinned:     boolean
   muted:      boolean
@@ -81,6 +102,9 @@ export interface PublicUser {
   isVerified:    boolean
   bannerColor:   string | null
   banner:        string | null
+  /** Render-time framing for images that can't be baked. See ICrop. */
+  avatarCrop:    ICrop | null
+  bannerCrop:    ICrop | null
   customStatus:  ICustomStatus | null
   createdAt:     Date
 }
@@ -135,6 +159,10 @@ const UserSchema = new Schema<IUserDocument, IUserModel>(
     // stored so removing the image falls back to the colour you had rather
     // than to the default.
     banner:       { type: String,  default: null },
+    // null means "no crop", which is what every existing row has and what a
+    // baked static image needs — so this is additive, with no migration.
+    avatarCrop:   { type: { zoom: Number, x: Number, y: Number }, default: null, _id: false },
+    bannerCrop:   { type: { zoom: Number, x: Number, y: Number }, default: null, _id: false },
     customStatus: {
       type: new Schema<ICustomStatus>({
         text:    { type: String, default: '', maxlength: 128 },
@@ -190,6 +218,8 @@ UserSchema.methods.toPublicJSON = function (): PublicUser {
     status:        effectiveStatus(this.status, this._id.toString()),
     isVerified:    this.isVerified,
     bannerColor:   this.bannerColor ?? null,
+    avatarCrop:    this.avatarCrop ?? null,
+    bannerCrop:    this.bannerCrop ?? null,
     banner:        this.banner ?? null,
     // Expired statuses are filtered here, so no caller can render a stale one.
     customStatus:  liveStatus(this.customStatus),
