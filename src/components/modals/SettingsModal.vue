@@ -16,7 +16,8 @@ import GifPickerModal from './GifPickerModal.vue'
 import ColorPicker from '@/components/ui/ColorPicker.vue'
 import ProfileCard from '@/components/profile/ProfileCard.vue'
 import SetStatusModal from '@/components/profile/SetStatusModal.vue'
-import { cropStyle } from '@/composables/useCrop'
+
+import AnimatedImage from '@/components/ui/AnimatedImage.vue'
 import VoiceVideoSettings from '@/components/voice/VoiceVideoSettings.vue'
 
 const emit = defineEmits<{ close: [] }>()
@@ -648,8 +649,8 @@ const handleLogout = () => { emit('close'); logout() }
                       class="pf-bnbox" :style="{ background: bannerColor || '#1e1f22' }"
                       aria-label="Pick banner colour" @click="showBannerPicker = !showBannerPicker"
                     >
-                      <img v-if="authUser?.banner" :src="authUser.banner" alt="" class="pf-bnimg"
-                           :style="cropStyle((authUser as any).bannerCrop)" />
+                      <AnimatedImage v-if="authUser?.banner" :src="authUser.banner" class="pf-bnimg"
+                                     :crop="(authUser as any).bannerCrop" />
                     </button>
                     <div v-if="showBannerPicker" class="pf-pop">
                       <div class="pf-pop-backdrop" @click="showBannerPicker = false" />

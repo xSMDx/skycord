@@ -2,19 +2,23 @@
 /**
  * The one place an avatar is drawn.
  *
- * Exists because of animated GIFs. A static avatar is cropped by canvas at
- * upload and stored already-cropped, so every `<img>` in the app could just
- * point at it. A GIF can't be: drawing it to a canvas flattens it to a single
- * frame. Its framing therefore has to live as numbers and be re-applied as a
- * CSS transform at every place the avatar appears — which is only maintainable
- * if there IS one place.
+ * Exists for two reasons, both about animated images.
  *
- * The crop is stored as a zoom plus an offset in PERCENT of the container, not
- * pixels, so the same numbers frame the face identically at 20px in a message
- * list and at 80px on a profile card.
+ * FRAMING. A static avatar is cropped by canvas at upload and stored
+ * already-cropped, so any `<img>` could point at it. A GIF can't be — drawing
+ * it to a canvas flattens it to one frame — so its framing lives as numbers
+ * and is re-applied as a CSS transform wherever it appears. That's only
+ * maintainable if there IS one place.
+ *
+ * MOTION. A member list of twenty looping GIFs is twenty things competing with
+ * the message you're reading. They hold still and move only when there's a
+ * reason: hover on a pointer device, a shared periodic burst on touch. See
+ * useGifPlayback for why the burst is one timer rather than one per avatar.
  */
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import type { Crop } from '@/composables/useCrop'
+import { isAnimated } from '@/composables/useCrop'
+import { useGifBurst, hasHover, motionAllowed, freezeFrame } from '@/composables/useGifPlayback'
 
 const props = withDefaults(defineProps<{
   src: string
@@ -22,11 +26,44 @@ const props = withDefaults(defineProps<{
   /** Rendered size in px. Square; avatars always are. */
   size?: number
   crop?: Crop | null
-  /** Square instead of round — group icons in some surfaces. */
+  /** Square instead of round — group icons on some surfaces. */
   square?: boolean
-  /** Ring colour for a speaking/selected state, if the caller wants one. */
+  /** Ring colour for a speaking or selected state. */
   ring?: string | null
-}>(), { alt: '', size: 32, crop: null, square: false, ring: null })
+  /** Opt out of the motion policy — the profile editor wants to see the real
+   *  thing move while you're choosing it. */
+  alwaysAnimate?: boolean
+}>(), { alt: '', size: 32, crop: null, square: false, ring: null, alwaysAnimate: false })
+
+const animated = computed(() => isAnimated(props.src))
+const { bursting } = useGifBurst()
+
+/** Frozen first frame. null when we couldn't make one (cross-origin GIF). */
+const poster = ref<string | null>(null)
+const hovering = ref(false)
+
+const loadPoster = async () => {
+  poster.value = animated.value && motionAllowed && !props.alwaysAnimate
+    ? await freezeFrame(props.src)
+    : null
+}
+onMounted(loadPoster)
+watch(() => props.src, loadPoster)
+
+/**
+ * Show the live image when it should be moving, the poster when it shouldn't.
+ * With no poster (cross-origin) there is nothing to fall back TO, so it plays
+ * — a broken picture would be worse than an unwanted animation.
+ */
+const playing = computed(() => {
+  if (!animated.value) return true
+  if (props.alwaysAnimate) return true
+  if (!motionAllowed) return false          // reduced motion: never
+  if (!poster.value) return true            // no still to show
+  return hasHover ? hovering.value : bursting.value
+})
+
+const shownSrc = computed(() => (playing.value || !poster.value) ? props.src : poster.value)
 
 const boxStyle = computed(() => ({
   width:  `${props.size}px`,
@@ -35,25 +72,25 @@ const boxStyle = computed(() => ({
   ...(props.ring ? { boxShadow: `0 0 0 2px ${props.ring}` } : {}),
 }))
 
-/**
- * No crop is the common case and must cost nothing: `object-fit: cover` alone
- * already frames a centred image correctly, so a null crop emits no transform
- * at all rather than an identity one.
- */
+/** A null crop must cost nothing: object-fit already frames a centred image,
+ *  so emit no transform at all rather than an identity one. */
 const imgStyle = computed(() => {
   const c = props.crop
   if (!c || (c.zoom === 1 && c.x === 0 && c.y === 0)) return undefined
   return {
     transform: `translate(${c.x}%, ${c.y}%) scale(${c.zoom})`,
-    // Scaling from the centre keeps the offset meaning the same at any size.
     transformOrigin: 'center center',
   }
 })
 </script>
 
 <template>
-  <span class="av" :style="boxStyle">
-    <img :src="src" :alt="alt" :style="imgStyle" draggable="false" />
+  <span
+    class="av" :style="boxStyle"
+    @pointerenter="hovering = true"
+    @pointerleave="hovering = false"
+  >
+    <img :src="shownSrc" :alt="alt" :style="imgStyle" draggable="false" />
     <slot />
   </span>
 </template>
@@ -63,12 +100,12 @@ const imgStyle = computed(() => {
   position: relative; display: inline-block; flex-shrink: 0;
   overflow: hidden;                 /* the crop IS this clip */
   background: var(--bg-deep);
-  /* Own stacking context, so a scaled GIF can't paint over a neighbour. */
+  /* Its own stacking context, so a scaled GIF can't paint over a neighbour. */
   isolation: isolate;
 }
 .av img {
   width: 100%; height: 100%;
-  object-fit: cover;                /* frames a null-crop image on its own */
+  object-fit: cover;                /* frames a null-crop image by itself */
   display: block;
   user-select: none; -webkit-user-drag: none;
 }

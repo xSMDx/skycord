@@ -9,7 +9,8 @@
  */
 import { computed } from 'vue'
 import { Pencil, Plus } from 'lucide-vue-next'
-import { cropStyle, type Crop } from '@/composables/useCrop'
+import type { Crop } from '@/composables/useCrop'
+import AnimatedImage from '@/components/ui/AnimatedImage.vue'
 import { avatarFor } from '@/composables/useAvatar'
 
 const props = withDefaults(defineProps<{
@@ -94,7 +95,7 @@ const memberSinceLabel = computed(() => {
       @keydown.enter.prevent="editable && emit('editBanner')"
       @keydown.space.prevent="editable && emit('editBanner')"
     >
-      <img v-if="banner" :src="banner" alt="" class="pc-bimg" :style="cropStyle(bannerCrop)" />
+      <AnimatedImage v-if="banner" :src="banner" class="pc-bimg" :crop="bannerCrop" />
       <span v-if="editable" class="pc-bpencil"><Pencil :size="15" :stroke-width="2.25" /></span>
     </div>
 

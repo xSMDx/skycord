@@ -35,8 +35,8 @@ const animated = isAnimated(props.src)
 // The preview is the real aspect of the thing being framed, so what you see
 // while dragging is what lands on the profile.
 const BANNER_RATIO = 16 / 5
-const VIEWPORT   = 300
-const VIEWPORT_H = props.shape === 'banner' ? Math.round(VIEWPORT / BANNER_RATIO) : VIEWPORT
+const VIEWPORT   = props.shape === 'banner' ? 340 : 300
+const VIEWPORT_H = props.shape === 'banner' ? 106 : 300
 const OUTPUT     = props.shape === 'banner' ? 1024 : 256
 const OUTPUT_H   = props.shape === 'banner' ? Math.round(1024 / BANNER_RATIO) : 256
 
@@ -140,7 +140,7 @@ const apply = () => {
           @pointerup="onUp" @pointercancel="onUp"
         >
           <img v-if="ready" :src="src" class="ei-img" :style="imgStyle()" draggable="false" />
-          <div class="ei-mask" :class="{ 'ei-mask-banner': shape === 'banner' }"></div>
+          <div class="ei-mask"></div>
         </div>
       </div>
 
@@ -187,15 +187,17 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .ei-close:hover { background: var(--hover); color: var(--text-strong); }
 
-.ei-stage {
-  aspect-ratio: var(--ei-ratio, 1); display: flex; justify-content: center; padding: 18px; }
-.ei-stage.ei-banner { aspect-ratio: 16 / 5; }
-.ei-mask-banner { border-radius: 8px !important; }
+.ei-stage { display: flex; justify-content: center; padding: 18px; }
 .ei-viewport {
-  position: relative; width: 300px; height: 300px;
+  position: relative;
+  /* Driven by the shape, so what you drag is the shape you get. */
+  width: var(--ei-w, 300px); height: var(--ei-h, 300px);
   border-radius: 8px; overflow: hidden; background: var(--bg-input);
   cursor: grab; touch-action: none;
 }
+/* 16:5 — the same strip the profile card draws, so the preview isn't a
+   promise the card then breaks. */
+.ei-stage.ei-banner .ei-viewport { --ei-w: 340px; --ei-h: 106px; }
 .ei-viewport:active { cursor: grabbing; }
 .ei-img { position: absolute; left: 50%; top: 50%; transform-origin: center; will-change: transform; }
 /* GIF preview: whole frame, centred, animation untouched */
@@ -206,6 +208,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.9), 0 0 0 9999px rgba(0,0,0,.55);
   border-radius: 50%;
 }
+/* Banners are a rectangle. Showing a circle here would frame the image
+   against a shape it is never going to be drawn in. */
+.ei-stage.ei-banner .ei-mask { border-radius: 8px; }
 
 .ei-controls {
   display: flex; align-items: center; gap: 12px;
