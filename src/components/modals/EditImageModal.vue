@@ -35,10 +35,37 @@ const animated = isAnimated(props.src)
 // The preview is the real aspect of the thing being framed, so what you see
 // while dragging is what lands on the profile.
 const BANNER_RATIO = 16 / 5
-const VIEWPORT   = props.shape === 'banner' ? 340 : 300
-const VIEWPORT_H = props.shape === 'banner' ? 106 : 300
-const OUTPUT     = props.shape === 'banner' ? 1024 : 256
-const OUTPUT_H   = props.shape === 'banner' ? Math.round(1024 / BANNER_RATIO) : 256
+const banner = props.shape === 'banner'
+
+/*
+ * Two rectangles, deliberately different sizes.
+ *
+ *   STAGE   the area you drag inside. Bigger than the window, so you can see
+ *           the parts of the image you're about to cut off and judge the
+ *           framing against them.
+ *   WINDOW  the bright rounded rect. This is what actually gets kept, and
+ *           every measurement below is against IT, not the stage.
+ *
+ * They used to be one rectangle. That made the banner editor a letterbox with
+ * no context around it — you were framing blind — and it meant the exported
+ * crop was measured against the stage.
+ */
+const STAGE_W  = banner ? 340 : 300
+const STAGE_H  = banner ? 240 : 300
+const CROP_W   = banner ? 304 : 300
+const CROP_H   = banner ? Math.round(304 / BANNER_RATIO) : 300   // 95
+
+/** The geometry above, handed to CSS. One source of truth: hardcoding these
+ *  sizes in the stylesheet too would let the drag area and the export maths
+ *  drift apart without anything failing loudly. */
+const stageVars = {
+  '--st-w': STAGE_W + 'px', '--st-h': STAGE_H + 'px',
+  '--cw': CROP_W + 'px',  '--ch': CROP_H + 'px',
+  '--cr': banner ? '12px' : '50%',
+}
+
+const OUTPUT   = banner ? 1024 : 256
+const OUTPUT_H = banner ? Math.round(1024 / BANNER_RATIO) : 256
 
 const img      = new Image()
 const ready    = ref(false)
@@ -61,7 +88,7 @@ onMounted(() => {
     // Cover the viewport in BOTH axes — for a banner the limiting dimension is
     // usually the height, and fitting to the shorter side alone would leave a
     // gap down the sides of a wide crop.
-    baseCover = Math.max(VIEWPORT / img.naturalWidth, VIEWPORT_H / img.naturalHeight)
+    baseCover = Math.max(CROP_W / img.naturalWidth, CROP_H / img.naturalHeight)
     ready.value = true
   }
   img.src = props.src
@@ -95,8 +122,10 @@ const apply = () => {
   if (animated) {
     emit('applyCrop', props.src, clampCrop({
       zoom: scale.value,
-      x: (tx.value / VIEWPORT)   * 100,
-      y: (ty.value / VIEWPORT_H) * 100,
+      // Percent OF THE WINDOW, since that's the box the crop is rendered
+      // into everywhere else.
+      x: (tx.value / CROP_W) * 100,
+      y: (ty.value / CROP_H) * 100,
     }))
     return
   }
@@ -106,7 +135,7 @@ const apply = () => {
   const ctx = canvas.getContext('2d')
   if (!ctx) { emit('cancel'); return }
 
-  const k = OUTPUT / VIEWPORT
+  const k = OUTPUT / CROP_W
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, OUTPUT, OUTPUT_H)
   ctx.save()
@@ -133,14 +162,16 @@ const apply = () => {
 
       <!-- One viewport for both kinds of image. A GIF used to get its own
            undraggable preview, which is precisely what made it uncroppable. -->
-      <div class="ei-stage" :class="`ei-${shape}`">
+      <div class="ei-stage" :class="`ei-${shape}`" :style="stageVars">
         <div
           class="ei-viewport"
           @pointerdown="onDown" @pointermove="onMove"
           @pointerup="onUp" @pointercancel="onUp"
         >
           <img v-if="ready" :src="src" class="ei-img" :style="imgStyle()" draggable="false" />
-          <div class="ei-mask"></div>
+          <!-- The bright window. Its huge outer shadow is what dims everything
+               around it, so the dim and the cut-out can never disagree. -->
+          <div class="ei-window"></div>
         </div>
       </div>
 
@@ -187,30 +218,35 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .ei-close:hover { background: var(--hover); color: var(--text-strong); }
 
-.ei-stage { display: flex; justify-content: center; padding: 18px; }
+.ei-stage {
+  display: flex; justify-content: center; padding: 18px;
+}
 .ei-viewport {
   position: relative;
-  /* Driven by the shape, so what you drag is the shape you get. */
-  width: var(--ei-w, 300px); height: var(--ei-h, 300px);
+  width: var(--st-w, 300px); height: var(--st-h, 300px);
   border-radius: 8px; overflow: hidden; background: var(--bg-input);
   cursor: grab; touch-action: none;
 }
 /* 16:5 — the same strip the profile card draws, so the preview isn't a
    promise the card then breaks. */
-.ei-stage.ei-banner .ei-viewport { --ei-w: 340px; --ei-h: 106px; }
 .ei-viewport:active { cursor: grabbing; }
 .ei-img { position: absolute; left: 50%; top: 50%; transform-origin: center; will-change: transform; }
 /* GIF preview: whole frame, centred, animation untouched */
 .ei-gifnote { text-align: center; font-size: 12.5px; color: var(--text-3); margin: 10px 0 0; }
 /* Circular alignment mask: darken everything outside the circle + white ring */
-.ei-mask {
-  position: absolute; inset: 0; pointer-events: none;
+/* The kept region. Everything outside is dimmed by this element's own
+   9999px outer shadow, so there is exactly one source of truth for where the
+   crop ends — a separate dimming layer could drift out of alignment with it. */
+.ei-window {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--cw, 300px); height: var(--ch, 300px);
+  pointer-events: none;
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.9), 0 0 0 9999px rgba(0,0,0,.55);
-  border-radius: 50%;
+  border-radius: var(--cr, 50%);
 }
 /* Banners are a rectangle. Showing a circle here would frame the image
    against a shape it is never going to be drawn in. */
-.ei-stage.ei-banner .ei-mask { border-radius: 8px; }
 
 .ei-controls {
   display: flex; align-items: center; gap: 12px;
