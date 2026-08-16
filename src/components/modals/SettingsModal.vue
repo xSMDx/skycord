@@ -634,7 +634,8 @@ const handleLogout = () => { emit('close'); logout() }
                 <div class="pf-field">
                   <span class="acc-row-label">Avatar</span>
                   <div class="pf-avrow">
-                    <img :src="avatarFor(authUser?.username||'you', authUser?.avatar)" class="pf-av" alt="" />
+                    <AnimatedImage :src="avatarFor(authUser?.username||'you', authUser?.avatar)"
+                                   class="pf-av" :crop="(authUser as any)?.avatarCrop" />
                     <div class="pf-avbtns">
                       <button class="acc-btn" @click="openImagePicker('avatar')">Change</button>
                       <button class="acc-btn pf-danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove</button>
@@ -694,6 +695,7 @@ const handleLogout = () => { emit('close'); logout() }
                   :avatar="authUser?.avatar"
                   :banner="authUser?.banner"
                   :banner-crop="(authUser as any)?.bannerCrop"
+                  :avatar-crop="(authUser as any)?.avatarCrop"
                   :banner-color="bannerColor"
                   :bio="bioValue"
                   :status="authUser?.status"

@@ -124,6 +124,7 @@ const STATUS_COLORS: Record<string, string> = {
             :avatar="user.avatar"
             :banner="user.banner"
             :banner-crop="(user as any).bannerCrop"
+            :avatar-crop="(user as any).avatarCrop"
             :banner-color="user.bannerColor"
             :status="user.status"
             :custom-status="user.customStatus"

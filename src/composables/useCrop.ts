@@ -31,8 +31,8 @@ export const isAnimated = (src?: string | null): boolean =>
  *  framing the server will refuse to store. */
 export const clampCrop = (c: Crop): Crop => ({
   zoom: Math.min(5, Math.max(1, c.zoom)),
-  x:    Math.min(100, Math.max(-100, c.x)),
-  y:    Math.min(100, Math.max(-100, c.y)),
+  x:    Math.min(1000, Math.max(-1000, c.x)),
+  y:    Math.min(1000, Math.max(-1000, c.y)),
 })
 
 /** The CSS a cropped image needs. Returns undefined for an identity crop so

@@ -158,6 +158,7 @@ onBeforeUnmount(() => {
         :avatar="view.avatar"
         :banner="view.banner"
         :banner-crop="(view as any).bannerCrop"
+        :avatar-crop="(view as any).avatarCrop"
         :banner-color="view.bannerColor"
         :status="view.status"
         :custom-status="view.customStatus"

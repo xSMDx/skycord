@@ -6,6 +6,7 @@ import ChangeIconModal from './ChangeIconModal.vue'
 import EditImageModal from './EditImageModal.vue'
 import GifPickerModal from './GifPickerModal.vue'
 import { useApi } from '@/composables/useApi'
+import type { Crop } from '@/composables/useCrop'
 import type { Group } from '@/types'
 
 const props = defineProps<{ group: Group }>()
@@ -24,7 +25,25 @@ const uploadSrc = ref('')
 
 const onUpload = (dataUrl: string) => { uploadSrc.value = dataUrl; picker.value = 'edit' }
 const onCropped = (dataUrl: string) => { avatar.value = dataUrl; picker.value = null }
-const onGif = (url: string) => { avatar.value = url; picker.value = null }
+
+/**
+ * An animated icon can't be baked — the canvas would flatten the animation —
+ * so the source is kept as-is.
+ *
+ * The FRAMING is dropped here, unlike avatars and banners. Group icons live on
+ * the Conversation document, which has no crop field, so there is nowhere to
+ * put it; storing it only in this component would show a zoom that vanished on
+ * reload, which is worse than not offering one. Adding Conversation.avatarCrop
+ * is the follow-up. Until then this at least SAVES — the Apply button was
+ * emitting into a listener that didn't exist and doing nothing at all.
+ */
+const onCroppedAnimated = (src: string, _crop: Crop) => {
+  avatar.value = src; picker.value = null
+}
+
+/** A picked GIF goes through the editor like an uploaded one. It used to be
+ *  written straight to the icon, so it could never be framed. */
+const onGif = (url: string) => { uploadSrc.value = url; picker.value = 'edit' }
 
 const save = async () => {
   if (saving.value) return
@@ -98,6 +117,7 @@ const save = async () => {
       v-if="picker === 'edit'"
       :src="uploadSrc"
       @apply="onCropped"
+      @apply-crop="onCroppedAnimated"
       @cancel="picker = 'change'"
       @close="picker = null"
     />

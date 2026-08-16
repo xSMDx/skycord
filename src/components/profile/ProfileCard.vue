@@ -21,9 +21,10 @@ const props = withDefaults(defineProps<{
   bannerColor?:  string | null
   /** Image or GIF banner. Wins over bannerColor when present. */
   banner?:       string | null
-  /** Framing for a banner that couldn't be baked (a GIF). Static banners are
+  /** Framing for images that couldn't be baked (GIFs). Static ones are
    *  stored already-cropped and carry none. */
   bannerCrop?:   Crop | null
+  avatarCrop?:   Crop | null
   bio?:          string
   status?:       string
   customStatus?: { text: string } | null
@@ -108,7 +109,7 @@ const memberSinceLabel = computed(() => {
         @keydown.enter.prevent="avatarActs && onAvatar()"
         @keydown.space.prevent="avatarActs && onAvatar()"
       >
-        <img :src="avatarSrc" :alt="name" />
+        <AnimatedImage :src="avatarSrc" :alt="name" :crop="avatarCrop" />
         <span v-if="editable" class="pc-apencil"><Pencil :size="19" :stroke-width="2.25" /></span>
       </div>
       <span class="pc-dot" :style="{ background: dotColor }" />

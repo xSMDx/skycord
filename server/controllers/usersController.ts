@@ -185,7 +185,12 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
       if (!v || typeof v !== 'object') return undefined
       const n = (x: any, lo: number, hi: number) =>
         typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : null
-      const zoom = n(v.zoom, 1, 5), x = n(v.x, -100, 100), y = n(v.y, -100, 100)
+      // ±100% of the window is NOT enough headroom. A banner window is 95px
+      // tall inside a 240px stage, so an ordinary vertical drag reaches ~210%
+      // — the old bound truncated it and stored a framing the user never
+      // chose. The editor now constrains panning to the image's own edges;
+      // this stays only as a guard against absurd values.
+      const zoom = n(v.zoom, 1, 5), x = n(v.x, -1000, 1000), y = n(v.y, -1000, 1000)
       if (zoom === null || x === null || y === null) return undefined
       return { zoom, x, y }
     }

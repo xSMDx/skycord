@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 // Aliased, for two reasons: PhImage and PhImageSquare both map to Lucide's
 // single Image, which would be a duplicate identifier; and an unaliased `Image`
 // shadows the DOM constructor that `new Image()` below relies on for cropping.
@@ -102,11 +102,35 @@ const onDown = (e: PointerEvent) => {
   startX = e.clientX; startY = e.clientY; startTx = tx.value; startTy = ty.value
   ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
 }
+/**
+ * How far the image may be nudged before a corner of the window would show
+ * empty space. Nothing outside this is a framing anyone wants, and allowing it
+ * also produced offsets past 100% of the window — which the server then
+ * clamped, silently saving a DIFFERENT framing than the one on screen.
+ */
+const maxOffset = () => {
+  const s = baseCover * scale.value
+  return {
+    x: Math.max(0, (img.naturalWidth  * s - CROP_W) / 2),
+    y: Math.max(0, (img.naturalHeight * s - CROP_H) / 2),
+  }
+}
+const clampPan = () => {
+  const m = maxOffset()
+  tx.value = Math.min(m.x, Math.max(-m.x, tx.value))
+  ty.value = Math.min(m.y, Math.max(-m.y, ty.value))
+}
+
 const onMove = (e: PointerEvent) => {
   if (!dragging) return
   tx.value = startTx + (e.clientX - startX)
   ty.value = startTy + (e.clientY - startY)
+  clampPan()
 }
+
+// Zooming OUT shrinks the room to pan, so an offset that was legal at 3x can
+// leave a gap at 1.2x. Re-clamp whenever the zoom changes.
+watch(scale, clampPan)
 const onUp = () => { dragging = false }
 
 const rotate = () => { rot.value = (rot.value + 90) % 360 }
