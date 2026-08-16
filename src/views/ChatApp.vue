@@ -41,6 +41,7 @@ import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
 import RtcDebugModal         from '@/components/voice/RtcDebugModal.vue'
+import ConversationDetails    from '@/components/chat/ConversationDetails.vue'
 import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
@@ -585,16 +586,45 @@ const otherUnread = computed(() => {
   return n
 })
 
+// ── Conversation details ────────────────────────────────────────────────────
+/** Which details screen is open on a phone, and which of its tabs. */
+const showDetails = ref(false)
+const detailsTab  = ref<'members' | 'media' | 'pins' | 'links' | 'files'>('members')
+
 /**
- * Tapping the title opens whatever "details" means for this conversation.
- * The group details SCREEN isn't built yet, so groups fall back to the edit
- * modal — the chevron promises somewhere to go, and that promise has to be
- * kept from the moment it's on screen.
+ * Tapping the title opens the details screen on a phone. On desktop there's
+ * no room grammar for a pushed screen and the panels already exist, so it
+ * keeps the old behaviour: a DM opens the profile, a group opens its editor.
  */
 const openConversationDetails = () => {
+  if (isMobile.value && (view.value === 'dm' || view.value === 'group')) {
+    detailsTab.value = 'members'
+    showDetails.value = true
+    return
+  }
   if (view.value === 'dm' && activeDM.value) { showUserProfile.value = activeDM.value.id; return }
   if (view.value === 'group' && activeGroup.value) showEditGroup.value = true
 }
+
+/** A DM has no member list of its own — synthesise the two people in it. */
+const detailsMembers = computed(() => {
+  if (view.value === 'group' && activeGroup.value) return activeGroup.value.members
+  if (view.value === 'dm' && activeDM.value) {
+    const me = authUser.value
+    const f = apiFriends.value.find(x => x.id === activeDM.value!.id)
+    return [
+      { id: activeDM.value.id, username: f?.username ?? activeDM.value.name,
+        displayName: activeDM.value.name, avatar: activeDM.value.avatar, status: activeDM.value.status },
+      { id: me?.id ?? 'me', username: me?.username ?? 'you',
+        displayName: me?.displayName || me?.username, avatar: myAvatar.value, status: chosenStatus.value },
+    ]
+  }
+  return []
+})
+
+// Leaving the conversation must not strand you on the details of a chat you
+// are no longer in.
+watch([activeDM, activeGroup], () => { showDetails.value = false })
 
 // ── Computed ───────────────────────────────────────────────────────────────
 const textChannels    = computed(() => channels.filter(c => c.type === 'text'  && c.serverId === activeServer.value))
@@ -1671,6 +1701,24 @@ onBeforeUnmount(() => {
     <SettingsModal    v-if="showSettings"      :initial-page="settingsPage" @close="showSettings = false" />
     <CameraPreviewModal v-if="showCameraPreview" @close="showCameraPreview = false" @confirm="onCameraConfirmed" />
     <RtcDebugModal v-if="showRtcDebug" @close="showRtcDebug = false" @toast="showToast" />
+    <ConversationDetails
+      v-if="showDetails && isMobile && (view === 'dm' || view === 'group')"
+      :kind="view === 'group' ? 'group' : 'dm'"
+      :title="view === 'group' && activeGroup ? groupDisplayName(activeGroup) : (activeDM?.name ?? '')"
+      :subtitle="view === 'group' ? groupSubtitle : dmSubtitle"
+      :avatar="view === 'group' ? (activeGroup?.avatar ?? null) : (activeDM?.avatar ?? null)"
+      :members="detailsMembers"
+      :member-count="view === 'group' ? activeGroup?.memberCount : 2"
+      :max-members="view === 'group' ? 10 : undefined"
+      :owner-id="activeGroup?.owner"
+      v-model:tab="detailsTab"
+      @close="showDetails = false"
+      @add-members="showInviteGroup = true"
+      @open-member="id => { showDetails = false; showUserProfile = id }"
+      @open-settings="showEditGroup = true"
+      @search="showDetails = false; openSearch()"
+      @mute="showDetails = false"
+    />
 
     <ProfilePopout
       v-if="profilePopout"
