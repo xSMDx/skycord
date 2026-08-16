@@ -634,8 +634,8 @@ const handleLogout = () => { emit('close'); logout() }
                 <div class="pf-field">
                   <span class="acc-row-label">Avatar</span>
                   <div class="pf-avrow">
-                    <AnimatedImage :src="avatarFor(authUser?.username||'you', authUser?.avatar)"
-                                   class="pf-av" :crop="(authUser as any)?.avatarCrop" />
+                    <Avatar :src="avatarFor(authUser?.username||'you', authUser?.avatar)"
+                            :size="56" class="pf-av" :crop="(authUser as any)?.avatarCrop" />
                     <div class="pf-avbtns">
                       <button class="acc-btn" @click="openImagePicker('avatar')">Change</button>
                       <button class="acc-btn pf-danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove</button>
@@ -1071,7 +1071,7 @@ img    { display: block; object-fit: cover; }
 .pf-field .acc-row-label { margin-bottom: 9px; }
 
 .pf-avrow { display: flex; align-items: center; gap: 12px; }
-.pf-av { width: 56px; height: 56px; border-radius: 50%; flex: none; }
+.pf-av { flex: none; }   /* size and shape come from Avatar, which also clips */
 .pf-avbtns { display: flex; gap: 8px; flex-wrap: wrap; }
 .pf-danger { color: #f0716f; background: none; }
 .pf-danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }

@@ -69,7 +69,17 @@ const OUTPUT_H = banner ? Math.round(1024 / BANNER_RATIO) : 256
 
 const img      = new Image()
 const ready    = ref(false)
-let baseCover  = 1      // scale so the image covers the viewport at zoom 1
+let baseCover  = 1      // cover scale at zoom 1, for the unrotated image
+
+/** Cover scale for the CURRENT rotation. At 90°/270° the image's width has to
+ *  cover the window's height and vice versa. */
+const coverScale = () => {
+  if (!img.naturalWidth) return baseCover
+  const swapped = rot.value % 180 !== 0
+  const w = swapped ? img.naturalHeight : img.naturalWidth
+  const h = swapped ? img.naturalWidth  : img.naturalHeight
+  return Math.max(CROP_W / w, CROP_H / h)
+}
 
 const scale  = ref(1)   // user zoom (1..3)
 const rot    = ref(0)   // degrees, 90° steps
@@ -80,7 +90,7 @@ const ty     = ref(0)
 const imgStyle = () => ({
   transform:
     `translate(-50%, -50%) translate(${tx.value}px, ${ty.value}px) ` +
-    `rotate(${rot.value}deg) scale(${baseCover * scale.value})`,
+    `rotate(${rot.value}deg) scale(${coverScale() * scale.value})`,
 })
 
 onMounted(() => {
@@ -109,11 +119,11 @@ const onDown = (e: PointerEvent) => {
  * clamped, silently saving a DIFFERENT framing than the one on screen.
  */
 const maxOffset = () => {
-  const s = baseCover * scale.value
-  return {
-    x: Math.max(0, (img.naturalWidth  * s - CROP_W) / 2),
-    y: Math.max(0, (img.naturalHeight * s - CROP_H) / 2),
-  }
+  const s = coverScale() * scale.value
+  const swapped = rot.value % 180 !== 0
+  const w = (swapped ? img.naturalHeight : img.naturalWidth)  * s
+  const h = (swapped ? img.naturalWidth  : img.naturalHeight) * s
+  return { x: Math.max(0, (w - CROP_W) / 2), y: Math.max(0, (h - CROP_H) / 2) }
 }
 const clampPan = () => {
   const m = maxOffset()
@@ -130,7 +140,7 @@ const onMove = (e: PointerEvent) => {
 
 // Zooming OUT shrinks the room to pan, so an offset that was legal at 3x can
 // leave a gap at 1.2x. Re-clamp whenever the zoom changes.
-watch(scale, clampPan)
+watch([scale, rot], clampPan)
 const onUp = () => { dragging = false }
 
 const rotate = () => { rot.value = (rot.value + 90) % 360 }
@@ -154,6 +164,16 @@ const apply = () => {
     return
   }
 
+  /*
+   * Clamp once more, here, because this is the last gate before pixels are
+   * written and it is the only one that has to hold. Dragging clamps as you
+   * go, but a value can reach this point another way — a rotation, a crop
+   * restored from a version that predates the clamp — and a gap baked into
+   * the export is permanent. No amount of fixing the renderer later recovers
+   * pixels that were never stored.
+   */
+  clampPan()
+
   const canvas = document.createElement('canvas')
   canvas.width = OUTPUT; canvas.height = OUTPUT_H
   const ctx = canvas.getContext('2d')
@@ -165,7 +185,7 @@ const apply = () => {
   ctx.save()
   ctx.translate(OUTPUT / 2 + tx.value * k, OUTPUT_H / 2 + ty.value * k)
   ctx.rotate((rot.value * Math.PI) / 180)
-  const drawScale = baseCover * scale.value * k
+  const drawScale = coverScale() * scale.value * k
   ctx.scale(drawScale, drawScale)
   ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2)
   ctx.restore()
