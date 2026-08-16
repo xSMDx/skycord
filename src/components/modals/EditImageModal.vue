@@ -208,7 +208,7 @@ const apply = () => {
         <input
           v-model.number="scale"
           class="ei-slider"
-          type="range" min="1" max="3" step="0.01"
+          type="range" min="1" max="5" step="0.01"
           aria-label="Zoom"
         />
         <ImageIcon :size="22" :stroke-width="2.25" class="ei-zoom-ico" />
