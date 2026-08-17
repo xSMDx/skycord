@@ -17,7 +17,12 @@
 <meta property="og:site_name"   content="Skycord" />
 <meta property="og:title"       content="Skycord — your crew's place to talk" />
 <meta property="og:description" content="Voice and video calls, screen share, and themes you can send in chat — running on our own server." />
-<meta name="twitter:card"        content="summary" />
+<meta property="og:image"        content="https://skycord.xyz/og.jpg" />
+<meta property="og:image:width"  content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt"    content="Skycord — your crew's place to talk" />
+<meta name="twitter:card"        content="summary_large_image" />
+<meta name="twitter:image"       content="https://skycord.xyz/og.jpg" />
 <meta name="twitter:title"       content="Skycord — your crew's place to talk" />
 <meta name="twitter:description" content="Voice and video calls, screen share, and themes you can send in chat — running on our own server." />
 
@@ -348,16 +353,28 @@
     align-items: center; 
     justify-content: center;
     box-shadow: 0 0 0 4px var(--speak), 0 0 26px rgba(35,165,90,.45);
-    animation: ring 2.2s ease-in-out infinite, float 3s ease-in-out infinite;
+    animation: ring 4.6s ease-in-out infinite, float 3s ease-in-out infinite;
     transition: transform .3s;
   }
   @keyframes float {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }
   }
+  /*
+   * This ring is the same one the app draws around whoever is talking, so its
+   * timing is the difference between the hero showing a call and showing a
+   * loading spinner. An even two-step sine is a metronome; real speech comes
+   * in bursts with a pause between them, which is what the uneven stops and
+   * the long quiet tail from 52% are for.
+   */
   @keyframes ring {
-    0%, 100% { box-shadow: 0 0 0 4px var(--speak), 0 0 22px rgba(35,165,90,.35); }
-    50%      { box-shadow: 0 0 0 6px var(--speak), 0 0 38px rgba(35,165,90,.6); }
+    0%, 6%   { box-shadow: 0 0 0 3px rgba(35,165,90,.35), 0 0 14px rgba(35,165,90,.20); }
+    11%      { box-shadow: 0 0 0 5px var(--speak),        0 0 30px rgba(35,165,90,.55); }
+    19%      { box-shadow: 0 0 0 3px rgba(35,165,90,.45), 0 0 18px rgba(35,165,90,.28); }
+    26%      { box-shadow: 0 0 0 6px var(--speak),        0 0 34px rgba(35,165,90,.60); }
+    34%      { box-shadow: 0 0 0 4px rgba(35,165,90,.50), 0 0 20px rgba(35,165,90,.30); }
+    41%      { box-shadow: 0 0 0 5px var(--speak),        0 0 28px rgba(35,165,90,.52); }
+    52%,100% { box-shadow: 0 0 0 3px rgba(35,165,90,.30), 0 0 14px rgba(35,165,90,.18); }
   }
   .avatar-svg {
     width: 58px;
@@ -446,6 +463,23 @@
     background: var(--gradient);
     border-radius: 2px;
   }
+  /* Mono, because these are readings rather than prose — and JetBrains Mono
+     is already being fetched for the changelog. */
+  .shipping {
+    margin: 18px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-size: 12.5px;
+    letter-spacing: .01em;
+    color: rgba(255,255,255,.42);
+  }
+  .shipping a { color: rgba(255,255,255,.62); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.18); }
+  .shipping a:hover { color: #fff; border-bottom-color: var(--blurple); }
+
+  /* One card carries more weight than the other eight so the grid has a
+     first read instead of nine equal voices. It is the flagship and already
+     sits first, so this is weight, not reordering. */
+  .grid .card.lead { grid-column: span 2; }
+
   .grid { 
     display: grid; 
     grid-template-columns: repeat(3, 1fr); 
@@ -805,6 +839,7 @@
   }
   @media (max-width: 560px) {
     .grid { grid-template-columns: 1fr; }
+    .grid .card.lead { grid-column: auto; }
     .bar { gap: 12px; }
     .cta-mini { display: none; }
     .hero { padding-top: 40px; }
@@ -850,6 +885,7 @@
       <h1>Your crew's<br/>place to <em>talk</em>.</h1>
       <p class="sub">Voice and video calls, screen share, and themes you can send in chat — running on our own server, not someone else's.</p>
       <a class="cta" href="https://app.skycord.xyz">Open Skycord<small>runs in your browser — no install</small></a>
+      <p class="shipping" id="shipping"></p>
 
       <div class="stage" aria-hidden="true">
         <div class="tile share">
@@ -885,7 +921,7 @@
     <div class="wrap">
       <h2>What's inside</h2>
       <div class="grid">
-        <div class="card">
+        <div class="card lead">
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
           <h3>Video calls &amp; screen share</h3>
           <p>Turn on your camera or share a screen mid-call. Sharing never loops the call's own audio back at your friends.</p>
@@ -1289,6 +1325,22 @@ document.addEventListener('keydown', function (e) {
   e.preventDefault();          // Space would scroll the page instead
   toggleRelease(r);
 });
+
+/*
+ * Read off RELEASES rather than typed in, so it cannot drift into a lie the
+ * next time you ship. For a project with no logos to show, evidence that it
+ * is still moving is the honest substitute — and it surfaces the changelog,
+ * which is otherwise behind a tab most visitors never press.
+ */
+(function shippingLine() {
+  const el = document.getElementById('shipping');
+  if (!el || typeof RELEASES === 'undefined' || !RELEASES.length) return;
+  const newest = RELEASES[0], oldest = RELEASES[RELEASES.length - 1];
+  const weeks = Math.max(1, Math.round(
+    (new Date(newest.date) - new Date(oldest.date)) / 604800000));
+  el.innerHTML = '<a href="#changelog">' + RELEASES.length + ' releases in ' + weeks +
+    ' weeks</a> · latest ' + newest.v + ', ' + newest.date;
+})();
 
 // Tab navigation
 const PANELS = ['features', 'roadmap', 'changelog'];
