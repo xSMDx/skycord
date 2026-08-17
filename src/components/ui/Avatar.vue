@@ -17,7 +17,7 @@
  */
 import { computed, ref, watch, onMounted } from 'vue'
 import type { Crop } from '@/composables/useCrop'
-import { isAnimated } from '@/composables/useCrop'
+import { isAnimated, cropLayout } from '@/composables/useCrop'
 import { useGifBurst, hasHover, motionAllowed, freezeFrame } from '@/composables/useGifPlayback'
 
 const props = withDefaults(defineProps<{
@@ -82,15 +82,36 @@ const boxStyle = computed(() => {
   }
 })
 
-/** A null crop must cost nothing: object-fit already frames a centred image,
- *  so emit no transform at all rather than an identity one. */
+/*
+ * A null crop must cost nothing: object-fit already frames a centred image, so
+ * emit nothing at all rather than an identity layout.
+ *
+ * A real crop cannot use object-fit plus a transform. Cover crops to the
+ * element box first, so translating the result just slides a finished image
+ * inside its own frame and leaves a gap. See cropLayout.
+ */
+const el  = ref<HTMLImageElement | null>(null)
+const box = ref({ w: 0, h: 0 })
+const measure = () => {
+  // clientWidth/Height, not getBoundingClientRect: the rect includes ancestor
+  // transforms, and the settings modal animates in with a scale. Measuring
+  // mid-animation returned 333 for a 340px card and sized the image to match,
+  // leaving a slice of background down one side. The layout box ignores that.
+  const p = el.value?.parentElement
+  if (p) box.value = { w: p.clientWidth, h: p.clientHeight }
+}
+onMounted(() => {
+  measure()
+  if (typeof ResizeObserver !== 'undefined' && el.value?.parentElement) {
+    new ResizeObserver(measure).observe(el.value.parentElement)
+  }
+})
+
 const imgStyle = computed(() => {
   const c = props.crop
   if (!c || (c.zoom === 1 && c.x === 0 && c.y === 0)) return undefined
-  return {
-    transform: `translate(${c.x}%, ${c.y}%) scale(${c.zoom})`,
-    transformOrigin: 'center center',
-  }
+  const { w, h } = box.value
+  return cropLayout(el.value?.naturalWidth ?? 0, el.value?.naturalHeight ?? 0, w, h, c)
 })
 </script>
 
@@ -100,7 +121,7 @@ const imgStyle = computed(() => {
     @pointerenter="hovering = true"
     @pointerleave="hovering = false"
   >
-    <img :src="shownSrc" :alt="alt" :style="imgStyle" draggable="false" />
+    <img ref="el" :src="shownSrc" :alt="alt" :style="imgStyle" draggable="false" @load="measure" />
     <slot />
   </span>
 </template>
