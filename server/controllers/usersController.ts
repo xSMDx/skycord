@@ -5,11 +5,15 @@ import mongoose from 'mongoose'
 import { getIO, isUserOnline } from '../sockets/chatSocket'
 import { effectiveStatus } from '../state/presence'
 
-// Anyone without a live socket is offline, whatever the DB says. Connected
-// users keep their chosen status (idle/dnd/invisible) rather than being forced
-// to 'online'.
-const presenceFor = (userId: string, stored: string): string =>
-  isUserOnline(userId) ? (stored === 'offline' ? 'online' : stored) : 'offline'
+/*
+ * What a third party is allowed to see. This is just effectiveStatus — it used
+ * to be a second, hand-written version of the same idea, and it was wrong in
+ * two ways the real one is not: it returned 'invisible' verbatim, so an
+ * invisible user was identifiable by anyone reading the payload, and it never
+ * applied auto-idle, so someone idle for an hour still read as online.
+ */
+const presenceFor = (userId: string, stored: string | null | undefined): string =>
+  effectiveStatus(stored, userId)
 
 // ── Search users by username/displayName ────────────────────────────────────
 export const searchUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -91,7 +95,7 @@ export const sendFriendRequest = async (req: Request, res: Response, next: NextF
           discriminator: requester?.discriminator ?? '0000',
           avatar:        requester?.avatar        ?? null,
           avatarCrop:    requester?.avatarCrop    ?? null,
-          status:        requester?.status        ?? 'offline',
+          status:        effectiveStatus(requester?.status, requesterId),
         },
         createdAt: friendship.createdAt.toISOString(),
       })

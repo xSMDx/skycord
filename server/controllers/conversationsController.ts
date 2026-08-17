@@ -6,6 +6,7 @@ import { Message, SystemType } from '../models/Message'
 import { User } from '../models/User'
 import { Friendship } from '../models/Friendship'
 import { resolveMessages } from './messagesController'
+import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 
 // Shape a group doc into what the client's conversation list expects. The
@@ -24,7 +25,7 @@ const shapeGroup = (group: any, memberDocs: any[]) => ({
     displayName: m.displayName,
     avatar:      m.avatar ?? null,
     avatarCrop:  m.avatarCrop ?? null,
-    status:      m.status,
+    status:      effectiveStatus(m.status, m._id.toString()),
   })),
   lastMessageAt: group.lastMessageAt,
   createdAt:     group.createdAt,
@@ -203,7 +204,7 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
         displayName:   p.displayName,
         avatar:        p.avatar,
         avatarCrop:    p.avatarCrop ?? null,
-        status:        p.status || 'offline',
+        status:        effectiveStatus(p.status, p._id.toString()),
         lastMessage:   r.lastKind ? '' : String(r.lastMessage || ''),
         lastMessageAt: r.lastMessageAt,
       }
@@ -339,7 +340,7 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
         displayName: m.displayName,
         avatar:      m.avatar ?? null,
         avatarCrop:  m.avatarCrop ?? null,
-        status:      m.status,
+        status:      effectiveStatus(m.status, m._id.toString()),
         isOwner:     group.owner.toString() === m._id.toString(),
       })),
     })

@@ -19,11 +19,34 @@ export const effectiveSelfStatus = ref<'online' | 'idle' | 'dnd' | 'offline'>('o
 /**
  * How long without input before we call it idle.
  *
- * Ten minutes, matching Discord. Short enough to be honest about whether
- * you're really there, long enough that reading a long message or watching a
- * screen share doesn't flip you to Idle mid-conversation.
+ * Five minutes by default: short enough to be honest about whether you are
+ * really there, long enough that reading a long message or watching a screen
+ * share does not flip you to Idle mid-conversation. Adjustable because the
+ * right answer depends on how you use it — someone who leaves Skycord open on
+ * a second monitor wants longer than someone who checks in between tasks.
+ *
+ * Stored in minutes because that is the unit the setting is written in;
+ * converting once here keeps the timer in milliseconds where it belongs.
  */
-const IDLE_AFTER_MS = 10 * 60 * 1000
+const IDLE_KEY = 'skycord.idleMinutes'
+export const IDLE_MIN = 1, IDLE_MAX = 60
+export const DEFAULT_IDLE_MINUTES = 5
+
+const readIdleMinutes = (): number => {
+  const n = Number(localStorage.getItem(IDLE_KEY))
+  return Number.isFinite(n) && n >= IDLE_MIN && n <= IDLE_MAX ? n : DEFAULT_IDLE_MINUTES
+}
+
+export const idleMinutes = ref(readIdleMinutes())
+
+/** Changing it restarts the countdown, so a shorter value takes effect now
+ *  rather than after the old one finally expires. */
+export const setIdleMinutes = (n: number): void => {
+  const v = Math.min(IDLE_MAX, Math.max(IDLE_MIN, Math.round(n)))
+  idleMinutes.value = v
+  localStorage.setItem(IDLE_KEY, String(v))
+  if (wired) bumpActivity()
+}
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 let away = false
@@ -41,7 +64,7 @@ const goIdle = () => emitAway(true)
 const bumpActivity = () => {
   emitAway(false)
   if (idleTimer) clearTimeout(idleTimer)
-  idleTimer = setTimeout(goIdle, IDLE_AFTER_MS)
+  idleTimer = setTimeout(goIdle, idleMinutes.value * 60 * 1000)
 }
 
 /**

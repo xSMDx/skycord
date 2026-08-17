@@ -12,6 +12,7 @@ import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
 import EditImageModal from './EditImageModal.vue'
+import { idleMinutes, setIdleMinutes, IDLE_MIN, IDLE_MAX } from '@/composables/usePresence'
 import GifPickerModal from './GifPickerModal.vue'
 import ColorPicker from '@/components/ui/ColorPicker.vue'
 import ProfileCard from '@/components/profile/ProfileCard.vue'
@@ -683,6 +684,20 @@ const handleLogout = () => { emit('close'); logout() }
                     </div>
                   </div>
                 </div>
+
+                <div class="pf-field">
+                  <span class="acc-row-label">Go idle after</span>
+                  <div class="pf-idlerow">
+                    <input
+                      class="pf-idle" type="range" :min="IDLE_MIN" :max="IDLE_MAX" step="1"
+                      :value="idleMinutes"
+                      aria-label="Minutes of inactivity before your status turns to Idle"
+                      @input="setIdleMinutes(+($event.target as HTMLInputElement).value)" />
+                    <span class="pf-idleval">{{ idleMinutes }} min</span>
+                  </div>
+                  <p class="pf-hint">Only applies while your status is Online. Do Not Disturb and
+                    Invisible stay as you set them.</p>
+                </div>
               </div>
 
               <!-- live card -->
@@ -1073,6 +1088,10 @@ img    { display: block; object-fit: cover; }
 .pf-avrow { display: flex; align-items: center; gap: 12px; }
 .pf-av { flex: none; }   /* size and shape come from Avatar, which also clips */
 .pf-avbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.pf-idlerow { display: flex; align-items: center; gap: 12px; }
+.pf-idle { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+.pf-idleval { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-1); min-width: 52px; text-align: right; }
+.pf-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-3); line-height: 1.4; }
 .pf-danger { color: #f0716f; background: none; }
 .pf-danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pf-danger:disabled { opacity: .4; cursor: not-allowed; }
