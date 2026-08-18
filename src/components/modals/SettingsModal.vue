@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
 import {
-  X, CircleCheck, ArrowRight, LogOut, ChevronLeft, ChevronRight,
+  X, LogOut, ChevronLeft, ChevronRight,
 } from 'lucide-vue-next'
 import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
@@ -398,8 +398,6 @@ const navSections: NavSection[] = [
 const PAGE_SUBSECTIONS: Record<string, { id: string; label: string }[]> = {
   account: [
     { id: 'acc-info',     label: 'Account Info' },
-    { id: 'acc-password', label: 'Password & Security' },
-    { id: 'acc-standing', label: 'Account Standing' },
   ],
   appearance: [
     { id: 'ap-theme',       label: 'Theme' },
@@ -574,48 +572,16 @@ const handleLogout = () => { emit('close'); logout() }
                 </div>
                 <button class="acc-btn" @click="openModal('displayName', authUser?.displayName||'')">Edit</button>
               </div>
-            </div>
-
-            <!-- Password & Security -->
-            <h2 id="acc-password" class="acc-section-title">Password &amp; Security</h2>
-            <div class="acc-card">
+              <div class="acc-divider" />
+              <!-- Moved out of the deleted Password & Security section. It is the
+                   one thing in there that was real, and it belongs beside the
+                   other credentials anyway. -->
               <div class="acc-row">
                 <div class="acc-row-left">
                   <span class="acc-row-label">Password</span>
                   <span class="acc-row-value muted">••••••••••••</span>
                 </div>
                 <button class="acc-btn" @click="openModal('password')">Edit</button>
-              </div>
-              <div class="acc-divider" />
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Two-Factor Authentication</span>
-                  <span class="acc-row-value muted">Not enabled</span>
-                </div>
-                <button class="acc-btn">Enable</button>
-              </div>
-              <div class="acc-divider" />
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Logged-in Devices</span>
-                  <span class="acc-row-value muted">1 device</span>
-                </div>
-                <button class="acc-btn-arrow">
-                  <ArrowRight :size="16" :stroke-width="1.5" />
-                </button>
-              </div>
-            </div>
-
-            <!-- Account Standing -->
-            <h2 id="acc-standing" class="acc-section-title">Account Standing</h2>
-            <div class="acc-card">
-              <div class="acc-standing">
-                <CircleCheck :size="24" :stroke-width="2.25" style="color:#23a55a; flex-shrink:0" />
-                <div style="flex:1">
-                  <div class="acc-standing-title">Your account is all good</div>
-                  <div class="acc-standing-sub">No violations. Thanks for keeping Skycord safe 🙏</div>
-                </div>
-                <ArrowRight :size="16" :stroke-width="1.5" style="color:#949ba4;flex-shrink:0" />
               </div>
             </div>
 
@@ -1253,14 +1219,9 @@ img    { display: block; object-fit: cover; }
 }
 .acc-btn:hover { background: var(--hover-strong); transform: translateY(-1px); }
 .acc-btn:disabled { opacity: .6; cursor: not-allowed; }
-.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background .12s; }
-.acc-btn-arrow:hover { background: var(--hover); color: white; }
 .acc-divider { height: 1px; background: rgba(255,255,255,.06); margin: 0 20px; }
 .reveal-btn { font-size: 12px; color: var(--accent); font-weight: 600; }
 .reveal-btn:hover { text-decoration: underline; }
-.acc-standing { display: flex; align-items: center; gap: 14px; padding: 16px 20px; }
-.acc-standing-title { font-size: 15px; font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
-.acc-standing-sub   { font-size: 12px; color: var(--text-3); }
 
 /* WIP */
 /* Appearance */
