@@ -4,6 +4,32 @@ import { Channel } from '../models/Channel'
 import { loadServer, requireOwner, shapeChannel } from './serversController'
 
 /**
+ * Serializes callbacks per server id, within this process only. Guards the
+ * last-text-channel check-then-delete in `deleteChannel` against two
+ * concurrent deletes both reading the same count before either writes.
+ *
+ * PER-PROCESS ONLY: this Map lives in one Node process's memory and
+ * coordinates nothing beyond it. It is enough today because the API runs as
+ * a single pm2 process and Mongo here is a standalone instance (no replica
+ * set, so no multi-document transactions are available). If the API is ever
+ * run as more than one instance, this guard stops being sufficient — the
+ * invariant would need a distributed lock (e.g. Redis) or a replica-set
+ * transaction to close the same race across processes.
+ */
+const serverLocks = new Map<string, Promise<void>>()
+
+function withServerLock<T>(serverId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = serverLocks.get(serverId) ?? Promise.resolve()
+  const run = prev.then(fn)
+  // Settle the chain whether fn resolved or threw, so a failed delete can
+  // never wedge every future delete for this server.
+  const tail = run.then(() => undefined, () => undefined)
+  serverLocks.set(serverId, tail)
+  tail.finally(() => { if (serverLocks.get(serverId) === tail) serverLocks.delete(serverId) })
+  return run
+}
+
+/**
  * Resolve a channel and prove the caller may touch it. The channel must belong
  * to the server in the path — otherwise a member of any server could address a
  * channel in any other by id.
@@ -57,14 +83,17 @@ export const deleteChannel = async (req: Request, res: Response, next: NextFunct
     const found = await loadChannel(req, res); if (!found) return
     if (!requireOwner(found.server, req.user!.sub, res)) return
 
-    // A server always has somewhere to talk.
-    if (found.channel.type === 'text') {
-      const texts = await Channel.countDocuments({ server: found.server._id, type: 'text' })
-      if (texts <= 1) {
-        res.status(400).json({ message: 'You cannot delete the last text channel' }); return
+    const serverId = found.server._id.toString()
+    await withServerLock(serverId, async () => {
+      // A server always has somewhere to talk.
+      if (found.channel.type === 'text') {
+        const texts = await Channel.countDocuments({ server: found.server._id, type: 'text' })
+        if (texts <= 1) {
+          res.status(400).json({ message: 'You cannot delete the last text channel' }); return
+        }
       }
-    }
-    await found.channel.deleteOne()
-    res.json({ ok: true })
+      await found.channel.deleteOne()
+      res.json({ ok: true })
+    })
   } catch (err) { next(err) }
 }
