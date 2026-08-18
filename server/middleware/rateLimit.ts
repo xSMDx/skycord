@@ -23,6 +23,9 @@ const make = (windowMs: number, max: number, message: string): ReturnType<typeof
     legacyHeaders: false,
     keyGenerator: keyByUser,
     message: { message, code: 'RATE_LIMITED' },
+    // VITEST (not NODE_ENV) — prod runs with NODE_ENV=development, so NODE_ENV
+    // would disable this limiter live. VITEST is only ever set by the test runner.
+    skip: () => !!process.env.VITEST,
   } as Partial<Options>)
 
 /** Catch-all for authenticated API traffic. Generous — this is a backstop

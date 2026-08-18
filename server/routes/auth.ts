@@ -11,6 +11,9 @@ const strictLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many attempts — please wait 15 minutes', code: 'RATE_LIMITED' },
+  // VITEST (not NODE_ENV) — prod runs with NODE_ENV=development, so NODE_ENV
+  // would disable this limiter live. VITEST is only ever set by the test runner.
+  skip: () => !!process.env.VITEST,
 })
 
 const refreshLimit = rateLimit({
@@ -19,6 +22,9 @@ const refreshLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many refresh requests', code: 'RATE_LIMITED' },
+  // VITEST (not NODE_ENV) — prod runs with NODE_ENV=development, so NODE_ENV
+  // would disable this limiter live. VITEST is only ever set by the test runner.
+  skip: () => !!process.env.VITEST,
 })
 
 router.post('/register', strictLimit,  register)
