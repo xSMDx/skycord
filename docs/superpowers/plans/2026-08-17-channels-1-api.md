@@ -527,11 +527,9 @@ describe('PATCH /servers/:sid', () => {
     expect(res.body.server.name).toBe('Renamed')
   })
 
-  it('403s a member who is not the owner', async () => {
+  it('403s someone who is not a member', async () => {
     const a = await register(), b = await register()
     const s = await mkServer(a)
-    // Put b in the server directly through the model-free path: join by invite
-    // is Task 6, so assert the owner check with a non-member instead.
     const res = await app().patch(`/servers/${s.id}`).set(auth(b)).send({ name: 'x' })
     expect(res.status).toBe(403)
   })
