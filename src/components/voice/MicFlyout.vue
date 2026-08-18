@@ -6,6 +6,7 @@ import CallFlyout from './CallFlyout.vue'
 import { useCallDevices } from '@/composables/useCallDevices'
 import { useVoiceSettings } from '@/composables/useVoiceSettings'
 import { useVoice } from '@/composables/useVoice'
+import { useSelfAudio } from '@/composables/useSelfAudio'
 import { getRoom } from '@/composables/voiceRoom'
 
 // The call bar shows everything in one menu; the user panel splits it, because
@@ -20,7 +21,8 @@ const show = (half: 'input' | 'output') => props.mode === 'all' || props.mode ==
 const emit = defineEmits<{ close: []; openSettings: [] }>()
 const { mics, speakers, supportsSinkId, refreshDevices, deviceLabel, setMicDevice, setSpeakerDevice } = useCallDevices()
 const { voiceSettings, setVoiceSettings } = useVoiceSettings()
-const { voice, toggleDeafen, applyOutput } = useVoice()
+const { applyOutput } = useVoice()
+const { deafened, toggleDeafen } = useSelfAudio()
 
 const openSection = ref<'' | 'input' | 'output'>('')
 const toggleSection = (s: 'input' | 'output') => { openSection.value = openSection.value === s ? '' : s }
@@ -37,9 +39,21 @@ const currentSpkLabel = () => {
   return d ? deviceLabel(d, 'Speaker') : 'Default'
 }
 
-// Live input level — reads the EXISTING LiveKit mic track through an analyser.
-// No second getUserMedia, no monitor loopback, no deafen side effects (that's
-// the settings page's Mic Test, deliberately untouched).
+/*
+ * Live input level.
+ *
+ * Prefers the EXISTING LiveKit mic track, so during a call there is no second
+ * getUserMedia, no monitor loopback and no deafen side effects.
+ *
+ * Outside a call there is no room and no published track, and this used to
+ * give up there — which is most of the time, because the user panel is where
+ * this flyout normally gets opened. The meter simply sat at zero. So when
+ * there is no track it opens its own stream purely to measure, honouring the
+ * chosen input device, and stops it again on close.
+ *
+ * Never connected to destination in either case: this measures, it never
+ * plays your own voice back at you.
+ */
 const level = ref(0)
 let ctx: AudioContext | null = null
 let raf = 0
@@ -48,6 +62,8 @@ let boundTrack: MediaStreamTrack | null = null
 let analyser: AnalyserNode | null = null
 let src: MediaStreamAudioSourceNode | null = null
 let data: Uint8Array<ArrayBuffer> | null = null
+/** Only set when we opened the mic ourselves; must be stopped on close. */
+let owned: MediaStream | null = null
 
 const currentMicTrack = () =>
   getRoom()?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null
@@ -66,9 +82,18 @@ const bindTrack = (t: MediaStreamTrack) => {
 onMounted(async () => {
   await refreshDevices()
   if (disposed) return                    // flyout closed during the await
-  const t = currentMicTrack()
-  if (!t) return                          // no mic (connecting/blocked): meter idles
   try {
+    let t = currentMicTrack()
+    if (!t) {
+      // No call in progress — borrow the mic just for the meter.
+      const id = voiceSettings.inputDeviceId
+      owned = await navigator.mediaDevices.getUserMedia({
+        audio: id ? { deviceId: { exact: id } } : true,
+      })
+      if (disposed) { owned.getTracks().forEach(k => k.stop()); owned = null; return }
+      t = owned.getAudioTracks()[0] ?? null
+    }
+    if (!t) return                        // mic blocked or absent: meter idles
     ctx = new AudioContext()
     await ctx.resume()
     if (disposed) { ctx.close().catch(() => {}); ctx = null; return }
@@ -77,7 +102,12 @@ onMounted(async () => {
       if (disposed) return
       // Rebind if the mic track was replaced (e.g. device switched from this menu)
       const cur = currentMicTrack()
-      if (cur && cur !== boundTrack) bindTrack(cur)
+      if (cur && cur !== boundTrack) {
+        // A call started while the meter was open: switch to its track and
+        // let go of ours.
+        bindTrack(cur)
+        owned?.getTracks().forEach(k => k.stop()); owned = null
+      }
       if (analyser && data) {
         analyser.getByteTimeDomainData(data)
         let peak = 0
@@ -94,6 +124,7 @@ onBeforeUnmount(() => {
   disposed = true
   cancelAnimationFrame(raf)
   src?.disconnect(); src = null
+  owned?.getTracks().forEach(k => k.stop()); owned = null
   ctx?.close().catch(() => {}); ctx = null
 })
 </script>
@@ -144,7 +175,7 @@ onBeforeUnmount(() => {
     <!-- Deafen belongs to the output side: it's what silences everyone else. -->
     <div v-if="show('output')" class="fr" role="button" @click="toggleDeafen()">
       <span>Deafen</span>
-      <span class="fr-tog" :class="{ on: voice.localDeafened }"><span /></span>
+      <span class="fr-tog" :class="{ on: deafened }"><span /></span>
     </div>
     <button class="fr" @click="emit('openSettings'); emit('close')">
       <span>Voice Settings</span><Settings :size="15" :stroke-width="2.25" />

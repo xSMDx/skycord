@@ -20,7 +20,7 @@ import { useMessages }                      from '@/composables/useMessages'
 import { useApi, type ApiUser, type PendingRequest, type ApiMessage } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, setActiveDMPartner, setActiveGroup, dmConvId, soundMute, soundUnmute, soundDeafen, soundUndeafen } from '@/composables/useSocket'
+import { useSocket, setActiveDMPartner, setActiveGroup, dmConvId } from '@/composables/useSocket'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
 import UserProfileModal    from '@/components/profile/UserProfileModal.vue'
@@ -48,6 +48,7 @@ import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance }        from '@/composables/useAppearance'
 import { useVoice }          from '@/composables/useVoice'
+import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
 // above still owns its own surface until it's migrated onto this one.
@@ -133,7 +134,7 @@ const {
   on: socketOn,
 } = useSocket()
 
-const { voice, connect: vConnect, leave: vLeave, toggleMute: vToggleMute, toggleDeafen: vToggleDeafen, voiceRoomName } = useVoice()
+const { voice, connect: vConnect, leave: vLeave, voiceRoomName } = useVoice()
 const { toggleCamera } = useVoiceMedia()
 
 // ── Incoming DM call ─────────────────────────────────────────────────────────
@@ -281,41 +282,13 @@ const activeServer  = ref('sykord')
 const activeChannel = ref('general')
 const sidebarOpen   = ref(true)
 const membersOpen   = ref(false)
-const isMuted       = ref(false)
-const isDeafened    = ref(false)
-
-// Deafening force-mutes (can't hear others but still transmitting would be a
-// strange state) — but it remembers whatever the mute state was BEFORE
-// deafening, so undeafening restores it correctly instead of either always
-// force-unmuting (wrong if the user was already muted on purpose) or leaving
-// them stuck muted forever (wrong if they weren't muted to begin with).
-let muteStateBeforeDeafen = false
-
-const toggleMute = () => {
-  isMuted.value = !isMuted.value
-  if (isMuted.value) soundMute(); else soundUnmute()
-  // Manually unmuting while deafened doesn't make sense to leave half-done —
-  // you'd be transmitting audio you still can't hear anyone reply to.
-  if (!isMuted.value && isDeafened.value) isDeafened.value = false
-}
-const toggleDeafen = () => {
-  isDeafened.value = !isDeafened.value
-  if (isDeafened.value) {
-    muteStateBeforeDeafen = isMuted.value
-    isMuted.value = true
-    soundDeafen()
-  } else {
-    isMuted.value = muteStateBeforeDeafen
-    soundUndeafen()
-  }
-}
-
-// While in a real call the mic/deafen buttons drive LiveKit; otherwise they're
-// the cosmetic toggles above.
-const micOff      = computed(() => voice.connected ? voice.localMuted    : isMuted.value)
-const deafOff     = computed(() => voice.connected ? voice.localDeafened : isDeafened.value)
-const onToggleMute   = () => { if (voice.connected) { vToggleMute();   soundMute() } else toggleMute() }
-const onToggleDeafen = () => { if (voice.connected) { vToggleDeafen(); soundDeafen() } else toggleDeafen() }
+/*
+ * Mute and deafen now live in useSelfAudio, shared. They used to be two refs
+ * right here, which made them unreachable from any other component — the
+ * Deafen row in MicFlyout could not touch them and called the LiveKit toggle
+ * instead, which no-ops outside a call.
+ */
+const { muted: micOff, deafened: deafOff, toggleMute: onToggleMute, toggleDeafen: onToggleDeafen } = useSelfAudio()
 
 // ── Voice call (header Phone button + presence) ──
 const currentCall = computed<{ id: string; kind: 'dm' | 'group'; name: string } | null>(() => {
@@ -1962,14 +1935,14 @@ onBeforeUnmount(() => {
                 <MicOff v-if="micOff" :size="16" :stroke-width="1.5"/>
                 <Mic v-else :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" v-tip="'Input device'" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" :class="{ open: upMenu === 'mic' }" v-tip="'Input device'" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" v-tip="deafOff ? 'Undeafen' : 'Deafen'">
                 <Headphones :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" :class="{ open: upMenu === 'out' }" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
@@ -2031,14 +2004,14 @@ onBeforeUnmount(() => {
                 <MicOff v-if="micOff" :size="16" :stroke-width="1.5"/>
                 <Mic v-else :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" v-tip="'Input device'" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" :class="{ open: upMenu === 'mic' }" v-tip="'Input device'" @click.stop="upMenu = upMenu === 'mic' ? '' : 'mic'" @contextmenu.prevent.stop="upMenu = 'mic'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'mic'" mode="input" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <div class="up-split">
               <button class="up-btn btn-headphones" :class="{ danger: deafOff }" @click.stop="onToggleDeafen" @contextmenu.prevent.stop="upMenu = 'out'" v-tip="deafOff ? 'Undeafen' : 'Deafen'">
                 <Headphones :size="16" :stroke-width="1.5"/>
               </button>
-              <button class="up-chev" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25"/></button>
+              <button class="up-chev" :class="{ open: upMenu === 'out' }" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
             <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
@@ -2635,6 +2608,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-split{display:flex;align-items:center;position:relative}
 .up-chev{width:14px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:background .12s,color .12s}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
+/* The chevron points down when the menu is shut and up while it is open, so
+   the button says which way it will move things. It was a hardcoded
+   ChevronDown that never changed. */
+.up-chev-ic{transition:transform .16s ease}
+.up-chev.open .up-chev-ic{transform:rotate(180deg)}
+@media (prefers-reduced-motion: reduce){.up-chev-ic{transition:none}}
 .up-chev:disabled{opacity:.45;cursor:not-allowed}
 @keyframes wiggle-mic{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
 @keyframes bob-phones{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(-3px) scale(1.08)}60%{transform:translateY(1px) scale(.97)}}
