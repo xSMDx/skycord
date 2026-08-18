@@ -40,9 +40,15 @@ Named so the plan cannot quietly absorb them:
 
 ### Server
 
-`name`, `icon`, `iconCrop`, `owner`, `members[]`, `createdAt`.
+`name`, `icon`, `iconCrop`, `bannerColor`, `description`, `owner`,
+`members[]`, `createdAt`.
 `MAX_SERVER_MEMBERS = 100`, declared beside the model as `MAX_GROUP_MEMBERS`
 already is in `Conversation.ts`.
+
+`bannerColor` comes from a fixed swatch row, the same idea as the profile
+`bannerColor` that already exists — it gives the invite preview and the rail
+something other than grey. `description` is a short line shown on the invite
+preview. Neither is required.
 
 `iconCrop` is included from the start. Group icons still cannot be cropped
 because `Conversation` has no crop field; this is the moment where adding it
@@ -68,7 +74,11 @@ changed now.
 
 ### ServerInvite
 
-`code`, `server`, `createdBy`, `expiresAt` which is a Date or null.
+`code`, `server`, `createdBy`, `expiresAt` which is a Date or null, `uses`.
+
+`uses` is a plain counter incremented on join, because the reference Invites
+tab shows one and it is genuinely useful. There is deliberately **no maxUses**:
+enforcing a limit is a different feature from reporting a number.
 
 Separate from `GroupInvite` rather than generalising it: "never expires" needs
 a nullable `expiresAt`, and Mongo's TTL index skips documents whose field is
@@ -209,6 +219,66 @@ already does — there is no server-side read state anywhere in the app today.
 Persisting it means a per-user, per-channel `lastReadAt`, which is its own
 piece of work and is **not in this cycle**. Matching the existing behaviour is
 the point: one inconsistent unread model would be worse than a simple one.
+
+## Menus and modals
+
+### Server menu (the chevron beside the server name)
+
+Owner sees: **Invite to Server**, **Server Settings**, **Create Channel**,
+**Notification Settings**, **Privacy Settings**, **Copy Server ID**.
+
+Non-owner sees the same minus Server Settings and Create Channel, plus
+**Leave Server** in red.
+
+Notification Settings and Privacy Settings open **nothing yet** — the entries
+exist, their contents are a later cycle.
+
+Deliberately absent, from the reference: Create Category, Create Event, App
+Directory, Server Boost, Edit Per-server Profile.
+
+**Hide Muted Channels is also absent, on purpose.** Hiding muted channels
+requires channel muting, muting lives in Notification Settings, and that is the
+thing being deferred — so the toggle would visibly do nothing. It belongs to
+the notifications cycle.
+
+### Create Channel modal
+
+Channel Type as radio buttons: **Text** and **Voice**. No Forum.
+
+Channel Name with its emoji picker, since channel names use emoji.
+
+**No Private Channel toggle.** "Only selected members and roles can view this
+channel" is a permissions feature and permissions are next cycle.
+
+Cancel / Create Channel.
+
+### Server Settings
+
+Four sections only:
+
+- **Server Profile** — name, icon with crop, banner colour swatches,
+  description, and a live preview card showing icon, name and
+  "n Online · n Members".
+- **Members** — a table of name, member since, and a row action to kick.
+  Search by username. Dropping the reference Join Method, Roles, Signals,
+  Sort, Prune and the community-only "Show Members In Channel List" toggle.
+- **Invites** — active links with inviter, code, uses, expires and revoke,
+  plus a Create Invite Link button offering 24h / 7d / never. Dropping Pause
+  Invites and the Roles column.
+- **Delete Server** — a confirmation dialog reading "Delete *name*", "Are you
+  sure you want to delete *name*? This action cannot be undone.", with Cancel
+  and a red Delete Server.
+
+Everything else in the reference is out: Server Tag, Engagement, Boost Perks,
+Emoji, Stickers, Soundboard, Access, Integrations, App Directory, Safety Setup,
+Audit Log, Bans, AutoMod, Enable Community, Server Template. **Roles is next
+cycle.**
+
+### Access
+
+There is one join mode: **invite only**. The reference Apply to Join and
+Discoverable both need a moderation and discovery surface that does not exist
+here. Age-Restricted and Server Rules are out for the same reason.
 
 ## Failure modes
 
