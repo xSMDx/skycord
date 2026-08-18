@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose'
+import type { ICrop } from './User'
 
 /**
  * A server: a named place with members and channels. Deliberately separate
@@ -6,8 +7,6 @@ import mongoose, { Document, Schema, Types } from 'mongoose'
  * would be a live-data migration across every DM and group path.
  */
 export const MAX_SERVER_MEMBERS = 100
-
-export interface ICrop { zoom: number; x: number; y: number }
 
 export interface IServer extends Document {
   _id:         Types.ObjectId
