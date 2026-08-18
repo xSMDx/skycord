@@ -94,7 +94,11 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
       if (!n || n.length > 100) { res.status(400).json({ message: 'Give the server a name' }); return }
       server.name = n
     }
-    if (icon !== undefined)        server.icon = icon === null ? null : String(icon)
+    if (icon !== undefined) {
+      // Same cap and message as the group-icon update in conversationsController.
+      if (icon && String(icon).length > 1_500_000) { res.status(400).json({ message: 'Image is too large' }); return }
+      server.icon = icon === null ? null : String(icon)
+    }
     if (bannerColor !== undefined) server.bannerColor = bannerColor === null ? null : String(bannerColor)
     if (description !== undefined) server.description = description === null ? null : String(description).slice(0, 300)
     if (iconCrop !== undefined) {

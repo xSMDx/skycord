@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth'
+import { uploadLimit, writeLimit } from '../middleware/rateLimit'
 import {
   createServer, getMyServers, getServer, updateServer, deleteServer,
   getServerMembers, removeMember,
@@ -8,10 +9,10 @@ import {
 const router = Router()
 router.use(requireAuth)
 
-router.post('/',                       createServer)
+router.post('/',                       writeLimit,  createServer)
 router.get('/',                        getMyServers)
 router.get('/:sid',                    getServer)
-router.patch('/:sid',                  updateServer)
+router.patch('/:sid',                  uploadLimit, updateServer)
 router.delete('/:sid',                 deleteServer)
 router.get('/:sid/members',            getServerMembers)
 router.delete('/:sid/members/:uid',    removeMember)
