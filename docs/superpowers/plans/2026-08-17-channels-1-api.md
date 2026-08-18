@@ -27,7 +27,7 @@ Spec: `docs/superpowers/specs/2026-08-17-channels-design.md`
 
 **Files:**
 - Modify: `package.json`
-- Create: `vitest.config.ts`
+- Create: `vitest.config.mts`
 - Create: `server/__tests__/helpers.ts`
 - Test: `server/__tests__/health.test.ts`
 
@@ -50,7 +50,7 @@ In `package.json`, inside `"scripts"`, after the `"typecheck"` line:
     "test:watch": "vitest"
 ```
 
-- [ ] **Step 3: Create `vitest.config.ts`**
+- [ ] **Step 3: Create `vitest.config.mts`**
 
 ```ts
 import { defineConfig } from 'vitest/config'
