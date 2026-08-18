@@ -1,0 +1,119 @@
+import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { Types } from 'mongoose'
+import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } from './helpers'
+import { Server } from '../models/Server'
+import { ServerInvite } from '../models/ServerInvite'
+
+beforeAll(connectDb)
+afterAll(disconnectDb)
+beforeEach(resetDb)
+
+const mkServer = async (u: TestUser) =>
+  (await app().post('/servers').set(auth(u)).send({ name: 'EA' })).body.server
+const mkInvite = async (u: TestUser, sid: string, expiry: '24h' | '7d' | 'never' = '24h') =>
+  (await app().post(`/servers/${sid}/invites`).set(auth(u)).send({ expiry })).body.invite
+
+describe('POST /servers/:sid/invites', () => {
+  it('mints a 24h invite by default', async () => {
+    const u = await register()
+    const s = await mkServer(u)
+    const res = await app().post(`/servers/${s.id}/invites`).set(auth(u)).send({ expiry: '24h' })
+    expect(res.status).toBe(201)
+    expect(res.body.invite.code).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(res.body.invite.uses).toBe(0)
+    const ms = new Date(res.body.invite.expiresAt).getTime() - Date.now()
+    expect(ms).toBeGreaterThan(23 * 3600_000)
+  })
+
+  it('mints a never-expiring invite with a null expiry', async () => {
+    const u = await register()
+    const s = await mkServer(u)
+    const inv = await mkInvite(u, s.id, 'never')
+    expect(inv.expiresAt).toBeNull()
+  })
+
+  it('403s a non-owner', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const res = await app().post(`/servers/${s.id}/invites`).set(auth(b)).send({ expiry: '24h' })
+    expect(res.status).toBe(403)
+  })
+})
+
+describe('POST /invites/:code', () => {
+  it('joins the server and increments uses', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.status).toBe(200)
+    expect(res.body.server.id).toBe(s.id)
+    expect(res.body.channels).toHaveLength(2)
+
+    const after = (await app().get(`/servers/${s.id}/members`).set(auth(b))).body.members
+    expect(after).toHaveLength(2)
+    const stored = await ServerInvite.findOne({ code: inv.code })
+    expect(stored!.uses).toBe(1)
+  })
+
+  it('is idempotent for someone already in', async () => {
+    const a = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+    const res = await app().post(`/invites/${inv.code}`).set(auth(a))
+    expect(res.status).toBe(200)
+    const members = (await app().get(`/servers/${s.id}/members`).set(auth(a))).body.members
+    expect(members).toHaveLength(1)
+  })
+
+  it('404s an unknown code', async () => {
+    const u = await register()
+    const res = await app().post('/invites/nope').set(auth(u))
+    expect(res.status).toBe(404)
+  })
+
+  it('410s an expired invite, distinctly from unknown', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+    await ServerInvite.updateOne({ code: inv.code }, { expiresAt: new Date(Date.now() - 1000) })
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.status).toBe(410)
+    expect(res.body.message).toMatch(/expired/i)
+  })
+
+  it('409s when the server is full', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+    // Pad to the cap without registering 99 accounts.
+    const filler = Array.from({ length: 99 }, () => new Types.ObjectId())
+    await Server.updateOne({ _id: s.id }, { $push: { members: { $each: filler } } })
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.status).toBe(409)
+    expect(res.body.message).toMatch(/full/i)
+  })
+})
+
+describe('DELETE /servers/:sid/invites/:code', () => {
+  it('revokes, and the code stops working', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+    expect((await app().delete(`/servers/${s.id}/invites/${inv.code}`).set(auth(a))).status).toBe(200)
+    expect((await app().post(`/invites/${inv.code}`).set(auth(b))).status).toBe(404)
+  })
+})
+
+describe('GET /servers/:sid/invites', () => {
+  it('lists active invites for the owner', async () => {
+    const u = await register()
+    const s = await mkServer(u)
+    await mkInvite(u, s.id)
+    const res = await app().get(`/servers/${s.id}/invites`).set(auth(u))
+    expect(res.status).toBe(200)
+    expect(res.body.invites).toHaveLength(1)
+    expect(res.body.invites[0].inviter.username).toBe(u.username)
+  })
+})
