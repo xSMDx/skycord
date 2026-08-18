@@ -12,6 +12,7 @@ import conversationsRoutes from './routes/conversations'
 import themesRoutes   from './routes/themes'
 import voiceRoutes    from './routes/voice'
 import gifsRoutes     from './routes/gifs'
+import serversRoutes  from './routes/servers'
 import { errorHandler, notFound } from './middleware/errorHandler'
 import { apiLimit } from './middleware/rateLimit'
 
@@ -72,6 +73,7 @@ export const createApp = () => {
   app.use('/themes',        themesRoutes)
   app.use('/voice',         voiceRoutes)
   app.use('/gifs',          gifsRoutes)
+  app.use('/servers',       serversRoutes)
 
   app.use(notFound)
   app.use(errorHandler)
