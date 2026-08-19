@@ -5,6 +5,8 @@ import { Message }  from '../models/Message'
 import { User }     from '../models/User'
 import { Conversation } from '../models/Conversation'
 import { Friendship } from '../models/Friendship'
+import { Server } from '../models/Server'
+import { Channel } from '../models/Channel'
 import { dmConvId, canDM } from '../controllers/messagesController'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
@@ -591,6 +593,16 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // Join a room per group so group:send broadcasts reach every member.
       myGroups = await Conversation.find({ members: userId }).select('_id').lean()
       myGroups.forEach(g => socket.join(`group:${g._id.toString()}`))
+
+      // One room per channel, not per server: a member receives only the
+      // channels they can see, which is the shape per-channel permissions
+      // will need in a later cycle.
+      const myServers = await Server.find({ members: userId }).select('_id').lean()
+      if (myServers.length) {
+        const myChannels = await Channel.find({ server: { $in: myServers.map(s => s._id) } })
+          .select('_id').lean()
+        myChannels.forEach(c => socket.join(`chan:${c._id.toString()}`))
+      }
 
       // Presence goes to friends only. It used to be io.emit(...), so every
       // connected client learned every other user's online/offline transitions
