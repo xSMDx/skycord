@@ -2,6 +2,10 @@ import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
 import { Channel } from '../models/Channel'
 import { loadServer, requireOwner, shapeChannel } from './serversController'
+import { Message } from '../models/Message'
+import { User } from '../models/User'
+import { resolveMessages } from './messagesController'
+import { getIO } from '../sockets/chatSocket'
 
 /**
  * Serializes callbacks per server id, within this process only. Guards the
@@ -95,5 +99,80 @@ export const deleteChannel = async (req: Request, res: Response, next: NextFunct
       await found.channel.deleteOne()
       res.json({ ok: true })
     })
+  } catch (err) { next(err) }
+}
+
+/** Oldest-first, resolved so author data is live rather than the frozen snapshot. */
+export const getChannelMessages = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const found = await loadChannel(req, res); if (!found) return
+    const raw = await Message.find({ conversationId: found.channel._id.toString() })
+      .sort({ createdAt: 1 }).lean()
+    res.json({ messages: await resolveMessages(raw) })
+  } catch (err) { next(err) }
+}
+
+export const sendChannelMessage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const found = await loadChannel(req, res); if (!found) return
+    const userId = req.user!.sub
+
+    // A voice channel is one thing. Text-in-voice is deliberately out of scope.
+    if (found.channel.type !== 'text') {
+      res.status(400).json({ message: 'You cannot post messages in a voice channel' }); return
+    }
+
+    const { content, replyToIds } = req.body as { content?: string; replyToIds?: string[] }
+    if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
+
+    // Name and avatar come from the User document, never the request body —
+    // accepting them from the client is how an author-spoofing hole was opened
+    // on the other send paths.
+    const sender = await User.findById(userId)
+      .select('avatar avatarCrop displayName username').lean()
+
+    const ids = Array.isArray(replyToIds) ? replyToIds : []
+    const targets = ids.length
+      ? await Message.find({ _id: { $in: ids } }).select('authorName content').lean()
+      : []
+    const byId = new Map(targets.map(t => [t._id.toString(), t]))
+    const replyTo = ids
+      .map(id => byId.get(id))
+      .filter((t): t is NonNullable<typeof t> => !!t)
+      .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+
+    const channelId = found.channel._id.toString()
+    const msg = await Message.create({
+      conversationId:   channelId,
+      kind:             'channel',
+      authorId:         userId,
+      authorName:       sender?.displayName || sender?.username || 'Unknown',
+      authorAvatar:     sender?.avatar ?? null,
+      authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
+      content:          content.trim(),
+      replyToIds:       ids,
+    })
+
+    const payload = {
+      _id:              msg._id.toString(),
+      conversationId:   channelId,
+      kind:             'channel',
+      authorId:         userId,
+      authorName:       msg.authorName,
+      authorAvatar:     sender?.avatar ?? null,
+      authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
+      content:          msg.content,
+      reactions:        [],
+      pinned:           false,
+      edited:           false,
+      replyTo,
+      createdAt:        msg.createdAt.toISOString(),
+    }
+
+    // Reach connected members live. The sender used REST because their own
+    // socket is down, so they will not echo this back to themselves.
+    getIO()?.to(`chan:${channelId}`).emit('channel:receive', payload)
+
+    res.status(201).json({ message: payload })
   } catch (err) { next(err) }
 }

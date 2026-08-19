@@ -5,7 +5,9 @@ import {
   createServer, getMyServers, getServer, updateServer, deleteServer,
   getServerMembers, removeMember,
 } from '../controllers/serversController'
-import { createChannel, updateChannel, deleteChannel } from '../controllers/channelsController'
+import {
+  createChannel, updateChannel, deleteChannel, getChannelMessages, sendChannelMessage,
+} from '../controllers/channelsController'
 import { createInvite, listInvites, revokeInvite } from '../controllers/invitesController'
 
 const router = Router()
@@ -24,6 +26,9 @@ router.delete('/:sid/members/:uid',    removeMember)
 router.post('/:sid/channels',          writeLimit,  createChannel)
 router.patch('/:sid/channels/:cid',    writeLimit,  updateChannel)
 router.delete('/:sid/channels/:cid',   deleteChannel)
+
+router.get('/:sid/channels/:cid/messages',              getChannelMessages)
+router.post('/:sid/channels/:cid/messages', writeLimit, sendChannelMessage)
 
 // Minting an invite is a create, same class as above — writeLimit. Listing is
 // a plain scoped read. Revoking follows the DELETE-stays-unlimited convention.
