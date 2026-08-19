@@ -15,7 +15,7 @@ import { Request } from 'express'
 
 const keyByUser = (req: Request) => req.user?.sub || req.ip || 'unknown'
 
-const make = (windowMs: number, max: number, message: string): ReturnType<typeof rateLimit> =>
+export const make = (windowMs: number, max: number, message: string): ReturnType<typeof rateLimit> =>
   rateLimit({
     windowMs,
     max,

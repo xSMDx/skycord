@@ -1,31 +1,18 @@
 import { Router } from 'express'
-import rateLimit from 'express-rate-limit'
 import { register, login, refresh, logout, me } from '../controllers/authController'
 import { requireAuth } from '../middleware/auth'
+import { make } from '../middleware/rateLimit'
 
 const router = Router()
 
-const strictLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many attempts — please wait 15 minutes', code: 'RATE_LIMITED' },
-  // VITEST (not NODE_ENV) — prod runs with NODE_ENV=development, so NODE_ENV
-  // would disable this limiter live. VITEST is only ever set by the test runner.
-  skip: () => !!process.env.VITEST,
-})
-
-const refreshLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many refresh requests', code: 'RATE_LIMITED' },
-  // VITEST (not NODE_ENV) — prod runs with NODE_ENV=development, so NODE_ENV
-  // would disable this limiter live. VITEST is only ever set by the test runner.
-  skip: () => !!process.env.VITEST,
-})
+// Routed through the shared make() factory (carries the VITEST skip) rather
+// than building rateLimit() inline, so a limiter added here later can't
+// forget it. Windows, maxes and messages are unchanged from before.
+// make() keys by req.user?.sub || req.ip; these routes run before
+// requireAuth, so req.user is always unset here and this reduces to the
+// same req.ip keying express-rate-limit's own default used previously.
+const strictLimit = make(15 * 60 * 1000, 10, 'Too many attempts — please wait 15 minutes')
+const refreshLimit = make(15 * 60 * 1000, 60, 'Too many refresh requests')
 
 router.post('/register', strictLimit,  register)
 router.post('/login',    strictLimit,  login)

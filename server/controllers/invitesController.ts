@@ -102,8 +102,10 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
 
       if (upd.modifiedCount === 1) {
         joined = true
-        invite.uses += 1
-        await invite.save()
+        // Atomic $inc, not read/modify/write: two different users joining
+        // concurrently would otherwise both read uses=0 and both write 1,
+        // under-counting by one.
+        await ServerInvite.updateOne({ _id: invite._id }, { $inc: { uses: 1 } })
         server = await Server.findById(invite.server) ?? server
       } else {
         // No match: either this user is already a member (lost a race to

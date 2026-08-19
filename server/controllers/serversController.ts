@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
-import { Server, MAX_SERVER_MEMBERS } from '../models/Server'
+import { Server } from '../models/Server'
 import { Channel } from '../models/Channel'
+import { ServerInvite } from '../models/ServerInvite'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
 
@@ -99,7 +100,13 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
       if (icon && String(icon).length > 1_500_000) { res.status(400).json({ message: 'Image is too large' }); return }
       server.icon = icon === null ? null : String(icon)
     }
-    if (bannerColor !== undefined) server.bannerColor = bannerColor === null ? null : String(bannerColor)
+    if (bannerColor !== undefined) {
+      // Same validation as the profile bannerColor in usersController: a
+      // strict #rrggbb hex, lowercased, or reject with a friendly 400.
+      if (bannerColor === null) server.bannerColor = null
+      else if (/^#[0-9a-f]{6}$/i.test(String(bannerColor))) server.bannerColor = String(bannerColor).toLowerCase()
+      else { res.status(400).json({ message: 'Banner colour must be a #rrggbb hex' }); return }
+    }
     if (description !== undefined) server.description = description === null ? null : String(description).slice(0, 300)
     if (iconCrop !== undefined) {
       const c = iconCrop
@@ -117,6 +124,9 @@ export const deleteServer = async (req: Request, res: Response, next: NextFuncti
     const server = await loadServer(req, res); if (!server) return
     if (!requireOwner(server, req.user!.sub, res)) return
     await Channel.deleteMany({ server: server._id })
+    // Invites with expiresAt: null are skipped by the TTL index and would
+    // otherwise outlive the server they point at.
+    await ServerInvite.deleteMany({ server: server._id })
     await server.deleteOne()
     res.json({ ok: true })
   } catch (err) { next(err) }
@@ -156,10 +166,12 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     }
     if (!isSelf && !requireOwner(server, me, res)) return
 
-    server.members = server.members.filter(m => m.toString() !== target)
-    await server.save()
+    // Atomic $pull, not read/filter/save: a plain save() would emit a full
+    // $set of the array, and versionKey: false means there is no optimistic-
+    // concurrency backstop — a kick racing a concurrent join could silently
+    // drop the joiner. $pull removes exactly the one id, however the
+    // document has changed underneath since it was loaded.
+    await Server.updateOne({ _id: server._id }, { $pull: { members: target } })
     res.json({ ok: true })
   } catch (err) { next(err) }
 }
-
-export { MAX_SERVER_MEMBERS }
