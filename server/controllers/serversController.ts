@@ -166,6 +166,11 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     }
     if (!isSelf && !requireOwner(server, me, res)) return
 
+    // Guard against malformed ids that Mongoose would try to cast, throwing
+    // a CastError. This keeps the endpoint idempotent: a non-castable id
+    // matches nothing and succeeds with 200 OK.
+    if (!Types.ObjectId.isValid(target)) { res.json({ ok: true }); return }
+
     // Atomic $pull, not read/filter/save: a plain save() would emit a full
     // $set of the array, and versionKey: false means there is no optimistic-
     // concurrency backstop — a kick racing a concurrent join could silently

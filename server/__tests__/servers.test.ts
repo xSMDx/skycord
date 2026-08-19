@@ -66,6 +66,7 @@ describe('GET /servers/:sid', () => {
     const s = await mkServer(a)
     const res = await app().get(`/servers/${s.id}`).set(auth(b))
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/not a member/i)
   })
 
   it('404s an unknown id', async () => {
@@ -89,6 +90,7 @@ describe('PATCH /servers/:sid', () => {
     const s = await mkServer(a)
     const res = await app().patch(`/servers/${s.id}`).set(auth(b)).send({ name: 'x' })
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/not a member/i)
   })
 
   it('403s a non-owner member', async () => {
@@ -97,6 +99,7 @@ describe('PATCH /servers/:sid', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().patch(`/servers/${s.id}`).set(auth(b)).send({ name: 'x' })
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/owner/i)
   })
 
   it('rejects an oversized icon with a friendly 400', async () => {
@@ -152,6 +155,7 @@ describe('DELETE /servers/:sid', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().delete(`/servers/${s.id}`).set(auth(b))
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/owner/i)
   })
 
   it('takes the invites with it, including never-expiring ones', async () => {
@@ -182,6 +186,15 @@ describe('DELETE /servers/:sid/members/:uid', () => {
     await joinAsMember(s.id, c.id)
     const res = await app().delete(`/servers/${s.id}/members/${c.id}`).set(auth(b))
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/owner/i)
+  })
+
+  it('200s when removing a member with a malformed uid, idempotent for non-existent ids', async () => {
+    const a = await register()
+    const s = await mkServer(a)
+    const res = await app().delete(`/servers/${s.id}/members/not-an-id`).set(auth(a))
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
   })
 
   it('lets a non-owner member remove themselves, and they are actually gone', async () => {

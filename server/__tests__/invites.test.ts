@@ -48,6 +48,7 @@ describe('POST /servers/:sid/invites', () => {
     const s = await mkServer(a)
     const res = await app().post(`/servers/${s.id}/invites`).set(auth(b)).send({ expiry: '24h' })
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/not a member/i)
   })
 
   it('403s a non-owner member', async () => {
@@ -56,6 +57,7 @@ describe('POST /servers/:sid/invites', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().post(`/servers/${s.id}/invites`).set(auth(b)).send({ expiry: '24h' })
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/owner/i)
   })
 })
 
@@ -171,6 +173,7 @@ describe('DELETE /servers/:sid/invites/:code', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().delete(`/servers/${s.id}/invites/${inv.code}`).set(auth(b))
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/owner/i)
   })
 })
 
@@ -192,5 +195,6 @@ describe('GET /servers/:sid/invites', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().get(`/servers/${s.id}/invites`).set(auth(b))
     expect(res.status).toBe(403)
+    expect(res.body.message).toMatch(/owner/i)
   })
 })
