@@ -152,6 +152,29 @@ describe('server and channel lifecycle events', () => {
     expect(p.userId).toBe(b.id)
   })
 
+  // The event above only announces the removal — it doesn't stop traffic.
+  // Nothing evicted the removed member's sockets from the server's chan:
+  // rooms, so channel:receive kept reaching them for the life of the socket
+  // even though REST was already correctly 403ing them. Proven the same way
+  // as the deleted-channel eviction test below: post for real after the
+  // kick and show nothing arrives, not just that no eviction call was made.
+  it("evicts a kicked member's sockets from the server's channel rooms, so live channel traffic stops reaching them", async () => {
+    const a = await register()
+    const { server, channels } = await mkServer(a)
+    const c = channels.find((x: any) => x.type === 'text')
+    const { b, sock: bSock } = await memberSocket(server.id)
+
+    await app().delete(`/servers/${server.id}/members/${b.id}`).set(auth(a))
+
+    let seen = false
+    bSock.on('channel:receive', () => { seen = true })
+    await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(a)).send({ content: 'after kick' })
+
+    await new Promise(r => setTimeout(r, 400))
+    expect(seen).toBe(false)
+  })
+
   // (a) The binding constraint that matters most: a brand-new channel's room
   // must actually carry traffic to members who were already connected when
   // it was created, not merely announce that the channel exists. Their
@@ -172,6 +195,49 @@ describe('server and channel lifecycle events', () => {
     const payload = await received
     expect(payload.content).toBe('fresh room hello')
     expect(payload.conversationId).toBe(created.id)
+  })
+
+  // joinViaInvite added the member to the server document but never put
+  // their already-open sockets into the server's chan: rooms — rooms are
+  // joined once, at connect time, and this membership didn't exist then. A
+  // user who joins while connected saw a dead channel until they happened
+  // to reconnect, which is the headline feature failing on the primary
+  // entry path (invites, not the seed-membership test shortcut).
+  it('joins a mid-session invite-joiner into channel rooms without requiring a reconnect', async () => {
+    const a = await register()
+    const { server, channels } = await mkServer(a)
+    const c = channels.find((x: any) => x.type === 'text')
+    const inv = (await app().post(`/servers/${server.id}/invites`)
+      .set(auth(a)).send({ expiry: '24h' })).body.invite
+
+    const b = await register()
+    // Connects BEFORE joining, so its chan: rooms at connect time reflect
+    // zero server membership — exactly the "already connected" scenario.
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    await app().post(`/invites/${inv.code}`).set(auth(b))
+
+    const received = nextEvent(bSock, 'channel:receive')
+    await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(a)).send({ content: 'welcome' })
+
+    const payload = await received
+    expect(payload.content).toBe('welcome')
+  })
+
+  // There is no server:deleted event, so a member's client has no way to
+  // make the server disappear from their rail when the owner deletes it.
+  // Must fire BEFORE the documents are removed — emitToServer reads the
+  // member list off the server doc, which no longer exists afterwards.
+  it('announces server:deleted to members before the server is gone', async () => {
+    const a = await register()
+    const { server } = await mkServer(a)
+    const { sock } = await memberSocket(server.id)
+    const got = nextEvent(sock, 'server:deleted')
+
+    await app().delete(`/servers/${server.id}`).set(auth(a))
+
+    const p = await got
+    expect(p.serverId).toBe(server.id)
   })
 
   // (c) A deleted channel's room must actually evict its sockets, not just

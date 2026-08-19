@@ -135,6 +135,30 @@ export const deleteServer = async (req: Request, res: Response, next: NextFuncti
   try {
     const server = await loadServer(req, res); if (!server) return
     if (!requireOwner(server, req.user!.sub, res)) return
+
+    // Gathered before anything is deleted: emitToServer reads the member
+    // list off the document, and the room list needs the channel ids —
+    // both are gone once the deletes below run.
+    const channels = await Channel.find({ server: server._id }).select('_id').lean()
+    const rooms = channels.map(c => `chan:${c._id.toString()}`)
+
+    // There was no event at all for this, so a member's client had no way
+    // to make the server disappear from their rail. Must fire before the
+    // documents are removed, for the same reason the room list above is
+    // gathered early.
+    emitToServer(server, 'server:deleted', { serverId: server._id.toString() })
+
+    // Evict every member's sockets from this server's channel rooms — the
+    // analogue of the removeMember eviction below, but for all members at
+    // once since the whole server is going away. Without this, chan: traffic
+    // (there is none left to emit, but the rooms themselves persist on the
+    // socket) would otherwise linger until each socket happens to reconnect.
+    // One call across every member room, mirroring createChannel's join.
+    if (rooms.length) {
+      const io = getIO()
+      if (io) io.in(server.members.map(m => `user:${m.toString()}`)).socketsLeave(rooms)
+    }
+
     await Channel.deleteMany({ server: server._id })
     // Invites with expiresAt: null are skipped by the TTL index and would
     // otherwise outlive the server they point at.
@@ -209,6 +233,14 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
       emitToServer(server, 'server:memberLeft', {
         serverId: server._id.toString(), userId: target,
       })
+      // REST is already 403'd for this user going forward, but their sockets
+      // joined chan: rooms at connect time and nothing evicted them — live
+      // channel traffic kept reaching them for the rest of the socket's
+      // life. Mirrors deleteChannel's socketsLeave, scoped to this one user
+      // across every channel of this server, in a single call.
+      const channels = await Channel.find({ server: server._id }).select('_id').lean()
+      const rooms = channels.map(c => `chan:${c._id.toString()}`)
+      if (rooms.length) getIO()?.in(`user:${target}`).socketsLeave(rooms)
     }
     res.json({ ok: true })
   } catch (err) { next(err) }

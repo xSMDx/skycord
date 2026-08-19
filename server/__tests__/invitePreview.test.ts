@@ -32,6 +32,9 @@ describe('GET /invites/:code', () => {
     // Previewing must not join.
     const after = await app().get(`/servers/${s.id}`).set(auth(b))
     expect(after.status).toBe(403)
+
+    // Previewing must not mutate the invite either.
+    expect((await ServerInvite.findOne({ code: inv.code }))!.uses).toBe(0)
   })
 
   it('does not leak sensitive fields and returns only allowed keys', async () => {

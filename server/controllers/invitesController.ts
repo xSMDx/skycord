@@ -6,6 +6,7 @@ import { User } from '../models/User'
 import { generateInviteCode } from '../utils/inviteCode'
 import { loadServer, requireOwner, shapeServer, shapeChannel, emitToServer } from './serversController'
 import { effectiveStatus } from '../state/presence'
+import { getIO } from '../sockets/chatSocket'
 
 const DAY = 24 * 60 * 60 * 1000
 const expiryFor = (v: unknown): Date | null =>
@@ -177,6 +178,18 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
     }
 
     const channels = await Channel.find({ server: server._id }).sort({ type: 1, position: 1 }).lean()
+
+    // A member who joins while already connected must start RECEIVING this
+    // server's channels immediately, not only after a reconnect — their
+    // sockets joined rooms once, at connect time, before this membership
+    // existed. Gated on `joined` (true only for a genuine new join here),
+    // never for the idempotent "already a member" / lost-the-race branches
+    // above, whose sockets are already correctly in these rooms already.
+    if (joined) {
+      const rooms = channels.map(c => `chan:${c._id.toString()}`)
+      if (rooms.length) getIO()?.in(`user:${userId}`).socketsJoin(rooms)
+    }
+
     res.json({ server: shapeServer(server), channels: channels.map(shapeChannel), joined })
   } catch (err) { next(err) }
 }
