@@ -5,8 +5,8 @@ import {
   Search, Users, ChevronDown,
   Mic, MicOff, Headphones, Settings,
   Pin, BellOff, PanelLeft, Compass,
-  MessageCircle, X, UserPlus, Mail,
-  Check, LoaderCircle, Ellipsis,
+  MessageCircle, X, UserPlus,
+  Check, Ellipsis,
   Pencil, UsersRound,
   User, Paperclip, AtSign, SlidersHorizontal, Copy,
   Phone, Camera, PhoneOff
@@ -65,7 +65,7 @@ import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMen
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
-import type { DM, Friend, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
+import type { DM, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 const { user: authUser, authFetch, updateUser } = useAuth()
@@ -111,7 +111,7 @@ const {
   pushDMMessage, pushGroupMessage,
   sendDM, sendGroup, sendChannel,
   toggleDMReaction, toggleChannelReaction,
-  pinMessage, deleteMessage, editMessage,
+  deleteMessage, editMessage,
 } = useMessages()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -127,7 +127,6 @@ const {
   sendPinSocket,
   sendReactSocket,
   sendGroupSocket,
-  getMessageSocket,
   sendTypingStart,
   sendTypingStop,
   subscribeGroup,
@@ -485,9 +484,6 @@ const ctxMenu = ref<{ x: number; y: number; msg: Message } | null>(null)
 const msgListRef = ref<InstanceType<typeof MessageList> | null>(null)
 
 // ── Role colours ───────────────────────────────────────────────────────────
-const roleColor: Record<string, string> = {
-  owner: '#f47fff', admin: '#ff6b6b', mod: '#5dade2', vip: '#f4d03f', member: '#dcddde',
-}
 
 // ── Static server/channel data ─────────────────────────────────────────────
 const servers: Server[] = [
@@ -505,7 +501,6 @@ const channels: Channel[] = [
   { id: 'gaming-vc',     name: 'gaming',        type: 'voice', serverId: 'sykord' },
 ]
 const members: Member[] = []
-const voiceUsers: any[] = []
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 // avatarFor is imported from the shared composable (see top of file) so this
@@ -624,8 +619,6 @@ const voiceChannels   = computed(() => channels.filter(c => c.type === 'voice' &
 const currentChannel  = computed(() => channels.find(c => c.id === activeChannel.value))
 const currentServer   = computed(() => servers.find(s => s.id === activeServer.value))
 const onlineMembers   = computed(() => members.filter(m => m.status !== 'offline'))
-const offlineMembers  = computed(() => members.filter(m => m.status === 'offline'))
-const onlineFriends   = computed(() => apiFriends.value.filter(f => f.status !== 'offline'))
 const activeNow       = computed(() => apiFriends.value.filter(f => f.status === 'online' || f.status === 'idle'))
 const filteredFriends = computed(() => {
   const q = friendSearch.value.trim().toLowerCase()
@@ -1389,39 +1382,6 @@ const showReplyTree    = ref(false)
 const replyTreeData     = ref<ReplyGraph | null>(null)
 const replyTreeLoading = ref(false)
 
-// Resolve one message by dbId — local cache first, socket fallback for ancestors
-// not currently loaded (e.g. scrolled-off history).
-const resolveMessageById = async (id: string): Promise<Message | null> => {
-  const localList = getMsgList()
-  const local = localList.find(m => (m as any).dbId === id || String(m.id) === id)
-  if (local) return local
-
-  if (!activeDM.value) return null
-  try {
-    const ack = await getMessageSocket(id)
-    if (!ack.ok || !ack.message) return null
-    const fetched = ack.message
-    return {
-      id:          parseInt(id.slice(-8), 16) || Date.now(),
-      dbId:        id,
-      author:      fetched.authorName,
-      authorId:    fetched.authorId,
-      content:     fetched.content,
-      time:        new Date(fetched.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp:   new Date(fetched.createdAt).getTime(),
-      avatar:      fetched.authorAvatar || avatarFor(fetched.authorName),
-      avatarCrop:  (fetched as any).authorAvatarCrop ?? null,
-      avatarColor: '#5865f2',
-      reactions:   [],
-      pinned:      fetched.pinned,
-      edited:      fetched.edited,
-      replyTo:     fetched.replyTo?.length ? fetched.replyTo : undefined,
-    }
-  } catch (e) {
-    console.error('[resolveMessageById]', e)
-    return null
-  }
-}
 
 // Build the connected reply graph around the held message: walk its parents
 // (via replyTo[]) and any loaded message that replies to a node, collecting a
@@ -1491,7 +1451,6 @@ const jumpToMessage = (dbId: string) => {
 }
 
 // ── Emoji picker for input box (float, unchanged) ──────────────────────────
-const openEmojiForMsg   = (msgId: number) => { emojiTargetMsgId.value = msgId; showEmojiPicker.value = true }
 const emojiPickerTab    = ref<'emojis' | 'gifs' | 'stickers'>('emojis')
 const openEmojiForInput = ()               => { emojiTargetMsgId.value = null;  emojiPickerTab.value = 'emojis'; showEmojiPicker.value = true }
 // The composer's GIF button was inert — no handler at all. It opens the same

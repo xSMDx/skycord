@@ -3,7 +3,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 
-const props = defineProps<{
+defineProps<{
   title: string
   description?: string
   saving?: boolean

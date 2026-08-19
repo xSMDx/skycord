@@ -9,7 +9,7 @@
  * Clicking a mutual friend re-targets this same modal rather than stacking a
  * second one, so you can walk the graph without a pile of dialogs behind you.
  */
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import {
   X, MessageCircle, UserPlus, UserMinus, Ellipsis, IdCard, Check,
 } from 'lucide-vue-next'
@@ -67,7 +67,6 @@ watch(currentId, id => {
   void load(id)
 }, { immediate: true })
 
-const name = computed(() => user.value?.displayName || user.value?.username || 'Unknown')
 const fmt = (d: string | null) => {
   if (!d) return null
   const dt = new Date(d)
