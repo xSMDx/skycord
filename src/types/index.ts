@@ -99,15 +99,22 @@ export interface Member {
 export interface Server {
   id:     string
   name:   string
+  /** Renderable icon: the stored icon when there is one, else a generated initials data-URI. */
   img:    string
+  /** The raw stored icon, null when the user has never set one. */
+  icon?:       string | null
+  iconCrop?:   AvatarCrop | null
+  owner?:      string
+  memberCount?: number
   unread?: number
 }
- 
+
 export interface Channel {
   id:       string
   name:     string
   type:     'text' | 'voice'
   serverId: string
+  position?: number
   unread?:  number
   locked?:  boolean
 }
