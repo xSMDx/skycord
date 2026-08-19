@@ -608,16 +608,21 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         myChannels.forEach(c => socket.join(`chan:${c._id.toString()}`))
       }
 
-      // Presence goes to friends only. It used to be io.emit(...), so every
-      // connected client learned every other user's online/offline transitions
-      // — a behavioural-pattern leak, and friends are the only people with a UI
-      // that displays it.
       const fr = await Friendship.find({
         status: 'accepted',
         $or: [{ requester: userId }, { receiver: userId }],
       }).select('requester receiver').lean()
-      myFriendIds = fr.map(f =>
+      const friendIds = fr.map(f =>
         f.requester.toString() === userId ? f.receiver.toString() : f.requester.toString())
+
+      // Presence reaches friends PLUS anyone sharing a server. A member list
+      // without live status is most of the point of a member list, and the
+      // audience only widens to rooms the user chose to join. Invisible is
+      // still a full opt-out, because effectiveStatus maps it to offline.
+      const coMemberIds = (await Server.find({ members: userId }).select('members').lean())
+        .flatMap(s => s.members.map(m => m.toString()))
+
+      myFriendIds = [...new Set([...friendIds, ...coMemberIds])].filter(id => id !== userId)
 
       // Announce only on the first socket; extra tabs shouldn't re-broadcast.
       if (wasOffline) {
