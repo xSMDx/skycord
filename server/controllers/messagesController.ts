@@ -68,12 +68,20 @@ const parentIdsOf = (m: any): string[] => {
   return []
 }
 
-export const resolveMessages = async (messages: any[]) => {
+// `conversationId` is required, not optional: every call site resolves
+// exactly one conversation's messages, so the scope is always known and
+// unambiguous. Making it optional would leave the door open for a future
+// call site to forget it and reopen this exact leak — a crafted replyToIds
+// naming a message in someone else's DM would resolve here regardless of
+// what conversation the reader is actually looking at, echoing that
+// message's author name and a content snippet into a conversation the
+// attacker chose.
+export const resolveMessages = async (messages: any[], conversationId: string) => {
   const replyIds = [...new Set(messages.flatMap(parentIdsOf))]
 
   let replyPreviewById = new Map<string, ReplyPreview>()
   if (replyIds.length > 0) {
-    const replyTargets = await Message.find({ _id: { $in: replyIds } })
+    const replyTargets = await Message.find({ _id: { $in: replyIds }, conversationId })
       .select('authorName content')
       .lean()
     replyPreviewById = new Map(
@@ -125,7 +133,7 @@ export const getDMMessages = async (req: Request, res: Response, next: NextFunct
       .limit(limit)
       .lean()
 
-    const resolved = await resolveMessages(messages)
+    const resolved = await resolveMessages(messages, convId)
     res.json({ messages: resolved.reverse() })
   } catch (err) { next(err) }
 }
@@ -151,15 +159,30 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
     // The avatar was hardened previously; the name beside it was missed.
     const sender = await User.findById(userId).select('avatar avatarCrop displayName username').lean()
 
+    const conversationId = dmConvId(userId, partnerId)
+    const rawReplyIds = Array.isArray(replyToIds) ? replyToIds : []
+    // Persist only ids that resolve to a real message inside THIS DM. Storing
+    // the client's raw array (as this path used to) meant a reply id naming a
+    // message from someone else's DM sat in the document forever — harmless
+    // only as long as every reader also scoped its lookup, which is exactly
+    // the assumption that failed before resolveMessages was scoped above.
+    // Defense in depth, not the primary fix.
+    const validReplyIds = rawReplyIds.length
+      ? new Set(
+          (await Message.find({ _id: { $in: rawReplyIds }, conversationId })
+            .select('_id').lean()).map(d => d._id.toString())
+        )
+      : new Set<string>()
+
     const msg = await Message.create({
-      conversationId: dmConvId(userId, partnerId),
+      conversationId,
       kind:           'dm',
       authorId:       userId,
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:        content.trim(),
-      replyToIds:     Array.isArray(replyToIds) ? replyToIds : [],
+      replyToIds:     rawReplyIds.filter(id => validReplyIds.has(id)),
     })
 
     res.status(201).json({ message: msg })

@@ -57,10 +57,15 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
 }
 
 // Resolve a list of parent message ids into reply previews, preserving order
-// and dropping any that no longer exist.
-const buildReplyPreviews = async (ids?: string[]) => {
+// and dropping any that no longer exist. `conversationId` is required, not
+// optional — every call site knows exactly which conversation it's building
+// a message for, and an optional scope here is one forgotten call site away
+// from reopening the same leak: a crafted replyToIds naming a message in
+// someone else's DM would otherwise resolve and echo that message's author +
+// a content snippet into whatever conversation the caller chose.
+const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string) => {
   if (!Array.isArray(ids) || ids.length === 0) return []
-  const targets = await Message.find({ _id: { $in: ids } }).select('authorName content').lean()
+  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content').lean()
   const byId = new Map(targets.map(t => [t._id.toString(), t]))
   return ids
     .map(id => byId.get(id))
@@ -145,8 +150,14 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         if (!await canDM(userId, data.partnerId)) {
           ack?.({ ok: false, error: 'Not allowed' }); return
         }
+        const conversationId = dmConvId(userId, data.partnerId)
+        // Resolved once (scoped to this DM), then reused for both what gets
+        // persisted and what goes out in the payload — a reply id naming a
+        // message outside this conversation is dropped from both, not merely
+        // hidden from the response while still sitting in the stored doc.
+        const replyTo = await buildReplyPreviews(data.replyToIds, conversationId)
         const msg = await Message.create({
-          conversationId: dmConvId(userId, data.partnerId),
+          conversationId,
           kind:           'dm',
           authorId:       userId,
           // Server-side name, never the client's. data.authorName let a sender
@@ -155,7 +166,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
           content:        data.content.trim(),
-          replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
+          replyToIds:     replyTo.map(r => r.id),
         })
         const payload = {
           _id:            msg._id.toString(),
@@ -167,7 +178,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           reactions:      [],
           pinned:         false,
           edited:         false,
-          replyTo:        await buildReplyPreviews(data.replyToIds),
+          replyTo,
           createdAt:      msg.createdAt.toISOString(),
         }
         io.to(`user:${data.partnerId}`).emit('dm:receive', payload)
@@ -317,15 +328,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           ack?.({ ok: false, error: 'Not allowed' }); return
         }
 
+        const conversationId = dmConvId(userId, data.partnerId)
+        const replyTo = await buildReplyPreviews(data.replyToIds, conversationId)
         const msg = await Message.create({
-          conversationId: dmConvId(userId, data.partnerId),
+          conversationId,
           kind:           'dm',
           authorId:       userId,
           authorName:     myName,
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
           content:        data.content.trim(),
-          replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
+          replyToIds:     replyTo.map(r => r.id),
         })
 
         const payload = {
@@ -338,7 +351,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           reactions:      [],
           pinned:         false,
           edited:         false,
-          replyTo:        await buildReplyPreviews(data.replyToIds),
+          replyTo,
           createdAt: msg.createdAt.toISOString(),
         }
 
@@ -365,6 +378,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           ack?.({ ok: false, error: 'Not a member' }); return
         }
 
+        const replyTo = await buildReplyPreviews(data.replyToIds, data.groupId)
         const msg = await Message.create({
           conversationId: data.groupId,
           kind:           'group',
@@ -373,7 +387,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
           content:        data.content.trim(),
-          replyToIds:     Array.isArray(data.replyToIds) ? data.replyToIds : [],
+          replyToIds:     replyTo.map(r => r.id),
         })
 
         // Bump lastMessageAt so the group sorts to the top of conversation lists.
@@ -391,7 +405,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           reactions:      [],
           pinned:         false,
           edited:         false,
-          replyTo:        await buildReplyPreviews(data.replyToIds),
+          replyTo,
           createdAt:      msg.createdAt.toISOString(),
         }
 

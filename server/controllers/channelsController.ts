@@ -145,7 +145,7 @@ export const getChannelMessages = async (req: Request, res: Response, next: Next
       .limit(limit)
       .lean()
 
-    const resolved = await resolveMessages(raw)
+    const resolved = await resolveMessages(raw, found.channel._id.toString())
     res.json({ messages: resolved.reverse() })
   } catch (err) { next(err) }
 }

@@ -214,6 +214,37 @@ describe('GET /servers/:sid/channels/:cid/messages', () => {
     expect(res.status).toBe(403)
   })
 
+  // Exercises resolveMessages' own conversation scoping directly (the POST
+  // response's replyTo is built by sendChannelMessage's separate inline
+  // query, not by resolveMessages) — a regression here would only show up on
+  // a later GET, exactly like the DM/group leak this mirrors.
+  it('resolveMessages scopes replyTo to this channel on GET, and still resolves a same-channel reply', async () => {
+    const u = await register()
+    const { server, channels } = await mkServer(u)
+    const c = textOf(channels)
+    const other = (await app().post(`/servers/${server.id}/channels`)
+      .set(auth(u)).send({ name: 'second', type: 'text' })).body.channel
+
+    const secret = await app().post(`/servers/${server.id}/channels/${other.id}/messages`)
+      .set(auth(u)).send({ content: 'secret-in-other-channel-get' })
+    const secretId = secret.body.message._id
+
+    const original = await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(u)).send({ content: 'the original' })
+    const originalId = original.body.message._id
+
+    await Message.create({
+      conversationId: c.id, kind: 'channel', authorId: u.id, authorName: u.username,
+      content: 'poisoned reply', replyToIds: [secretId, originalId],
+    })
+
+    const res = await app().get(`/servers/${server.id}/channels/${c.id}/messages`).set(auth(u))
+    expect(res.status).toBe(200)
+    expect(JSON.stringify(res.body)).not.toContain('secret-in-other-channel-get')
+    const msg = res.body.messages.find((m: any) => m.content === 'poisoned reply')
+    expect(msg.replyTo).toEqual([{ id: originalId, author: u.username, content: 'the original' }])
+  })
+
   // getChannelMessages loaded an entire channel's history unbounded, and
   // resolveMessages then did an unbounded $in across every reply target in
   // that history. Pagination must match the DM path's contract exactly

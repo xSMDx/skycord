@@ -239,7 +239,7 @@ export const getGroupMessages = async (req: Request, res: Response, next: NextFu
       .limit(limit)
       .lean()
 
-    const resolved = await resolveMessages(messages)
+    const resolved = await resolveMessages(messages, groupId)
     res.json({ messages: resolved.reverse() })
   } catch (err) { next(err) }
 }
@@ -268,8 +268,15 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
     const sender = await User.findById(userId).select('avatar avatarCrop displayName username').lean()
 
     const ids = Array.isArray(replyToIds) ? replyToIds : []
+    // Scoped to this group: this endpoint builds its own reply preview inline
+    // rather than going through resolveMessages/buildReplyPreviews, so it
+    // needed the same conversationId scoping applied directly here. Without
+    // it, a reply id naming a message from an unrelated group or DM would
+    // resolve anyway, echoing that message's author + a content snippet into
+    // this group's preview — both in this response and, since it's persisted
+    // below, on every future GET of this group's history too.
     const targets = ids.length
-      ? await Message.find({ _id: { $in: ids } }).select('authorName content').lean()
+      ? await Message.find({ _id: { $in: ids }, conversationId: groupId }).select('authorName content').lean()
       : []
     const targetById = new Map(targets.map(t => [t._id.toString(), t]))
     const replyPreviews = ids
@@ -285,7 +292,9 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:        content.trim(),
-      replyToIds:     ids,
+      // Persist only the ids that survived scope validation above — matches
+      // the channel path's persistence rule, never the raw request-body ids.
+      replyToIds:     replyPreviews.map(r => r.id),
     })
     group.lastMessageAt = msg.createdAt
     await group.save()
