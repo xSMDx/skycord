@@ -188,10 +188,28 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     // concurrency backstop — a kick racing a concurrent join could silently
     // drop the joiner. $pull removes exactly the one id, however the
     // document has changed underneath since it was loaded.
-    await Server.updateOne({ _id: server._id }, { $pull: { members: target } })
-    emitToServer(server, 'server:memberLeft', {
-      serverId: server._id.toString(), userId: target,
-    })
+    // The filter includes `members: target`, not just `_id`, so a target
+    // that isn't in the array fails to match the DOCUMENT at all — not just
+    // the array element. That distinction matters because the schema has
+    // `timestamps: true`: with a filter of only `{ _id }`, Mongoose bumps
+    // `updatedAt` on every call regardless of whether $pull found anything,
+    // which makes modifiedCount read 1 even on a genuine no-op. Folding the
+    // membership check into the filter (the same trick joinViaInvite uses
+    // for its `$ne` condition) means a non-match skips the write entirely,
+    // so modifiedCount stays a trustworthy signal.
+    const upd = await Server.updateOne(
+      { _id: server._id, members: target },
+      { $pull: { members: target } }
+    )
+    // Only announce a departure when the $pull actually removed someone — a
+    // target who was never a member, or one a racing request already
+    // removed, is a no-op and must not tell every client someone left. The
+    // HTTP response stays the idempotent-DELETE `{ ok: true }` either way.
+    if (upd.modifiedCount === 1) {
+      emitToServer(server, 'server:memberLeft', {
+        serverId: server._id.toString(), userId: target,
+      })
+    }
     res.json({ ok: true })
   } catch (err) { next(err) }
 }
