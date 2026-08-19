@@ -34,13 +34,21 @@ describe('GET /invites/:code', () => {
     expect(after.status).toBe(403)
   })
 
-  it('does not leak the member list or the channels', async () => {
+  it('does not leak sensitive fields and returns only allowed keys', async () => {
     const a = await register(), b = await register()
     const s = await mkServer(a)
     const inv = await mkInvite(a, s.id)
     const res = await app().get(`/invites/${inv.code}`).set(auth(b))
+
+    // Must not leak members, channels, owner, or createdAt
     expect(res.body.server).not.toHaveProperty('members')
+    expect(res.body.server).not.toHaveProperty('owner')
+    expect(res.body.server).not.toHaveProperty('createdAt')
     expect(res.body).not.toHaveProperty('channels')
+
+    // Server must contain exactly these keys and no others
+    const allowedServerKeys = ['id', 'name', 'icon', 'iconCrop', 'bannerColor', 'description', 'memberCount']
+    expect(Object.keys(res.body.server).sort()).toEqual(allowedServerKeys.sort())
   })
 
   it('tells an existing member they are already in', async () => {
