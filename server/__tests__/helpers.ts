@@ -70,11 +70,11 @@ export const withSocketServer = async (): Promise<{ url: string; close: () => Pr
     //
     // The forced disconnects fire each server-side "disconnect" handler,
     // which does its own async work (chatSocket.ts writes lastSeenAt via
-    // mongoose) that io.close()'s callback does not wait for. Without a
-    // short grace tick here, a caller that immediately closes the Mongo
-    // connection afterwards (as disconnectDb() does) can race that write
-    // and surface an unhandled MongoClientClosedError instead of a clean exit.
-    close: () => new Promise<void>(r => { io.close(() => setTimeout(r, 100)) }),
+    // mongoose). That handler now wraps its body in try/catch, so a write
+    // racing disconnectDb()'s connection close is caught and logged instead
+    // of escaping as an unhandled MongoClientClosedError — no grace tick
+    // needed here anymore.
+    close: () => new Promise<void>(r => { io.close(() => r()) }),
   }
 }
 

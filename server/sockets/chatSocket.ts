@@ -558,16 +558,20 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     // ── Disconnect ─────────────────────────────────────────────────────────
     socket.on('disconnect', async () => {
-      console.log(`[WS] - ${username}`)
-      // Drop out of any calls this socket was in so presence doesn't go stale.
-      for (const room of [...joinedCallRooms]) leaveCall(room)
-      // Only go offline once the user's LAST socket closes — otherwise closing
-      // one of two tabs (or a refresh) would falsely mark them offline.
-      if (presence.removeSocket(userId, socket.id)) {
-        // lastSeenAt only. Writing status: 'offline' here is exactly what used
-        // to erase the user's Do Not Disturb every time they closed the app.
-        await User.findByIdAndUpdate(userId, { lastSeenAt: new Date() })
-        for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: 'offline' })
+      try {
+        console.log(`[WS] - ${username}`)
+        // Drop out of any calls this socket was in so presence doesn't go stale.
+        for (const room of [...joinedCallRooms]) leaveCall(room)
+        // Only go offline once the user's LAST socket closes — otherwise closing
+        // one of two tabs (or a refresh) would falsely mark them offline.
+        if (presence.removeSocket(userId, socket.id)) {
+          // lastSeenAt only. Writing status: 'offline' here is exactly what used
+          // to erase the user's Do Not Disturb every time they closed the app.
+          await User.findByIdAndUpdate(userId, { lastSeenAt: new Date() })
+          for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: 'offline' })
+        }
+      } catch (err) {
+        console.error('[WS] disconnect', err)
       }
     })
 
