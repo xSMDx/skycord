@@ -52,4 +52,31 @@ describe('channel sockets', () => {
     await new Promise(r => setTimeout(r, 400))
     expect(seen).toBe(false)
   })
+
+  // sendChannelMessage emitted with io.to(room), which includes the sender's
+  // own socket — on top of the same payload already coming back in the 201.
+  // The group path hit this exact bug and fixed it with socket.to(...); the
+  // channel path needs the equivalent (.except('user:<id>')) since it emits
+  // from getIO() rather than from the sender's own socket instance.
+  it("does not deliver the message back to the sender's own socket, only to other members", async () => {
+    const a = await register(), b = await register()
+    const { server, channels } = await mkServer(a)
+    await Server.updateOne({ _id: server.id }, { $push: { members: b.id } })
+    const c = channels.find((x: any) => x.type === 'text')
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    let senderSaw = false
+    aSock.on('channel:receive', () => { senderSaw = true })
+    const received = nextEvent(bSock, 'channel:receive')
+
+    await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(a)).send({ content: 'no echo' })
+
+    const payload = await received
+    expect(payload.content).toBe('no echo')
+
+    await new Promise(r => setTimeout(r, 400))
+    expect(senderSaw).toBe(false)
+  })
 })

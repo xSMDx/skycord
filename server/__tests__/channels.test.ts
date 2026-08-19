@@ -91,6 +91,20 @@ describe('PATCH /servers/:sid/channels/:cid', () => {
     expect(res.status).toBe(403)
     expect(res.body.message).toMatch(/owner/i)
   })
+
+  // loadChannel is the authorisation boundary shared by every channel
+  // endpoint: it must reject a channel id that resolves but belongs to a
+  // DIFFERENT server than the one in the path, not just an id that doesn't
+  // exist at all. Pinned here (rather than only on DELETE, which already
+  // exercises this incidentally) so the boundary itself is covered directly.
+  it('404s a channel id belonging to a different server', async () => {
+    const u = await register()
+    const one = await mkServer(u), two = await mkServer(u)
+    const other = two.channels[0]
+    const res = await app().patch(`/servers/${one.server.id}/channels/${other.id}`)
+      .set(auth(u)).send({ name: 'renamed' })
+    expect(res.status).toBe(404)
+  })
 })
 
 describe('DELETE /servers/:sid/channels/:cid', () => {

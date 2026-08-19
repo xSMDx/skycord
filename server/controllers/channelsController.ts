@@ -70,14 +70,13 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
 
     // Members with the app open must also start RECEIVING the new channel, not
     // merely see it appear. Their sockets joined rooms at connect time, and
-    // this channel did not exist then.
+    // this channel did not exist then. One socketsJoin call against the union
+    // of every member's personal room, rather than an awaited fetchSockets()
+    // round trip per member followed by a join loop.
     const io = getIO()
     if (io) {
       const room = `chan:${channel._id.toString()}`
-      for (const m of server.members) {
-        const socks = await io.in(`user:${m.toString()}`).fetchSockets()
-        socks.forEach(sock => sock.join(room))
-      }
+      io.in(server.members.map(m => `user:${m.toString()}`)).socketsJoin(room)
     }
     res.status(201).json({ channel: shaped })
   } catch (err) { next(err) }
@@ -124,13 +123,30 @@ export const deleteChannel = async (req: Request, res: Response, next: NextFunct
   } catch (err) { next(err) }
 }
 
-/** Oldest-first, resolved so author data is live rather than the frozen snapshot. */
+/**
+ * Oldest-first, resolved so author data is live rather than the frozen
+ * snapshot. Paginated with the same contract as getDMMessages
+ * (messagesController.ts): `limit` defaults to 50 and caps at 100, `before`
+ * filters to messages older than that timestamp. Without a cap this loaded
+ * an entire channel's history in one query, and resolveMessages then ran an
+ * unbounded $in across every reply target in that history.
+ */
 export const getChannelMessages = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const found = await loadChannel(req, res); if (!found) return
-    const raw = await Message.find({ conversationId: found.channel._id.toString() })
-      .sort({ createdAt: 1 }).lean()
-    res.json({ messages: await resolveMessages(raw) })
+    const before = req.query.before as string | undefined
+    const limit  = Math.min(Number(req.query.limit) || 50, 100)
+
+    const filter: any = { conversationId: found.channel._id.toString() }
+    if (before) filter.createdAt = { $lt: new Date(before) }
+
+    const raw = await Message.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+
+    const resolved = await resolveMessages(raw)
+    res.json({ messages: resolved.reverse() })
   } catch (err) { next(err) }
 }
 
@@ -179,7 +195,15 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       authorAvatar:     sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:          content.trim(),
-      replyToIds:       ids,
+      // Persist only the ids that survived the channel-scoped validation
+      // above (replyTo.map), never the raw request-body ids. Storing `ids`
+      // here let a client name a message from an unrelated channel or a DM
+      // it has no part in: the POST response was already scrubbed, but the
+      // stored document wasn't, so resolveMessages' conversation-blind $in
+      // lookup would resolve that other conversation's author + content
+      // snippet back in on every future GET of this channel — a permanent
+      // leak, not merely a one-time echo.
+      replyToIds:       replyTo.map(r => r.id),
     })
 
     const payload = {
@@ -198,9 +222,12 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       createdAt:        msg.createdAt.toISOString(),
     }
 
-    // Reach connected members live. The sender used REST because their own
-    // socket is down, so they will not echo this back to themselves.
-    getIO()?.to(`chan:${channelId}`).emit('channel:receive', payload)
+    // Reach connected members live, excluding the sender's own socket(s):
+    // they already have this payload from the 201 response below, and
+    // io.to(room) reaches every socket in the room including the sender's —
+    // without the exclusion every message rendered twice for its own author.
+    // Mirrors the fix already applied to group:send in chatSocket.ts.
+    getIO()?.to(`chan:${channelId}`).except(`user:${userId}`).emit('channel:receive', payload)
 
     res.status(201).json({ message: payload })
   } catch (err) { next(err) }
