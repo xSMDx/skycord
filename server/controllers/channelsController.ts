@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
 import { Channel } from '../models/Channel'
-import { loadServer, requireOwner, shapeChannel } from './serversController'
+import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversController'
 import { Message } from '../models/Message'
 import { User } from '../models/User'
 import { resolveMessages } from './messagesController'
@@ -65,7 +65,21 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
     const position = last.length ? last[0].position + 1 : 0
 
     const channel = await Channel.create({ server: server._id, name, type, position })
-    res.status(201).json({ channel: shapeChannel(channel) })
+    const shaped = shapeChannel(channel)
+    emitToServer(server, 'channel:created', { serverId: server._id.toString(), channel: shaped })
+
+    // Members with the app open must also start RECEIVING the new channel, not
+    // merely see it appear. Their sockets joined rooms at connect time, and
+    // this channel did not exist then.
+    const io = getIO()
+    if (io) {
+      const room = `chan:${channel._id.toString()}`
+      for (const m of server.members) {
+        const socks = await io.in(`user:${m.toString()}`).fetchSockets()
+        socks.forEach(sock => sock.join(room))
+      }
+    }
+    res.status(201).json({ channel: shaped })
   } catch (err) { next(err) }
 }
 
@@ -78,6 +92,9 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
     found.channel.name = name
     await found.channel.save()
+    emitToServer(found.server, 'channel:updated', {
+      serverId: found.server._id.toString(), channel: shapeChannel(found.channel),
+    })
     res.json({ channel: shapeChannel(found.channel) })
   } catch (err) { next(err) }
 }
@@ -97,6 +114,11 @@ export const deleteChannel = async (req: Request, res: Response, next: NextFunct
         }
       }
       await found.channel.deleteOne()
+      const channelId = found.channel._id.toString()
+      emitToServer(found.server, 'channel:deleted', {
+        serverId: found.server._id.toString(), channelId,
+      })
+      getIO()?.in(`chan:${channelId}`).socketsLeave(`chan:${channelId}`)
       res.json({ ok: true })
     })
   } catch (err) { next(err) }

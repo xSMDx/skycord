@@ -5,6 +5,7 @@ import { Channel } from '../models/Channel'
 import { ServerInvite } from '../models/ServerInvite'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
+import { getIO } from '../sockets/chatSocket'
 
 /** Client shape for a server row. `memberCount` rather than the id array. */
 export const shapeServer = (s: any) => ({
@@ -26,6 +27,16 @@ export const shapeChannel = (c: any) => ({
   type:     c.type,
   position: c.position,
 })
+
+/**
+ * Reach every connected member of a server. There is no `server:<id>` room —
+ * rooms are per channel — so this fans out over the personal `user:<id>`
+ * rooms the socket layer already maintains.
+ */
+export const emitToServer = (server: { members: unknown[] }, event: string, payload: unknown): void => {
+  const io = getIO(); if (!io) return
+  for (const m of server.members) io.to(`user:${m!.toString()}`).emit(event, payload)
+}
 
 /**
  * The one authorisation rule this cycle: you may act on a server if you are a
@@ -115,6 +126,7 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
         : null
     }
     await server.save()
+    emitToServer(server, 'server:updated', { server: shapeServer(server) })
     res.json({ server: shapeServer(server) })
   } catch (err) { next(err) }
 }
@@ -177,6 +189,9 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     // drop the joiner. $pull removes exactly the one id, however the
     // document has changed underneath since it was loaded.
     await Server.updateOne({ _id: server._id }, { $pull: { members: target } })
+    emitToServer(server, 'server:memberLeft', {
+      serverId: server._id.toString(), userId: target,
+    })
     res.json({ ok: true })
   } catch (err) { next(err) }
 }

@@ -4,7 +4,8 @@ import { Channel } from '../models/Channel'
 import { ServerInvite } from '../models/ServerInvite'
 import { User } from '../models/User'
 import { generateInviteCode } from '../utils/inviteCode'
-import { loadServer, requireOwner, shapeServer, shapeChannel } from './serversController'
+import { loadServer, requireOwner, shapeServer, shapeChannel, emitToServer } from './serversController'
+import { effectiveStatus } from '../state/presence'
 
 const DAY = 24 * 60 * 60 * 1000
 const expiryFor = (v: unknown): Date | null =>
@@ -138,7 +139,26 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
         // concurrently would otherwise both read uses=0 and both write 1,
         // under-counting by one.
         await ServerInvite.updateOne({ _id: invite._id }, { $inc: { uses: 1 } })
-        server = await Server.findById(invite.server) ?? server
+        const fresh = await Server.findById(invite.server) ?? server
+        server = fresh
+
+        const joiner = await User.findById(userId)
+          .select('username displayName avatar avatarCrop status').lean()
+        if (joiner) {
+          emitToServer(fresh, 'server:memberJoined', {
+            serverId: fresh._id.toString(),
+            member: {
+              id:          userId,
+              username:    (joiner as any).username,
+              displayName: (joiner as any).displayName,
+              avatar:      (joiner as any).avatar ?? null,
+              avatarCrop:  (joiner as any).avatarCrop ?? null,
+              // Computed, never the stored column.
+              status:      effectiveStatus((joiner as any).status, userId),
+              isOwner:     false,
+            },
+          })
+        }
       } else {
         // No match: either this user is already a member (lost a race to
         // another request adding them — a double-click) or the server is
