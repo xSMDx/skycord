@@ -7,6 +7,14 @@ import { createApp } from '../app'
 import { Server } from '../models/Server'
 import { ServerInvite } from '../models/ServerInvite'
 
+// There is no join endpoint that a test could use here without itself
+// depending on the behaviour under test (POST /invites/:code), so tests
+// that need a non-owner *member* (as opposed to a stranger who never
+// joined) seed membership directly against the model — same pattern as
+// channels.test.ts and servers.test.ts.
+const joinAsMember = async (sid: string, uid: string) =>
+  Server.updateOne({ _id: sid }, { $push: { members: uid } })
+
 beforeAll(connectDb)
 afterAll(disconnectDb)
 beforeEach(resetDb)
@@ -35,9 +43,17 @@ describe('POST /servers/:sid/invites', () => {
     expect(inv.expiresAt).toBeNull()
   })
 
-  it('403s a non-owner', async () => {
+  it('403s a non-member (never joined)', async () => {
     const a = await register(), b = await register()
     const s = await mkServer(a)
+    const res = await app().post(`/servers/${s.id}/invites`).set(auth(b)).send({ expiry: '24h' })
+    expect(res.status).toBe(403)
+  })
+
+  it('403s a non-owner member', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    await joinAsMember(s.id, b.id)
     const res = await app().post(`/servers/${s.id}/invites`).set(auth(b)).send({ expiry: '24h' })
     expect(res.status).toBe(403)
   })
@@ -147,6 +163,15 @@ describe('DELETE /servers/:sid/invites/:code', () => {
     expect((await app().delete(`/servers/${s.id}/invites/${inv.code}`).set(auth(a))).status).toBe(200)
     expect((await app().post(`/invites/${inv.code}`).set(auth(b))).status).toBe(404)
   })
+
+  it('403s a non-owner member', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+    await joinAsMember(s.id, b.id)
+    const res = await app().delete(`/servers/${s.id}/invites/${inv.code}`).set(auth(b))
+    expect(res.status).toBe(403)
+  })
 })
 
 describe('GET /servers/:sid/invites', () => {
@@ -158,5 +183,14 @@ describe('GET /servers/:sid/invites', () => {
     expect(res.status).toBe(200)
     expect(res.body.invites).toHaveLength(1)
     expect(res.body.invites[0].inviter.username).toBe(u.username)
+  })
+
+  it('403s a non-owner member', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    await mkInvite(a, s.id)
+    await joinAsMember(s.id, b.id)
+    const res = await app().get(`/servers/${s.id}/invites`).set(auth(b))
+    expect(res.status).toBe(403)
   })
 })

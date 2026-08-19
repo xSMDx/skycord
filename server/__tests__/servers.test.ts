@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } from './helpers'
 import { Server } from '../models/Server'
+import { ServerInvite } from '../models/ServerInvite'
 
 beforeAll(connectDb)
 afterAll(disconnectDb)
@@ -106,6 +107,22 @@ describe('PATCH /servers/:sid', () => {
     expect(res.status).toBe(400)
     expect(res.body.message).toBe('Image is too large')
   })
+
+  it('rejects a malformed bannerColor', async () => {
+    const u = await register()
+    const s = await mkServer(u)
+    const res = await app().patch(`/servers/${s.id}`).set(auth(u)).send({ bannerColor: 'red' })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(/hex/i)
+  })
+
+  it('stores a valid bannerColor, lowercased', async () => {
+    const u = await register()
+    const s = await mkServer(u)
+    const res = await app().patch(`/servers/${s.id}`).set(auth(u)).send({ bannerColor: '#ABC123' })
+    expect(res.status).toBe(200)
+    expect(res.body.server.bannerColor).toBe('#abc123')
+  })
 })
 
 describe('GET /servers/:sid/members', () => {
@@ -135,6 +152,17 @@ describe('DELETE /servers/:sid', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().delete(`/servers/${s.id}`).set(auth(b))
     expect(res.status).toBe(403)
+  })
+
+  it('takes the invites with it, including never-expiring ones', async () => {
+    const u = await register()
+    const s = await mkServer(u)
+    await app().post(`/servers/${s.id}/invites`).set(auth(u)).send({ expiry: '24h' })
+    await app().post(`/servers/${s.id}/invites`).set(auth(u)).send({ expiry: 'never' })
+    expect(await ServerInvite.countDocuments({ server: s.id })).toBe(2)
+
+    expect((await app().delete(`/servers/${s.id}`).set(auth(u))).status).toBe(200)
+    expect(await ServerInvite.countDocuments({ server: s.id })).toBe(0)
   })
 })
 
