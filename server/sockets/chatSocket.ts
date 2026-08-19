@@ -56,6 +56,43 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
   return msg.conversationId.split('_').includes(userId)
 }
 
+/**
+ * Everyone entitled to hear this user's presence: their accepted friends,
+ * plus everyone who shares a server with them — deduplicated, minus the
+ * user themselves.
+ *
+ * Queried fresh on every call rather than cached in the connection closure.
+ * The old closure was computed once at connect and never touched again, so
+ * a server membership change made mid-connection (someone else joining or
+ * leaving a shared server) left it silently wrong for the rest of the
+ * socket's life — the exact bug this replaces. Presence events (connect,
+ * disconnect, status change, idle toggle) are rare enough that two indexed
+ * queries at emit time is a negligible cost at this app's scale, and this
+ * removes the entire staleness class rather than adding cache-invalidation
+ * hooks that would have to be remembered at every future membership-changing
+ * call site (join, leave, kick, server delete, ...).
+ *
+ * `knownServers`, when given, is a `Server.find({ members: userId })` result
+ * the caller already ran for another purpose (connect-time channel-room
+ * joining does exactly this query) so this doesn't run it a second time.
+ */
+const presenceAudience = async (
+  userId: string,
+  knownServers?: { members: unknown[] }[],
+): Promise<string[]> => {
+  const fr = await Friendship.find({
+    status: 'accepted',
+    $or: [{ requester: userId }, { receiver: userId }],
+  }).select('requester receiver').lean()
+  const friendIds = fr.map(f =>
+    f.requester.toString() === userId ? f.receiver.toString() : f.requester.toString())
+
+  const servers = knownServers ?? await Server.find({ members: userId }).select('members').lean()
+  const coMemberIds = servers.flatMap(s => s.members.map(m => (m as any).toString()))
+
+  return [...new Set([...friendIds, ...coMemberIds])].filter(id => id !== userId)
+}
+
 // Resolve a list of parent message ids into reply previews, preserving order
 // and dropping any that no longer exist. `conversationId` is required, not
 // optional — every call site knows exactly which conversation it's building
@@ -133,8 +170,6 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     let myAvatarCrop: { zoom: number; x: number; y: number } | null = null
     let myName = username
     let myGroups: { _id: any }[] = []
-    // Who is allowed to hear about this user's presence. Populated below.
-    let myFriendIds: string[] = []
     // The user's CHOSEN status, read once at connect. Kept here so the
     // presence handlers below can re-derive what friends should see without a
     // database round-trip on every idle flicker.
@@ -536,9 +571,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * One place, so the "invisible reads as offline" rule can't be forgotten
      * at one of the call sites.
      */
-    const broadcastPresence = () => {
+    const broadcastPresence = async () => {
       const status = presence.effectiveStatus(myStatus, userId)
-      for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status })
+      const audience = await presenceAudience(userId)
+      for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status })
       // Your own other tabs get the RAW choice — you must see your own
       // "Invisible", even while your friends are being told you're offline.
       io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status })
@@ -554,7 +590,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       try {
         await User.findByIdAndUpdate(userId, { status: next })
       } catch { ack?.({ ok: false, error: 'Could not save that' }); return }
-      broadcastPresence()
+      await broadcastPresence()
       ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId) })
     })
 
@@ -563,11 +599,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * property of this session, not of the account, so a fresh sign-in never
      * starts you as away. effectiveStatus() only lets it apply to 'online'.
      */
-    socket.on('presence:away', (raw: unknown) => {
+    socket.on('presence:away', async (raw: unknown) => {
       const away = raw === true || (raw as any)?.away === true
       if (presence.isAway(userId) === away) return   // no-op, don't spam friends
       presence.setAway(userId, away)
-      broadcastPresence()
+      await broadcastPresence()
     })
 
     // ── Disconnect ─────────────────────────────────────────────────────────
@@ -582,7 +618,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           // lastSeenAt only. Writing status: 'offline' here is exactly what used
           // to erase the user's Do Not Disturb every time they closed the app.
           await User.findByIdAndUpdate(userId, { lastSeenAt: new Date() })
-          for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: 'offline' })
+          const audience = await presenceAudience(userId)
+          for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status: 'offline' })
         }
       } catch (err) {
         console.error('[WS] disconnect', err)
@@ -614,34 +651,26 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
       // One room per channel, not per server: a member receives only the
       // channels they can see, which is the shape per-channel permissions
-      // will need in a later cycle.
-      const myServers = await Server.find({ members: userId }).select('_id').lean()
+      // will need in a later cycle. `members` is selected alongside `_id` so
+      // the presence announce below can reuse this same query instead of
+      // running Server.find({ members: userId }) a second time.
+      const myServers = await Server.find({ members: userId }).select('_id members').lean()
       if (myServers.length) {
         const myChannels = await Channel.find({ server: { $in: myServers.map(s => s._id) } })
           .select('_id').lean()
         myChannels.forEach(c => socket.join(`chan:${c._id.toString()}`))
       }
 
-      const fr = await Friendship.find({
-        status: 'accepted',
-        $or: [{ requester: userId }, { receiver: userId }],
-      }).select('requester receiver').lean()
-      const friendIds = fr.map(f =>
-        f.requester.toString() === userId ? f.receiver.toString() : f.requester.toString())
-
-      // Presence reaches friends PLUS anyone sharing a server. A member list
-      // without live status is most of the point of a member list, and the
-      // audience only widens to rooms the user chose to join. Invisible is
-      // still a full opt-out, because effectiveStatus maps it to offline.
-      const coMemberIds = (await Server.find({ members: userId }).select('members').lean())
-        .flatMap(s => s.members.map(m => m.toString()))
-
-      myFriendIds = [...new Set([...friendIds, ...coMemberIds])].filter(id => id !== userId)
-
       // Announce only on the first socket; extra tabs shouldn't re-broadcast.
+      // Presence reaches friends PLUS anyone sharing a server (see
+      // presenceAudience above) — a member list without live status is most
+      // of the point of a member list, and the audience only widens to rooms
+      // the user chose to join. Invisible is still a full opt-out, because
+      // effectiveStatus maps it to offline.
       if (wasOffline) {
         const eff = presence.effectiveStatus(myStatus, userId)
-        for (const fid of myFriendIds) io.to(`user:${fid}`).emit('presence', { userId, status: eff })
+        const audience = await presenceAudience(userId, myServers)
+        for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status: eff })
       }
 
       // Catch up on calls already in progress. Without this, someone who was
