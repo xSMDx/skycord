@@ -51,6 +51,17 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
     const group = await Conversation.findById(msg.conversationId).select('members').lean()
     return !!group && group.members.some(m => m.toString() === userId)
   }
+  if (msg.kind === 'channel') {
+    // A channel has no member list of its own — access follows the server's
+    // membership. Without this branch, a channel message fell through to
+    // the DM check below: its conversationId is a bare ObjectId with no
+    // underscore, so split('_').includes(userId) was always false and
+    // pin/react were permanently "Not allowed" in every channel.
+    const channel = await Channel.findById(msg.conversationId).select('server').lean()
+    if (!channel) return false
+    const server = await Server.findById(channel.server).select('members').lean()
+    return !!server && server.members.some(m => m.toString() === userId)
+  }
   // DM/system: the conversationId is the two participant ids joined, so
   // membership is simply being one of them.
   return msg.conversationId.split('_').includes(userId)
@@ -238,11 +249,21 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         msg.edited  = true
         await msg.save()
 
-        const partner = getPartner(msg.conversationId, userId)
         const payload = { messageId: msg._id.toString(), content: msg.content }
 
-        if (partner) io.to(`user:${partner}`).emit('message:edited', payload)
-        else if (msg.kind === 'group') socket.to(`group:${msg.conversationId}`).emit('message:edited', payload)
+        // Channel routing goes first and stands alone: getPartner assumes a
+        // DM-shaped "id1_id2" conversationId, but a channel's is a bare
+        // ObjectId. Calling it anyway returns that whole id back as a
+        // truthy-but-bogus "partner", which would route this into a
+        // phantom `user:<channelId>` room instead of `chan:<channelId>` —
+        // reaching nobody. DM and group routing below are untouched.
+        if (msg.kind === 'channel') {
+          io.to(`chan:${msg.conversationId}`).except(`user:${userId}`).emit('message:edited', payload)
+        } else {
+          const partner = getPartner(msg.conversationId, userId)
+          if (partner) io.to(`user:${partner}`).emit('message:edited', payload)
+          else if (msg.kind === 'group') socket.to(`group:${msg.conversationId}`).emit('message:edited', payload)
+        }
         ack?.({ ok: true })
       } catch (err) {
         console.error('[WS] message:edit', err)
@@ -259,11 +280,16 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
         const partner = getPartner(msg.conversationId, userId)
         const isGroup = msg.kind === 'group'
-        const groupId = msg.conversationId
+        const isChannel = msg.kind === 'channel'
+        const conversationId = msg.conversationId
         await msg.deleteOne()
 
-        if (partner) io.to(`user:${partner}`).emit('message:deleted', { messageId: data.messageId })
-        else if (isGroup) socket.to(`group:${groupId}`).emit('message:deleted', { messageId: data.messageId })
+        const payload = { messageId: data.messageId }
+        // See message:edit above for why channel routing can't go through
+        // getPartner and must be checked first.
+        if (isChannel) io.to(`chan:${conversationId}`).except(`user:${userId}`).emit('message:deleted', payload)
+        else if (partner) io.to(`user:${partner}`).emit('message:deleted', payload)
+        else if (isGroup) socket.to(`group:${conversationId}`).emit('message:deleted', payload)
         ack?.({ ok: true })
       } catch (err) {
         console.error('[WS] message:delete', err)
@@ -283,11 +309,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         msg.pinned = data.pinned
         await msg.save()
 
-        const partner = getPartner(msg.conversationId, userId)
         const payload = { messageId: msg._id.toString(), pinned: msg.pinned }
 
-        if (partner) io.to(`user:${partner}`).emit('message:pinned', payload)
-        else if (msg.kind === 'group') socket.to(`group:${msg.conversationId}`).emit('message:pinned', payload)
+        // See message:edit above for why channel routing can't go through
+        // getPartner and must be checked first.
+        if (msg.kind === 'channel') {
+          io.to(`chan:${msg.conversationId}`).except(`user:${userId}`).emit('message:pinned', payload)
+        } else {
+          const partner = getPartner(msg.conversationId, userId)
+          if (partner) io.to(`user:${partner}`).emit('message:pinned', payload)
+          else if (msg.kind === 'group') socket.to(`group:${msg.conversationId}`).emit('message:pinned', payload)
+        }
         ack?.({ ok: true })
       } catch (err) {
         console.error('[WS] message:pin', err)
@@ -338,11 +370,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           userIds: r.userIds.map(id => id.toString()),
         }))
 
-        const partner = getPartner(msg.conversationId, userId)
         const payload = { messageId: msg._id.toString(), reactions, reactorId: userId }
 
-        if (partner) io.to(`user:${partner}`).emit('message:reacted', payload)
-        else if (msg.kind === 'group') socket.to(`group:${msg.conversationId}`).emit('message:reacted', payload)
+        // See message:edit above for why channel routing can't go through
+        // getPartner and must be checked first.
+        if (msg.kind === 'channel') {
+          io.to(`chan:${msg.conversationId}`).except(`user:${userId}`).emit('message:reacted', payload)
+        } else {
+          const partner = getPartner(msg.conversationId, userId)
+          if (partner) io.to(`user:${partner}`).emit('message:reacted', payload)
+          else if (msg.kind === 'group') socket.to(`group:${msg.conversationId}`).emit('message:reacted', payload)
+        }
         ack?.({ ok: true, reactions })
       } catch (err) {
         console.error('[WS] message:react', err)
