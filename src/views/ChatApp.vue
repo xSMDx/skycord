@@ -19,6 +19,7 @@ import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
 import { useMessages }                      from '@/composables/useMessages'
 import { useApi, type ApiUser, type PendingRequest, type ApiMessage } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
+import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, dmConvId } from '@/composables/useSocket'
 
@@ -759,34 +760,7 @@ const loadDMHistory = async (partnerId: string) => {
   loadingMsgs.value = true
   try {
     const data = await fetchDMMessages(partnerId)
-    const msgs: Message[] = data.messages.map((m: ApiMessage) => ({
-      id:          parseInt((m._id || m.id || '0').slice(-8), 16) || Date.now(),
-      dbId:        m._id || m.id || undefined,
-      // Without these, call logs load as ordinary messages (avatar + name) and
-      // lose their system styling and phone icon — group history already maps them.
-      kind:        m.kind,
-      systemType:  m.systemType,
-      author:      m.authorName,
-      authorId:    m.authorId,
-      content:     m.content,
-      time:        new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp:   new Date(m.createdAt).getTime(),
-      avatar:      m.authorAvatar || avatarFor(m.authorName),
-      avatarCrop:  (m as any).authorAvatarCrop ?? null,
-      avatarColor: '#5865f2',
-      reactions:   (m.reactions || []).map((r: any) => ({
-        emoji:   r.emoji,
-        count:   r.userIds?.length || 0,
-        reacted: r.userIds?.includes(authUser.value?.id) || false,
-      })),
-      pinned:  m.pinned,
-      edited:  m.edited,
-      // FIX: the REST history route returns the raw stored replyTo (just an id
-      // reference, no author/content), unlike the live socket path which resolves
-      // it into the full { id, author, content } preview shape before sending.
-      // Detect the unresolved form here and patch it below via resolveReplyPreviews.
-      replyTo: Array.isArray(m.replyTo) && m.replyTo.length ? m.replyTo : undefined,
-    }))
+    const msgs: Message[] = data.messages.map((m: ApiMessage) => toClientMessage(m, authUser.value?.id))
     initDM(partnerId, msgs)  // always overwrite from DB
     // Resolve any reply previews that came back unresolved from REST
     await resolveReplyPreviews(partnerId)
@@ -831,28 +805,7 @@ const loadGroupHistory = async (groupId: string) => {
   loadingMsgs.value = true
   try {
     const data = await fetchGroupMessages(groupId)
-    const msgs: Message[] = data.messages.map((m: ApiMessage) => ({
-      id:          parseInt((m._id || m.id || '0').slice(-8), 16) || Date.now(),
-      dbId:        m._id || m.id || undefined,
-      kind:        m.kind,
-      systemType:  m.systemType,
-      author:      m.authorName,
-      authorId:    m.authorId,
-      content:     m.content,
-      time:        new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp:   new Date(m.createdAt).getTime(),
-      avatar:      m.authorAvatar || avatarFor(m.authorName),
-      avatarCrop:  (m as any).authorAvatarCrop ?? null,
-      avatarColor: '#5865f2',
-      reactions:   (m.reactions || []).map((r: any) => ({
-        emoji:   r.emoji,
-        count:   r.userIds?.length || 0,
-        reacted: r.userIds?.includes(authUser.value?.id) || false,
-      })),
-      pinned:  m.pinned,
-      edited:  m.edited,
-      replyTo: Array.isArray(m.replyTo) && m.replyTo.length ? m.replyTo : undefined,
-    }))
+    const msgs: Message[] = data.messages.map((m: ApiMessage) => toClientMessage(m, authUser.value?.id))
     initGroup(groupId, msgs)
   } catch (e) {
     console.error('[loadGroupHistory]', e)
@@ -931,25 +884,7 @@ const setupSocket = () => {
     const parts = (payload.conversationId as string).split('_')
     const partnerId = parts.find(p => p !== authUser.value?.id) || payload.authorId
 
-    const msg: Message = {
-      id:          parseInt((payload._id || '0').slice(-8), 16) || Date.now(),
-      dbId:        payload._id,
-      // Same reason as the history mapping: call logs arrive as system messages.
-      kind:        payload.kind,
-      systemType:  payload.systemType,
-      author:      payload.authorName,
-      authorId:    payload.authorId,
-      content:     payload.content,
-      time:        new Date(payload.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp:   new Date(payload.createdAt).getTime(),
-      avatar:      payload.authorAvatar || avatarFor(payload.authorName),
-      avatarCrop:  payload.authorAvatarCrop ?? null,
-      avatarColor: '#5865f2',
-      reactions:   [],
-      pinned:      false,
-      edited:      false,
-      replyTo:     payload.replyTo?.length ? payload.replyTo : undefined,
-    }
+    const msg: Message = toClientMessage(payload, authUser.value?.id)
 
     pushDMMessage(partnerId, msg)
 
@@ -1027,24 +962,7 @@ const setupSocket = () => {
     // Defense against echoes/reconnect replays — if we already have this DB id
     // (e.g. our own optimistic message that got stamped via the send ack), skip.
     if (payload._id && getGroupMsgs(groupId).some(m => (m as any).dbId === payload._id)) return
-    const msg: Message = {
-      id:          parseInt((payload._id || '0').slice(-8), 16) || Date.now(),
-      dbId:        payload._id,
-      kind:        payload.kind,
-      systemType:  payload.systemType,
-      author:      payload.authorName,
-      authorId:    payload.authorId,
-      content:     payload.content,
-      time:        new Date(payload.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp:   new Date(payload.createdAt).getTime(),
-      avatar:      payload.authorAvatar || avatarFor(payload.authorName),
-      avatarCrop:  payload.authorAvatarCrop ?? null,
-      avatarColor: '#5865f2',
-      reactions:   [],
-      pinned:      false,
-      edited:      false,
-      replyTo:     payload.replyTo?.length ? payload.replyTo : undefined,
-    }
+    const msg: Message = toClientMessage(payload, authUser.value?.id)
     pushGroupMessage(groupId, msg)
     const g = groupsData.value.find(x => x.id === groupId)
     if (g) {
