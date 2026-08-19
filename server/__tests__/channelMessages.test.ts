@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } from './helpers'
 import { Server } from '../models/Server'
+import { Message } from '../models/Message'
 
 beforeAll(connectDb)
 afterAll(disconnectDb)
@@ -70,6 +71,71 @@ describe('POST /servers/:sid/channels/:cid/messages', () => {
     const res = await app().post(`/servers/${server.id}/channels/${textOf(channels).id}/messages`)
       .set(auth(b)).send({ content: 'from a member' })
     expect(res.status).toBe(201)
+  })
+
+  it('populates replyTo for a reply targeting a message in the same channel', async () => {
+    const u = await register()
+    const { server, channels } = await mkServer(u)
+    const c = textOf(channels)
+    const original = await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(u)).send({ content: 'the original message' })
+    const originalId = original.body.message._id
+
+    const res = await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(u)).send({ content: 'replying', replyToIds: [originalId] })
+
+    expect(res.status).toBe(201)
+    expect(res.body.message.replyTo).toHaveLength(1)
+    expect(res.body.message.replyTo[0]).toMatchObject({
+      id: originalId,
+      author: u.username,
+      content: 'the original message',
+    })
+  })
+
+  it('drops a reply targeting a message from a different channel in the same server', async () => {
+    const u = await register()
+    const { server, channels } = await mkServer(u)
+    const c = textOf(channels)
+    const other = (await app().post(`/servers/${server.id}/channels`)
+      .set(auth(u)).send({ name: 'second', type: 'text' })).body.channel
+
+    const secret = await app().post(`/servers/${server.id}/channels/${other.id}/messages`)
+      .set(auth(u)).send({ content: 'secret-in-other-channel' })
+    const secretId = secret.body.message._id
+
+    const res = await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(u)).send({ content: 'replying', replyToIds: [secretId] })
+
+    expect(res.status).toBe(201)
+    expect(res.body.message.replyTo).toEqual([])
+    expect(JSON.stringify(res.body)).not.toContain('secret-in-other-channel')
+  })
+
+  it('drops a reply targeting a message from a DM the caller is not part of', async () => {
+    const u = await register()
+    const a = await register(), b = await register()
+    const { server, channels } = await mkServer(u)
+    const c = textOf(channels)
+
+    // Created directly with the Message model — the point is a row that lives
+    // in a DM conversationId the caller has no part in, without needing to
+    // route it through the DM endpoints.
+    const dmMsg = await Message.create({
+      conversationId: [a.id, b.id].sort().join('_'),
+      kind:           'dm',
+      authorId:       a.id,
+      authorName:     a.username,
+      content:        'secret-dm-content',
+      replyToIds:     [],
+    })
+
+    const res = await app().post(`/servers/${server.id}/channels/${c.id}/messages`)
+      .set(auth(u)).send({ content: 'replying', replyToIds: [dmMsg._id.toString()] })
+
+    expect(res.status).toBe(201)
+    expect(res.body.message.replyTo).toEqual([])
+    expect(JSON.stringify(res.body)).not.toContain('secret-dm-content')
   })
 })
 

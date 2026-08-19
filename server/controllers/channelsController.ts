@@ -132,8 +132,15 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       .select('avatar avatarCrop displayName username').lean()
 
     const ids = Array.isArray(replyToIds) ? replyToIds : []
+    // Scoped to this channel: without the conversationId filter, a caller could
+    // name a message id from someone else's DM or an unrelated group/channel and
+    // have its authorName + a content snippet echoed into this channel's
+    // replyTo preview for every member to see. An id that resolves but belongs
+    // to a different conversation is treated the same as an id that resolves to
+    // nothing at all — silently dropped, never leaked.
     const targets = ids.length
-      ? await Message.find({ _id: { $in: ids } }).select('authorName content').lean()
+      ? await Message.find({ _id: { $in: ids }, conversationId: found.channel._id.toString() })
+          .select('authorName content').lean()
       : []
     const byId = new Map(targets.map(t => [t._id.toString(), t]))
     const replyTo = ids
