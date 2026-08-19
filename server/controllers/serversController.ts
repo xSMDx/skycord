@@ -154,7 +154,12 @@ export const deleteServer = async (req: Request, res: Response, next: NextFuncti
     // (there is none left to emit, but the rooms themselves persist on the
     // socket) would otherwise linger until each socket happens to reconnect.
     // One call across every member room, mirroring createChannel's join.
-    if (rooms.length) {
+    // Guarded on a non-empty member list too: Socket.IO treats io.in([]) as
+    // "every connected socket", not "nobody" — an empty array here would
+    // silently evict every connected user from these rooms. Unreachable
+    // today (the owner can never leave, so a server's member list can't be
+    // emptied), but structurally safe rather than incidentally safe.
+    if (rooms.length && server.members.length) {
       const io = getIO()
       if (io) io.in(server.members.map(m => `user:${m.toString()}`)).socketsLeave(rooms)
     }

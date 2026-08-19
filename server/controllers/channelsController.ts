@@ -74,7 +74,12 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
     // of every member's personal room, rather than an awaited fetchSockets()
     // round trip per member followed by a join loop.
     const io = getIO()
-    if (io) {
+    // Guarded on a non-empty member list: Socket.IO treats io.in([]) as "every
+    // connected socket", not "nobody" — an empty array here would silently
+    // join every user in the process to this channel's room. Unreachable
+    // today (the owner is always a member), but structurally safe rather
+    // than incidentally safe.
+    if (io && server.members.length) {
       const room = `chan:${channel._id.toString()}`
       io.in(server.members.map(m => `user:${m.toString()}`)).socketsJoin(room)
     }
