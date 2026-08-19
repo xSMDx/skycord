@@ -57,6 +57,38 @@ export const revokeInvite = async (req: Request, res: Response, next: NextFuncti
 }
 
 /**
+ * What a join screen needs, and nothing more. Deliberately omits the member
+ * list and the channel list: the caller is not a member yet, and a preview
+ * that leaked either would make an invite code a directory of who is inside.
+ */
+export const previewInvite = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const invite = await ServerInvite.findOne({ code: req.params.code })
+    if (!invite) { res.status(404).json({ message: 'That invite does not exist' }); return }
+    if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
+      res.status(410).json({ message: 'This invite has expired' }); return
+    }
+    const server = await Server.findById(invite.server)
+    if (!server) { res.status(404).json({ message: 'That server no longer exists' }); return }
+
+    const userId = req.user!.sub
+    res.json({
+      server: {
+        id:          server._id.toString(),
+        name:        server.name,
+        icon:        server.icon ?? null,
+        iconCrop:    server.iconCrop ?? null,
+        bannerColor: server.bannerColor ?? null,
+        description: server.description ?? null,
+        memberCount: server.members.length,
+      },
+      alreadyMember: server.members.some(m => m.toString() === userId),
+      full:          server.members.length >= MAX_SERVER_MEMBERS,
+    })
+  } catch (err) { next(err) }
+}
+
+/**
  * Join. Expired, revoked and full are three different problems and get three
  * different answers — a single generic failure would leave the user guessing.
  *
