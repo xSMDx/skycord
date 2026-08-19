@@ -1,6 +1,9 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
+import http from 'http'
 import { Types } from 'mongoose'
+import request from 'supertest'
 import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } from './helpers'
+import { createApp } from '../app'
 import { Server } from '../models/Server'
 import { ServerInvite } from '../models/ServerInvite'
 
@@ -65,6 +68,46 @@ describe('POST /invites/:code', () => {
     expect(res.status).toBe(200)
     const members = (await app().get(`/servers/${s.id}/members`).set(auth(a))).body.members
     expect(members).toHaveLength(1)
+    const stored = await ServerInvite.findOne({ code: inv.code })
+    expect(stored!.uses).toBe(0)
+  })
+
+  it('handles two concurrent joins by the same user without duplicating the member or double-counting uses', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+
+    // A single already-listening server shared by both requests. Two
+    // separate `app()` calls each bind their own ephemeral supertest
+    // server, and the extra listen()-setup jitter between them is enough
+    // to accidentally serialize the requests, masking the very race this
+    // test exists to catch — so both concurrent POSTs go through one
+    // shared server instead, the way two real simultaneous clients would.
+    const server = http.createServer(createApp())
+    await new Promise<void>(resolve => server.listen(0, resolve))
+    let r1: request.Response, r2: request.Response
+    try {
+      const client = () => request(server)
+      ;[r1, r2] = await Promise.all([
+        client().post(`/invites/${inv.code}`).set(auth(b)),
+        client().post(`/invites/${inv.code}`).set(auth(b)),
+      ])
+    } finally {
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    }
+    expect(r1.status).toBe(200)
+    expect(r2.status).toBe(200)
+
+    // The /members endpoint queries with $in, which silently de-dupes a
+    // repeated id — it would report the right count even if the stored
+    // array holds `b` twice. Check both: the public view, and the raw
+    // document, which is where a duplicate actually shows up.
+    const after = (await app().get(`/servers/${s.id}/members`).set(auth(b))).body.members
+    expect(after).toHaveLength(2)
+    const raw = await Server.findById(s.id).lean()
+    expect(raw!.members).toHaveLength(2)
+    const stored = await ServerInvite.findOne({ code: inv.code })
+    expect(stored!.uses).toBe(1)
   })
 
   it('404s an unknown code', async () => {

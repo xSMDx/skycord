@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from 'express'
-import { Types } from 'mongoose'
 import { Server, MAX_SERVER_MEMBERS } from '../models/Server'
 import { Channel } from '../models/Channel'
 import { ServerInvite } from '../models/ServerInvite'
@@ -60,6 +59,17 @@ export const revokeInvite = async (req: Request, res: Response, next: NextFuncti
 /**
  * Join. Expired, revoked and full are three different problems and get three
  * different answers — a single generic failure would leave the user guessing.
+ *
+ * The membership check-and-add is a single atomic `updateOne`, not a plain
+ * document read/push/save. Two concurrent joins (two users racing the cap,
+ * or one user double-clicking the same link) would otherwise both read the
+ * same pre-write state, both pass their checks, and both write — breaching
+ * the cap or duplicating the member id. A transaction isn't available (this
+ * Mongo is a standalone instance, no replica set), and a per-process lock
+ * like `withServerLock` isn't needed either: the invariant lives entirely
+ * inside one document, so a single conditional update closes it completely
+ * — and unlike an in-process lock, it still holds if this API ever runs as
+ * more than one process.
  */
 export const joinViaInvite = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -70,21 +80,49 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
       res.status(410).json({ message: 'This invite has expired' }); return
     }
 
-    const server = await Server.findById(invite.server)
+    let server = await Server.findById(invite.server)
     if (!server) { res.status(404).json({ message: 'That server no longer exists' }); return }
 
-    const already = server.members.some(m => m.toString() === userId)
-    if (!already) {
-      if (server.members.length >= MAX_SERVER_MEMBERS) {
-        res.status(409).json({ message: 'This server is full' }); return
+    const alreadyBefore = server.members.some(m => m.toString() === userId)
+    let joined = false
+
+    if (!alreadyBefore) {
+      // Matches only if the caller isn't already a member AND the server
+      // isn't at the cap (the guard checks that the slot one below the cap
+      // doesn't exist, i.e. current length < MAX_SERVER_MEMBERS). One round
+      // trip, no window between the check and the write.
+      const upd = await Server.updateOne(
+        {
+          _id: invite.server,
+          members: { $ne: userId },
+          [`members.${MAX_SERVER_MEMBERS - 1}`]: { $exists: false },
+        },
+        { $addToSet: { members: userId } }
+      )
+
+      if (upd.modifiedCount === 1) {
+        joined = true
+        invite.uses += 1
+        await invite.save()
+        server = await Server.findById(invite.server) ?? server
+      } else {
+        // No match: either this user is already a member (lost a race to
+        // another request adding them — a double-click) or the server is
+        // full. Re-read to tell those apart; only one of them is a 409.
+        const fresh = await Server.findById(invite.server)
+        if (!fresh) { res.status(404).json({ message: 'That server no longer exists' }); return }
+        server = fresh
+        const nowMember = server.members.some(m => m.toString() === userId)
+        if (!nowMember) {
+          res.status(409).json({ message: 'This server is full' }); return
+        }
+        // Else: someone else's concurrent request already added this same
+        // user — fall through to the idempotent 200 below, same as if they
+        // had already been a member before this request started.
       }
-      server.members.push(new Types.ObjectId(userId))
-      await server.save()
-      invite.uses += 1
-      await invite.save()
     }
 
     const channels = await Channel.find({ server: server._id }).sort({ type: 1, position: 1 }).lean()
-    res.json({ server: shapeServer(server), channels: channels.map(shapeChannel), joined: !already })
+    res.json({ server: shapeServer(server), channels: channels.map(shapeChannel), joined })
   } catch (err) { next(err) }
 }
