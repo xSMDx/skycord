@@ -1060,7 +1060,30 @@ Then, immediately after the `socketOn('onGroupMessage', …)` block (currently e
   socketOn('onServerMemberLeft',   syncMemberCount)
 ```
 
-`loadChannelHistory` is defined in Task 5. If Task 4 is implemented first, write the handler exactly as above and let the typecheck flag it — Task 5 resolves it. Do not stub it.
+- [ ] **Step 4b: Define `loadChannelHistory`**
+
+The `onChannelDeleted` handler above calls it, so it is defined here rather than in Task 5. Add it next to `loadGroupHistory` (around line 830), mirroring that function's shape:
+
+```ts
+const loadChannelHistory = async (channelId: string) => {
+  const sid = activeServerId.value
+  if (!sid) return
+  loadingMsgs.value = true
+  try {
+    const data = await getChannelMessagesApi(sid, channelId)
+    initChannel(channelId, data.messages.map(m => toClientMessage(m, authUser.value?.id)))
+  } catch (e) {
+    console.error('[loadChannelHistory]', e)
+    initChannel(channelId, [])
+  } finally {
+    loadingMsgs.value = false
+    await nextTick()
+    msgListRef.value?.scrollToBottom()
+  }
+}
+```
+
+Everything it depends on already exists: `getChannelMessagesApi` from Task 2, `toClientMessage` from Task 1, `initChannel` from Task 3, and `loadingMsgs` / `msgListRef` / `nextTick` from `ChatApp.vue` itself. Declare it **above** the socket-handler block that calls it — the handlers are registered inside a function that runs on mount, but `const` arrow functions are not hoisted, so a definition placed after the registration site would still be in scope at call time yet reads confusingly; keep it with its sibling history loaders.
 
 - [ ] **Step 5: Extend `liveList` so edits, deletes, pins and reactions reach channels**
 
@@ -1117,7 +1140,26 @@ Delete the mock literals and point the rail, the sidebar, and the send path at `
 
 - [ ] **Step 1: Delete the mock data**
 
-Remove lines 492-505 entirely — the `// ── Static server/channel data ──` comment, `const servers: Server[] = [...]`, and `const channels: Channel[] = [...]`. Leave `const members: Member[] = []` and `const voiceUsers: any[] = []` alone; the member list is 3b.
+Remove the `// ── Static server/channel data ──` comment, `const servers: Server[] = [...]`, and `const channels: Channel[] = [...]` (they were at lines 492-505 before earlier tasks shifted things). Leave `const members: Member[] = []` alone; the member list is 3b. (`voiceUsers` and `roleColor`, which used to sit in this block, were already removed as dead code in commit `5d36e2a`.)
+
+There is a **second** mock-data site further down, inside `onMounted` — currently around line 1524, immediately after `await loadMyGroups()`:
+
+```ts
+  initChannel('general', [
+    { id: 1, author: 'Skycord', authorId: 'system', avatar: avatarFor('skycord'),
+      avatarColor: '#5865f2', time: '12:00 PM', timestamp: Date.now() - 5000000,
+      content: '👋 Welcome to Skycord! Add friends to start chatting.', reactions: [] },
+  ])
+  channels.filter(c => c.type === 'text' && c.id !== 'general').forEach(c => initChannel(c.id, []))
+```
+
+Delete both statements. They seed a fake welcome message into a channel literally named `general` — a mock id, not a real one — and the second line will not even compile once `channels` is gone. Channel history now comes from `loadChannelHistory`, which Step 4 adds.
+
+```bash
+grep -n "initChannel" src/views/ChatApp.vue
+```
+
+Expected after this step: one hit, the destructure at line ~109. If `initChannel` ends up with no callers at all in `ChatApp.vue`, remove it from that destructure too — Step 4 adds it back as a real caller, so most likely it stays.
 
 - [ ] **Step 2: Delete the computeds the composable replaces**
 
@@ -1157,30 +1199,11 @@ Work through every hit: anywhere the old ref was used as an id, it becomes `acti
   if (view.value === 'server') return activeChannelId.value ? getChannelMessages(activeChannelId.value) : []
 ```
 
-- [ ] **Step 4: Add channel history loading**
+- [ ] **Step 4: Add the channel-open handler**
 
-Next to `loadGroupHistory` (line 830), add:
+`loadChannelHistory` already exists — Task 4 added it next to `loadGroupHistory`, because its `onChannelDeleted` handler needed it. Do not define it again; just call it.
 
-```ts
-const loadChannelHistory = async (channelId: string) => {
-  const sid = activeServerId.value
-  if (!sid) return
-  loadingMsgs.value = true
-  try {
-    const data = await getChannelMessagesApi(sid, channelId)
-    initChannel(channelId, data.messages.map(m => toClientMessage(m, authUser.value?.id)))
-  } catch (e) {
-    console.error('[loadChannelHistory]', e)
-    initChannel(channelId, [])
-  } finally {
-    loadingMsgs.value = false
-    await nextTick()
-    msgListRef.value?.scrollToBottom()
-  }
-}
-```
-
-And a channel-open handler, next to `openGroup`:
+Add a channel-open handler, next to `openGroup`:
 
 ```ts
 const selectChannel = async (ch: Channel) => {
