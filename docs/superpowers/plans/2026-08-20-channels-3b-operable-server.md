@@ -586,7 +586,9 @@ Rename reuses the app's existing single-field edit modal — check whether `Edit
 sed -n '1,40p' src/components/modals/EditFieldModal.vue
 ```
 
-Delete must confirm, and must warn that message history goes with it. Deleting the **last text channel** is refused by the server — surface that error rather than swallowing it.
+Delete must confirm, and must warn that message history goes with it. **Use `src/components/modals/ConfirmModal.vue`** — Task 1 built it, and `ChatApp.vue` already holds a shared `confirmState` that Leave Server and Delete Server both drive, so a third caller is a one-liner. Do not add a second confirmation mechanism, and do not use `window.confirm` (Task 1's review rejected it: unstyled OS chrome in a themed app).
+
+Deleting the **last text channel** is refused by the server — surface that error rather than swallowing it.
 
 - [ ] **Step 5: Typecheck, test, build**
 

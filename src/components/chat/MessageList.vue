@@ -16,6 +16,7 @@ const emit  = defineEmits<{
   openReplyTree: [msg: Message]
   jumpToMessage: [dbId: string]
   groupJoined:   [group: any]
+  serverJoined:  [server: any]
 }>()
 
 const el          = ref<HTMLElement | null>(null)
@@ -198,6 +199,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
           @openReplyTree="(msg) => emit('openReplyTree',msg)"
           @jumpToMessage="(dbId) => emit('jumpToMessage',dbId)"
           @groupJoined="(g) => emit('groupJoined',g)"
+          @serverJoined="(s) => emit('serverJoined',s)"
         />
       </template>
     </TransitionGroup>

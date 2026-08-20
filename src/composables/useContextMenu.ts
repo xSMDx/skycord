@@ -82,7 +82,22 @@ const builder = shallowRef<(() => MenuItem[]) | null>(null)
 export const menuItems = computed<MenuItem[]>(() =>
   builder.value ? prepare(builder.value()) : menu.items)
 
-export const openMenu = (e: MouseEvent, items: MenuItem[] | (() => MenuItem[])) => {
+/**
+ * Anything openMenu actually touches on the event: a screen position plus the
+ * two calls every trigger already makes (preventDefault/stopPropagation). A
+ * plain MouseEvent satisfies this structurally, so every existing call site
+ * is unaffected — this only widens what ELSE can be passed, for triggers
+ * (like a keyboard activation) that have no pointer position of their own and
+ * build one from an element's bounding rect instead.
+ */
+export interface MenuAnchor {
+  clientX: number
+  clientY: number
+  preventDefault(): void
+  stopPropagation(): void
+}
+
+export const openMenu = (e: MenuAnchor, items: MenuItem[] | (() => MenuItem[])) => {
   const initial = typeof items === 'function' ? items() : items
   if (!initial.length) return
   e.preventDefault()

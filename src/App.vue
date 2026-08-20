@@ -27,6 +27,28 @@ const consumeThemeLink = async () => {
   history.replaceState(null, '', '/')   // clean the URL either way
 }
 
+// A /join/<code> link is a server invite — opening it should end with a join
+// prompt inside the app. App.vue has no UI of its own for that (ChatApp owns
+// the modal chrome), so this only captures the code and hands it down as a
+// prop; ChatApp shows the join card once it reads the prop, which happens
+// only once it mounts (i.e. only once authed).
+//
+// Captured HERE, synchronously, before the `isAuthed` check in the template
+// below decides between AuthPage and ChatApp — not lazily re-derived from
+// the URL from inside the authed branch. A link opened while logged out has
+// to survive the trip through AuthPage, and ChatApp doesn't exist yet to
+// read the URL itself; by the time it does mount post-login, the URL has
+// already been cleaned (right below), so re-deriving from it then would find
+// nothing. Capturing into a ref now is what carries the code across login
+// for exactly the person most likely to be following an invite link: someone
+// who doesn't have an account yet.
+const joinCodeFromUrl = (): string | null => {
+  const m = location.pathname.match(/^\/join\/([A-Za-z0-9_-]{6,16})\/?$/)
+  return m ? m[1] : null
+}
+const pendingJoinCode = ref<string | null>(joinCodeFromUrl())
+if (pendingJoinCode.value) history.replaceState(null, '', '/')   // clean the URL either way
+
 // Show splash for at least 3 seconds regardless of how fast initialize() resolves,
 // so fonts/assets have time to settle and the icon animation plays a full cycle.
 const splashDone = ref(false)
@@ -70,7 +92,7 @@ onMounted(async () => {
   <!-- Main app — only mounted after splash is fully done -->
   <template v-if="splashDone">
     <AuthPage v-if="!isAuthed" />
-    <ChatApp  v-else />
+    <ChatApp  v-else :pending-join-code="pendingJoinCode" @join-code-consumed="pendingJoinCode = null" />
   </template>
 
   <!-- Theme-preview banner — floats above everything while previewing a shared theme -->

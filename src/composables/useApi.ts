@@ -5,6 +5,27 @@
 import { useAuth } from './useAuth'
 import type { ConvPref } from './useConvPrefs'
 
+/**
+ * Turn a failed response into something a caller can actually branch on.
+ *
+ * This used to be a bare `throw await res.json()` in each of the four verbs,
+ * which lost the status code — so callers that need to tell "this invite is
+ * gone forever" from "this server is momentarily full" were reduced to
+ * string-matching the server's prose, and a copy edit on the server would
+ * silently flip their behaviour.
+ *
+ * It also assumed the body was JSON. When nginx serves the SPA index for an
+ * unproxied path (the exact failure the channels deploy gate guards against),
+ * res.json() threw a SyntaxError about "<" and the real problem — a 404 of
+ * HTML — never reached the user.
+ */
+const failure = async (res: Response): Promise<never> => {
+  let body: any = {}
+  try { body = await res.json() } catch {
+    body = { message: `Unexpected ${res.status} response from the server` }
+  }
+  throw Object.assign(body, { status: res.status })
+}
 export const useApi = () => {
   const { accessToken } = useAuth()
 
@@ -15,7 +36,7 @@ export const useApi = () => {
 
   const get = async <T>(path: string): Promise<T> => {
     const res = await fetch(path, { headers: headers(), credentials: 'include' })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 
@@ -24,7 +45,7 @@ export const useApi = () => {
       method: 'POST', headers: headers(), credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 
@@ -33,13 +54,13 @@ export const useApi = () => {
       method: 'PATCH', headers: headers(), credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 
   const del = async <T>(path: string): Promise<T> => {
     const res = await fetch(path, { method: 'DELETE', headers: headers(), credentials: 'include' })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 
@@ -149,6 +170,72 @@ export const useApi = () => {
       `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds }
     )
 
+  const createChannelApi = (sid: string, name: string, type: 'text' | 'voice') =>
+    post<{ channel: WireChannel }>(`/servers/${sid}/channels`, { name, type })
+
+  const updateChannelApi = (sid: string, cid: string, body: { name?: string }) =>
+    patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
+
+  // deleteChannel (server/controllers/channelsController.ts) responds
+  // `{ ok: true }`, matching deleteServerApi/leaveServerApi below — not
+  // `{ deleted }`, which is tempting to guess from the endpoint name.
+  const deleteChannelApi = (sid: string, cid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/channels/${cid}`)
+
+  // Both respond `{ ok: true }` (see deleteServer / removeMember in
+  // server/controllers/serversController.ts) — not the `{ deleted }` /
+  // `{ removed }` shapes it's tempting to guess from the endpoint names.
+  const deleteServerApi = (sid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}`)
+
+  const leaveServerApi = (sid: string, uid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/members/${uid}`)
+
+  // Server invites (distinct from group invites above — different collection,
+  // different join path: /join/<code>, not /invite/<code>).
+  const createServerInvite = (sid: string) =>
+    post<{ invite: WireInvite }>(`/servers/${sid}/invites`)
+
+  // Owner-only on the server (requireOwner) — a non-owner calling this gets a
+  // 403, so callers must gate on isOwner before firing it.
+  const listServerInvites = (sid: string) =>
+    get<{ invites: WireInvite[] }>(`/servers/${sid}/invites`)
+
+  const revokeServerInvite = (sid: string, code: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/invites/${code}`)
+
+  // Consuming a server invite — routes to previewInvite/joinViaInvite in
+  // server/controllers/invitesController.ts, mounted at /invites (see
+  // server/app.ts), which is unrelated to the /conversations/invites path
+  // getInvite/joinViaInvite above use for GROUP invites.
+  //
+  // previewInvite's shape is flatter than it looks at first glance: there is
+  // no top-level `code`, and "already a member" is `alreadyMember` on the
+  // response root, not an `isMember` field nested inside `server`. It also
+  // reports `full` (server at MAX_SERVER_MEMBERS), which has no group-invite
+  // equivalent.
+  const getServerInvite = (code: string) =>
+    get<{
+      server: {
+        id:          string
+        name:        string
+        icon:        string | null
+        iconCrop:    { zoom: number; x: number; y: number } | null
+        bannerColor: string | null
+        description: string | null
+        memberCount: number
+      }
+      alreadyMember: boolean
+      full:          boolean
+    }>(`/invites/${code}`)
+
+  // joinViaInvite's shape matches WireServer/WireChannel exactly (it calls
+  // shapeServer/shapeChannel directly) and — unlike the preview above — really
+  // does return `joined` at the top level. `joined: false` means "you were
+  // already a member," not failure; the request still resolves 200.
+  const joinServerInvite = (code: string) =>
+    post<{ server: WireServer; channels: WireChannel[]; joined: boolean }>(`/invites/${code}`)
+
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>
     post<{ slug: string }>('/themes', { name, data })
@@ -185,6 +272,10 @@ export const useApi = () => {
     createTheme, getTheme,
     getVoiceToken,
     createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
+    createChannelApi, updateChannelApi, deleteChannelApi,
+    deleteServerApi, leaveServerApi,
+    createServerInvite, listServerInvites, revokeServerInvite,
+    getServerInvite, joinServerInvite,
   }
 }
 
@@ -265,4 +356,13 @@ export interface WireChannel {
   name:     string
   type:     'text' | 'voice'
   position: number
+}
+
+/** Exactly `shapeInvite` in server/controllers/invitesController.ts:15. */
+export interface WireInvite {
+  code:      string
+  uses:      number
+  expiresAt: string | null
+  createdAt: string
+  inviter:   { id: string; username: string } | null
 }
