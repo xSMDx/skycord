@@ -5,6 +5,27 @@
 import { useAuth } from './useAuth'
 import type { ConvPref } from './useConvPrefs'
 
+/**
+ * Turn a failed response into something a caller can actually branch on.
+ *
+ * This used to be a bare `throw await res.json()` in each of the four verbs,
+ * which lost the status code — so callers that need to tell "this invite is
+ * gone forever" from "this server is momentarily full" were reduced to
+ * string-matching the server's prose, and a copy edit on the server would
+ * silently flip their behaviour.
+ *
+ * It also assumed the body was JSON. When nginx serves the SPA index for an
+ * unproxied path (the exact failure the channels deploy gate guards against),
+ * res.json() threw a SyntaxError about "<" and the real problem — a 404 of
+ * HTML — never reached the user.
+ */
+const failure = async (res: Response): Promise<never> => {
+  let body: any = {}
+  try { body = await res.json() } catch {
+    body = { message: `Unexpected ${res.status} response from the server` }
+  }
+  throw Object.assign(body, { status: res.status })
+}
 export const useApi = () => {
   const { accessToken } = useAuth()
 
@@ -15,7 +36,7 @@ export const useApi = () => {
 
   const get = async <T>(path: string): Promise<T> => {
     const res = await fetch(path, { headers: headers(), credentials: 'include' })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 
@@ -24,7 +45,7 @@ export const useApi = () => {
       method: 'POST', headers: headers(), credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 
@@ -33,13 +54,13 @@ export const useApi = () => {
       method: 'PATCH', headers: headers(), credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 
   const del = async <T>(path: string): Promise<T> => {
     const res = await fetch(path, { method: 'DELETE', headers: headers(), credentials: 'include' })
-    if (!res.ok) throw await res.json()
+    if (!res.ok) return failure(res)
     return res.json()
   }
 

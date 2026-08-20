@@ -20,18 +20,15 @@ const full         = ref(false)
 const joining      = ref(false)
 const errorMessage = ref('')
 
-// useApi's helpers `throw await res.json()`, which for this endpoint is only
-// ever `{ message }` — no HTTP status makes it onto the thrown object (see
-// useApi.ts), so the terminal/retryable split has to run on the message text
-// itself. These three are exactly the cases previewInvite/joinViaInvite send
-// when the invite is genuinely gone (server/controllers/invitesController.ts)
-// — anything else (409 "This server is full", a 5xx, a network blip) falls
-// through to the retryable path below.
-const TERMINAL_MESSAGES = new Set([
-  'That invite does not exist',
-  'This invite has expired',
-  'That server no longer exists',
-])
+// useApi attaches the HTTP status to what it throws, so the split keys on
+// the status rather than on the server's prose. Matching message text worked
+// but meant a copy edit on the server would silently turn a dead invite into
+// a retryable one, or strand a user on a temporarily-full server.
+//
+// 404 = the invite or its server is gone. 410 = expired. Both are permanent.
+// Everything else — 409 (full), any 5xx, or a network error with no status
+// at all — might succeed on a second attempt, so the button stays live.
+const isTerminal = (e: any): boolean => e?.status === 404 || e?.status === 410
 
 // Real icon when the server has one; otherwise the same initials-on-colour
 // fallback a member with no avatar gets, so an icon-less server never looks
@@ -48,7 +45,7 @@ const loadPreview = async () => {
     state.value = res.alreadyMember ? 'joined' : 'loaded'
   } catch (e: any) {
     errorMessage.value = e?.message || 'This invite is invalid or has expired.'
-    state.value = TERMINAL_MESSAGES.has(e?.message) ? 'terminal' : 'retry'
+    state.value = isTerminal(e) ? 'terminal' : 'retry'
   }
 }
 
@@ -71,7 +68,7 @@ const join = async () => {
     // Everything else — full server, 5xx, network blip — leaves `state` as
     // 'loaded' so the Join button (and any server info already loaded) stays
     // on screen for another try.
-    if (TERMINAL_MESSAGES.has(e?.message)) state.value = 'terminal'
+    if (isTerminal(e)) state.value = 'terminal'
   } finally {
     joining.value = false
   }
