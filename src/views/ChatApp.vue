@@ -17,7 +17,7 @@ import { useViewport }                      from '@/composables/useViewport'
 import { useMobileNav }                     from '@/composables/useMobileNav'
 import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
 import { useMessages }                      from '@/composables/useMessages'
-import { useApi, type ApiUser, type PendingRequest, type ApiMessage } from '@/composables/useApi'
+import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, type ChosenStatus } from '@/composables/usePresence'
@@ -920,6 +920,15 @@ const selectChannel = async (ch: Channel) => {
   await loadChannelHistory(ch.id)
 }
 
+// CreateChannelModal's `created` emit — select the channel the user just
+// made instead of leaving them staring at the sidebar. upsertChannel has
+// already put it in state (the modal calls it before emitting), so this is
+// purely local: no request, and selectChannel's own text-only guard already
+// makes a voice channel a harmless no-op here, same as clicking one directly.
+const handleChannelCreated = (channel: WireChannel) => {
+  selectChannel({ id: channel.id, name: channel.name, type: channel.type, serverId: channel.server, position: channel.position })
+}
+
 const handleNewDMCreate = async (ids: string[]) => {
   showNewDM.value = false
   if (ids.length === 1) {
@@ -985,7 +994,12 @@ const runConfirm = async () => {
   try {
     await c.action()
   } finally {
-    confirmState.value = null
+    // Only close the dialog that's still on screen — the user may have
+    // dismissed this one (or it may have been superseded on Escape) and
+    // opened a confirm on a different action while this one was still in
+    // flight. Same closure-outliving-the-view hazard the rename flow guards
+    // against for its own data writes.
+    if (confirmState.value === c) confirmState.value = null
   }
 }
 
@@ -1330,17 +1344,29 @@ const openConversationMenu = (e: MouseEvent, c: any) => {
 }
 
 // The sidebar header's chevron — the home for server-level actions (invite,
-// channel management, leave/delete) that had nowhere to live before.
-const openServerMenu = (e: MouseEvent) => {
+// channel management, leave/delete) that had nowhere to live before. Also the
+// keyboard activation target: Invite People / Leave / Delete Server exist
+// nowhere else in the UI, so Enter/Space here has to work, not just a click.
+const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const s = activeServer.value
   if (!s) return
-  openMenu(e, buildServerMenu(s, authUser.value?.id, {
+  const items = buildServerMenu(s, authUser.value?.id, {
     invitePeople:  () => { showInvite.value = true },          // Task 2
     createChannel: () => { showCreateChannel.value = true },   // Task 4
     leaveServer:   doLeaveServer,
     deleteServer:  doDeleteServer,
     copy:          copyText,
-  }))
+  })
+  if (e instanceof MouseEvent) { openMenu(e, items); return }
+  // A keyboard activation carries no pointer position — anchor the menu to
+  // the header itself rather than guessing at coordinates.
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  openMenu({
+    clientX: r.left,
+    clientY: r.bottom,
+    preventDefault:  () => e.preventDefault(),
+    stopPropagation: () => e.stopPropagation(),
+  }, items)
 }
 
 // createChannel/updateChannel/deleteChannel all 403 a non-owner server-side
@@ -1457,6 +1483,13 @@ const openServer = async (srv: Server) => {
   view.value = 'server'
   setActiveDMPartner(null)
   setActiveGroup(null)
+  // A modal opened against the server you're leaving must not outlive it.
+  // InviteServerModal is additionally keyed on activeServer.id (belt and
+  // braces against a switch that races its own onMounted load), but
+  // CreateChannelModal has no such key, so this reset is the only guard it
+  // gets.
+  showInvite.value = false
+  showCreateChannel.value = false
   try {
     // enterServer is useServers' openServer: sets activeServerId, fetches the
     // channel list the first time, and picks the landing channel.
@@ -1489,6 +1522,8 @@ const onServerCreated = async (serverId: string) => {
   view.value = 'server'
   setActiveDMPartner(null)
   setActiveGroup(null)
+  showInvite.value = false
+  showCreateChannel.value = false
   await enterServer(serverId)
   if (activeChannelId.value) {
     setActiveChannel(activeChannelId.value)
@@ -1872,7 +1907,12 @@ const onKey = (e: KeyboardEvent) => {
     showEmojiPicker.value = showPinned.value = showReactionPicker.value =
     showNewDM.value = showEditGroup.value = showInviteGroup.value =
     showCreateServer.value = showInvite.value = showCreateChannel.value = false
-    confirmState.value = null
+    // Never dismiss a confirm that's mid-action — ConfirmModal already
+    // disables its own Cancel button while busy (see :disabled="busy"), and
+    // this document-level handler must honour the same rule. Otherwise
+    // Escape-ing a slow confirm lets a second one open before the first
+    // settles, and runConfirm's finally would null out the wrong one.
+    if (!confirmState.value?.busy) confirmState.value = null
     replyTargets.value = []
     showUserProfile.value = null
     closeCtx()
@@ -1993,6 +2033,7 @@ onBeforeUnmount(() => {
       v-if="showCreateChannel && activeServer"
       :server-id="activeServer.id"
       @close="showCreateChannel = false"
+      @created="handleChannelCreated"
     />
     <EditFieldModal
       v-if="renameChannelTarget"
@@ -2010,6 +2051,7 @@ onBeforeUnmount(() => {
       <p v-if="renameChannelErr" class="efm-err">{{ renameChannelErr }}</p>
     </EditFieldModal>
     <InviteServerModal v-if="showInvite && activeServer"
+      :key="activeServer.id"
       :server-id="activeServer.id"
       :server-name="activeServer.name"
       :is-owner="activeServer.owner === authUser?.id"
@@ -2250,7 +2292,10 @@ onBeforeUnmount(() => {
 
       <!-- Channel sidebar (server view) -->
       <aside v-else class="sidebar" :class="{ collapsed: !sidebarOpen }">
-        <div class="sb-header" @click.stop="openServerMenu($event)">
+        <div class="sb-header" role="button" tabindex="0"
+          @click.stop="openServerMenu($event)"
+          @keydown.enter.prevent="openServerMenu($event)"
+          @keydown.space.prevent="openServerMenu($event)">
           <span>{{ activeServer?.name }}</span>
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
