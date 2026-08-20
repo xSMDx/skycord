@@ -30,6 +30,7 @@ import EmojiPickerModal    from '@/components/modals/EmojiPickerModal.vue'
 import PinnedMessagesModal from '@/components/modals/PinnedMessagesModal.vue'
 import AddFriendModal      from '@/components/modals/AddFriendModal.vue'
 import CreateServerModal   from '@/components/modals/CreateServerModal.vue'
+import ConfirmModal        from '@/components/modals/ConfirmModal.vue'
 import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
 import NewDMModal          from '@/components/modals/NewDMModal.vue'
 import EditGroupModal      from '@/components/modals/EditGroupModal.vue'
@@ -478,6 +479,19 @@ watch(currentCall, (c) => { if (!c) callExpanded.value = false })
 const showUserProfile   = ref<string | null>(null)   // the user id on screen, or null
 const showAddFriend     = ref(false)
 const showCreateServer  = ref(false)
+// Themed confirm modal, shared across every destructive action that needs a
+// yes/no gate (leave/delete server today; channel delete lands here next).
+// One state object rather than a flag per action, so a new call site is a
+// call to openConfirm() rather than a new ref + new template block.
+interface ConfirmState {
+  title:         string
+  message:       string
+  confirmLabel?: string
+  danger?:       boolean
+  busy:          boolean
+  action:        () => void | Promise<void>
+}
+const confirmState = ref<ConfirmState | null>(null)
 // Modals themselves land in Tasks 2 and 4 — declared now so the server menu
 // (Task 1) compiles against real refs rather than no-op stand-ins.
 const showInvite         = ref(false)
@@ -925,35 +939,63 @@ const doLeaveGroup = async (groupId: string) => {
 }
 
 // Leave/Delete Server — both destructive, both go through a confirm step.
-// There's no bespoke confirm dialog anywhere in the app to reuse: deleteDM and
-// leaveGroup (the two precedents the plan pointed at) both execute immediately
-// with no confirmation at all today. window.confirm is the least invasive
-// option that's actually "already there" rather than a new component.
-const doLeaveServer = async (sid: string) => {
-  const s = servers.value.find(x => x.id === sid)
-  if (!window.confirm(`Leave ${s?.name ?? 'this server'}?`)) return
+// That step used to be the browser's native confirm() dialog: unstyled OS
+// chrome that can't follow the app's theme and blocks the main thread while
+// it's up. ConfirmModal replaces it — see openConfirm/runConfirm below.
+const openConfirm = (opts: Omit<ConfirmState, 'busy'>) => {
+  confirmState.value = { ...opts, busy: false }
+}
+const runConfirm = async () => {
+  const c = confirmState.value
+  if (!c) return
+  c.busy = true
   try {
-    await api.leaveServerApi(sid, authUser.value?.id || '')
-    // onServerMemberLeft (server:memberLeft) only syncs the member count for
-    // everyone else's departure — it doesn't remove the server from your own
-    // sidebar or navigate you away when it's YOUR membership that ended, so
-    // that cleanup happens here, mirroring onServerDeleted below.
-    const wasHere = activeServerId.value === sid
-    removeServer(sid)
-    if (wasHere) { setActiveChannel(null); openFriends() }
-  } catch (e) { console.error('[doLeaveServer]', e); showToast('Couldn’t leave the server') }
+    await c.action()
+  } finally {
+    confirmState.value = null
+  }
 }
 
-const doDeleteServer = async (sid: string) => {
+const doLeaveServer = (sid: string) => {
   const s = servers.value.find(x => x.id === sid)
-  if (!window.confirm(`Delete ${s?.name ?? 'this server'}? This cannot be undone.`)) return
-  try {
-    await api.deleteServerApi(sid)
-    // No local cleanup needed here: the server broadcasts server:deleted to
-    // every member including the owner, and the existing onServerDeleted
-    // handler already calls removeServer + openFriends() for whoever was
-    // looking at it.
-  } catch (e) { console.error('[doDeleteServer]', e); showToast('Couldn’t delete the server') }
+  openConfirm({
+    title: 'Leave Server',
+    message: `Leave ${s?.name ?? 'this server'}?`,
+    confirmLabel: 'Leave',
+    danger: true,
+    action: async () => {
+      try {
+        await api.leaveServerApi(sid, authUser.value?.id || '')
+        // onServerMemberLeft (server:memberLeft) only syncs the member count
+        // for everyone else's departure — it doesn't remove the server from
+        // your own sidebar or navigate you away when it's YOUR membership
+        // that ended, so that cleanup happens here, mirroring onServerDeleted
+        // below.
+        const wasHere = activeServerId.value === sid
+        removeServer(sid)
+        if (wasHere) { setActiveChannel(null); openFriends() }
+      } catch (e) { console.error('[doLeaveServer]', e); showToast('Couldn’t leave the server') }
+    },
+  })
+}
+
+const doDeleteServer = (sid: string) => {
+  const s = servers.value.find(x => x.id === sid)
+  openConfirm({
+    title: 'Delete Server',
+    message: `Delete ${s?.name ?? 'this server'}? This cannot be undone.`,
+    confirmLabel: 'Delete',
+    danger: true,
+    action: async () => {
+      try {
+        await api.deleteServerApi(sid)
+        // No local cleanup needed here: the server broadcasts server:deleted
+        // to every member including the owner, and the existing
+        // onServerDeleted handler already calls removeServer + openFriends()
+        // for whoever was looking at it.
+      } catch (e) { console.error('[doDeleteServer]', e); showToast('Couldn’t delete the server') }
+    },
+  })
 }
 
 // ── Socket handlers ────────────────────────────────────────────────────────
@@ -1712,6 +1754,7 @@ const onKey = (e: KeyboardEvent) => {
     showEmojiPicker.value = showPinned.value = showReactionPicker.value =
     showNewDM.value = showEditGroup.value = showInviteGroup.value =
     showCreateServer.value = showInvite.value = showCreateChannel.value = false
+    confirmState.value = null
     replyTargets.value = []
     showUserProfile.value = null
     closeCtx()
@@ -1828,6 +1871,16 @@ onBeforeUnmount(() => {
     />
     <AddFriendModal   v-if="showAddFriend"     @close="showAddFriend = false" />
     <CreateServerModal v-if="showCreateServer" @close="showCreateServer = false" @created="onServerCreated" />
+    <ConfirmModal
+      v-if="confirmState"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-label="confirmState.confirmLabel"
+      :danger="confirmState.danger"
+      :busy="confirmState.busy"
+      @confirm="runConfirm"
+      @close="confirmState = null"
+    />
     <QuickSwitcherModal
       v-if="showQuickSwitcher"
       :dms="dmsData"

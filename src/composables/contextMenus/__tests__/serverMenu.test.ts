@@ -58,7 +58,17 @@ describe('buildServerMenu', () => {
   })
 
   it('separates the destructive row from the rest', () => {
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers())
-    expect(items.some(isSeparator)).toBe(true)
+    // A separator anywhere in the list isn't what the name claims — it must
+    // sit immediately before the destructive row, in both the owner (Delete
+    // Server) and non-owner (Leave Server) cases.
+    const owner = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers())
+    const ownerDelIdx = owner.findIndex(i => isAction(i) && i.label === 'Delete Server')
+    expect(ownerDelIdx).toBeGreaterThan(0)
+    expect(isSeparator(owner[ownerDelIdx - 1])).toBe(true)
+
+    const member = buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers())
+    const memberLeaveIdx = member.findIndex(i => isAction(i) && i.label === 'Leave Server')
+    expect(memberLeaveIdx).toBeGreaterThan(0)
+    expect(isSeparator(member[memberLeaveIdx - 1])).toBe(true)
   })
 })
