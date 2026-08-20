@@ -22,7 +22,7 @@ import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId } from '@/composables/useSocket'
-import { useServers } from '@/composables/useServers'
+import { useServers, resetServers } from '@/composables/useServers'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
 import UserProfileModal    from '@/components/profile/UserProfileModal.vue'
@@ -1693,6 +1693,12 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopIdleWatch()
   socketDisconnect()
+  // Server state lives at module scope, and this component unmounts exactly
+  // once — on logout, when App.vue swaps in AuthPage without reloading the
+  // page. Logging back in as someone else in the same tab would otherwise
+  // still show the previous account's servers in the rail, and clicking one
+  // would find its channels already cached and skip the fetch entirely.
+  resetServers()
   if (_typingTimer) clearTimeout(_typingTimer)
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('click',   onClick)

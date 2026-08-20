@@ -69,6 +69,25 @@ const toClientChannel = (w: WireChannel): Channel => ({
 
 const byPosition = (a: Channel, b: Channel) => (a.position ?? 0) - (b.position ?? 0)
 
+/**
+ * Clear everything on the way out.
+ *
+ * This state is module-level, and logging out does NOT reload the page — App.vue
+ * just swaps ChatApp for AuthPage. Without this, logging out and back in as a
+ * different account in the same tab left the previous account's servers in the
+ * rail: loadServers only upserts, so nothing removed them, and clicking one
+ * found channelsByServer already cached, so openServer made no request and
+ * rendered the previous account's channels and messages.
+ */
+export const resetServers = () => {
+  servers.value          = []
+  channelsByServer.value = {}
+  activeServerId.value   = null
+  activeChannelId.value  = null
+  unreadChannels.value   = {}
+  lastChannelIn.value    = {}
+}
+
 export const useServers = () => {
   const api = useApi()
 
@@ -176,6 +195,7 @@ export const useServers = () => {
   const activeChannel  = computed(() => activeChannels.value.find(c => c.id === activeChannelId.value) ?? null)
 
   return {
+    resetServers,
     servers, channelsByServer, activeServerId, activeChannelId, unreadChannels, lastChannelIn,
     activeServer, activeChannel, textChannels, voiceChannels,
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
