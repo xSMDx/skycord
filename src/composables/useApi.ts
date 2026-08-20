@@ -158,7 +158,7 @@ export const useApi = () => {
     get<{ servers: WireServer[] }>('/servers')
 
   const getServerDetail = (sid: string) =>
-    get<{ server: WireServer; channels: WireChannel[] }>(`/servers/${sid}`)
+    get<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[] }>(`/servers/${sid}`)
 
   const getChannelMessagesApi = (sid: string, cid: string, before?: string) =>
     get<{ messages: ApiMessage[] }>(
@@ -175,6 +175,22 @@ export const useApi = () => {
 
   const updateChannelApi = (sid: string, cid: string, body: { name?: string }) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
+
+  // ── Categories ───────────────────────────────────────────────────────────
+  // Same write/rename/delete class as the channel routes above and the same
+  // response shapes (server/controllers/categoriesController.ts): create and
+  // update both respond `{ category }`, delete responds `{ ok: true }` like
+  // every other DELETE in this file. Routes are mounted in
+  // server/routes/servers.ts — there is deliberately no GET, since
+  // getServerDetail already returns categories alongside channels.
+  const createCategoryApi = (sid: string, name: string) =>
+    post<{ category: WireCategory }>(`/servers/${sid}/categories`, { name })
+
+  const updateCategoryApi = (sid: string, cid: string, body: { name?: string }) =>
+    patch<{ category: WireCategory }>(`/servers/${sid}/categories/${cid}`, body)
+
+  const deleteCategoryApi = (sid: string, cid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/categories/${cid}`)
 
   // deleteChannel (server/controllers/channelsController.ts) responds
   // `{ ok: true }`, matching deleteServerApi/leaveServerApi below — not
@@ -273,6 +289,7 @@ export const useApi = () => {
     getVoiceToken,
     createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
     createChannelApi, updateChannelApi, deleteChannelApi,
+    createCategoryApi, updateCategoryApi, deleteCategoryApi,
     deleteServerApi, leaveServerApi,
     createServerInvite, listServerInvites, revokeServerInvite,
     getServerInvite, joinServerInvite,
@@ -355,6 +372,25 @@ export interface WireChannel {
   server:   string
   name:     string
   type:     'text' | 'voice'
+  position: number
+  // shapeChannel guards this with `c.category ? … : null`, so the wire value
+  // is always a string or null — never absent — even for a channel that
+  // predates categories, whose raw DB row has no `category` key at all. The
+  // guard exists because a Mongoose `default` never reaches rows already in
+  // the collection, only ones created or hydrated after the field existed.
+  category: string | null
+}
+
+/**
+ * Exactly `shapeCategory` in server/controllers/serversController.ts:48 — it
+ * lives beside shapeServer/shapeChannel there, not in categoriesController.ts,
+ * so getServer (serversController) and categoriesController don't have to
+ * import each other.
+ */
+export interface WireCategory {
+  id:       string
+  server:   string
+  name:     string
   position: number
 }
 

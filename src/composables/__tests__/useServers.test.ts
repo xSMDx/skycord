@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useServers, serverIconFor } from '../useServers'
-import type { WireServer, WireChannel } from '../useApi'
+import { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } from '../useServers'
+import type { WireServer, WireChannel, WireCategory } from '../useApi'
 
 const wireServer = (id: string, name = id): WireServer => ({
   id, name, icon: null, iconCrop: null, bannerColor: null,
@@ -8,7 +8,29 @@ const wireServer = (id: string, name = id): WireServer => ({
 })
 
 const wireChannel = (id: string, server: string, name: string, type: 'text' | 'voice', position = 0): WireChannel =>
-  ({ id, server, name, type, position })
+  ({ id, server, name, type, position, category: null })
+
+const wireCategory = (id: string, server: string, name: string, position = 0): WireCategory =>
+  ({ id, server, name, position })
+
+/**
+ * `vitest.config.mts` runs this suite under `environment: 'node'`, which has
+ * no `localStorage` global at all — confirmed by running `node -e
+ * "console.log('localStorage' in globalThis)"` in this repo, which prints
+ * `false`. Collapse persistence needs something real to round-trip a write
+ * and a read through, so this stubs the one global it touches: four methods,
+ * not a DOM library, and nothing jsdom or @vue/test-utils would pull in.
+ * Production code still degrades gracefully (see useServers.ts) when this
+ * global is genuinely absent, e.g. a browser with storage disabled.
+ */
+class FakeStorage {
+  private store: Record<string, string> = {}
+  getItem(key: string) { return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null }
+  setItem(key: string, value: string) { this.store[key] = value }
+  removeItem(key: string) { delete this.store[key] }
+  clear() { this.store = {} }
+}
+;(globalThis as any).localStorage = new FakeStorage()
 
 describe('useServers', () => {
   let s: ReturnType<typeof useServers>
@@ -19,10 +41,17 @@ describe('useServers', () => {
     // test starts by clearing it rather than by constructing a fresh instance.
     s.servers.value = []
     s.channelsByServer.value = {}
+    s.categoriesByServer.value = {}
     s.activeServerId.value = null
     s.activeChannelId.value = null
     s.unreadChannels.value = {}
     s.lastChannelIn.value = {}
+    // Plan 3a shipped with lastChannelIn missing from this reset — the suite
+    // passed anyway only because of declaration order, and broke the moment
+    // that changed. collapsedCategories is new module-level state of exactly
+    // the same shape; it goes in the reset from day one.
+    s.collapsedCategories.value = {}
+    ;(globalThis.localStorage as any).clear()
   })
 
   it('maps a wire server into the renderable client shape', () => {
@@ -160,6 +189,137 @@ describe('useServers', () => {
     s.markUnread('c1')
     s.openChannel('c1')
     expect(s.unreadChannels.value['c1']).toBeUndefined()
+  })
+
+  // ── categories ─────────────────────────────────────────────────────────
+
+  it('groupedChannels puts uncategorised channels in a leading group with no category', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    expect(groups[0].category).toBeNull()
+    expect(groups[0].text.map(c => c.id)).toEqual(['c1'])
+  })
+
+  it('groups channels under their category, with categories in position order', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('c1', 's1', 'general', 'text', 0),
+        wireChannel('c2', 's1', 'rules',   'text', 0),
+      ],
+      [
+        wireCategory('catB', 's1', 'Info', 1),
+        wireCategory('catA', 's1', 'Chat', 0),
+      ],
+    )
+    s.channelsByServer.value['s1'].find(c => c.id === 'c1')!.category = 'catA'
+    s.channelsByServer.value['s1'].find(c => c.id === 'c2')!.category = 'catB'
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    // Uncategorised leads, then categories in position order (catA:0 before catB:1)
+    // regardless of the order they were fetched/inserted in.
+    expect(groups.map(g => g.category?.id ?? null)).toEqual([null, 'catA', 'catB'])
+    expect(groups[1].text.map(c => c.id)).toEqual(['c1'])
+    expect(groups[2].text.map(c => c.id)).toEqual(['c2'])
+  })
+
+  it('orders text channels before voice within a group, each by position', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('v2', 's1', 'Voice B', 'voice', 1),
+        wireChannel('v1', 's1', 'Voice A', 'voice', 0),
+        wireChannel('t2', 's1', 'text-b',  'text',  1),
+        wireChannel('t1', 's1', 'text-a',  'text',  0),
+      ],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    s.channelsByServer.value['s1'].forEach(c => { c.category = 'cat1' })
+    s.activeServerId.value = 's1'
+    const group = s.groupedChannels.value[1]
+    expect(group.text.map(c => c.id)).toEqual(['t1', 't2'])
+    expect(group.voice.map(c => c.id)).toEqual(['v1', 'v2'])
+  })
+
+  it('still produces a group for a category with no channels', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Empty', 0)])
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    expect(groups).toHaveLength(2)
+    expect(groups[1].category?.id).toBe('cat1')
+    expect(groups[1].text).toEqual([])
+    expect(groups[1].voice).toEqual([])
+  })
+
+  it('treats a channel with no category field the same as an explicit null', () => {
+    // Simulates a channel that predates the categories feature. shapeChannel
+    // on the server (serversController.ts) already normalises this to null
+    // before it reaches the wire, but the client's own grouping must not lean
+    // on that guarantee holding forever — hence no `=== null` anywhere in
+    // groupedChannels' bucketing.
+    const legacy = wireChannel('c1', 's1', 'general', 'text', 0)
+    delete (legacy as any).category
+    s.receiveDetail(wireServer('s1'), [legacy])
+    s.activeServerId.value = 's1'
+    expect(s.groupedChannels.value[0].text.map(c => c.id)).toEqual(['c1'])
+  })
+
+  it('removeCategory reparents its channels to uncategorised rather than dropping them', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [wireChannel('c1', 's1', 'general', 'text', 0)],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    s.channelsByServer.value['s1'][0].category = 'cat1'
+    s.removeCategory('s1', 'cat1')
+    expect(s.categoriesByServer.value['s1']).toHaveLength(0)
+    // The channel survives the category's deletion — reparented, not dropped.
+    expect(s.channelsByServer.value['s1']).toHaveLength(1)
+    expect(s.channelsByServer.value['s1'][0].category).toBeNull()
+  })
+
+  it('upsertCategory adds a new category and updates an existing one in place', () => {
+    s.receiveDetail(wireServer('s1'), [])
+    s.upsertCategory(wireCategory('cat1', 's1', 'Old', 0))
+    expect(s.categoriesByServer.value['s1']).toHaveLength(1)
+    s.upsertCategory(wireCategory('cat1', 's1', 'New', 0))
+    expect(s.categoriesByServer.value['s1']).toHaveLength(1)
+    expect(s.categoriesByServer.value['s1'][0].name).toBe('New')
+  })
+
+  it('ignores a category for a server whose detail has not been fetched', () => {
+    s.upsertCategory(wireCategory('cat9', 'unknown', 'ghost', 0))
+    expect(s.categoriesByServer.value['unknown']).toBeUndefined()
+  })
+
+  it('toggleCategory flips collapsed state and collapsedCategories persists across a simulated reload', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Group', 0)])
+    expect(s.collapsedCategories.value['s1:cat1']).toBeFalsy()
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(true)
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(false)
+    s.toggleCategory('s1', 'cat1')
+
+    // Simulate a reload: forget the in-memory state, then re-read from the
+    // exact storage key toggleCategory just wrote to.
+    s.collapsedCategories.value = {}
+    const persisted = JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')
+    expect(persisted['s1:cat1']).toBe(true)
+  })
+
+  it('collapsing a category the user is currently viewing a channel in does not change activeChannelId', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [wireChannel('c1', 's1', 'general', 'text', 0)],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    s.channelsByServer.value['s1'][0].category = 'cat1'
+    s.activeServerId.value = 's1'
+    s.openChannel('c1')
+    s.toggleCategory('s1', 'cat1')
+    expect(s.activeChannelId.value).toBe('c1')
   })
 })
 
