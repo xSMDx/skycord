@@ -2252,6 +2252,9 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="ch in textChannels" :key="ch.id"
               class="ch-item" :class="{ active: activeChannelId===ch.id, unread: !!unreadChannels[ch.id] }"
+              role="button" tabindex="0"
+              @keydown.enter.prevent="selectChannel(ch)"
+              @keydown.space.prevent="selectChannel(ch)"
               @click="selectChannel(ch)"
               @contextmenu.prevent.stop="openChannelMenu($event, ch)">
               <Hash class="ch-icon" :size="15" :stroke-width="1.5"/>
