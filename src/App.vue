@@ -9,7 +9,7 @@ import SkycordIcon     from '@/components/SkycordIcon.vue'
 import ThemePreviewBanner from '@/components/appearance/ThemePreviewBanner.vue'
 import TooltipLayer       from '@/components/ui/TooltipLayer.vue'
 
-const { isAuthed, initialized, initialize } = useAuth()
+const { isAuthed, initialize } = useAuth()
 const { getTheme } = useApi()
 const { previewTheme, sanitizeTheme } = useAppearance()
 

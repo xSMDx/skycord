@@ -76,6 +76,20 @@ export const createServer = async (req: Request, res: Response, next: NextFuncti
       { server: server._id, name: 'general', type: 'text',  position: 0 },
       { server: server._id, name: 'General', type: 'voice', position: 0 },
     ])
+
+    // The creator's own sockets have to join these rooms now. Sockets join
+    // chan: rooms at connect time (chatSocket) and neither of these channels
+    // existed then, so without this the person who just made the server is the
+    // one member who receives nothing from it — no messages, no edits, no
+    // pins — until they reload. It is the same join createChannel and
+    // joinViaInvite already do; only createServer was missing it, which hid
+    // the gap behind the reload every other path happens to involve.
+    const io = getIO()
+    if (io) {
+      const rooms = channels.map(c => `chan:${c._id.toString()}`)
+      io.in(`user:${userId}`).socketsJoin(rooms)
+    }
+
     res.status(201).json({ server: shapeServer(server), channels: channels.map(shapeChannel) })
   } catch (err) { next(err) }
 }

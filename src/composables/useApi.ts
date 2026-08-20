@@ -129,6 +129,26 @@ export const useApi = () => {
   const addGroupMembers = (groupId: string, memberIds: string[]) =>
     post<{ group: any }>(`/conversations/groups/${groupId}/members`, { memberIds })
 
+  // ── Servers & channels ───────────────────────────────────────────────────
+  const createServerApi = (name: string) =>
+    post<{ server: WireServer; channels: WireChannel[] }>('/servers', { name })
+
+  const getMyServers = () =>
+    get<{ servers: WireServer[] }>('/servers')
+
+  const getServerDetail = (sid: string) =>
+    get<{ server: WireServer; channels: WireChannel[] }>(`/servers/${sid}`)
+
+  const getChannelMessagesApi = (sid: string, cid: string, before?: string) =>
+    get<{ messages: ApiMessage[] }>(
+      `/servers/${sid}/channels/${cid}/messages${before ? `?before=${before}` : ''}`
+    )
+
+  const sendChannelRest = (sid: string, cid: string, content: string, replyToIds: string[] = []) =>
+    post<{ message: ApiMessage }>(
+      `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds }
+    )
+
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>
     post<{ slug: string }>('/themes', { name, data })
@@ -164,6 +184,7 @@ export const useApi = () => {
     updateGroup, addGroupMembers,
     createTheme, getTheme,
     getVoiceToken,
+    createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
   }
 }
 
@@ -222,4 +243,26 @@ export interface ApiMessage {
   replyTo?:     { id: string; author: string; content: string }[] | null
   kind?:        'dm' | 'group' | 'channel' | 'system'
   systemType?:  'rename' | 'icon' | 'add' | 'join' | 'leave' | 'call'
+}
+
+/** Exactly `shapeServer` in server/controllers/serversController.ts:11. */
+export interface WireServer {
+  id:          string
+  name:        string
+  icon:        string | null
+  iconCrop:    { zoom: number; x: number; y: number } | null
+  bannerColor: string | null
+  description: string | null
+  owner:       string
+  memberCount: number
+  createdAt:   string
+}
+
+/** Exactly `shapeChannel` in server/controllers/serversController.ts:23. */
+export interface WireChannel {
+  id:       string
+  server:   string
+  name:     string
+  type:     'text' | 'voice'
+  position: number
 }

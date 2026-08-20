@@ -13,8 +13,14 @@ export const useMessages = () => {
   const initDM = (id: string, seed: Message[] = []) => {
     dmMessages.value[id] = seed
   }
+  /**
+   * Overwrites, like initDM and initGroup. The old guard (`if (!…)`) dated from
+   * the mock era, where the seed was a constant and re-seeding was pointless.
+   * Against a real database it is a bug: reopening a channel kept whatever was
+   * in memory and never picked up messages sent while you were elsewhere.
+   */
   const initChannel = (id: string, seed: Message[] = []) => {
-    if (!serverMessages.value[id]) serverMessages.value[id] = seed
+    serverMessages.value[id] = seed
   }
   const initGroup = (id: string, seed: Message[] = []) => {
     groupMessages.value[id] = seed
@@ -38,6 +44,20 @@ export const useMessages = () => {
     if (!groupMessages.value[groupId].find(m => m.id === msg.id)) {
       groupMessages.value[groupId].push(msg)
     }
+  }
+
+  const pushChannelMessage = (channelId: string, msg: Message) => {
+    if (!serverMessages.value[channelId]) serverMessages.value[channelId] = []
+    // Keyed on dbId, not the numeric id: the numeric id is only the low 8 hex
+    // digits of the ObjectId, so two distinct messages can collide on it.
+    // Only dedupe when the incoming message has a dbId. An unstamped message
+    // (dbId undefined) is an optimistic local message with no server identity
+    // yet to compare — treating "undefined === undefined" as a match would
+    // silently drop it, so it must always be appended.
+    if (msg.dbId != null && serverMessages.value[channelId].some(m => m.dbId === msg.dbId)) {
+      return
+    }
+    serverMessages.value[channelId].push(msg)
   }
 
 type ReplyParents = { id: string; author: string; content: string }[]
@@ -84,15 +104,6 @@ const sendDM = (
     return msg
   }
 
-  const sendChannel = (channelId: string, author: string, authorId: string, avatar: string, content: string) => {
-    if (!serverMessages.value[channelId]) serverMessages.value[channelId] = []
-    serverMessages.value[channelId].push({
-      id: makeId(), author, authorId, content,
-      time: fmtTime(), timestamp: Date.now(),
-      avatar, avatarColor: '#5865f2', reactions: [],
-    })
-  }
-
   const toggleReaction = (list: Message[], msgId: number, emoji: string) => {
     const msg = list.find(m => m.id === msgId)
     if (!msg) return
@@ -125,8 +136,8 @@ const sendDM = (
     dmMessages, serverMessages, groupMessages,
     initDM, initChannel, initGroup,
     getDMMessages, getChannelMessages, getGroupMessages,
-    pushDMMessage, pushGroupMessage,
-    sendDM, sendGroup, sendChannel,
+    pushDMMessage, pushGroupMessage, pushChannelMessage,
+    sendDM, sendGroup,
     toggleDMReaction, toggleChannelReaction,
     pinMessage, deleteMessage, editMessage,
   }
