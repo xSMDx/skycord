@@ -864,6 +864,7 @@ const openGroup = async (group: Group) => {
   if (g) g.unread = undefined
   setActiveDMPartner(null)
   setActiveGroup(group.id)
+  setActiveChannel(null)
   await loadGroupHistory(group.id)
 }
 
@@ -1020,7 +1021,11 @@ const setupSocket = () => {
     removeChannel(p.serverId, p.channelId)
     // removeChannel clears activeChannelId when the deleted channel was the one
     // on screen. Land somewhere real rather than on an empty pane.
-    if (!activeChannelId.value && activeServerId.value === p.serverId) {
+    // activeServerId isn't cleared on navigating away to a DM or Friends, so
+    // without the view check this recovery would still fire there: silently
+    // clearing an unread badge, throwing a loading spinner over whatever the
+    // user is actually reading, and yanking its scroll position.
+    if (view.value === 'server' && !activeChannelId.value && activeServerId.value === p.serverId) {
       selectLanding(p.serverId)
       if (activeChannelId.value) {
         setActiveChannel(activeChannelId.value)
@@ -1109,6 +1114,7 @@ const openDM = async (dm: DM) => {
   // Tell socket which DM is open so sounds are suppressed
   setActiveDMPartner(dm.id)
   setActiveGroup(null)
+  setActiveChannel(null)
   // Load history from DB
   await loadDMHistory(dm.id)
 }
@@ -1226,6 +1232,7 @@ const openFriends = () => {
   activeDM.value = null
   setActiveDMPartner(null)
   setActiveGroup(null)
+  setActiveChannel(null)
 }
 
 const openServer = (srv: Server) => {
