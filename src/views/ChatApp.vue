@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  Hash, Lock, Volume2, Plus, ChevronRight, ChevronLeft,
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft,
   Search, Users, ChevronDown,
   Mic, MicOff, Headphones, Settings,
   Pin, BellOff, PanelLeft, Compass,
@@ -103,7 +103,7 @@ const {
   createGroup, getMyGroups,
   getGroupMessages: fetchGroupMessages, sendGroupRest,
   leaveGroup,
-  getChannelMessagesApi,
+  getChannelMessagesApi, sendChannelRest,
 } = api
 
 // ── Messages ───────────────────────────────────────────────────────────────
@@ -111,24 +111,23 @@ const {
   initDM, initChannel, initGroup,
   getDMMessages, getChannelMessages, getGroupMessages: getGroupMsgs,
   pushDMMessage, pushGroupMessage, pushChannelMessage,
-  sendDM, sendGroup, sendChannel,
+  sendDM, sendGroup,
   toggleDMReaction, toggleChannelReaction,
   deleteMessage, editMessage,
 } = useMessages()
 
 // ── Servers & channels ───────────────────────────────────────────────────
-// Trimmed to what this task's socket handlers actually touch. The brief's
-// fuller destructure (servers, activeServer, activeChannel, textChannels,
-// voiceChannels, openServer, openChannel, loadServers, unreadChannels) is for
-// Task 5, which retires the mock `servers`/`channels`/`activeServer`/
-// `activeChannel`/`textChannels`/`voiceChannels` consts and the `openServer`
-// rail handler still living further down this file — pulling those names in
-// now would either collide with the mock consts (duplicate `const`) or sit
-// unused (`noUnusedLocals` is on in tsconfig.json). `servers` is aliased to
-// `liveServers` because a plain mock array of that name still exists.
+// The whole state layer, now that the mock `servers`/`channels` arrays and the
+// mock `activeServer`/`activeChannel`/`textChannels`/`voiceChannels` consts are
+// gone — nothing left in this file shadows these names. The one exception is
+// `openServer`, which is also the name of the rail's click handler further
+// down; the composable's version is the "enter this server" state transition
+// that handler calls, so it comes in as `enterServer`.
 const {
-  servers: liveServers, activeServerId, activeChannelId,
-  selectLanding, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
+  servers, activeServerId, activeChannelId, unreadChannels,
+  activeServer, activeChannel, textChannels, voiceChannels,
+  selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
+  loadServers, openServer: enterServer,
 } = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -295,8 +294,6 @@ const unhideConv = (id: string) => {
   const s = new Set(hiddenIds.value); s.delete(id); hiddenIds.value = s; persistHidden()
 }
 const deleteDM = (id: string) => { initDM(id, []); hideConv(id) }
-const activeServer  = ref('sykord')
-const activeChannel = ref('general')
 const sidebarOpen   = ref(true)
 const membersOpen   = ref(false)
 /*
@@ -502,21 +499,8 @@ const msgListRef = ref<InstanceType<typeof MessageList> | null>(null)
 
 // ── Role colours ───────────────────────────────────────────────────────────
 
-// ── Static server/channel data ─────────────────────────────────────────────
-const servers: Server[] = [
-  { id: 'sykord', name: 'Skycord HQ',   img: 'https://api.dicebear.com/7.x/shapes/svg?seed=skycord&backgroundColor=5865f2' },
-  { id: 'gaming', name: 'Gaming Zone',  img: 'https://api.dicebear.com/7.x/shapes/svg?seed=gaming&backgroundColor=43b581' },
-  { id: 'music',  name: 'Music Studio', img: 'https://api.dicebear.com/7.x/shapes/svg?seed=music&backgroundColor=eb459e' },
-  { id: 'code',   name: 'Dev Corner',   img: 'https://api.dicebear.com/7.x/shapes/svg?seed=devco&backgroundColor=ed4245' },
-]
-const channels: Channel[] = [
-  { id: 'general',       name: 'general',       type: 'text',  serverId: 'sykord' },
-  { id: 'announcements', name: 'announcements', type: 'text',  serverId: 'sykord', locked: true },
-  { id: 'off-topic',     name: 'off-topic',     type: 'text',  serverId: 'sykord' },
-  { id: 'showcase',      name: 'showcase',      type: 'text',  serverId: 'sykord' },
-  { id: 'lounge',        name: 'lounge',        type: 'voice', serverId: 'sykord' },
-  { id: 'gaming-vc',     name: 'gaming',        type: 'voice', serverId: 'sykord' },
-]
+// Servers and channels come from useServers now. The member list is still a
+// placeholder — the members API is 3b.
 const members: Member[] = []
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -631,10 +615,9 @@ const detailsMembers = computed(() => {
 watch([activeDM, activeGroup], () => { showDetails.value = false })
 
 // ── Computed ───────────────────────────────────────────────────────────────
-const textChannels    = computed(() => channels.filter(c => c.type === 'text'  && c.serverId === activeServer.value))
-const voiceChannels   = computed(() => channels.filter(c => c.type === 'voice' && c.serverId === activeServer.value))
-const currentChannel  = computed(() => channels.find(c => c.id === activeChannel.value))
-const currentServer   = computed(() => servers.find(s => s.id === activeServer.value))
+// textChannels / voiceChannels / activeChannel / activeServer are all computeds
+// off useServers now (destructured at the top of this file); the four local
+// copies that filtered the mock arrays are gone.
 const onlineMembers   = computed(() => members.filter(m => m.status !== 'offline'))
 const activeNow       = computed(() => apiFriends.value.filter(f => f.status === 'online' || f.status === 'idle'))
 const filteredFriends = computed(() => {
@@ -663,12 +646,26 @@ const conversations = computed<Convo[]>(() => {
     (Number(isPinned(b.id)) - Number(isPinned(a.id))) || (b.ts - a.ts))
 })
 
-const currentMessages = computed<Message[]>(() => {
-  if (view.value === 'dm'    && activeDM.value)    return getDMMessages(activeDM.value.id)
-  if (view.value === 'group' && activeGroup.value)  return getGroupMsgs(activeGroup.value.id)
-  if (view.value === 'server') return getChannelMessages(activeChannel.value)
+/**
+ * The message list currently on screen — the single answer to "which list?".
+ *
+ * There used to be three: this computed, `getMsgList()` next to the message
+ * actions, and `liveList()` inside setupSocket. They had already drifted on
+ * which channel id they trusted, so a socket edit and a local edit could land
+ * in two different arrays. One function now, wrapped in one computed for the
+ * template; every other caller calls the function.
+ *
+ * `activeChannelId` is nullable where the old mock ref was always a string, so
+ * the server branch returns an empty list rather than reading `null`.
+ */
+const getMsgList = (): Message[] => {
+  if (view.value === 'dm'     && activeDM.value)        return getDMMessages(activeDM.value.id)
+  if (view.value === 'group'  && activeGroup.value)     return getGroupMsgs(activeGroup.value.id)
+  if (view.value === 'server' && activeChannelId.value) return getChannelMessages(activeChannelId.value)
   return []
-})
+}
+
+const currentMessages = computed<Message[]>(() => getMsgList())
 
 // Members of the current chat — drives the @mention autocomplete in the composer.
 const chatMembers = computed<{ id: string; name: string; username?: string; avatar?: string }[]>(() => {
@@ -868,6 +865,18 @@ const openGroup = async (group: Group) => {
   await loadGroupHistory(group.id)
 }
 
+/**
+ * Open a text channel from the sidebar. Voice channels render but stay inert —
+ * joining one is 3b, and a click that silently switched the message pane to a
+ * voice channel would be worse than a click that does nothing.
+ */
+const selectChannel = async (ch: Channel) => {
+  if (ch.type !== 'text') return
+  openChannel(ch.id)
+  setActiveChannel(ch.id)
+  await loadChannelHistory(ch.id)
+}
+
 const handleNewDMCreate = async (ids: string[]) => {
   showNewDM.value = false
   if (ids.length === 1) {
@@ -1047,40 +1056,36 @@ const setupSocket = () => {
   // field today (see task-4-report.md, Step 3) — the guard below makes this a
   // harmless no-op until the server side adds one.
   const syncMemberCount = (p: any) => {
-    const s = liveServers.value.find(x => x.id === p.serverId)
+    const s = servers.value.find(x => x.id === p.serverId)
     if (s && typeof p.memberCount === 'number') s.memberCount = p.memberCount
   }
   socketOn('onServerMemberJoined', syncMemberCount)
   socketOn('onServerMemberLeft',   syncMemberCount)
 
   // ── Live message updates from partner / group ──────────────────────────────
-  // Resolve the message list currently driving the view (channel, DM, or
-  // group) so edits, deletes, pins, and reactions land in the right place.
-  const liveList = (): Message[] => {
-    if (view.value === 'server' && activeChannelId.value) return getChannelMessages(activeChannelId.value)
-    if (view.value === 'group'  && activeGroup.value)     return getGroupMsgs(activeGroup.value.id)
-    if (activeDM.value)                                   return getDMMessages(activeDM.value.id)
-    return []
-  }
+  // These used to resolve the on-screen list through a local `liveList()` that
+  // had drifted from the two other copies of the same idea. They all call
+  // getMsgList now, so a remote edit and a local edit cannot target different
+  // arrays.
 
   socketOn('onEdited', (p: any) => {
-    const m = liveList().find(m => m.dbId === p.messageId)
+    const m = getMsgList().find(m => m.dbId === p.messageId)
     if (m) { m.content = p.content; m.edited = true }
   })
 
   socketOn('onDeleted', (p: any) => {
-    const list = liveList()
+    const list = getMsgList()
     const i = list.findIndex(m => m.dbId === p.messageId)
     if (i !== -1) list.splice(i, 1)
   })
 
   socketOn('onPinned', (p: any) => {
-    const m = liveList().find(m => m.dbId === p.messageId)
+    const m = getMsgList().find(m => m.dbId === p.messageId)
     if (m) m.pinned = p.pinned
   })
 
   socketOn('onReacted', (p: any) => {
-    const m = liveList().find(m => m.dbId === p.messageId)
+    const m = getMsgList().find(m => m.dbId === p.messageId)
     if (!m) return
     m.reactions = p.reactions.map((r: any) => ({
       emoji:   r.emoji,
@@ -1235,11 +1240,25 @@ const openFriends = () => {
   setActiveChannel(null)
 }
 
-const openServer = (srv: Server) => {
-  activeServer.value = srv.id
+const openServer = async (srv: Server) => {
   view.value = 'server'
   setActiveDMPartner(null)
   setActiveGroup(null)
+  try {
+    // enterServer is useServers' openServer: sets activeServerId, fetches the
+    // channel list the first time, and picks the landing channel.
+    await enterServer(srv.id)
+  } catch (e) {
+    console.error('[openServer]', e)
+    showToast('Could not open that server')
+    return
+  }
+  if (activeChannelId.value) {
+    setActiveChannel(activeChannelId.value)
+    await loadChannelHistory(activeChannelId.value)
+  } else {
+    setActiveChannel(null)
+  }
 }
 
 // ── Send message ───────────────────────────────────────────────────────────
@@ -1337,8 +1356,30 @@ const doSend = async () => {
       sendingMsg.value = false
     }
   } else if (view.value === 'server') {
-    sendChannel(activeChannel.value, name, userId, myAvatar.value, text)
+    sendingMsg.value = true
+    const sid = activeServerId.value, cid = activeChannelId.value
+    if (!sid || !cid) { sendingMsg.value = false; return }
+
+    // `replyIds` in the DM and group branches is scoped inside each of those
+    // blocks, so it is not in scope here — recompute it from the same source
+    // and clear the targets the same way they do.
+    const replyIds = replyTargetMeta.value.map(r => r.id)
+    replyTargets.value = []
+
     newMessage.value = ''
+    // No optimistic insert: the POST returns the real message and the round
+    // trip is local. An optimistic copy would need reconciling against both
+    // the 201 and the channel:receive echo.
+    try {
+      const { message } = await sendChannelRest(sid, cid, text, replyIds)
+      pushChannelMessage(cid, toClientMessage(message, authUser.value?.id))
+    } catch (e: any) {
+      console.error('[doSend channel]', e)
+      showToast(e?.message || 'Message failed to send')
+      newMessage.value = text     // give the text back rather than losing it
+    } finally {
+      sendingMsg.value = false
+    }
     await nextTick(); msgListRef.value?.scrollToBottom()
   }
 }
@@ -1356,11 +1397,7 @@ const doAccept = async (req: PendingRequest) => {
 }
 
 // ── Message actions ────────────────────────────────────────────────────────
-const getMsgList = () => {
-  if (view.value === 'dm'    && activeDM.value)    return getDMMessages(activeDM.value.id)
-  if (view.value === 'group' && activeGroup.value)  return getGroupMsgs(activeGroup.value.id)
-  return getChannelMessages(activeChannel.value)
-}
+// getMsgList lives up beside currentMessages — see the comment there.
 
 // Edit — update local + broadcast to partner via socket
 const handleEditSave = async (msg: Message) => {
@@ -1391,7 +1428,7 @@ const handleReact = async (msgId: number, emoji: string) => {
     }
   } else {
     if (view.value === 'dm' && activeDM.value) toggleDMReaction(activeDM.value.id, msgId, emoji)
-    else toggleChannelReaction(activeChannel.value, msgId, emoji)
+    else if (view.value === 'server' && activeChannelId.value) toggleChannelReaction(activeChannelId.value, msgId, emoji)
   }
 }
 // Context menu version: takes (msg, emoji) instead of (msgId, emoji)
@@ -1609,15 +1646,16 @@ onMounted(async () => {
   // chosen status of 'online' — see server/state/presence.ts.
   startIdleWatch()
   if (authUser.value?.status) chosenStatus.value = authUser.value.status as any
+
+  // Detached, like the prefs and DM-history fetches inside loadFriends, and
+  // fired before them so the rail paints without waiting on the friends list.
+  // The rail is the app's spine — an empty one reads as "you have no servers"
+  // rather than "this failed", so a failure is worth a console warning even
+  // though it must not block the rest of boot.
+  loadServers().catch(e => console.warn('[servers] rail unavailable', e))
+
   await loadFriends()
   await loadMyGroups()
-
-  initChannel('general', [
-    { id: 1, author: 'Skycord', authorId: 'system', avatar: avatarFor('skycord'),
-      avatarColor: '#5865f2', time: '12:00 PM', timestamp: Date.now() - 5000000,
-      content: '👋 Welcome to Skycord! Add friends to start chatting.', reactions: [] },
-  ])
-  channels.filter(c => c.type === 'text' && c.id !== 'general').forEach(c => initChannel(c.id, []))
 
   document.addEventListener('keydown', onKey)
   document.addEventListener('click',   onClick)
@@ -1799,7 +1837,7 @@ onBeforeUnmount(() => {
         <div class="ri-divider" />
         <!-- Servers -->
         <div v-for="srv in servers" :key="srv.id"
-          class="ri" :class="{ active: view==='server' && activeServer===srv.id }"
+          class="ri" :class="{ active: view==='server' && activeServerId===srv.id }"
           v-tip="srv.name" @click.stop="openServer(srv)">
           <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
@@ -1923,32 +1961,30 @@ onBeforeUnmount(() => {
       <!-- Channel sidebar (server view) -->
       <aside v-else class="sidebar" :class="{ collapsed: !sidebarOpen }">
         <div class="sb-header">
-          <span>{{ currentServer?.name }}</span>
+          <span>{{ activeServer?.name }}</span>
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
         <div class="sb-body">
           <div class="ch-group">
             <div class="ch-group-label">
               <ChevronRight :size="10" :stroke-width="2.25"/><span>Text Channels</span>
-              <button class="ch-add-btn"><Plus :size="14" :stroke-width="1.5"/></button>
             </div>
             <button v-for="ch in textChannels" :key="ch.id"
-              class="ch-item" :class="{ active: activeChannel===ch.id, unread: ch.unread }"
-              @click="activeChannel=ch.id">
-              <Lock v-if="ch.locked" class="ch-icon" :size="15" :stroke-width="1.5"/>
-              <Hash v-else class="ch-icon" :size="15" :stroke-width="1.5"/>
+              class="ch-item" :class="{ active: activeChannelId===ch.id, unread: !!unreadChannels[ch.id] }"
+              @click="selectChannel(ch)">
+              <Hash class="ch-icon" :size="15" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
-              <span v-if="ch.unread" class="ch-unread">{{ ch.unread }}</span>
+              <span v-if="unreadChannels[ch.id]" class="ch-unread">{{ unreadChannels[ch.id] }}</span>
             </button>
           </div>
           <div class="ch-group">
             <div class="ch-group-label">
               <ChevronRight :size="10" :stroke-width="2.25"/><span>Voice Channels</span>
             </div>
+            <!-- Inert until 3b adds voice-channel join. -->
             <button v-for="ch in voiceChannels" :key="ch.id" class="ch-item voice">
               <Volume2 class="ch-icon" :size="15" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
-              <span class="vc-live">LIVE</span>
             </button>
           </div>
         </div>
@@ -2170,7 +2206,7 @@ onBeforeUnmount(() => {
                 <Hash class="ch-hash" :size="18" :stroke-width="1.5"/>
                 <div class="ch-ident ch-ident-static">
                   <span class="ch-ident-row">
-                    <h2 class="chat-title">{{ currentChannel?.name }}</h2>
+                    <h2 class="chat-title">{{ activeChannel?.name }}</h2>
                   </span>
                   <div class="ch-topic-sep"/>
                   <span class="ch-topic">Discuss anything on Skycord</span>
@@ -2270,7 +2306,7 @@ onBeforeUnmount(() => {
             :messages="currentMessages"
             :myId="authUser?.id || 'me'"
             :typers="currentTypers"
-            :channelName="currentChannel?.name || ''"
+            :channelName="activeChannel?.name || ''"
             :isDM="view==='dm'"
             :dmPartner="activeDM ? { name: activeDM.name, avatar: activeDM.avatar } : undefined"
             :group="view==='group' && activeGroup ? { name: groupDisplayName(activeGroup), avatar: activeGroup.avatar } : undefined"
@@ -2289,7 +2325,7 @@ onBeforeUnmount(() => {
           <!-- Message input (modular component) — reply strip lives inside it -->
           <MessageInput
             v-model="newMessage"
-            :placeholder="view==='dm' && activeDM ? `Message @${activeDM.name}` : view==='group' && activeGroup ? `Message ${groupDisplayName(activeGroup)}` : `Message #${currentChannel?.name}`"
+            :placeholder="view==='dm' && activeDM ? `Message @${activeDM.name}` : view==='group' && activeGroup ? `Message ${groupDisplayName(activeGroup)}` : `Message #${activeChannel?.name ?? ''}`"
             :sending="sendingMsg"
             :replyTargets="replyTargetMeta"
             :members="chatMembers"
@@ -2531,9 +2567,6 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-group-label{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition:color .15s;white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
 .ch-group-label span{flex:1}
-.ch-add-btn{width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--text-3);opacity:0;transition:opacity .15s,transform .12s}
-.ch-group-label:hover .ch-add-btn{opacity:1}
-.ch-add-btn:hover{color:white;transform:rotate(90deg) scale(1.2)}
 .ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;transition:background .12s,color .12s,padding-left .12s;white-space:nowrap}
 .ch-item:hover{background:var(--hover);color:var(--text-2);padding-left:12px}
 .ch-item.active{background:rgba(var(--accent-rgb),.16);color:#c4c9ff}
@@ -2541,7 +2574,6 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-icon{flex-shrink:0}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
 .ch-unread{min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;display:flex;align-items:center;justify-content:center}
-.vc-live{font-size:9px;font-weight:700;letter-spacing:.5px;color:#23a55a;background:rgba(35,165,90,.12);padding:1px 4px;border-radius:3px}
 
 /* User Panel */
 .user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px}
