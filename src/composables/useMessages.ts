@@ -13,8 +13,14 @@ export const useMessages = () => {
   const initDM = (id: string, seed: Message[] = []) => {
     dmMessages.value[id] = seed
   }
+  /**
+   * Overwrites, like initDM and initGroup. The old guard (`if (!…)`) dated from
+   * the mock era, where the seed was a constant and re-seeding was pointless.
+   * Against a real database it is a bug: reopening a channel kept whatever was
+   * in memory and never picked up messages sent while you were elsewhere.
+   */
   const initChannel = (id: string, seed: Message[] = []) => {
-    if (!serverMessages.value[id]) serverMessages.value[id] = seed
+    serverMessages.value[id] = seed
   }
   const initGroup = (id: string, seed: Message[] = []) => {
     groupMessages.value[id] = seed
@@ -37,6 +43,15 @@ export const useMessages = () => {
     if (!groupMessages.value[groupId]) groupMessages.value[groupId] = []
     if (!groupMessages.value[groupId].find(m => m.id === msg.id)) {
       groupMessages.value[groupId].push(msg)
+    }
+  }
+
+  const pushChannelMessage = (channelId: string, msg: Message) => {
+    if (!serverMessages.value[channelId]) serverMessages.value[channelId] = []
+    // Keyed on dbId, not the numeric id: the numeric id is only the low 8 hex
+    // digits of the ObjectId, so two distinct messages can collide on it.
+    if (!serverMessages.value[channelId].some(m => m.dbId === msg.dbId)) {
+      serverMessages.value[channelId].push(msg)
     }
   }
 
@@ -125,7 +140,7 @@ const sendDM = (
     dmMessages, serverMessages, groupMessages,
     initDM, initChannel, initGroup,
     getDMMessages, getChannelMessages, getGroupMessages,
-    pushDMMessage, pushGroupMessage,
+    pushDMMessage, pushGroupMessage, pushChannelMessage,
     sendDM, sendGroup, sendChannel,
     toggleDMReaction, toggleChannelReaction,
     pinMessage, deleteMessage, editMessage,
