@@ -50,9 +50,14 @@ export const useMessages = () => {
     if (!serverMessages.value[channelId]) serverMessages.value[channelId] = []
     // Keyed on dbId, not the numeric id: the numeric id is only the low 8 hex
     // digits of the ObjectId, so two distinct messages can collide on it.
-    if (!serverMessages.value[channelId].some(m => m.dbId === msg.dbId)) {
-      serverMessages.value[channelId].push(msg)
+    // Only dedupe when the incoming message has a dbId. An unstamped message
+    // (dbId undefined) is an optimistic local message with no server identity
+    // yet to compare — treating "undefined === undefined" as a match would
+    // silently drop it, so it must always be appended.
+    if (msg.dbId != null && serverMessages.value[channelId].some(m => m.dbId === msg.dbId)) {
+      return
     }
+    serverMessages.value[channelId].push(msg)
   }
 
 type ReplyParents = { id: string; author: string; content: string }[]

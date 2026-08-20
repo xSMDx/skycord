@@ -43,6 +43,18 @@ describe('useMessages — channel store', () => {
     expect(m.getChannelMessages('c1')).toHaveLength(2)
   })
 
+  it('never dedupes unstamped messages against each other (no dbId to compare)', () => {
+    m.pushChannelMessage('c1', msg(1, undefined as unknown as string))
+    m.pushChannelMessage('c1', msg(2, undefined as unknown as string))
+    expect(m.getChannelMessages('c1')).toHaveLength(2)
+  })
+
+  it('still lands an unstamped message when the list already has a stamped one', () => {
+    m.pushChannelMessage('c1', msg(1, 'a'))
+    m.pushChannelMessage('c1', msg(2, undefined as unknown as string))
+    expect(m.getChannelMessages('c1')).toHaveLength(2)
+  })
+
   it('keeps channels separate', () => {
     m.pushChannelMessage('c1', msg(1, 'a'))
     m.pushChannelMessage('c2', msg(2, 'b'))
