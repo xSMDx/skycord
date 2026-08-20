@@ -64,6 +64,9 @@ const _h: Record<string, CB<any>> = {
   onChannelCreated:     ((_p: any) => {}) as CB<any>,
   onChannelUpdated:     ((_p: any) => {}) as CB<any>,
   onChannelDeleted:     ((_p: any) => {}) as CB<any>,
+  onCategoryCreated:    ((_p: any) => {}) as CB<any>,
+  onCategoryUpdated:    ((_p: any) => {}) as CB<any>,
+  onCategoryDeleted:    ((_p: any) => {}) as CB<any>,
   onServerUpdated:      ((_p: any) => {}) as CB<any>,
   onServerDeleted:      ((_p: any) => {}) as CB<any>,
   onServerMemberJoined: ((_p: any) => {}) as CB<any>,
@@ -186,6 +189,15 @@ export const useSocket = () => {
     _socket.on('channel:created',     (p: any) => _h.onChannelCreated(p))
     _socket.on('channel:updated',     (p: any) => _h.onChannelUpdated(p))
     _socket.on('channel:deleted',     (p: any) => _h.onChannelDeleted(p))
+    // Categories are pure sidebar structure — no sound, no unread, nothing to
+    // gate on "am I looking at this?", so unlike channel:receive above these
+    // are plain pass-throughs. `category:deleted` deliberately carries only
+    // ids (see deleteCategory in server/controllers/categoriesController.ts):
+    // the server has already reparented that category's channels, and the
+    // client reparents its own cached copies rather than being sent them back.
+    _socket.on('category:created',    (p: any) => _h.onCategoryCreated(p))
+    _socket.on('category:updated',    (p: any) => _h.onCategoryUpdated(p))
+    _socket.on('category:deleted',    (p: any) => _h.onCategoryDeleted(p))
     _socket.on('server:updated',      (p: any) => _h.onServerUpdated(p))
     _socket.on('server:deleted',      (p: any) => _h.onServerDeleted(p))
     _socket.on('server:memberJoined', (p: any) => _h.onServerMemberJoined(p))

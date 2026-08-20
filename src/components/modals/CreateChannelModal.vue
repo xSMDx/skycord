@@ -7,7 +7,15 @@ import { useServers } from '@/composables/useServers'
 import type { WireChannel } from '@/composables/useApi'
 import { formatChannelName } from '@/utils/channelName'
 
-const props = defineProps<{ serverId: string }>()
+// `category` is which group's `+` was clicked — null (or absent) for the
+// server menu's Create Channel, which has no group to speak of and so creates
+// an uncategorised channel. There is no picker in the modal: the affordance
+// that opened it already said where the channel goes, and offering a second,
+// contradictable answer for that is Task 5's problem, not this one's.
+const props = withDefaults(
+  defineProps<{ serverId: string; category?: string | null }>(),
+  { category: null },
+)
 const emit = defineEmits<{ close: []; created: [channel: WireChannel] }>()
 
 const { createChannelApi } = useApi()
@@ -36,7 +44,7 @@ const submit = async () => {
   busy.value  = true
   error.value = ''
   try {
-    const { channel } = await createChannelApi(props.serverId, n, type.value)
+    const { channel } = await createChannelApi(props.serverId, n, type.value, props.category)
     // Fold it into state here rather than waiting for the channel:created
     // echo — the echo is harmless since upsertChannel updates in place by id.
     upsertChannel(channel)

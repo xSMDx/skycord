@@ -76,7 +76,7 @@ import { formatChannelName } from '@/utils/channelName'
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
-import type { DM, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
+import type { DM, Member, Server, Channel, Category, Message, ReplyGraph, Group } from '@/types'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -143,15 +143,21 @@ const {
 
 // ── Servers & channels ───────────────────────────────────────────────────
 // The whole state layer, now that the mock `servers`/`channels` arrays and the
-// mock `activeServer`/`activeChannel`/`textChannels`/`voiceChannels` consts are
-// gone — nothing left in this file shadows these names. The one exception is
-// `openServer`, which is also the name of the rail's click handler further
-// down; the composable's version is the "enter this server" state transition
-// that handler calls, so it comes in as `enterServer`.
+// mock `activeServer`/`activeChannel` consts are gone — nothing left in this
+// file shadows these names. The one exception is `openServer`, which is also
+// the name of the rail's click handler further down; the composable's version
+// is the "enter this server" state transition that handler calls, so it comes
+// in as `enterServer`.
+//
+// `textChannels`/`voiceChannels` are deliberately NOT pulled in any more. The
+// sidebar renders `groupedChannels` — which already splits each category's
+// channels into text and voice — so a flat all-text/all-voice list of the
+// whole server would draw every channel a second time, outside its group.
 const {
   servers, activeServerId, activeChannelId, unreadChannels,
-  activeServer, activeChannel, textChannels, voiceChannels,
+  activeServer, activeChannel, groupedChannels, collapsedCategories,
   selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
+  upsertCategory, removeCategory, toggleCategory,
   loadServers, openServer: enterServer,
 } = useServers()
 
@@ -518,6 +524,17 @@ const confirmState = ref<ConfirmState | null>(null)
 // (Task 1) compiles against real refs rather than no-op stand-ins.
 const showInvite         = ref(false)
 const showCreateChannel  = ref(false)
+/**
+ * Which category the open Create Channel modal will file its channel under.
+ * Set by whichever affordance opened the modal — a category header's `+` names
+ * that category, the server menu's Create Channel names none — rather than
+ * being asked for a second time inside the modal.
+ */
+const createChannelCategory = ref<string | null>(null)
+const openCreateChannel = (category: string | null) => {
+  createChannelCategory.value = category
+  showCreateChannel.value     = true
+}
 const showQuickSwitcher = ref(false)
 const showEmojiPicker   = ref(false)
 const showPinned        = ref(false)
@@ -658,9 +675,68 @@ const detailsMembers = computed(() => {
 watch([activeDM, activeGroup], () => { showDetails.value = false })
 
 // ── Computed ───────────────────────────────────────────────────────────────
-// textChannels / voiceChannels / activeChannel / activeServer are all computeds
-// off useServers now (destructured at the top of this file); the four local
-// copies that filtered the mock arrays are gone.
+// groupedChannels / activeChannel / activeServer are all computeds off
+// useServers now (destructured at the top of this file); the four local copies
+// that filtered the mock arrays are gone.
+
+/**
+ * `groupedChannels` with the two things the state layer has no business
+ * knowing about folded in: whether each category is folded shut on THIS
+ * device, and which rows survive that fold.
+ *
+ * A collapsed category is not emptied. It keeps showing the channel you are
+ * currently reading and anything with an unread badge, which is what Discord
+ * does and for two concrete reasons: hiding the channel on screen leaves the
+ * sidebar with nothing highlighted while its messages are right there, and
+ * hiding an unread one throws away the only notice that it has traffic — the
+ * badge exists to be seen, and folding a category is a request for less
+ * clutter, not for less news.
+ *
+ * The leading uncategorised group is dropped when it has no channels: it
+ * renders no header (an "Uncategorised" label over every server's #general
+ * would be noise), so with no rows there is nothing left but a hover target
+ * and 4px of margin. Every *category* group survives empty — an empty
+ * category still has to be visible to be renamed, deleted, or filled.
+ */
+/** useServers keys its collapse map `${serverId}:${categoryId}`. Spelling that
+ *  format out once here keeps the two readers below from drifting from each
+ *  other, and from `toggleCategory`, which is handed the same two ids to
+ *  write it back. */
+const isCategoryCollapsed = (serverId: string, categoryId: string) =>
+  !!collapsedCategories.value[`${serverId}:${categoryId}`]
+
+interface SidebarGroup {
+  /** v-for key. Categories are keyed by id; the headerless group is a
+   *  constant, and cannot collide — Mongo ids are hex. */
+  key:       string
+  category:  Category | null
+  collapsed: boolean
+  text:      Channel[]
+  voice:     Channel[]
+}
+const sidebarGroups = computed<SidebarGroup[]>(() =>
+  groupedChannels.value
+    .map(g => {
+      const collapsed = !!g.category && isCategoryCollapsed(g.category.serverId, g.category.id)
+      const survives  = (c: Channel) =>
+        !collapsed || c.id === activeChannelId.value || !!unreadChannels.value[c.id]
+      return {
+        key:       g.category?.id ?? 'uncategorised',
+        category:  g.category,
+        collapsed,
+        text:      g.text.filter(survives),
+        voice:     g.voice.filter(survives),
+      }
+    })
+    .filter(g => g.category !== null || g.text.length > 0 || g.voice.length > 0)
+)
+
+/** Fold/unfold from a category header. A no-op on the headerless
+ *  uncategorised group, which has nothing to fold and no header to click. */
+const toggleGroup = (g: SidebarGroup) => {
+  if (g.category) toggleCategory(g.category.serverId, g.category.id)
+}
+
 const onlineMembers   = computed(() => members.filter(m => m.status !== 'offline'))
 const activeNow       = computed(() => apiFriends.value.filter(f => f.status === 'online' || f.status === 'idle'))
 const filteredFriends = computed(() => {
@@ -926,7 +1002,15 @@ const selectChannel = async (ch: Channel) => {
 // purely local: no request, and selectChannel's own text-only guard already
 // makes a voice channel a harmless no-op here, same as clicking one directly.
 const handleChannelCreated = (channel: WireChannel) => {
-  selectChannel({ id: channel.id, name: channel.name, type: channel.type, serverId: channel.server, position: channel.position })
+  // Unfold the category it landed in, if the `+` that opened the modal
+  // belonged to a folded one. A collapsed group keeps showing its active and
+  // unread rows, and selectChannel below makes a new TEXT channel active — but
+  // a new voice channel is neither, so without this the owner clicks `+`,
+  // names a voice channel, and watches the sidebar not change.
+  if (channel.category && isCategoryCollapsed(channel.server, channel.category)) {
+    toggleCategory(channel.server, channel.category)
+  }
+  selectChannel({ id: channel.id, name: channel.name, type: channel.type, serverId: channel.server, position: channel.position, category: channel.category })
 }
 
 const handleNewDMCreate = async (ids: string[]) => {
@@ -1153,6 +1237,12 @@ const setupSocket = () => {
   })
 
   socketOn('onChannelCreated', (p: any) => upsertChannel(p.channel))
+  // `channel:updated` carries `category`, so moving a channel between
+  // categories is already an update of the channel — it needs nothing here
+  // beyond what a rename needs. upsertChannel replaces the entry in
+  // channelsByServer, which is what groupedChannels reads, so the sidebar
+  // re-buckets it into its new group rather than re-rendering it under the
+  // old one.
   socketOn('onChannelUpdated', (p: any) => upsertChannel(p.channel))
   socketOn('onChannelDeleted', (p: any) => {
     removeChannel(p.serverId, p.channelId)
@@ -1170,6 +1260,15 @@ const setupSocket = () => {
       }
     }
   })
+
+  socketOn('onCategoryCreated', (p: any) => upsertCategory(p.category))
+  socketOn('onCategoryUpdated', (p: any) => upsertCategory(p.category))
+  // Ids only, by design — the server reparented this category's channels to
+  // uncategorised before deleting it and does not send them back. removeCategory
+  // does the same locally, so the channels move up into the headerless group
+  // instead of disappearing with their category. Doing that reparent here
+  // instead would be a second copy of a rule that already lives in useServers.
+  socketOn('onCategoryDeleted', (p: any) => removeCategory(p.serverId, p.categoryId))
 
   socketOn('onServerUpdated', (p: any) => upsertServer(p.server))
   socketOn('onServerDeleted', (p: any) => {
@@ -1352,7 +1451,9 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   if (!s) return
   const items = buildServerMenu(s, authUser.value?.id, {
     invitePeople:  () => { showInvite.value = true },          // Task 2
-    createChannel: () => { showCreateChannel.value = true },   // Task 4
+    // No category: the server menu is not scoped to one, and guessing at the
+    // first one would file the channel somewhere the user never pointed at.
+    createChannel: () => { openCreateChannel(null) },
     leaveServer:   doLeaveServer,
     deleteServer:  doDeleteServer,
     copy:          copyText,
@@ -1370,7 +1471,7 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
 }
 
 // createChannel/updateChannel/deleteChannel all 403 a non-owner server-side
-// (requireOwner), so the `+` on the Text Channels label and every row action
+// (requireOwner), so the `+` on every category header and every row action
 // beyond Copy Channel ID must be gated on this, same as buildServerMenu's own
 // isOwner check above.
 const isServerOwner = computed(() =>
@@ -2032,6 +2133,7 @@ onBeforeUnmount(() => {
     <CreateChannelModal
       v-if="showCreateChannel && activeServer"
       :server-id="activeServer.id"
+      :category="createChannelCategory"
       @close="showCreateChannel = false"
       @created="handleChannelCreated"
     />
@@ -2300,13 +2402,29 @@ onBeforeUnmount(() => {
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
         <div class="sb-body">
-          <div class="ch-group">
-            <div class="ch-group-label">
-              <ChevronRight :size="10" :stroke-width="2.25"/><span>Text Channels</span>
+          <!-- One group per category, uncategorised first and deliberately
+               headerless (see `sidebarGroups`). The rows are the markup they
+               have always been, moved inside the loop unchanged: `role="button"`
+               + `tabindex="0"` so a channel is reachable without a mouse, and
+               `.self` on BOTH key handlers so Enter/Space on the nested
+               `.ch-more` button activates that button instead of being swallowed
+               by the row underneath it. -->
+          <div v-for="group in sidebarGroups" :key="group.key" class="ch-group">
+            <!-- Headerless for the uncategorised group. Same activation contract
+                 as the row below it — a header you can only fold with a mouse is
+                 a header a keyboard user cannot get past — and `.self` again so
+                 Enter on the `+` creates a channel rather than also folding the
+                 category out from under it. -->
+            <div v-if="group.category" class="ch-group-label" role="button" tabindex="0"
+              @click="toggleGroup(group)"
+              @keydown.self.enter.prevent="toggleGroup(group)"
+              @keydown.self.space.prevent="toggleGroup(group)">
+              <ChevronRight class="ch-group-chev" :class="{ open: !group.collapsed }" :size="10" :stroke-width="2.25"/>
+              <span>{{ group.category.name }}</span>
               <button v-if="isServerOwner" class="ch-add-btn" v-tip="'Create Channel'"
-                @click.stop="showCreateChannel = true"><Plus :size="14" :stroke-width="1.5"/></button>
+                @click.stop="openCreateChannel(group.category.id)"><Plus :size="14" :stroke-width="1.5"/></button>
             </div>
-            <div v-for="ch in textChannels" :key="ch.id"
+            <div v-for="ch in group.text" :key="ch.id"
               class="ch-item" :class="{ active: activeChannelId===ch.id, unread: !!unreadChannels[ch.id] }"
               role="button" tabindex="0"
               @keydown.self.enter.prevent="selectChannel(ch)"
@@ -2320,15 +2438,10 @@ onBeforeUnmount(() => {
                 <Ellipsis :size="14" :stroke-width="1.5"/>
               </button>
             </div>
-          </div>
-          <div class="ch-group">
-            <div class="ch-group-label">
-              <ChevronRight :size="10" :stroke-width="2.25"/><span>Voice Channels</span>
-            </div>
             <!-- Joining is inert until 3b adds voice-channel join — but the row
                  still owns its context menu, so rename/delete work on a voice
                  channel exactly like a text one. -->
-            <div v-for="ch in voiceChannels" :key="ch.id" class="ch-item voice"
+            <div v-for="ch in group.voice" :key="ch.id" class="ch-item voice"
               @contextmenu.prevent.stop="openChannelMenu($event, ch)">
               <Volume2 class="ch-icon" :size="15" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
@@ -2918,6 +3031,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-group-label{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition:color .15s;white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
 .ch-group-label span{flex:1}
+/* Right when folded, down when open — the chevron is the only thing that says
+   which way the group is, since a collapsed category still shows its unread
+   and active rows and so is never reliably empty.
+   NOT `.ch-chev`, which is already taken by the chat header's mobile
+   disclosure chevron and carries a desktop `display:none`. */
+.ch-group-chev{flex-shrink:0;transition:transform .15s}
+.ch-group-chev.open{transform:rotate(90deg)}
 .ch-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s;flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}

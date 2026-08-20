@@ -170,8 +170,13 @@ export const useApi = () => {
       `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds }
     )
 
-  const createChannelApi = (sid: string, name: string, type: 'text' | 'voice') =>
-    post<{ channel: WireChannel }>(`/servers/${sid}/channels`, { name, type })
+  // `category` defaults to null rather than being left off the body: both mean
+  // uncategorised to createChannel (`req.body.category ?? null`), so sending it
+  // explicitly costs nothing and keeps the request self-describing. It must
+  // never be `''` — resolveCategory rejects an empty string with a 400 on
+  // purpose, reading it as a stale/forgotten selection rather than "none".
+  const createChannelApi = (sid: string, name: string, type: 'text' | 'voice', category: string | null = null) =>
+    post<{ channel: WireChannel }>(`/servers/${sid}/channels`, { name, type, category })
 
   const updateChannelApi = (sid: string, cid: string, body: { name?: string }) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
