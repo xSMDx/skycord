@@ -149,6 +149,15 @@ export const useApi = () => {
       `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds }
     )
 
+  // Both respond `{ ok: true }` (see deleteServer / removeMember in
+  // server/controllers/serversController.ts) — not the `{ deleted }` /
+  // `{ removed }` shapes it's tempting to guess from the endpoint names.
+  const deleteServerApi = (sid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}`)
+
+  const leaveServerApi = (sid: string, uid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/members/${uid}`)
+
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>
     post<{ slug: string }>('/themes', { name, data })
@@ -185,6 +194,7 @@ export const useApi = () => {
     createTheme, getTheme,
     getVoiceToken,
     createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
+    deleteServerApi, leaveServerApi,
   }
 }
 

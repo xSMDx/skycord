@@ -60,6 +60,7 @@ import ConnectionBanner      from '@/components/ui/ConnectionBanner.vue'
 import { openMenu }          from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
+import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
 // isMuted is aliased: this file already has its own `isMuted` ref for YOUR mic
 // state (line ~243). Importing the conversation-mute helper under the same name
 // shadowed it, so the template called a ref and threw on every render — which
@@ -477,6 +478,10 @@ watch(currentCall, (c) => { if (!c) callExpanded.value = false })
 const showUserProfile   = ref<string | null>(null)   // the user id on screen, or null
 const showAddFriend     = ref(false)
 const showCreateServer  = ref(false)
+// Modals themselves land in Tasks 2 and 4 — declared now so the server menu
+// (Task 1) compiles against real refs rather than no-op stand-ins.
+const showInvite         = ref(false)
+const showCreateChannel  = ref(false)
 const showQuickSwitcher = ref(false)
 const showEmojiPicker   = ref(false)
 const showPinned        = ref(false)
@@ -919,6 +924,38 @@ const doLeaveGroup = async (groupId: string) => {
   } catch (e) { console.error('[doLeaveGroup]', e) }
 }
 
+// Leave/Delete Server — both destructive, both go through a confirm step.
+// There's no bespoke confirm dialog anywhere in the app to reuse: deleteDM and
+// leaveGroup (the two precedents the plan pointed at) both execute immediately
+// with no confirmation at all today. window.confirm is the least invasive
+// option that's actually "already there" rather than a new component.
+const doLeaveServer = async (sid: string) => {
+  const s = servers.value.find(x => x.id === sid)
+  if (!window.confirm(`Leave ${s?.name ?? 'this server'}?`)) return
+  try {
+    await api.leaveServerApi(sid, authUser.value?.id || '')
+    // onServerMemberLeft (server:memberLeft) only syncs the member count for
+    // everyone else's departure — it doesn't remove the server from your own
+    // sidebar or navigate you away when it's YOUR membership that ended, so
+    // that cleanup happens here, mirroring onServerDeleted below.
+    const wasHere = activeServerId.value === sid
+    removeServer(sid)
+    if (wasHere) { setActiveChannel(null); openFriends() }
+  } catch (e) { console.error('[doLeaveServer]', e); showToast('Couldn’t leave the server') }
+}
+
+const doDeleteServer = async (sid: string) => {
+  const s = servers.value.find(x => x.id === sid)
+  if (!window.confirm(`Delete ${s?.name ?? 'this server'}? This cannot be undone.`)) return
+  try {
+    await api.deleteServerApi(sid)
+    // No local cleanup needed here: the server broadcasts server:deleted to
+    // every member including the owner, and the existing onServerDeleted
+    // handler already calls removeServer + openFriends() for whoever was
+    // looking at it.
+  } catch (e) { console.error('[doDeleteServer]', e); showToast('Couldn’t delete the server') }
+}
+
 // ── Socket handlers ────────────────────────────────────────────────────────
 const setupSocket = () => {
   // Incoming DM from another user
@@ -1215,6 +1252,20 @@ const openConversationMenu = (e: MouseEvent, c: any) => {
       leaveGroup:  (id) => doLeaveGroup(id),
     }))
   }
+}
+
+// The sidebar header's chevron — the home for server-level actions (invite,
+// channel management, leave/delete) that had nowhere to live before.
+const openServerMenu = (e: MouseEvent) => {
+  const s = activeServer.value
+  if (!s) return
+  openMenu(e, buildServerMenu(s, authUser.value?.id, {
+    invitePeople:  () => { showInvite.value = true },          // Task 2
+    createChannel: () => { showCreateChannel.value = true },   // Task 4
+    leaveServer:   doLeaveServer,
+    deleteServer:  doDeleteServer,
+    copy:          copyText,
+  }))
 }
 
 // Open a DM straight from a profile card. Uses the user the modal already
@@ -1660,7 +1711,7 @@ const onKey = (e: KeyboardEvent) => {
     showSettings.value = showAddFriend.value = showQuickSwitcher.value =
     showEmojiPicker.value = showPinned.value = showReactionPicker.value =
     showNewDM.value = showEditGroup.value = showInviteGroup.value =
-    showCreateServer.value = false
+    showCreateServer.value = showInvite.value = showCreateChannel.value = false
     replyTargets.value = []
     showUserProfile.value = null
     closeCtx()
@@ -1997,7 +2048,7 @@ onBeforeUnmount(() => {
 
       <!-- Channel sidebar (server view) -->
       <aside v-else class="sidebar" :class="{ collapsed: !sidebarOpen }">
-        <div class="sb-header">
+        <div class="sb-header" @click.stop="openServerMenu($event)">
           <span>{{ activeServer?.name }}</span>
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
