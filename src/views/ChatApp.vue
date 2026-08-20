@@ -80,7 +80,14 @@ import type { DM, Member, Server, Channel, Message, ReplyGraph, Group } from '@/
 // into a local, mutable ref: the prop itself is readonly, and closing the
 // modal this drives needs to null it out.
 const props = defineProps<{ pendingJoinCode?: string | null }>()
+const emit = defineEmits<{ joinCodeConsumed: [] }>()
+// Copied into local state once, then handed back so App.vue can forget it.
+// App.vue reads the code from the URL before the auth branch (so an invite
+// opened while logged out survives the trip through AuthPage), and logging out
+// remounts this component without reloading the page — so a code left sitting
+// in App.vue would re-open this modal for an invite already joined or dismissed.
 const joinPromptCode = ref<string | null>(props.pendingJoinCode ?? null)
+if (joinPromptCode.value) emit('joinCodeConsumed')
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 const { user: authUser, authFetch, updateUser } = useAuth()

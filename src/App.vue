@@ -92,7 +92,7 @@ onMounted(async () => {
   <!-- Main app — only mounted after splash is fully done -->
   <template v-if="splashDone">
     <AuthPage v-if="!isAuthed" />
-    <ChatApp  v-else :pending-join-code="pendingJoinCode" />
+    <ChatApp  v-else :pending-join-code="pendingJoinCode" @join-code-consumed="pendingJoinCode = null" />
   </template>
 
   <!-- Theme-preview banner — floats above everything while previewing a shared theme -->
