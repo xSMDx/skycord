@@ -21,7 +21,8 @@ import { useApi, type ApiUser, type PendingRequest, type ApiMessage } from '@/co
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, setActiveDMPartner, setActiveGroup, dmConvId } from '@/composables/useSocket'
+import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId } from '@/composables/useSocket'
+import { useServers } from '@/composables/useServers'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
 import UserProfileModal    from '@/components/profile/UserProfileModal.vue'
@@ -102,17 +103,33 @@ const {
   createGroup, getMyGroups,
   getGroupMessages: fetchGroupMessages, sendGroupRest,
   leaveGroup,
+  getChannelMessagesApi,
 } = api
 
 // ── Messages ───────────────────────────────────────────────────────────────
 const {
   initDM, initChannel, initGroup,
   getDMMessages, getChannelMessages, getGroupMessages: getGroupMsgs,
-  pushDMMessage, pushGroupMessage,
+  pushDMMessage, pushGroupMessage, pushChannelMessage,
   sendDM, sendGroup, sendChannel,
   toggleDMReaction, toggleChannelReaction,
   deleteMessage, editMessage,
 } = useMessages()
+
+// ── Servers & channels ───────────────────────────────────────────────────
+// Trimmed to what this task's socket handlers actually touch. The brief's
+// fuller destructure (servers, activeServer, activeChannel, textChannels,
+// voiceChannels, openServer, openChannel, loadServers, unreadChannels) is for
+// Task 5, which retires the mock `servers`/`channels`/`activeServer`/
+// `activeChannel`/`textChannels`/`voiceChannels` consts and the `openServer`
+// rail handler still living further down this file — pulling those names in
+// now would either collide with the mock consts (duplicate `const`) or sit
+// unused (`noUnusedLocals` is on in tsconfig.json). `servers` is aliased to
+// `liveServers` because a plain mock array of that name still exists.
+const {
+  servers: liveServers, activeServerId, activeChannelId,
+  selectLanding, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
+} = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
 const {
@@ -810,6 +827,27 @@ const loadGroupHistory = async (groupId: string) => {
   }
 }
 
+// Mirrors loadGroupHistory. Declared here (a sibling of it) rather than beside
+// the socket handlers below that call it: setupSocket() only runs on mount, by
+// which point this const is long since defined, but a definition placed after
+// the call site would read as forward-referencing something that isn't hoisted.
+const loadChannelHistory = async (channelId: string) => {
+  const sid = activeServerId.value
+  if (!sid) return
+  loadingMsgs.value = true
+  try {
+    const data = await getChannelMessagesApi(sid, channelId)
+    initChannel(channelId, data.messages.map(m => toClientMessage(m, authUser.value?.id)))
+  } catch (e) {
+    console.error('[loadChannelHistory]', e)
+    initChannel(channelId, [])
+  } finally {
+    loadingMsgs.value = false
+    await nextTick()
+    msgListRef.value?.scrollToBottom()
+  }
+}
+
 const openGroup = async (group: Group) => {
   if (!groupsData.value.find(g => g.id === group.id)) groupsData.value.unshift(group)
   activeGroup.value = group
@@ -965,12 +1003,58 @@ const setupSocket = () => {
     }
   })
 
+  // ── Servers & channels ────────────────────────────────────────────────────
+  socketOn('onChannelMessage', (payload: any) => {
+    const channelId = payload.conversationId
+    // Reconnect can replay, and our own send already stamped its dbId from the
+    // 201 response. Either way, having the id means we have the message.
+    if (payload._id && getChannelMessages(channelId).some(m => m.dbId === payload._id)) return
+    pushChannelMessage(channelId, toClientMessage(payload, authUser.value?.id))
+    const looking = view.value === 'server' && activeChannelId.value === channelId
+    if (!looking) markUnread(channelId)
+  })
+
+  socketOn('onChannelCreated', (p: any) => upsertChannel(p.channel))
+  socketOn('onChannelUpdated', (p: any) => upsertChannel(p.channel))
+  socketOn('onChannelDeleted', (p: any) => {
+    removeChannel(p.serverId, p.channelId)
+    // removeChannel clears activeChannelId when the deleted channel was the one
+    // on screen. Land somewhere real rather than on an empty pane.
+    if (!activeChannelId.value && activeServerId.value === p.serverId) {
+      selectLanding(p.serverId)
+      if (activeChannelId.value) {
+        setActiveChannel(activeChannelId.value)
+        loadChannelHistory(activeChannelId.value)
+      }
+    }
+  })
+
+  socketOn('onServerUpdated', (p: any) => upsertServer(p.server))
+  socketOn('onServerDeleted', (p: any) => {
+    const wasHere = activeServerId.value === p.serverId
+    removeServer(p.serverId)
+    if (wasHere) { setActiveChannel(null); openFriends() }
+  })
+
+  // The member list is 3b; until then the only visible consequence of someone
+  // joining or leaving is the count, so keep just that honest. Neither
+  // server:memberJoined nor server:memberLeft actually carries a memberCount
+  // field today (see task-4-report.md, Step 3) — the guard below makes this a
+  // harmless no-op until the server side adds one.
+  const syncMemberCount = (p: any) => {
+    const s = liveServers.value.find(x => x.id === p.serverId)
+    if (s && typeof p.memberCount === 'number') s.memberCount = p.memberCount
+  }
+  socketOn('onServerMemberJoined', syncMemberCount)
+  socketOn('onServerMemberLeft',   syncMemberCount)
+
   // ── Live message updates from partner / group ──────────────────────────────
-  // Resolve the message list currently driving the view (DM or group) so edits,
-  // deletes, pins, and reactions land in the right place for both kinds.
+  // Resolve the message list currently driving the view (channel, DM, or
+  // group) so edits, deletes, pins, and reactions land in the right place.
   const liveList = (): Message[] => {
-    if (view.value === 'group' && activeGroup.value) return getGroupMsgs(activeGroup.value.id)
-    if (activeDM.value) return getDMMessages(activeDM.value.id)
+    if (view.value === 'server' && activeChannelId.value) return getChannelMessages(activeChannelId.value)
+    if (view.value === 'group'  && activeGroup.value)     return getGroupMsgs(activeGroup.value.id)
+    if (activeDM.value)                                   return getDMMessages(activeDM.value.id)
     return []
   }
 

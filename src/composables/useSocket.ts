@@ -39,6 +39,11 @@ export const setActiveDMPartner = (id: string | null) => { _activeDMPartnerId = 
 let _activeGroupId: string | null = null
 export const setActiveGroup = (id: string | null) => { _activeGroupId = id }
 
+// Same idea again for channels: a message arriving in the channel already on
+// screen should not ding.
+let _activeChannelId: string | null = null
+export const setActiveChannel = (id: string | null) => { _activeChannelId = id }
+
 type CB<T> = (p: T) => void
 const _h: Record<string, CB<any>> = {
   onMessage:        ((_p: any) => {}) as CB<any>,
@@ -55,6 +60,14 @@ const _h: Record<string, CB<any>> = {
   onGroupUpdated:   ((_p: any) => {}) as CB<any>,
   onGroupMessage:   ((_p: any) => {}) as CB<any>,
   onMentionEveryone:((_p: any) => {}) as CB<any>,
+  onChannelMessage:     ((_p: any) => {}) as CB<any>,
+  onChannelCreated:     ((_p: any) => {}) as CB<any>,
+  onChannelUpdated:     ((_p: any) => {}) as CB<any>,
+  onChannelDeleted:     ((_p: any) => {}) as CB<any>,
+  onServerUpdated:      ((_p: any) => {}) as CB<any>,
+  onServerDeleted:      ((_p: any) => {}) as CB<any>,
+  onServerMemberJoined: ((_p: any) => {}) as CB<any>,
+  onServerMemberLeft:   ((_p: any) => {}) as CB<any>,
 }
 
 // ── Sounds ────────────────────────────────────────────────────────────────
@@ -160,6 +173,23 @@ export const useSocket = () => {
       if (p.authorId !== user.value?.id && _activeGroupId !== gid && !isMuted(gid)) soundMessage()
       _h.onGroupMessage(p)
     })
+
+    // ── Servers & channels ──────────────────────────────────────────────
+    // A channel message dings under the same rule as a group one: not from
+    // you, and not the channel you are looking at. Channel mutes are not a
+    // feature yet, so unlike groups there is no isMuted() check to make here.
+    _socket.on('channel:receive', (p: any) => {
+      if (p.authorId !== user.value?.id && _activeChannelId !== p.conversationId) soundMessage()
+      _h.onChannelMessage(p)
+    })
+
+    _socket.on('channel:created',     (p: any) => _h.onChannelCreated(p))
+    _socket.on('channel:updated',     (p: any) => _h.onChannelUpdated(p))
+    _socket.on('channel:deleted',     (p: any) => _h.onChannelDeleted(p))
+    _socket.on('server:updated',      (p: any) => _h.onServerUpdated(p))
+    _socket.on('server:deleted',      (p: any) => _h.onServerDeleted(p))
+    _socket.on('server:memberJoined', (p: any) => _h.onServerMemberJoined(p))
+    _socket.on('server:memberLeft',   (p: any) => _h.onServerMemberLeft(p))
 
     // @everyone ping — distinct notification sound + a toast in the UI
     _socket.on('mention:everyone', (p: any) => { soundNotification(); _h.onMentionEveryone(p) })
