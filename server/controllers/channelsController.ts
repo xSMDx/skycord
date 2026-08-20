@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
 import { Channel } from '../models/Channel'
+import { Category } from '../models/Category'
 import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversController'
 import { Message } from '../models/Message'
 import { User } from '../models/User'
@@ -50,6 +51,33 @@ export const loadChannel = async (req: Request, res: Response) => {
   return { server, channel }
 }
 
+/**
+ * Turn a `category` from a request body into something storable.
+ *
+ * Returns the ObjectId when the value names a category of THIS server, `null`
+ * for explicitly uncategorised, and `false` for anything else — a malformed
+ * id, an id that resolves to nothing, and (the case that matters) an id that
+ * resolves to a category belonging to a DIFFERENT server. That last one has to
+ * be refused rather than silently stored: a channel filed under a category
+ * that its own server does not render, and that the other server has no
+ * channel of, disappears from both sidebars with nothing to click to get it
+ * back.
+ *
+ * `false` rather than a thrown error so the callers stay in the same
+ * validate-then-respond shape as the name check beside them.
+ */
+const resolveCategory = async (
+  raw: unknown, serverId: Types.ObjectId
+): Promise<Types.ObjectId | null | false> => {
+  if (raw === null || raw === '') return null
+  if (typeof raw !== 'string' || !Types.ObjectId.isValid(raw)) return false
+  const category = await Category.findById(raw).select('server').lean()
+  if (!category || category.server.toString() !== serverId.toString()) return false
+  return category._id
+}
+
+const CATEGORY_REJECTED = 'That category does not belong to this server'
+
 export const createChannel = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
@@ -60,11 +88,16 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
     if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
     if (!type) { res.status(400).json({ message: 'A channel is either text or voice' }); return }
 
+    // Absent means uncategorised, the same thing an explicit null means — a
+    // channel created before there was anywhere to put it.
+    const category = await resolveCategory(req.body.category ?? null, server._id)
+    if (category === false) { res.status(400).json({ message: CATEGORY_REJECTED }); return }
+
     // Appended to the end of its own type group.
     const last = await Channel.find({ server: server._id, type }).sort({ position: -1 }).limit(1).lean()
     const position = last.length ? last[0].position + 1 : 0
 
-    const channel = await Channel.create({ server: server._id, name, type, position })
+    const channel = await Channel.create({ server: server._id, name, type, position, category })
     const shaped = shapeChannel(channel)
     emitToServer(server, 'channel:created', { serverId: server._id.toString(), channel: shaped })
 
@@ -92,9 +125,33 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     const found = await loadChannel(req, res); if (!found) return
     if (!requireOwner(found.server, req.user!.sub, res)) return
 
-    const name = String(req.body.name ?? '').trim()
-    if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
-    found.channel.name = name
+    // Per-field, in the shape updateServer already uses, so a channel can be
+    // moved between categories without also being renamed. A body that names
+    // neither field is still the 400 it has always been: the endpoint asks for
+    // something to change, and "nothing" is a client bug, not a no-op worth a
+    // 200 and a broadcast.
+    const wantsName     = req.body.name !== undefined
+    const wantsCategory = req.body.category !== undefined
+    if (!wantsName && !wantsCategory) {
+      res.status(400).json({ message: 'Give the channel a name' }); return
+    }
+
+    // Validate everything before writing anything: a blank name arriving
+    // alongside a valid category must not leave the category moved.
+    let name: string | undefined
+    if (wantsName) {
+      name = String(req.body.name ?? '').trim()
+      if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
+    }
+    let category: Types.ObjectId | null | undefined
+    if (wantsCategory) {
+      const resolved = await resolveCategory(req.body.category, found.server._id)
+      if (resolved === false) { res.status(400).json({ message: CATEGORY_REJECTED }); return }
+      category = resolved
+    }
+
+    if (name !== undefined) found.channel.name = name
+    if (category !== undefined) found.channel.category = category
     await found.channel.save()
     emitToServer(found.server, 'channel:updated', {
       serverId: found.server._id.toString(), channel: shapeChannel(found.channel),

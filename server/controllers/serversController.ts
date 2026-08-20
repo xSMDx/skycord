@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
 import { Server } from '../models/Server'
 import { Channel } from '../models/Channel'
+import { Category } from '../models/Category'
 import { ServerInvite } from '../models/ServerInvite'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
@@ -25,6 +26,29 @@ export const shapeChannel = (c: any) => ({
   server:   c.server.toString(),
   name:     c.name,
   type:     c.type,
+  position: c.position,
+  // The `c.category ? … : null` guard is load-bearing; do not shorten it to
+  // `c.category.toString()`. A Mongoose `default` is applied when a document
+  // is created or hydrated, never retroactively to rows already stored, and
+  // every read that reaches this helper goes through `.lean()`, which skips
+  // hydration entirely. So a channel written before `category` existed — which
+  // is every channel that predates this feature — arrives here as `undefined`
+  // rather than `null`, and an unguarded `.toString()` would throw on the very
+  // first server anyone opens. Pinned by categoryModel.test.ts and by the
+  // legacy-row case in categories.test.ts.
+  category: c.category ? c.category.toString() : null,
+})
+
+/**
+ * Client shape for a category. Lives here beside shapeServer/shapeChannel
+ * rather than in categoriesController so that serversController (getServer)
+ * and categoriesController do not have to import each other — the same reason
+ * shapeChannel lives here and not in channelsController.
+ */
+export const shapeCategory = (c: any) => ({
+  id:       c._id.toString(),
+  server:   c.server.toString(),
+  name:     c.name,
   position: c.position,
 })
 
@@ -105,7 +129,14 @@ export const getServer = async (req: Request, res: Response, next: NextFunction)
   try {
     const server = await loadServer(req, res); if (!server) return
     const channels = await Channel.find({ server: server._id }).sort({ type: 1, position: 1 }).lean()
-    res.json({ server: shapeServer(server), channels: channels.map(shapeChannel) })
+    // Sorted the same way channels are, so the client renders the sidebar in
+    // the order the owner built it without sorting anything itself.
+    const categories = await Category.find({ server: server._id }).sort({ position: 1 }).lean()
+    res.json({
+      server:     shapeServer(server),
+      channels:   channels.map(shapeChannel),
+      categories: categories.map(shapeCategory),
+    })
   } catch (err) { next(err) }
 }
 
@@ -179,6 +210,11 @@ export const deleteServer = async (req: Request, res: Response, next: NextFuncti
     }
 
     await Channel.deleteMany({ server: server._id })
+    // Categories have nothing to outlive once the channels they grouped are
+    // gone, and nothing else ever reads them — same reasoning as the invite
+    // sweep below, which exists so nothing is left pointing at a server that
+    // no longer exists.
+    await Category.deleteMany({ server: server._id })
     // Invites with expiresAt: null are skipped by the TTL index and would
     // otherwise outlive the server they point at.
     await ServerInvite.deleteMany({ server: server._id })
