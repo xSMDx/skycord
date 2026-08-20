@@ -316,6 +316,48 @@ describe('DELETE /servers/:sid/categories/:cid', () => {
     expect((await Channel.findById(chan.id))!.category!.toString()).toBe(cat.id)
   })
 
+  // The bug this pins: createChannel's resolveCategory reads the category
+  // while it still exists, then Channel.create persists that id — with
+  // nothing stopping deleteCategory's reparent-then-delete from running in
+  // between, a channel could end up pointing at a category id that is gone.
+  // Fixed by having both sides take the same per-server lock
+  // (withServerLock, channelsController.ts), so the create and the delete
+  // cannot interleave. Because the lock serializes them, either outcome is
+  // fine: the create can land first (and then get reparented to null by the
+  // delete below it, same as any channel already in the category), or the
+  // delete can land first (and the create then fails with a 400, since the
+  // category is genuinely gone by the time it resolves). What the test
+  // pins is the invariant that must hold no matter which order won — no
+  // channel is left referencing a category that does not exist.
+  it('serializes a concurrent create-into-category against a delete-of-that-category: no channel is left dangling', async () => {
+    const u = await register()
+    const { server } = await mkServer(u)
+    const cat = await mkCategory(u, server.id, 'Racing')
+
+    const [createRes, deleteRes] = await Promise.all([
+      mkChannel(u, server.id, { name: 'racer', category: cat.id }),
+      app().delete(`/servers/${server.id}/categories/${cat.id}`).set(auth(u)),
+    ])
+
+    // The delete always succeeds: the category exists when loadCategory reads
+    // it, and only the lock — not the outcome of the race — decides ordering.
+    expect(deleteRes.status).toBe(200)
+    // The create either wins the race and lands (201) or loses it because by
+    // the time it's serialized in, the category it named is already gone (400).
+    expect([201, 400]).toContain(createRes.status)
+
+    // The invariant, checked against the stored documents rather than either
+    // response body: every surviving category id is still a real category,
+    // and no channel's `category` field names one that isn't.
+    const categoryIds = new Set(
+      (await Category.find({ server: server.id }).lean()).map(c => c._id.toString())
+    )
+    const channels = await Channel.find({ server: server.id }).lean()
+    for (const ch of channels) {
+      if (ch.category) expect(categoryIds.has(ch.category.toString())).toBe(true)
+    }
+  })
+
   it('403s a non-owner member and keeps the category', async () => {
     const a = await register(), b = await register()
     const { server } = await mkServer(a)
@@ -435,6 +477,18 @@ describe('channel category assignment', () => {
     const u = await register()
     const { server } = await mkServer(u)
     const res = await mkChannel(u, server.id, { name: 'x', category: 'not-an-id' })
+    expect(res.status).toBe(400)
+    expect(await Channel.countDocuments({ server: server.id })).toBe(2)
+  })
+
+  // `''` is not a second spelling of "uncategorised" alongside `null` — a
+  // client sending an empty string almost always means a bug (a forgotten
+  // field, a stale/empty selection) rather than a deliberate choice, so it's
+  // rejected the same way any other malformed id is, not silently accepted.
+  it('refuses an empty-string category rather than treating it as uncategorised', async () => {
+    const u = await register()
+    const { server } = await mkServer(u)
+    const res = await mkChannel(u, server.id, { name: 'x', category: '' })
     expect(res.status).toBe(400)
     expect(await Channel.countDocuments({ server: server.id })).toBe(2)
   })

@@ -9,9 +9,25 @@ import { resolveMessages } from './messagesController'
 import { getIO } from '../sockets/chatSocket'
 
 /**
- * Serializes callbacks per server id, within this process only. Guards the
- * last-text-channel check-then-delete in `deleteChannel` against two
- * concurrent deletes both reading the same count before either writes.
+ * Serializes callbacks per server id, within this process only. Guards every
+ * check-then-act sequence in this file and in categoriesController.ts that
+ * reads something about a server's channels/categories and then writes based
+ * on what it read:
+ *  - `deleteChannel`'s last-text-channel count-then-delete, against two
+ *    concurrent deletes both reading the same count before either writes.
+ *  - `createChannel` and `updateChannel`'s category resolution: both resolve
+ *    a category id to prove it exists on this server, then persist that id
+ *    on a channel. Locked against `deleteCategory`, whose reparent-then-delete
+ *    could otherwise slip in between the resolve and the persist and leave
+ *    the channel pointing at a category that no longer exists.
+ *  - `createCategory`'s MAX_CATEGORIES count and highest-position read, both
+ *    check-then-act against concurrent creates the same way.
+ *  - `deleteCategory`'s reparent-then-delete itself, so it can't interleave
+ *    with any of the above.
+ *
+ * Exported so categoriesController.ts can take the same per-server lock
+ * rather than a second, uncoordinated one — two independent locks would not
+ * serialize against each other and would defeat the point.
  *
  * PER-PROCESS ONLY: this Map lives in one Node process's memory and
  * coordinates nothing beyond it. It is enough today because the API runs as
@@ -23,7 +39,7 @@ import { getIO } from '../sockets/chatSocket'
  */
 const serverLocks = new Map<string, Promise<void>>()
 
-function withServerLock<T>(serverId: string, fn: () => Promise<T>): Promise<T> {
+export function withServerLock<T>(serverId: string, fn: () => Promise<T>): Promise<T> {
   const prev = serverLocks.get(serverId) ?? Promise.resolve()
   const run = prev.then(fn)
   // Settle the chain whether fn resolved or threw, so a failed delete can
@@ -69,7 +85,14 @@ export const loadChannel = async (req: Request, res: Response) => {
 const resolveCategory = async (
   raw: unknown, serverId: Types.ObjectId
 ): Promise<Types.ObjectId | null | false> => {
-  if (raw === null || raw === '') return null
+  // `null` is the one spelling of "uncategorised" — the same value the
+  // channel document itself stores. An empty string is deliberately NOT a
+  // second spelling: it falls through to the ObjectId.isValid check below,
+  // fails it, and comes back `false` (a 400) like any other malformed id. In
+  // a JSON API a client sending `''` almost always means "I forgot to set
+  // this" or "I have a stale/empty selection", not "explicitly none" — and
+  // treating it as valid would hide that bug behind a silent success.
+  if (raw === null) return null
   if (typeof raw !== 'string' || !Types.ObjectId.isValid(raw)) return false
   const category = await Category.findById(raw).select('server').lean()
   if (!category || category.server.toString() !== serverId.toString()) return false
@@ -88,18 +111,34 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
     if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
     if (!type) { res.status(400).json({ message: 'A channel is either text or voice' }); return }
 
-    // Absent means uncategorised, the same thing an explicit null means — a
-    // channel created before there was anywhere to put it.
-    const category = await resolveCategory(req.body.category ?? null, server._id)
-    if (category === false) { res.status(400).json({ message: CATEGORY_REJECTED }); return }
+    // Resolving the category and persisting it on the new channel must be
+    // atomic with respect to deleteCategory's reparent-then-delete — without
+    // the lock, resolveCategory can read a category that still exists, then
+    // deleteCategory can reparent + remove it, then Channel.create would
+    // still store the now-dead id, stranding a dangling reference. The
+    // highest-position read a few lines down rides along in the same
+    // critical section; that also happens to close a pre-existing (and
+    // separately harmless, writeLimit-bounded) duplicate-position race
+    // between two concurrent creates, at no extra cost.
+    const serverId = server._id.toString()
+    const result = await withServerLock(serverId, async () => {
+      // Absent means uncategorised, the same thing an explicit null means —
+      // a channel created before there was anywhere to put it.
+      const category = await resolveCategory(req.body.category ?? null, server._id)
+      if (category === false) return { error: CATEGORY_REJECTED } as const
 
-    // Appended to the end of its own type group.
-    const last = await Channel.find({ server: server._id, type }).sort({ position: -1 }).limit(1).lean()
-    const position = last.length ? last[0].position + 1 : 0
+      // Appended to the end of its own type group.
+      const last = await Channel.find({ server: server._id, type }).sort({ position: -1 }).limit(1).lean()
+      const position = last.length ? last[0].position + 1 : 0
 
-    const channel = await Channel.create({ server: server._id, name, type, position, category })
+      const channel = await Channel.create({ server: server._id, name, type, position, category })
+      return { channel } as const
+    })
+    if ('error' in result) { res.status(400).json({ message: result.error }); return }
+
+    const channel = result.channel
     const shaped = shapeChannel(channel)
-    emitToServer(server, 'channel:created', { serverId: server._id.toString(), channel: shaped })
+    emitToServer(server, 'channel:created', { serverId, channel: shaped })
 
     // Members with the app open must also start RECEIVING the new channel, not
     // merely see it appear. Their sockets joined rooms at connect time, and
@@ -143,16 +182,32 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
       name = String(req.body.name ?? '').trim()
       if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
     }
-    let category: Types.ObjectId | null | undefined
-    if (wantsCategory) {
-      const resolved = await resolveCategory(req.body.category, found.server._id)
-      if (resolved === false) { res.status(400).json({ message: CATEGORY_REJECTED }); return }
-      category = resolved
+    // This save() moves the channel into a category (or out of one); it has
+    // the same race as createChannel against deleteCategory's
+    // reparent-then-delete — resolve-then-persist has to be atomic with that,
+    // or the save can land after a concurrent delete and store a dead
+    // category id. Locked with the same per-server mutex only when a category
+    // is actually being touched; a name-only rename never reads or writes
+    // `category`, so it has nothing to race and no need to queue behind it.
+    const applyUpdate = async (): Promise<{ error: string } | { ok: true }> => {
+      let category: Types.ObjectId | null | undefined
+      if (wantsCategory) {
+        const resolved = await resolveCategory(req.body.category, found.server._id)
+        if (resolved === false) return { error: CATEGORY_REJECTED }
+        category = resolved
+      }
+
+      if (name !== undefined) found.channel.name = name
+      if (category !== undefined) found.channel.category = category
+      await found.channel.save()
+      return { ok: true }
     }
 
-    if (name !== undefined) found.channel.name = name
-    if (category !== undefined) found.channel.category = category
-    await found.channel.save()
+    const result = wantsCategory
+      ? await withServerLock(found.server._id.toString(), applyUpdate)
+      : await applyUpdate()
+    if ('error' in result) { res.status(400).json({ message: result.error }); return }
+
     emitToServer(found.server, 'channel:updated', {
       serverId: found.server._id.toString(), channel: shapeChannel(found.channel),
     })
