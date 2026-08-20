@@ -265,6 +265,45 @@ describe('useServers', () => {
     expect(s.groupedChannels.value[0].text.map(c => c.id)).toEqual(['c1'])
   })
 
+  it('routes a channel with a dangling category reference into the uncategorised group instead of dropping it', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('c1', 's1', 'general', 'text', 0),
+        wireChannel('c2', 's1', 'orphan',  'text', 1),
+      ],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    // c2 claims a category id this server never sent — e.g. a channel:created
+    // for a category the client has not fetched yet, or one that raced a
+    // category:deleted. It must land in the uncategorised group, not vanish.
+    s.channelsByServer.value['s1'].find(c => c.id === 'c2')!.category = 'ghost-category'
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    expect(groups[0].category).toBeNull()
+    expect(groups[0].text.map(c => c.id)).toEqual(['c1', 'c2'])
+    // And it must not silently join the real category's bucket either.
+    expect(groups[1].text.map(c => c.id)).toEqual([])
+  })
+
+  it('sorts a dangling-category channel by type and position among genuinely uncategorised channels', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('t2', 's1', 'text-b',  'text',  1),
+        wireChannel('t1', 's1', 'text-a',  'text',  0),
+        wireChannel('v1', 's1', 'Voice A', 'voice', 0),
+      ],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    // t2 points at a category id that does not exist in categoriesByServer.
+    s.channelsByServer.value['s1'].find(c => c.id === 't2')!.category = 'ghost-category'
+    s.activeServerId.value = 's1'
+    const uncategorised = s.groupedChannels.value[0]
+    expect(uncategorised.text.map(c => c.id)).toEqual(['t1', 't2'])
+    expect(uncategorised.voice.map(c => c.id)).toEqual(['v1'])
+  })
+
   it('removeCategory reparents its channels to uncategorised rather than dropping them', () => {
     s.receiveDetail(
       wireServer('s1'),
@@ -320,6 +359,21 @@ describe('useServers', () => {
     s.openChannel('c1')
     s.toggleCategory('s1', 'cat1')
     expect(s.activeChannelId.value).toBe('c1')
+  })
+
+  it('resetServers clears collapsedCategories, and the clear survives a re-read from storage', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Group', 0)])
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(true)
+
+    s.resetServers()
+
+    expect(s.collapsedCategories.value).toEqual({})
+    // Not just the in-memory ref — the localStorage entry itself must be gone,
+    // otherwise the next account to log in on this device would read it right
+    // back out via readCollapsedCategories on module load.
+    const persisted = JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')
+    expect(persisted).toEqual({})
   })
 })
 

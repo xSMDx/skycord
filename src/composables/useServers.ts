@@ -135,11 +135,16 @@ export const resetServers = () => {
   activeChannelId.value    = null
   unreadChannels.value     = {}
   lastChannelIn.value      = {}
-  // collapsedCategories is deliberately NOT cleared here — it's a per-device
-  // view preference keyed by server+category id, not account data, the same
-  // way appearance settings survive a logout. Logging back in (even as a
-  // different account, on a server both accounts share) restores the same
-  // folds a moment ago rather than re-expanding every category.
+  // collapsedCategories IS cleared here, unlike a true per-device preference
+  // (theme, font size). Its keys are `${serverId}:${categoryId}` —
+  // membership-scoped identifiers, the same kind of state as lastChannelIn
+  // two lines up, not generic chrome. Leaving it would let a second account
+  // on a shared device inherit the first account's folds on any server they
+  // both belong to, grow the blob forever across every account that has ever
+  // used the device, and leave this function inconsistent with lastChannelIn,
+  // which gets the same treatment for the same reason.
+  collapsedCategories.value = {}
+  writeCollapsedCategories(collapsedCategories.value)
 }
 
 export const useServers = () => {
@@ -311,17 +316,34 @@ export const useServers = () => {
   const groupedChannels = computed<ChannelGroup[]>(() => {
     const channels   = activeChannels.value
     const categories = activeCategories.value // already position-sorted by receiveDetail/upsertCategory
+    const knownCategoryIds = new Set(categories.map(c => c.id))
 
-    const bucket = (categoryId: string | null) => {
-      const inGroup = channels.filter(c => (c.category ?? null) === categoryId)
-      return {
-        text:  inGroup.filter(c => c.type === 'text'),
-        voice: inGroup.filter(c => c.type === 'voice'),
-      }
+    // One pass over the channel list rather than filtering it once per
+    // category (which was the previous shape: O(categories × channels)).
+    // A channel routes into the bucket for its category id, EXCEPT when that
+    // id is non-null but doesn't resolve to a category this server actually
+    // has — a dangling reference, reachable when category:deleted (which
+    // carries only ids and expects the client to reparent locally, see
+    // removeCategory above) races a channel:created/:updated naming that
+    // category, or when a channel:created arrives for a category the client
+    // hasn't fetched yet. That channel falls back into the leading
+    // uncategorised bucket instead of being dropped: a channel the user
+    // cannot see is worse than one sitting in the wrong group, because there
+    // is no way to discover or fix a vanished channel from the UI, while a
+    // misplaced one is still visible, still joinable, and self-corrects the
+    // moment the category catches up.
+    const buckets = new Map<string | null, { text: Channel[]; voice: Channel[] }>()
+    buckets.set(null, { text: [], voice: [] })
+    for (const category of categories) buckets.set(category.id, { text: [], voice: [] })
+
+    for (const c of channels) {
+      const cid = c.category ?? null
+      const target = (cid !== null && knownCategoryIds.has(cid)) ? buckets.get(cid)! : buckets.get(null)!
+      target[c.type === 'voice' ? 'voice' : 'text'].push(c)
     }
 
-    const groups: ChannelGroup[] = [{ category: null, ...bucket(null) }]
-    for (const category of categories) groups.push({ category, ...bucket(category.id) })
+    const groups: ChannelGroup[] = [{ category: null, ...buckets.get(null)! }]
+    for (const category of categories) groups.push({ category, ...buckets.get(category.id)! })
     return groups
   })
 
