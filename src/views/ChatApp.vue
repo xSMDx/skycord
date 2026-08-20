@@ -29,6 +29,7 @@ import UserProfileModal    from '@/components/profile/UserProfileModal.vue'
 import EmojiPickerModal    from '@/components/modals/EmojiPickerModal.vue'
 import PinnedMessagesModal from '@/components/modals/PinnedMessagesModal.vue'
 import AddFriendModal      from '@/components/modals/AddFriendModal.vue'
+import CreateServerModal   from '@/components/modals/CreateServerModal.vue'
 import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
 import NewDMModal          from '@/components/modals/NewDMModal.vue'
 import EditGroupModal      from '@/components/modals/EditGroupModal.vue'
@@ -475,6 +476,7 @@ watch(currentCall, (c) => { if (!c) callExpanded.value = false })
 // UserProfileModal normalises whatever fields are present.
 const showUserProfile   = ref<string | null>(null)   // the user id on screen, or null
 const showAddFriend     = ref(false)
+const showCreateServer  = ref(false)
 const showQuickSwitcher = ref(false)
 const showEmojiPicker   = ref(false)
 const showPinned        = ref(false)
@@ -1269,6 +1271,22 @@ const openServer = async (srv: Server) => {
   }
 }
 
+const onServerCreated = async (serverId: string) => {
+  // The modal already folded the new server and its two default channels
+  // into state via receiveDetail, so enterServer finds them cached and
+  // makes no second request.
+  view.value = 'server'
+  setActiveDMPartner(null)
+  setActiveGroup(null)
+  await enterServer(serverId)
+  if (activeChannelId.value) {
+    setActiveChannel(activeChannelId.value)
+    await loadChannelHistory(activeChannelId.value)
+  } else {
+    setActiveChannel(null)
+  }
+}
+
 // ── Send message ───────────────────────────────────────────────────────────
 const doSend = async () => {
   const text = newMessage.value.trim()
@@ -1641,7 +1659,8 @@ const onKey = (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
     showSettings.value = showAddFriend.value = showQuickSwitcher.value =
     showEmojiPicker.value = showPinned.value = showReactionPicker.value =
-    showNewDM.value = showEditGroup.value = showInviteGroup.value = false
+    showNewDM.value = showEditGroup.value = showInviteGroup.value =
+    showCreateServer.value = false
     replyTargets.value = []
     showUserProfile.value = null
     closeCtx()
@@ -1751,6 +1770,7 @@ onBeforeUnmount(() => {
       @toast="showToast"
     />
     <AddFriendModal   v-if="showAddFriend"     @close="showAddFriend = false" />
+    <CreateServerModal v-if="showCreateServer" @close="showCreateServer = false" @created="onServerCreated" />
     <QuickSwitcherModal
       v-if="showQuickSwitcher"
       :dms="dmsData"
@@ -1855,7 +1875,7 @@ onBeforeUnmount(() => {
           <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
         </div>
         <div class="ri-divider" />
-        <button class="ri add"     v-tip="'Add server'">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
         <button class="ri explore" v-tip="'Explore'">     <div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
       </nav>
 
