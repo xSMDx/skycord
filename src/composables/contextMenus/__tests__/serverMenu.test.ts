@@ -39,9 +39,13 @@ describe('buildServerMenu', () => {
     expect(l).not.toContain('Create Channel')
   })
 
-  it('still offers a non-owner Invite People', () => {
+  it('offers a non-owner only Copy Server ID and Leave Server', () => {
+    // Every invite endpoint (create/list/revoke) is owner-only server-side,
+    // same as channel creation, so a non-owner's menu must pin down to
+    // exactly this row set — not just individually lack Invite People —
+    // so a future owner-only row that forgets to gate on isOwner fails here.
     const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
-    expect(l).toContain('Invite People')
+    expect(l).toEqual(['Copy Server ID', 'Leave Server'])
   })
 
   it('marks the destructive row danger', () => {

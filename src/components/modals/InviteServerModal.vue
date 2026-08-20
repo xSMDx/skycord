@@ -123,9 +123,13 @@ onMounted(load)
             {{ copied ? 'Copied!' : 'Copy' }}
           </button>
         </div>
-        <button v-else class="is-mint" :disabled="busy" @click="mint">
+        <button v-else-if="isOwner" class="is-mint" :disabled="busy" @click="mint">
           {{ busy ? 'Creating…' : 'Create Invite Link' }}
         </button>
+        <!-- Creating invites is owner-only server-side; this modal is only
+             reachable by an owner today, but the prop makes that explicit
+             here too rather than relying on the caller alone. -->
+        <p v-else class="is-empty">Only the server owner can create invite links.</p>
       </div>
 
       <!-- Existing invites (owner only — listing 403s for anyone else) -->

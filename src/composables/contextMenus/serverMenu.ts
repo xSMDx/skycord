@@ -2,9 +2,9 @@
  * The menu behind the sidebar header's chevron.
  *
  * Rows are gated on ownership rather than shown-and-disabled, because the
- * server 403s a non-owner on channel creation and deletion — a row that can
- * only ever fail is worse than no row, which is the same rule conversationMenu
- * follows for its unimplemented entries.
+ * server 403s a non-owner on channel creation, invite management, and
+ * deletion — a row that can only ever fail is worse than no row, which is
+ * the same rule conversationMenu follows for its unimplemented entries.
  *
  * Server Settings is deliberately absent, not disabled: it has no
  * implementation at all yet (plan 3c+).
@@ -27,12 +27,16 @@ export const buildServerMenu = (
   myId: string | undefined,
   h: ServerMenuHandlers,
 ): MenuItem[] => {
+  // TODO(3c): invites and channel creation should become a per-role
+  // permission rather than being owner-only, once a permissions model
+  // exists. Until then this mirrors the server's owner-only enforcement.
   const isOwner = !!myId && server.owner === myId
-  const items: MenuItem[] = [
-    { label: 'Invite People', icon: UserPlus, onSelect: () => h.invitePeople(server.id) },
-  ]
+  const items: MenuItem[] = []
   if (isOwner) {
-    items.push({ label: 'Create Channel', icon: Plus, onSelect: () => h.createChannel(server.id) })
+    items.push(
+      { label: 'Invite People', icon: UserPlus, onSelect: () => h.invitePeople(server.id) },
+      { label: 'Create Channel', icon: Plus, onSelect: () => h.createChannel(server.id) },
+    )
   }
   items.push(
     { label: 'Copy Server ID', icon: Copy, onSelect: () => h.copy(server.id, 'Server ID') },
