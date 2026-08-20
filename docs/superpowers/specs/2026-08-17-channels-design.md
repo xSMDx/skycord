@@ -309,3 +309,71 @@ for the presence work:
 
 `npm run typecheck` — never bare `tsc`, which cannot parse `.vue` and once let
 a fatal render crash through both it and the vite build.
+
+---
+
+## Reference screenshots — real Discord server (added 2026-08-20)
+
+Four screenshots of the user's own Discord server ("Syko Squad", 180 members),
+supplied after plan 3a shipped. They are the visual target for 3b. Everything
+below is something the screenshots show that this spec did not previously
+capture; the spec's existing sections still govern where they overlap.
+
+### Sidebar
+
+- **Categories are the default organisation, not an option.** The real server
+  has six: `info`, `Text Channels`, `POSTS`, `Links & Rules`, `control panel`,
+  `Voices`, `Events`. Each has a collapse chevron and an uppercase label. 3a
+  renders a flat `TEXT CHANNELS` / `VOICE CHANNELS` split; that is a stand-in.
+- **Emoji live inside channel names**, before the word: `🎨 projects`,
+  `💻 links`, `💯 roles`, `🎵 music-commands`, `📷 screen-shots`. The `#` glyph
+  sits to the left of the emoji, so the row is `# 🎵 music-commands`. Names are
+  free text — some use styled unicode (`𝕯𝖗𝖊𝖆𝖒-𝖈𝖔𝖗𝖊`).
+- **Private channels replace `#` with a lock**, and private *voice* channels
+  show a lock on the speaker icon (`🔒 🅰 | Team-A`).
+- **"Stat channels"**: locked, unclickable channels used as read-only counters —
+  `🔒 Total Members: 180`, `🔒 Online Members: 26`, sitting in an `info`
+  category at the very top. Worth knowing these exist; they are just channels
+  nobody can post in, with a bot renaming them.
+- **Unread is a white pill on the left edge** of the rail item / channel row,
+  not only a count badge. Channel name goes bold-white when unread.
+- **Voice channels list their occupants underneath**, indented, as avatar +
+  display name. A second screenshot shows the same channel rendering the
+  occupant as **avatar only, no name** — so there are two density states.
+
+### Joined-voice state
+
+- The joined voice channel turns green, gains a **live timer** (`0:11` → `0:50`
+  across two screenshots), and shows a **"Set a channel status ✏️"** subtitle.
+- A **"Voice Connected"** panel sits directly above the user panel: channel and
+  server name, a signal-strength icon, a disconnect button, then a row of four
+  square buttons — camera, screen share, activity, soundboard.
+- The main pane, while in a voice channel, is the **call view**: participant
+  tiles over a coloured backdrop, with `Invite to Voice` and `Choose Activity`
+  buttons beneath. This is the desktop instant-join the spec describes.
+
+### Member list
+
+- Topped by an **`Activity — 5`** section: rich-presence cards with game name,
+  box art, elapsed time, and a tag (`Returning`, `Trending`, `3x Streak`).
+  Out of scope for 3b, but it explains why the panel is wider than a plain list.
+- Then **role groups with counts**, ordered by role: `SYKO — 1`, `Active — 1`,
+  `SykoGang — 1`, `BOT — 8`, `Offline — 164`. Names are role-coloured.
+- Bots carry an **`✅ APP`** tag and a status line (`m!help`, `/help`).
+- Offline members are listed, greyed, in their own trailing group — the count
+  (164 of 180) means this list must virtualise or lazy-render.
+
+### Message area
+
+- The **channel topic renders inline in the header**, to the right of the name,
+  separated by a divider — e.g. `# 🎵 music-commands · !P (Esm Ahang) / -p …`.
+- The **channel intro block** ("Welcome to # 💯 roles!" + "This is the start of
+  the # 💯 roles channel." + topic) already matches what 3a renders.
+- **Reactions** show as pill chips with counts (`55`, `41`, `4`) plus an
+  add-reaction button.
+- When the user lacks send permission the composer is **replaced** by the text
+  *"You do not have permission to send messages in this channel."*
+- **RTL text renders inline** (Persian, in both message bodies and the channel
+  topic). Mixed LTR/RTL in one line is normal here, not an edge case.
+- Bot messages use embeds with a coloured left border, and slash-command
+  invocations render as a `/ user used /command` breadcrumb above the reply.
