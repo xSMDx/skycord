@@ -68,6 +68,7 @@ import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
 import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
 import { buildChannelMenu, type MenuChannel } from '@/composables/contextMenus/channelMenu'
+import { buildCategoryMenu, type MenuCategory } from '@/composables/contextMenus/categoryMenu'
 import { formatChannelName } from '@/utils/channelName'
 // isMuted is aliased: this file already has its own `isMuted` ref for YOUR mic
 // state (line ~243). Importing the conversation-mute helper under the same name
@@ -535,6 +536,20 @@ const openCreateChannel = (category: string | null) => {
   createChannelCategory.value = category
   showCreateChannel.value     = true
 }
+/**
+ * The name behind `createChannelCategory`, so the modal can say WHERE it is
+ * about to create — the two entry points (a category header's `+` and the
+ * server menu's Create Channel) are otherwise the same dialog and the user
+ * has no way to tell which one they hit. Resolved here rather than inside the
+ * modal because this file already has the group list; the modal would have to
+ * reach back into useServers for a single string.
+ *
+ * Null while the id names a category this client hasn't got (a delete that
+ * raced the open) — the modal then simply says nothing, and the POST's own
+ * `category` is what the server validates.
+ */
+const createChannelCategoryName = computed(() =>
+  groupedChannels.value.find(g => g.category?.id === createChannelCategory.value)?.category?.name ?? null)
 const showQuickSwitcher = ref(false)
 const showEmojiPicker   = ref(false)
 const showPinned        = ref(false)
@@ -1454,6 +1469,10 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
     // No category: the server menu is not scoped to one, and guessing at the
     // first one would file the channel somewhere the user never pointed at.
     createChannel: () => { openCreateChannel(null) },
+    // Lives here as well as on a category header because a server with no
+    // categories yet has no header to right-click — without this row the
+    // first category could never be made.
+    createCategory: openCreateCategory,
     leaveServer:   doLeaveServer,
     deleteServer:  doDeleteServer,
     copy:          copyText,
@@ -1555,6 +1574,136 @@ const doDeleteChannel = (ch: MenuChannel) => {
   })
 }
 
+// ── Categories ─────────────────────────────────────────────────────────────
+// createCategory/updateCategory/deleteCategory are all requireOwner
+// (server/controllers/categoriesController.ts), which is why every entry point
+// below is gated on isServerOwner — buildCategoryMenu does it for the menu,
+// buildServerMenu for Create Category.
+const openCategoryMenu = (e: MouseEvent, category: Category) => {
+  openMenu(e, buildCategoryMenu(category, isServerOwner.value, {
+    // The header's `+` and this row are the same action; both name the
+    // category so the channel lands in the group the user pointed at.
+    createChannel: (c) => openCreateChannel(c.id),
+    rename:        openRenameCategory,
+    remove:        doDeleteCategory,
+    copy:          copyText,
+  }))
+}
+
+// Create and rename both reuse EditFieldModal, exactly as channel rename does
+// above — a category is one field, and a bespoke dialog for it would be a
+// third thing to keep in visual sync with the other two.
+//
+// The target server is captured when the dialog opens rather than read from
+// activeServer at submit time: the POST can outlive a rail click, and creating
+// a category in whichever server the user happened to switch to would be
+// silent and wrong.
+const createCategoryServer = ref<string | null>(null)
+const createCategoryVal    = ref('')
+const createCategoryBusy   = ref(false)
+const createCategoryErr    = ref('')
+const openCreateCategory = (sid: string) => {
+  createCategoryServer.value = sid
+  createCategoryVal.value    = ''
+  createCategoryErr.value    = ''
+}
+const submitCreateCategory = async () => {
+  const sid = createCategoryServer.value
+  if (!sid) return
+  const name = createCategoryVal.value.trim()
+  if (!name || createCategoryBusy.value) return
+  createCategoryBusy.value = true
+  createCategoryErr.value  = ''
+  try {
+    const { category } = await api.createCategoryApi(sid, name)
+    // Fold it in here rather than waiting for the category:created echo, same
+    // reasoning as the channel paths — the echo is harmless since
+    // upsertCategory updates in place by id.
+    upsertCategory(category)
+    if (createCategoryServer.value === sid) createCategoryServer.value = null
+  } catch (e: any) {
+    // The server's own message is what carries the category cap
+    // ("A server can have at most N categories") — a generic fallback would
+    // swallow the one thing the user needs to know.
+    if (createCategoryServer.value === sid) createCategoryErr.value = e?.message || 'Could not create that category'
+  } finally {
+    // Unconditional, like submitRenameChannel's: a plain busy mutex, not
+    // per-target state, and gating it on the target being unchanged is what
+    // left the channel rename dialog stuck in its saving state.
+    createCategoryBusy.value = false
+  }
+}
+
+const renameCategoryTarget = ref<MenuCategory | null>(null)
+const renameCategoryVal    = ref('')
+const renameCategoryBusy   = ref(false)
+const renameCategoryErr    = ref('')
+const openRenameCategory = (c: MenuCategory) => {
+  renameCategoryTarget.value = c
+  renameCategoryVal.value    = c.name
+  renameCategoryErr.value    = ''
+}
+const submitRenameCategory = async () => {
+  const target = renameCategoryTarget.value
+  if (!target) return
+  // Not run through formatChannelName: a category is not a channel and the
+  // server stores its name verbatim (updateCategory only trims), so
+  // slugifying "Text Channels" into "text-channels" here would be this
+  // client inventing a rule the server does not have.
+  const n = renameCategoryVal.value.trim()
+  if (!n || renameCategoryBusy.value) return
+  renameCategoryBusy.value = true
+  renameCategoryErr.value  = ''
+  try {
+    const { category } = await api.updateCategoryApi(target.serverId, target.id, { name: n })
+    upsertCategory(category)
+    if (renameCategoryTarget.value === target) renameCategoryTarget.value = null
+  } catch (e: any) {
+    if (renameCategoryTarget.value === target) renameCategoryErr.value = e?.message || 'Could not rename that category'
+  } finally {
+    renameCategoryBusy.value = false
+  }
+}
+
+/**
+ * Deleting a category does NOT delete its channels — deleteCategory reparents
+ * them to uncategorised first and only then removes the category (see the
+ * comment on that controller). The confirmation has to say so in those words:
+ * an owner who reads "Delete POSTS?" next to a red button assumes the four
+ * channels inside go with it, and never clicks it again.
+ *
+ * The count is read from `groupedChannels`, which is the same grouping the
+ * sidebar renders — so the number in the message is the number of rows the
+ * user can see under that header, not an estimate. `groupedChannels` covers
+ * the ACTIVE server only, which is exactly the scope this can be opened from
+ * (a header in the current server's sidebar).
+ */
+const doDeleteCategory = (cat: MenuCategory) => {
+  const group = groupedChannels.value.find(g => g.category?.id === cat.id)
+  const count = group ? group.text.length + group.voice.length : 0
+  const message = count === 0
+    ? `Delete ${cat.name}? It has no channels in it, so nothing else changes.`
+    : `Delete ${cat.name}? Its ${count} channel${count === 1 ? '' : 's'} will move out of ` +
+      `the category and stay in the server — ${count === 1 ? 'it won’t' : 'they won’t'} be deleted.`
+  openConfirm({
+    title: 'Delete Category',
+    message,
+    confirmLabel: 'Delete',
+    danger: true,
+    action: async () => {
+      try {
+        await api.deleteCategoryApi(cat.serverId, cat.id)
+        // No local removeCategory call: category:deleted is broadcast to every
+        // member including the owner, and onCategoryDeleted already drops the
+        // category and reparents its channels — mirroring doDeleteChannel.
+      } catch (e: any) {
+        console.error('[doDeleteCategory]', e)
+        showToast(e?.message || 'Couldn’t delete the category')
+      }
+    },
+  })
+}
+
 // Open a DM straight from a profile card. Uses the user the modal already
 // loaded rather than the friends list, so this works for someone you've met
 // through a mutual friend and aren't friends with yet.
@@ -1591,6 +1740,12 @@ const openServer = async (srv: Server) => {
   // gets.
   showInvite.value = false
   showCreateChannel.value = false
+  // Same reasoning for the category dialogs: both hold a server id captured
+  // when they opened, so leaving one open across a rail click would either
+  // write into the server you just left or sit there describing a category
+  // that isn't on screen any more.
+  createCategoryServer.value = null
+  renameCategoryTarget.value = null
   try {
     // enterServer is useServers' openServer: sets activeServerId, fetches the
     // channel list the first time, and picks the landing channel.
@@ -2134,6 +2289,7 @@ onBeforeUnmount(() => {
       v-if="showCreateChannel && activeServer"
       :server-id="activeServer.id"
       :category="createChannelCategory"
+      :category-name="createChannelCategoryName"
       @close="showCreateChannel = false"
       @created="handleChannelCreated"
     />
@@ -2151,6 +2307,42 @@ onBeforeUnmount(() => {
         <input class="efm-input" v-model="renameChannelVal" autofocus @keydown.enter="submitRenameChannel" />
       </div>
       <p v-if="renameChannelErr" class="efm-err">{{ renameChannelErr }}</p>
+    </EditFieldModal>
+    <!-- Create / rename a category. Same modal as Edit Channel above, and
+         deliberately not a channel-style slugified field: a category name is
+         stored verbatim, so what you type is what the header shows. -->
+    <EditFieldModal
+      v-if="createCategoryServer"
+      title="Create Category"
+      description="Categories group channels together. Everyone in the server can see it."
+      :saving="createCategoryBusy"
+      done-label="Create Category"
+      :done-disabled="!createCategoryVal.trim()"
+      @close="createCategoryServer = null"
+      @done="submitCreateCategory"
+    >
+      <div>
+        <label class="efm-field-label">Category Name</label>
+        <input class="efm-input" v-model="createCategoryVal" maxlength="100" placeholder="New Category"
+          autofocus @keydown.enter="submitCreateCategory" />
+      </div>
+      <p v-if="createCategoryErr" class="efm-err">{{ createCategoryErr }}</p>
+    </EditFieldModal>
+    <EditFieldModal
+      v-if="renameCategoryTarget"
+      title="Edit Category"
+      :saving="renameCategoryBusy"
+      done-label="Save"
+      :done-disabled="!renameCategoryVal.trim()"
+      @close="renameCategoryTarget = null"
+      @done="submitRenameCategory"
+    >
+      <div>
+        <label class="efm-field-label">Category Name</label>
+        <input class="efm-input" v-model="renameCategoryVal" maxlength="100"
+          autofocus @keydown.enter="submitRenameCategory" />
+      </div>
+      <p v-if="renameCategoryErr" class="efm-err">{{ renameCategoryErr }}</p>
     </EditFieldModal>
     <InviteServerModal v-if="showInvite && activeServer"
       :key="activeServer.id"
@@ -2418,11 +2610,18 @@ onBeforeUnmount(() => {
             <div v-if="group.category" class="ch-group-label" role="button" tabindex="0"
               @click="toggleGroup(group)"
               @keydown.self.enter.prevent="toggleGroup(group)"
-              @keydown.self.space.prevent="toggleGroup(group)">
+              @keydown.self.space.prevent="toggleGroup(group)"
+              @contextmenu.prevent.stop="openCategoryMenu($event, group.category)">
               <ChevronRight class="ch-group-chev" :class="{ open: !group.collapsed }" :size="10" :stroke-width="2.25"/>
               <span>{{ group.category.name }}</span>
               <button v-if="isServerOwner" class="ch-add-btn" v-tip="'Create Channel'"
                 @click.stop="openCreateChannel(group.category.id)"><Plus :size="14" :stroke-width="1.5"/></button>
+              <!-- Shown to everyone, not just the owner: a non-owner's menu is
+                   Copy Category ID, which is a real (and only here) action.
+                   Right-click on the header does the same thing — this is the
+                   discoverable half, the same pairing every channel row has. -->
+              <button class="ch-add-btn" v-tip="'More'"
+                @click.stop="openCategoryMenu($event, group.category)"><Ellipsis :size="14" :stroke-width="1.5"/></button>
             </div>
             <div v-for="ch in group.text" :key="ch.id"
               class="ch-item" :class="{ active: activeChannelId===ch.id, unread: !!unreadChannels[ch.id] }"

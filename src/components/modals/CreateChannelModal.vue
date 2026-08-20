@@ -9,12 +9,18 @@ import { formatChannelName } from '@/utils/channelName'
 
 // `category` is which group's `+` was clicked — null (or absent) for the
 // server menu's Create Channel, which has no group to speak of and so creates
-// an uncategorised channel. There is no picker in the modal: the affordance
-// that opened it already said where the channel goes, and offering a second,
-// contradictable answer for that is Task 5's problem, not this one's.
+// an uncategorised channel. There is still no picker in the modal: the
+// affordance that opened it already said where the channel goes, and offering
+// a second, contradictable answer for that would be a way to disagree with
+// the thing you just clicked.
+//
+// `categoryName` is that decision made visible — the two entry points open an
+// identical dialog otherwise, and a user who hits the wrong one has no way to
+// tell before the channel exists. Display only: the POST sends `category`,
+// the id, so a stale name can never change where the channel lands.
 const props = withDefaults(
-  defineProps<{ serverId: string; category?: string | null }>(),
-  { category: null },
+  defineProps<{ serverId: string; category?: string | null; categoryName?: string | null }>(),
+  { category: null, categoryName: null },
 )
 const emit = defineEmits<{ close: []; created: [channel: WireChannel] }>()
 
@@ -67,6 +73,7 @@ const submit = async () => {
       <div class="ccm-header">
         <div>
           <h2 class="ccm-title">Create Channel</h2>
+          <p v-if="categoryName" class="ccm-sub">in {{ categoryName }}</p>
         </div>
         <button class="ccm-close" @click="emit('close')">
           <X :size="20" :stroke-width="1.5" />
@@ -137,6 +144,11 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   padding: 20px 20px 0;
 }
 .ccm-title { font-size: 18px; font-weight: 700; color: var(--text-strong); }
+/* Uppercased to read as the sidebar header it names, not as prose. */
+.ccm-sub {
+  font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--text-3); margin-top: 4px;
+}
 .ccm-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;

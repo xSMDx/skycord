@@ -9,17 +9,18 @@
  * Server Settings is deliberately absent, not disabled: it has no
  * implementation at all yet (plan 3c+).
  */
-import { UserPlus, Plus, Copy, Trash2, LogOut } from 'lucide-vue-next'
+import { UserPlus, Plus, FolderPlus, Copy, Trash2, LogOut } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 
 export interface MenuServer { id: string; name: string; owner?: string }
 
 export interface ServerMenuHandlers {
-  invitePeople:  (serverId: string) => void
-  createChannel: (serverId: string) => void
-  leaveServer:   (serverId: string) => void
-  deleteServer:  (serverId: string) => void
-  copy:          (text: string, what: string) => void
+  invitePeople:   (serverId: string) => void
+  createChannel:  (serverId: string) => void
+  createCategory: (serverId: string) => void
+  leaveServer:    (serverId: string) => void
+  deleteServer:   (serverId: string) => void
+  copy:           (text: string, what: string) => void
 }
 
 export const buildServerMenu = (
@@ -36,6 +37,10 @@ export const buildServerMenu = (
     items.push(
       { label: 'Invite People', icon: UserPlus, onSelect: () => h.invitePeople(server.id) },
       { label: 'Create Channel', icon: Plus, onSelect: () => h.createChannel(server.id) },
+      // Sits beside Create Channel rather than only on a category header,
+      // because a server with no categories yet has no header to right-click —
+      // this is the only way to make the first one.
+      { label: 'Create Category', icon: FolderPlus, onSelect: () => h.createCategory(server.id) },
     )
   }
   items.push(
