@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
@@ -14,6 +14,17 @@ const name  = ref('')
 const busy  = ref(false)
 const error = ref('')
 
+// The POST can outlive this component: Cancel, the overlay, and Escape all
+// unmount it via v-if while the request is still in flight, and Vue does not
+// invalidate an emit closure on unmount — so a cancelled create still emitted
+// `created` and dropped the user into a server they had just backed out of.
+//
+// Cancelling the dialog does not un-create the server, though: the POST has
+// already landed by then. So the server still gets folded into state, because
+// the rail showing it is the truth; only the navigation is skipped.
+let gone = false
+onBeforeUnmount(() => { gone = true })
+
 const submit = async () => {
   const n = name.value.trim()
   if (!n || busy.value) return
@@ -25,9 +36,11 @@ const submit = async () => {
     // the server and its two default channels, so the caller can enter it
     // without a second round trip.
     receiveDetail(server, channels)
+    if (gone) return
     emit('created', server.id)
     emit('close')
   } catch (e: any) {
+    if (gone) return
     // The server's own message is the useful one ("Give the server a name",
     // rate-limit text) — only fall back when there isn't one.
     error.value = e?.message || 'Could not create that server'
