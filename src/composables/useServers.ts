@@ -25,9 +25,10 @@ const unreadChannels   = ref<Record<string, number>>({})
  * Where you were last time you were in each server. Discord does this and it
  * matters more than it sounds: without it, every rail click dumps you back in
  * #general and you lose your place in the channel you were actually reading.
- * Plain object, not a ref — nothing renders it directly.
+ * A ref (like the other module-level state above) even though nothing renders
+ * it directly — that's what lets tests reach in and reset it between runs.
  */
-const lastChannelIn: Record<string, string> = {}
+const lastChannelIn = ref<Record<string, string>>({})
 
 /**
  * A server with no icon draws its initials on a colour derived from its name,
@@ -82,9 +83,13 @@ export const useServers = () => {
   }
 
   const removeServer = (sid: string) => {
+    // Read the channel list before deleting it — it's the only way to know
+    // which unreadChannels entries belong to this server.
+    const channels = channelsByServer.value[sid] ?? []
     servers.value = servers.value.filter(s => s.id !== sid)
     delete channelsByServer.value[sid]
-    delete lastChannelIn[sid]
+    delete lastChannelIn.value[sid]
+    channels.forEach(c => { delete unreadChannels.value[c.id] })
     if (activeServerId.value === sid) {
       activeServerId.value  = null
       activeChannelId.value = null
@@ -113,7 +118,7 @@ export const useServers = () => {
   const removeChannel = (sid: string, cid: string) => {
     const list = channelsByServer.value[sid]
     if (list) channelsByServer.value[sid] = list.filter(c => c.id !== cid)
-    if (lastChannelIn[sid] === cid) delete lastChannelIn[sid]
+    if (lastChannelIn.value[sid] === cid) delete lastChannelIn.value[sid]
     if (activeChannelId.value === cid) activeChannelId.value = null
     delete unreadChannels.value[cid]
   }
@@ -124,7 +129,7 @@ export const useServers = () => {
   /** Pick which channel entering `sid` should land on. */
   const selectLanding = (sid: string) => {
     const list = channelsByServer.value[sid] ?? []
-    const remembered = lastChannelIn[sid]
+    const remembered = lastChannelIn.value[sid]
     const target = (remembered && list.some(c => c.id === remembered))
       ? remembered
       : list.find(c => c.type === 'text')?.id ?? null
@@ -134,7 +139,7 @@ export const useServers = () => {
 
   const openChannel = (cid: string) => {
     activeChannelId.value = cid
-    if (activeServerId.value) lastChannelIn[activeServerId.value] = cid
+    if (activeServerId.value) lastChannelIn.value[activeServerId.value] = cid
     clearUnread(cid)
   }
 
@@ -171,7 +176,7 @@ export const useServers = () => {
   const activeChannel  = computed(() => activeChannels.value.find(c => c.id === activeChannelId.value) ?? null)
 
   return {
-    servers, channelsByServer, activeServerId, activeChannelId, unreadChannels,
+    servers, channelsByServer, activeServerId, activeChannelId, unreadChannels, lastChannelIn,
     activeServer, activeChannel, textChannels, voiceChannels,
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     markUnread, clearUnread, selectLanding, openChannel,

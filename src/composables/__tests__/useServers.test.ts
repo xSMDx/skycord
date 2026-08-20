@@ -22,6 +22,7 @@ describe('useServers', () => {
     s.activeServerId.value = null
     s.activeChannelId.value = null
     s.unreadChannels.value = {}
+    s.lastChannelIn.value = {}
   })
 
   it('maps a wire server into the renderable client shape', () => {
@@ -114,6 +115,13 @@ describe('useServers', () => {
     expect(s.activeChannelId.value).toBeNull()
   })
 
+  it('removing a server clears unread counts for its channels', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    s.markUnread('c1')
+    s.removeServer('s1')
+    expect(s.unreadChannels.value['c1']).toBeUndefined()
+  })
+
   it('removing a server you are not looking at leaves the selection alone', () => {
     s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
     s.receiveDetail(wireServer('s2'), [wireChannel('c3', 's2', 'general', 'text', 0)])
@@ -138,7 +146,7 @@ describe('useServers', () => {
     expect(s.channelsByServer.value['unknown']).toBeUndefined()
   })
 
-  it('tracks unread per channel and clears it on open', () => {
+  it('tracks unread per channel and clears it via clearUnread', () => {
     s.markUnread('c1')
     s.markUnread('c1')
     expect(s.unreadChannels.value['c1']).toBe(2)
