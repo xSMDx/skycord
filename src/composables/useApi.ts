@@ -149,6 +149,18 @@ export const useApi = () => {
       `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds }
     )
 
+  const createChannelApi = (sid: string, name: string, type: 'text' | 'voice') =>
+    post<{ channel: WireChannel }>(`/servers/${sid}/channels`, { name, type })
+
+  const updateChannelApi = (sid: string, cid: string, body: { name?: string }) =>
+    patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
+
+  // deleteChannel (server/controllers/channelsController.ts) responds
+  // `{ ok: true }`, matching deleteServerApi/leaveServerApi below — not
+  // `{ deleted }`, which is tempting to guess from the endpoint name.
+  const deleteChannelApi = (sid: string, cid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/channels/${cid}`)
+
   // Both respond `{ ok: true }` (see deleteServer / removeMember in
   // server/controllers/serversController.ts) — not the `{ deleted }` /
   // `{ removed }` shapes it's tempting to guess from the endpoint names.
@@ -239,6 +251,7 @@ export const useApi = () => {
     createTheme, getTheme,
     getVoiceToken,
     createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
+    createChannelApi, updateChannelApi, deleteChannelApi,
     deleteServerApi, leaveServerApi,
     createServerInvite, listServerInvites, revokeServerInvite,
     getServerInvite, joinServerInvite,

@@ -30,7 +30,9 @@ import EmojiPickerModal    from '@/components/modals/EmojiPickerModal.vue'
 import PinnedMessagesModal from '@/components/modals/PinnedMessagesModal.vue'
 import AddFriendModal      from '@/components/modals/AddFriendModal.vue'
 import CreateServerModal   from '@/components/modals/CreateServerModal.vue'
+import CreateChannelModal  from '@/components/modals/CreateChannelModal.vue'
 import ConfirmModal        from '@/components/modals/ConfirmModal.vue'
+import EditFieldModal      from '@/components/modals/EditFieldModal.vue'
 import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
 import NewDMModal          from '@/components/modals/NewDMModal.vue'
 import EditGroupModal      from '@/components/modals/EditGroupModal.vue'
@@ -65,6 +67,7 @@ import { openMenu }          from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
 import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
+import { buildChannelMenu, type MenuChannel } from '@/composables/contextMenus/channelMenu'
 // isMuted is aliased: this file already has its own `isMuted` ref for YOUR mic
 // state (line ~243). Importing the conversation-mute helper under the same name
 // shadowed it, so the template called a ref and threw on every render — which
@@ -1339,6 +1342,81 @@ const openServerMenu = (e: MouseEvent) => {
   }))
 }
 
+// createChannel/updateChannel/deleteChannel all 403 a non-owner server-side
+// (requireOwner), so the `+` on the Text Channels label and every row action
+// beyond Copy Channel ID must be gated on this, same as buildServerMenu's own
+// isOwner check above.
+const isServerOwner = computed(() =>
+  !!activeServer.value && activeServer.value.owner === authUser.value?.id)
+
+const openChannelMenu = (e: MouseEvent, ch: Channel) => {
+  openMenu(e, buildChannelMenu(ch, isServerOwner.value, {
+    rename: openRenameChannel,
+    remove: doDeleteChannel,
+    copy:   copyText,
+  }))
+}
+
+// Rename a channel — reuses the app's existing single-field edit modal
+// (EditFieldModal) rather than a bespoke dialog, same as SettingsModal's
+// username/email/displayName fields.
+const renameChannelTarget = ref<MenuChannel | null>(null)
+const renameChannelVal    = ref('')
+const renameChannelBusy   = ref(false)
+const renameChannelErr    = ref('')
+const openRenameChannel = (ch: MenuChannel) => {
+  renameChannelTarget.value = ch
+  renameChannelVal.value    = ch.name
+  renameChannelErr.value    = ''
+}
+const submitRenameChannel = async () => {
+  const target = renameChannelTarget.value
+  const n = renameChannelVal.value.trim()
+  if (!target || !n || renameChannelBusy.value) return
+  renameChannelBusy.value = true
+  renameChannelErr.value  = ''
+  try {
+    const { channel } = await api.updateChannelApi(target.serverId, target.id, { name: n })
+    // Fold it in here rather than waiting for the channel:updated echo, same
+    // reasoning as CreateChannelModal — the echo is harmless since
+    // upsertChannel updates in place by id.
+    upsertChannel(channel)
+    // Only close the dialog that's still on screen — the user may have
+    // dismissed this one and opened rename on a different channel while the
+    // PATCH was in flight (same closure-outliving-the-view hazard
+    // CreateChannelModal's `gone` flag guards against).
+    if (renameChannelTarget.value === target) renameChannelTarget.value = null
+  } catch (e: any) {
+    if (renameChannelTarget.value === target) renameChannelErr.value = e?.message || 'Could not rename that channel'
+  } finally {
+    if (renameChannelTarget.value === target) renameChannelBusy.value = false
+  }
+}
+
+const doDeleteChannel = (ch: MenuChannel) => {
+  openConfirm({
+    title: 'Delete Channel',
+    message: `Delete #${ch.name}? This cannot be undone — all messages in it will be lost too.`,
+    confirmLabel: 'Delete',
+    danger: true,
+    action: async () => {
+      try {
+        await api.deleteChannelApi(ch.serverId, ch.id)
+        // No local removeChannel call here: channel:deleted is broadcast to
+        // every member including the owner, and the existing onChannelDeleted
+        // handler already removes it from state and lands somewhere sensible
+        // if it was the one on screen — mirroring doDeleteServer above.
+      } catch (e: any) {
+        console.error('[doDeleteChannel]', e)
+        // Surface the server's own message rather than a generic fallback —
+        // this is how "You cannot delete the last text channel" reaches the
+        // user instead of being swallowed.
+        showToast(e?.message || 'Couldn’t delete the channel')
+      }
+    },
+  })
+}
+
 // Open a DM straight from a profile card. Uses the user the modal already
 // loaded rather than the friends list, so this works for someone you've met
 // through a mutual friend and aren't friends with yet.
@@ -1900,6 +1978,26 @@ onBeforeUnmount(() => {
     />
     <AddFriendModal   v-if="showAddFriend"     @close="showAddFriend = false" />
     <CreateServerModal v-if="showCreateServer" @close="showCreateServer = false" @created="onServerCreated" />
+    <CreateChannelModal
+      v-if="showCreateChannel && activeServer"
+      :server-id="activeServer.id"
+      @close="showCreateChannel = false"
+    />
+    <EditFieldModal
+      v-if="renameChannelTarget"
+      title="Edit Channel"
+      :saving="renameChannelBusy"
+      done-label="Save"
+      :done-disabled="!renameChannelVal.trim()"
+      @close="renameChannelTarget = null"
+      @done="submitRenameChannel"
+    >
+      <div>
+        <label class="efm-field-label">Channel Name</label>
+        <input class="efm-input" v-model="renameChannelVal" autofocus @keydown.enter="submitRenameChannel" />
+      </div>
+      <p v-if="renameChannelErr" class="efm-err">{{ renameChannelErr }}</p>
+    </EditFieldModal>
     <InviteServerModal v-if="showInvite && activeServer"
       :server-id="activeServer.id"
       :server-name="activeServer.name"
@@ -2149,24 +2247,36 @@ onBeforeUnmount(() => {
           <div class="ch-group">
             <div class="ch-group-label">
               <ChevronRight :size="10" :stroke-width="2.25"/><span>Text Channels</span>
+              <button v-if="isServerOwner" class="ch-add-btn" v-tip="'Create Channel'"
+                @click.stop="showCreateChannel = true"><Plus :size="14" :stroke-width="1.5"/></button>
             </div>
-            <button v-for="ch in textChannels" :key="ch.id"
+            <div v-for="ch in textChannels" :key="ch.id"
               class="ch-item" :class="{ active: activeChannelId===ch.id, unread: !!unreadChannels[ch.id] }"
-              @click="selectChannel(ch)">
+              @click="selectChannel(ch)"
+              @contextmenu.prevent.stop="openChannelMenu($event, ch)">
               <Hash class="ch-icon" :size="15" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
               <span v-if="unreadChannels[ch.id]" class="ch-unread">{{ unreadChannels[ch.id] }}</span>
-            </button>
+              <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
+                <Ellipsis :size="14" :stroke-width="1.5"/>
+              </button>
+            </div>
           </div>
           <div class="ch-group">
             <div class="ch-group-label">
               <ChevronRight :size="10" :stroke-width="2.25"/><span>Voice Channels</span>
             </div>
-            <!-- Inert until 3b adds voice-channel join. -->
-            <button v-for="ch in voiceChannels" :key="ch.id" class="ch-item voice">
+            <!-- Joining is inert until 3b adds voice-channel join — but the row
+                 still owns its context menu, so rename/delete work on a voice
+                 channel exactly like a text one. -->
+            <div v-for="ch in voiceChannels" :key="ch.id" class="ch-item voice"
+              @contextmenu.prevent.stop="openChannelMenu($event, ch)">
               <Volume2 class="ch-icon" :size="15" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
-            </button>
+              <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
+                <Ellipsis :size="14" :stroke-width="1.5"/>
+              </button>
+            </div>
           </div>
         </div>
         <VoiceConnectedPanel
@@ -2749,10 +2859,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-group-label{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition:color .15s;white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
 .ch-group-label span{flex:1}
-.ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;transition:background .12s,color .12s,padding-left .12s;white-space:nowrap}
+.ch-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s;flex-shrink:0}
+.ch-group-label:hover .ch-add-btn{opacity:1}
+.ch-add-btn:hover{color:var(--text-strong)}
+.ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition:background .12s,color .12s,padding-left .12s;white-space:nowrap}
 .ch-item:hover{background:var(--hover);color:var(--text-2);padding-left:12px}
 .ch-item.active{background:rgba(var(--accent-rgb),.16);color:#c4c9ff}
 .ch-item.unread{color:var(--text-2);font-weight:600}
+.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
+.ch-item:hover .ch-more{opacity:1}
+.ch-more:hover{color:var(--text-strong)}
 .ch-icon{flex-shrink:0}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
 .ch-unread{min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;display:flex;align-items:center;justify-content:center}
@@ -2967,6 +3083,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    means it's either invisible or permanently showing. Long-press opens the
    context menu instead, which is the same set of actions. */
 .shell.mobile .dm-x{display:none}
+.shell.mobile .ch-more{display:none}
+.shell.mobile .ch-add-btn{display:none}
 
 /* iOS pops its own callout ("Copy / Look Up") on a long press, which would race
    our menu. Suppressing the callout is enough — user-select is deliberately NOT
