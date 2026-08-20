@@ -104,15 +104,6 @@ const sendDM = (
     return msg
   }
 
-  const sendChannel = (channelId: string, author: string, authorId: string, avatar: string, content: string) => {
-    if (!serverMessages.value[channelId]) serverMessages.value[channelId] = []
-    serverMessages.value[channelId].push({
-      id: makeId(), author, authorId, content,
-      time: fmtTime(), timestamp: Date.now(),
-      avatar, avatarColor: '#5865f2', reactions: [],
-    })
-  }
-
   const toggleReaction = (list: Message[], msgId: number, emoji: string) => {
     const msg = list.find(m => m.id === msgId)
     if (!msg) return
@@ -146,7 +137,7 @@ const sendDM = (
     initDM, initChannel, initGroup,
     getDMMessages, getChannelMessages, getGroupMessages,
     pushDMMessage, pushGroupMessage, pushChannelMessage,
-    sendDM, sendGroup, sendChannel,
+    sendDM, sendGroup,
     toggleDMReaction, toggleChannelReaction,
     pinMessage, deleteMessage, editMessage,
   }

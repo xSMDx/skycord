@@ -1251,6 +1251,14 @@ const openServer = async (srv: Server) => {
   } catch (e) {
     console.error('[openServer]', e)
     showToast('Could not open that server')
+    // enterServer already set activeServerId before the throw, but never
+    // reached selectLanding — activeChannelId is left pointing at whatever
+    // channel was active in the PREVIOUS server. Clear it and leave via
+    // Friends rather than stranding the user on a server view with someone
+    // else's channel selected underneath it.
+    activeChannelId.value = null
+    setActiveChannel(null)
+    openFriends()
     return
   }
   if (activeChannelId.value) {
@@ -1363,7 +1371,8 @@ const doSend = async () => {
     // `replyIds` in the DM and group branches is scoped inside each of those
     // blocks, so it is not in scope here — recompute it from the same source
     // and clear the targets the same way they do.
-    const replyIds = replyTargetMeta.value.map(r => r.id)
+    const replies   = replyTargets.value
+    const replyIds  = replyTargetMeta.value.map(r => r.id)
     replyTargets.value = []
 
     newMessage.value = ''
@@ -1377,6 +1386,7 @@ const doSend = async () => {
       console.error('[doSend channel]', e)
       showToast(e?.message || 'Message failed to send')
       newMessage.value = text     // give the text back rather than losing it
+      replyTargets.value = replies // ...and the reply targets it was attached to
     } finally {
       sendingMsg.value = false
     }
@@ -1412,12 +1422,13 @@ const handleCtxEdit = (msg: Message) => {
   if (live) msgListRef.value?.startEditExternal?.(live)
 }
 
-// React — socket for DMs (authoritative), local-only for server channels
+// React — socket-backed wherever the message has a dbId (DMs, groups, channels),
+// local-only fallback otherwise
 const handleReact = async (msgId: number, emoji: string) => {
   const list = getMsgList()
   const msg  = list.find(m => m.id === msgId)
   if (!msg) return
-  if (view.value === 'dm' && (msg as any).dbId && socketConnected.value) {
+  if ((msg as any).dbId && socketConnected.value) {
     const ack = await sendReactSocket((msg as any).dbId, emoji)
     if (ack.ok && ack.reactions) {
       msg.reactions = ack.reactions.map((r: any) => ({
