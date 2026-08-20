@@ -158,6 +158,19 @@ export const useApi = () => {
   const leaveServerApi = (sid: string, uid: string) =>
     del<{ ok: boolean }>(`/servers/${sid}/members/${uid}`)
 
+  // Server invites (distinct from group invites above — different collection,
+  // different join path: /join/<code>, not /invite/<code>).
+  const createServerInvite = (sid: string) =>
+    post<{ invite: WireInvite }>(`/servers/${sid}/invites`)
+
+  // Owner-only on the server (requireOwner) — a non-owner calling this gets a
+  // 403, so callers must gate on isOwner before firing it.
+  const listServerInvites = (sid: string) =>
+    get<{ invites: WireInvite[] }>(`/servers/${sid}/invites`)
+
+  const revokeServerInvite = (sid: string, code: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/invites/${code}`)
+
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>
     post<{ slug: string }>('/themes', { name, data })
@@ -195,6 +208,7 @@ export const useApi = () => {
     getVoiceToken,
     createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
     deleteServerApi, leaveServerApi,
+    createServerInvite, listServerInvites, revokeServerInvite,
   }
 }
 
@@ -275,4 +289,13 @@ export interface WireChannel {
   name:     string
   type:     'text' | 'voice'
   position: number
+}
+
+/** Exactly `shapeInvite` in server/controllers/invitesController.ts:15. */
+export interface WireInvite {
+  code:      string
+  uses:      number
+  expiresAt: string | null
+  createdAt: string
+  inviter:   { id: string; username: string } | null
 }

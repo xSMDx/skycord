@@ -35,6 +35,7 @@ import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
 import NewDMModal          from '@/components/modals/NewDMModal.vue'
 import EditGroupModal      from '@/components/modals/EditGroupModal.vue'
 import InviteGroupModal    from '@/components/modals/InviteGroupModal.vue'
+import InviteServerModal   from '@/components/modals/InviteServerModal.vue'
 
 import MessageList   from '@/components/chat/MessageList.vue'
 import MessageInput  from '@/components/chat/MessageInput.vue'
@@ -1871,6 +1872,11 @@ onBeforeUnmount(() => {
     />
     <AddFriendModal   v-if="showAddFriend"     @close="showAddFriend = false" />
     <CreateServerModal v-if="showCreateServer" @close="showCreateServer = false" @created="onServerCreated" />
+    <InviteServerModal v-if="showInvite && activeServer"
+      :server-id="activeServer.id"
+      :server-name="activeServer.name"
+      :is-owner="activeServer.owner === authUser?.id"
+      @close="showInvite = false" />
     <ConfirmModal
       v-if="confirmState"
       :title="confirmState.title"
