@@ -171,6 +171,38 @@ export const useApi = () => {
   const revokeServerInvite = (sid: string, code: string) =>
     del<{ ok: boolean }>(`/servers/${sid}/invites/${code}`)
 
+  // Consuming a server invite — routes to previewInvite/joinViaInvite in
+  // server/controllers/invitesController.ts, mounted at /invites (see
+  // server/app.ts), which is unrelated to the /conversations/invites path
+  // getInvite/joinViaInvite above use for GROUP invites.
+  //
+  // previewInvite's shape is flatter than it looks at first glance: there is
+  // no top-level `code`, and "already a member" is `alreadyMember` on the
+  // response root, not an `isMember` field nested inside `server`. It also
+  // reports `full` (server at MAX_SERVER_MEMBERS), which has no group-invite
+  // equivalent.
+  const getServerInvite = (code: string) =>
+    get<{
+      server: {
+        id:          string
+        name:        string
+        icon:        string | null
+        iconCrop:    { zoom: number; x: number; y: number } | null
+        bannerColor: string | null
+        description: string | null
+        memberCount: number
+      }
+      alreadyMember: boolean
+      full:          boolean
+    }>(`/invites/${code}`)
+
+  // joinViaInvite's shape matches WireServer/WireChannel exactly (it calls
+  // shapeServer/shapeChannel directly) and — unlike the preview above — really
+  // does return `joined` at the top level. `joined: false` means "you were
+  // already a member," not failure; the request still resolves 200.
+  const joinServerInvite = (code: string) =>
+    post<{ server: WireServer; channels: WireChannel[]; joined: boolean }>(`/invites/${code}`)
+
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>
     post<{ slug: string }>('/themes', { name, data })
@@ -209,6 +241,7 @@ export const useApi = () => {
     createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
     deleteServerApi, leaveServerApi,
     createServerInvite, listServerInvites, revokeServerInvite,
+    getServerInvite, joinServerInvite,
   }
 }
 

@@ -36,9 +36,11 @@ import NewDMModal          from '@/components/modals/NewDMModal.vue'
 import EditGroupModal      from '@/components/modals/EditGroupModal.vue'
 import InviteGroupModal    from '@/components/modals/InviteGroupModal.vue'
 import InviteServerModal   from '@/components/modals/InviteServerModal.vue'
+import ModalBase           from '@/components/modals/ModalBase.vue'
 
 import MessageList   from '@/components/chat/MessageList.vue'
 import MessageInput  from '@/components/chat/MessageInput.vue'
+import ServerInviteCard from '@/components/chat/ServerInviteCard.vue'
 import ContextMenu          from '@/components/chat/ContextMenu.vue'
 import ReactionPickerModal  from '@/components/modals/ReactionPickerModal.vue'
 import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
@@ -71,6 +73,14 @@ import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
 import type { DM, Member, Server, Channel, Message, ReplyGraph, Group } from '@/types'
+
+// A /join/<code> link opened while logged out is captured by App.vue before
+// its auth check (see the comment on pendingJoinCode there) and handed down
+// as a prop once ChatApp mounts — which only happens once authed. Copied
+// into a local, mutable ref: the prop itself is readonly, and closing the
+// modal this drives needs to null it out.
+const props = defineProps<{ pendingJoinCode?: string | null }>()
+const joinPromptCode = ref<string | null>(props.pendingJoinCode ?? null)
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 const { user: authUser, authFetch, updateUser } = useAuth()
@@ -929,6 +939,17 @@ const handleGroupJoined = async (rawGroup: any) => {
   if (!groupsData.value.find(g => g.id === group.id)) groupsData.value.unshift(group)
   subscribeGroup(group.id)
   await openGroup(group)
+}
+
+// Fires from either ServerInviteCard: the one embedded in a message
+// (@serverJoined, routed through MessageList) or the one shown in the modal
+// below for a directly-opened /join/<code> link. Either way the card already
+// folded the response into state via receiveDetail, so this is exactly
+// onServerCreated's path — enterServer finds the server cached and makes no
+// second request.
+const handleServerJoined = async (server: any) => {
+  joinPromptCode.value = null   // close the direct-link modal, if that's how we got here
+  await onServerCreated(server.id)
 }
 
 const doLeaveGroup = async (groupId: string) => {
@@ -1877,6 +1898,12 @@ onBeforeUnmount(() => {
       :server-name="activeServer.name"
       :is-owner="activeServer.owner === authUser?.id"
       @close="showInvite = false" />
+    <!-- A directly-opened /join/<code> link — same card the message-embedded
+         version renders, in a modal shell since there's no message here to
+         embed it under. -->
+    <ModalBase v-if="joinPromptCode" width="380px" @close="joinPromptCode = null">
+      <ServerInviteCard :code="joinPromptCode" @joined="handleServerJoined" />
+    </ModalBase>
     <ConfirmModal
       v-if="confirmState"
       :title="confirmState.title"
@@ -2467,6 +2494,7 @@ onBeforeUnmount(() => {
             @openReplyTree="openReplyTree"
             @jumpToMessage="jumpToMessage"
             @groupJoined="handleGroupJoined"
+            @serverJoined="handleServerJoined"
           />
 
           <!-- Message input (modular component) — reply strip lives inside it -->

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Pencil, CornerUpLeft, Ellipsis, UserPlus, ArrowRight, ArrowLeft, PhoneCall, PhoneOff } from 'lucide-vue-next'
 import type { Message } from '@/types'
 import GroupInviteCard from './GroupInviteCard.vue'
+import ServerInviteCard from './ServerInviteCard.vue'
 import ThemeCard from './ThemeCard.vue'
 import { renderMessage, stripMarkers } from '@/utils/richText'
 import { appearance } from '@/composables/useAppearance'
@@ -24,6 +25,7 @@ const emit  = defineEmits<{
   openReplyTree: [msg: Message]
   jumpToMessage: [dbId: string]
   groupJoined:   [group: any]
+  serverJoined:  [server: any]
 }>()
 
 // Both call logs share systemType 'call', so the start/end distinction comes
@@ -86,6 +88,10 @@ const inviteCode = computed(() => {
   const m = INVITE_RE.exec(props.msg.content)
   return m?.[1] ?? null
 })
+
+// Server invites use /join/<code>; /invite/<code> above is group invites.
+const JOIN_RE = /https?:\/\/[^/\s]+\/join\/([A-Za-z0-9_-]{6,16})\/?/
+const joinCode = computed(() => JOIN_RE.exec(props.msg.content)?.[1] ?? null)
 
 // Detect a shared theme — inline code (sykord-theme:…) or a /theme/<slug> link.
 const THEME_CODE_RE = /sykord-theme:[A-Za-z0-9_-]+/
@@ -194,6 +200,7 @@ const onReplyPillLeave = () => {
       </template>
 
       <GroupInviteCard v-if="inviteCode" :code="inviteCode" @joined="emit('groupJoined', $event)" />
+      <ServerInviteCard v-if="joinCode" :code="joinCode" @joined="emit('serverJoined', $event)" />
       <ThemeCard v-if="themeRef" v-bind="themeRef" />
 
       <div v-if="msg.reactions?.length" class="msg-reactions">
