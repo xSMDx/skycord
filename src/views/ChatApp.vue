@@ -68,6 +68,7 @@ import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
 import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
 import { buildChannelMenu, type MenuChannel } from '@/composables/contextMenus/channelMenu'
+import { formatChannelName } from '@/utils/channelName'
 // isMuted is aliased: this file already has its own `isMuted` ref for YOUR mic
 // state (line ~243). Importing the conversation-mute helper under the same name
 // shadowed it, so the template called a ref and threw on every render — which
@@ -1371,8 +1372,9 @@ const openRenameChannel = (ch: MenuChannel) => {
 }
 const submitRenameChannel = async () => {
   const target = renameChannelTarget.value
-  const n = renameChannelVal.value.trim()
-  if (!target || !n || renameChannelBusy.value) return
+  if (!target) return
+  const n = formatChannelName(renameChannelVal.value, target.type)
+  if (!n || renameChannelBusy.value) return
   renameChannelBusy.value = true
   renameChannelErr.value  = ''
   try {
@@ -1389,14 +1391,23 @@ const submitRenameChannel = async () => {
   } catch (e: any) {
     if (renameChannelTarget.value === target) renameChannelErr.value = e?.message || 'Could not rename that channel'
   } finally {
-    if (renameChannelTarget.value === target) renameChannelBusy.value = false
+    // Unconditional: this is a plain busy mutex, not per-target state. The
+    // guard above on submitRenameChannel's own entry (renameChannelBusy.value)
+    // means only one request can ever be in flight at a time, so whichever
+    // finally runs always belongs to the request that set this flag — there
+    // is no stale-response race here. Gating this reset on `renameChannelTarget
+    // .value === target` (like the data writes above, which genuinely do need
+    // it) was the bug: once a rename closed the dialog on success, the target
+    // was already null, so the busy flag could never be cleared again and
+    // every later Edit Channel opened permanently stuck in the saving state.
+    renameChannelBusy.value = false
   }
 }
 
 const doDeleteChannel = (ch: MenuChannel) => {
   openConfirm({
     title: 'Delete Channel',
-    message: `Delete #${ch.name}? This cannot be undone — all messages in it will be lost too.`,
+    message: `Delete #${ch.name}? This cannot be undone — the channel will be gone for everyone in this server.`,
     confirmLabel: 'Delete',
     danger: true,
     action: async () => {
@@ -2253,8 +2264,8 @@ onBeforeUnmount(() => {
             <div v-for="ch in textChannels" :key="ch.id"
               class="ch-item" :class="{ active: activeChannelId===ch.id, unread: !!unreadChannels[ch.id] }"
               role="button" tabindex="0"
-              @keydown.enter.prevent="selectChannel(ch)"
-              @keydown.space.prevent="selectChannel(ch)"
+              @keydown.self.enter.prevent="selectChannel(ch)"
+              @keydown.self.space.prevent="selectChannel(ch)"
               @click="selectChannel(ch)"
               @contextmenu.prevent.stop="openChannelMenu($event, ch)">
               <Hash class="ch-icon" :size="15" :stroke-width="1.5"/>
@@ -2863,14 +2874,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-group-label:hover{color:var(--text-2)}
 .ch-group-label span{flex:1}
 .ch-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s;flex-shrink:0}
-.ch-group-label:hover .ch-add-btn{opacity:1}
+.ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
 .ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition:background .12s,color .12s,padding-left .12s;white-space:nowrap}
 .ch-item:hover{background:var(--hover);color:var(--text-2);padding-left:12px}
 .ch-item.active{background:rgba(var(--accent-rgb),.16);color:#c4c9ff}
 .ch-item.unread{color:var(--text-2);font-weight:600}
 .ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
-.ch-item:hover .ch-more{opacity:1}
+.ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}
 .ch-icon{flex-shrink:0}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}

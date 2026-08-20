@@ -5,6 +5,7 @@ import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
 import { useServers } from '@/composables/useServers'
 import type { WireChannel } from '@/composables/useApi'
+import { formatChannelName } from '@/utils/channelName'
 
 const props = defineProps<{ serverId: string }>()
 const emit = defineEmits<{ close: []; created: [channel: WireChannel] }>()
@@ -20,8 +21,7 @@ const error = ref('')
 // Discord slugifies as you type and users expect it. Spaces become hyphens,
 // uppercase folds down. Voice channels keep their name verbatim — the real
 // server in the reference screenshots has "| Voice Chat" and "Study Chat".
-const display = computed(() =>
-  type.value === 'text' ? name.value.trim().toLowerCase().replace(/\s+/g, '-') : name.value.trim())
+const display = computed(() => formatChannelName(name.value, type.value))
 
 // Same unmount guard CreateServerModal carries: the POST can outlive the
 // modal, and Vue does not invalidate an emit closure on unmount, so a
@@ -100,6 +100,7 @@ const submit = async () => {
             @keydown.enter.prevent="submit"
           />
         </div>
+        <p v-if="type === 'text' && name.trim()" class="ccm-preview">Channel will be created as <strong>#{{ display }}</strong></p>
         <p v-if="error" class="ccm-err">{{ error }}</p>
       </div>
 
@@ -163,6 +164,8 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-input.has-icon { padding-left: 34px; }
 .ccm-input:focus { border-color: var(--accent); }
 .ccm-input::placeholder { color: var(--text-faint); }
+.ccm-preview { font-size: 12px; color: var(--text-3); margin-top: 8px; }
+.ccm-preview strong { color: var(--text-2); font-weight: 600; }
 .ccm-err { font-size: 12px; color: #f08080; margin-top: 8px; }
 
 .ccm-footer {
