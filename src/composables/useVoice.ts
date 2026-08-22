@@ -36,7 +36,7 @@ export type ConnectStage = 'finding-server' | 'connecting' | 'authenticating' | 
 
 interface VoiceState {
   activeConvId: string | null
-  activeKind:   'dm' | 'group' | null
+  activeKind:   'dm' | 'group' | 'channel' | null
   activeName:   string
   connecting:   boolean
   connectStage: ConnectStage       // which step of the join we're on
@@ -170,9 +170,14 @@ const stopLocalLevel = () => {
   levelCtx?.close().catch(() => {}); levelCtx = null
 }
 
-// Room name for a conversation, matching the server (voiceController.roomFor).
-export const voiceRoomName = (kind: 'dm' | 'group', convId: string, myId: string) =>
-  kind === 'group' ? `group:${convId}` : `dm:${[myId, convId].sort().join('_')}`
+// Room name for a conversation, matching the server. Two server-side copies of
+// this exact rule: voiceController.roomFor and chatSocket's callRoom — if you
+// change the naming here, change both of those too (see
+// src/composables/__tests__/voiceRoomName.test.ts).
+export const voiceRoomName = (kind: 'dm' | 'group' | 'channel', convId: string, myId: string) =>
+  kind === 'channel' ? `voice:${convId}`
+  : kind === 'group' ? `group:${convId}`
+  : `dm:${[myId, convId].sort().join('_')}`
 
 // ── Per-participant local controls ──────────────────────────────────────────
 // Purely local: muting someone or dropping their volume affects only your ears,
@@ -442,7 +447,7 @@ watch(() => [voiceSettings.noiseMode, voiceSettings.sensitivity,
 // safe to read here at import time; getVoiceToken reads the token at call time.
 const { getVoiceToken } = useApi()
 
-const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
+const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: string) => {
     // Already in — or already joining — this exact call: no-op. Guarding the
     // join window (connectingConvId, since activeConvId isn't set until success)
     // is what stops a second click/accept during the ~1s join from spinning up a
@@ -459,7 +464,7 @@ const connect = async (convId: string, kind: 'dm' | 'group', name: string) => {
   // One join attempt. On failure it flashes "No route" (red) and schedules the
   // next attempt automatically — so the user never has to spam the call button;
   // they just watch it retry until it lands (or hit Cancel).
-  const attemptConnect = async (convId: string, kind: 'dm' | 'group', name: string, attempt: number) => {
+  const attemptConnect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: string, attempt: number) => {
     const seq = ++connectSeq
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
     if (failTimer)  { clearTimeout(failTimer);  failTimer = null }

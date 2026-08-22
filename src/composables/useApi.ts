@@ -277,7 +277,7 @@ export const useApi = () => {
     get<{ slug: string; name: string; authorName: string; data: Record<string, unknown> }>(`/themes/${slug}`)
 
   // ── Voice ────────────────────────────────────────────────────────────────
-  const getVoiceToken = (conversationId: string, kind: 'dm' | 'group') =>
+  const getVoiceToken = (conversationId: string, kind: 'dm' | 'group' | 'channel') =>
     post<{ token: string; url: string; room: string }>('/voice/token', { conversationId, kind })
 
   // Conversations you actually have, from message history — independent of

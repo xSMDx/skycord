@@ -89,8 +89,8 @@ import { soundMessage, soundNotification } from './useSounds'
 // Call presence emitters — module-level (not closure-bound) so non-component code
 // (useVoice's cleanup, which fires on unexpected LiveKit drops) can clear server
 // presence too, not just the component that opened the call.
-export const emitCallJoin  = (conversationId: string, kind: 'dm' | 'group') => _socket?.emit('call:join',  { conversationId, kind })
-export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group') => _socket?.emit('call:leave', { conversationId, kind })
+export const emitCallJoin  = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:join',  { conversationId, kind })
+export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:leave', { conversationId, kind })
 
 export const useSocket = () => {
   const { accessToken, user } = useAuth()
