@@ -3,6 +3,7 @@ import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } 
 import { Server } from '../models/Server'
 import { Conversation } from '../models/Conversation'
 import { roomFor } from '../controllers/voiceController'
+import { dmConvId } from '../controllers/messagesController'
 
 beforeAll(connectDb)
 afterAll(disconnectDb)
@@ -90,7 +91,17 @@ describe('POST /voice/token — kind: dm and group still work', () => {
     expect(res.status).toBe(200)
     expect(res.body.token).toEqual(expect.any(String))
     expect(res.body.url).toEqual(expect.any(String))
-    expect(res.body.room).toEqual(expect.any(String))
+    // Exact, not expect.any(String): the DM room name is a contract between
+    // this endpoint and voiceRoomName on the client, and a silent change to
+    // its shape — prefix, separator, participant order — would put two people
+    // in different LiveKit rooms while both believed they were connected.
+    // Nothing errors in that state, so this assertion is the only thing that
+    // would notice.
+    expect(res.body.room).toBe(`dm:${dmConvId(a.id, b.id)}`)
+    // And it must not depend on who asked.
+    const other = await app().post('/voice/token').set(auth(b))
+      .send({ conversationId: a.id, kind: 'dm' })
+    expect(other.body.room).toBe(res.body.room)
   })
 
   it('mints a token for a group', async () => {
