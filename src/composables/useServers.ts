@@ -164,10 +164,16 @@ export const useServers = () => {
     // Read the channel list before deleting it — it's the only way to know
     // which unreadChannels entries belong to this server.
     const channels = channelsByServer.value[sid] ?? []
+    // Same reason: read the categories before dropping them, so their
+    // collapse keys can go too. Leaving a server strands one entry per
+    // category it had, and nothing can ever reach them again.
+    const cats = categoriesByServer.value[sid] ?? []
     servers.value = servers.value.filter(s => s.id !== sid)
     delete channelsByServer.value[sid]
     delete categoriesByServer.value[sid]
     delete lastChannelIn.value[sid]
+    cats.forEach(c => { delete collapsedCategories.value[collapseKey(sid, c.id)] })
+    if (cats.length) writeCollapsedCategories(collapsedCategories.value)
     channels.forEach(c => { delete unreadChannels.value[c.id] })
     if (activeServerId.value === sid) {
       activeServerId.value  = null
@@ -231,6 +237,13 @@ export const useServers = () => {
 
     const channels = channelsByServer.value[sid]
     if (channels) channels.forEach(c => { if (c.category === cid) c.category = null })
+
+    // Drop the collapse entry too. Nothing else can ever reach this key once
+    // the category is gone — the id is never reissued — so leaving it behind
+    // grows the stored blob by one entry per category anyone ever deletes,
+    // forever, on every device they used.
+    delete collapsedCategories.value[collapseKey(sid, cid)]
+    writeCollapsedCategories(collapsedCategories.value)
   }
 
   /** Fold/unfold a category in the sidebar. A view concern only — it never

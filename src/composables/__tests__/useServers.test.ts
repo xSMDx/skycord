@@ -375,6 +375,40 @@ describe('useServers', () => {
     const persisted = JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')
     expect(persisted).toEqual({})
   })
+
+  // A category id is never reissued, so a collapse key left behind after the
+  // category is gone can never be reached again — it just grows the stored
+  // blob by one entry per category anyone ever deletes. Observed live: after
+  // collapsing one category and deleting a different one, storage held two.
+  it("removeCategory drops the category's collapse key, in memory and in storage", () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Group', 0)])
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(true)
+
+    s.removeCategory('s1', 'cat1')
+
+    expect(s.collapsedCategories.value['s1:cat1']).toBeUndefined()
+    expect(JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')).toEqual({})
+  })
+
+  it('removeServer drops the collapse keys of every category it had', () => {
+    s.receiveDetail(wireServer('s1'), [], [
+      wireCategory('cat1', 's1', 'One', 0),
+      wireCategory('cat2', 's1', 'Two', 1),
+    ])
+    s.receiveDetail(wireServer('s2'), [], [wireCategory('cat3', 's2', 'Other', 0)])
+    s.toggleCategory('s1', 'cat1')
+    s.toggleCategory('s1', 'cat2')
+    s.toggleCategory('s2', 'cat3')
+
+    s.removeServer('s1')
+
+    // Only s1 in the collapse blob is gone; the other server keeps its fold.
+    expect(s.collapsedCategories.value['s1:cat1']).toBeUndefined()
+    expect(s.collapsedCategories.value['s1:cat2']).toBeUndefined()
+    expect(s.collapsedCategories.value['s2:cat3']).toBe(true)
+    expect(JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')).toEqual({ 's2:cat3': true })
+  })
 })
 
 describe('serverIconFor', () => {
