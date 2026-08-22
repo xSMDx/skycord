@@ -23,6 +23,10 @@ const mkServer = async (u: TestUser) =>
   (await app().post('/servers').set(auth(u)).send({ name: 'EA' })).body.server
 const mkInvite = async (u: TestUser, sid: string, expiry: '24h' | '7d' | 'never' = '24h') =>
   (await app().post(`/servers/${sid}/invites`).set(auth(u)).send({ expiry })).body.invite
+const mkCategory = async (u: TestUser, sid: string, name: string) =>
+  (await app().post(`/servers/${sid}/categories`).set(auth(u)).send({ name })).body.category
+const mkChannel = async (u: TestUser, sid: string, body: Record<string, unknown>) =>
+  (await app().post(`/servers/${sid}/channels`).set(auth(u)).send({ type: 'text', ...body })).body.channel
 
 describe('POST /servers/:sid/invites', () => {
   it('mints a 24h invite by default', async () => {
@@ -76,6 +80,79 @@ describe('POST /invites/:code', () => {
     expect(after).toHaveLength(2)
     const stored = await ServerInvite.findOne({ code: inv.code })
     expect(stored!.uses).toBe(1)
+  })
+
+  /**
+   * This response is the ONLY server-detail payload a joining member ever
+   * gets: the client folds it in with the same `receiveDetail` that consumes
+   * GET /servers/:sid and then caches the result. When it omitted categories,
+   * the joiner's sidebar rendered every channel flat, in the headerless
+   * group, and nothing short of a page reload could repair it.
+   */
+  it('returns the server\'s categories, position-ordered and wire-shaped', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    await mkCategory(a, s.id, 'First')
+    await mkCategory(a, s.id, 'Second')
+    const inv = await mkInvite(a, s.id)
+
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.status).toBe(200)
+    expect(res.body.categories.map((c: any) => c.name)).toEqual(['First', 'Second'])
+    // Same shape getServer sends — shapeCategory, not a raw document.
+    expect(Object.keys(res.body.categories[0]).sort()).toEqual(['id', 'name', 'position', 'server'])
+    expect(res.body.categories[0].server).toBe(s.id)
+  })
+
+  it('returns categories the joiner can actually group the returned channels by', async () => {
+    // The payload has to be self-sufficient: every non-null `channel.category`
+    // must resolve inside the `categories` array of the very same response, or
+    // the client buckets those channels as dangling and renders them flat.
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const cat = await mkCategory(a, s.id, 'Chat')
+    await mkChannel(a, s.id, { name: 'filed', category: cat.id })
+    const inv = await mkInvite(a, s.id)
+
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.status).toBe(200)
+    const ids = new Set(res.body.categories.map((c: any) => c.id))
+    const filed = res.body.channels.find((c: any) => c.name === 'filed')
+    expect(filed.category).toBe(cat.id)
+    expect(ids.has(filed.category)).toBe(true)
+  })
+
+  it('returns an empty categories array for a server with none', async () => {
+    // Present-and-empty, not absent: the client treats an absent list as
+    // "never loaded" and refetches, which would be a wasted round trip here.
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const inv = await mkInvite(a, s.id)
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.body.categories).toEqual([])
+  })
+
+  it('returns categories on the idempotent re-join too', async () => {
+    // `joined: false` takes a different branch through joinViaInvite. A user
+    // who double-clicks the link, or revisits it, must not get a thinner
+    // payload than the one that made them a member.
+    const a = await register()
+    const s = await mkServer(a)
+    await mkCategory(a, s.id, 'Chat')
+    const inv = await mkInvite(a, s.id)
+    const res = await app().post(`/invites/${inv.code}`).set(auth(a))
+    expect(res.status).toBe(200)
+    expect(res.body.joined).toBe(false)
+    expect(res.body.categories.map((c: any) => c.name)).toEqual(['Chat'])
+  })
+
+  it('does not leak another server\'s categories', async () => {
+    const a = await register(), b = await register()
+    const one = await mkServer(a), two = await mkServer(a)
+    await mkCategory(a, two.id, 'Theirs')
+    const inv = await mkInvite(a, one.id)
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.body.categories).toEqual([])
   })
 
   it('is idempotent for someone already in', async () => {

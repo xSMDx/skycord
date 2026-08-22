@@ -35,7 +35,15 @@ const submit = async () => {
     // Fold it into state here rather than refetching: the 201 already carries
     // the server and its two default channels, so the caller can enter it
     // without a second round trip.
-    receiveDetail(server, channels)
+    //
+    // The explicit `[]` is load-bearing. receiveDetail no longer defaults its
+    // third argument, precisely so that a caller with nothing to say about
+    // categories leaves the bucket absent and `openServer` repairs it. Here
+    // there is something to say: POST /servers creates the categories
+    // collection empty, so a server this new provably has none — and saying so
+    // is what keeps `onServerCreated`'s "enters without a second request"
+    // promise true.
+    receiveDetail(server, channels, [])
     if (gone) return
     emit('created', server.id)
     emit('close')

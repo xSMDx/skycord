@@ -78,12 +78,40 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
     // Rename only. `position` is assigned by appending and there is no reorder
     // UI yet; accepting one from the body would let a client write a position
     // that collides with a sibling's for no one to fix.
-    found.category.name = name
-    await found.category.save()
+    //
+    // Locked, like createCategory above and deleteCategory below, rather than
+    // saving the document loadCategory already hydrated. loadCategory's read
+    // and this write are a check-then-act pair: a deleteCategory landing
+    // between them leaves `save()` with nothing to update, and Mongoose 8
+    // throws DocumentNotFoundError for that — a 500 for what is really a plain
+    // 404, the same answer the caller would have got had the delete arrived a
+    // millisecond sooner.
+    //
+    // The lock is taken rather than just mapping that error to a 404 because
+    // the lock is what the neighbours in this file already use for exactly
+    // this hazard, and it fixes the race instead of relabelling its
+    // aftermath: the re-read below runs inside the same critical section as
+    // deleteCategory's reparent-then-delete, so the rename either commits
+    // wholly before that delete starts or sees a category that is already
+    // gone. Error-mapping alone would still let the two interleave and would
+    // have to be repeated at every future write here.
+    //
+    // The re-read INSIDE the lock is the load-bearing part. Re-saving the
+    // document hydrated before the lock was acquired would put the read back
+    // outside the critical section and reopen the very window this closes.
+    const serverId = found.server._id.toString()
+    const fresh = await withServerLock(serverId, async () => {
+      const current = await Category.findOne({ _id: found.category._id, server: found.server._id })
+      if (!current) return null
+      current.name = name
+      await current.save()
+      return current
+    })
+    if (!fresh) { res.status(404).json({ message: 'Category not found' }); return }
 
-    const shaped = shapeCategory(found.category)
+    const shaped = shapeCategory(fresh)
     emitToServer(found.server, 'category:updated', {
-      serverId: found.server._id.toString(), category: shaped,
+      serverId, category: shaped,
     })
     res.json({ category: shaped })
   } catch (err) { next(err) }

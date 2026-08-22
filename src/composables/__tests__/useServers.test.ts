@@ -1,6 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } from '../useServers'
 import type { WireServer, WireChannel, WireCategory } from '../useApi'
+
+/**
+ * The composable's only I/O. Stubbed rather than reached, so `openServer`'s
+ * fetch-or-don't decision can be asserted on directly — that decision is the
+ * whole of the cache contract and nothing else in this suite exercises it.
+ * `vi.hoisted` because `vi.mock`'s factory is hoisted above the imports and
+ * cannot close over an ordinary const.
+ */
+const api = vi.hoisted(() => ({
+  getMyServers:    vi.fn(),
+  getServerDetail: vi.fn(),
+}))
+vi.mock('../useApi', () => ({ useApi: () => api }))
 
 const wireServer = (id: string, name = id): WireServer => ({
   id, name, icon: null, iconCrop: null, bannerColor: null,
@@ -52,6 +65,8 @@ describe('useServers', () => {
     // the same shape; it goes in the reset from day one.
     s.collapsedCategories.value = {}
     ;(globalThis.localStorage as any).clear()
+    api.getMyServers.mockReset()
+    api.getServerDetail.mockReset()
   })
 
   it('maps a wire server into the renderable client shape', () => {
@@ -73,16 +88,13 @@ describe('useServers', () => {
     expect(s.servers.value[0].name).toBe('New')
   })
 
-  it('splits channels by type and sorts them by position', () => {
-    s.receiveDetail(wireServer('s1'), [
-      wireChannel('c2', 's1', 'off-topic', 'text', 1),
-      wireChannel('c1', 's1', 'general',   'text', 0),
-      wireChannel('v1', 's1', 'Lounge',    'voice', 0),
-    ])
-    s.activeServerId.value = 's1'
-    expect(s.textChannels.value.map(c => c.name)).toEqual(['general', 'off-topic'])
-    expect(s.voiceChannels.value.map(c => c.name)).toEqual(['Lounge'])
-  })
+  // The old 'splits channels by type and sorts them by position' test went
+  // with `textChannels`/`voiceChannels` themselves. Nothing was lost: the
+  // type split and the position ordering it asserted are both still pinned,
+  // by 'orders text channels before voice within a group, each by position'
+  // and by 'sorts a dangling-category channel by type and position among
+  // genuinely uncategorised channels' further down — against
+  // `groupedChannels`, which is what actually renders.
 
   it('lands on the first text channel, never a voice one', () => {
     s.receiveDetail(wireServer('s1'), [
@@ -319,7 +331,12 @@ describe('useServers', () => {
   })
 
   it('upsertCategory adds a new category and updates an existing one in place', () => {
-    s.receiveDetail(wireServer('s1'), [])
+    // The explicit `[]` stands for "detail fetched, server has no categories
+    // yet" — which is what every production caller of receiveDetail now says
+    // when it means that. Omitting the argument means something different
+    // (nothing known about categories) and leaves the bucket absent, which is
+    // the neighbouring test's case, not this one's.
+    s.receiveDetail(wireServer('s1'), [], [])
     s.upsertCategory(wireCategory('cat1', 's1', 'Old', 0))
     expect(s.categoriesByServer.value['s1']).toHaveLength(1)
     s.upsertCategory(wireCategory('cat1', 's1', 'New', 0))
@@ -408,6 +425,78 @@ describe('useServers', () => {
     expect(s.collapsedCategories.value['s1:cat2']).toBeUndefined()
     expect(s.collapsedCategories.value['s2:cat3']).toBe(true)
     expect(JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')).toEqual({ 's2:cat3': true })
+  })
+
+  // ── the invite-join staleness trap ─────────────────────────────────────
+  // A member who joined by invite used to land in a server whose channels
+  // were cached and whose categories were cached as an empty list, so the
+  // sidebar rendered every channel flat, with no headers, and no rail click
+  // could ever repair it — only a page reload. Three things now stand
+  // between that and the user; these pin the two on this side of the wire.
+
+  it('receiveDetail leaves the categories bucket absent when it is given none', () => {
+    // Absent, NOT `[]`. An empty array is a claim that the server has no
+    // categories, and it is precisely that claim — indistinguishable from the
+    // truth — that made the stale sidebar unrecoverable.
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    expect(s.channelsByServer.value['s1']).toHaveLength(1)
+    expect(s.categoriesByServer.value['s1']).toBeUndefined()
+  })
+
+  it('receiveDetail writes an empty bucket when a caller explicitly has none to give', () => {
+    // createServer's 201 knows the server is too new to have any. That is a
+    // fact, and it must be recorded as one, or every brand-new server would
+    // cost a pointless extra GET on entry.
+    s.receiveDetail(wireServer('s1'), [], [])
+    expect(s.categoriesByServer.value['s1']).toEqual([])
+  })
+
+  it('receiveDetail does not wipe known categories when a later payload omits them', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Chat', 0)])
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    expect(s.categoriesByServer.value['s1'].map(c => c.id)).toEqual(['cat1'])
+  })
+
+  it('openServer refetches when channels are cached but categories were never received', async () => {
+    api.getServerDetail.mockResolvedValue({
+      server:     wireServer('s1'),
+      channels:   [wireChannel('c1', 's1', 'general', 'text', 0)],
+      categories: [wireCategory('cat1', 's1', 'Chat', 0)],
+    })
+    // Exactly what an invite-join payload with no categories used to leave
+    // behind: a populated channel bucket, no category bucket.
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+
+    await s.openServer('s1')
+
+    expect(api.getServerDetail).toHaveBeenCalledWith('s1')
+    expect(s.categoriesByServer.value['s1'].map(c => c.id)).toEqual(['cat1'])
+    expect(s.groupedChannels.value.map(g => g.category?.id ?? null)).toEqual([null, 'cat1'])
+  })
+
+  it('openServer makes no request when both buckets are already populated', async () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [wireChannel('c1', 's1', 'general', 'text', 0)],
+      [wireCategory('cat1', 's1', 'Chat', 0)],
+    )
+    await s.openServer('s1')
+    expect(api.getServerDetail).not.toHaveBeenCalled()
+    expect(s.activeChannelId.value).toBe('c1')
+  })
+
+  it('openServer makes no request for a server known to have no categories', async () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)], [])
+    await s.openServer('s1')
+    expect(api.getServerDetail).not.toHaveBeenCalled()
+  })
+
+  it('openServer fetches a server it has never seen', async () => {
+    api.getServerDetail.mockResolvedValue({
+      server: wireServer('s9'), channels: [], categories: [],
+    })
+    await s.openServer('s9')
+    expect(api.getServerDetail).toHaveBeenCalledWith('s9')
   })
 })
 

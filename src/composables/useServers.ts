@@ -181,11 +181,29 @@ export const useServers = () => {
     }
   }
 
-  /** Fold a `GET /servers/:sid` response into state. */
-  const receiveDetail = (w: WireServer, chans: WireChannel[], cats: WireCategory[] = []) => {
+  /**
+   * Fold a `GET /servers/:sid`-shaped response into state.
+   *
+   * `cats` is optional but NOT defaulted to `[]`, and the difference is the
+   * whole point. An empty array is a claim — "this server has no categories"
+   * — and once written, nothing can tell it apart from the truth, so
+   * `openServer` sees a populated bucket and never refetches. A caller that
+   * simply has no categories field to give (a payload that predates them, or
+   * one that forgot) must leave the bucket ABSENT instead, which is the state
+   * `openServer` treats as "not loaded yet" and repairs with one GET.
+   *
+   * Callers that genuinely know the server has none — createServer, whose 201
+   * describes a server too new to have any — pass `[]` on purpose. That is a
+   * fact, not a default, and it correctly suppresses the refetch.
+   *
+   * An existing bucket is left alone rather than cleared when `cats` is
+   * omitted: data already known to be good should not be thrown away by a
+   * payload that simply says nothing about it.
+   */
+  const receiveDetail = (w: WireServer, chans: WireChannel[], cats?: WireCategory[]) => {
     upsertServer(w)
-    channelsByServer.value[w.id]   = chans.map(toClientChannel).sort(byPosition)
-    categoriesByServer.value[w.id] = cats.map(toClientCategory).sort(byCategoryPosition)
+    channelsByServer.value[w.id] = chans.map(toClientChannel).sort(byPosition)
+    if (cats) categoriesByServer.value[w.id] = cats.map(toClientCategory).sort(byCategoryPosition)
   }
 
   const upsertChannel = (w: WireChannel) => {
@@ -291,10 +309,25 @@ export const useServers = () => {
    * Enter a server. Channels are fetched once per server and then cached —
    * `channel:created` / `:updated` / `:deleted` keep the cache honest, so
    * refetching on every rail click would be a request that changes nothing.
+   *
+   * The guard checks BOTH buckets, not just channels. A payload that carries
+   * channels but no categories — the invite-join response was exactly that —
+   * populates `channelsByServer` and (see receiveDetail) leaves
+   * `categoriesByServer` untouched. A channels-only guard read that as
+   * "already loaded" forever: the sidebar rendered every channel flat, in the
+   * headerless group, and no rail click could ever fix it because no refetch
+   * was ever attempted. Gating on both means the worst a categories-less
+   * payload can cost is one extra GET, rather than state that stays wrong
+   * until the page is reloaded.
+   *
+   * This is the backstop, not the primary fix — joinViaInvite now sends its
+   * categories and CreateServerModal states its empty one explicitly, so
+   * neither path reaches this branch. It is here so that the NEXT payload to
+   * forget them degrades into a redundant request instead of a broken sidebar.
    */
   const openServer = async (sid: string) => {
     activeServerId.value = sid
-    if (!channelsByServer.value[sid]) await loadServerDetail(sid)
+    if (!channelsByServer.value[sid] || !categoriesByServer.value[sid]) await loadServerDetail(sid)
     selectLanding(sid)
   }
 
@@ -305,8 +338,6 @@ export const useServers = () => {
     activeServerId.value ? channelsByServer.value[activeServerId.value] ?? [] : [])
   const activeCategories = computed(() =>
     activeServerId.value ? categoriesByServer.value[activeServerId.value] ?? [] : [])
-  const textChannels     = computed(() => activeChannels.value.filter(c => c.type === 'text'))
-  const voiceChannels    = computed(() => activeChannels.value.filter(c => c.type === 'voice'))
   const activeChannel    = computed(() => activeChannels.value.find(c => c.id === activeChannelId.value) ?? null)
 
   /**
@@ -364,7 +395,11 @@ export const useServers = () => {
     resetServers,
     servers, channelsByServer, categoriesByServer, activeServerId, activeChannelId,
     unreadChannels, lastChannelIn, collapsedCategories,
-    activeServer, activeChannel, textChannels, voiceChannels, groupedChannels,
+    // No flat `textChannels`/`voiceChannels` any more: the sidebar renders
+    // `groupedChannels`, which already splits each group into text and voice,
+    // and a whole-server flat list alongside it could only ever draw every
+    // channel a second time outside its group.
+    activeServer, activeChannel, activeCategories, groupedChannels,
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     upsertCategory, removeCategory, toggleCategory,
     markUnread, clearUnread, selectLanding, openChannel,

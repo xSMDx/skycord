@@ -150,13 +150,15 @@ const {
 // is the "enter this server" state transition that handler calls, so it comes
 // in as `enterServer`.
 //
-// `textChannels`/`voiceChannels` are deliberately NOT pulled in any more. The
-// sidebar renders `groupedChannels` — which already splits each category's
-// channels into text and voice — so a flat all-text/all-voice list of the
-// whole server would draw every channel a second time, outside its group.
+// There is deliberately no flat all-text/all-voice pair here: the sidebar
+// renders `groupedChannels`, which already splits each category's channels
+// into text and voice, so a whole-server flat list would draw every channel a
+// second time outside its group. `activeCategories` is the flat list that IS
+// wanted — the Move to Category submenu needs the server's categories as
+// categories, not as render groups.
 const {
-  servers, activeServerId, activeChannelId, unreadChannels,
-  activeServer, activeChannel, groupedChannels, collapsedCategories,
+  servers, activeServerId, activeChannelId, unreadChannels, channelsByServer,
+  activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories,
   selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
   upsertCategory, removeCategory, toggleCategory,
   loadServers, openServer: enterServer,
@@ -1497,11 +1499,46 @@ const isServerOwner = computed(() =>
   !!activeServer.value && activeServer.value.owner === authUser.value?.id)
 
 const openChannelMenu = (e: MouseEvent, ch: Channel) => {
-  openMenu(e, buildChannelMenu(ch, isServerOwner.value, {
-    rename: openRenameChannel,
-    remove: doDeleteChannel,
-    copy:   copyText,
-  }))
+  // Passed as a BUILDER, not a snapshot array: `activeCategories` and the
+  // channel's own `category` are both live, and a category created or deleted
+  // (by anyone, over a socket) while this menu is open must change what the
+  // submenu offers rather than leaving a row that moves the channel into a
+  // category that no longer exists.
+  openMenu(e, () => buildChannelMenu(
+    // Re-read from state rather than closing over the `ch` the click handed
+    // us: after a move, `upsertChannel` replaces the object in the list, and
+    // the stale one would keep the check mark on the old category.
+    channelsByServer.value[ch.serverId]?.find(c => c.id === ch.id) ?? ch,
+    isServerOwner.value,
+    {
+      rename: openRenameChannel,
+      remove: doDeleteChannel,
+      move:   doMoveChannel,
+      copy:   copyText,
+    },
+    activeCategories.value,
+  ))
+}
+
+// Move a channel between categories (or out of all of them). Owner-only, like
+// every other category mutation — updateChannel is `requireOwner` server-side,
+// which is why the row only exists behind `isServerOwner` above.
+const doMoveChannel = async (ch: MenuChannel, categoryId: string | null) => {
+  try {
+    // `category` alone, no `name`: updateChannel takes the two fields
+    // independently, so this cannot disturb a rename that is in flight.
+    const { channel } = await api.updateChannelApi(ch.serverId, ch.id, { category: categoryId })
+    // Folded in here rather than waiting for the `channel:updated` echo, same
+    // as submitRenameChannel — the echo is harmless because upsertChannel
+    // updates in place by id.
+    upsertChannel(channel)
+  } catch (e: any) {
+    console.error('[doMoveChannel]', e)
+    // Surface the server's own message — this is how "That category does not
+    // belong to this server" (a category deleted out from under an open menu)
+    // reaches the user instead of the move silently doing nothing.
+    showToast(e?.message || 'Couldn’t move that channel')
+  }
 }
 
 // Rename a channel — reuses the app's existing single-field edit modal

@@ -9,7 +9,8 @@ import mongoose, { Document, Schema, Types } from 'mongoose'
  * `type !== 'text'` guard rejects anything non-text (channelsController.ts),
  * deleteChannel's last-channel guard only counts `type: 'text'` channels
  * (channelsController.ts), and the client splits rendering by type
- * (`textChannels`/`voiceChannels` in useServers.ts). Note that loadChannel
+ * (`groupedChannels` in useServers.ts buckets each group into text/voice).
+ * Note that loadChannel
  * and the chan:<id> room joins (createChannel, chatSocket) are already
  * type-agnostic — they resolve or join by id alone, so a third value would
  * not need new guards there. A third value would still need auditing at the

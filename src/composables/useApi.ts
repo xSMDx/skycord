@@ -178,7 +178,13 @@ export const useApi = () => {
   const createChannelApi = (sid: string, name: string, type: 'text' | 'voice', category: string | null = null) =>
     post<{ channel: WireChannel }>(`/servers/${sid}/channels`, { name, type, category })
 
-  const updateChannelApi = (sid: string, cid: string, body: { name?: string }) =>
+  // Per-field, matching updateChannel server-side: `name` and `category` are
+  // independent, so a channel can be moved between categories without also
+  // being renamed. `category: null` moves it out of every category; a category
+  // id moves it in. As with createChannelApi above, `''` is NOT a spelling of
+  // "none" — resolveCategory 400s it on purpose. A body naming neither field
+  // is a 400 too, so callers must always send at least one.
+  const updateChannelApi = (sid: string, cid: string, body: { name?: string; category?: string | null }) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
 
   // ── Categories ───────────────────────────────────────────────────────────
@@ -250,12 +256,18 @@ export const useApi = () => {
       full:          boolean
     }>(`/invites/${code}`)
 
-  // joinViaInvite's shape matches WireServer/WireChannel exactly (it calls
-  // shapeServer/shapeChannel directly) and — unlike the preview above — really
-  // does return `joined` at the top level. `joined: false` means "you were
-  // already a member," not failure; the request still resolves 200.
+  // joinViaInvite's shape matches WireServer/WireChannel/WireCategory exactly
+  // (it calls shapeServer/shapeChannel/shapeCategory directly) and — unlike
+  // the preview above — really does return `joined` at the top level.
+  // `joined: false` means "you were already a member," not failure; the
+  // request still resolves 200.
+  //
+  // `categories` is part of the contract, not an extra: this is the same
+  // detail payload getServerDetail returns and the caller folds it in with the
+  // same receiveDetail. Dropping it here left a joining member with a cached
+  // empty category list and a permanently flat sidebar.
   const joinServerInvite = (code: string) =>
-    post<{ server: WireServer; channels: WireChannel[]; joined: boolean }>(`/invites/${code}`)
+    post<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[]; joined: boolean }>(`/invites/${code}`)
 
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>

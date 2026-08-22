@@ -1,10 +1,13 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
+import http from 'http'
 import mongoose from 'mongoose'
+import request from 'supertest'
 import type { Socket as ClientSocket } from 'socket.io-client'
 import {
   app, connectDb, disconnectDb, resetDb, register, auth,
   withSocketServer, connectSocket, nextEvent, type TestUser,
 } from './helpers'
+import { createApp } from '../app'
 import { Server } from '../models/Server'
 import { Channel } from '../models/Channel'
 import { Category, MAX_CATEGORIES } from '../models/Category'
@@ -250,6 +253,49 @@ describe('PATCH /servers/:sid/categories/:cid', () => {
     const res = await app().patch(`/servers/${server.id}/categories/not-an-id`)
       .set(auth(u)).send({ name: 'x' })
     expect(res.status).toBe(404)
+  })
+
+  /**
+   * A rename that races a delete must answer 404 — the same thing it answers
+   * when the delete simply arrived first — and never 500.
+   *
+   * updateCategory used to read the category with loadCategory and then
+   * `save()` it with no lock, while createCategory and deleteCategory both
+   * took `withServerLock`. A delete landing in that gap leaves `save()` with
+   * no matching document, and Mongoose 8 throws DocumentNotFoundError for
+   * that, which the error middleware turns into a 500. It now takes the same
+   * lock and re-reads inside it, so the two calls serialise.
+   *
+   * Both requests go through ONE already-listening server, for the reason
+   * invites.test.ts spells out: two separate `app()` calls each bind their
+   * own ephemeral server, and the listen() jitter between them is enough to
+   * accidentally serialise the requests. This is a smoke test for the
+   * invariant rather than a deterministic reproduction of the interleaving —
+   * it cannot force the two to collide, but it can never pass on a 500.
+   */
+  it('answers a rename racing a delete with 404, never a 500', async () => {
+    const u = await register()
+    const { server } = await mkServer(u)
+    const cat = await mkCategory(u, server.id, 'Doomed')
+
+    const httpServer = http.createServer(createApp())
+    await new Promise<void>(resolve => httpServer.listen(0, resolve))
+    let patched: request.Response, deleted: request.Response
+    try {
+      const client = () => request(httpServer)
+      ;[patched, deleted] = await Promise.all([
+        client().patch(`/servers/${server.id}/categories/${cat.id}`).set(auth(u)).send({ name: 'Renamed' }),
+        client().delete(`/servers/${server.id}/categories/${cat.id}`).set(auth(u)),
+      ])
+    } finally {
+      await new Promise<void>(resolve => httpServer.close(() => resolve()))
+    }
+
+    expect(deleted.status).toBe(200)
+    // 200 if the rename got in first, 404 if the delete did. Nothing else.
+    expect([200, 404]).toContain(patched.status)
+    // Whichever order they landed in, the delete is the one that persists.
+    expect(await Category.findById(cat.id)).toBeNull()
   })
 })
 
