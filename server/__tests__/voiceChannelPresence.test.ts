@@ -191,11 +191,52 @@ describe('voice channel presence', () => {
   })
 })
 
+// call:join used to perform no membership check of any kind: an authenticated
+// user naming any channel/group id landed in activeCalls and was broadcast to
+// every real member, with no way for anyone to evict the phantom occupant
+// afterwards (leaveCall only ever removes the caller). These prove the
+// refusal actually blocks occupancy rather than merely rejecting politely —
+// a real member who WOULD see call:state for a genuine join never sees one.
+describe('call:join refuses non-members', () => {
+  it('does not add a non-member of the server to a channel call', async () => {
+    const a = await register(), outsider = await register()
+    const { voice } = await seed(a)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const oSock = track(await connectSocket(sockets.url, outsider.token))
+    let seen = false
+    aSock.on('call:state', () => { seen = true })
+
+    oSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+
+    await new Promise(r => setTimeout(r, 400))
+    expect(seen).toBe(false)
+  })
+
+  it('does not add a non-member of the group to a group call', async () => {
+    const a = await register(), b = await register(), outsider = await register()
+    const group = await Conversation.create({
+      type: 'group', owner: a.id, members: [a.id, b.id], lastMessageAt: new Date(),
+    })
+    const groupId = group._id.toString()
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const oSock = track(await connectSocket(sockets.url, outsider.token))
+    let seen = false
+    aSock.on('call:state', () => { seen = true })
+
+    oSock.emit('call:join', { conversationId: groupId, kind: 'group' })
+
+    await new Promise(r => setTimeout(r, 400))
+    expect(seen).toBe(false)
+  })
+})
+
 // broadcastCall's DM branch PARSES the room name rather than matching a prefix,
 // so it is the branch that quietly produces nonsense if the new channel case is
 // bolted on carelessly. These two keep the old paths honest.
 describe('the DM and group call paths still work', () => {
-  it('still reaches both DM participants, and still posts the system message', async () => {
+  it('still reaches both DM participants, and still posts the system message on join AND on leave', async () => {
     const a = await register(), b = await register()
 
     const aSock = track(await connectSocket(sockets.url, a.token))
@@ -208,10 +249,25 @@ describe('the DM and group call paths still work', () => {
     const payload = await seen
     expect(payload.room).toBe(`dm:${dmConvId(a.id, b.id)}`)
     expect(payload.userIds).toEqual([a.id])
+    // "started a call" — call:join awaits postCallSystem before broadcasting,
+    // so by the time call:state lands the write is already there.
     expect(await Message.countDocuments()).toBe(before + 1)
+
+    // Leaving is the other half, and it is NOT proven by a blanket `return`
+    // (or an outright deleted postCallEnded) at all: 294 tests passed either
+    // way before this. leaveCall fires postCallEnded WITHOUT awaiting it
+    // before broadcasting call:state, so waiting on call:state here would
+    // race the "Call ended" write. postCallEnded's own dm:receive is emitted
+    // only after its Message.create resolves, so waiting on THAT instead
+    // guarantees the count below is read after the write lands.
+    const ended = nextEvent(bSock, 'dm:receive')
+    aSock.emit('call:leave', { conversationId: b.id, kind: 'dm' })
+    const endedPayload = await ended
+    expect(endedPayload.content).toBe('Call ended')
+    expect(await Message.countDocuments()).toBe(before + 2)
   })
 
-  it('still reaches the group room', async () => {
+  it('still reaches the group room, and still posts the system message on join AND on leave', async () => {
     const a = await register(), b = await register()
     // Made against the model: the real endpoint requires friendship setup that
     // is irrelevant here (same shortcut groupMessages.test.ts takes).
@@ -222,6 +278,7 @@ describe('the DM and group call paths still work', () => {
 
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
+    const before = await Message.countDocuments()
     const seen = nextEvent(bSock, 'call:state')
 
     aSock.emit('call:join', { conversationId: groupId, kind: 'group' })
@@ -229,5 +286,14 @@ describe('the DM and group call paths still work', () => {
     const payload = await seen
     expect(payload.room).toBe(`group:${groupId}`)
     expect(payload.userIds).toEqual([a.id])
+    expect(await Message.countDocuments()).toBe(before + 1)
+
+    // Same race-avoidance as the DM case above: wait on group:receive (fired
+    // only after postCallEnded's Message.create resolves), not call:state.
+    const ended = nextEvent(bSock, 'group:receive')
+    aSock.emit('call:leave', { conversationId: groupId, kind: 'group' })
+    const endedPayload = await ended
+    expect(endedPayload.content).toBe('Call ended')
+    expect(await Message.countDocuments()).toBe(before + 2)
   })
 })

@@ -68,6 +68,46 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
 }
 
 /**
+ * May this user actually be added to this call's occupancy?
+ *
+ * `call:join` used to run no check at all: an authenticated user naming ANY
+ * channel or group id landed in `activeCalls` and was broadcast to every real
+ * member of that server or group, with no way for anyone to evict the
+ * phantom occupant afterwards — `leaveCall` only ever removes the caller.
+ * The channel branch mirrors `canAccessMessage`'s above: Channel -> Server ->
+ * members, rather than a second copy of that resolution.
+ *
+ * DM gets no check and always returns true. `callRoom`'s dm branch is
+ * `dm:${dmConvId(userId, convId)}`, built from the CALLER's own id, so the
+ * room always contains exactly the caller plus whoever they named — there is
+ * no "someone else's DM" a caller could land themselves in by naming an id.
+ * Whether two people are allowed to ring each other at all (friendship, DND,
+ * etc.) is a separate product question this event never enforced before and
+ * is out of scope here; there is no membership fact left to check.
+ *
+ * Any lookup failure (malformed id, doc deleted mid-flight) reads as "not
+ * allowed" rather than throwing out of a handler with no surrounding
+ * try/catch.
+ */
+const canJoinCall = async (
+  kind: 'dm' | 'group' | 'channel', conversationId: string, userId: string,
+): Promise<boolean> => {
+  if (kind === 'dm') return true
+  try {
+    if (kind === 'channel') {
+      const channel = await Channel.findById(conversationId).select('server').lean()
+      if (!channel) return false
+      const server = await Server.findById(channel.server).select('members').lean()
+      return !!server && server.members.some(m => m.toString() === userId)
+    }
+    const group = await Conversation.findById(conversationId).select('members').lean()
+    return !!group && group.members.some(m => m.toString() === userId)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Everyone entitled to hear this user's presence: their accepted friends,
  * plus everyone who shares a server with them — deduplicated, minus the
  * user themselves.
@@ -594,6 +634,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       } catch (err) { console.error('[WS] postCallEnded', err) }
     }
 
+    // No membership check here, deliberately: this only ever deletes the
+    // CALLER's own id from the room's Set (`set.has(userId)` guards that), so
+    // it cannot forge or evict anyone else's occupancy. Once call:join is
+    // guarded above, a caller can only ever be in a room they were let into,
+    // so there is nothing left for a leave-side check to catch.
     const leaveCall = (room: string) => {
       const set = activeCalls.get(room)
       if (!set || !set.has(userId)) return
@@ -608,6 +653,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     socket.on('call:join', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
+      // Refuse silently, same shape every other handler in this file uses for
+      // "not allowed" — no ack is expected on this event, so there is nothing
+      // to report back beyond simply not joining.
+      if (!await canJoinCall(data.kind, data.conversationId, userId)) return
       const room = callRoom(data.kind, data.conversationId)
       let set = activeCalls.get(room)
       const wasEmpty = !set || set.size === 0
