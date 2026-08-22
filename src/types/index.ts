@@ -115,8 +115,20 @@ export interface Channel {
   type:     'text' | 'voice'
   serverId: string
   position?: number
+  /** The category this channel is grouped under. null/undefined both mean
+   *  uncategorised — a channel created before categories existed carries no
+   *  key at all in the raw DB row, and callers must treat that the same as
+   *  an explicit null rather than testing `=== null`. */
+  category?: string | null
   unread?:  number
   locked?:  boolean
+}
+
+export interface Category {
+  id:        string
+  serverId:  string
+  name:      string
+  position?: number
 }
  
 export interface EmojiData {

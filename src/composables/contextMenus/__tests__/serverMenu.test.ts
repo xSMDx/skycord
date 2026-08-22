@@ -5,6 +5,7 @@ import { isAction, isSeparator, type MenuItem } from '../../useContextMenu'
 const handlers = () => ({
   invitePeople: vi.fn(),
   createChannel: vi.fn(),
+  createCategory: vi.fn(),
   leaveServer: vi.fn(),
   deleteServer: vi.fn(),
   copy: vi.fn(),
@@ -14,10 +15,23 @@ const labels = (items: MenuItem[]) =>
   items.filter(isAction).map(i => i.label)
 
 describe('buildServerMenu', () => {
-  it('offers Invite People and Create Channel to the owner', () => {
+  it('offers Invite People, Create Channel and Create Category to the owner', () => {
     const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
     expect(l).toContain('Invite People')
     expect(l).toContain('Create Channel')
+    expect(l).toContain('Create Category')
+  })
+
+  it('offers an owner exactly its row set', () => {
+    // The owner half of the pin the non-owner case below already carries: an
+    // exhaustive list, so a row added to the isOwner branch has to be
+    // acknowledged here rather than slipping in unnoticed — and so a row that
+    // should have been owner-gated but was appended to the shared tail shows
+    // up as a diff in BOTH tests.
+    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
+    expect(l).toEqual([
+      'Invite People', 'Create Channel', 'Create Category', 'Copy Server ID', 'Delete Server',
+    ])
   })
 
   it('offers the owner Delete Server, never Leave Server', () => {
@@ -32,11 +46,20 @@ describe('buildServerMenu', () => {
     expect(l).not.toContain('Delete Server')
   })
 
-  it('hides Create Channel from a non-owner', () => {
-    // The server 403s a non-owner creating a channel, so offering the row
-    // would produce a modal that can only fail.
+  it('hides Create Channel and Create Category from a non-owner', () => {
+    // The server 403s a non-owner creating a channel, and createCategory is
+    // requireOwner too (server/controllers/categoriesController.ts), so
+    // offering either row would produce a modal that can only fail.
     const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
     expect(l).not.toContain('Create Channel')
+    expect(l).not.toContain('Create Category')
+  })
+
+  it('hands Create Category the server id', () => {
+    const h = handlers()
+    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
+    items.filter(isAction).find(i => i.label === 'Create Category')!.onSelect?.()
+    expect(h.createCategory).toHaveBeenCalledWith('s1')
   })
 
   it('offers a non-owner only Copy Server ID and Leave Server', () => {

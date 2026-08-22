@@ -8,6 +8,9 @@ import {
 import {
   createChannel, updateChannel, deleteChannel, getChannelMessages, sendChannelMessage,
 } from '../controllers/channelsController'
+import {
+  createCategory, updateCategory, deleteCategory,
+} from '../controllers/categoriesController'
 import { createInvite, listInvites, revokeInvite } from '../controllers/invitesController'
 
 const router = Router()
@@ -26,6 +29,14 @@ router.delete('/:sid/members/:uid',    removeMember)
 router.post('/:sid/channels',          writeLimit,  createChannel)
 router.patch('/:sid/channels/:cid',    writeLimit,  updateChannel)
 router.delete('/:sid/channels/:cid',   deleteChannel)
+
+// Same class of write as the channel routes above, and the same convention:
+// create/rename are writeLimit'd, DELETE stays unlimited. There is no
+// GET /:sid/categories — getServer already returns them alongside channels,
+// and a second endpoint would be a second source of truth for the sidebar.
+router.post('/:sid/categories',        writeLimit,  createCategory)
+router.patch('/:sid/categories/:cid',  writeLimit,  updateCategory)
+router.delete('/:sid/categories/:cid',              deleteCategory)
 
 router.get('/:sid/channels/:cid/messages',              getChannelMessages)
 router.post('/:sid/channels/:cid/messages', writeLimit, sendChannelMessage)

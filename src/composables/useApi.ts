@@ -158,7 +158,7 @@ export const useApi = () => {
     get<{ servers: WireServer[] }>('/servers')
 
   const getServerDetail = (sid: string) =>
-    get<{ server: WireServer; channels: WireChannel[] }>(`/servers/${sid}`)
+    get<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[] }>(`/servers/${sid}`)
 
   const getChannelMessagesApi = (sid: string, cid: string, before?: string) =>
     get<{ messages: ApiMessage[] }>(
@@ -170,11 +170,38 @@ export const useApi = () => {
       `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds }
     )
 
-  const createChannelApi = (sid: string, name: string, type: 'text' | 'voice') =>
-    post<{ channel: WireChannel }>(`/servers/${sid}/channels`, { name, type })
+  // `category` defaults to null rather than being left off the body: both mean
+  // uncategorised to createChannel (`req.body.category ?? null`), so sending it
+  // explicitly costs nothing and keeps the request self-describing. It must
+  // never be `''` — resolveCategory rejects an empty string with a 400 on
+  // purpose, reading it as a stale/forgotten selection rather than "none".
+  const createChannelApi = (sid: string, name: string, type: 'text' | 'voice', category: string | null = null) =>
+    post<{ channel: WireChannel }>(`/servers/${sid}/channels`, { name, type, category })
 
-  const updateChannelApi = (sid: string, cid: string, body: { name?: string }) =>
+  // Per-field, matching updateChannel server-side: `name` and `category` are
+  // independent, so a channel can be moved between categories without also
+  // being renamed. `category: null` moves it out of every category; a category
+  // id moves it in. As with createChannelApi above, `''` is NOT a spelling of
+  // "none" — resolveCategory 400s it on purpose. A body naming neither field
+  // is a 400 too, so callers must always send at least one.
+  const updateChannelApi = (sid: string, cid: string, body: { name?: string; category?: string | null }) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
+
+  // ── Categories ───────────────────────────────────────────────────────────
+  // Same write/rename/delete class as the channel routes above and the same
+  // response shapes (server/controllers/categoriesController.ts): create and
+  // update both respond `{ category }`, delete responds `{ ok: true }` like
+  // every other DELETE in this file. Routes are mounted in
+  // server/routes/servers.ts — there is deliberately no GET, since
+  // getServerDetail already returns categories alongside channels.
+  const createCategoryApi = (sid: string, name: string) =>
+    post<{ category: WireCategory }>(`/servers/${sid}/categories`, { name })
+
+  const updateCategoryApi = (sid: string, cid: string, body: { name?: string }) =>
+    patch<{ category: WireCategory }>(`/servers/${sid}/categories/${cid}`, body)
+
+  const deleteCategoryApi = (sid: string, cid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/categories/${cid}`)
 
   // deleteChannel (server/controllers/channelsController.ts) responds
   // `{ ok: true }`, matching deleteServerApi/leaveServerApi below — not
@@ -229,12 +256,18 @@ export const useApi = () => {
       full:          boolean
     }>(`/invites/${code}`)
 
-  // joinViaInvite's shape matches WireServer/WireChannel exactly (it calls
-  // shapeServer/shapeChannel directly) and — unlike the preview above — really
-  // does return `joined` at the top level. `joined: false` means "you were
-  // already a member," not failure; the request still resolves 200.
+  // joinViaInvite's shape matches WireServer/WireChannel/WireCategory exactly
+  // (it calls shapeServer/shapeChannel/shapeCategory directly) and — unlike
+  // the preview above — really does return `joined` at the top level.
+  // `joined: false` means "you were already a member," not failure; the
+  // request still resolves 200.
+  //
+  // `categories` is part of the contract, not an extra: this is the same
+  // detail payload getServerDetail returns and the caller folds it in with the
+  // same receiveDetail. Dropping it here left a joining member with a cached
+  // empty category list and a permanently flat sidebar.
   const joinServerInvite = (code: string) =>
-    post<{ server: WireServer; channels: WireChannel[]; joined: boolean }>(`/invites/${code}`)
+    post<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[]; joined: boolean }>(`/invites/${code}`)
 
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>
@@ -273,6 +306,7 @@ export const useApi = () => {
     getVoiceToken,
     createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
     createChannelApi, updateChannelApi, deleteChannelApi,
+    createCategoryApi, updateCategoryApi, deleteCategoryApi,
     deleteServerApi, leaveServerApi,
     createServerInvite, listServerInvites, revokeServerInvite,
     getServerInvite, joinServerInvite,
@@ -355,6 +389,25 @@ export interface WireChannel {
   server:   string
   name:     string
   type:     'text' | 'voice'
+  position: number
+  // shapeChannel guards this with `c.category ? … : null`, so the wire value
+  // is always a string or null — never absent — even for a channel that
+  // predates categories, whose raw DB row has no `category` key at all. The
+  // guard exists because a Mongoose `default` never reaches rows already in
+  // the collection, only ones created or hydrated after the field existed.
+  category: string | null
+}
+
+/**
+ * Exactly `shapeCategory` in server/controllers/serversController.ts:48 — it
+ * lives beside shapeServer/shapeChannel there, not in categoriesController.ts,
+ * so getServer (serversController) and categoriesController don't have to
+ * import each other.
+ */
+export interface WireCategory {
+  id:       string
+  server:   string
+  name:     string
   position: number
 }
 

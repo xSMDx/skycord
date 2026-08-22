@@ -324,6 +324,18 @@ export const shapeChannel = (c: any) => ({
 })
 ```
 
+**The `c.category ? … : null` guard is load-bearing — do not simplify it to `c.category.toString()`.** A Mongoose `default` is applied when a document is *created or hydrated*, never retroactively to rows already stored. I verified this against the live database:
+
+| how the pre-categories row is read | `category` reads as |
+| --- | --- |
+| raw driver | field absent |
+| `Model.findById()` (hydrated) | `null` |
+| `Model.findById().lean()` | **`undefined`** |
+
+`getServer` uses `.lean()`. So for every channel that existed before this plan — which is all of them — `shapeChannel` receives `undefined`, and an unguarded `.toString()` would throw on the very first server anyone opens.
+
+The same trap applies to tests: do not assert `toBeNull()` on a `.lean()` read of a document created before the field existed. Assert falsiness, or read it hydrated.
+
 Adding a field to `shapeChannel` changes every payload that carries a channel — `channel:created`, `channel:updated`, `createServer`, `createChannel`. That is intended; check the existing channel tests still pass and update any that assert on an exact object shape.
 
 - [ ] **Step 7: Accept `category` on channel create and update**

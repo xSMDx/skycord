@@ -13,6 +13,14 @@ export interface IChannel extends Document {
   type:     ChannelType
   /** Order within its type group. Assigned by appending; no reorder UI yet. */
   position: number
+  /**
+   * The category this channel sits under, or null for uncategorised.
+   *
+   * Null is the default precisely so no migration is needed: every channel
+   * that existed before categories reads as uncategorised, which is exactly
+   * what it is.
+   */
+  category: Types.ObjectId | null
   createdAt: Date
   updatedAt: Date
 }
@@ -23,6 +31,7 @@ const ChannelSchema = new Schema<IChannel>(
     name:     { type: String, required: true, maxlength: 100 },
     type:     { type: String, enum: ['text', 'voice'], required: true, default: 'text' },
     position: { type: Number, default: 0 },
+    category: { type: Schema.Types.ObjectId, ref: 'Category', default: null },
   },
   { timestamps: true, versionKey: false }
 )

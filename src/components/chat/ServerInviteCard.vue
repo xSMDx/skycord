@@ -59,7 +59,13 @@ const join = async () => {
     const res = await joinServerInvite(props.code)
     // `joined: false` means "you were already a member" — still success, not
     // an error, so it gets the same "Joined" state as a fresh join.
-    receiveDetail(res.server, res.channels)
+    //
+    // Categories are passed explicitly. receiveDetail's third parameter
+    // defaults to `[]`, and that default writes an authoritative "this server
+    // has no categories" into the cache — indistinguishable, to every later
+    // reader, from a server that genuinely has none. The joining member's
+    // sidebar then renders every channel flat until a page reload.
+    receiveDetail(res.server, res.channels, res.categories)
     state.value = 'joined'
     emit('joined', res.server)
   } catch (e: any) {

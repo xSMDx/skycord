@@ -1,6 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { useServers, serverIconFor } from '../useServers'
-import type { WireServer, WireChannel } from '../useApi'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } from '../useServers'
+import type { WireServer, WireChannel, WireCategory } from '../useApi'
+
+/**
+ * The composable's only I/O. Stubbed rather than reached, so `openServer`'s
+ * fetch-or-don't decision can be asserted on directly — that decision is the
+ * whole of the cache contract and nothing else in this suite exercises it.
+ * `vi.hoisted` because `vi.mock`'s factory is hoisted above the imports and
+ * cannot close over an ordinary const.
+ */
+const api = vi.hoisted(() => ({
+  getMyServers:    vi.fn(),
+  getServerDetail: vi.fn(),
+}))
+vi.mock('../useApi', () => ({ useApi: () => api }))
 
 const wireServer = (id: string, name = id): WireServer => ({
   id, name, icon: null, iconCrop: null, bannerColor: null,
@@ -8,7 +21,29 @@ const wireServer = (id: string, name = id): WireServer => ({
 })
 
 const wireChannel = (id: string, server: string, name: string, type: 'text' | 'voice', position = 0): WireChannel =>
-  ({ id, server, name, type, position })
+  ({ id, server, name, type, position, category: null })
+
+const wireCategory = (id: string, server: string, name: string, position = 0): WireCategory =>
+  ({ id, server, name, position })
+
+/**
+ * `vitest.config.mts` runs this suite under `environment: 'node'`, which has
+ * no `localStorage` global at all — confirmed by running `node -e
+ * "console.log('localStorage' in globalThis)"` in this repo, which prints
+ * `false`. Collapse persistence needs something real to round-trip a write
+ * and a read through, so this stubs the one global it touches: four methods,
+ * not a DOM library, and nothing jsdom or @vue/test-utils would pull in.
+ * Production code still degrades gracefully (see useServers.ts) when this
+ * global is genuinely absent, e.g. a browser with storage disabled.
+ */
+class FakeStorage {
+  private store: Record<string, string> = {}
+  getItem(key: string) { return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null }
+  setItem(key: string, value: string) { this.store[key] = value }
+  removeItem(key: string) { delete this.store[key] }
+  clear() { this.store = {} }
+}
+;(globalThis as any).localStorage = new FakeStorage()
 
 describe('useServers', () => {
   let s: ReturnType<typeof useServers>
@@ -19,10 +54,19 @@ describe('useServers', () => {
     // test starts by clearing it rather than by constructing a fresh instance.
     s.servers.value = []
     s.channelsByServer.value = {}
+    s.categoriesByServer.value = {}
     s.activeServerId.value = null
     s.activeChannelId.value = null
     s.unreadChannels.value = {}
     s.lastChannelIn.value = {}
+    // Plan 3a shipped with lastChannelIn missing from this reset — the suite
+    // passed anyway only because of declaration order, and broke the moment
+    // that changed. collapsedCategories is new module-level state of exactly
+    // the same shape; it goes in the reset from day one.
+    s.collapsedCategories.value = {}
+    ;(globalThis.localStorage as any).clear()
+    api.getMyServers.mockReset()
+    api.getServerDetail.mockReset()
   })
 
   it('maps a wire server into the renderable client shape', () => {
@@ -44,16 +88,13 @@ describe('useServers', () => {
     expect(s.servers.value[0].name).toBe('New')
   })
 
-  it('splits channels by type and sorts them by position', () => {
-    s.receiveDetail(wireServer('s1'), [
-      wireChannel('c2', 's1', 'off-topic', 'text', 1),
-      wireChannel('c1', 's1', 'general',   'text', 0),
-      wireChannel('v1', 's1', 'Lounge',    'voice', 0),
-    ])
-    s.activeServerId.value = 's1'
-    expect(s.textChannels.value.map(c => c.name)).toEqual(['general', 'off-topic'])
-    expect(s.voiceChannels.value.map(c => c.name)).toEqual(['Lounge'])
-  })
+  // The old 'splits channels by type and sorts them by position' test went
+  // with `textChannels`/`voiceChannels` themselves. Nothing was lost: the
+  // type split and the position ordering it asserted are both still pinned,
+  // by 'orders text channels before voice within a group, each by position'
+  // and by 'sorts a dangling-category channel by type and position among
+  // genuinely uncategorised channels' further down — against
+  // `groupedChannels`, which is what actually renders.
 
   it('lands on the first text channel, never a voice one', () => {
     s.receiveDetail(wireServer('s1'), [
@@ -160,6 +201,302 @@ describe('useServers', () => {
     s.markUnread('c1')
     s.openChannel('c1')
     expect(s.unreadChannels.value['c1']).toBeUndefined()
+  })
+
+  // ── categories ─────────────────────────────────────────────────────────
+
+  it('groupedChannels puts uncategorised channels in a leading group with no category', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    expect(groups[0].category).toBeNull()
+    expect(groups[0].text.map(c => c.id)).toEqual(['c1'])
+  })
+
+  it('groups channels under their category, with categories in position order', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('c1', 's1', 'general', 'text', 0),
+        wireChannel('c2', 's1', 'rules',   'text', 0),
+      ],
+      [
+        wireCategory('catB', 's1', 'Info', 1),
+        wireCategory('catA', 's1', 'Chat', 0),
+      ],
+    )
+    s.channelsByServer.value['s1'].find(c => c.id === 'c1')!.category = 'catA'
+    s.channelsByServer.value['s1'].find(c => c.id === 'c2')!.category = 'catB'
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    // Uncategorised leads, then categories in position order (catA:0 before catB:1)
+    // regardless of the order they were fetched/inserted in.
+    expect(groups.map(g => g.category?.id ?? null)).toEqual([null, 'catA', 'catB'])
+    expect(groups[1].text.map(c => c.id)).toEqual(['c1'])
+    expect(groups[2].text.map(c => c.id)).toEqual(['c2'])
+  })
+
+  it('orders text channels before voice within a group, each by position', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('v2', 's1', 'Voice B', 'voice', 1),
+        wireChannel('v1', 's1', 'Voice A', 'voice', 0),
+        wireChannel('t2', 's1', 'text-b',  'text',  1),
+        wireChannel('t1', 's1', 'text-a',  'text',  0),
+      ],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    s.channelsByServer.value['s1'].forEach(c => { c.category = 'cat1' })
+    s.activeServerId.value = 's1'
+    const group = s.groupedChannels.value[1]
+    expect(group.text.map(c => c.id)).toEqual(['t1', 't2'])
+    expect(group.voice.map(c => c.id)).toEqual(['v1', 'v2'])
+  })
+
+  it('still produces a group for a category with no channels', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Empty', 0)])
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    expect(groups).toHaveLength(2)
+    expect(groups[1].category?.id).toBe('cat1')
+    expect(groups[1].text).toEqual([])
+    expect(groups[1].voice).toEqual([])
+  })
+
+  it('treats a channel with no category field the same as an explicit null', () => {
+    // Simulates a channel that predates the categories feature. shapeChannel
+    // on the server (serversController.ts) already normalises this to null
+    // before it reaches the wire, but the client's own grouping must not lean
+    // on that guarantee holding forever — hence no `=== null` anywhere in
+    // groupedChannels' bucketing.
+    const legacy = wireChannel('c1', 's1', 'general', 'text', 0)
+    delete (legacy as any).category
+    s.receiveDetail(wireServer('s1'), [legacy])
+    s.activeServerId.value = 's1'
+    expect(s.groupedChannels.value[0].text.map(c => c.id)).toEqual(['c1'])
+  })
+
+  it('routes a channel with a dangling category reference into the uncategorised group instead of dropping it', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('c1', 's1', 'general', 'text', 0),
+        wireChannel('c2', 's1', 'orphan',  'text', 1),
+      ],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    // c2 claims a category id this server never sent — e.g. a channel:created
+    // for a category the client has not fetched yet, or one that raced a
+    // category:deleted. It must land in the uncategorised group, not vanish.
+    s.channelsByServer.value['s1'].find(c => c.id === 'c2')!.category = 'ghost-category'
+    s.activeServerId.value = 's1'
+    const groups = s.groupedChannels.value
+    expect(groups[0].category).toBeNull()
+    expect(groups[0].text.map(c => c.id)).toEqual(['c1', 'c2'])
+    // And it must not silently join the real category's bucket either.
+    expect(groups[1].text.map(c => c.id)).toEqual([])
+  })
+
+  it('sorts a dangling-category channel by type and position among genuinely uncategorised channels', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('t2', 's1', 'text-b',  'text',  1),
+        wireChannel('t1', 's1', 'text-a',  'text',  0),
+        wireChannel('v1', 's1', 'Voice A', 'voice', 0),
+      ],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    // t2 points at a category id that does not exist in categoriesByServer.
+    s.channelsByServer.value['s1'].find(c => c.id === 't2')!.category = 'ghost-category'
+    s.activeServerId.value = 's1'
+    const uncategorised = s.groupedChannels.value[0]
+    expect(uncategorised.text.map(c => c.id)).toEqual(['t1', 't2'])
+    expect(uncategorised.voice.map(c => c.id)).toEqual(['v1'])
+  })
+
+  it('removeCategory reparents its channels to uncategorised rather than dropping them', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [wireChannel('c1', 's1', 'general', 'text', 0)],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    s.channelsByServer.value['s1'][0].category = 'cat1'
+    s.removeCategory('s1', 'cat1')
+    expect(s.categoriesByServer.value['s1']).toHaveLength(0)
+    // The channel survives the category's deletion — reparented, not dropped.
+    expect(s.channelsByServer.value['s1']).toHaveLength(1)
+    expect(s.channelsByServer.value['s1'][0].category).toBeNull()
+  })
+
+  it('upsertCategory adds a new category and updates an existing one in place', () => {
+    // The explicit `[]` stands for "detail fetched, server has no categories
+    // yet" — which is what every production caller of receiveDetail now says
+    // when it means that. Omitting the argument means something different
+    // (nothing known about categories) and leaves the bucket absent, which is
+    // the neighbouring test's case, not this one's.
+    s.receiveDetail(wireServer('s1'), [], [])
+    s.upsertCategory(wireCategory('cat1', 's1', 'Old', 0))
+    expect(s.categoriesByServer.value['s1']).toHaveLength(1)
+    s.upsertCategory(wireCategory('cat1', 's1', 'New', 0))
+    expect(s.categoriesByServer.value['s1']).toHaveLength(1)
+    expect(s.categoriesByServer.value['s1'][0].name).toBe('New')
+  })
+
+  it('ignores a category for a server whose detail has not been fetched', () => {
+    s.upsertCategory(wireCategory('cat9', 'unknown', 'ghost', 0))
+    expect(s.categoriesByServer.value['unknown']).toBeUndefined()
+  })
+
+  it('toggleCategory flips collapsed state and collapsedCategories persists across a simulated reload', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Group', 0)])
+    expect(s.collapsedCategories.value['s1:cat1']).toBeFalsy()
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(true)
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(false)
+    s.toggleCategory('s1', 'cat1')
+
+    // Simulate a reload: forget the in-memory state, then re-read from the
+    // exact storage key toggleCategory just wrote to.
+    s.collapsedCategories.value = {}
+    const persisted = JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')
+    expect(persisted['s1:cat1']).toBe(true)
+  })
+
+  it('collapsing a category the user is currently viewing a channel in does not change activeChannelId', () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [wireChannel('c1', 's1', 'general', 'text', 0)],
+      [wireCategory('cat1', 's1', 'Group', 0)],
+    )
+    s.channelsByServer.value['s1'][0].category = 'cat1'
+    s.activeServerId.value = 's1'
+    s.openChannel('c1')
+    s.toggleCategory('s1', 'cat1')
+    expect(s.activeChannelId.value).toBe('c1')
+  })
+
+  it('resetServers clears collapsedCategories, and the clear survives a re-read from storage', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Group', 0)])
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(true)
+
+    s.resetServers()
+
+    expect(s.collapsedCategories.value).toEqual({})
+    // Not just the in-memory ref — the localStorage entry itself must be gone,
+    // otherwise the next account to log in on this device would read it right
+    // back out via readCollapsedCategories on module load.
+    const persisted = JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')
+    expect(persisted).toEqual({})
+  })
+
+  // A category id is never reissued, so a collapse key left behind after the
+  // category is gone can never be reached again — it just grows the stored
+  // blob by one entry per category anyone ever deletes. Observed live: after
+  // collapsing one category and deleting a different one, storage held two.
+  it("removeCategory drops the category's collapse key, in memory and in storage", () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Group', 0)])
+    s.toggleCategory('s1', 'cat1')
+    expect(s.collapsedCategories.value['s1:cat1']).toBe(true)
+
+    s.removeCategory('s1', 'cat1')
+
+    expect(s.collapsedCategories.value['s1:cat1']).toBeUndefined()
+    expect(JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')).toEqual({})
+  })
+
+  it('removeServer drops the collapse keys of every category it had', () => {
+    s.receiveDetail(wireServer('s1'), [], [
+      wireCategory('cat1', 's1', 'One', 0),
+      wireCategory('cat2', 's1', 'Two', 1),
+    ])
+    s.receiveDetail(wireServer('s2'), [], [wireCategory('cat3', 's2', 'Other', 0)])
+    s.toggleCategory('s1', 'cat1')
+    s.toggleCategory('s1', 'cat2')
+    s.toggleCategory('s2', 'cat3')
+
+    s.removeServer('s1')
+
+    // Only s1 in the collapse blob is gone; the other server keeps its fold.
+    expect(s.collapsedCategories.value['s1:cat1']).toBeUndefined()
+    expect(s.collapsedCategories.value['s1:cat2']).toBeUndefined()
+    expect(s.collapsedCategories.value['s2:cat3']).toBe(true)
+    expect(JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')).toEqual({ 's2:cat3': true })
+  })
+
+  // ── the invite-join staleness trap ─────────────────────────────────────
+  // A member who joined by invite used to land in a server whose channels
+  // were cached and whose categories were cached as an empty list, so the
+  // sidebar rendered every channel flat, with no headers, and no rail click
+  // could ever repair it — only a page reload. Three things now stand
+  // between that and the user; these pin the two on this side of the wire.
+
+  it('receiveDetail leaves the categories bucket absent when it is given none', () => {
+    // Absent, NOT `[]`. An empty array is a claim that the server has no
+    // categories, and it is precisely that claim — indistinguishable from the
+    // truth — that made the stale sidebar unrecoverable.
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    expect(s.channelsByServer.value['s1']).toHaveLength(1)
+    expect(s.categoriesByServer.value['s1']).toBeUndefined()
+  })
+
+  it('receiveDetail writes an empty bucket when a caller explicitly has none to give', () => {
+    // createServer's 201 knows the server is too new to have any. That is a
+    // fact, and it must be recorded as one, or every brand-new server would
+    // cost a pointless extra GET on entry.
+    s.receiveDetail(wireServer('s1'), [], [])
+    expect(s.categoriesByServer.value['s1']).toEqual([])
+  })
+
+  it('receiveDetail does not wipe known categories when a later payload omits them', () => {
+    s.receiveDetail(wireServer('s1'), [], [wireCategory('cat1', 's1', 'Chat', 0)])
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    expect(s.categoriesByServer.value['s1'].map(c => c.id)).toEqual(['cat1'])
+  })
+
+  it('openServer refetches when channels are cached but categories were never received', async () => {
+    api.getServerDetail.mockResolvedValue({
+      server:     wireServer('s1'),
+      channels:   [wireChannel('c1', 's1', 'general', 'text', 0)],
+      categories: [wireCategory('cat1', 's1', 'Chat', 0)],
+    })
+    // Exactly what an invite-join payload with no categories used to leave
+    // behind: a populated channel bucket, no category bucket.
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+
+    await s.openServer('s1')
+
+    expect(api.getServerDetail).toHaveBeenCalledWith('s1')
+    expect(s.categoriesByServer.value['s1'].map(c => c.id)).toEqual(['cat1'])
+    expect(s.groupedChannels.value.map(g => g.category?.id ?? null)).toEqual([null, 'cat1'])
+  })
+
+  it('openServer makes no request when both buckets are already populated', async () => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [wireChannel('c1', 's1', 'general', 'text', 0)],
+      [wireCategory('cat1', 's1', 'Chat', 0)],
+    )
+    await s.openServer('s1')
+    expect(api.getServerDetail).not.toHaveBeenCalled()
+    expect(s.activeChannelId.value).toBe('c1')
+  })
+
+  it('openServer makes no request for a server known to have no categories', async () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)], [])
+    await s.openServer('s1')
+    expect(api.getServerDetail).not.toHaveBeenCalled()
+  })
+
+  it('openServer fetches a server it has never seen', async () => {
+    api.getServerDetail.mockResolvedValue({
+      server: wireServer('s9'), channels: [], categories: [],
+    })
+    await s.openServer('s9')
+    expect(api.getServerDetail).toHaveBeenCalledWith('s9')
   })
 })
 

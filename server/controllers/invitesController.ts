@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Server, MAX_SERVER_MEMBERS } from '../models/Server'
 import { Channel } from '../models/Channel'
+import { Category } from '../models/Category'
 import { ServerInvite } from '../models/ServerInvite'
 import { User } from '../models/User'
 import { generateInviteCode } from '../utils/inviteCode'
-import { loadServer, requireOwner, shapeServer, shapeChannel, emitToServer } from './serversController'
+import { loadServer, requireOwner, shapeServer, shapeChannel, shapeCategory, emitToServer } from './serversController'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 
@@ -178,6 +179,16 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
     }
 
     const channels = await Channel.find({ server: server._id }).sort({ type: 1, position: 1 }).lean()
+    // Fetched and sorted exactly as getServer does, because this response is
+    // the ONLY detail payload a joining member gets: the client folds it in
+    // with the same `receiveDetail` that consumes GET /servers/:sid, and then
+    // caches it. Omitting categories here does not merely delay them — it
+    // writes an authoritative empty list the client has no reason to ever
+    // refetch, so every channel renders flat, with no headers, until a full
+    // page reload. (Client-side, `openServer` now also refuses to treat a
+    // categories-less cache as populated; both halves of that belt-and-braces
+    // are deliberate.)
+    const categories = await Category.find({ server: server._id }).sort({ position: 1 }).lean()
 
     // A member who joins while already connected must start RECEIVING this
     // server's channels immediately, not only after a reconnect — their
@@ -190,6 +201,11 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
       if (rooms.length) getIO()?.in(`user:${userId}`).socketsJoin(rooms)
     }
 
-    res.json({ server: shapeServer(server), channels: channels.map(shapeChannel), joined })
+    res.json({
+      server:     shapeServer(server),
+      channels:   channels.map(shapeChannel),
+      categories: categories.map(shapeCategory),
+      joined,
+    })
   } catch (err) { next(err) }
 }
