@@ -145,18 +145,18 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
     // this channel did not exist then. One socketsJoin call against the union
     // of every member's personal room, rather than an awaited fetchSockets()
     // round trip per member followed by a join loop.
+
+    // Remember which server it belongs to before anyone can be in it: the
+    // map is filled at connect time from the channels that existed then, and
+    // this one did not. Without it the first call:state for this channel
+    // would arrive with no serverId and the rail could not attribute it.
+    rememberChannelServer(channel._id.toString(), server._id.toString())
     const io = getIO()
     // Guarded on a non-empty member list: Socket.IO treats io.in([]) as "every
     // connected socket", not "nobody" — an empty array here would silently
     // join every user in the process to this channel's room. Unreachable
     // today (the owner is always a member), but structurally safe rather
     // than incidentally safe.
-    // Remember which server it belongs to before anyone can be in it: the
-    // map is filled at connect time from the channels that existed then, and
-    // this one did not. Without it the first call:state for this channel
-    // would arrive with no serverId and the rail could not attribute it.
-    rememberChannelServer(channel._id.toString(), server._id.toString())
-
     if (io && server.members.length) {
       const room = `chan:${channel._id.toString()}`
       io.in(server.members.map(m => `user:${m.toString()}`)).socketsJoin(room)

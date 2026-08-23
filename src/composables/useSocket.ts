@@ -57,6 +57,46 @@ export const activeCalls = ref<Record<string, string[]>>({})
  */
 export const voiceRoomServers = ref<Record<string, string>>({})
 
+/**
+ * Forget a voice room outright — occupancy and attribution together.
+ *
+ * Deleting an occupied voice channel is the one case the `call:state` stream
+ * cannot close by itself. The server empties `chan:<id>` as part of the
+ * delete, so when the last occupant leaves afterwards, the "room is now empty"
+ * broadcast is addressed to a room nobody is in and reaches no client.
+ *
+ * That used to be harmless: `voiceActivityByServer` could not name a server
+ * for a channel that had left `channelsByServer`, so a stale `activeCalls`
+ * entry was dropped on the floor. The attribution map answers that question
+ * from the wire now, which removes the accidental self-heal — a stale entry
+ * keeps the rail badge lit and the hover preview populated for the rest of
+ * the session, for every member who was online when the channel was deleted.
+ */
+export const forgetVoiceRoom = (channelId: string): void => {
+  const room = `voice:${channelId}`
+  if (room in activeCalls.value) {
+    const next = { ...activeCalls.value }; delete next[room]; activeCalls.value = next
+  }
+  if (room in voiceRoomServers.value) {
+    const next = { ...voiceRoomServers.value }; delete next[room]; voiceRoomServers.value = next
+  }
+}
+
+/**
+ * Drop every call this session knew about.
+ *
+ * Logging out swaps the shell for the auth page without a page reload, so
+ * anything left in a module ref is inherited by whoever logs in next —
+ * `resetServers` and `resetPresenceMap` are called at the same seam and say
+ * exactly this. These two were missed there because until the rail badge
+ * existed, no surface rendered a call the viewer was not a participant in, so
+ * a leaked entry had nowhere to show up.
+ */
+export const resetCalls = (): void => {
+  activeCalls.value     = {}
+  voiceRoomServers.value = {}
+}
+
 let _activeDMPartnerId: string | null = null
 export const setActiveDMPartner = (id: string | null) => { _activeDMPartnerId = id }
 

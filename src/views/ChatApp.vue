@@ -21,7 +21,7 @@ import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireCh
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId } from '@/composables/useSocket'
+import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
 import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
@@ -1744,6 +1744,11 @@ const setupSocket = () => {
     // must not be the thing that collapses it: you're still in the call.
     const wasViewingVoice = viewedVoiceId.value
     removeChannel(p.serverId, p.channelId)
+    // Occupancy for a channel that no longer exists can never be closed by the
+    // server: it empties chan:<id> as part of the delete, so the "room is
+    // empty" broadcast that would normally follow the last occupant out is
+    // addressed to nobody. Drop it here or the rail badge stays lit forever.
+    forgetVoiceRoom(p.channelId)
     // removeChannel clears activeChannelId when the deleted channel was the one
     // on screen. Land somewhere real rather than on an empty pane.
     // activeServerId isn't cleared on navigating away to a DM or Friends, so
@@ -2741,6 +2746,10 @@ onBeforeUnmount(() => {
   // still show the previous account's servers in the rail, and clicking one
   // would find its channels already cached and skip the fetch entirely.
   resetServers()
+  // Same reason as resetServers directly above: the shell is swapped without a
+  // page reload, so a call this account could see must not be inherited by the
+  // next one to log in on this device.
+  resetCalls()
   // Same reason: a second account on this device must not inherit the first
   // one's status dots while its own presence events are still arriving.
   resetPresenceMap()
@@ -3053,10 +3062,11 @@ onBeforeUnmount(() => {
         -->
         <div v-for="srv in servers" :key="srv.id"
           class="ri" :class="{ active: view==='server' && activeServerId===srv.id }"
-          :aria-label="srv.name"
+          :aria-label="voiceActivityByServer[srv.id] ? srv.name + ' — someone is in voice' : srv.name"
           v-tip="voiceActivityByServer[srv.id] ? '' : srv.name"
           @mouseenter="onRailHover($event, srv.id)"
           @mouseleave="closeRailPreview"
+          @pointerdown="closeRailPreview"
           @click.stop="openServer(srv)">
           <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
@@ -3709,11 +3719,15 @@ onBeforeUnmount(() => {
             <input type="text" placeholder="Search members…"/>
           </div>
           <div class="mp-list">
+            <!-- Wrapped for the same reason the Offline block below is: a section
+                 header with nothing under it is noise, and a server where everyone
+                 happens to be offline should not announce "Online — 0". -->
+            <template v-if="activeMembers.online.length">
             <div class="mp-section-label">Online — {{ activeMembers.online.length }}</div>
             <div v-for="m in activeMembers.online" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
-                <Avatar :src="m.avatar" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
+                <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
                 <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
               </div>
               <div class="mp-info">
@@ -3722,12 +3736,14 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
+            </template>
+
             <template v-if="activeMembers.offline.length">
               <div class="mp-section-label">Offline — {{ activeMembers.offline.length }}</div>
               <div v-for="m in activeMembers.offline" :key="m.id" class="mp-member mp-offline" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                    @contextmenu="openUserMenu($event, m)">
                 <div class="mp-av">
-                  <Avatar :src="m.avatar" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
+                  <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
                   <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
                 </div>
                 <div class="mp-info">
@@ -4466,7 +4482,6 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg-panel)}
 .mp-info{flex:1;min-width:0}
 .mp-name{display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mp-status{display:block;font-size:11px}
 
 /* Emoji float */
 .emoji-float{position:fixed;bottom:72px;right:20px;z-index:500;animation:pop-up .15s cubic-bezier(.4,0,.2,1)}
