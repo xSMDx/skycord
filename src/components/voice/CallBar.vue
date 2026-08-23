@@ -20,9 +20,15 @@ import { ownTileMenu, participantMenu, calleeMenu } from '@/composables/contextM
 //     Starting a call shows YOUR tile immediately; the "connecting" state lives
 //     only in the bottom-left Voice panel.
 //   • ongoing (not joined)           → who's in the call + a Join button.
+//
+// A voice CHANNEL is the third kind. It reaches this component only once you're
+// in it (ChatApp only calls a channel "the call in view" when you're connected
+// to one in the open server), so the ongoing/not-joined half is unreachable for
+// a channel today — but the labels below still branch for it rather than
+// calling a room of people "a call" if that ever changes.
 const props = defineProps<{
   convId: string
-  kind: 'dm' | 'group'
+  kind: 'dm' | 'group' | 'channel'
   name: string
   // Server-presence participants resolved to display info (incl. you, if joined).
   participants: { id: string; name: string; avatar: string; local: boolean }[]
@@ -78,6 +84,13 @@ const showOngoing    = computed(() => callActive.value && !inCall.value && !prop
 const visible        = computed(() => inCall.value || showOngoing.value)
 
 const others = computed(() => props.participants.filter(p => !p.local))
+// "in a call" is a DM/group phrase — you are being called. Nobody calls a voice
+// channel; people are simply in it.
+const ongoingLabel = computed(() => {
+  const n = others.value.length
+  if (props.kind === 'channel') return n === 1 ? `${others.value[0].name} is in voice` : `${n} people in voice`
+  return n === 1 ? `${others.value[0].name} is in a call` : `${n} people in a call`
+})
 const initial = (n: string) => (n || '?').charAt(0).toUpperCase()
 // id → avatar, so joined-mode tiles (live LiveKit participants don't carry
 // avatars) can show real avatars from server presence.
@@ -319,6 +332,12 @@ const RING_FOR_MS = 40_000
  * friend's socket blip makes the app decide they never answered, adding a
  * phantom "ringing…" tile and starting the dial tone at a person you are
  * mid-sentence with. The room is the authority on who is in the call.
+ *
+ * DM-only, and that is the real branch for the other two kinds rather than an
+ * oversight: a group call rings through the incoming-call modal, and a voice
+ * channel rings nobody at all — you walk into an empty room and wait, which is
+ * the whole difference between a channel and a call. Dialling either would
+ * start a tone with no callee for it to be aimed at.
  */
 const dialing   = computed(() =>
   joinedHere.value && props.kind === 'dm' && !voice.participants.some(p => !p.local))
@@ -434,11 +453,15 @@ onBeforeUnmount(() => {
           <span class="cb-name">{{ p.name }}</span>
         </div>
       </div>
-      <div class="cb-ongoing-label">
-        {{ others.length === 1 ? `${others[0].name} is in a call` : `${others.length} people in a call` }}
-      </div>
+      <div class="cb-ongoing-label">{{ ongoingLabel }}</div>
       <div class="cb-join-row">
-        <button class="cb-join" @click="join"><Phone :size="18" :stroke-width="2.25" /> Join Call</button>
+        <button class="cb-join" @click="join">
+          <Phone :size="18" :stroke-width="2.25" /> {{ kind === 'channel' ? 'Join Voice' : 'Join Call' }}
+        </button>
+        <!-- Dismissible only for a DM, and only a DM. A group call and a voice
+             channel are both places that stay open with or without you — there
+             is no ring to silence and nothing that would ever un-dismiss, so a
+             dismiss button there just hides a room that is still there. -->
         <button v-if="kind === 'dm'" class="cb-dismiss" v-tip="'Dismiss'" @click="emit('dismiss')"><X :size="18" :stroke-width="2.25" /></button>
       </div>
     </template>

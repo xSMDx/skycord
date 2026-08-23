@@ -339,9 +339,51 @@ const membersOpen   = ref(false)
 const { muted: micOff, deafened: deafOff, toggleMute: onToggleMute, toggleDeafen: onToggleDeafen } = useSelfAudio()
 
 // ── Voice call (header Phone button + presence) ──
-const currentCall = computed<{ id: string; kind: 'dm' | 'group'; name: string } | null>(() => {
+/**
+ * The voice CHANNEL the live call belongs to, resolved from the loaded channel
+ * lists rather than from `voice.activeKind`.
+ *
+ * Why not the kind: during the join window `activeKind` is still null (useVoice
+ * only stamps it on success) while `connectingConvId` is already set, so a
+ * kind-based test can't recognise a channel until the call has landed — and the
+ * call surface needs to exist from the first click, not a second later. Looking
+ * the id up in `channelsByServer` answers "is this a voice channel, and whose
+ * server is it?" in one step, for both phases of the join.
+ */
+const liveVoiceChannel = computed<Channel | null>(() => {
+  const id = voice.activeConvId ?? voice.connectingConvId
+  if (!id) return null
+  for (const list of Object.values(channelsByServer.value)) {
+    const ch = list.find(c => c.id === id && c.type === 'voice')
+    if (ch) return ch
+  }
+  return null
+})
+
+/**
+ * What the Voice Connected panel calls this channel.
+ *
+ * That panel names the CONVERSATION, and for a channel the name alone ("General")
+ * is ambiguous — every server has one. Discord answers this the same way, with
+ * the channel and its server on one line, so the label carries both.
+ */
+const voiceChannelLabel = (ch: Channel) => {
+  const srv = servers.value.find(s => s.id === ch.serverId)
+  return srv ? `${ch.name} / ${srv.name}` : ch.name
+}
+
+const currentCall = computed<{ id: string; kind: 'dm' | 'group' | 'channel'; name: string } | null>(() => {
   if (view.value === 'dm'    && activeDM.value)    return { id: activeDM.value.id,    kind: 'dm',    name: activeDM.value.name }
   if (view.value === 'group' && activeGroup.value) return { id: activeGroup.value.id, kind: 'group', name: groupDisplayName(activeGroup.value) }
+  // In a server, the call "in view" is the voice channel you are IN — not the
+  // text channel you are reading, which has no call of its own. Scoped to the
+  // open server so a call in another server doesn't plant a call bar over an
+  // unrelated conversation, and to a call you have actually joined: an ongoing
+  // channel call you haven't joined belongs to the sidebar's occupant list,
+  // which names it, rather than to a banner that couldn't say which channel.
+  const vc = liveVoiceChannel.value
+  if (view.value === 'server' && vc && vc.serverId === activeServerId.value)
+    return { id: vc.id, kind: 'channel', name: voiceChannelLabel(vc) }
   return null
 })
 const callActiveHere = computed(() => !!currentCall.value && voice.connected && voice.activeConvId === currentCall.value.id)
@@ -356,6 +398,17 @@ const callActiveHere = computed(() => !!currentCall.value && voice.connected && 
 const returnToCall = () => {
   const id = voice.activeConvId || voice.connectingConvId
   if (!id) return
+  // A voice channel's call surface lives inside its server, so "back to call"
+  // means "go to that server". If you are already in it there is nothing to do
+  // — and deliberately so: navigating would have to pick a text channel, and
+  // the text channel you are reading is not this button's business.
+  const vc = liveVoiceChannel.value
+  if (vc) {
+    if (activeServerId.value === vc.serverId && view.value === 'server') return
+    const srv = servers.value.find(s => s.id === vc.serverId)
+    if (srv) void openServer(srv)
+    return
+  }
   if (voice.activeKind === 'group') {
     const g = groupsData.value.find(x => x.id === id)
     if (g) { openGroup(g); return }
@@ -375,6 +428,98 @@ const convHasCall = (kind: 'dm' | 'group', id: string) => {
   const room = voiceRoomName(kind, id, authUser.value?.id || '')
   return (activeCalls.value[room]?.length ?? 0) > 0
 }
+// ── Who is in a voice channel ───────────────────────────────────────────────
+/**
+ * Names and faces for the ids `call:state` reports.
+ *
+ * The server sends ids only, and there is no member-list API yet
+ * (`members` below is still a stub), so this is assembled from what the client
+ * already holds: you, your friends, the members of any group DM you're in, and
+ * the authors of messages already cached for this server's text channels — the
+ * last of which is what covers the ordinary case of a fellow server member who
+ * isn't your friend but has said something you've loaded.
+ *
+ * Anyone who resolves to none of those still gets a row, with the generated
+ * default avatar. Dropping them would make a busy channel look empty, which is
+ * a worse lie than an unnamed face.
+ */
+type VoiceOccupant = { id: string; name: string; avatar: string }
+
+/** authorId → display info, from the message history cached for the open
+ *  server. Built once per change rather than scanned per occupant. */
+const serverAuthorDirectory = computed<Record<string, VoiceOccupant>>(() => {
+  const out: Record<string, VoiceOccupant> = {}
+  const sid = activeServerId.value
+  if (!sid) return out
+  for (const ch of channelsByServer.value[sid] ?? []) {
+    if (ch.type !== 'text') continue
+    for (const m of getChannelMessages(ch.id)) {
+      // System messages carry the actor's name in the body, not a real author.
+      if (!m.authorId || m.kind === 'system') continue
+      out[m.authorId] = { id: m.authorId, name: m.author, avatar: m.avatar || avatarFor(m.author) }
+    }
+  }
+  return out
+})
+
+const resolveVoiceUser = (id: string): VoiceOccupant => {
+  if (id === authUser.value?.id)
+    return { id, name: authUser.value?.displayName || authUser.value?.username || 'You', avatar: myAvatar.value }
+  const f = apiFriends.value.find(x => x.id === id)
+  if (f) return { id, name: f.displayName || f.username, avatar: avatarFor(f.username, f.avatar) }
+  for (const g of groupsData.value) {
+    const m = g.members?.find(mm => mm.id === id)
+    if (m) return { id, name: m.displayName || m.username, avatar: m.avatar || avatarFor(m.username) }
+  }
+  const cached = serverAuthorDirectory.value[id]
+  if (cached) return cached
+  // Unresolvable — still present, still drawn. Seeded on the id so the same
+  // stranger keeps the same face for as long as they're in the channel.
+  return { id, name: 'Unknown', avatar: avatarFor(id) }
+}
+
+/**
+ * Occupants per voice room, keyed by the room name the server broadcasts.
+ *
+ * Your own row is added the moment you click, rather than waiting for the
+ * broadcast to come back — a join that shows nothing for a beat reads as a
+ * click that missed.
+ */
+const voiceRoomOccupants = computed<Record<string, VoiceOccupant[]>>(() => {
+  const out: Record<string, VoiceOccupant[]> = {}
+  for (const [room, ids] of Object.entries(activeCalls.value)) {
+    if (!room.startsWith('voice:')) continue   // dm:/group: rooms are the CallBar's business
+    out[room] = ids.map(resolveVoiceUser)
+  }
+  const myId = authUser.value?.id || ''
+  const vc   = liveVoiceChannel.value
+  if (myId && vc) {
+    const room = voiceRoomName('channel', vc.id, myId)
+    const list = out[room] ? [...out[room]] : []
+    if (!list.some(o => o.id === myId)) list.push(resolveVoiceUser(myId))
+    out[room] = list
+  }
+  return out
+})
+
+/** Sidebar helper: who is sitting in this voice channel right now. */
+const voiceOccupants = (channelId: string): VoiceOccupant[] =>
+  voiceRoomOccupants.value[voiceRoomName('channel', channelId, authUser.value?.id || '')] ?? []
+
+/**
+ * Join a voice channel. Instant on desktop — no confirmation, same as every
+ * other client — and reusing the one connect path DMs and groups already use.
+ *
+ * It deliberately does NOT touch `activeChannelId`: voice and text are
+ * independent, and people sit in voice while reading somewhere else. Clicking
+ * the channel you are already in is a no-op that useVoice's own `connect()`
+ * already absorbs (it returns early when the target conv is the live or
+ * in-flight one), so there is no second guard here.
+ */
+const joinVoiceChannel = (ch: Channel) => {
+  vConnect(ch.id, 'channel', voiceChannelLabel(ch)).catch(() => {})
+}
+
 // Presence userIds for the open conversation's call, resolved to display info
 // (name + avatar) so the CallBar can show who's in the call before you join.
 const callParticipantsHere = computed(() => {
@@ -385,6 +530,10 @@ const callParticipantsHere = computed(() => {
   const ids  = activeCalls.value[room] ?? []
   return ids.map(id => {
     if (id === myId) return { id, name: 'You', avatar: myAvatar.value, local: true }
+    if (c.kind === 'channel') {
+      const u = resolveVoiceUser(id)
+      return { id, name: u.name, avatar: u.avatar, local: false }
+    }
     if (c.kind === 'group') {
       const m = activeGroup.value?.members.find(mm => mm.id === id)
       return { id, name: m ? (m.displayName || m.username) : 'Member', avatar: m?.avatar || avatarFor(m?.username || ''), local: false }
@@ -1002,9 +1151,11 @@ const openGroup = async (group: Group) => {
 }
 
 /**
- * Open a text channel from the sidebar. Voice channels render but stay inert —
- * joining one is 3b, and a click that silently switched the message pane to a
- * voice channel would be worse than a click that does nothing.
+ * Open a text channel from the sidebar. Voice channels go through
+ * `joinVoiceChannel` instead — they are a place you talk, not a place the
+ * message pane can point at — so this stays text-only and the guard below
+ * keeps a voice channel harmless if one ever reaches it (the create-channel
+ * flow calls straight in here with whatever was just made).
  */
 const selectChannel = async (ch: Channel) => {
   if (ch.type !== 'text') return
@@ -2674,17 +2825,33 @@ onBeforeUnmount(() => {
                 <Ellipsis :size="14" :stroke-width="1.5"/>
               </button>
             </div>
-            <!-- Joining is inert until 3b adds voice-channel join — but the row
-                 still owns its context menu, so rename/delete work on a voice
-                 channel exactly like a text one. -->
-            <div v-for="ch in group.voice" :key="ch.id" class="ch-item voice"
-              @contextmenu.prevent.stop="openChannelMenu($event, ch)">
-              <Volume2 class="ch-icon" :size="15" :stroke-width="1.5"/>
-              <span class="ch-name">{{ ch.name }}</span>
-              <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
-                <Ellipsis :size="14" :stroke-width="1.5"/>
+            <!-- Clicking connects straight away — no confirmation, the way every
+                 other client does it. `.active` here means "you are in this
+                 voice channel", NOT "this is the channel you are reading":
+                 voice and text are independent and joining never moves
+                 `activeChannelId`. Occupants render as sibling rows rather than
+                 children so the indent is the only thing nesting them — a
+                 wrapper would have to re-create the row's hover and focus
+                 behaviour to stay clickable. -->
+            <template v-for="ch in group.voice" :key="ch.id">
+              <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id }"
+                role="button" tabindex="0"
+                @click="joinVoiceChannel(ch)"
+                @keydown.self.enter.prevent="joinVoiceChannel(ch)"
+                @keydown.self.space.prevent="joinVoiceChannel(ch)"
+                @contextmenu.prevent.stop="openChannelMenu($event, ch)">
+                <Volume2 class="ch-icon" :size="15" :stroke-width="1.5"/>
+                <span class="ch-name">{{ ch.name }}</span>
+                <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
+                  <Ellipsis :size="14" :stroke-width="1.5"/>
+                </button>
+              </div>
+              <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
+                class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })">
+                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" /></span>
+                <span class="vc-occ-name">{{ o.name }}</span>
               </button>
-            </div>
+            </template>
           </div>
         </div>
         <VoiceConnectedPanel
@@ -3287,6 +3454,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-icon{flex-shrink:0}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
 .ch-unread{min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;display:flex;align-items:center;justify-content:center}
+/* Who is sitting in a voice channel. Indented under its row so the nesting is
+   read from the left edge, and deliberately quieter than the channel name —
+   these are occupants of the row above, not siblings of it. The reference also
+   shows an avatar-only density for crowded servers; that needs a trigger
+   (a per-server setting, or a count threshold) and is not built here. */
+.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:2px 8px 2px 26px;border:none;background:none;border-radius:6px;cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
+.vc-occ:hover{background:var(--hover);color:var(--text-2)}
+.vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
+.vc-occ-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* User Panel */
 .user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px}
