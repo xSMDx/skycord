@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } from '../useServers'
-import type { WireServer, WireChannel, WireCategory } from '../useApi'
+import type { WireServer, WireChannel, WireCategory, WireMember } from '../useApi'
 
 /**
  * The composable's only I/O. Stubbed rather than reached, so `openServer`'s
@@ -10,8 +9,9 @@ import type { WireServer, WireChannel, WireCategory } from '../useApi'
  * cannot close over an ordinary const.
  */
 const api = vi.hoisted(() => ({
-  getMyServers:    vi.fn(),
-  getServerDetail: vi.fn(),
+  getMyServers:     vi.fn(),
+  getServerDetail:  vi.fn(),
+  getServerMembers: vi.fn(),
 }))
 vi.mock('../useApi', () => ({ useApi: () => api }))
 
@@ -25,6 +25,11 @@ const wireChannel = (id: string, server: string, name: string, type: 'text' | 'v
 
 const wireCategory = (id: string, server: string, name: string, position = 0): WireCategory =>
   ({ id, server, name, position })
+
+const wireMember = (id: string, overrides: Partial<WireMember> = {}): WireMember => ({
+  id, username: id, displayName: id, avatar: null, avatarCrop: null,
+  status: 'online', isOwner: false, ...overrides,
+})
 
 /**
  * `vitest.config.mts` runs this suite under `environment: 'node'`, which has
@@ -45,6 +50,22 @@ class FakeStorage {
 }
 ;(globalThis as any).localStorage = new FakeStorage()
 
+// useServers now imports usePresence (activeMembers groups through
+// livePresence), and usePresence reads localStorage at module load for the
+// idle-timeout setting — the exact reason presenceById.test.ts imports it
+// dynamically instead of statically. ES module imports resolve, and the
+// imported module's body runs, before ANY of this file's own top-level code
+// does — regardless of where the `import … from '../useServers'` line sits
+// textually relative to the FakeStorage stub above. A static import here
+// would therefore evaluate usePresence (and its unguarded localStorage read)
+// before the stub exists, throwing ReferenceError: localStorage is not
+// defined. Dynamic import defers the load to this exact line, after the stub
+// is in place. `vi.mock('../useApi', …)` above still applies to it: Vitest's
+// mocking intercepts module resolution regardless of static vs. dynamic
+// import.
+const { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } = await import('../useServers')
+const { applyPresence, resetPresenceMap } = await import('../usePresence')
+
 describe('useServers', () => {
   let s: ReturnType<typeof useServers>
 
@@ -55,6 +76,9 @@ describe('useServers', () => {
     s.servers.value = []
     s.channelsByServer.value = {}
     s.categoriesByServer.value = {}
+    // Same rule as every other module-level ref here: goes in the reset the
+    // moment it exists, not after a test order happens to paper over a leak.
+    s.membersByServer.value = {}
     s.activeServerId.value = null
     s.activeChannelId.value = null
     s.unreadChannels.value = {}
@@ -70,6 +94,13 @@ describe('useServers', () => {
     ;(globalThis.localStorage as any).clear()
     api.getMyServers.mockReset()
     api.getServerDetail.mockReset()
+    api.getServerMembers.mockReset()
+    // usePresence's map is module-level too, shared with every other test
+    // file that imports it in this process — the same class of bug the
+    // comments above warn about, just in a different module. The live-
+    // presence test below writes into it via applyPresence and must not leak
+    // into a later test.
+    resetPresenceMap()
   })
 
   it('maps a wire server into the renderable client shape', () => {
@@ -565,6 +596,104 @@ describe('useServers', () => {
     })
     await s.openServer('s9')
     expect(api.getServerDetail).toHaveBeenCalledWith('s9')
+  })
+
+  // ── server members ───────────────────────────────────────────────────────
+
+  it('members land per server and do not leak between servers', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1'), wireMember('u2')] })
+    await s.loadServerMembers('s1')
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u3')] })
+    await s.loadServerMembers('s2')
+    expect(s.membersByServer.value['s1'].map(m => m.id)).toEqual(['u1', 'u2'])
+    expect(s.membersByServer.value['s2'].map(m => m.id)).toEqual(['u3'])
+  })
+
+  it('activeMembers splits into online and offline, with the owner first among the online', async () => {
+    api.getServerMembers.mockResolvedValueOnce({
+      members: [
+        wireMember('u1',    { status: 'online' }),
+        wireMember('owner', { status: 'idle', isOwner: true }),
+        wireMember('u3',    { status: 'offline' }),
+      ],
+    })
+    await s.loadServerMembers('s1')
+    s.activeServerId.value = 's1'
+    expect(s.activeMembers.value.online.map(m => m.id)).toEqual(['owner', 'u1'])
+    expect(s.activeMembers.value.offline.map(m => m.id)).toEqual(['u3'])
+  })
+
+  it("offline means offline — status === 'offline' groups down, everything else groups up", async () => {
+    api.getServerMembers.mockResolvedValueOnce({
+      members: [
+        wireMember('a', { status: 'online' }),
+        wireMember('b', { status: 'idle' }),
+        wireMember('c', { status: 'dnd' }),
+        wireMember('d', { status: 'offline' }),
+      ],
+    })
+    await s.loadServerMembers('s1')
+    s.activeServerId.value = 's1'
+    expect(s.activeMembers.value.online.map(m => m.id)).toEqual(['a', 'b', 'c'])
+    expect(s.activeMembers.value.offline.map(m => m.id)).toEqual(['d'])
+  })
+
+  it('groups by live presence, not the status that came with the fetch — the whole reason livePresence exists', async () => {
+    // Fetched as offline...
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1', { status: 'offline' })] })
+    await s.loadServerMembers('s1')
+    s.activeServerId.value = 's1'
+    expect(s.activeMembers.value.offline.map(m => m.id)).toEqual(['u1'])
+
+    // ...but a live presence event says online since. Grouping a member by
+    // its own fetched copy instead of livePresence is exactly the bug this
+    // composable's presence work already fixed on three other surfaces.
+    applyPresence('u1', 'online')
+    expect(s.activeMembers.value.online.map(m => m.id)).toEqual(['u1'])
+    expect(s.activeMembers.value.offline).toEqual([])
+  })
+
+  it('activeMembers is empty when no server is active', () => {
+    expect(s.activeMembers.value).toEqual({ online: [], offline: [] })
+  })
+
+  it('upsertMember adds a new member and updates an existing one in place', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1', { displayName: 'Old' })] })
+    await s.loadServerMembers('s1')
+    s.upsertMember('s1', wireMember('u2'))
+    expect(s.membersByServer.value['s1']).toHaveLength(2)
+    s.upsertMember('s1', wireMember('u1', { displayName: 'New' }))
+    expect(s.membersByServer.value['s1']).toHaveLength(2)
+    expect(s.membersByServer.value['s1'].find(m => m.id === 'u1')!.displayName).toBe('New')
+  })
+
+  it('ignores a member for a server whose list has not been fetched', () => {
+    // Mirrors upsertChannel/upsertCategory's identical guard: creating the
+    // bucket here would half-populate it, one member where the server
+    // actually has ten.
+    s.upsertMember('unknown', wireMember('ghost'))
+    expect(s.membersByServer.value['unknown']).toBeUndefined()
+  })
+
+  it('removeMember drops them', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1'), wireMember('u2')] })
+    await s.loadServerMembers('s1')
+    s.removeMember('s1', 'u1')
+    expect(s.membersByServer.value['s1'].map(m => m.id)).toEqual(['u2'])
+  })
+
+  it('removeServer drops its members', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1')] })
+    await s.loadServerMembers('s1')
+    s.removeServer('s1')
+    expect(s.membersByServer.value['s1']).toBeUndefined()
+  })
+
+  it('resetServers clears membersByServer', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1')] })
+    await s.loadServerMembers('s1')
+    s.resetServers()
+    expect(s.membersByServer.value).toEqual({})
   })
 })
 

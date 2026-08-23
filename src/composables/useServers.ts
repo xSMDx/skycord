@@ -10,13 +10,23 @@
  */
 import { ref, computed } from 'vue'
 import type { Server, Channel, Category } from '@/types'
-import type { WireServer, WireChannel, WireCategory } from './useApi'
+import type { WireServer, WireChannel, WireCategory, WireMember } from './useApi'
 import { useApi } from './useApi'
 import { colorForUsername } from './useAvatar'
+import { livePresence } from './usePresence'
 
 const servers            = ref<Server[]>([])
 const channelsByServer   = ref<Record<string, Channel[]>>({})
 const categoriesByServer = ref<Record<string, Category[]>>({})
+/**
+ * Server members, keyed by server id — the same "fetched once, kept honest by
+ * events" shape as channelsByServer/categoriesByServer above.
+ *
+ * Holds the wire shape essentially verbatim (see `ServerMember` and
+ * `toClientMember` below): unlike a server/channel/category, a member has
+ * nothing to rename or reshape between the wire and the UI.
+ */
+const membersByServer    = ref<Record<string, ServerMember[]>>({})
 const activeServerId     = ref<string | null>(null)
 const activeChannelId    = ref<string | null>(null)
 /**
@@ -128,6 +138,37 @@ const toClientCategory = (w: WireCategory): Category => ({
   position: w.position,
 })
 
+/**
+ * A server member as the UI holds it. Unlike toClientServer/toClientChannel
+ * above, there is nothing to rename or reshape — getServerMembers already
+ * returns exactly the fields the panel needs.
+ */
+export interface ServerMember {
+  id:          string
+  username:    string
+  displayName: string
+  avatar:      string | null
+  avatarCrop:  { zoom: number; x: number; y: number } | null
+  /**
+   * effectiveStatus() at fetch time — a snapshot, nothing more. NEVER group
+   * or render a member by this field directly; always go through
+   * `livePresence(id, status)` first (see `activeMembers` below). A live
+   * value, once one has arrived, is the only thing allowed to win.
+   */
+  status:      string
+  isOwner:     boolean
+}
+
+const toClientMember = (w: WireMember): ServerMember => ({
+  id:          w.id,
+  username:    w.username,
+  displayName: w.displayName,
+  avatar:      w.avatar,
+  avatarCrop:  w.avatarCrop ?? null,
+  status:      w.status,
+  isOwner:     w.isOwner,
+})
+
 const byPosition = (a: Channel, b: Channel) => (a.position ?? 0) - (b.position ?? 0)
 const byCategoryPosition = (a: Category, b: Category) => (a.position ?? 0) - (b.position ?? 0)
 
@@ -145,6 +186,7 @@ export const resetServers = () => {
   servers.value            = []
   channelsByServer.value   = {}
   categoriesByServer.value = {}
+  membersByServer.value    = {}
   activeServerId.value     = null
   activeChannelId.value    = null
   viewedVoiceId.value      = null
@@ -186,6 +228,7 @@ export const useServers = () => {
     servers.value = servers.value.filter(s => s.id !== sid)
     delete channelsByServer.value[sid]
     delete categoriesByServer.value[sid]
+    delete membersByServer.value[sid]
     delete lastChannelIn.value[sid]
     cats.forEach(c => { delete collapsedCategories.value[collapseKey(sid, c.id)] })
     if (cats.length) writeCollapsedCategories(collapsedCategories.value)
@@ -287,6 +330,27 @@ export const useServers = () => {
     writeCollapsedCategories(collapsedCategories.value)
   }
 
+  /**
+   * Mirrors upsertChannel/upsertCategory's guard exactly, for the same
+   * reason: a member for a server whose list hasn't been fetched has nowhere
+   * to go. Creating the bucket here would half-populate it — one member
+   * where the server actually has ten — the moment `server:memberJoined`
+   * arrives before `loadServerMembers` ever ran.
+   */
+  const upsertMember = (sid: string, w: WireMember) => {
+    const list = membersByServer.value[sid]
+    if (!list) return
+    const next = toClientMember(w)
+    const i = list.findIndex(m => m.id === next.id)
+    if (i === -1) list.push(next)
+    else list[i] = next
+  }
+
+  const removeMember = (sid: string, uid: string) => {
+    const list = membersByServer.value[sid]
+    if (list) membersByServer.value[sid] = list.filter(m => m.id !== uid)
+  }
+
   /** Fold/unfold a category in the sidebar. A view concern only — it never
    *  touches which channel is active, even if that channel sits inside the
    *  category being collapsed. */
@@ -337,6 +401,11 @@ export const useServers = () => {
     list.forEach(upsertServer)
   }
 
+  const loadServerMembers = async (sid: string) => {
+    const { members } = await api.getServerMembers(sid)
+    membersByServer.value[sid] = members.map(toClientMember)
+  }
+
   const loadServerDetail = async (sid: string) => {
     const { server, channels, categories } = await api.getServerDetail(sid)
     receiveDetail(server, channels, categories)
@@ -376,6 +445,35 @@ export const useServers = () => {
   const activeCategories = computed(() =>
     activeServerId.value ? categoriesByServer.value[activeServerId.value] ?? [] : [])
   const activeChannel    = computed(() => activeChannels.value.find(c => c.id === activeChannelId.value) ?? null)
+
+  /**
+   * What the members panel renders: the active server's members split into
+   * Online and Offline, owner first among the online.
+   *
+   * Grouped by `livePresence(id, status)`, NEVER by the `status` a member
+   * carries from the fetch. That field is a snapshot from whenever
+   * loadServerMembers (or the last upsertMember) ran; reading it directly
+   * here is exactly the bug this project's presence work already fixed on
+   * three other surfaces — a member would show one status in the dot next to
+   * their name (which every surface already draws via livePresence) while
+   * this list quietly grouped them under a different, stale one.
+   * `livePresence` is the single place that knows which value is current, so
+   * this asks it too, the same as everyone else.
+   *
+   * `.sort` is stable (guaranteed since ES2019), so the owner-first sort
+   * below only ever moves the owner to the front — everyone else keeps
+   * whatever order the list was already in.
+   */
+  const activeMembers = computed(() => {
+    const list = activeServerId.value ? membersByServer.value[activeServerId.value] ?? [] : []
+    const online: ServerMember[] = []
+    const offline: ServerMember[] = []
+    for (const m of list) {
+      (livePresence(m.id, m.status) === 'offline' ? offline : online).push(m)
+    }
+    online.sort((a, b) => (a.isOwner === b.isOwner ? 0 : a.isOwner ? -1 : 1))
+    return { online, offline }
+  })
 
   /**
    * What the sidebar renders: uncategorised first (category: null), then
@@ -430,18 +528,19 @@ export const useServers = () => {
 
   return {
     resetServers,
-    servers, channelsByServer, categoriesByServer, activeServerId, activeChannelId,
+    servers, channelsByServer, categoriesByServer, membersByServer, activeServerId, activeChannelId,
     viewedVoiceId,
     unreadChannels, lastChannelIn, collapsedCategories,
     // No flat `textChannels`/`voiceChannels` any more: the sidebar renders
     // `groupedChannels`, which already splits each group into text and voice,
     // and a whole-server flat list alongside it could only ever draw every
     // channel a second time outside its group.
-    activeServer, activeChannel, activeCategories, groupedChannels,
+    activeServer, activeChannel, activeCategories, groupedChannels, activeMembers,
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     upsertCategory, removeCategory, toggleCategory,
+    upsertMember, removeMember,
     markUnread, clearUnread, selectLanding, openChannel, viewVoiceChannel,
-    loadServers, loadServerDetail, openServer,
+    loadServers, loadServerDetail, loadServerMembers, openServer,
   }
 }
 

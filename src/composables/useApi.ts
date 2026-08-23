@@ -160,6 +160,14 @@ export const useApi = () => {
   const getServerDetail = (sid: string) =>
     get<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[] }>(`/servers/${sid}`)
 
+  // Exactly `getServerMembers` in server/controllers/serversController.ts:226.
+  // `status` there is `effectiveStatus(u.status, u._id)` — computed server-side,
+  // never the user's raw stored column — so it is only ever a fetch-time
+  // snapshot. Callers must run it through `livePresence(id, status)` before
+  // rendering or grouping by it; see `activeMembers` in useServers.ts.
+  const getServerMembers = (sid: string) =>
+    get<{ members: WireMember[] }>(`/servers/${sid}/members`)
+
   const getChannelMessagesApi = (sid: string, cid: string, before?: string) =>
     get<{ messages: ApiMessage[] }>(
       `/servers/${sid}/channels/${cid}/messages${before ? `?before=${before}` : ''}`
@@ -308,7 +316,7 @@ export const useApi = () => {
     updateGroup, addGroupMembers,
     createTheme, getTheme,
     getVoiceToken,
-    createServerApi, getMyServers, getServerDetail, getChannelMessagesApi, sendChannelRest,
+    createServerApi, getMyServers, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
     createChannelApi, updateChannelApi, deleteChannelApi,
     createCategoryApi, updateCategoryApi, deleteCategoryApi,
     deleteServerApi, leaveServerApi,
@@ -413,6 +421,19 @@ export interface WireCategory {
   server:   string
   name:     string
   position: number
+}
+
+/** Exactly `getServerMembers` in server/controllers/serversController.ts:226. */
+export interface WireMember {
+  id:          string
+  username:    string
+  displayName: string
+  avatar:      string | null
+  avatarCrop:  { zoom: number; x: number; y: number } | null
+  /** effectiveStatus() at fetch time — a snapshot, not a live value. See the
+   *  comment on getServerMembers above. */
+  status:      string
+  isOwner:     boolean
 }
 
 /** Exactly `shapeInvite` in server/controllers/invitesController.ts:15. */
