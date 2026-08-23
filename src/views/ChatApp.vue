@@ -354,6 +354,17 @@ const { muted: micOff, deafened: deafOff, toggleMute: onToggleMute, toggleDeafen
  * the id up in `channelsByServer` answers "is this a voice channel, and whose
  * server is it?" in one step, for both phases of the join.
  */
+/**
+ * The server whose voice I am actually connected to, or null.
+ *
+ * Drives the two-state rail badge. Read from the LIVE call rather than from
+ * anything the sidebar is merely displaying: you can be sitting in one
+ * server's voice channel while reading a different server entirely, and the
+ * badge has to follow the call, not the view.
+ */
+const myVoiceServerId = computed<string | null>(() => liveVoiceChannel.value?.serverId ?? null)
+
+
 const liveVoiceChannel = computed<Channel | null>(() => {
   // A join that has permanently failed (spent all its retries — a deleted
   // channel, a server you were removed from) must stop looking "live"
@@ -3079,7 +3090,8 @@ onBeforeUnmount(() => {
             one 44px circle is a puzzle, and the number lives in the hover
             preview where there is room to say who.
           -->
-          <span v-if="voiceActivityByServer[srv.id]" class="ri-voice" aria-hidden="true">
+          <span v-if="voiceActivityByServer[srv.id]" class="ri-voice"
+            :class="{ mine: myVoiceServerId === srv.id }" aria-hidden="true">
             <Volume2 :size="11" :stroke-width="2.75"/>
           </span>
           <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
@@ -3837,7 +3849,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Same 18px circle + 2px floor-coloured ring as .dm-call in the DM list, so a
    voice indicator looks like a voice indicator wherever it appears — the ring
    is what keeps a green disc legible against a green server icon. */
-.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+/* Green means you are in this one. Every other server with voice activity
+   keeps the dark chip — the user asked for two colours, not a palette. */
+.ri-voice.mine{background:#23a55a}
 
 /* ── Rail voice hover preview ──────────────────────────────────────────────
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index

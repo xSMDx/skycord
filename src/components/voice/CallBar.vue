@@ -418,15 +418,15 @@ onBeforeUnmount(() => {
             <button class="cb-b cb-mic" :class="{ off: voice.localMuted }" v-tip="voice.localMuted ? 'Unmute' : 'Mute'" @click="toggleMute" @contextmenu="onCtrlCtx($event, 'mic')">
               <component :is="voice.localMuted ? MicOff : Mic" :size="20" :stroke-width="2.25" />
             </button>
-            <button class="cb-chev" v-tip="'Audio settings'" @click="toggleMenu('mic')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
+            <button class="cb-chev" :class="{ open: openMenu === 'mic' }" v-tip="'Audio settings'" @click="toggleMenu('mic')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
             <MicFlyout v-if="openMenu === 'mic'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
           <div class="cb-split" :class="{ menuopen: openMenu === 'cam' }">
             <button class="cb-b cb-cam" :disabled="!joinedHere" :class="{ on: media.localCamOn }" v-tip="!joinedHere ? 'Connecting…' : (media.localCamOn ? 'Turn off camera' : 'Turn on camera')" @click="onCamera" @contextmenu="onCtrlCtx($event, 'cam')">
               <component :is="media.localCamOn ? Video : VideoOff" :size="20" :stroke-width="2.25" />
             </button>
-            <button class="cb-chev" :disabled="!joinedHere" v-tip="'Video settings'" @click="toggleMenu('cam')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
-            <CameraFlyout v-if="openMenu === 'cam'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
+            <button class="cb-chev" :class="{ open: openMenu === 'cam' }" :disabled="!joinedHere" v-tip="'Video settings'" @click="toggleMenu('cam')"><ChevronDown :size="12" :stroke-width="2.25" /></button>
+            <CameraFlyout v-if="openMenu === 'cam'" @close="openMenu = ''" @open-settings="emit('openSettings')" @preview-camera="emit('previewCamera')" />
           </div>
         </div>
         <div class="cb-group">
@@ -578,6 +578,21 @@ onBeforeUnmount(() => {
 .cb-share:hover:not(:disabled) svg { animation: cb-lift .45s ease; }
 .cb-more:hover:not(:disabled)  svg { animation: cb-pop .4s ease; }
 .cb-chev:hover:not(:disabled)  svg { animation: cb-pop .35s ease; }
+
+/* The chevron acknowledges its own menu.
+   The "animation: none" on the open state is load-bearing, not tidiness: the
+   hover pop above animates transform, and an animation beats a plain
+   declaration for the same property — so without it, hovering an open
+   chevron would snap back to 0deg for the length of the pop, then jump. */
+.cb-chev svg      { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
+.cb-chev.open svg { transform: rotate(180deg); animation: none; }
+.cb-chev.open:hover:not(:disabled) svg { animation: none; }
+
+/* The rotation is decoration — it says nothing the open menu does not already
+   say — so it snaps for anyone who asked for less movement. */
+@media (prefers-reduced-motion: reduce) {
+  .cb-chev svg { transition: none; }
+}
 .cb-leave:hover                svg { animation: cb-swing .5s ease; }
 
 /* Ongoing (not joined) */

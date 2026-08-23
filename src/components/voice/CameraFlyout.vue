@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { ChevronRight, Check, Settings, Eye, EyeOff } from 'lucide-vue-next'
-import { Track } from 'livekit-client'
+import { ref, onMounted } from 'vue'
+import { ChevronRight, Check, Settings, Eye } from 'lucide-vue-next'
 import CallFlyout from './CallFlyout.vue'
 import { useCallDevices } from '@/composables/useCallDevices'
 import { useVoiceSettings } from '@/composables/useVoiceSettings'
 import { useVoiceMedia } from '@/composables/useVoiceMedia'
-import { getRoom } from '@/composables/voiceRoom'
 
-const emit = defineEmits<{ close: []; openSettings: [] }>()
+/**
+ * `previewCamera` rather than a preview of our own.
+ *
+ * This flyout used to grow a live `<video>` inside itself, which put a camera
+ * feed in a 200px-wide menu anchored to the call bar — and meant this file
+ * owned a `getUserMedia` capture it had to remember to stop on every exit
+ * path. `CameraPreviewModal` already exists, is already mounted in ChatApp
+ * behind `showCameraPreview`, and already owns that lifecycle; CallBar already
+ * declares the `previewCamera` event and ChatApp already listens for it, so
+ * the whole route was in place and this was the one caller not using it.
+ */
+const emit = defineEmits<{ close: []; openSettings: []; previewCamera: [] }>()
 const { cameras, refreshDevices, deviceLabel, setCameraDevice } = useCallDevices()
 const { voiceSettings } = useVoiceSettings()
 const { media } = useVoiceMedia()
@@ -19,48 +28,7 @@ const currentCamLabel = () => {
   return d ? deviceLabel(d, 'Camera') : 'Default'
 }
 
-// Inline preview: reuse the LIVE camera track when publishing; otherwise open a
-// temporary capture that is stopped when the preview or flyout closes.
-const previewing = ref(false)
-const videoEl = ref<HTMLVideoElement | null>(null)
-let tempStream: MediaStream | null = null
-let disposed = false
-
-let startingPreview = false
-const startPreview = async () => {
-  if (previewing.value || startingPreview) return
-  startingPreview = true
-  const live = getRoom()?.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack
-  try {
-    if (live) {
-      if (videoEl.value) videoEl.value.srcObject = new MediaStream([live])
-    } else {
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: voiceSettings.cameraDeviceId || undefined },
-      })
-      if (disposed) { s.getTracks().forEach(t => t.stop()); return }
-      // Never orphan a previous capture, whatever path produced it.
-      tempStream?.getTracks().forEach(t => t.stop())
-      tempStream = s
-      if (videoEl.value) videoEl.value.srcObject = tempStream
-    }
-    await videoEl.value?.play().catch(() => {})
-    previewing.value = true
-  } catch { previewing.value = false }
-  finally { startingPreview = false }
-}
-const stopPreview = () => {
-  tempStream?.getTracks().forEach(t => t.stop()); tempStream = null
-  if (videoEl.value) videoEl.value.srcObject = null
-  previewing.value = false
-}
-const togglePreview = () => { previewing.value ? stopPreview() : startPreview() }
-
 onMounted(refreshDevices)
-onBeforeUnmount(() => {
-  disposed = true
-  stopPreview()
-})
 </script>
 
 <template>
@@ -80,13 +48,12 @@ onBeforeUnmount(() => {
     </template>
 
     <div class="fr-sep" />
-    <button class="fr" @click="togglePreview">
-      <span>{{ previewing ? 'Hide Preview' : 'Preview Camera' }}<span v-if="media.localCamOn" class="fr-sub">Showing your live camera</span></span>
-      <component :is="previewing ? EyeOff : Eye" :size="15" :stroke-width="2.25" />
+    <!-- Closes on the way out: leaving a menu open behind a modal it launched
+         gives you two dismissable layers stacked on the same click. -->
+    <button class="fr" @click="emit('previewCamera'); emit('close')">
+      <span>Preview Camera<span v-if="media.localCamOn" class="fr-sub">Showing your live camera</span></span>
+      <Eye :size="15" :stroke-width="2.25" />
     </button>
-    <div v-show="previewing" class="cf-prevbox">
-      <video ref="videoEl" class="cf-video" muted playsinline />
-    </div>
 
     <div class="fr-sep" />
     <button class="fr" @click="emit('openSettings'); emit('close')">
@@ -94,11 +61,3 @@ onBeforeUnmount(() => {
     </button>
   </CallFlyout>
 </template>
-
-<style scoped>
-.cf-prevbox {
-  margin: 4px 2px; border-radius: 6px; overflow: hidden;
-  background: #000; aspect-ratio: 16 / 9;
-}
-.cf-video { width: 100%; height: 100%; object-fit: cover; display: block; }
-</style>
