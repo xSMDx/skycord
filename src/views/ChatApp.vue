@@ -21,8 +21,9 @@ import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireCh
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId } from '@/composables/useSocket'
+import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
+import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
 import UserProfileModal    from '@/components/profile/UserProfileModal.vue'
@@ -77,7 +78,7 @@ import { formatChannelName } from '@/utils/channelName'
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
-import type { DM, Member, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
+import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -157,12 +158,14 @@ const {
 // wanted — the Move to Category submenu needs the server's categories as
 // categories, not as render groups.
 const {
-  servers, activeServerId, activeChannelId, unreadChannels, channelsByServer,
-  activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories,
+  servers, activeServerId, activeChannelId, unreadChannels, channelsByServer, membersByServer,
+  activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories, activeMembers,
+  voiceActivityByServer,
   selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
-  loadServers, openServer: enterServer,
+  upsertMember, removeMember,
+  loadServers, loadServerMembers, openServer: enterServer,
 } = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -477,9 +480,9 @@ const convHasCall = (kind: 'dm' | 'group', id: string) => {
 /**
  * Names and faces for the ids `call:state` reports.
  *
- * The server sends ids only, and there is no member-list API yet
- * (`members` below is still a stub), so this is assembled from what the client
- * already holds: you, your friends, the members of any group DM you're in, and
+ * The server sends ids only, so rather than a second round trip through the
+ * member list this is assembled from what the client already holds: you,
+ * your friends, the members of any group DM you're in, and
  * the authors of messages already cached for this server's text channels — the
  * last of which is what covers the ordinary case of a fellow server member who
  * isn't your friend but has said something you've loaded.
@@ -523,6 +526,19 @@ const resolveVoiceUser = (id: string): VoiceOccupant => {
   for (const g of groupsData.value) {
     const m = g.members?.find(mm => mm.id === id)
     if (m) return { id, name: m.displayName || m.username, avatar: m.avatar || avatarFor(m.username), avatarCrop: m.avatarCrop ?? null }
+  }
+  // The server member lists, before falling back to guessing from message
+  // history. A member who has never posted has no entry in the author
+  // directory below, so they used to resolve to "Unknown" while sitting in a
+  // voice channel next to their own name in the member panel. Searching every
+  // fetched server rather than only the open one, because the rail hover
+  // preview shows occupants of servers you are not currently looking at.
+  for (const list of Object.values(membersByServer.value)) {
+    const m = list.find(x => x.id === id)
+    if (m) return {
+      id, name: m.displayName || m.username,
+      avatar: m.avatar || avatarFor(m.username), avatarCrop: m.avatarCrop ?? null,
+    }
   }
   const cached = serverAuthorDirectory.value[id]
   if (cached) return cached
@@ -597,6 +613,128 @@ const voiceOccupants = (channelId: string): (VoiceOccupant & { speaking: boolean
   const scoped = isConnectedVoiceRoom(channelId)
   return list.map(o => ({ ...o, speaking: scoped && (liveSpeakingById.value[o.id] ?? false) }))
 }
+
+/**
+ * The voice cluster in the server sidebar's name header: the channel YOU are
+ * in, and who is in it with you.
+ *
+ * Deliberately gated on `liveVoiceChannel`, not on `voiceActivityByServer` —
+ * the header answers "you are in voice, here" and nothing else. The rail badge
+ * next to it is the surface for "somebody else is in voice"; a header that lit
+ * up for other people's calls would be saying the same thing twice, two
+ * inches apart, and would then have to explain which of the server's voice
+ * channels it meant.
+ *
+ * The server check is the same one `viewedVoiceChannel` makes, for the same
+ * reason: sitting in one server's call while reading another server must not
+ * put the call in the second server's header.
+ *
+ * Null rather than an empty cluster when there is nobody to draw — including
+ * during a join that has not landed yet, where `voiceOccupants`'s optimistic
+ * self-row normally means this is never empty in practice.
+ */
+const headerVoice = computed(() => {
+  const vc = liveVoiceChannel.value
+  if (!vc || vc.serverId !== activeServerId.value) return null
+  const occupants = voiceOccupants(vc.id)
+  if (!occupants.length) return null
+  return { channel: vc, occupants }
+})
+/** Faces shown inline in the 48px header; the rest become a "+N". */
+const HEADER_VOICE_FACES = 3
+
+// ── Rail voice hover preview ────────────────────────────────────────────────
+/**
+ * Hovering a rail server that has voice activity shows a small panel naming
+ * the server, its occupied voice channels, and who is in them.
+ *
+ * Its own floating element rather than a tooltip, because `v-tip` cannot carry
+ * this. `showTip(el, text, placement)` in useTooltip takes a plain string and
+ * TooltipLayer renders it as `{{ tip.text }}` — no slot, no VNode, no HTML.
+ * Bending it into a rich panel would mean either a second `content` channel
+ * that every other v-tip ignores, or smuggling markup through a string, and
+ * the layer is `pointer-events:none`, `max-width:260px`, `text-align:center`
+ * chrome built for one line of label. So: a separate panel, and the rail item
+ * drops its `v-tip` exactly when this can appear (see the template) so a
+ * single hover never produces two floating things.
+ *
+ * The same OPEN_DELAY the tooltip uses, imported rather than restated — a rail
+ * where some items answer a hover in 400ms and others instantly reads as
+ * broken, not as two features.
+ */
+const railPreviewAnchor = ref<{ serverId: string; x: number; y: number; w: number; h: number } | null>(null)
+const railPreviewEl     = ref<HTMLElement | null>(null)
+const railPreviewTop    = ref(0)
+let railPreviewTimer: ReturnType<typeof setTimeout> | null = null
+
+const closeRailPreview = () => {
+  if (railPreviewTimer) { clearTimeout(railPreviewTimer); railPreviewTimer = null }
+  railPreviewAnchor.value = null
+}
+
+const onRailHover = (e: MouseEvent, serverId: string) => {
+  closeRailPreview()
+  if (!voiceActivityByServer.value[serverId]) return   // plain v-tip handles this one
+  const el = e.currentTarget as HTMLElement
+  railPreviewTimer = setTimeout(() => {
+    const r = el.getBoundingClientRect()
+    if (r.width === 0 && r.height === 0) return        // scrolled out from under the pointer
+    // Belt and braces for "one hover, one thing": the rail item that opened
+    // this has no v-tip text, but a tooltip from whatever the pointer crossed
+    // on the way in may still be up and warm.
+    hideTip()
+    railPreviewAnchor.value = { serverId, x: r.left, y: r.top, w: r.width, h: r.height }
+  }, TIP_OPEN_DELAY)
+}
+
+/**
+ * What the panel draws, recomputed from live state rather than captured at
+ * hover time — so the last person leaving a channel closes the panel under
+ * the pointer instead of leaving a lie on screen.
+ */
+const railPreview = computed(() => {
+  const a = railPreviewAnchor.value
+  if (!a) return null
+  const activity = voiceActivityByServer.value[a.serverId]
+  if (!activity?.length) return null
+  const srv = servers.value.find(s => s.id === a.serverId)
+  if (!srv) return null
+  return {
+    anchor: a,
+    name:   srv.name,
+    channels: activity.map(v => ({
+      id:   v.channelId,
+      // null when we hold no channel list for this server — see
+      // `voiceActivityByServer`. The template renders that case as a plain
+      // "In a voice channel" rather than guessing at a name or dropping the
+      // row, because we genuinely know someone is in voice and genuinely do
+      // not know where.
+      name: v.channelName,
+      occupants: v.userIds.map(resolveVoiceUser),
+    })),
+  }
+})
+
+/**
+ * Vertically centre the panel on the rail item, then keep it on screen —
+ * measured rather than estimated, the same as TooltipLayer, because the height
+ * depends on how many people are in the call.
+ */
+watch(railPreview, async (p) => {
+  if (!p) return
+  await nextTick()
+  const h  = railPreviewEl.value?.offsetHeight ?? 0
+  const vh = window.innerHeight
+  railPreviewTop.value = Math.max(8, Math.min(p.anchor.y + p.anchor.h / 2 - h / 2, vh - h - 8))
+})
+
+const railPreviewStyle = computed(() => ({
+  left: `${(railPreview.value?.anchor.x ?? 0) + (railPreview.value?.anchor.w ?? 0) + 8}px`,
+  top:  `${railPreviewTop.value}px`,
+}))
+
+/** Faces before the panel stops listing them one per row. */
+const PREVIEW_FACES = 6
 
 /**
  * Join a voice channel AND look at it. Instant on desktop — no confirmation,
@@ -891,9 +1029,9 @@ const msgListRef = ref<InstanceType<typeof MessageList> | null>(null)
 
 // ── Role colours ───────────────────────────────────────────────────────────
 
-// Servers and channels come from useServers now. The member list is still a
-// placeholder — the members API is 3b.
-const members: Member[] = []
+// Servers and channels come from useServers now. Server members do too —
+// `activeMembers` (grouped by live presence) and `membersByServer` (the raw,
+// fetch-once-per-server cache) — so there is no local placeholder left here.
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 // avatarFor is imported from the shared composable (see top of file) so this
@@ -1069,7 +1207,6 @@ const toggleGroup = (g: SidebarGroup) => {
   if (g.category) toggleCategory(g.category.serverId, g.category.id)
 }
 
-const onlineMembers   = computed(() => members.filter(m => m.status !== 'offline'))
 const activeNow       = computed(() => apiFriends.value.filter(f => f.status === 'online' || f.status === 'idle'))
 const filteredFriends = computed(() => {
   const q = friendSearch.value.trim().toLowerCase()
@@ -1125,7 +1262,8 @@ const chatMembers = computed<{ id: string; name: string; username?: string; avat
   if (view.value === 'dm' && activeDM.value)
     return [{ id: activeDM.value.id, name: activeDM.value.name, avatar: activeDM.value.avatar }]
   if (view.value === 'server')
-    return members.map(m => ({ id: m.id, name: m.name, avatar: m.avatar }))
+    return [...activeMembers.value.online, ...activeMembers.value.offline]
+      .map(m => ({ id: m.id, name: m.displayName || m.username, username: m.username, avatar: m.avatar || avatarFor(m.username) }))
   return []
 })
 
@@ -1606,6 +1744,11 @@ const setupSocket = () => {
     // must not be the thing that collapses it: you're still in the call.
     const wasViewingVoice = viewedVoiceId.value
     removeChannel(p.serverId, p.channelId)
+    // Occupancy for a channel that no longer exists can never be closed by the
+    // server: it empties chan:<id> as part of the delete, so the "room is
+    // empty" broadcast that would normally follow the last occupant out is
+    // addressed to nobody. Drop it here or the rail badge stays lit forever.
+    forgetVoiceRoom(p.channelId)
     // removeChannel clears activeChannelId when the deleted channel was the one
     // on screen. Land somewhere real rather than on an empty pane.
     // activeServerId isn't cleared on navigating away to a DM or Friends, so
@@ -1642,17 +1785,13 @@ const setupSocket = () => {
     if (wasHere) { setActiveChannel(null); openFriends() }
   })
 
-  // The member list is 3b; until then the only visible consequence of someone
-  // joining or leaving is the count, so keep just that honest. Neither
-  // server:memberJoined nor server:memberLeft actually carries a memberCount
-  // field today (see task-4-report.md, Step 3) — the guard below makes this a
-  // harmless no-op until the server side adds one.
-  const syncMemberCount = (p: any) => {
-    const s = servers.value.find(x => x.id === p.serverId)
-    if (s && typeof p.memberCount === 'number') s.memberCount = p.memberCount
-  }
-  socketOn('onServerMemberJoined', syncMemberCount)
-  socketOn('onServerMemberLeft',   syncMemberCount)
+  // Neither event carries a memberCount field (confirmed again here — see
+  // invitesController.ts's `server:memberJoined` emit and serversController.ts's
+  // `server:memberLeft` emit), so the panel's count is never read off
+  // `Server.memberCount`; it's derived from membersByServer itself (see
+  // `activeMembers`), which these two keep honest directly.
+  socketOn('onServerMemberJoined', (p: any) => upsertMember(p.serverId, p.member))
+  socketOn('onServerMemberLeft',   (p: any) => removeMember(p.serverId, p.userId))
 
   // ── Live message updates from partner / group ──────────────────────────────
   // These used to resolve the on-screen list through a local `liveList()` that
@@ -2148,6 +2287,15 @@ const openServer = async (srv: Server) => {
     openFriends()
     return
   }
+  // Members follow the same fetch-once-per-server rule as channels/categories
+  // above, but a failure here degrades quietly (empty panel, logged) rather
+  // than bouncing the user back to Friends — same treatment as
+  // loadChannelHistory below: the channel view they came here for already
+  // loaded fine, and losing the member sidebar is not worth losing that too.
+  if (!membersByServer.value[srv.id]) {
+    try { await loadServerMembers(srv.id) }
+    catch (e) { console.error('[openServer members]', e) }
+  }
   if (activeChannelId.value) {
     setActiveChannel(activeChannelId.value)
     await loadChannelHistory(activeChannelId.value)
@@ -2159,13 +2307,19 @@ const openServer = async (srv: Server) => {
 const onServerCreated = async (serverId: string) => {
   // The modal already folded the new server and its two default channels
   // into state via receiveDetail, so enterServer finds them cached and
-  // makes no second request.
+  // makes no second request. Members are not part of that payload, though —
+  // CreateServerModal never populates membersByServer — so the guarded fetch
+  // below always runs once for a just-created server.
   view.value = 'server'
   setActiveDMPartner(null)
   setActiveGroup(null)
   showInvite.value = false
   showCreateChannel.value = false
   await enterServer(serverId)
+  if (!membersByServer.value[serverId]) {
+    try { await loadServerMembers(serverId) }
+    catch (e) { console.error('[onServerCreated members]', e) }
+  }
   if (activeChannelId.value) {
     setActiveChannel(activeChannelId.value)
     await loadChannelHistory(activeChannelId.value)
@@ -2592,10 +2746,18 @@ onBeforeUnmount(() => {
   // still show the previous account's servers in the rail, and clicking one
   // would find its channels already cached and skip the fetch entirely.
   resetServers()
+  // Same reason as resetServers directly above: the shell is swapped without a
+  // page reload, so a call this account could see must not be inherited by the
+  // next one to log in on this device.
+  resetCalls()
   // Same reason: a second account on this device must not inherit the first
   // one's status dots while its own presence events are still arriving.
   resetPresenceMap()
   if (_typingTimer) clearTimeout(_typingTimer)
+  // A hover in flight when the component goes away — logging out with the
+  // pointer resting on a rail server — would otherwise fire its timer into a
+  // dead component and leave a teleported panel over the auth page.
+  closeRailPreview()
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('click',   onClick)
 })
@@ -2770,6 +2932,45 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
+    <!--
+      Rail voice hover preview. Teleported for the same reason TooltipLayer is:
+      the rail is 68px wide and scrolls, so anything anchored inside it gets
+      clipped the moment it is wider than the strip it grew out of.
+
+      `pointer-events:none` is a decision, not an oversight — this is a preview,
+      not a menu. Letting the pointer enter it would mean keeping it open while
+      the pointer is inside, which is a hover intent problem this does not need
+      to have; as it stands the panel simply cannot be aimed at, and leaving the
+      rail item closes it.
+    -->
+    <Teleport to="body">
+      <Transition name="rvp">
+        <div v-if="railPreview" ref="railPreviewEl" class="rvp" :style="railPreviewStyle">
+          <div class="rvp-name">{{ railPreview.name }}</div>
+          <div v-for="ch in railPreview.channels" :key="ch.id" class="rvp-ch">
+            <div class="rvp-ch-head">
+              <Volume2 :size="13" :stroke-width="2.25" class="rvp-ch-ic"/>
+              <!--
+                A server whose channel list we have never fetched gives us
+                occupancy without a name (see `voiceActivityByServer`). Saying
+                so is the honest option: an invented name would be wrong and an
+                empty row would throw away the fact that someone IS in there.
+              -->
+              <span v-if="ch.name" class="rvp-ch-name">{{ ch.name }}</span>
+              <span v-else class="rvp-ch-name unnamed">In a voice channel</span>
+            </div>
+            <div v-for="o in ch.occupants.slice(0, PREVIEW_FACES)" :key="o.id" class="rvp-occ">
+              <span class="rvp-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" /></span>
+              <span class="rvp-occ-name">{{ o.name }}</span>
+            </div>
+            <div v-if="ch.occupants.length > PREVIEW_FACES" class="rvp-more">
+              +{{ ch.occupants.length - PREVIEW_FACES }} more
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <UserProfileModal
       v-if="showUserProfile"
       :user-id="showUserProfile"
@@ -2850,11 +3051,37 @@ onBeforeUnmount(() => {
         </div>
         <div class="ri-divider" />
         <!-- Servers -->
+        <!--
+          One hover, one thing. A server with voice activity gets the rich
+          preview panel (see `railPreview`) and NO tooltip — an empty string is
+          how `showTip` is told to stay down; every other server keeps the
+          plain name tooltip it has always had. `aria-label` is spelled out
+          rather than left to the directive, which only mirrors text it was
+          actually given: without it, the servers that gained a preview would
+          be the ones that lost their accessible name.
+        -->
         <div v-for="srv in servers" :key="srv.id"
           class="ri" :class="{ active: view==='server' && activeServerId===srv.id }"
-          v-tip="srv.name" @click.stop="openServer(srv)">
+          :aria-label="voiceActivityByServer[srv.id] ? srv.name + ' — someone is in voice' : srv.name"
+          v-tip="voiceActivityByServer[srv.id] ? '' : srv.name"
+          @mouseenter="onRailHover($event, srv.id)"
+          @mouseleave="closeRailPreview"
+          @pointerdown="closeRailPreview"
+          @click.stop="openServer(srv)">
           <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
+          <!--
+            Lower-LEFT, deliberately: `.ri-badge` (unread) already owns the
+            lower-right of every rail icon, and the two must never stack. They
+            are told apart by three things at once so a glance is enough —
+            side, colour (voice green vs unread red) and content (a glyph vs a
+            number). No count here for the same reason: two numeric badges on
+            one 44px circle is a puzzle, and the number lives in the hover
+            preview where there is room to say who.
+          -->
+          <span v-if="voiceActivityByServer[srv.id]" class="ri-voice" aria-hidden="true">
+            <Volume2 :size="11" :stroke-width="2.75"/>
+          </span>
           <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
         </div>
         <div class="ri-divider" />
@@ -2978,7 +3205,32 @@ onBeforeUnmount(() => {
           @click.stop="openServerMenu($event)"
           @keydown.enter.prevent="openServerMenu($event)"
           @keydown.space.prevent="openServerMenu($event)">
-          <span>{{ activeServer?.name }}</span>
+          <!--
+            `.sb-header-name` is what lets the cluster exist at all: the header
+            is `space-between` with `white-space:nowrap`, so before this a long
+            server name simply grew past the padding and pushed the chevron out
+            of the bar. The name is now the only thing that flexes, and the only
+            thing that ellipses; the voice cluster and the chevron never shrink.
+          -->
+          <span class="sb-header-name">{{ activeServer?.name }}</span>
+          <!--
+            Only ever your own call (see `headerVoice`). The tip names the
+            channel because the cluster deliberately does not — at 48px there
+            is room for the faces or the channel name, not both, and the faces
+            are the part you cannot get anywhere else at a glance.
+          -->
+          <span v-if="headerVoice" class="sb-hvoice" v-tip="'In voice — ' + headerVoice.channel.name">
+            <Volume2 class="sb-hvoice-ic" :size="13" :stroke-width="2.25"/>
+            <span class="sb-hvoice-avs">
+              <span v-for="o in headerVoice.occupants.slice(0, HEADER_VOICE_FACES)" :key="o.id"
+                class="sb-hvoice-av" :class="{ speaking: o.speaking }">
+                <Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" />
+              </span>
+            </span>
+            <span v-if="headerVoice.occupants.length > HEADER_VOICE_FACES" class="sb-hvoice-more">
+              +{{ headerVoice.occupants.length - HEADER_VOICE_FACES }}
+            </span>
+          </span>
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
         <div class="sb-body">
@@ -3324,7 +3576,7 @@ onBeforeUnmount(() => {
                    .members-panel` already hides the panel, so the toggle would
                    be a button with no visible outcome — the same reason the
                    CallBar's hide-chat control is suppressed for a channel. -->
-              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" @click.stop="membersOpen=!membersOpen">
+              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" v-tip="membersOpen ? 'Hide Member List' : 'Show Member List'" @click.stop="membersOpen=!membersOpen">
                 <Users :size="18" :stroke-width="1.5"/>
               </button>
 
@@ -3454,20 +3706,52 @@ onBeforeUnmount(() => {
         <div v-if="isMobile && membersOpen && (view==='server' || view==='group')"
              class="m-sheet-scrim" @click="membersOpen = false" />
 
-        <!-- Members sidebar (server) -->
+        <!-- Members sidebar (server). Markup mirrors the group DM panel just
+             below — avatar, live status dot, name, owner tag — split into
+             Online/Offline sections the way the old mock stub used to
+             pretend to, except the groups and the count now come from
+             activeMembers (grouped by livePresence, never the fetched
+             snapshot) instead of an empty literal. -->
         <aside v-if="view==='server'" class="members-panel" :class="{ closed: !membersOpen }">
-          <div class="mp-header"><h3>Members <span class="mp-count">{{ members.length }}</span></h3></div>
+          <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="13" :stroke-width="1.5"/>
             <input type="text" placeholder="Search members…"/>
           </div>
           <div class="mp-list">
-            <div class="mp-section-label">Online — {{ onlineMembers.length }}</div>
-            <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+            <!-- Wrapped for the same reason the Offline block below is: a section
+                 header with nothing under it is noise, and a server where everyone
+                 happens to be offline should not announce "Online — 0". -->
+            <template v-if="activeMembers.online.length">
+            <div class="mp-section-label">Online — {{ activeMembers.online.length }}</div>
+            <div v-for="m in activeMembers.online" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
-              <div class="mp-av"><Avatar :src="m.avatar" :alt="m.name" :crop="(m as any).avatarCrop" /><span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/></div>
-              <div class="mp-info"><span class="mp-name">{{ m.name }}</span><span class="mp-status" :style="{ color: statusColor(livePresence(m.id, m.status)) }">{{ statusLabel(livePresence(m.id, m.status)) }}</span></div>
+              <div class="mp-av">
+                <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
+                <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+              </div>
+              <div class="mp-info">
+                <span class="mp-name">{{ m.displayName || m.username }}</span>
+                <span v-if="m.isOwner" class="mp-owner">Owner</span>
+              </div>
             </div>
+
+            </template>
+
+            <template v-if="activeMembers.offline.length">
+              <div class="mp-section-label">Offline — {{ activeMembers.offline.length }}</div>
+              <div v-for="m in activeMembers.offline" :key="m.id" class="mp-member mp-offline" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+                   @contextmenu="openUserMenu($event, m)">
+                <div class="mp-av">
+                  <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
+                  <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+                </div>
+                <div class="mp-info">
+                  <span class="mp-name">{{ m.displayName || m.username }}</span>
+                  <span v-if="m.isOwner" class="mp-owner">Owner</span>
+                </div>
+              </div>
+            </template>
           </div>
         </aside>
 
@@ -3547,6 +3831,41 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
 .ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+/* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
+   is both unread and occupied shows two marks that never touch: this one at
+   x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
+   Same 18px circle + 2px floor-coloured ring as .dm-call in the DM list, so a
+   voice indicator looks like a voice indicator wherever it appears — the ring
+   is what keeps a green disc legible against a green server icon. */
+.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+
+/* ── Rail voice hover preview ──────────────────────────────────────────────
+   Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
+   below it: the two are the same gesture answered at two levels of detail, and
+   they should not look like they came from different apps. */
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding:10px 12px;border-radius:10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvp-ch{margin-top:8px}
+.rvp-ch-head{display:flex;align-items:center;gap:6px;min-width:0}
+.rvp-ch-ic{color:#23a55a;flex-shrink:0}
+.rvp-ch-name{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* The row we could not name. Same slot, visibly not a channel name — it is not
+   uppercased like one, and it does not pretend to be a title. */
+.rvp-ch-name.unnamed{text-transform:none;letter-spacing:0;font-weight:500;font-style:italic;color:var(--text-faint,var(--text-3))}
+.rvp-occ{display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:2px}
+.rvp-occ-av{display:flex;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0}
+.rvp-occ-name{font-size:12.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvp-more{font-size:11px;font-weight:600;color:var(--text-3);margin-top:6px;padding-left:30px}
+/* Slides out of the rail rather than fading in place, so the panel reads as
+   belonging to the icon the pointer is on. */
+.rvp-enter-active{transition:opacity .12s ease,transform .12s cubic-bezier(.32,.72,0,1)}
+.rvp-leave-active{transition:opacity .08s ease}
+.rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
+.rvp-leave-to{opacity:0}
+@media (prefers-reduced-motion: reduce){
+  .rvp-enter-active,.rvp-leave-active{transition:opacity .1s ease}
+  .rvp-enter-from{transform:none}
+}
 .ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius:1px;margin:4px 0}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:#23a55a}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:#23a55a}
@@ -3570,8 +3889,35 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
-.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition:background .15s;white-space:nowrap}
+.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition:background .15s;white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
+/* The one flexible child, so the voice cluster and the chevron keep their
+   size and a 40-character server name ellipses instead of shoving them out
+   of the bar. min-width:0 is load-bearing — a flex item's default min-width
+   is auto, which refuses to shrink below its text and defeats the ellipsis. */
+.sb-header-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* Your own call, inline in the 48px header. Sized down from the sidebar's own
+   occupant rows (20px faces, 13px glyph) so the bar keeps its height and the
+   server name stays the loudest thing in it. */
+/* No cursor of its own: the whole 48px bar is one button that opens the server
+   menu, and a default cursor over part of it would claim otherwise. */
+.sb-hvoice{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.sb-hvoice-ic{color:#23a55a;flex-shrink:0}
+.sb-hvoice-avs{display:flex;align-items:center}
+/* Overlapped, each ringed in the sidebar's own background so the stack reads
+   as separate faces rather than one smeared one. */
+/* display:flex, matching .vc-occ-av: Avatar's own span is inline-block at
+   100%/100%, and an inline-block in a block box picks up a baseline gap. */
+.sb-hvoice-av{position:relative;display:flex;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-left:-6px;box-shadow:0 0 0 2px var(--bg-raised)}
+.sb-hvoice-av:first-child{margin-left:0}
+/* Speaking ring, same green as the sidebar occupant rows' Avatar `ring`. Done
+   with box-shadow rather than that prop because these faces overlap: the prop
+   draws inside the image, which the neighbour would then cover. The z-index
+   lifts a speaking face above the one stacked on top of it, so its ring is a
+   whole ring rather than a crescent. */
+.sb-hvoice-av.speaking{z-index:1;box-shadow:0 0 0 2px var(--bg-raised),0 0 0 3.5px #23a55a}
+.sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
 .sb-body{flex:1;overflow-y:auto;padding:8px 0}
 
 .dm-item{display:flex;align-items:center;gap:10px;padding:6px 10px;margin:0 6px;border-radius:6px;cursor:pointer;transition:background .12s;position:relative}
@@ -4129,12 +4475,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:6px 8px 4px}
 .mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .12s}
 .mp-member:hover{background:var(--hover)}
+.mp-member.mp-offline{opacity:.5}
+.mp-member.mp-offline:hover{opacity:.8}
 .mp-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .mp-av img{width:100%;height:100%;border-radius:50%;object-fit:cover}
 .mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg-panel)}
 .mp-info{flex:1;min-width:0}
 .mp-name{display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mp-status{display:block;font-size:11px}
 
 /* Emoji float */
 .emoji-float{position:fixed;bottom:72px;right:20px;z-index:500;animation:pop-up .15s cubic-bezier(.4,0,.2,1)}

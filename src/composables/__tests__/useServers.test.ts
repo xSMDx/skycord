@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } from '../useServers'
-import type { WireServer, WireChannel, WireCategory } from '../useApi'
+import type { WireServer, WireChannel, WireCategory, WireMember } from '../useApi'
 
 /**
  * The composable's only I/O. Stubbed rather than reached, so `openServer`'s
@@ -10,10 +9,35 @@ import type { WireServer, WireChannel, WireCategory } from '../useApi'
  * cannot close over an ordinary const.
  */
 const api = vi.hoisted(() => ({
-  getMyServers:    vi.fn(),
-  getServerDetail: vi.fn(),
+  getMyServers:     vi.fn(),
+  getServerDetail:  vi.fn(),
+  getServerMembers: vi.fn(),
 }))
 vi.mock('../useApi', () => ({ useApi: () => api }))
+
+/**
+ * The other input to the composable, now that `voiceActivityByServer` exists:
+ * live call presence, which useServers reads as two module-level refs off
+ * useSocket.
+ *
+ * Mocked rather than imported for real so this suite keeps testing one thing.
+ * The real module pulls in socket.io-client, useAuth, useConvPrefs and
+ * useSounds purely as a side effect of wanting two refs, and none of that is
+ * under test here — while a hand-held ref lets a test state "these rooms are
+ * occupied, this one is empty" as a plain fact and read the answer straight
+ * back out. The shapes below are exactly the exported ones; if either drifts,
+ * `npm run typecheck` fails on the real call site in useServers.ts.
+ */
+const socket = vi.hoisted(() => ({
+  activeCalls:      null as unknown as { value: Record<string, string[]> },
+  voiceRoomServers: null as unknown as { value: Record<string, string> },
+}))
+vi.mock('../useSocket', async () => {
+  const { ref } = await import('vue')
+  socket.activeCalls      = ref<Record<string, string[]>>({})
+  socket.voiceRoomServers = ref<Record<string, string>>({})
+  return { activeCalls: socket.activeCalls, voiceRoomServers: socket.voiceRoomServers }
+})
 
 const wireServer = (id: string, name = id): WireServer => ({
   id, name, icon: null, iconCrop: null, bannerColor: null,
@@ -25,6 +49,11 @@ const wireChannel = (id: string, server: string, name: string, type: 'text' | 'v
 
 const wireCategory = (id: string, server: string, name: string, position = 0): WireCategory =>
   ({ id, server, name, position })
+
+const wireMember = (id: string, overrides: Partial<WireMember> = {}): WireMember => ({
+  id, username: id, displayName: id, avatar: null, avatarCrop: null,
+  status: 'online', isOwner: false, ...overrides,
+})
 
 /**
  * `vitest.config.mts` runs this suite under `environment: 'node'`, which has
@@ -45,6 +74,22 @@ class FakeStorage {
 }
 ;(globalThis as any).localStorage = new FakeStorage()
 
+// useServers now imports usePresence (activeMembers groups through
+// livePresence), and usePresence reads localStorage at module load for the
+// idle-timeout setting — the exact reason presenceById.test.ts imports it
+// dynamically instead of statically. ES module imports resolve, and the
+// imported module's body runs, before ANY of this file's own top-level code
+// does — regardless of where the `import … from '../useServers'` line sits
+// textually relative to the FakeStorage stub above. A static import here
+// would therefore evaluate usePresence (and its unguarded localStorage read)
+// before the stub exists, throwing ReferenceError: localStorage is not
+// defined. Dynamic import defers the load to this exact line, after the stub
+// is in place. `vi.mock('../useApi', …)` above still applies to it: Vitest's
+// mocking intercepts module resolution regardless of static vs. dynamic
+// import.
+const { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } = await import('../useServers')
+const { applyPresence, resetPresenceMap } = await import('../usePresence')
+
 describe('useServers', () => {
   let s: ReturnType<typeof useServers>
 
@@ -55,6 +100,9 @@ describe('useServers', () => {
     s.servers.value = []
     s.channelsByServer.value = {}
     s.categoriesByServer.value = {}
+    // Same rule as every other module-level ref here: goes in the reset the
+    // moment it exists, not after a test order happens to paper over a leak.
+    s.membersByServer.value = {}
     s.activeServerId.value = null
     s.activeChannelId.value = null
     s.unreadChannels.value = {}
@@ -70,6 +118,13 @@ describe('useServers', () => {
     ;(globalThis.localStorage as any).clear()
     api.getMyServers.mockReset()
     api.getServerDetail.mockReset()
+    api.getServerMembers.mockReset()
+    // usePresence's map is module-level too, shared with every other test
+    // file that imports it in this process — the same class of bug the
+    // comments above warn about, just in a different module. The live-
+    // presence test below writes into it via applyPresence and must not leak
+    // into a later test.
+    resetPresenceMap()
   })
 
   it('maps a wire server into the renderable client shape', () => {
@@ -566,6 +621,104 @@ describe('useServers', () => {
     await s.openServer('s9')
     expect(api.getServerDetail).toHaveBeenCalledWith('s9')
   })
+
+  // ── server members ───────────────────────────────────────────────────────
+
+  it('members land per server and do not leak between servers', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1'), wireMember('u2')] })
+    await s.loadServerMembers('s1')
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u3')] })
+    await s.loadServerMembers('s2')
+    expect(s.membersByServer.value['s1'].map(m => m.id)).toEqual(['u1', 'u2'])
+    expect(s.membersByServer.value['s2'].map(m => m.id)).toEqual(['u3'])
+  })
+
+  it('activeMembers splits into online and offline, with the owner first among the online', async () => {
+    api.getServerMembers.mockResolvedValueOnce({
+      members: [
+        wireMember('u1',    { status: 'online' }),
+        wireMember('owner', { status: 'idle', isOwner: true }),
+        wireMember('u3',    { status: 'offline' }),
+      ],
+    })
+    await s.loadServerMembers('s1')
+    s.activeServerId.value = 's1'
+    expect(s.activeMembers.value.online.map(m => m.id)).toEqual(['owner', 'u1'])
+    expect(s.activeMembers.value.offline.map(m => m.id)).toEqual(['u3'])
+  })
+
+  it("offline means offline — status === 'offline' groups down, everything else groups up", async () => {
+    api.getServerMembers.mockResolvedValueOnce({
+      members: [
+        wireMember('a', { status: 'online' }),
+        wireMember('b', { status: 'idle' }),
+        wireMember('c', { status: 'dnd' }),
+        wireMember('d', { status: 'offline' }),
+      ],
+    })
+    await s.loadServerMembers('s1')
+    s.activeServerId.value = 's1'
+    expect(s.activeMembers.value.online.map(m => m.id)).toEqual(['a', 'b', 'c'])
+    expect(s.activeMembers.value.offline.map(m => m.id)).toEqual(['d'])
+  })
+
+  it('groups by live presence, not the status that came with the fetch — the whole reason livePresence exists', async () => {
+    // Fetched as offline...
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1', { status: 'offline' })] })
+    await s.loadServerMembers('s1')
+    s.activeServerId.value = 's1'
+    expect(s.activeMembers.value.offline.map(m => m.id)).toEqual(['u1'])
+
+    // ...but a live presence event says online since. Grouping a member by
+    // its own fetched copy instead of livePresence is exactly the bug this
+    // composable's presence work already fixed on three other surfaces.
+    applyPresence('u1', 'online')
+    expect(s.activeMembers.value.online.map(m => m.id)).toEqual(['u1'])
+    expect(s.activeMembers.value.offline).toEqual([])
+  })
+
+  it('activeMembers is empty when no server is active', () => {
+    expect(s.activeMembers.value).toEqual({ online: [], offline: [] })
+  })
+
+  it('upsertMember adds a new member and updates an existing one in place', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1', { displayName: 'Old' })] })
+    await s.loadServerMembers('s1')
+    s.upsertMember('s1', wireMember('u2'))
+    expect(s.membersByServer.value['s1']).toHaveLength(2)
+    s.upsertMember('s1', wireMember('u1', { displayName: 'New' }))
+    expect(s.membersByServer.value['s1']).toHaveLength(2)
+    expect(s.membersByServer.value['s1'].find(m => m.id === 'u1')!.displayName).toBe('New')
+  })
+
+  it('ignores a member for a server whose list has not been fetched', () => {
+    // Mirrors upsertChannel/upsertCategory's identical guard: creating the
+    // bucket here would half-populate it, one member where the server
+    // actually has ten.
+    s.upsertMember('unknown', wireMember('ghost'))
+    expect(s.membersByServer.value['unknown']).toBeUndefined()
+  })
+
+  it('removeMember drops them', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1'), wireMember('u2')] })
+    await s.loadServerMembers('s1')
+    s.removeMember('s1', 'u1')
+    expect(s.membersByServer.value['s1'].map(m => m.id)).toEqual(['u2'])
+  })
+
+  it('removeServer drops its members', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1')] })
+    await s.loadServerMembers('s1')
+    s.removeServer('s1')
+    expect(s.membersByServer.value['s1']).toBeUndefined()
+  })
+
+  it('resetServers clears membersByServer', async () => {
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1')] })
+    await s.loadServerMembers('s1')
+    s.resetServers()
+    expect(s.membersByServer.value).toEqual({})
+  })
 })
 
 describe('serverIconFor', () => {
@@ -585,5 +738,115 @@ describe('serverIconFor', () => {
 
   it('does not crash on an empty name', () => {
     expect(serverIconFor('')).toContain('data:image/svg+xml')
+  })
+})
+
+/**
+ * The rail badge's whole derivation. Rendering is somebody else's problem —
+ * what is pinned here is the decision this computed makes about what counts
+ * as activity and which server it belongs to.
+ */
+describe('voiceActivityByServer', () => {
+  let s: ReturnType<typeof useServers>
+
+  beforeEach(() => {
+    s = useServers()
+    s.servers.value = []
+    s.channelsByServer.value = {}
+    s.categoriesByServer.value = {}
+    s.activeServerId.value = null
+    socket.activeCalls.value = {}
+    socket.voiceRoomServers.value = {}
+  })
+
+  it('attributes an occupied room to the server the payload names', () => {
+    socket.activeCalls.value      = { 'voice:c1': ['u1', 'u2'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.voiceActivityByServer.value).toEqual({
+      s1: [{ channelId: 'c1', channelName: null, userIds: ['u1', 'u2'] }],
+    })
+  })
+
+  /* The cold-load case, and the reason `serverId` exists on the wire at all:
+     no channel list for s1 has ever been fetched, so the badge can only come
+     from the payload. A `channelsByServer`-only derivation returns {} here. */
+  it('badges a server whose channel list was never fetched', () => {
+    s.upsertServer(wireServer('s1'))
+    socket.activeCalls.value      = { 'voice:c1': ['u1'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.channelsByServer.value['s1']).toBeUndefined()
+    expect(s.voiceActivityByServer.value['s1']).toHaveLength(1)
+    expect(s.voiceActivityByServer.value['s1'][0].channelName).toBeNull()
+  })
+
+  it('names the channel once that server’s channels are known', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'General', 'voice')], [])
+    socket.activeCalls.value      = { 'voice:c1': ['u1'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.voiceActivityByServer.value['s1'][0].channelName).toBe('General')
+  })
+
+  /* The payload's serverId wins, but the local channel list is a real
+     fallback: the server omits serverId when its channel->server map has no
+     entry for that channel, and we may hold the channel ourselves. */
+  it('falls back to the local channel list when the payload names no server', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'General', 'voice')], [])
+    socket.activeCalls.value = { 'voice:c1': ['u1'] }
+    expect(s.voiceActivityByServer.value['s1'][0].channelName).toBe('General')
+  })
+
+  it('drops a room neither source can attribute to a server', () => {
+    socket.activeCalls.value = { 'voice:c9': ['u1'] }
+    expect(s.voiceActivityByServer.value).toEqual({})
+  })
+
+  it('a room with no occupants is not activity', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'General', 'voice')], [])
+    socket.activeCalls.value      = { 'voice:c1': [] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.voiceActivityByServer.value).toEqual({})
+  })
+
+  /* Absent, not present-and-false. The template tests this map by lookup, so
+     an empty array under s2 would light a badge for a server where nobody is
+     talking. */
+  it('omits a server with no activity rather than listing it empty', () => {
+    s.upsertServer(wireServer('s1'))
+    s.upsertServer(wireServer('s2'))
+    socket.activeCalls.value      = { 'voice:c1': ['u1'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    const out = s.voiceActivityByServer.value
+    expect(Object.keys(out)).toEqual(['s1'])
+    expect('s2' in out).toBe(false)
+    expect(out['s2']).toBeUndefined()
+  })
+
+  it('ignores DM and group calls, which are not server activity', () => {
+    socket.activeCalls.value = { 'dm:u1_u2': ['u1', 'u2'], 'group:g1': ['u1'] }
+    expect(s.voiceActivityByServer.value).toEqual({})
+  })
+
+  it('collects every occupied channel in one server, named ones first', () => {
+    s.receiveDetail(wireServer('s1'), [
+      wireChannel('c1', 's1', 'Zulu',  'voice'),
+      wireChannel('c2', 's1', 'Alpha', 'voice'),
+    ], [])
+    socket.activeCalls.value = {
+      'voice:c1': ['u1'], 'voice:c2': ['u2'],
+      // Occupied, attributed to s1 by the payload, but not in the fetched
+      // list — an unnamed row, and it sorts last.
+      'voice:c3': ['u3'],
+    }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1', 'voice:c2': 's1', 'voice:c3': 's1' }
+    expect(s.voiceActivityByServer.value['s1'].map(a => a.channelName))
+      .toEqual(['Alpha', 'Zulu', null])
+  })
+
+  it('separates two servers that each have someone in voice', () => {
+    socket.activeCalls.value      = { 'voice:c1': ['u1'], 'voice:c2': ['u2', 'u3'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1', 'voice:c2': 's2' }
+    const out = s.voiceActivityByServer.value
+    expect(out['s1'][0].userIds).toEqual(['u1'])
+    expect(out['s2'][0].userIds).toEqual(['u2', 'u3'])
   })
 })

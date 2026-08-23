@@ -10,13 +10,24 @@
  */
 import { ref, computed } from 'vue'
 import type { Server, Channel, Category } from '@/types'
-import type { WireServer, WireChannel, WireCategory } from './useApi'
+import type { WireServer, WireChannel, WireCategory, WireMember } from './useApi'
 import { useApi } from './useApi'
 import { colorForUsername } from './useAvatar'
+import { livePresence } from './usePresence'
+import { activeCalls, voiceRoomServers } from './useSocket'
 
 const servers            = ref<Server[]>([])
 const channelsByServer   = ref<Record<string, Channel[]>>({})
 const categoriesByServer = ref<Record<string, Category[]>>({})
+/**
+ * Server members, keyed by server id — the same "fetched once, kept honest by
+ * events" shape as channelsByServer/categoriesByServer above.
+ *
+ * Holds the wire shape essentially verbatim (see `ServerMember` and
+ * `toClientMember` below): unlike a server/channel/category, a member has
+ * nothing to rename or reshape between the wire and the UI.
+ */
+const membersByServer    = ref<Record<string, ServerMember[]>>({})
 const activeServerId     = ref<string | null>(null)
 const activeChannelId    = ref<string | null>(null)
 /**
@@ -128,6 +139,37 @@ const toClientCategory = (w: WireCategory): Category => ({
   position: w.position,
 })
 
+/**
+ * A server member as the UI holds it. Unlike toClientServer/toClientChannel
+ * above, there is nothing to rename or reshape — getServerMembers already
+ * returns exactly the fields the panel needs.
+ */
+export interface ServerMember {
+  id:          string
+  username:    string
+  displayName: string
+  avatar:      string | null
+  avatarCrop:  { zoom: number; x: number; y: number } | null
+  /**
+   * effectiveStatus() at fetch time — a snapshot, nothing more. NEVER group
+   * or render a member by this field directly; always go through
+   * `livePresence(id, status)` first (see `activeMembers` below). A live
+   * value, once one has arrived, is the only thing allowed to win.
+   */
+  status:      string
+  isOwner:     boolean
+}
+
+const toClientMember = (w: WireMember): ServerMember => ({
+  id:          w.id,
+  username:    w.username,
+  displayName: w.displayName,
+  avatar:      w.avatar,
+  avatarCrop:  w.avatarCrop ?? null,
+  status:      w.status,
+  isOwner:     w.isOwner,
+})
+
 const byPosition = (a: Channel, b: Channel) => (a.position ?? 0) - (b.position ?? 0)
 const byCategoryPosition = (a: Category, b: Category) => (a.position ?? 0) - (b.position ?? 0)
 
@@ -145,6 +187,7 @@ export const resetServers = () => {
   servers.value            = []
   channelsByServer.value   = {}
   categoriesByServer.value = {}
+  membersByServer.value    = {}
   activeServerId.value     = null
   activeChannelId.value    = null
   viewedVoiceId.value      = null
@@ -186,6 +229,7 @@ export const useServers = () => {
     servers.value = servers.value.filter(s => s.id !== sid)
     delete channelsByServer.value[sid]
     delete categoriesByServer.value[sid]
+    delete membersByServer.value[sid]
     delete lastChannelIn.value[sid]
     cats.forEach(c => { delete collapsedCategories.value[collapseKey(sid, c.id)] })
     if (cats.length) writeCollapsedCategories(collapsedCategories.value)
@@ -287,6 +331,27 @@ export const useServers = () => {
     writeCollapsedCategories(collapsedCategories.value)
   }
 
+  /**
+   * Mirrors upsertChannel/upsertCategory's guard exactly, for the same
+   * reason: a member for a server whose list hasn't been fetched has nowhere
+   * to go. Creating the bucket here would half-populate it — one member
+   * where the server actually has ten — the moment `server:memberJoined`
+   * arrives before `loadServerMembers` ever ran.
+   */
+  const upsertMember = (sid: string, w: WireMember) => {
+    const list = membersByServer.value[sid]
+    if (!list) return
+    const next = toClientMember(w)
+    const i = list.findIndex(m => m.id === next.id)
+    if (i === -1) list.push(next)
+    else list[i] = next
+  }
+
+  const removeMember = (sid: string, uid: string) => {
+    const list = membersByServer.value[sid]
+    if (list) membersByServer.value[sid] = list.filter(m => m.id !== uid)
+  }
+
   /** Fold/unfold a category in the sidebar. A view concern only — it never
    *  touches which channel is active, even if that channel sits inside the
    *  category being collapsed. */
@@ -337,6 +402,11 @@ export const useServers = () => {
     list.forEach(upsertServer)
   }
 
+  const loadServerMembers = async (sid: string) => {
+    const { members } = await api.getServerMembers(sid)
+    membersByServer.value[sid] = members.map(toClientMember)
+  }
+
   const loadServerDetail = async (sid: string) => {
     const { server, channels, categories } = await api.getServerDetail(sid)
     receiveDetail(server, channels, categories)
@@ -370,12 +440,101 @@ export const useServers = () => {
 
   // ── Derived ─────────────────────────────────────────────────────────────
 
+  /**
+   * Which servers have someone sitting in one of their voice channels, and
+   * where. Keyed by server id; **a server with no voice activity is ABSENT**,
+   * not present with an empty array — so `voiceActivityByServer[sid]` is
+   * directly usable as the "does this server get a badge?" test and there is
+   * no second, emptier way to say "nothing here".
+   *
+   * Attribution comes from the `serverId` the server puts on `call:state`
+   * (`voiceRoomServers`) FIRST, and only falls back to the local channel list.
+   * That ordering is the whole reason the rail badge works on a cold load:
+   * `channelsByServer` is populated per server as you open it, so a
+   * channel-list-only derivation would light up a badge for the one server you
+   * happened to visit and stay dark for the other nine you belong to — even
+   * though the connect-time catch-up already told us about every one of them.
+   * The fallback still earns its place: it covers a room whose channel the
+   * server could not attribute (`serverId` omitted) but whose channel WE hold.
+   *
+   * `channelName` is null when the channel list for that server has not been
+   * fetched. Occupancy is known server-wide; names are not, and inventing one
+   * or hiding the row would both be worse than saying so — see the rail hover
+   * preview in ChatApp.vue, which renders the null case as an unnamed row.
+   *
+   * A room with zero occupants is not activity. The socket layer deletes such
+   * rooms outright, so this is belt-and-braces against a payload that reports
+   * an empty list some other way.
+   */
+  const voiceActivityByServer = computed<Record<string, VoiceActivity[]>>(() => {
+    // channelId -> its server and name, for everything we have actually
+    // fetched. Built once per recompute rather than re-scanned per room.
+    const known: Record<string, { serverId: string; name: string }> = {}
+    for (const [sid, list] of Object.entries(channelsByServer.value))
+      for (const ch of list) if (ch.type === 'voice') known[ch.id] = { serverId: sid, name: ch.name }
+
+    const out: Record<string, VoiceActivity[]> = {}
+    for (const [room, userIds] of Object.entries(activeCalls.value)) {
+      if (!room.startsWith('voice:')) continue      // dm:/group: calls are not server activity
+      if (!userIds?.length) continue                // an empty room is not activity
+      const channelId = room.slice(6)
+      const local     = known[channelId]
+      const serverId  = voiceRoomServers.value[room] ?? local?.serverId
+      // Neither source can name a server for this room. There is no rail icon
+      // to hang it on, so it is dropped rather than bucketed under a made-up key.
+      if (!serverId) continue
+      if (!out[serverId]) out[serverId] = []
+      out[serverId].push({ channelId, channelName: local?.name ?? null, userIds })
+    }
+
+    // Deterministic order, so the hover preview does not reshuffle its rows
+    // every time an unrelated room's occupancy changes. Named channels sort
+    // alphabetically; the ones we cannot name go last, ordered by id.
+    for (const list of Object.values(out))
+      list.sort((a, b) =>
+        a.channelName === null || b.channelName === null
+          ? (a.channelName === null ? 1 : 0) - (b.channelName === null ? 1 : 0) ||
+            a.channelId.localeCompare(b.channelId)
+          : a.channelName.localeCompare(b.channelName))
+
+    return out
+  })
+
   const activeServer     = computed(() => servers.value.find(s => s.id === activeServerId.value) ?? null)
   const activeChannels   = computed(() =>
     activeServerId.value ? channelsByServer.value[activeServerId.value] ?? [] : [])
   const activeCategories = computed(() =>
     activeServerId.value ? categoriesByServer.value[activeServerId.value] ?? [] : [])
   const activeChannel    = computed(() => activeChannels.value.find(c => c.id === activeChannelId.value) ?? null)
+
+  /**
+   * What the members panel renders: the active server's members split into
+   * Online and Offline, owner first among the online.
+   *
+   * Grouped by `livePresence(id, status)`, NEVER by the `status` a member
+   * carries from the fetch. That field is a snapshot from whenever
+   * loadServerMembers (or the last upsertMember) ran; reading it directly
+   * here is exactly the bug this project's presence work already fixed on
+   * three other surfaces — a member would show one status in the dot next to
+   * their name (which every surface already draws via livePresence) while
+   * this list quietly grouped them under a different, stale one.
+   * `livePresence` is the single place that knows which value is current, so
+   * this asks it too, the same as everyone else.
+   *
+   * `.sort` is stable (guaranteed since ES2019), so the owner-first sort
+   * below only ever moves the owner to the front — everyone else keeps
+   * whatever order the list was already in.
+   */
+  const activeMembers = computed(() => {
+    const list = activeServerId.value ? membersByServer.value[activeServerId.value] ?? [] : []
+    const online: ServerMember[] = []
+    const offline: ServerMember[] = []
+    for (const m of list) {
+      (livePresence(m.id, m.status) === 'offline' ? offline : online).push(m)
+    }
+    online.sort((a, b) => (a.isOwner === b.isOwner ? 0 : a.isOwner ? -1 : 1))
+    return { online, offline }
+  })
 
   /**
    * What the sidebar renders: uncategorised first (category: null), then
@@ -430,18 +589,20 @@ export const useServers = () => {
 
   return {
     resetServers,
-    servers, channelsByServer, categoriesByServer, activeServerId, activeChannelId,
+    servers, channelsByServer, categoriesByServer, membersByServer, activeServerId, activeChannelId,
     viewedVoiceId,
     unreadChannels, lastChannelIn, collapsedCategories,
     // No flat `textChannels`/`voiceChannels` any more: the sidebar renders
     // `groupedChannels`, which already splits each group into text and voice,
     // and a whole-server flat list alongside it could only ever draw every
     // channel a second time outside its group.
-    activeServer, activeChannel, activeCategories, groupedChannels,
+    activeServer, activeChannel, activeCategories, groupedChannels, activeMembers,
+    voiceActivityByServer,
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     upsertCategory, removeCategory, toggleCategory,
+    upsertMember, removeMember,
     markUnread, clearUnread, selectLanding, openChannel, viewVoiceChannel,
-    loadServers, loadServerDetail, openServer,
+    loadServers, loadServerDetail, loadServerMembers, openServer,
   }
 }
 
@@ -455,4 +616,18 @@ export interface ChannelGroup {
   category: Category | null
   text:     Channel[]
   voice:    Channel[]
+}
+
+/**
+ * One occupied voice channel, as `voiceActivityByServer` reports it. See that
+ * computed for why `channelName` is nullable — the short version is that the
+ * server tells us WHERE someone is talking for every server you belong to, but
+ * only a server whose detail you have fetched can tell us what to call it.
+ */
+export interface VoiceActivity {
+  channelId:   string
+  /** null when this server's channel list has never been fetched. */
+  channelName: string | null
+  /** Never empty — an unoccupied room is not activity and is filtered out. */
+  userIds:     string[]
 }

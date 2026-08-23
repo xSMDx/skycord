@@ -29,7 +29,73 @@ const connState = ref<ConnState>('connecting')
 const typingUsers = ref<Record<string, { username: string; timer: ReturnType<typeof setTimeout> }>>({})
 // Active voice calls: LiveKit room name -> userIds currently in it (server-tracked
 // presence, so the UI can show Join / "In a call" without being in the room).
-const activeCalls = ref<Record<string, string[]>>({})
+//
+// Exported as a module binding as well as through `useSocket()`: the derived
+// "which servers have voice activity" computed lives in useServers, which has
+// no reason to instantiate the whole socket facade just to read one ref.
+export const activeCalls = ref<Record<string, string[]>>({})
+
+/**
+ * `voice:<channelId>` room name -> the id of the server that channel belongs to.
+ *
+ * A sibling of `activeCalls` rather than a field inside it, because the two
+ * answer different questions and only one of them is universal: EVERY room
+ * kind (dm:, group:, voice:) has occupants, only a voice room has a server.
+ * `activeCalls`'s shape is read in a dozen places as "room -> who is in it",
+ * and widening it to a wrapper object to carry a field that is meaningless for
+ * two of the three room kinds would cost every one of those call sites.
+ *
+ * Written in the same handler, in the same branch, as `activeCalls` — the two
+ * cannot drift because there is exactly one place that touches either.
+ *
+ * This is the field that makes a rail badge possible at all. The server fills
+ * it from a channel->server map and replays occupancy for every server you
+ * belong to at connect time, so on a fresh load the client knows a server has
+ * someone in voice WITHOUT having fetched that server's channel list. Deriving
+ * the badge from `channelsByServer` alone would silently limit it to servers
+ * you had already opened this session.
+ */
+export const voiceRoomServers = ref<Record<string, string>>({})
+
+/**
+ * Forget a voice room outright — occupancy and attribution together.
+ *
+ * Deleting an occupied voice channel is the one case the `call:state` stream
+ * cannot close by itself. The server empties `chan:<id>` as part of the
+ * delete, so when the last occupant leaves afterwards, the "room is now empty"
+ * broadcast is addressed to a room nobody is in and reaches no client.
+ *
+ * That used to be harmless: `voiceActivityByServer` could not name a server
+ * for a channel that had left `channelsByServer`, so a stale `activeCalls`
+ * entry was dropped on the floor. The attribution map answers that question
+ * from the wire now, which removes the accidental self-heal — a stale entry
+ * keeps the rail badge lit and the hover preview populated for the rest of
+ * the session, for every member who was online when the channel was deleted.
+ */
+export const forgetVoiceRoom = (channelId: string): void => {
+  const room = `voice:${channelId}`
+  if (room in activeCalls.value) {
+    const next = { ...activeCalls.value }; delete next[room]; activeCalls.value = next
+  }
+  if (room in voiceRoomServers.value) {
+    const next = { ...voiceRoomServers.value }; delete next[room]; voiceRoomServers.value = next
+  }
+}
+
+/**
+ * Drop every call this session knew about.
+ *
+ * Logging out swaps the shell for the auth page without a page reload, so
+ * anything left in a module ref is inherited by whoever logs in next —
+ * `resetServers` and `resetPresenceMap` are called at the same seam and say
+ * exactly this. These two were missed there because until the rail badge
+ * existed, no surface rendered a call the viewer was not a participant in, so
+ * a leaked entry had nowhere to show up.
+ */
+export const resetCalls = (): void => {
+  activeCalls.value     = {}
+  voiceRoomServers.value = {}
+}
 
 let _activeDMPartnerId: string | null = null
 export const setActiveDMPartner = (id: string | null) => { _activeDMPartnerId = id }
@@ -239,11 +305,30 @@ export const useSocket = () => {
     _socket.on('mention:everyone', (p: any) => { soundNotification(); _h.onMentionEveryone(p) })
 
     // Voice-call presence — server broadcasts who is in each room.
-    _socket.on('call:state', (p: { room: string; userIds: string[] }) => {
+    //
+    // `serverId` rides along on voice rooms (see voiceRoomServers above) and is
+    // kept in step with occupancy here, in the one handler that owns both.
+    _socket.on('call:state', (p: { room: string; userIds: string[]; serverId?: string }) => {
       const next = { ...activeCalls.value }
       if (p.userIds?.length) next[p.room] = p.userIds
       else delete next[p.room]
       activeCalls.value = next
+
+      // Three cases, and the third is the interesting one. Empty room -> drop
+      // the attribution with the occupancy. Carries a serverId -> record it.
+      // Occupied but carries NO serverId -> leave whatever we already knew
+      // alone. The server omits the field when its channel->server map has no
+      // entry for that channel, and a payload that says nothing about which
+      // server this is must not erase a correct answer we were given earlier.
+      if (!p.userIds?.length) {
+        if (p.room in voiceRoomServers.value) {
+          const drop = { ...voiceRoomServers.value }
+          delete drop[p.room]
+          voiceRoomServers.value = drop
+        }
+      } else if (p.serverId && voiceRoomServers.value[p.room] !== p.serverId) {
+        voiceRoomServers.value = { ...voiceRoomServers.value, [p.room]: p.serverId }
+      }
     })
   }
 
@@ -305,7 +390,7 @@ export const useSocket = () => {
   const on = (event: string, cb: CB<any>) => { _h[event] = cb }
 
   return {
-    connected, connState, typingUsers, activeCalls,
+    connected, connState, typingUsers, activeCalls, voiceRoomServers,
     /** Manual retry, for the "Try again" affordance once we've given up. */
     retry: () => { connState.value = 'connecting'; _socket?.connect() },
     connect, disconnect,

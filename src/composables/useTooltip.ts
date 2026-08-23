@@ -29,7 +29,13 @@ export const tip = reactive({
  * just passing through. So: wait once, then stay "warm" briefly, which is how
  * native toolbars behave.
  */
-const OPEN_DELAY = 400
+/**
+ * Exported so the one surface that cannot use a tooltip — the rail's voice
+ * hover preview, which needs rich content this primitive can't carry — can
+ * wait exactly as long before appearing. Two hover affordances on the same
+ * strip of rail with different delays reads as one of them being broken.
+ */
+export const OPEN_DELAY = 400
 const WARM_FOR   = 900
 
 let openTimer: ReturnType<typeof setTimeout> | null = null
