@@ -55,7 +55,7 @@ fixes; three are real features, two of which need new backend.
 The user's decision, after being offered a six-colour scheme: **"lets keep it simple 2 colors green
 and black like pic 1."**
 
-- [ ] **Step 1**
+- [x] **Step 1**
 
 `.ri-voice` is green for everyone right now. Make it mean something: **green when you are in that
 server's voice**, **black/dark when there is voice activity you are not part of**. Derive
@@ -64,7 +64,7 @@ server's voice**, **black/dark when there is voice activity you are not part of*
 Keep the existing ring (`box-shadow: 0 0 0 2px var(--bg-floor)`) so the dark state still reads as a
 badge against a dark rail rather than disappearing into it. Check it in both themes.
 
-- [ ] **Step 2:** Typecheck, full suite, build, commit.
+- [x] **Step 2:** Typecheck, full suite, build, commit.
 
 ---
 
@@ -75,20 +75,20 @@ badge against a dark rail rather than disappearing into it. Check it in both the
 The flyout grows a live preview inside itself, which is what the user photographed as wrong. The
 reference (Discord's "Ready to video chat?") is a centred modal — and this project already has one.
 
-- [ ] **Step 1**
+- [x] **Step 1**
 
 Read `CameraPreviewModal.vue` first and report what it already does. Compare it against the
 reference: a preview area, a camera picker, an "Always preview video" preference, and a
 "Turn On Camera" confirm. Build only what is missing.
 
-- [ ] **Step 2**
+- [x] **Step 2**
 
 Make the flyout's preview row **open that modal** and close the flyout, instead of expanding
 `.cf-prevbox`. Delete the inline preview and its `previewing` / `startPreview` / `stopPreview`
 machinery **only if nothing else uses it** — check, do not assume. Any temporary capture the
 inline preview owned must still be stopped; a leaked camera track is a lit webcam LED.
 
-- [ ] **Step 3:** Typecheck, full suite, build, commit.
+- [x] **Step 3:** Typecheck, full suite, build, commit.
 
 ---
 
@@ -99,7 +99,7 @@ inline preview owned must still be stopped; a leaked camera track is a lit webca
 The user arrowed both `.cb-chev` buttons. They are static; the flyout they open gives no visual
 acknowledgement from the control itself.
 
-- [ ] **Step 1**
+- [x] **Step 1**
 
 Rotate each chevron 180 degrees while its own flyout is open, with a real transition — not the
 instant inline `transform` the expand chevron uses. Only the chevron whose menu is open moves.
@@ -108,7 +108,7 @@ Respect `prefers-reduced-motion`: the rotation is decoration, so it should snap 
 animate for users who have asked for less movement. Check whether this file or the global stylesheet
 already has a reduced-motion block and follow it rather than inventing a second convention.
 
-- [ ] **Step 2:** Typecheck, full suite, build, commit.
+- [x] **Step 2:** Typecheck, full suite, build, commit.
 
 ---
 
@@ -116,7 +116,7 @@ already has a reduced-motion block and follow it rather than inventing a second 
 
 **Files:** Modify `src/views/ChatApp.vue`, `src/composables/useServers.ts`, `src/composables/useApi.ts`
 
-- [ ] **Step 1: Animate collapse**
+- [x] **Step 1: Animate collapse**
 
 `collapsedCategories` flips a boolean and the channels vanish. Animate open and close. A CSS
 `height` transition needs a measured height because `auto` does not animate — use the standard
@@ -126,7 +126,7 @@ hold different numbers of channels and channel names wrap.
 The category's own chevron should rotate with the same timing, so one gesture reads as one motion.
 Same reduced-motion rule as Task 3.
 
-- [ ] **Step 2: Write the failing tests for the move**
+- [x] **Step 2: Write the failing tests for the move**
 
 Before touching drag: `updateChannel` already accepts `category`, so the client work is a call it
 does not currently make. Add a `moveChannel(sid, cid, categoryId | null)` wrapper in `useApi.ts` and
@@ -137,7 +137,7 @@ cover in `useServers.test.ts`:
 - `groupedChannels` order stays deterministic afterwards
 - a move the server rejects does not leave the sidebar showing the optimistic position
 
-- [ ] **Step 3: The drag primitive**
+- [x] **Step 3: The drag primitive**
 
 There is **no list-reordering primitive anywhere in `src/`** — the only drag code is image cropping
 and bottom-sheet dragging, and neither generalises. Build the smallest thing that works for this
@@ -151,7 +151,7 @@ Requirements:
   do not offer the affordance to someone who cannot use it.
 - The sidebar must not be left showing a move the server refused.
 
-- [ ] **Step 4:** Typecheck, full suite, build, commit.
+- [x] **Step 4:** Typecheck, full suite, build, commit.
 
 ---
 
@@ -164,12 +164,12 @@ plus tests
 The user chose **"Member list + real timers"**, which reverses the earlier chevrons-only decision.
 The chevrons must now open something.
 
-- [ ] **Step 1: Restyle the member list**
+- [x] **Step 1: Restyle the member list**
 
 Match the reference's grouping and density. Sections, section counts, dimmed offline block. Keep
 the grouping logic in `activeMembers` — it is tested; this is presentation only.
 
-- [ ] **Step 2: Write the failing backend tests**
+- [x] **Step 2: Write the failing backend tests**
 
 `User.status` has no expiry. `ICustomStatus.clearAt` + `liveStatus()` is the pattern to mirror:
 **expiry on read, no sweeper**. Add `statusUntil: Date | null`.
@@ -184,13 +184,13 @@ Cover in `server/__tests__/`:
 - the expiry is applied inside `effectiveStatus`, so **every** caller gets it — a second copy of
   this logic is how `invisible` once leaked verbatim
 
-- [ ] **Step 3: Implement the backend**
+- [x] **Step 3: Implement the backend**
 
 Expiry belongs in `effectiveStatus` because that is the single funnel every public payload goes
 through. Remember a Mongoose `default` does not reach already-stored rows, and `.lean()` reads
 `undefined` where a hydrated doc reads `null` — treat both as "no expiry".
 
-- [ ] **Step 4: The submenus**
+- [x] **Step 4: The submenus**
 
 Chevrons open a duration list: 15 Minutes, 1 Hour, 8 Hours, 24 Hours, 3 Days, Forever. Picking a
 duration sets the status **and** its expiry. Clicking the status row itself still sets it instantly
@@ -198,7 +198,7 @@ with no expiry — the chevron is the only thing that opens the submenu.
 
 The UI must show a status that expired while the tab was open without needing a reload.
 
-- [ ] **Step 5:** Typecheck, full suite, build, commit.
+- [x] **Step 5:** Typecheck, full suite, build, commit.
 
 ---
 
@@ -211,7 +211,7 @@ The user's words: **"when some one hit the see more it will show the modal, and 
 like a group invite and a channel invite which will directly join you in that voice chat if you hit
 join."**
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `ServerInvite` has no channel field. Add a nullable `channel`, and thread it through preview and
 join so the client knows where to land.
@@ -227,46 +227,46 @@ Cover:
 - an already-member using a channel invite still gets the channel back (they should land in voice
   even though there is no join to perform)
 
-- [ ] **Step 2: Backend**
+- [x] **Step 2: Backend**
 
 Mirror `updateChannel`'s category resolution for validating that the channel belongs to this server.
 
-- [ ] **Step 3: The inline flyout**
+- [x] **Step 3: The inline flyout**
 
 An "Invite to Voice" row under a voice channel, listing a few friends with a one-click invite, and
 a **"See more…"** that opens the modal. Check what an invite actually *delivers* to the recipient
 before designing this — if there is no notification path, say so in your report rather than building
 a button that silently does nothing.
 
-- [ ] **Step 4: The modal**
+- [x] **Step 4: The modal**
 
 Search, the server's member list, per-row invite, and the shareable link. Reuse `activeMembers`
 from 3f rather than fetching members again.
 
-- [ ] **Step 5: Landing in voice**
+- [x] **Step 5: Landing in voice**
 
 Following a channel invite joins the server and connects to that voice channel. The three-way room
 naming contract still applies: `roomFor`, `callRoom` and `voiceRoomName` must all produce
 `voice:<channelId>`.
 
-- [ ] **Step 6:** Typecheck, full suite, build, commit.
+- [x] **Step 6:** Typecheck, full suite, build, commit.
 
 ---
 
 ### Task 7: Browser verification
 
-- [ ] **Set the viewport to at least 1280 wide first.** A previous pass was run at 374px, where the
+- [x] **Set the viewport to at least 1280 wide first.** A previous pass was run at 374px, where the
       app is in `.shell.mobile` and the rail is `display:none` — and hidden DOM answers
       `querySelector` perfectly well, so every check read as a pass while nothing was on screen.
-- [ ] The voice badge is green when you are in the call and dark when you are not.
-- [ ] The camera preview row opens the modal; no inline box; no camera left running after closing.
-- [ ] Both chevrons rotate when their flyout opens and return when it closes.
-- [ ] Categories animate open and closed, chevron included.
-- [ ] A channel drags into another category and stays there after a reload. A voice channel too.
-- [ ] Dragging is not offered to a non-owner.
-- [ ] The member list matches the reference.
-- [ ] A timed status expires on its own, visibly, without a reload — and an expired invisible reads
+- [x] The voice badge is green when you are in the call and dark when you are not.
+- [x] The camera preview row opens the modal; no inline box; no camera left running after closing.
+- [x] Both chevrons rotate when their flyout opens and return when it closes.
+- [x] Categories animate open and closed, chevron included.
+- [x] A channel drags into another category and stays there after a reload. A voice channel too.
+- [x] Dragging is not offered to a non-owner.
+- [x] The member list matches the reference.
+- [x] A timed status expires on its own, visibly, without a reload — and an expired invisible reads
       as online, never as "invisible".
-- [ ] Invite to Voice: the inline list invites, "See more…" opens the modal, and following the
+- [x] Invite to Voice: the inline list invites, "See more…" opens the modal, and following the
       invite lands you in that voice channel.
-- [ ] Console errors and any 4xx.
+- [x] Console errors and any 4xx.
