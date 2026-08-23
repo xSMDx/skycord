@@ -15,6 +15,30 @@ const api = vi.hoisted(() => ({
 }))
 vi.mock('../useApi', () => ({ useApi: () => api }))
 
+/**
+ * The other input to the composable, now that `voiceActivityByServer` exists:
+ * live call presence, which useServers reads as two module-level refs off
+ * useSocket.
+ *
+ * Mocked rather than imported for real so this suite keeps testing one thing.
+ * The real module pulls in socket.io-client, useAuth, useConvPrefs and
+ * useSounds purely as a side effect of wanting two refs, and none of that is
+ * under test here — while a hand-held ref lets a test state "these rooms are
+ * occupied, this one is empty" as a plain fact and read the answer straight
+ * back out. The shapes below are exactly the exported ones; if either drifts,
+ * `npm run typecheck` fails on the real call site in useServers.ts.
+ */
+const socket = vi.hoisted(() => ({
+  activeCalls:      null as unknown as { value: Record<string, string[]> },
+  voiceRoomServers: null as unknown as { value: Record<string, string> },
+}))
+vi.mock('../useSocket', async () => {
+  const { ref } = await import('vue')
+  socket.activeCalls      = ref<Record<string, string[]>>({})
+  socket.voiceRoomServers = ref<Record<string, string>>({})
+  return { activeCalls: socket.activeCalls, voiceRoomServers: socket.voiceRoomServers }
+})
+
 const wireServer = (id: string, name = id): WireServer => ({
   id, name, icon: null, iconCrop: null, bannerColor: null,
   description: null, owner: 'u1', memberCount: 1, createdAt: '2026-08-19T00:00:00.000Z',
@@ -714,5 +738,115 @@ describe('serverIconFor', () => {
 
   it('does not crash on an empty name', () => {
     expect(serverIconFor('')).toContain('data:image/svg+xml')
+  })
+})
+
+/**
+ * The rail badge's whole derivation. Rendering is somebody else's problem —
+ * what is pinned here is the decision this computed makes about what counts
+ * as activity and which server it belongs to.
+ */
+describe('voiceActivityByServer', () => {
+  let s: ReturnType<typeof useServers>
+
+  beforeEach(() => {
+    s = useServers()
+    s.servers.value = []
+    s.channelsByServer.value = {}
+    s.categoriesByServer.value = {}
+    s.activeServerId.value = null
+    socket.activeCalls.value = {}
+    socket.voiceRoomServers.value = {}
+  })
+
+  it('attributes an occupied room to the server the payload names', () => {
+    socket.activeCalls.value      = { 'voice:c1': ['u1', 'u2'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.voiceActivityByServer.value).toEqual({
+      s1: [{ channelId: 'c1', channelName: null, userIds: ['u1', 'u2'] }],
+    })
+  })
+
+  /* The cold-load case, and the reason `serverId` exists on the wire at all:
+     no channel list for s1 has ever been fetched, so the badge can only come
+     from the payload. A `channelsByServer`-only derivation returns {} here. */
+  it('badges a server whose channel list was never fetched', () => {
+    s.upsertServer(wireServer('s1'))
+    socket.activeCalls.value      = { 'voice:c1': ['u1'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.channelsByServer.value['s1']).toBeUndefined()
+    expect(s.voiceActivityByServer.value['s1']).toHaveLength(1)
+    expect(s.voiceActivityByServer.value['s1'][0].channelName).toBeNull()
+  })
+
+  it('names the channel once that server’s channels are known', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'General', 'voice')], [])
+    socket.activeCalls.value      = { 'voice:c1': ['u1'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.voiceActivityByServer.value['s1'][0].channelName).toBe('General')
+  })
+
+  /* The payload's serverId wins, but the local channel list is a real
+     fallback: the server omits serverId when its channel->server map has no
+     entry for that channel, and we may hold the channel ourselves. */
+  it('falls back to the local channel list when the payload names no server', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'General', 'voice')], [])
+    socket.activeCalls.value = { 'voice:c1': ['u1'] }
+    expect(s.voiceActivityByServer.value['s1'][0].channelName).toBe('General')
+  })
+
+  it('drops a room neither source can attribute to a server', () => {
+    socket.activeCalls.value = { 'voice:c9': ['u1'] }
+    expect(s.voiceActivityByServer.value).toEqual({})
+  })
+
+  it('a room with no occupants is not activity', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'General', 'voice')], [])
+    socket.activeCalls.value      = { 'voice:c1': [] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    expect(s.voiceActivityByServer.value).toEqual({})
+  })
+
+  /* Absent, not present-and-false. The template tests this map by lookup, so
+     an empty array under s2 would light a badge for a server where nobody is
+     talking. */
+  it('omits a server with no activity rather than listing it empty', () => {
+    s.upsertServer(wireServer('s1'))
+    s.upsertServer(wireServer('s2'))
+    socket.activeCalls.value      = { 'voice:c1': ['u1'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1' }
+    const out = s.voiceActivityByServer.value
+    expect(Object.keys(out)).toEqual(['s1'])
+    expect('s2' in out).toBe(false)
+    expect(out['s2']).toBeUndefined()
+  })
+
+  it('ignores DM and group calls, which are not server activity', () => {
+    socket.activeCalls.value = { 'dm:u1_u2': ['u1', 'u2'], 'group:g1': ['u1'] }
+    expect(s.voiceActivityByServer.value).toEqual({})
+  })
+
+  it('collects every occupied channel in one server, named ones first', () => {
+    s.receiveDetail(wireServer('s1'), [
+      wireChannel('c1', 's1', 'Zulu',  'voice'),
+      wireChannel('c2', 's1', 'Alpha', 'voice'),
+    ], [])
+    socket.activeCalls.value = {
+      'voice:c1': ['u1'], 'voice:c2': ['u2'],
+      // Occupied, attributed to s1 by the payload, but not in the fetched
+      // list — an unnamed row, and it sorts last.
+      'voice:c3': ['u3'],
+    }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1', 'voice:c2': 's1', 'voice:c3': 's1' }
+    expect(s.voiceActivityByServer.value['s1'].map(a => a.channelName))
+      .toEqual(['Alpha', 'Zulu', null])
+  })
+
+  it('separates two servers that each have someone in voice', () => {
+    socket.activeCalls.value      = { 'voice:c1': ['u1'], 'voice:c2': ['u2', 'u3'] }
+    socket.voiceRoomServers.value = { 'voice:c1': 's1', 'voice:c2': 's2' }
+    const out = s.voiceActivityByServer.value
+    expect(out['s1'][0].userIds).toEqual(['u1'])
+    expect(out['s2'][0].userIds).toEqual(['u2', 'u3'])
   })
 })

@@ -14,6 +14,7 @@ import type { WireServer, WireChannel, WireCategory, WireMember } from './useApi
 import { useApi } from './useApi'
 import { colorForUsername } from './useAvatar'
 import { livePresence } from './usePresence'
+import { activeCalls, voiceRoomServers } from './useSocket'
 
 const servers            = ref<Server[]>([])
 const channelsByServer   = ref<Record<string, Channel[]>>({})
@@ -439,6 +440,66 @@ export const useServers = () => {
 
   // ── Derived ─────────────────────────────────────────────────────────────
 
+  /**
+   * Which servers have someone sitting in one of their voice channels, and
+   * where. Keyed by server id; **a server with no voice activity is ABSENT**,
+   * not present with an empty array — so `voiceActivityByServer[sid]` is
+   * directly usable as the "does this server get a badge?" test and there is
+   * no second, emptier way to say "nothing here".
+   *
+   * Attribution comes from the `serverId` the server puts on `call:state`
+   * (`voiceRoomServers`) FIRST, and only falls back to the local channel list.
+   * That ordering is the whole reason the rail badge works on a cold load:
+   * `channelsByServer` is populated per server as you open it, so a
+   * channel-list-only derivation would light up a badge for the one server you
+   * happened to visit and stay dark for the other nine you belong to — even
+   * though the connect-time catch-up already told us about every one of them.
+   * The fallback still earns its place: it covers a room whose channel the
+   * server could not attribute (`serverId` omitted) but whose channel WE hold.
+   *
+   * `channelName` is null when the channel list for that server has not been
+   * fetched. Occupancy is known server-wide; names are not, and inventing one
+   * or hiding the row would both be worse than saying so — see the rail hover
+   * preview in ChatApp.vue, which renders the null case as an unnamed row.
+   *
+   * A room with zero occupants is not activity. The socket layer deletes such
+   * rooms outright, so this is belt-and-braces against a payload that reports
+   * an empty list some other way.
+   */
+  const voiceActivityByServer = computed<Record<string, VoiceActivity[]>>(() => {
+    // channelId -> its server and name, for everything we have actually
+    // fetched. Built once per recompute rather than re-scanned per room.
+    const known: Record<string, { serverId: string; name: string }> = {}
+    for (const [sid, list] of Object.entries(channelsByServer.value))
+      for (const ch of list) if (ch.type === 'voice') known[ch.id] = { serverId: sid, name: ch.name }
+
+    const out: Record<string, VoiceActivity[]> = {}
+    for (const [room, userIds] of Object.entries(activeCalls.value)) {
+      if (!room.startsWith('voice:')) continue      // dm:/group: calls are not server activity
+      if (!userIds?.length) continue                // an empty room is not activity
+      const channelId = room.slice(6)
+      const local     = known[channelId]
+      const serverId  = voiceRoomServers.value[room] ?? local?.serverId
+      // Neither source can name a server for this room. There is no rail icon
+      // to hang it on, so it is dropped rather than bucketed under a made-up key.
+      if (!serverId) continue
+      if (!out[serverId]) out[serverId] = []
+      out[serverId].push({ channelId, channelName: local?.name ?? null, userIds })
+    }
+
+    // Deterministic order, so the hover preview does not reshuffle its rows
+    // every time an unrelated room's occupancy changes. Named channels sort
+    // alphabetically; the ones we cannot name go last, ordered by id.
+    for (const list of Object.values(out))
+      list.sort((a, b) =>
+        a.channelName === null || b.channelName === null
+          ? (a.channelName === null ? 1 : 0) - (b.channelName === null ? 1 : 0) ||
+            a.channelId.localeCompare(b.channelId)
+          : a.channelName.localeCompare(b.channelName))
+
+    return out
+  })
+
   const activeServer     = computed(() => servers.value.find(s => s.id === activeServerId.value) ?? null)
   const activeChannels   = computed(() =>
     activeServerId.value ? channelsByServer.value[activeServerId.value] ?? [] : [])
@@ -536,6 +597,7 @@ export const useServers = () => {
     // and a whole-server flat list alongside it could only ever draw every
     // channel a second time outside its group.
     activeServer, activeChannel, activeCategories, groupedChannels, activeMembers,
+    voiceActivityByServer,
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     upsertCategory, removeCategory, toggleCategory,
     upsertMember, removeMember,
@@ -554,4 +616,18 @@ export interface ChannelGroup {
   category: Category | null
   text:     Channel[]
   voice:    Channel[]
+}
+
+/**
+ * One occupied voice channel, as `voiceActivityByServer` reports it. See that
+ * computed for why `channelName` is nullable — the short version is that the
+ * server tells us WHERE someone is talking for every server you belong to, but
+ * only a server whose detail you have fetched can tell us what to call it.
+ */
+export interface VoiceActivity {
+  channelId:   string
+  /** null when this server's channel list has never been fetched. */
+  channelName: string | null
+  /** Never empty — an unoccupied room is not activity and is filtered out. */
+  userIds:     string[]
 }

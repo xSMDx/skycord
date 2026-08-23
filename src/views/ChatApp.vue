@@ -159,6 +159,7 @@ const {
 const {
   servers, activeServerId, activeChannelId, unreadChannels, channelsByServer, membersByServer,
   activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories, activeMembers,
+  voiceActivityByServer,
   selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
@@ -2867,6 +2868,18 @@ onBeforeUnmount(() => {
           v-tip="srv.name" @click.stop="openServer(srv)">
           <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
+          <!--
+            Lower-LEFT, deliberately: `.ri-badge` (unread) already owns the
+            lower-right of every rail icon, and the two must never stack. They
+            are told apart by three things at once so a glance is enough —
+            side, colour (voice green vs unread red) and content (a glyph vs a
+            number). No count here for the same reason: two numeric badges on
+            one 44px circle is a puzzle, and the number lives in the hover
+            preview where there is room to say who.
+          -->
+          <span v-if="voiceActivityByServer[srv.id]" class="ri-voice" aria-hidden="true">
+            <Volume2 :size="11" :stroke-width="2.75"/>
+          </span>
           <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
         </div>
         <div class="ri-divider" />
@@ -3585,6 +3598,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
 .ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+/* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
+   is both unread and occupied shows two marks that never touch: this one at
+   x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
+   Same 18px circle + 2px floor-coloured ring as .dm-call in the DM list, so a
+   voice indicator looks like a voice indicator wherever it appears — the ring
+   is what keeps a green disc legible against a green server icon. */
+.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
 .ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius:1px;margin:4px 0}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:#23a55a}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:#23a55a}
