@@ -19,6 +19,20 @@ const channelsByServer   = ref<Record<string, Channel[]>>({})
 const categoriesByServer = ref<Record<string, Category[]>>({})
 const activeServerId     = ref<string | null>(null)
 const activeChannelId    = ref<string | null>(null)
+/**
+ * The voice channel whose stage is on screen right now — deliberately its own
+ * ref, NOT a repurposing of `activeChannelId`. `activeChannelId` means "the
+ * text channel whose messages are on screen"; it is untouched by joining a
+ * voice channel (see `joinVoiceChannel` in ChatApp.vue) precisely because
+ * people sit in a voice call while reading a text channel elsewhere. Looking
+ * AT a voice channel's stage is a third, independent thing: you can view the
+ * stage while a text channel still sits selected underneath it (so leaving
+ * the stage has somewhere to fall back to), and you can be connected to a
+ * voice call without viewing its stage at all. Folding this into
+ * `activeChannelId` would make "stop looking at voice" indistinguishable from
+ * "stop reading text" — resist the temptation to merge these two.
+ */
+const viewedVoiceId      = ref<string | null>(null)
 /** Channel id → count of messages that arrived while you were not looking. */
 const unreadChannels     = ref<Record<string, number>>({})
 
@@ -133,6 +147,7 @@ export const resetServers = () => {
   categoriesByServer.value = {}
   activeServerId.value     = null
   activeChannelId.value    = null
+  viewedVoiceId.value      = null
   unreadChannels.value     = {}
   lastChannelIn.value      = {}
   // collapsedCategories IS cleared here, unlike a true per-device preference
@@ -175,6 +190,11 @@ export const useServers = () => {
     cats.forEach(c => { delete collapsedCategories.value[collapseKey(sid, c.id)] })
     if (cats.length) writeCollapsedCategories(collapsedCategories.value)
     channels.forEach(c => { delete unreadChannels.value[c.id] })
+    // You cannot be looking at a voice stage in a server that is gone.
+    // Inert in practice today — every caller navigates away, and that clears
+    // it — but that is an assumption about callers, and this is cheap to
+    // clear where it is provably stale.
+    if (channels.some(c => c.id === viewedVoiceId.value)) viewedVoiceId.value = null
     if (activeServerId.value === sid) {
       activeServerId.value  = null
       activeChannelId.value = null
@@ -224,6 +244,9 @@ export const useServers = () => {
     if (list) channelsByServer.value[sid] = list.filter(c => c.id !== cid)
     if (lastChannelIn.value[sid] === cid) delete lastChannelIn.value[sid]
     if (activeChannelId.value === cid) activeChannelId.value = null
+    // Same rule as activeChannelId just above: you cannot be looking at a
+    // channel that no longer exists.
+    if (viewedVoiceId.value === cid) viewedVoiceId.value = null
     delete unreadChannels.value[cid]
   }
 
@@ -284,14 +307,28 @@ export const useServers = () => {
       ? remembered
       : list.find(c => c.type === 'text')?.id ?? null
     activeChannelId.value = target
+    // Entering a server — whether for the first time or by switching rails —
+    // always lands you on a text channel, never mid-voice-stage. Runs
+    // unconditionally, same as openChannel below: a no-op when there was
+    // nothing to clear costs nothing.
+    viewedVoiceId.value = null
     if (target) clearUnread(target)
   }
 
   const openChannel = (cid: string) => {
     activeChannelId.value = cid
+    // Opening a text channel means you are looking at text now, not voice.
+    viewedVoiceId.value = null
     if (activeServerId.value) lastChannelIn.value[activeServerId.value] = cid
     clearUnread(cid)
   }
+
+  /**
+   * Start looking at a voice channel's stage. Deliberately does not touch
+   * `activeChannelId` — see the comment on `viewedVoiceId`'s declaration for
+   * why joining/viewing voice and reading text are independent.
+   */
+  const viewVoiceChannel = (cid: string) => { viewedVoiceId.value = cid }
 
   // ── I/O ─────────────────────────────────────────────────────────────────
 
@@ -394,6 +431,7 @@ export const useServers = () => {
   return {
     resetServers,
     servers, channelsByServer, categoriesByServer, activeServerId, activeChannelId,
+    viewedVoiceId,
     unreadChannels, lastChannelIn, collapsedCategories,
     // No flat `textChannels`/`voiceChannels` any more: the sidebar renders
     // `groupedChannels`, which already splits each group into text and voice,
@@ -402,7 +440,7 @@ export const useServers = () => {
     activeServer, activeChannel, activeCategories, groupedChannels,
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     upsertCategory, removeCategory, toggleCategory,
-    markUnread, clearUnread, selectLanding, openChannel,
+    markUnread, clearUnread, selectLanding, openChannel, viewVoiceChannel,
     loadServers, loadServerDetail, openServer,
   }
 }

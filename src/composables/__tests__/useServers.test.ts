@@ -64,6 +64,9 @@ describe('useServers', () => {
     // that changed. collapsedCategories is new module-level state of exactly
     // the same shape; it goes in the reset from day one.
     s.collapsedCategories.value = {}
+    // Same rule applies to viewedVoiceId: new module-level state goes in this
+    // reset the moment it's added, not after it bites someone.
+    s.viewedVoiceId.value = null
     ;(globalThis.localStorage as any).clear()
     api.getMyServers.mockReset()
     api.getServerDetail.mockReset()
@@ -201,6 +204,71 @@ describe('useServers', () => {
     s.markUnread('c1')
     s.openChannel('c1')
     expect(s.unreadChannels.value['c1']).toBeUndefined()
+  })
+
+  // ── viewed voice channel ───────────────────────────────────────────────
+  // Separate from activeChannelId by design — see the comment on
+  // viewedVoiceId in useServers.ts. These pin every place that must clear it
+  // once the user is no longer looking at a voice channel's stage.
+
+  it('viewVoiceChannel sets viewedVoiceId and leaves activeChannelId untouched', () => {
+    s.receiveDetail(wireServer('s1'), [
+      wireChannel('c1', 's1', 'general', 'text',  0),
+      wireChannel('v1', 's1', 'Lounge',  'voice', 0),
+    ])
+    s.activeServerId.value = 's1'
+    s.openChannel('c1')
+    s.viewVoiceChannel('v1')
+    expect(s.viewedVoiceId.value).toBe('v1')
+    expect(s.activeChannelId.value).toBe('c1')
+  })
+
+  it('openChannel clears viewedVoiceId — opening a text channel means you are looking at text now', () => {
+    s.viewedVoiceId.value = 'v1'
+    s.openChannel('c1')
+    expect(s.viewedVoiceId.value).toBeNull()
+  })
+
+  it('selectLanding clears viewedVoiceId, since entering a server lands you on a text channel', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)])
+    s.viewedVoiceId.value = 'v1'
+    s.selectLanding('s1')
+    expect(s.viewedVoiceId.value).toBeNull()
+  })
+
+  it('switching to another server clears viewedVoiceId', async () => {
+    // Both buckets populated (categories explicitly `[]`) so openServer takes
+    // the cached path rather than the fetch path — the fetch itself is
+    // covered elsewhere and isn't what this test is about.
+    s.receiveDetail(wireServer('s1'), [wireChannel('v1', 's1', 'Lounge',  'voice', 0)], [])
+    s.receiveDetail(wireServer('s2'), [wireChannel('c1', 's2', 'general', 'text',  0)], [])
+    s.activeServerId.value = 's1'
+    s.viewVoiceChannel('v1')
+    await s.openServer('s2')
+    expect(s.viewedVoiceId.value).toBeNull()
+  })
+
+  it('removeChannel clears viewedVoiceId when the viewed voice channel is deleted', () => {
+    s.receiveDetail(wireServer('s1'), [wireChannel('v1', 's1', 'Lounge', 'voice', 0)])
+    s.viewVoiceChannel('v1')
+    s.removeChannel('s1', 'v1')
+    expect(s.viewedVoiceId.value).toBeNull()
+  })
+
+  it('removeChannel leaves viewedVoiceId alone when a different channel is removed', () => {
+    s.receiveDetail(wireServer('s1'), [
+      wireChannel('v1', 's1', 'Lounge',  'voice', 0),
+      wireChannel('c1', 's1', 'general', 'text',  0),
+    ])
+    s.viewVoiceChannel('v1')
+    s.removeChannel('s1', 'c1')
+    expect(s.viewedVoiceId.value).toBe('v1')
+  })
+
+  it('resetServers clears viewedVoiceId', () => {
+    s.viewedVoiceId.value = 'v1'
+    s.resetServers()
+    expect(s.viewedVoiceId.value).toBeNull()
   })
 
   // ── categories ─────────────────────────────────────────────────────────
