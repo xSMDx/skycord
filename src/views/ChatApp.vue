@@ -601,6 +601,35 @@ const voiceOccupants = (channelId: string): (VoiceOccupant & { speaking: boolean
 }
 
 /**
+ * The voice cluster in the server sidebar's name header: the channel YOU are
+ * in, and who is in it with you.
+ *
+ * Deliberately gated on `liveVoiceChannel`, not on `voiceActivityByServer` —
+ * the header answers "you are in voice, here" and nothing else. The rail badge
+ * next to it is the surface for "somebody else is in voice"; a header that lit
+ * up for other people's calls would be saying the same thing twice, two
+ * inches apart, and would then have to explain which of the server's voice
+ * channels it meant.
+ *
+ * The server check is the same one `viewedVoiceChannel` makes, for the same
+ * reason: sitting in one server's call while reading another server must not
+ * put the call in the second server's header.
+ *
+ * Null rather than an empty cluster when there is nobody to draw — including
+ * during a join that has not landed yet, where `voiceOccupants`'s optimistic
+ * self-row normally means this is never empty in practice.
+ */
+const headerVoice = computed(() => {
+  const vc = liveVoiceChannel.value
+  if (!vc || vc.serverId !== activeServerId.value) return null
+  const occupants = voiceOccupants(vc.id)
+  if (!occupants.length) return null
+  return { channel: vc, occupants }
+})
+/** Faces shown inline in the 48px header; the rest become a "+N". */
+const HEADER_VOICE_FACES = 3
+
+/**
  * Join a voice channel AND look at it. Instant on desktop — no confirmation,
  * same as every other client — and reusing the one connect path DMs and groups
  * already use.
@@ -3003,7 +3032,32 @@ onBeforeUnmount(() => {
           @click.stop="openServerMenu($event)"
           @keydown.enter.prevent="openServerMenu($event)"
           @keydown.space.prevent="openServerMenu($event)">
-          <span>{{ activeServer?.name }}</span>
+          <!--
+            `.sb-header-name` is what lets the cluster exist at all: the header
+            is `space-between` with `white-space:nowrap`, so before this a long
+            server name simply grew past the padding and pushed the chevron out
+            of the bar. The name is now the only thing that flexes, and the only
+            thing that ellipses; the voice cluster and the chevron never shrink.
+          -->
+          <span class="sb-header-name">{{ activeServer?.name }}</span>
+          <!--
+            Only ever your own call (see `headerVoice`). The tip names the
+            channel because the cluster deliberately does not — at 48px there
+            is room for the faces or the channel name, not both, and the faces
+            are the part you cannot get anywhere else at a glance.
+          -->
+          <span v-if="headerVoice" class="sb-hvoice" v-tip="'In voice — ' + headerVoice.channel.name">
+            <Volume2 class="sb-hvoice-ic" :size="13" :stroke-width="2.25"/>
+            <span class="sb-hvoice-avs">
+              <span v-for="o in headerVoice.occupants.slice(0, HEADER_VOICE_FACES)" :key="o.id"
+                class="sb-hvoice-av" :class="{ speaking: o.speaking }">
+                <Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" />
+              </span>
+            </span>
+            <span v-if="headerVoice.occupants.length > HEADER_VOICE_FACES" class="sb-hvoice-more">
+              +{{ headerVoice.occupants.length - HEADER_VOICE_FACES }}
+            </span>
+          </span>
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
         <div class="sb-body">
@@ -3628,8 +3682,33 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
-.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition:background .15s;white-space:nowrap}
+.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition:background .15s;white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
+/* The one flexible child, so the voice cluster and the chevron keep their
+   size and a 40-character server name ellipses instead of shoving them out
+   of the bar. min-width:0 is load-bearing — a flex item's default min-width
+   is auto, which refuses to shrink below its text and defeats the ellipsis. */
+.sb-header-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* Your own call, inline in the 48px header. Sized down from the sidebar's own
+   occupant rows (20px faces, 13px glyph) so the bar keeps its height and the
+   server name stays the loudest thing in it. */
+/* No cursor of its own: the whole 48px bar is one button that opens the server
+   menu, and a default cursor over part of it would claim otherwise. */
+.sb-hvoice{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.sb-hvoice-ic{color:#23a55a;flex-shrink:0}
+.sb-hvoice-avs{display:flex;align-items:center}
+/* Overlapped, each ringed in the sidebar's own background so the stack reads
+   as separate faces rather than one smeared one. */
+.sb-hvoice-av{position:relative;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-left:-6px;box-shadow:0 0 0 2px var(--bg-raised)}
+.sb-hvoice-av:first-child{margin-left:0}
+/* Speaking ring, same green as the sidebar occupant rows' Avatar `ring`. Done
+   with box-shadow rather than that prop because these faces overlap: the prop
+   draws inside the image, which the neighbour would then cover. The z-index
+   lifts a speaking face above the one stacked on top of it, so its ring is a
+   whole ring rather than a crescent. */
+.sb-hvoice-av.speaking{z-index:1;box-shadow:0 0 0 2px var(--bg-raised),0 0 0 3.5px #23a55a}
+.sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
 .sb-body{flex:1;overflow-y:auto;padding:8px 0}
 
 .dm-item{display:flex;align-items:center;gap:10px;padding:6px 10px;margin:0 6px;border-radius:6px;cursor:pointer;transition:background .12s;position:relative}
