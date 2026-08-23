@@ -195,6 +195,16 @@ export const useApi = () => {
   const updateChannelApi = (sid: string, cid: string, body: { name?: string; category?: string | null }) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
 
+  // The one thing a drag does, named for what it means rather than for the
+  // verb underneath it. `category` alone, never alongside `name`, so a move
+  // can never disturb a rename that is in flight — the server takes the two
+  // fields independently. `null` is a real argument here, not an omission: it
+  // is how a channel leaves every category. Owner-only (updateChannel is
+  // requireOwner), so callers must gate the affordance on isOwner rather than
+  // letting the 403 be the first the user hears of it.
+  const moveChannel = (sid: string, cid: string, category: string | null) =>
+    updateChannelApi(sid, cid, { category })
+
   // ── Categories ───────────────────────────────────────────────────────────
   // Same write/rename/delete class as the channel routes above and the same
   // response shapes (server/controllers/categoriesController.ts): create and
@@ -317,7 +327,7 @@ export const useApi = () => {
     createTheme, getTheme,
     getVoiceToken,
     createServerApi, getMyServers, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
-    createChannelApi, updateChannelApi, deleteChannelApi,
+    createChannelApi, updateChannelApi, moveChannel, deleteChannelApi,
     createCategoryApi, updateCategoryApi, deleteCategoryApi,
     deleteServerApi, leaveServerApi,
     createServerInvite, listServerInvites, revokeServerInvite,

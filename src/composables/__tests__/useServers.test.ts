@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   getMyServers:     vi.fn(),
   getServerDetail:  vi.fn(),
   getServerMembers: vi.fn(),
+  moveChannel:      vi.fn(),
 }))
 vi.mock('../useApi', () => ({ useApi: () => api }))
 
@@ -119,6 +120,7 @@ describe('useServers', () => {
     api.getMyServers.mockReset()
     api.getServerDetail.mockReset()
     api.getServerMembers.mockReset()
+    api.moveChannel.mockReset()
     // usePresence's map is module-level too, shared with every other test
     // file that imports it in this process — the same class of bug the
     // comments above warn about, just in a different module. The live-
@@ -548,6 +550,136 @@ describe('useServers', () => {
     expect(s.collapsedCategories.value['s1:cat2']).toBeUndefined()
     expect(s.collapsedCategories.value['s2:cat3']).toBe(true)
     expect(JSON.parse(localStorage.getItem(COLLAPSED_CATEGORIES_KEY) || '{}')).toEqual({ 's2:cat3': true })
+  })
+
+  // ── moving a channel between categories ────────────────────────────────
+  // `updateChannel` already accepts `category` (and `null` for "no category
+  // at all"), so the only thing that can go wrong on this side of the wire is
+  // what the sidebar shows in the gap between the drop and the response. The
+  // move is applied optimistically — a channel that visibly snaps back after
+  // a beat is worse than one that never appears to move — so every one of
+  // these pins the recovery as hard as the happy path.
+
+  /** s1 with two uncategorised text channels, one already in `cat1`, and a
+   *  second empty category to move things into. Positions are deliberately
+   *  interleaved across categories so an ordering assertion means something. */
+  const serverWithCategories = (s: ReturnType<typeof useServers>) => {
+    s.receiveDetail(
+      wireServer('s1'),
+      [
+        wireChannel('t1', 's1', 'text-a', 'text',  0),
+        wireChannel('t2', 's1', 'text-b', 'text',  1),
+        wireChannel('t3', 's1', 'text-c', 'text',  2),
+        wireChannel('v1', 's1', 'Voice',  'voice', 0),
+      ],
+      [wireCategory('cat1', 's1', 'One', 0), wireCategory('cat2', 's1', 'Two', 1)],
+    )
+    s.channelsByServer.value['s1'].find(c => c.id === 't2')!.category = 'cat1'
+    s.activeServerId.value = 's1'
+  }
+
+  /** The wire echo `updateChannel` sends back: the whole channel, reshaped,
+   *  with its new category on it. */
+  const movedTo = (id: string, category: string | null) => {
+    const c = wireChannel(id, 's1', id, 'text', Number(id.slice(1)) - 1)
+    return { channel: { ...c, category } }
+  }
+
+  it('moveChannel takes a channel out of its old group and puts it in the new one', async () => {
+    serverWithCategories(s)
+    api.moveChannel.mockResolvedValue(movedTo('t2', 'cat2'))
+
+    await s.moveChannel('s1', 't2', 'cat2')
+
+    expect(api.moveChannel).toHaveBeenCalledWith('s1', 't2', 'cat2')
+    const groups = s.groupedChannels.value
+    expect(groups[1].category?.id).toBe('cat1')
+    expect(groups[1].text.map(c => c.id)).toEqual([])
+    expect(groups[2].category?.id).toBe('cat2')
+    expect(groups[2].text.map(c => c.id)).toEqual(['t2'])
+  })
+
+  it('moveChannel with null lands the channel in the uncategorised group', async () => {
+    serverWithCategories(s)
+    api.moveChannel.mockResolvedValue(movedTo('t2', null))
+
+    await s.moveChannel('s1', 't2', null)
+
+    expect(api.moveChannel).toHaveBeenCalledWith('s1', 't2', null)
+    const groups = s.groupedChannels.value
+    expect(groups[0].category).toBeNull()
+    expect(groups[0].text.map(c => c.id)).toEqual(['t1', 't2', 't3'])
+    expect(groups[1].text.map(c => c.id)).toEqual([])
+  })
+
+  it('voice channels move too — the sidebar drags both kinds', async () => {
+    serverWithCategories(s)
+    api.moveChannel.mockResolvedValue({
+      channel: { ...wireChannel('v1', 's1', 'Voice', 'voice', 0), category: 'cat1' },
+    })
+
+    await s.moveChannel('s1', 'v1', 'cat1')
+
+    expect(s.groupedChannels.value[0].voice.map(c => c.id)).toEqual([])
+    expect(s.groupedChannels.value[1].voice.map(c => c.id)).toEqual(['v1'])
+  })
+
+  it('groupedChannels stays in position order after a move', async () => {
+    serverWithCategories(s)
+    // t3 (position 2) joins t2 (position 1) in cat1. Position order, not
+    // arrival order — a channel appended to the end of the array by the echo
+    // must still sort back in front of a higher-positioned sibling.
+    api.moveChannel.mockResolvedValue(movedTo('t3', 'cat1'))
+    await s.moveChannel('s1', 't3', 'cat1')
+    expect(s.groupedChannels.value[1].text.map(c => c.id)).toEqual(['t2', 't3'])
+
+    api.moveChannel.mockResolvedValue(movedTo('t1', 'cat1'))
+    await s.moveChannel('s1', 't1', 'cat1')
+    expect(s.groupedChannels.value[1].text.map(c => c.id)).toEqual(['t1', 't2', 't3'])
+    // And the same answer read twice — nothing about the grouping depends on
+    // how many times it has been evaluated.
+    expect(s.groupedChannels.value[1].text.map(c => c.id))
+      .toEqual(s.groupedChannels.value[1].text.map(c => c.id))
+    expect(s.groupedChannels.value[0].text.map(c => c.id)).toEqual([])
+  })
+
+  it('a move the server refuses leaves the sidebar showing where the channel really is', async () => {
+    serverWithCategories(s)
+    api.moveChannel.mockRejectedValue(
+      Object.assign(new Error('That category does not belong to this server'), { status: 400 }))
+
+    await expect(s.moveChannel('s1', 't2', 'cat2'))
+      .rejects.toThrow('That category does not belong to this server')
+
+    // Back in cat1, where the server still has it — never left showing the
+    // optimistic position.
+    const groups = s.groupedChannels.value
+    expect(groups[1].text.map(c => c.id)).toEqual(['t2'])
+    expect(groups[2].text.map(c => c.id)).toEqual([])
+  })
+
+  it('a refused move out of every category puts the channel back in its category', async () => {
+    serverWithCategories(s)
+    api.moveChannel.mockRejectedValue(Object.assign(new Error('nope'), { status: 403 }))
+
+    await expect(s.moveChannel('s1', 't2', null)).rejects.toThrow('nope')
+
+    expect(s.groupedChannels.value[0].text.map(c => c.id)).toEqual(['t1', 't3'])
+    expect(s.groupedChannels.value[1].text.map(c => c.id)).toEqual(['t2'])
+  })
+
+  it('dropping a channel back into the category it is already in asks the server nothing', async () => {
+    serverWithCategories(s)
+    await s.moveChannel('s1', 't2', 'cat1')
+    expect(api.moveChannel).not.toHaveBeenCalled()
+    await s.moveChannel('s1', 't1', null)
+    expect(api.moveChannel).not.toHaveBeenCalled()
+  })
+
+  it('moveChannel ignores a channel this client does not hold', async () => {
+    serverWithCategories(s)
+    await s.moveChannel('s1', 'ghost', 'cat1')
+    expect(api.moveChannel).not.toHaveBeenCalled()
   })
 
   // ── the invite-join staleness trap ─────────────────────────────────────

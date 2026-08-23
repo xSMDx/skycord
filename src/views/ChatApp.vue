@@ -165,7 +165,7 @@ const {
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
   upsertMember, removeMember,
-  loadServers, loadServerMembers, openServer: enterServer,
+  loadServers, loadServerMembers, openServer: enterServer, moveChannel,
 } = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -1161,23 +1161,23 @@ watch([activeDM, activeGroup], () => { showDetails.value = false })
 // that filtered the mock arrays are gone.
 
 /**
- * `groupedChannels` with the two things the state layer has no business
+ * `groupedChannels` with the one thing the state layer has no business
  * knowing about folded in: whether each category is folded shut on THIS
- * device, and which rows survive that fold.
+ * device.
  *
- * A collapsed category is not emptied. It keeps showing the channel you are
- * currently reading and anything with an unread badge, which is what Discord
- * does and for two concrete reasons: hiding the channel on screen leaves the
- * sidebar with nothing highlighted while its messages are right there, and
- * hiding an unread one throws away the only notice that it has traffic — the
- * badge exists to be seen, and folding a category is a request for less
- * clutter, not for less news.
+ * Every row is handed to the template whatever the fold says, because the
+ * fold is an ANIMATION now (see `.ch-fold` in this file's stylesheet) and a
+ * row that is not rendered cannot be animated away. `rowFolded` below is what
+ * decides which of them collapse to zero height; this computed only decides
+ * which groups exist and whether each one is shut.
  *
  * The leading uncategorised group is dropped when it has no channels: it
  * renders no header (an "Uncategorised" label over every server's #general
  * would be noise), so with no rows there is nothing left but a hover target
- * and 4px of margin. Every *category* group survives empty — an empty
- * category still has to be visible to be renamed, deleted, or filled.
+ * and 4px of margin. It comes back for the duration of a drag, where it is
+ * the only visible thing saying "you can put this outside every category" —
+ * see `dragChannelId`. Every *category* group survives empty regardless — an
+ * empty category still has to be visible to be renamed, deleted, or filled.
  */
 /** useServers keys its collapse map `${serverId}:${categoryId}`. Spelling that
  *  format out once here keeps the two readers below from drifting from each
@@ -1197,25 +1197,114 @@ interface SidebarGroup {
 }
 const sidebarGroups = computed<SidebarGroup[]>(() =>
   groupedChannels.value
-    .map(g => {
-      const collapsed = !!g.category && isCategoryCollapsed(g.category.serverId, g.category.id)
-      const survives  = (c: Channel) =>
-        !collapsed || c.id === activeChannelId.value || !!unreadChannels.value[c.id]
-      return {
-        key:       g.category?.id ?? 'uncategorised',
-        category:  g.category,
-        collapsed,
-        text:      g.text.filter(survives),
-        voice:     g.voice.filter(survives),
-      }
-    })
-    .filter(g => g.category !== null || g.text.length > 0 || g.voice.length > 0)
+    .map(g => ({
+      key:       g.category?.id ?? 'uncategorised',
+      category:  g.category,
+      collapsed: !!g.category && isCategoryCollapsed(g.category.serverId, g.category.id),
+      text:      g.text,
+      voice:     g.voice,
+    }))
+    .filter(g =>
+      g.category !== null || g.text.length > 0 || g.voice.length > 0 || !!dragChannelId.value)
 )
+
+/**
+ * Which rows a shut category folds away, and which it keeps.
+ *
+ * A collapsed category is not emptied. It keeps showing the channel you are
+ * currently reading and anything with an unread badge, which is what Discord
+ * does and for two concrete reasons: hiding the channel on screen leaves the
+ * sidebar with nothing highlighted while its messages are right there, and
+ * hiding an unread one throws away the only notice that it has traffic — the
+ * badge exists to be seen, and folding a category is a request for less
+ * clutter, not for less news.
+ *
+ * Phrased as "is this one folded" rather than "does this one survive" because
+ * that is the direction the class binding needs, and inverting it at the call
+ * site is how a `v-if` and a class drift apart.
+ */
+const rowFolded = (g: SidebarGroup, c: Channel) =>
+  g.collapsed && c.id !== activeChannelId.value && !unreadChannels.value[c.id]
 
 /** Fold/unfold from a category header. A no-op on the headerless
  *  uncategorised group, which has nothing to fold and no header to click. */
 const toggleGroup = (g: SidebarGroup) => {
   if (g.category) toggleCategory(g.category.serverId, g.category.id)
+}
+
+/**
+ * Dragging a channel between categories.
+ *
+ * HTML5 drag-and-drop, not a library and not a bespoke pointer-event rig:
+ * this list needs "pick a row up, drop it on a header", which the platform
+ * already does, including the drag image and the Escape-to-cancel that a
+ * hand-rolled version would have to reinvent.
+ *
+ * Two refs rather than one, because "a drag is happening" and "where it would
+ * land" answer different questions: the first decides whether the drop strip
+ * exists at all, the second which group is lit. `dropCategory` is `null` for
+ * the uncategorised group, the same spelling `moveChannel` takes, so nothing
+ * has to translate between them.
+ *
+ * `dragChannelId` is deliberately the source of truth for WHAT is moving,
+ * never the id on the dataTransfer: that payload exists only because Firefox
+ * refuses to start a drag without one, and reading it back would let a drop
+ * from another window move a channel in this one.
+ */
+const dragChannelId = ref<string | null>(null)
+const dropCategory  = ref<string | null>(null)
+
+const onChannelDragStart = (e: DragEvent, ch: Channel) => {
+  // Owners only — `updateChannel` is requireOwner server-side, so a
+  // non-owner's drag could only ever end in a 403. The rows carry
+  // `draggable="false"` for them as well; this is the second half of the same
+  // fence, not a substitute for it.
+  if (!isServerOwner.value) { e.preventDefault(); return }
+  dragChannelId.value = ch.id
+  // Start lit on the group it is already in, so the indicator says something
+  // true from the first frame rather than flashing "uncategorised" until the
+  // first dragover lands.
+  dropCategory.value  = ch.category ?? null
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', ch.id)
+  }
+}
+
+const endChannelDrag = () => { dragChannelId.value = null }
+
+/** `category` is the group under the pointer — `null` for "outside every
+ *  category", which `.sb-body` supplies for anything not over a group. */
+const onChannelDragOver = (e: DragEvent, category: string | null) => {
+  // Not our drag. Leaving preventDefault uncalled is what tells the browser
+  // this is not a drop target, so a file dragged over the sidebar still gets
+  // the browser's own refusal rather than being silently swallowed.
+  if (!dragChannelId.value) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropCategory.value = category
+}
+
+const onChannelDrop = async (e: DragEvent, category: string | null) => {
+  const cid = dragChannelId.value
+  if (!cid) return
+  e.preventDefault()
+  const sid = activeServerId.value
+  // Cleared before the request, not after: the row is going to move
+  // optimistically anyway, and leaving the drag state up would keep a drop
+  // strip and a lit group on screen until the server answered.
+  endChannelDrag()
+  if (!sid || !isServerOwner.value) return
+  try {
+    await moveChannel(sid, cid, category)
+  } catch (err: any) {
+    console.error('[onChannelDrop]', err)
+    // moveChannel has already put the channel back where it was; this is the
+    // only thing that says why. Same message source as the context menu's
+    // Move to Category, so "That category does not belong to this server"
+    // reads identically however the move was started.
+    showToast(err?.message || 'Couldn’t move that channel')
+  }
 }
 
 const activeNow       = computed(() => apiFriends.value.filter(f => f.status === 'online' || f.status === 'idle'))
@@ -3111,7 +3200,9 @@ onBeforeUnmount(() => {
             <span>Find or start a conversation</span>
           </button>
         </div>
-        <div class="sb-body">
+        <div class="sb-body"
+          @dragover="onChannelDragOver($event, null)"
+          @drop="onChannelDrop($event, null)">
           <div class="sb-nav">
             <button class="sb-nav-item" :class="{ active: view==='friends' }" @click="openFriends">
               <Users :size="18" :stroke-width="1.5" /> Friends
@@ -3253,7 +3344,10 @@ onBeforeUnmount(() => {
                `.self` on BOTH key handlers so Enter/Space on the nested
                `.ch-more` button activates that button instead of being swallowed
                by the row underneath it. -->
-          <div v-for="group in sidebarGroups" :key="group.key" class="ch-group">
+          <div v-for="group in sidebarGroups" :key="group.key" class="ch-group"
+            :class="{ 'drop-target': dragChannelId && dropCategory === (group.category?.id ?? null) }"
+            @dragover.stop="onChannelDragOver($event, group.category?.id ?? null)"
+            @drop.stop="onChannelDrop($event, group.category?.id ?? null)">
             <!-- Headerless for the uncategorised group. Same activation contract
                  as the row below it — a header you can only fold with a mouse is
                  a header a keyboard user cannot get past — and `.self` again so
@@ -3275,9 +3369,14 @@ onBeforeUnmount(() => {
               <button class="ch-add-btn" v-tip="'More'"
                 @click.stop="openCategoryMenu($event, group.category)"><Ellipsis :size="14" :stroke-width="1.5"/></button>
             </div>
-            <div v-for="ch in group.text" :key="ch.id"
-              class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id] }"
-              role="button" tabindex="0"
+            <div v-for="ch in group.text" :key="ch.id" class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
+            <div class="ch-fold-in">
+            <div
+              class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id], dragging: dragChannelId===ch.id }"
+              role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+              :draggable="isServerOwner"
+              @dragstart="onChannelDragStart($event, ch)"
+              @dragend="endChannelDrag"
               @keydown.self.enter.prevent="selectChannel(ch)"
               @keydown.self.space.prevent="selectChannel(ch)"
               @click="selectChannel(ch)"
@@ -3288,6 +3387,8 @@ onBeforeUnmount(() => {
               <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
                 <Ellipsis :size="14" :stroke-width="1.5"/>
               </button>
+            </div>
+            </div>
             </div>
             <!-- Clicking connects straight away — no confirmation, the way every
                  other client does it. `.active` here means "you are in this
@@ -3305,8 +3406,13 @@ onBeforeUnmount(() => {
                  the stage owns the pane (`&& !voiceStageOpen`), this row is
                  already the one lit — no second selected-look needed. -->
             <template v-for="ch in group.voice" :key="ch.id">
-              <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id }"
-                role="button" tabindex="0"
+              <div class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
+              <div class="ch-fold-in">
+              <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id, dragging: dragChannelId===ch.id }"
+                role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+                :draggable="isServerOwner"
+                @dragstart="onChannelDragStart($event, ch)"
+                @dragend="endChannelDrag"
                 @click="joinVoiceChannel(ch)"
                 @keydown.self.enter.prevent="joinVoiceChannel(ch)"
                 @keydown.self.space.prevent="joinVoiceChannel(ch)"
@@ -3317,11 +3423,17 @@ onBeforeUnmount(() => {
                   <Ellipsis :size="14" :stroke-width="1.5"/>
                 </button>
               </div>
+              </div>
+              </div>
+              <div class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
+              <div class="ch-fold-in">
               <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
                 class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })">
                 <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
               </button>
+              </div>
+              </div>
             </template>
           </div>
         </div>
@@ -4044,8 +4156,30 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    and active rows and so is never reliably empty.
    NOT `.ch-chev`, which is already taken by the chat header's mobile
    disclosure chevron and carries a desktop `display:none`. */
-.ch-group-chev{flex-shrink:0;transition:transform .15s}
+.ch-group-chev{flex-shrink:0;transition:transform .18s ease}
 .ch-group-chev.open{transform:rotate(90deg)}
+/* Folding a category is an animation, not a v-if. `interpolate-size:
+   allow-keywords` lets height animate to and from `auto` without measuring
+   anything, which matters because categories hold different numbers of
+   channels and channel names wrap. NOT the grid 0fr/1fr trick: in this
+   Chromium, `transition: grid-template-rows` between fr endpoints settles on
+   the WRONG endpoint (verified in isolation — a probe closed to 0fr still
+   measured 31px, then reopened to 1fr and measured 0), so a fold that used
+   it closed once and never came back. Timing matches .ch-group-chev so the
+   chevron and the rows read as one motion. */
+.ch-fold{overflow:hidden;height:auto;interpolate-size:allow-keywords;transition:height .18s ease}
+.ch-fold.folded{height:0}
+
+/* Where the drag would land. min-height keeps the headerless uncategorised
+   group hittable while it is empty — during a drag it is the only visible
+   thing saying "you can put this outside every category". */
+.ch-group.drop-target{outline:1px dashed var(--accent);outline-offset:1px;border-radius:6px;background:rgba(var(--accent-rgb),.07);min-height:26px}
+.ch-item.dragging{opacity:.4}
+
+@media (prefers-reduced-motion: reduce){
+  .ch-fold{transition:none}
+  .ch-group-chev{transition:none}
+}
 .ch-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s;flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
