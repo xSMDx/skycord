@@ -190,6 +190,11 @@ export const useServers = () => {
     cats.forEach(c => { delete collapsedCategories.value[collapseKey(sid, c.id)] })
     if (cats.length) writeCollapsedCategories(collapsedCategories.value)
     channels.forEach(c => { delete unreadChannels.value[c.id] })
+    // You cannot be looking at a voice stage in a server that is gone.
+    // Inert in practice today — every caller navigates away, and that clears
+    // it — but that is an assumption about callers, and this is cheap to
+    // clear where it is provably stale.
+    if (channels.some(c => c.id === viewedVoiceId.value)) viewedVoiceId.value = null
     if (activeServerId.value === sid) {
       activeServerId.value  = null
       activeChannelId.value = null
