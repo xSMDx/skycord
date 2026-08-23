@@ -16,6 +16,7 @@ const busy    = ref(false)
 const loading = ref(false)
 const error   = ref('')
 const copied  = ref(false)
+const expiry  = ref<'24h' | '7d' | 'never'>('24h')
 
 // Server invites use /join/<code>, not /invite/<code>. That path is already
 // claimed by GROUP invites (MessageItem.vue matches it and renders a
@@ -69,7 +70,7 @@ const mint = async () => {
   if (busy.value) return
   busy.value = true; error.value = ''
   try {
-    const { invite } = await createServerInvite(props.serverId)
+    const { invite } = await createServerInvite(props.serverId, expiry.value)
     url.value = linkFor(invite.code)
     invites.value = [invite, ...invites.value]
   } catch (e: any) {
@@ -123,9 +124,25 @@ onMounted(load)
             {{ copied ? 'Copied!' : 'Copy' }}
           </button>
         </div>
-        <button v-else-if="isOwner" class="is-mint" :disabled="busy" @click="mint">
-          {{ busy ? 'Creating…' : 'Create Invite Link' }}
-        </button>
+        <template v-else-if="isOwner">
+          <div class="is-expiry-row">
+            <button
+              class="is-expiry-btn" :class="{ active: expiry === '24h' }"
+              :disabled="busy" @click="expiry = '24h'"
+            >24 hours</button>
+            <button
+              class="is-expiry-btn" :class="{ active: expiry === '7d' }"
+              :disabled="busy" @click="expiry = '7d'"
+            >7 days</button>
+            <button
+              class="is-expiry-btn" :class="{ active: expiry === 'never' }"
+              :disabled="busy" @click="expiry = 'never'"
+            >Never</button>
+          </div>
+          <button class="is-mint" :disabled="busy" @click="mint">
+            {{ busy ? 'Creating…' : 'Create Invite Link' }}
+          </button>
+        </template>
         <!-- Creating invites is owner-only server-side; this modal is only
              reachable by an owner today, but the prop makes that explicit
              here too rather than relying on the caller alone. -->
@@ -188,6 +205,18 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .is-copy:hover:not(:disabled) { background: var(--accent-hover); }
 .is-copy.copied { background: #248046; }
+
+.is-expiry-row { display: flex; gap: 10px; }
+.is-expiry-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 10px 12px; border-radius: 6px;
+  background: var(--bg-input); color: var(--text-2);
+  border: 1px solid transparent; font-size: 14px; font-weight: 600;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.is-expiry-btn:hover:not(:disabled) { color: var(--text-strong); }
+.is-expiry-btn.active { border-color: var(--accent); color: var(--text-strong); background: rgba(var(--accent-rgb),.14); }
+.is-expiry-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .is-mint {
   padding: 10px 16px; border-radius: 6px;
