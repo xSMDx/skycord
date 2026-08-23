@@ -92,11 +92,48 @@ import { soundMessage, soundNotification } from './useSounds'
 export const emitCallJoin  = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:join',  { conversationId, kind })
 export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:leave', { conversationId, kind })
 
+/**
+ * Bind the OS online/offline events exactly once.
+ *
+ * The OS knows we're offline before any socket timeout does, so 'offline'
+ * short-circuits a pointless "Reconnecting…" on a link that is provably dead.
+ *
+ * Once, not per connect: these used to live inside connect(), so every
+ * reconnect added another pair to `window` that nothing ever removed. They
+ * are cheap individually and invisible in aggregate, which is the worst
+ * combination — a long-lived tab that has reconnected twenty times ends up
+ * firing twenty nudges at one network event.
+ */
+let _netWatchInstalled = false
+const installNetworkWatch = () => {
+  if (_netWatchInstalled || typeof window === 'undefined') return
+  _netWatchInstalled = true
+  window.addEventListener('offline', () => { if (!connected.value) connState.value = 'offline' })
+  window.addEventListener('online',  () => {
+    if (connected.value) return
+    connState.value = 'connecting'
+    _socket?.connect()   // nudge, rather than waiting out the backoff
+  })
+}
 export const useSocket = () => {
   const { accessToken, user } = useAuth()
 
   const connect = () => {
-    if (_socket?.connected) return
+    // The old guard was `if (_socket?.connected) return`, which let a socket
+    // that existed but was mid-reconnect fall straight through and be
+    // REPLACED — abandoning the previous one with every listener still
+    // attached. That orphan kept retrying and kept firing connect_error, and
+    // connect_error sets connState back to 'connecting'. So the healthy new
+    // socket would connect, set 'connected', and be immediately stomped back
+    // by a ghost nobody could see. That is the "Reconnecting… forever" loop:
+    // not a connection that never succeeds, but a dead one still shouting.
+    if (_socket) {
+      if (_socket.connected) return
+      _socket.removeAllListeners()
+      _socket.io.removeAllListeners()
+      _socket.disconnect()
+      _socket = null
+    }
     _socket = io('/', {
       auth: { token: accessToken.value },
       transports: ['websocket', 'polling'],
@@ -118,16 +155,11 @@ export const useSocket = () => {
     // will retry on its own, so the UI has to offer the user a way out.
     _socket.io.on('reconnect_failed', () => { connState.value = 'offline'; console.warn('[WS] gave up reconnecting') })
 
-    // The OS knows we're offline before any socket timeout does — going
-    // straight to 'offline' avoids a pointless "Reconnecting…" on a dead link.
-    if (typeof window !== 'undefined') {
-      window.addEventListener('offline', () => { if (!connected.value) connState.value = 'offline' })
-      window.addEventListener('online',  () => {
-        if (connected.value) return
-        connState.value = 'connecting'
-        _socket?.connect()   // nudge, rather than waiting out the backoff
-      })
-    }
+    // The OS-level online/offline listeners used to be registered HERE, which
+    // meant one more pair on every connect() — and each 'online' handler
+    // nudged the socket, so N reconnects produced N nudges for one event.
+    // They are bound once at module scope now (see installNetworkWatch).
+    installNetworkWatch()
 
     // Incoming DM — silent if you're already in that chat, or it's muted.
     _socket.on('dm:receive', (p: any) => {
@@ -215,7 +247,19 @@ export const useSocket = () => {
     })
   }
 
-  const disconnect = () => { _socket?.disconnect(); _socket = null; connected.value = false }
+  const disconnect = () => {
+    // removeAllListeners before disconnect: otherwise this socket's own
+    // 'disconnect' handler fires on the way out and sets connState back to
+    // 'connecting', leaving the banner up after a deliberate teardown.
+    _socket?.removeAllListeners()
+    _socket?.io.removeAllListeners()
+    _socket?.disconnect()
+    _socket = null
+    connected.value = false
+    // Reset, not 'connecting'. We are not trying to reach anything — logging
+    // out and then back in used to inherit whatever the last state was.
+    connState.value = 'connecting'
+  }
 
   // ── Emitters ────────────────────────────────────────────────────────────
 
