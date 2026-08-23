@@ -160,8 +160,6 @@ const stageTiles = computed<Tile[]>(() => {
 // optimistic stage tile still uses the 'me' placeholder id → duplicate self-cells.
 const videoList = computed(() => [...media.videoTracks.values()] as VideoTrackInfo[])
 
-/** Anything on the stage at all — a camera or a screen. */
-const hasVideo = computed(() => videoList.value.length > 0)
 /** Screen share specifically. A shared screen is mostly small text, so it needs
  *  far more room than a face does to be worth looking at. */
 const hasScreen = computed(() => videoList.value.some(v => v.source === 'screen'))
@@ -448,7 +446,12 @@ onBeforeUnmount(() => {
              enlarging. On an audio call they were two controls that changed
              nothing visible. They live in the control row rather than floating
              over the stage corners so every call action sits on one line. -->
-        <div v-if="hasVideo" class="cb-group">
+        <!-- Available in every call, not only one with video on the stage.
+             This was gated on `hasVideo` since August, which meant an
+             audio-only DM or group call had no way to hide the chat or go
+             fullscreen at all — but wanting the call bigger has nothing to
+             do with whether anyone has a camera on. -->
+        <div class="cb-group">
           <!-- ...and not at all when the call already owns the pane: there is
                no conversation behind a voice channel's stage, so "Show chat"
                would reveal an empty column. Fullscreen still earns its place —
