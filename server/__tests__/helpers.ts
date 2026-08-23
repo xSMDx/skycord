@@ -78,13 +78,53 @@ export const withSocketServer = async (): Promise<{ url: string; close: () => Pr
   }
 }
 
-/** Connects an authenticated client and resolves once it is actually connected. */
-export const connectSocket = (url: string, token: string): Promise<ClientSocket> =>
+/**
+ * Connects and resolves the instant the handshake completes, before the
+ * server has finished its setup.
+ *
+ * Only for tests that must have a listener attached while setup is still
+ * running — the reconnect catch-up replays in-progress calls from inside the
+ * connect handler, so a helper that waits until setup is done would miss it.
+ * Everything else wants `connectSocket`.
+ */
+export const connectSocketRaw = (url: string, token: string): Promise<ClientSocket> =>
   new Promise((resolve, reject) => {
-    const s = ioClient(url, { auth: { token }, transports: ['websocket'], forceNew: true })
-    s.on('connect', () => resolve(s))
-    s.on('connect_error', reject)
+    const c = ioClient(url, { auth: { token }, transports: ['websocket'], forceNew: true })
+    c.on('connect', () => resolve(c))
+    c.on('connect_error', reject)
   })
+/**
+ * Connects an authenticated client and resolves once the SERVER has finished
+ * setting that connection up — not merely once the handshake completed.
+ *
+ * The distinction is the whole point. The client's 'connect' fires at the
+ * handshake, but chatSocket then does several awaited round-trips before it
+ * joins the socket to its `user:`, `group:` and `chan:` rooms. A test that
+ * resolves on the handshake and immediately emits can therefore land BEFORE
+ * the socket is in the room it is about to be tested on, and the expected
+ * broadcast goes nowhere.
+ *
+ * That race made the suite fail roughly one run in ten — twice in a single
+ * session — and a suite that cries wolf costs more than the bug it hides,
+ * because the next real failure gets re-run instead of read.
+ *
+ * A settle rather than a signal: the server emits nothing that marks "setup
+ * done", and inventing an event solely for the tests would put a fiction on
+ * the wire. If that changes, await the real signal here and delete the wait.
+ *
+ * Use `connectSocketRaw` instead when the test needs to observe an event the
+ * server emits DURING setup — the call catch-up, for one. Waiting past setup
+ * means waiting past the very thing under test.
+ */
+export const connectSocket = async (url: string, token: string): Promise<ClientSocket> => {
+  const s = await new Promise<ClientSocket>((resolve, reject) => {
+    const c = ioClient(url, { auth: { token }, transports: ['websocket'], forceNew: true })
+    c.on('connect', () => resolve(c))
+    c.on('connect_error', reject)
+  })
+  await new Promise(r => setTimeout(r, 350))
+  return s
+}
 
 /** Resolves with the next payload for `name`, or rejects if it never arrives. */
 export const nextEvent = <T = any>(s: ClientSocket, name: string, ms = 3000): Promise<T> =>

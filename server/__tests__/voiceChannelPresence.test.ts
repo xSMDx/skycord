@@ -13,7 +13,7 @@ import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Socket as ClientSocket } from 'socket.io-client'
 import {
   app, connectDb, disconnectDb, resetDb, register, auth,
-  withSocketServer, connectSocket, nextEvent, type TestUser,
+  withSocketServer, connectSocket, connectSocketRaw, nextEvent, type TestUser,
 } from './helpers'
 import { Server } from '../models/Server'
 import { Message } from '../models/Message'
@@ -148,7 +148,10 @@ describe('voice channel presence', () => {
     aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
     await aSelf   // the call is definitely registered before b shows up
 
-    const bSock = track(await connectSocket(sockets.url, b.token))
+    // Raw: the catch-up replays from inside the connect handler, so waiting
+    // until setup finishes would mean waiting until after the thing we are
+    // here to observe has already gone.
+    const bSock = track(await connectSocketRaw(sockets.url, b.token))
     const payload = await nextEvent(bSock, 'call:state')
     expect(payload.room).toBe(`voice:${voice.id}`)
     expect(payload.userIds).toEqual([a.id])
