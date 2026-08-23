@@ -99,11 +99,21 @@ const place = async () => {
  * Invisible makes you read as offline to everyone — both are invisible to
  * the person choosing them, so a label alone asks them to guess.
  */
+/*
+ * `chevron` is presentational and deliberately leads nowhere.
+ *
+ * In Discord these three rows open a duration submenu — "for 1 hour",
+ * "until tomorrow" — and the status reverts by itself. That needs the expiry
+ * stored and reverted server-side, since the browser may well be closed when
+ * the hour is up, and it is not built. The user asked for the shape now and
+ * the behaviour later, knowing that. Do not 'fix' this by wiring an empty
+ * submenu; wire the real thing or take the chevrons out.
+ */
 const PRESENCE = [
-  { id: 'online',    label: 'Online',         note: '' },
-  { id: 'idle',      label: 'Idle',           note: 'Shown as away' },
-  { id: 'dnd',       label: 'Do Not Disturb', note: 'You will not receive notifications' },
-  { id: 'invisible', label: 'Invisible',      note: 'You will appear offline' },
+  { id: 'online',    label: 'Online',         note: '',                                    chevron: false },
+  { id: 'idle',      label: 'Idle',           note: 'Shown as away',                       chevron: true  },
+  { id: 'dnd',       label: 'Do Not Disturb', note: 'You will not receive notifications',  chevron: true  },
+  { id: 'invisible', label: 'Invisible',      note: 'You will appear offline',             chevron: true  },
 ] as const
 const showPresence = ref(false)
 /**
@@ -214,6 +224,7 @@ onBeforeUnmount(() => {
                   <span v-if="p.note" class="pp-presence-note">{{ p.note }}</span>
                 </span>
                 <Check v-if="p.id === chosenStatus" :size="14" :stroke-width="2.25" class="pp-chev" />
+                <ChevronRight v-else-if="p.chevron" :size="14" :stroke-width="2.25" class="pp-chev" />
               </button>
             </div>
 

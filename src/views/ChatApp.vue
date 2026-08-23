@@ -527,6 +527,19 @@ const resolveVoiceUser = (id: string): VoiceOccupant => {
     const m = g.members?.find(mm => mm.id === id)
     if (m) return { id, name: m.displayName || m.username, avatar: m.avatar || avatarFor(m.username), avatarCrop: m.avatarCrop ?? null }
   }
+  // The server member lists, before falling back to guessing from message
+  // history. A member who has never posted has no entry in the author
+  // directory below, so they used to resolve to "Unknown" while sitting in a
+  // voice channel next to their own name in the member panel. Searching every
+  // fetched server rather than only the open one, because the rail hover
+  // preview shows occupants of servers you are not currently looking at.
+  for (const list of Object.values(membersByServer.value)) {
+    const m = list.find(x => x.id === id)
+    if (m) return {
+      id, name: m.displayName || m.username,
+      avatar: m.avatar || avatarFor(m.username), avatarCrop: m.avatarCrop ?? null,
+    }
+  }
   const cached = serverAuthorDirectory.value[id]
   if (cached) return cached
   // Unresolvable — still present, still drawn. Seeded on the id so the same
