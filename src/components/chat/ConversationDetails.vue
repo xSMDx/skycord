@@ -15,7 +15,7 @@
 import { computed, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
   ChevronLeft, Search, Bell, Settings as SettingsIcon,
-  UserPlus, UsersRound, Crown, ChevronRight, SlidersHorizontal,
+  UserPlus, UsersRound, Crown, ChevronRight, SlidersHorizontal, Volume2,
 } from 'lucide-vue-next'
 import { statusColor, statusLabel } from '@/composables/usePresence'
 

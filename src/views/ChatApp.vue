@@ -77,7 +77,7 @@ import { formatChannelName } from '@/utils/channelName'
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
-import type { DM, Member, Server, Channel, Category, Message, ReplyGraph, Group } from '@/types'
+import type { DM, Member, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -351,6 +351,17 @@ const { muted: micOff, deafened: deafOff, toggleMute: onToggleMute, toggleDeafen
  * server is it?" in one step, for both phases of the join.
  */
 const liveVoiceChannel = computed<Channel | null>(() => {
+  // A join that has permanently failed (spent all its retries — a deleted
+  // channel, a server you were removed from) must stop looking "live"
+  // immediately. `connectingConvId` itself isn't cleared until `leave()` runs
+  // at the end of the fail-hold (FAIL_HOLD_MS after `connectStage` flips to
+  // 'failed'), so without this check the sidebar row would keep rendering
+  // active and `voiceRoomOccupants` would keep the optimistic self-row for
+  // that whole hold — you'd appear to be sitting in a channel you never
+  // actually joined. `connectStage` is the one signal useVoice already
+  // exposes for this; activeConvId is guaranteed null while it reads 'failed'
+  // (it's only ever set on a successful join), so this can't hide a real call.
+  if (voice.connectStage === 'failed') return null
   const id = voice.activeConvId ?? voice.connectingConvId
   if (!id) return null
   for (const list of Object.values(channelsByServer.value)) {
@@ -443,7 +454,12 @@ const convHasCall = (kind: 'dm' | 'group', id: string) => {
  * default avatar. Dropping them would make a busy channel look empty, which is
  * a worse lie than an unnamed face.
  */
-type VoiceOccupant = { id: string; name: string; avatar: string }
+// `avatarCrop` rides along so an animated occupant avatar frames the same way
+// it does everywhere else in the app — see `AvatarCrop` in `@/types`. `null`
+// (not just omitted) for a static avatar or an unresolvable user: that is the
+// value a static avatar already renders with everywhere else, so callers can
+// pass it straight to `Avatar`'s `:crop` without an extra fallback.
+type VoiceOccupant = { id: string; name: string; avatar: string; avatarCrop?: AvatarCrop | null }
 
 /** authorId → display info, from the message history cached for the open
  *  server. Built once per change rather than scanned per occupant. */
@@ -456,7 +472,7 @@ const serverAuthorDirectory = computed<Record<string, VoiceOccupant>>(() => {
     for (const m of getChannelMessages(ch.id)) {
       // System messages carry the actor's name in the body, not a real author.
       if (!m.authorId || m.kind === 'system') continue
-      out[m.authorId] = { id: m.authorId, name: m.author, avatar: m.avatar || avatarFor(m.author) }
+      out[m.authorId] = { id: m.authorId, name: m.author, avatar: m.avatar || avatarFor(m.author), avatarCrop: m.avatarCrop ?? null }
     }
   }
   return out
@@ -464,18 +480,23 @@ const serverAuthorDirectory = computed<Record<string, VoiceOccupant>>(() => {
 
 const resolveVoiceUser = (id: string): VoiceOccupant => {
   if (id === authUser.value?.id)
-    return { id, name: authUser.value?.displayName || authUser.value?.username || 'You', avatar: myAvatar.value }
+    return {
+      id, name: authUser.value?.displayName || authUser.value?.username || 'You', avatar: myAvatar.value,
+      avatarCrop: (authUser.value as any)?.avatarCrop ?? null,
+    }
   const f = apiFriends.value.find(x => x.id === id)
-  if (f) return { id, name: f.displayName || f.username, avatar: avatarFor(f.username, f.avatar) }
+  if (f) return { id, name: f.displayName || f.username, avatar: avatarFor(f.username, f.avatar), avatarCrop: (f as any).avatarCrop ?? null }
   for (const g of groupsData.value) {
     const m = g.members?.find(mm => mm.id === id)
-    if (m) return { id, name: m.displayName || m.username, avatar: m.avatar || avatarFor(m.username) }
+    if (m) return { id, name: m.displayName || m.username, avatar: m.avatar || avatarFor(m.username), avatarCrop: m.avatarCrop ?? null }
   }
   const cached = serverAuthorDirectory.value[id]
   if (cached) return cached
   // Unresolvable — still present, still drawn. Seeded on the id so the same
-  // stranger keeps the same face for as long as they're in the channel.
-  return { id, name: 'Unknown', avatar: avatarFor(id) }
+  // stranger keeps the same face for as long as they're in the channel. No
+  // crop info exists for a face we had to invent, so this is the one branch
+  // where `null` isn't carried from anywhere — it's simply correct.
+  return { id, name: 'Unknown', avatar: avatarFor(id), avatarCrop: null }
 }
 
 /**
@@ -515,10 +536,34 @@ const voiceOccupants = (channelId: string): VoiceOccupant[] =>
  * the channel you are already in is a no-op that useVoice's own `connect()`
  * already absorbs (it returns early when the target conv is the live or
  * in-flight one), so there is no second guard here.
+ *
+ * No `.catch` here on purpose: `connect()` fires `attemptConnect` with `void`
+ * and that function swallows every error itself (retry loop, then
+ * `connectStage = 'failed'`) — nothing downstream of its early returns can
+ * ever reject. A `.catch` here would be dead code that reads as "errors are
+ * handled", when the real (and only) failure signal is the `connectStage`
+ * watch below.
  */
 const joinVoiceChannel = (ch: Channel) => {
-  vConnect(ch.id, 'channel', voiceChannelLabel(ch)).catch(() => {})
+  void vConnect(ch.id, 'channel', voiceChannelLabel(ch))
 }
+
+/**
+ * The one real join-failure signal, surfaced as a toast.
+ *
+ * `connect()`/`attemptConnect()` never reject — see `joinVoiceChannel` above
+ * — so a failed join (all retries spent: a deleted channel, a server you were
+ * removed from, ...) only ever shows up as `voice.connectStage` becoming
+ * 'failed'. `liveVoiceChannel` above already stops treating that attempt as
+ * live the instant this happens, so the sidebar row and the optimistic
+ * occupant row retract; this is the toast that explains why, since
+ * VoiceConnectedPanel's red "Couldn't connect" label is easy to miss once
+ * you've looked away from it. Fires once per failed attempt, not on every
+ * render while the fail-hold is showing.
+ */
+watch(() => voice.connectStage, (stage, prev) => {
+  if (stage === 'failed' && prev !== 'failed') showToast('Couldn’t connect to voice')
+})
 
 // Presence userIds for the open conversation's call, resolved to display info
 // (name + avatar) so the CallBar can show who's in the call before you join.
@@ -2848,7 +2893,7 @@ onBeforeUnmount(() => {
               </div>
               <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
                 class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })">
-                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" /></span>
+                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
               </button>
             </template>
