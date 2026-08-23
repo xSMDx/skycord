@@ -25,7 +25,7 @@ const emit  = defineEmits<{
   openReplyTree: [msg: Message]
   jumpToMessage: [dbId: string]
   groupJoined:   [group: any]
-  serverJoined:  [server: any]
+  serverJoined:  [server: any, channel: { id: string; name: string } | null]
 }>()
 
 // Both call logs share systemType 'call', so the start/end distinction comes
@@ -200,7 +200,7 @@ const onReplyPillLeave = () => {
       </template>
 
       <GroupInviteCard v-if="inviteCode" :code="inviteCode" @joined="emit('groupJoined', $event)" />
-      <ServerInviteCard v-if="joinCode" :code="joinCode" @joined="emit('serverJoined', $event)" />
+      <ServerInviteCard v-if="joinCode" :code="joinCode" @joined="(s, ch) => emit('serverJoined', s, ch)" />
       <ThemeCard v-if="themeRef" v-bind="themeRef" />
 
       <div v-if="msg.reactions?.length" class="msg-reactions">

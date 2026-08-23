@@ -16,8 +16,14 @@ const emit  = defineEmits<{
   openReplyTree: [msg: Message]
   jumpToMessage: [dbId: string]
   groupJoined:   [group: any]
-  serverJoined:  [server: any]
+  serverJoined:  [server: any, channel: { id: string; name: string } | null]
 }>()
+
+// Named rather than inline in the template: an object type written into a
+// template attribute puts semicolons where the compiler expects expression
+// separators, so the annotation has to live out here.
+const onServerJoined = (s: any, ch: { id: string; name: string } | null) =>
+  emit('serverJoined', s, ch)
 
 const el          = ref<HTMLElement | null>(null)
 const hoveredId   = ref<number | null>(null)
@@ -199,7 +205,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
           @openReplyTree="(msg) => emit('openReplyTree',msg)"
           @jumpToMessage="(dbId) => emit('jumpToMessage',dbId)"
           @groupJoined="(g) => emit('groupJoined',g)"
-          @serverJoined="(s) => emit('serverJoined',s)"
+          @serverJoined="onServerJoined"
         />
       </template>
     </TransitionGroup>

@@ -10,6 +10,10 @@ export interface IServerInvite extends Document {
   code:      string
   server:    Types.ObjectId
   createdBy: Types.ObjectId
+  /** A voice channel to land in, or null for a plain server invite. The
+   *  channel can be deleted while the invite lives, so every reader treats a
+   *  dangling id as "no destination" rather than as an error. */
+  channel:   Types.ObjectId | null
   expiresAt: Date | null
   uses:      number
   createdAt: Date
@@ -20,6 +24,7 @@ const ServerInviteSchema = new Schema<IServerInvite>(
     code:      { type: String, required: true, unique: true, index: true },
     server:    { type: Schema.Types.ObjectId, ref: 'Server', required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    channel:   { type: Schema.Types.ObjectId, ref: 'Channel', default: null },
     expiresAt: { type: Date, default: null },
     // Reported, not enforced. There is deliberately no maxUses.
     uses:      { type: Number, default: 0 },

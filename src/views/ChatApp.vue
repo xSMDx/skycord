@@ -50,6 +50,8 @@ import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
+import InviteToVoice         from '@/components/voice/InviteToVoice.vue'
+import type { InvitePerson } from '@/components/voice/InviteToVoice.vue'
 import RtcDebugModal         from '@/components/voice/RtcDebugModal.vue'
 import ConversationDetails    from '@/components/chat/ConversationDetails.vue'
 import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
@@ -947,6 +949,42 @@ const setPresence = async (status: string, minutes?: number) => {
   } catch { showToast('Couldn’t update your status') }
 }
 const showCameraPreview = ref(false)
+
+/**
+ * "Invite to Voice" — the row under a voice channel, and the modal behind
+ * its "See more…".
+ *
+ * inviteVoiceChannel doubles as "is the inline list open", holding the
+ * channel it belongs to rather than a boolean, because the sidebar can show
+ * several voice channels and only one list may be open at a time.
+ */
+const inviteVoiceChannel = ref<Channel | null>(null)
+const inviteVoiceModal   = ref<Channel | null>(null)
+
+/** Friends first for the inline peek — that is who you actually pull into a
+ *  call. The modal widens to every member of the server. */
+const inviteFriends = computed<InvitePerson[]>(() =>
+  apiFriends.value.map(f => ({
+    id: f.id, username: f.username, displayName: (f as any).displayName,
+    avatar: f.avatar ?? null, avatarCrop: (f as any).avatarCrop ?? null,
+  })))
+
+const inviteMembers = computed<InvitePerson[]>(() => {
+  const me = authUser.value?.id
+  // Everyone but you — inviting yourself into the room you are standing in
+  // is the one row that can never do anything.
+  return [...activeMembers.value.online, ...activeMembers.value.offline]
+    .filter(m => m.id !== me)
+    .map(m => ({
+      id: m.id, username: m.username, displayName: m.displayName,
+      avatar: m.avatar ?? null, avatarCrop: (m as any).avatarCrop ?? null,
+    }))
+})
+
+const inviteMe = computed(() => ({
+  name: authUser.value?.displayName || authUser.value?.username || 'You',
+  avatar: myAvatar.value,
+}))
 // Which user-panel device menu is open. Same flyouts as the call bar, but
 // anchored upward — the panel is pinned to the bottom of the sidebar.
 const upMenu = ref<'' | 'mic' | 'out'>('')
@@ -1629,9 +1667,21 @@ const handleGroupJoined = async (rawGroup: any) => {
 // folded the response into state via receiveDetail, so this is exactly
 // onServerCreated's path — enterServer finds the server cached and makes no
 // second request.
-const handleServerJoined = async (server: any) => {
+const handleServerJoined = async (
+  server: any, channel?: { id: string; name: string } | null,
+) => {
   joinPromptCode.value = null   // close the direct-link modal, if that's how we got here
   await onServerCreated(server.id)
+  // An invite to a voice channel does not merely deliver you to the server —
+  // it delivers you to the room. Resolved against the freshly-cached channel
+  // list rather than trusting the id blind: joinVoiceChannel needs the whole
+  // Channel object, and the list has just been written by receiveDetail.
+  if (!channel) return
+  const ch = channelsByServer.value[server.id]?.find(c => c.id === channel.id)
+  // Gone between the preview and now, or somehow not in the payload. The join
+  // itself succeeded, so this stays silent rather than throwing an error at
+  // someone who did land where the link's primary promise said.
+  if (ch) joinVoiceChannel(ch)
 }
 
 const doLeaveGroup = async (groupId: string) => {
@@ -2900,6 +2950,17 @@ onBeforeUnmount(() => {
     />
     <SettingsModal    v-if="showSettings"      :initial-page="settingsPage" @close="showSettings = false" />
     <CameraPreviewModal v-if="showCameraPreview" @close="showCameraPreview = false" @confirm="onCameraConfirmed" />
+    <InviteToVoice
+      v-if="inviteVoiceModal"
+      mode="modal"
+      :server-id="activeServerId || ''"
+      :server-name="activeServer?.name || ''"
+      :channel="{ id: inviteVoiceModal.id, name: inviteVoiceModal.name }"
+      :people="inviteMembers"
+      :me="inviteMe"
+      @close="inviteVoiceModal = null"
+      @toast="showToast"
+    />
     <RtcDebugModal v-if="showRtcDebug" @close="showRtcDebug = false" @toast="showToast" />
     <ConversationDetails
       v-if="showDetails && isMobile && (view === 'dm' || view === 'group')"
@@ -3435,6 +3496,27 @@ onBeforeUnmount(() => {
                 <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
               </button>
+              <!-- Only for the channel you are actually in: an invite to a
+                   room you are not sitting in is a link to an empty room,
+                   and Discord scopes it the same way. Inside the occupant
+                   fold so a collapsed category folds it away too. -->
+              <template v-if="liveVoiceChannel?.id === ch.id">
+                <button class="vc-invite" @click.stop="inviteVoiceChannel = inviteVoiceChannel?.id === ch.id ? null : ch">
+                  <UserPlus :size="14" :stroke-width="2" />
+                  <span>Invite to Voice</span>
+                </button>
+                <InviteToVoice
+                  v-if="inviteVoiceChannel?.id === ch.id"
+                  mode="inline"
+                  :server-id="activeServerId || ''"
+                  :server-name="activeServer?.name || ''"
+                  :channel="{ id: ch.id, name: ch.name }"
+                  :people="inviteFriends"
+                  :me="inviteMe"
+                  @see-more="inviteVoiceModal = ch; inviteVoiceChannel = null"
+                  @toast="showToast"
+                />
+              </template>
               </div>
               </div>
             </template>
@@ -4200,6 +4282,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    these are occupants of the row above, not siblings of it. The reference also
    shows an avatar-only density for crowded servers; that needs a trigger
    (a per-server setting, or a count threshold) and is not built here. */
+.vc-invite{display:flex;align-items:center;gap:6px;width:calc(100% - 22px);margin-left:22px;padding:4px 8px;border-radius:4px;background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12.5px;text-align:left}
+.vc-invite:hover{background:var(--hover);color:var(--text-1)}
 .vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:6px;cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}

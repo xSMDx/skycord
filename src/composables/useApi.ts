@@ -242,8 +242,14 @@ export const useApi = () => {
   // '24h' is not special-cased there, it just rides the same default branch
   // as an omitted/unrecognised value, but naming it keeps the contract
   // explicit at the call site.
-  const createServerInvite = (sid: string, expiry: '24h' | '7d' | 'never' = '24h') =>
-    post<{ invite: WireInvite }>(`/servers/${sid}/invites`, { expiry })
+  // `channel` makes it an invite to a VOICE CHANNEL rather than to the server
+  // at large: following it joins the server and then connects to that room.
+  // Voice only and same-server only, enforced server-side (400 otherwise), so
+  // callers must not offer it for a text channel.
+  const createServerInvite = (
+    sid: string, expiry: '24h' | '7d' | 'never' = '24h', channel?: string,
+  ) =>
+    post<{ invite: WireInvite }>(`/servers/${sid}/invites`, { expiry, ...(channel ? { channel } : {}) })
 
   // Owner-only on the server (requireOwner) — a non-owner calling this gets a
   // 403, so callers must gate on isOwner before firing it.
@@ -276,6 +282,10 @@ export const useApi = () => {
       }
       alreadyMember: boolean
       full:          boolean
+      // The voice channel this invite points at, or null — including when the
+      // channel has since been deleted, which degrades to a plain server
+      // invite rather than to an error.
+      channel:       { id: string; name: string } | null
     }>(`/invites/${code}`)
 
   // joinViaInvite's shape matches WireServer/WireChannel/WireCategory exactly
@@ -289,7 +299,12 @@ export const useApi = () => {
   // same receiveDetail. Dropping it here left a joining member with a cached
   // empty category list and a permanently flat sidebar.
   const joinServerInvite = (code: string) =>
-    post<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[]; joined: boolean }>(`/invites/${code}`)
+    post<{
+      server: WireServer; channels: WireChannel[]; categories: WireCategory[]; joined: boolean
+      // Returned for an already-member too (joined: false) — there is no join
+      // to perform, but the destination is the point of the link.
+      channel: { id: string; name: string } | null
+    }>(`/invites/${code}`)
 
   // ── Themes ───────────────────────────────────────────────────────────────
   const createTheme = (name: string, data: Record<string, unknown>) =>
@@ -453,4 +468,7 @@ export interface WireInvite {
   expiresAt: string | null
   createdAt: string
   inviter:   { id: string; username: string } | null
+  /** The voice channel this invite lands you in, or null for a plain
+   *  server invite. Also null once that channel has been deleted. */
+  channel:   { id: string; name: string } | null
 }
