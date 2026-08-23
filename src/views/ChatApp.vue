@@ -3388,6 +3388,7 @@ onBeforeUnmount(() => {
             @toast="showToast"
             @open-settings="openSettings($event ?? 'account')"
             @expand="callExpanded = $event"
+            @minimize="viewedVoiceId = null"
             @profile="showUserProfile = $event.id"
             @preview-camera="showCameraPreview = true"
           />
@@ -3690,10 +3691,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    these are occupants of the row above, not siblings of it. The reference also
    shows an avatar-only density for crowded servers; that needs a trigger
    (a per-server setting, or a count threshold) and is not built here. */
-.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:2px 8px 2px 26px;border:none;background:none;border-radius:6px;cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
+.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:6px;cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
 .vc-occ-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Occupants are a group hanging off the channel above them, not more rows in
+   the same list. Without this they butt straight against the channel name and
+   against the next channel, and the hierarchy disappears. */
+.ch-item.voice + .vc-occ{margin-top:3px}
+.vc-occ:last-child{margin-bottom:5px}
 
 /* User Panel */
 .user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px}
