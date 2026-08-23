@@ -359,8 +359,11 @@ const liveVoiceChannel = computed<Channel | null>(() => {
   // active and `voiceRoomOccupants` would keep the optimistic self-row for
   // that whole hold — you'd appear to be sitting in a channel you never
   // actually joined. `connectStage` is the one signal useVoice already
-  // exposes for this; activeConvId is guaranteed null while it reads 'failed'
-  // (it's only ever set on a successful join), so this can't hide a real call.
+  // exposes for this, and it has to be read directly rather than inferred
+  // from `activeConvId`: on the self-heal path (useVoice.ts's
+  // RoomEvent.Disconnected handler keeps `activeConvId` set across the retry
+  // so the reconnect knows what to rejoin), `activeConvId` can still be
+  // non-null by the time `giveUp()` sets `connectStage` to 'failed'.
   if (voice.connectStage === 'failed') return null
   const id = voice.activeConvId ?? voice.connectingConvId
   if (!id) return null
@@ -1212,8 +1215,11 @@ const selectChannel = async (ch: Channel) => {
 // CreateChannelModal's `created` emit — select the channel the user just
 // made instead of leaving them staring at the sidebar. upsertChannel has
 // already put it in state (the modal calls it before emitting), so this is
-// purely local: no request, and selectChannel's own text-only guard already
-// makes a voice channel a harmless no-op here, same as clicking one directly.
+// purely local: no request, and selectChannel's own text-only guard keeps a
+// freshly created voice channel a harmless no-op here. That's UNLIKE clicking
+// a voice channel's own sidebar row, which goes through `joinVoiceChannel`
+// and actually joins the call — this code path only ever reaches
+// `selectChannel`, never `joinVoiceChannel`, for a channel just created here.
 const handleChannelCreated = (channel: WireChannel) => {
   // Unfold the category it landed in, if the `+` that opened the modal
   // belonged to a folded one. A collapsed group keeps showing its active and

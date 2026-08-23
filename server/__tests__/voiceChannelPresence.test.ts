@@ -230,6 +230,70 @@ describe('call:join refuses non-members', () => {
     await new Promise(r => setTimeout(r, 400))
     expect(seen).toBe(false)
   })
+
+  // POST /voice/token already refuses a text channel with a 400 — a voice call
+  // in a text channel is not a thing. canJoinCall's channel branch used to skip
+  // that check entirely, so a member naming a TEXT channel still landed in
+  // activeCalls and broadcast to every real member of the server via chan:<id>
+  // — permanent phantom occupancy in a channel that can never display it, and
+  // nothing could ever evict it (leaveCall only removes the caller, and no
+  // caller could ever legitimately "join" a text channel to leave it).
+  it('does not add a text channel to call occupancy — a voice call in a text channel is not a thing', async () => {
+    const a = await register(), b = await register()
+    const { server, channels } = await mkServer(a)
+    await joinAsMember(server.id, b.id)
+    const text = channels.find((c: any) => c.type === 'text')
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    let seen = false
+    bSock.on('call:state', () => { seen = true })
+
+    aSock.emit('call:join', { conversationId: text.id, kind: 'channel' })
+
+    await new Promise(r => setTimeout(r, 400))
+    expect(seen).toBe(false)
+  })
+})
+
+// canJoinCall used to early-return true for kind: 'dm' with no check
+// whatsoever, unlike getVoiceToken (voiceController.ts), which requires the
+// named partner to be a real user and not the caller themselves. Without that
+// check here, an authenticated client naming ANY string as the partner id
+// gets a real Message written by postCallSystem (dmConvId(userId, junk)) and,
+// looped, that's unbounded database growth from one authenticated socket.
+// These prove the refusal actually blocks both occupancy AND the write, not
+// just one half of it.
+describe('call:join validates the dm partner the way getVoiceToken does', () => {
+  it('refuses a junk partner id: no call:state, no Message written', async () => {
+    const a = await register()
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    let seen = false
+    aSock.on('call:state', () => { seen = true })
+    const before = await Message.countDocuments()
+
+    // Well-formed ObjectId shape but no such user, same shape as
+    // voiceChannelToken.test.ts's "404s a nonexistent (but well-formed) ...".
+    aSock.emit('call:join', { conversationId: '507f1f77bcf86cd799439011', kind: 'dm' })
+
+    await new Promise(r => setTimeout(r, 400))
+    expect(seen).toBe(false)
+    expect(await Message.countDocuments()).toBe(before)
+  })
+
+  it('refuses a self-join: no call:state, no Message written', async () => {
+    const a = await register()
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    let seen = false
+    aSock.on('call:state', () => { seen = true })
+    const before = await Message.countDocuments()
+
+    aSock.emit('call:join', { conversationId: a.id, kind: 'dm' })
+
+    await new Promise(r => setTimeout(r, 400))
+    expect(seen).toBe(false)
+    expect(await Message.countDocuments()).toBe(before)
+  })
 })
 
 // broadcastCall's DM branch PARSES the room name rather than matching a prefix,

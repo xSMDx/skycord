@@ -13,9 +13,14 @@ import { dmConvId } from './messagesController'
 // voice channels use the channel id, prefixed `voice:` — deliberately NOT
 // `chan:`, which is already the Socket.IO room carrying that same channel's
 // TEXT traffic. Two other places derive this exact same string independently
-// (chatSocket.ts's callRoom, useVoice.ts's voiceRoomName); if any of the three
-// disagree, two people both believe they're in a call together while sitting
-// in different LiveKit rooms, with no error anywhere.
+// (chatSocket.ts's callRoom, useVoice.ts's voiceRoomName); if any of those
+// three PRODUCERS disagree, two people both believe they're in a call
+// together while sitting in different LiveKit rooms, with no error anywhere.
+// More than three places touch this grammar overall — ChatApp.vue's
+// `incomingCall` (~line 217/231) and `voiceRoomOccupants` (~line 512) also
+// switch on the `dm:`/`group:`/`voice:` prefix — but those only need to
+// recognise a prefix, not reproduce the whole string, so they're safe without
+// being kept in lockstep with the three producers above.
 export const roomFor = (kind: 'dm' | 'group' | 'channel', convId: string, selfId: string) =>
   kind === 'channel' ? `voice:${convId}`
   : kind === 'group' ? `group:${convId}`
@@ -45,8 +50,11 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       // Same shape as canAccessMessage's channel branch in chatSocket.ts:
       // resolve Channel -> Server -> members. Plus one extra condition a
       // message doesn't need — a voice token is meaningless for a text
-      // channel, so that is checked and refused before authorisation, same
-      // ordering sendChannelMessage uses for its own type !== 'text' guard.
+      // channel — but that is checked AFTER authorisation, not before:
+      // membership (403) is resolved first and the type check (400) only
+      // runs once the caller is a confirmed member, so a non-member gets the
+      // exact same 403 whether the channel is text or voice and can never
+      // use this endpoint to learn which one it is.
       if (!mongoose.isValidObjectId(conversationId)) { res.status(400).json({ message: 'Invalid channel' }); return }
       const channel = await Channel.findById(conversationId).select('server type').lean()
       if (!channel) { res.status(404).json({ message: 'Channel not found' }); return }

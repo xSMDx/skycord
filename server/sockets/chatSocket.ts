@@ -74,16 +74,29 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
  * channel or group id landed in `activeCalls` and was broadcast to every real
  * member of that server or group, with no way for anyone to evict the
  * phantom occupant afterwards — `leaveCall` only ever removes the caller.
- * The channel branch mirrors `canAccessMessage`'s above: Channel -> Server ->
- * members, rather than a second copy of that resolution.
  *
- * DM gets no check and always returns true. `callRoom`'s dm branch is
- * `dm:${dmConvId(userId, convId)}`, built from the CALLER's own id, so the
- * room always contains exactly the caller plus whoever they named — there is
- * no "someone else's DM" a caller could land themselves in by naming an id.
- * Whether two people are allowed to ring each other at all (friendship, DND,
- * etc.) is a separate product question this event never enforced before and
- * is out of scope here; there is no membership fact left to check.
+ * Every branch mirrors the checks `getVoiceToken` (voiceController.ts)
+ * already runs for `POST /voice/token`, rather than inventing a second,
+ * possibly-different set of rules for the socket path:
+ *
+ *   - channel: Channel -> Server -> members (same resolution as
+ *     `canAccessMessage`'s channel branch above), AND `channel.type ===
+ *     'voice'`. Without the type check, a member could name a TEXT channel:
+ *     they could never actually join its LiveKit room, but `voice:<id>` still
+ *     entered `activeCalls` and `call:state` fanned out to `chan:<id>` —
+ *     every member of the server — as permanent phantom occupancy in a
+ *     channel that can never display it, with nothing to ever evict it.
+ *   - dm: the named partner must be a real user, and must not be the caller.
+ *     Without this, `callRoom`'s dm branch — `dm:${dmConvId(userId,
+ *     convId)}` — happily builds a room from ANY string, and
+ *     `postCallSystem`/`postCallEnded` write a real `Message` into it
+ *     (`dmConvId(userId, junk)`) and emit to `user:<junk>`. Looped, that is
+ *     unbounded database growth driven by one authenticated client. Whether
+ *     two real, distinct people are allowed to ring each other at all
+ *     (friendship, DND, etc.) is a separate product question this event
+ *     never enforced before and is out of scope here.
+ *   - group: Conversation -> members, same as `canAccessMessage`'s group
+ *     branch above.
  *
  * Any lookup failure (malformed id, doc deleted mid-flight) reads as "not
  * allowed" rather than throwing out of a handler with no surrounding
@@ -92,13 +105,17 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
 const canJoinCall = async (
   kind: 'dm' | 'group' | 'channel', conversationId: string, userId: string,
 ): Promise<boolean> => {
-  if (kind === 'dm') return true
   try {
     if (kind === 'channel') {
-      const channel = await Channel.findById(conversationId).select('server').lean()
-      if (!channel) return false
+      const channel = await Channel.findById(conversationId).select('server type').lean()
+      if (!channel || channel.type !== 'voice') return false
       const server = await Server.findById(channel.server).select('members').lean()
       return !!server && server.members.some(m => m.toString() === userId)
+    }
+    if (kind === 'dm') {
+      if (conversationId === userId) return false
+      const partner = await User.findById(conversationId).select('_id').lean()
+      return !!partner
     }
     const group = await Conversation.findById(conversationId).select('members').lean()
     return !!group && group.members.some(m => m.toString() === userId)

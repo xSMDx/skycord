@@ -17,7 +17,11 @@ import { voiceRoomName } from '../useVoice'
 // and callRoom (server/sockets/chatSocket.ts) — and all three must agree
 // character-for-character, or two people each believe they're connected while
 // sitting in different LiveKit rooms with no error and no log. If you change
-// the naming here, change both of those too (and vice versa).
+// the naming here, change both of those too (and vice versa). That "all
+// three" is the set of PRODUCERS, not the full list of code that cares about
+// this grammar — ChatApp.vue's `incomingCall` and `voiceRoomOccupants` also
+// read these room names, but only by prefix (`dm:`/`group:`/`voice:`), so
+// they don't need updating in lockstep with the three above.
 describe('voiceRoomName', () => {
   it('a channel room is voice:<channelId>', () => {
     expect(voiceRoomName('channel', 'chan1', 'u1')).toBe('voice:chan1')
