@@ -263,6 +263,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // presence handlers below can re-derive what friends should see without a
     // database round-trip on every idle flicker.
     let myStatus: presence.ChosenStatus = 'online'
+    // The chosen status's end, carried beside the choice itself. Held per
+    // socket for the same reason myStatus is: effectiveStatus needs both on
+    // every broadcast, and re-reading the row on each one would be a database
+    // round trip per presence event.
+    let myStatusUntil: Date | null = null
 
     // ── Send DM ───────────────────────────────────────────────────────────
     socket.on('dm:send', async (data: {
@@ -730,7 +735,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * at one of the call sites.
      */
     const broadcastPresence = async () => {
-      const status = presence.effectiveStatus(myStatus, userId)
+      const status = presence.effectiveStatus(myStatus, userId, myStatusUntil)
       const audience = await presenceAudience(userId)
       for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status })
       // Your own other tabs get the RAW choice — you must see your own
@@ -742,14 +747,25 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     socket.on('presence:set', async (raw: unknown, ack?: (r: any) => void) => {
       const next = typeof raw === 'string' ? raw : (raw as any)?.status
       if (!presence.isChosenStatus(next)) { ack?.({ ok: false, error: 'Unknown status' }); return }
-      myStatus = next
+
+      // An optional duration, in minutes. A bare string still works — that is
+      // the "Forever" case and the shape every existing client sends.
+      const mins = typeof raw === 'object' && raw ? Number((raw as any).minutes) : NaN
+      let until: Date | null = null
+      if (Number.isFinite(mins) && mins > 0) until = new Date(Date.now() + mins * 60_000)
+
+      myStatus      = next
+      myStatusUntil = until
       // Choosing a status explicitly means you're at the keyboard.
       presence.setAway(userId, false)
       try {
-        await User.findByIdAndUpdate(userId, { status: next })
+        // statusUntil is always written, never merged: picking a status with
+        // no duration has to clear whatever expiry the previous one left, or
+        // "Online forever" would silently inherit the old DND's end time.
+        await User.findByIdAndUpdate(userId, { status: next, statusUntil: until })
       } catch { ack?.({ ok: false, error: 'Could not save that' }); return }
       await broadcastPresence()
-      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId) })
+      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, myStatusUntil) })
     })
 
     /**
@@ -793,8 +809,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // write was the reason Do Not Disturb never survived a sign-in.
       const me = await User.findByIdAndUpdate(
         userId, { lastSeenAt: new Date() }, { new: true }
-      ).select('avatar avatarCrop displayName username status').lean()
-      myStatus = presence.isChosenStatus(me?.status) ? me!.status : 'online'
+      ).select('avatar avatarCrop displayName username status statusUntil').lean()
+      myStatus      = presence.isChosenStatus(me?.status) ? me!.status : 'online'
+    myStatusUntil = (me?.statusUntil as Date | null | undefined) ?? null
 
       // Looked up once per connection rather than trusting what the client
       // sends per-message. A reconnect after changing your avatar or display
@@ -841,7 +858,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // the user chose to join. Invisible is still a full opt-out, because
       // effectiveStatus maps it to offline.
       if (wasOffline) {
-        const eff = presence.effectiveStatus(myStatus, userId)
+        const eff = presence.effectiveStatus(myStatus, userId, myStatusUntil)
         const audience = await presenceAudience(userId, myServers)
         for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status: eff })
       }

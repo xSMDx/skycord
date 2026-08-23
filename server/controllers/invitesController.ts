@@ -145,7 +145,7 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
         server = fresh
 
         const joiner = await User.findById(userId)
-          .select('username displayName avatar avatarCrop status').lean()
+          .select('username displayName avatar avatarCrop status statusUntil').lean()
         if (joiner) {
           emitToServer(fresh, 'server:memberJoined', {
             serverId: fresh._id.toString(),
@@ -156,7 +156,7 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
               avatar:      (joiner as any).avatar ?? null,
               avatarCrop:  (joiner as any).avatarCrop ?? null,
               // Computed, never the stored column.
-              status:      effectiveStatus((joiner as any).status, userId),
+              status:      effectiveStatus((joiner as any).status, userId, (joiner as any).statusUntil),
               isOwner:     false,
             },
           })

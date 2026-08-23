@@ -227,7 +227,7 @@ export const getServerMembers = async (req: Request, res: Response, next: NextFu
   try {
     const server = await loadServer(req, res); if (!server) return
     const users = await User.find({ _id: { $in: server.members } })
-      .select('username displayName discriminator avatar avatarCrop status').lean()
+      .select('username displayName discriminator avatar avatarCrop status statusUntil').lean()
     res.json({
       members: users.map((u: any) => ({
         id:          u._id.toString(),
@@ -237,7 +237,7 @@ export const getServerMembers = async (req: Request, res: Response, next: NextFu
         avatarCrop:  u.avatarCrop ?? null,
         // Computed, never the stored column — that column is only ever the
         // user's chosen status, not whether they are reachable.
-        status:      effectiveStatus(u.status, u._id.toString()),
+        status:      effectiveStatus(u.status, u._id.toString(), u.statusUntil),
         isOwner:     server.owner.toString() === u._id.toString(),
       })),
     })
