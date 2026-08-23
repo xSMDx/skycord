@@ -77,7 +77,7 @@ import { formatChannelName } from '@/utils/channelName'
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
 
-import type { DM, Member, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
+import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -157,12 +157,13 @@ const {
 // wanted — the Move to Category submenu needs the server's categories as
 // categories, not as render groups.
 const {
-  servers, activeServerId, activeChannelId, unreadChannels, channelsByServer,
-  activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories,
+  servers, activeServerId, activeChannelId, unreadChannels, channelsByServer, membersByServer,
+  activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories, activeMembers,
   selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
-  loadServers, openServer: enterServer,
+  upsertMember, removeMember,
+  loadServers, loadServerMembers, openServer: enterServer,
 } = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -477,9 +478,9 @@ const convHasCall = (kind: 'dm' | 'group', id: string) => {
 /**
  * Names and faces for the ids `call:state` reports.
  *
- * The server sends ids only, and there is no member-list API yet
- * (`members` below is still a stub), so this is assembled from what the client
- * already holds: you, your friends, the members of any group DM you're in, and
+ * The server sends ids only, so rather than a second round trip through the
+ * member list this is assembled from what the client already holds: you,
+ * your friends, the members of any group DM you're in, and
  * the authors of messages already cached for this server's text channels — the
  * last of which is what covers the ordinary case of a fellow server member who
  * isn't your friend but has said something you've loaded.
@@ -891,9 +892,9 @@ const msgListRef = ref<InstanceType<typeof MessageList> | null>(null)
 
 // ── Role colours ───────────────────────────────────────────────────────────
 
-// Servers and channels come from useServers now. The member list is still a
-// placeholder — the members API is 3b.
-const members: Member[] = []
+// Servers and channels come from useServers now. Server members do too —
+// `activeMembers` (grouped by live presence) and `membersByServer` (the raw,
+// fetch-once-per-server cache) — so there is no local placeholder left here.
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 // avatarFor is imported from the shared composable (see top of file) so this
@@ -1069,7 +1070,6 @@ const toggleGroup = (g: SidebarGroup) => {
   if (g.category) toggleCategory(g.category.serverId, g.category.id)
 }
 
-const onlineMembers   = computed(() => members.filter(m => m.status !== 'offline'))
 const activeNow       = computed(() => apiFriends.value.filter(f => f.status === 'online' || f.status === 'idle'))
 const filteredFriends = computed(() => {
   const q = friendSearch.value.trim().toLowerCase()
@@ -1125,7 +1125,8 @@ const chatMembers = computed<{ id: string; name: string; username?: string; avat
   if (view.value === 'dm' && activeDM.value)
     return [{ id: activeDM.value.id, name: activeDM.value.name, avatar: activeDM.value.avatar }]
   if (view.value === 'server')
-    return members.map(m => ({ id: m.id, name: m.name, avatar: m.avatar }))
+    return [...activeMembers.value.online, ...activeMembers.value.offline]
+      .map(m => ({ id: m.id, name: m.displayName || m.username, username: m.username, avatar: m.avatar || avatarFor(m.username) }))
   return []
 })
 
@@ -1642,17 +1643,13 @@ const setupSocket = () => {
     if (wasHere) { setActiveChannel(null); openFriends() }
   })
 
-  // The member list is 3b; until then the only visible consequence of someone
-  // joining or leaving is the count, so keep just that honest. Neither
-  // server:memberJoined nor server:memberLeft actually carries a memberCount
-  // field today (see task-4-report.md, Step 3) — the guard below makes this a
-  // harmless no-op until the server side adds one.
-  const syncMemberCount = (p: any) => {
-    const s = servers.value.find(x => x.id === p.serverId)
-    if (s && typeof p.memberCount === 'number') s.memberCount = p.memberCount
-  }
-  socketOn('onServerMemberJoined', syncMemberCount)
-  socketOn('onServerMemberLeft',   syncMemberCount)
+  // Neither event carries a memberCount field (confirmed again here — see
+  // invitesController.ts's `server:memberJoined` emit and serversController.ts's
+  // `server:memberLeft` emit), so the panel's count is never read off
+  // `Server.memberCount`; it's derived from membersByServer itself (see
+  // `activeMembers`), which these two keep honest directly.
+  socketOn('onServerMemberJoined', (p: any) => upsertMember(p.serverId, p.member))
+  socketOn('onServerMemberLeft',   (p: any) => removeMember(p.serverId, p.userId))
 
   // ── Live message updates from partner / group ──────────────────────────────
   // These used to resolve the on-screen list through a local `liveList()` that
@@ -2148,6 +2145,15 @@ const openServer = async (srv: Server) => {
     openFriends()
     return
   }
+  // Members follow the same fetch-once-per-server rule as channels/categories
+  // above, but a failure here degrades quietly (empty panel, logged) rather
+  // than bouncing the user back to Friends — same treatment as
+  // loadChannelHistory below: the channel view they came here for already
+  // loaded fine, and losing the member sidebar is not worth losing that too.
+  if (!membersByServer.value[srv.id]) {
+    try { await loadServerMembers(srv.id) }
+    catch (e) { console.error('[openServer members]', e) }
+  }
   if (activeChannelId.value) {
     setActiveChannel(activeChannelId.value)
     await loadChannelHistory(activeChannelId.value)
@@ -2159,13 +2165,19 @@ const openServer = async (srv: Server) => {
 const onServerCreated = async (serverId: string) => {
   // The modal already folded the new server and its two default channels
   // into state via receiveDetail, so enterServer finds them cached and
-  // makes no second request.
+  // makes no second request. Members are not part of that payload, though —
+  // CreateServerModal never populates membersByServer — so the guarded fetch
+  // below always runs once for a just-created server.
   view.value = 'server'
   setActiveDMPartner(null)
   setActiveGroup(null)
   showInvite.value = false
   showCreateChannel.value = false
   await enterServer(serverId)
+  if (!membersByServer.value[serverId]) {
+    try { await loadServerMembers(serverId) }
+    catch (e) { console.error('[onServerCreated members]', e) }
+  }
   if (activeChannelId.value) {
     setActiveChannel(activeChannelId.value)
     await loadChannelHistory(activeChannelId.value)
@@ -3324,7 +3336,7 @@ onBeforeUnmount(() => {
                    .members-panel` already hides the panel, so the toggle would
                    be a button with no visible outcome — the same reason the
                    CallBar's hide-chat control is suppressed for a channel. -->
-              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" @click.stop="membersOpen=!membersOpen">
+              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" v-tip="membersOpen ? 'Hide Member List' : 'Show Member List'" @click.stop="membersOpen=!membersOpen">
                 <Users :size="18" :stroke-width="1.5"/>
               </button>
 
@@ -3454,20 +3466,46 @@ onBeforeUnmount(() => {
         <div v-if="isMobile && membersOpen && (view==='server' || view==='group')"
              class="m-sheet-scrim" @click="membersOpen = false" />
 
-        <!-- Members sidebar (server) -->
+        <!-- Members sidebar (server). Markup mirrors the group DM panel just
+             below — avatar, live status dot, name, owner tag — split into
+             Online/Offline sections the way the old mock stub used to
+             pretend to, except the groups and the count now come from
+             activeMembers (grouped by livePresence, never the fetched
+             snapshot) instead of an empty literal. -->
         <aside v-if="view==='server'" class="members-panel" :class="{ closed: !membersOpen }">
-          <div class="mp-header"><h3>Members <span class="mp-count">{{ members.length }}</span></h3></div>
+          <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="13" :stroke-width="1.5"/>
             <input type="text" placeholder="Search members…"/>
           </div>
           <div class="mp-list">
-            <div class="mp-section-label">Online — {{ onlineMembers.length }}</div>
-            <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+            <div class="mp-section-label">Online — {{ activeMembers.online.length }}</div>
+            <div v-for="m in activeMembers.online" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
-              <div class="mp-av"><Avatar :src="m.avatar" :alt="m.name" :crop="(m as any).avatarCrop" /><span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/></div>
-              <div class="mp-info"><span class="mp-name">{{ m.name }}</span><span class="mp-status" :style="{ color: statusColor(livePresence(m.id, m.status)) }">{{ statusLabel(livePresence(m.id, m.status)) }}</span></div>
+              <div class="mp-av">
+                <Avatar :src="m.avatar" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
+                <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+              </div>
+              <div class="mp-info">
+                <span class="mp-name">{{ m.displayName || m.username }}</span>
+                <span v-if="m.isOwner" class="mp-owner">Owner</span>
+              </div>
             </div>
+
+            <template v-if="activeMembers.offline.length">
+              <div class="mp-section-label">Offline — {{ activeMembers.offline.length }}</div>
+              <div v-for="m in activeMembers.offline" :key="m.id" class="mp-member mp-offline" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+                   @contextmenu="openUserMenu($event, m)">
+                <div class="mp-av">
+                  <Avatar :src="m.avatar" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
+                  <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+                </div>
+                <div class="mp-info">
+                  <span class="mp-name">{{ m.displayName || m.username }}</span>
+                  <span v-if="m.isOwner" class="mp-owner">Owner</span>
+                </div>
+              </div>
+            </template>
           </div>
         </aside>
 
@@ -4129,6 +4167,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:6px 8px 4px}
 .mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .12s}
 .mp-member:hover{background:var(--hover)}
+.mp-member.mp-offline{opacity:.5}
+.mp-member.mp-offline:hover{opacity:.8}
 .mp-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .mp-av img{width:100%;height:100%;border-radius:50%;object-fit:cover}
 .mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg-panel)}
