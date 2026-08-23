@@ -254,6 +254,11 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
       }
     }
 
+    // The HTTP path has no duration support, so a status set over it means
+    // forever -- and forever must overwrite whatever deadline the previous
+    // status left, same rule as the socket path.
+    if (allowed.status !== undefined) (allowed as any).statusUntil = null
+
     const user = await User.findByIdAndUpdate(userId, allowed, { new: true })
     if (!user) { res.status(404).json({ message: 'User not found' }); return }
 

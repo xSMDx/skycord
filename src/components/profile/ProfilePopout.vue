@@ -30,7 +30,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   close: []; editProfile: []; setStatus: []; message: [user: Record<string, any>]
-  viewFull: [id: string]; toast: [msg: string]; setPresence: [status: string]
+  viewFull: [id: string]; toast: [msg: string]; setPresence: [status: string, minutes?: number]
 }>()
 
 const { user: authUser } = useAuth()
@@ -117,6 +117,27 @@ const PRESENCE = [
 ] as const
 const showPresence = ref(false)
 /**
+ * The duration list, one status at a time. Clicking a status row still sets
+ * it instantly and forever — the chevron is the ONLY thing that opens this,
+ * so the fast path stays one click and the timed path is a deliberate second
+ * one. Reset alongside showPresence so a reopened menu never starts with a
+ * stale submenu already unfolded.
+ */
+const openDurations = ref<string | null>(null)
+const DURATIONS = [
+  { label: 'For 15 Minutes', minutes: 15 },
+  { label: 'For 1 Hour',     minutes: 60 },
+  { label: 'For 8 Hours',    minutes: 480 },
+  { label: 'For 24 Hours',   minutes: 1440 },
+  { label: 'For 3 Days',     minutes: 4320 },
+  { label: 'Forever',        minutes: undefined },
+] as const
+const pick = (id: string, minutes?: number) => {
+  emit('setPresence', id, minutes)
+  showPresence.value = false
+  openDurations.value = null
+}
+/**
  * Your CHOICE, not your effective status.
  *
  * These are different things and the difference is the whole point of the
@@ -132,7 +153,12 @@ const currentPresence = computed(() =>
   PRESENCE.find(p => p.id === chosenStatus.value) ?? PRESENCE[0])
 // Expanding the list changes the panel height, so it must be re-placed or it
 // grows off the bottom of the screen.
-const togglePresence = async () => { showPresence.value = !showPresence.value; await place() }
+const togglePresence = async () => {
+  showPresence.value = !showPresence.value
+  // A reopened menu must not start with a stale duration list unfolded.
+  openDurations.value = null
+  await place()
+}
 
 const addFriend = async () => {
   if (busy.value) return
@@ -214,18 +240,33 @@ onBeforeUnmount(() => {
               <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
             </button>
             <div v-if="showPresence" class="pp-sub">
-              <button
-                v-for="p in PRESENCE" :key="p.id" class="pp-row sub"
-                @click="emit('setPresence', p.id); showPresence = false"
-              >
-                <span class="pp-dot" :style="{ background: statusColor(p.id) }" />
-                <span class="pp-presence-text">
-                  <span>{{ p.label }}</span>
-                  <span v-if="p.note" class="pp-presence-note">{{ p.note }}</span>
-                </span>
-                <Check v-if="p.id === chosenStatus" :size="14" :stroke-width="2.25" class="pp-chev" />
-                <ChevronRight v-else-if="p.chevron" :size="14" :stroke-width="2.25" class="pp-chev" />
-              </button>
+              <template v-for="p in PRESENCE" :key="p.id">
+                <div class="pp-splitrow">
+                  <!-- The row itself sets instantly, forever — unchanged. -->
+                  <button class="pp-row sub" @click="pick(p.id)">
+                    <span class="pp-dot" :style="{ background: statusColor(p.id) }" />
+                    <span class="pp-presence-text">
+                      <span>{{ p.label }}</span>
+                      <span v-if="p.note" class="pp-presence-note">{{ p.note }}</span>
+                    </span>
+                    <Check v-if="p.id === chosenStatus" :size="14" :stroke-width="2.25" class="pp-chev" />
+                  </button>
+                  <!-- Its own button, not an icon inside the row: a nested
+                       button is invalid HTML, and this one now has a job — it
+                       opens the duration list instead of setting anything. -->
+                  <button v-if="p.chevron" class="pp-chev-btn" :class="{ open: openDurations === p.id }"
+                    :aria-label="'Set ' + p.label + ' for a limited time'"
+                    @click.stop="openDurations = openDurations === p.id ? null : p.id">
+                    <ChevronRight :size="14" :stroke-width="2.25" />
+                  </button>
+                </div>
+                <div v-if="openDurations === p.id" class="pp-durations">
+                  <button v-for="d in DURATIONS" :key="d.label" class="pp-row sub dur"
+                    @click="pick(p.id, d.minutes)">
+                    <span>{{ d.label }}</span>
+                  </button>
+                </div>
+              </template>
             </div>
 
             <button class="pp-row" @click="copyId">
@@ -298,6 +339,17 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-row.sub .pp-dot { margin-top: 5px; }
 .pp-row.danger { color: #f0716f; }
 .pp-row.danger svg { color: #f0716f; }
+/* A status row and the chevron that bounds it in time. The row keeps its
+   full-width hover; the chevron is a sibling so both stay valid buttons. */
+.pp-splitrow { display: flex; align-items: stretch; }
+.pp-splitrow .pp-row { flex: 1; min-width: 0; }
+.pp-chev-btn { flex: none; display: flex; align-items: center; padding: 0 8px; background: none; border: none; cursor: pointer; color: var(--text-2); border-radius: 4px; }
+.pp-chev-btn:hover { background: var(--hover-strong); }
+.pp-chev-btn svg { transition: transform .15s ease; }
+.pp-chev-btn.open svg { transform: rotate(90deg); }
+.pp-durations { display: flex; flex-direction: column; }
+.pp-row.sub.dur { padding-left: 34px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition: none; } }
 .pp-row.danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
 .pp-chev { margin-left: auto; color: var(--text-3); transition: transform .14s; }

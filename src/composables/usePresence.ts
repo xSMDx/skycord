@@ -13,6 +13,40 @@ export type ChosenStatus = 'online' | 'idle' | 'dnd' | 'invisible'
 
 /** What you picked. Mirrors User.status on the server. */
 export const chosenStatus = ref<ChosenStatus>('online')
+
+/**
+ * When the chosen status stops applying, or null for never. Mirrors the
+ * server's statusUntil; fed by the presence:set ack and presence:self, so
+ * every tab agrees on the deadline.
+ */
+export const chosenUntil = ref<Date | null>(null)
+
+/**
+ * The tab watches its own deadline. Expiry is applied on read server-side, so
+ * the data is never wrong — but nothing HAPPENS at the expiry moment unless
+ * someone acts: your own picker would keep showing the dead status, and your
+ * friends would keep seeing it until the next presence broadcast for any
+ * other reason. So the tab that set the timer also announces its end, by
+ * setting online for real — which persists, clears the deadline, and fans
+ * out, exactly as if you had clicked it. If no tab is open when the clock
+ * runs out, the read-side expiry still answers correctly; this is the
+ * broadcast half, not the truth half.
+ *
+ * The token guard is the standard one: pick a new status before the old
+ * deadline fires and the stale timer must do nothing.
+ */
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
+const armExpiry = () => {
+  if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null }
+  const until = chosenUntil.value
+  if (!until) return
+  const ms = new Date(until).getTime() - Date.now()
+  const token = until
+  expiryTimer = setTimeout(() => {
+    if (chosenUntil.value !== token) return   // superseded while waiting
+    void setChosenStatus('online')
+  }, Math.max(0, ms))
+}
 /** What your friends are currently being told. */
 /** What a status resolves to once reachability and idle are folded in — the
  *  server's effectiveStatus() produces exactly these four. `invisible` is a
@@ -136,23 +170,33 @@ export const stopIdleWatch = () => {
   if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
 }
 
-/** Tell the server you picked a status. Resolves once it's saved. */
-export const setChosenStatus = (status: ChosenStatus): Promise<boolean> =>
+/** Tell the server you picked a status. Resolves once it's saved.
+ *  `minutes` bounds it — omitted means forever, which also CLEARS any
+ *  deadline the previous status left (the server enforces the same rule). */
+export const setChosenStatus = (status: ChosenStatus, minutes?: number): Promise<boolean> =>
   new Promise((resolve) => {
     const s = getSocket()
     if (!s?.connected) { resolve(false); return }
     // Optimistic: the picker should tick instantly, not after a round-trip.
     chosenStatus.value = status
-    s.emit('presence:set', { status }, (r: any) => {
-      if (r?.ok) { chosenStatus.value = r.status; effectiveSelfStatus.value = r.effective }
+    s.emit('presence:set', { status, ...(minutes ? { minutes } : {}) }, (r: any) => {
+      if (r?.ok) {
+        chosenStatus.value      = r.status
+        effectiveSelfStatus.value = r.effective
+        chosenUntil.value       = r.until ? new Date(r.until) : null
+        armExpiry()
+      }
       resolve(!!r?.ok)
     })
   })
 
 /** Called by useSocket when the server echoes our own status back. */
-export const applySelfPresence = (p: { status?: string; effective?: string }) => {
+export const applySelfPresence = (p: { status?: string; effective?: string; until?: string | null }) => {
   if (p.status)    chosenStatus.value = p.status as ChosenStatus
   if (p.effective) effectiveSelfStatus.value = p.effective as any
+  // 'until' is present-but-null when a plain status cleared the deadline, and
+  // absent entirely on older payload shapes — only the former may disarm.
+  if ('until' in p) { chosenUntil.value = p.until ? new Date(p.until) : null; armExpiry() }
 }
 
 // ── Display helpers, shared by every surface that renders a status dot ──────

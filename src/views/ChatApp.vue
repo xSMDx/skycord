@@ -933,10 +933,13 @@ const toggleSelfPopout = (e: MouseEvent) =>
  * told nobody, so the change wasn't visible to anyone until they reconnected.
  * Falls back to HTTP when the socket is down, so it still saves offline.
  */
-const setPresence = async (status: string) => {
+const setPresence = async (status: string, minutes?: number) => {
   profilePopout.value = null
   const s = status as ChosenStatus
-  if (await setChosenStatus(s)) { if (authUser.value) updateUser({ ...authUser.value, status: s } as any); return }
+  if (await setChosenStatus(s, minutes)) { if (authUser.value) updateUser({ ...authUser.value, status: s } as any); return }
+  // The HTTP fallback has no duration support — a timed pick made while the
+  // socket is down degrades to the plain status, which is the honest option:
+  // a deadline nothing acknowledged would drift from what the picker showed.
   try {
     const res = await authFetch('/users/me', { method: 'PATCH', body: JSON.stringify({ status: s }) })
     if (res.ok) updateUser((await res.json()).user)
@@ -3868,7 +3871,6 @@ onBeforeUnmount(() => {
                    @contextmenu="openUserMenu($event, m)">
                 <div class="mp-av">
                   <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
-                  <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
                 </div>
                 <div class="mp-info">
                   <span class="mp-name">{{ m.displayName || m.username }}</span>
@@ -4622,15 +4624,19 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-search input::placeholder{color:var(--text-faint)}
 .mp-list{flex:1;overflow-y:auto;padding:4px 6px}
 .mp-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:6px 8px 4px}
+/* Sections read as sections when there is air between them — but only from
+   the second one on, or the list starts with a hole under the search box. */
+.mp-section-label:not(:first-child){margin-top:14px}
 .mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .12s}
 .mp-member:hover{background:var(--hover)}
-.mp-member.mp-offline{opacity:.5}
+.mp-member.mp-offline{opacity:.35}
 .mp-member.mp-offline:hover{opacity:.8}
-.mp-av{position:relative;width:30px;height:30px;flex-shrink:0}
+.mp-av{position:relative;width:32px;height:32px;flex-shrink:0}
 .mp-av img{width:100%;height:100%;border-radius:50%;object-fit:cover}
 .mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg-panel)}
 .mp-info{flex:1;min-width:0}
-.mp-name{display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-name{display:block;font-size:14px;font-weight:600;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-member:hover .mp-name{color:var(--text-1)}
 
 /* Emoji float */
 .emoji-float{position:fixed;bottom:72px;right:20px;z-index:500;animation:pop-up .15s cubic-bezier(.4,0,.2,1)}

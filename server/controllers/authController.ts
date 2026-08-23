@@ -62,6 +62,10 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
     user.lastSeenAt = new Date()
     user.status = 'online'
+    // A status write that skips the deadline leaves an orphan — online with
+    // the stomped status's future statusUntil still attached. Same invariant
+    // as presence:set: every status write writes the deadline.
+    user.statusUntil = null
     await user.save()
 
     const accessToken  = signAccessToken(user._id, user.username)

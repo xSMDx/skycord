@@ -268,6 +268,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // every broadcast, and re-reading the row on each one would be a database
     // round trip per presence event.
     let myStatusUntil: Date | null = null
+    // The connect-time load below runs after several awaits. A presence:set
+    // that lands inside that window must win over the stale row the load
+    // read before it — this flag is how the load knows it lost the race.
+    let statusTouched = false
 
     // ── Send DM ───────────────────────────────────────────────────────────
     socket.on('dm:send', async (data: {
@@ -740,7 +744,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status })
       // Your own other tabs get the RAW choice — you must see your own
       // "Invisible", even while your friends are being told you're offline.
-      io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status })
+      io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status, until: myStatusUntil })
     }
 
     /** The user picked a status. Persist the choice, then tell people. */
@@ -756,6 +760,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
       myStatus      = next
       myStatusUntil = until
+      statusTouched = true
       // Choosing a status explicitly means you're at the keyboard.
       presence.setAway(userId, false)
       try {
@@ -765,7 +770,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         await User.findByIdAndUpdate(userId, { status: next, statusUntil: until })
       } catch { ack?.({ ok: false, error: 'Could not save that' }); return }
       await broadcastPresence()
-      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, myStatusUntil) })
+      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, myStatusUntil), until: myStatusUntil })
     })
 
     /**
@@ -810,8 +815,13 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const me = await User.findByIdAndUpdate(
         userId, { lastSeenAt: new Date() }, { new: true }
       ).select('avatar avatarCrop displayName username status statusUntil').lean()
+      // Skipped entirely when presence:set beat this load: the row was read
+    // before that write, so "catching up" from it would roll the fresher
+    // choice back to the stale one.
+    if (!statusTouched) {
       myStatus      = presence.isChosenStatus(me?.status) ? me!.status : 'online'
-    myStatusUntil = (me?.statusUntil as Date | null | undefined) ?? null
+      myStatusUntil = (me?.statusUntil as Date | null | undefined) ?? null
+    }
 
       // Looked up once per connection rather than trusting what the client
       // sends per-message. A reconnect after changing your avatar or display
