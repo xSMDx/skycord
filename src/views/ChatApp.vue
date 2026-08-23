@@ -552,9 +552,33 @@ const voiceRoomOccupants = computed<Record<string, VoiceOccupant[]>>(() => {
   return out
 })
 
+/**
+ * userId → speaking, for the ONE voice room you are actually connected to.
+ *
+ * `voice.participants` only ever holds people whose audio you are subscribed
+ * to — the other occupants of YOUR call — so this map is empty the instant
+ * you are not in a channel call, and it never contains an id from a channel
+ * you haven't joined. That is what keeps the sidebar honest: an occupant of
+ * a voice channel you're not in has no entry here, so the lookup below falls
+ * through to `false` for them rather than to some invented "unknown" state.
+ * Built once here (like `serverAuthorDirectory` above) so `voiceOccupants`,
+ * which runs per row during render, does a plain O(1) key lookup instead of
+ * scanning `participants` for every occupant of every channel.
+ */
+const liveSpeakingById = computed<Record<string, boolean>>(() => {
+  const out: Record<string, boolean> = {}
+  if (voice.activeKind !== 'channel') return out
+  // Muted overrides a stale/lagging isSpeaking, same as the call bar's own
+  // stage tiles (CallBar.vue's stageTiles) — a muted mic can't be live audio.
+  for (const p of voice.participants) out[p.id] = p.speaking && !p.muted
+  return out
+})
+
 /** Sidebar helper: who is sitting in this voice channel right now. */
-const voiceOccupants = (channelId: string): VoiceOccupant[] =>
-  voiceRoomOccupants.value[voiceRoomName('channel', channelId, authUser.value?.id || '')] ?? []
+const voiceOccupants = (channelId: string): (VoiceOccupant & { speaking: boolean })[] => {
+  const list = voiceRoomOccupants.value[voiceRoomName('channel', channelId, authUser.value?.id || '')] ?? []
+  return list.map(o => ({ ...o, speaking: liveSpeakingById.value[o.id] ?? false }))
+}
 
 /**
  * Join a voice channel AND look at it. Instant on desktop — no confirmation,
@@ -2964,7 +2988,7 @@ onBeforeUnmount(() => {
               </div>
               <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
                 class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })">
-                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" /></span>
+                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
               </button>
             </template>
