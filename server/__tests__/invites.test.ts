@@ -47,6 +47,17 @@ describe('POST /servers/:sid/invites', () => {
     expect(inv.expiresAt).toBeNull()
   })
 
+  it('mints a 7-day invite', async () => {
+    const u = await register()
+    const s = await mkServer(u)
+    const inv = await mkInvite(u, s.id, '7d')
+    const ms = new Date(inv.expiresAt).getTime() - Date.now()
+    // Comfortably past 24h (the default) and just under 7 days, so this
+    // fails if '7d' ever regresses to the default branch.
+    expect(ms).toBeGreaterThan(6 * 24 * 3600_000)
+    expect(ms).toBeLessThanOrEqual(7 * 24 * 3600_000)
+  })
+
   it('403s a non-member (never joined)', async () => {
     const a = await register(), b = await register()
     const s = await mkServer(a)

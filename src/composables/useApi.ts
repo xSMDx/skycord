@@ -220,8 +220,12 @@ export const useApi = () => {
 
   // Server invites (distinct from group invites above — different collection,
   // different join path: /join/<code>, not /invite/<code>).
-  const createServerInvite = (sid: string) =>
-    post<{ invite: WireInvite }>(`/servers/${sid}/invites`)
+  // expiry mirrors expiryFor in server/controllers/invitesController.ts —
+  // '24h' is not special-cased there, it just rides the same default branch
+  // as an omitted/unrecognised value, but naming it keeps the contract
+  // explicit at the call site.
+  const createServerInvite = (sid: string, expiry: '24h' | '7d' | 'never' = '24h') =>
+    post<{ invite: WireInvite }>(`/servers/${sid}/invites`, { expiry })
 
   // Owner-only on the server (requireOwner) — a non-owner calling this gets a
   // 403, so callers must gate on isOwner before firing it.
@@ -277,7 +281,7 @@ export const useApi = () => {
     get<{ slug: string; name: string; authorName: string; data: Record<string, unknown> }>(`/themes/${slug}`)
 
   // ── Voice ────────────────────────────────────────────────────────────────
-  const getVoiceToken = (conversationId: string, kind: 'dm' | 'group') =>
+  const getVoiceToken = (conversationId: string, kind: 'dm' | 'group' | 'channel') =>
     post<{ token: string; url: string; room: string }>('/voice/token', { conversationId, kind })
 
   // Conversations you actually have, from message history — independent of

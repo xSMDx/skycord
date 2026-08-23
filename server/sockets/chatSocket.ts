@@ -68,6 +68,63 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
 }
 
 /**
+ * May this user actually be added to this call's occupancy?
+ *
+ * `call:join` used to run no check at all: an authenticated user naming ANY
+ * channel or group id landed in `activeCalls` and was broadcast to every real
+ * member of that server or group, with no way for anyone to evict the
+ * phantom occupant afterwards — `leaveCall` only ever removes the caller.
+ *
+ * Every branch mirrors the checks `getVoiceToken` (voiceController.ts)
+ * already runs for `POST /voice/token`, rather than inventing a second,
+ * possibly-different set of rules for the socket path:
+ *
+ *   - channel: Channel -> Server -> members (same resolution as
+ *     `canAccessMessage`'s channel branch above), AND `channel.type ===
+ *     'voice'`. Without the type check, a member could name a TEXT channel:
+ *     they could never actually join its LiveKit room, but `voice:<id>` still
+ *     entered `activeCalls` and `call:state` fanned out to `chan:<id>` —
+ *     every member of the server — as permanent phantom occupancy in a
+ *     channel that can never display it, with nothing to ever evict it.
+ *   - dm: the named partner must be a real user, and must not be the caller.
+ *     Without this, `callRoom`'s dm branch — `dm:${dmConvId(userId,
+ *     convId)}` — happily builds a room from ANY string, and
+ *     `postCallSystem`/`postCallEnded` write a real `Message` into it
+ *     (`dmConvId(userId, junk)`) and emit to `user:<junk>`. Looped, that is
+ *     unbounded database growth driven by one authenticated client. Whether
+ *     two real, distinct people are allowed to ring each other at all
+ *     (friendship, DND, etc.) is a separate product question this event
+ *     never enforced before and is out of scope here.
+ *   - group: Conversation -> members, same as `canAccessMessage`'s group
+ *     branch above.
+ *
+ * Any lookup failure (malformed id, doc deleted mid-flight) reads as "not
+ * allowed" rather than throwing out of a handler with no surrounding
+ * try/catch.
+ */
+const canJoinCall = async (
+  kind: 'dm' | 'group' | 'channel', conversationId: string, userId: string,
+): Promise<boolean> => {
+  try {
+    if (kind === 'channel') {
+      const channel = await Channel.findById(conversationId).select('server type').lean()
+      if (!channel || channel.type !== 'voice') return false
+      const server = await Server.findById(channel.server).select('members').lean()
+      return !!server && server.members.some(m => m.toString() === userId)
+    }
+    if (kind === 'dm') {
+      if (conversationId === userId) return false
+      const partner = await User.findById(conversationId).select('_id').lean()
+      return !!partner
+    }
+    const group = await Conversation.findById(conversationId).select('members').lean()
+    return !!group && group.members.some(m => m.toString() === userId)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Everyone entitled to hear this user's presence: their accepted friends,
  * plus everyone who shares a server with them — deduplicated, minus the
  * user themselves.
@@ -516,23 +573,42 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     // ── Voice call presence ──────────────────────────────────────────────────
     // The browser joins the LiveKit room directly; these events only track WHO is
-    // in a call so everyone else can see it. Room names mirror voiceController.
-    const callRoom = (kind: 'dm' | 'group', convId: string) =>
-      kind === 'group' ? `group:${convId}` : `dm:${dmConvId(userId, convId)}`
+    // in a call so everyone else can see it. Room names mirror voiceController's
+    // roomFor EXACTLY — if the two ever disagree, two people each believe they
+    // are in a call together while sitting in different LiveKit rooms, and
+    // nothing errors anywhere. A server voice channel is `voice:<channelId>`,
+    // deliberately NOT `chan:<channelId>`, which is the Socket.IO room carrying
+    // that same channel's text traffic (see broadcastCall below).
+    const callRoom = (kind: 'dm' | 'group' | 'channel', convId: string) =>
+      kind === 'channel' ? `voice:${convId}`
+      : kind === 'group' ? `group:${convId}`
+      : `dm:${dmConvId(userId, convId)}`
 
     const joinedCallRooms = new Set<string>()
 
     const broadcastCall = (room: string) => {
       const userIds = [...(activeCalls.get(room) ?? [])]
       const payload = { room, userIds }
-      if (room.startsWith('group:')) {
+      if (room.startsWith('voice:')) {
+        // Occupancy is server-wide news: everyone should see who is sitting in
+        // a voice channel without being in it. Every member joined the socket
+        // room `chan:<id>` for this channel at connect, so it is exactly the
+        // right audience — note that is the SOCKET room, deliberately named
+        // differently from this LiveKit room.
+        io.to(`chan:${room.slice(6)}`).emit('call:state', payload)
+      } else if (room.startsWith('group:')) {
         io.to(room).emit('call:state', payload)
       } else {
+        // DM last, because this branch PARSES the room name and would happily
+        // produce nonsense from any prefix it does not recognise.
         const [a, b] = room.slice(3).split('_')
         io.to(`user:${a}`).to(`user:${b}`).emit('call:state', payload)
       }
     }
 
+    // Never called for a channel — the parameter type is the guard, and the one
+    // call site narrows `kind` before reaching here. A voice channel has no
+    // readable text history for a system message to land in.
     const postCallSystem = async (kind: 'dm' | 'group', convId: string, content: string) => {
       const conversationId = kind === 'group' ? convId : dmConvId(userId, convId)
       const msg = await Message.create({
@@ -553,6 +629,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // Derives the conversation straight from the room name (the leaver may already
     // be disconnecting, so we can't rely on per-call closure state here).
     const postCallEnded = async (room: string) => {
+      // The other half of the no-system-message rule: a voice channel has no
+      // text history to announce into, and the DM branch below would parse
+      // `voice:<id>` into a garbage conversationId rather than refusing it.
+      if (room.startsWith('voice:')) return
       try {
         const isGroup = room.startsWith('group:')
         const conversationId = isGroup ? room.slice(6) : room.slice(3)
@@ -571,6 +651,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       } catch (err) { console.error('[WS] postCallEnded', err) }
     }
 
+    // No membership check here, deliberately: this only ever deletes the
+    // CALLER's own id from the room's Set (`set.has(userId)` guards that), so
+    // it cannot forge or evict anyone else's occupancy. Once call:join is
+    // guarded above, a caller can only ever be in a room they were let into,
+    // so there is nothing left for a leave-side check to catch.
     const leaveCall = (room: string) => {
       const set = activeCalls.get(room)
       if (!set || !set.has(userId)) return
@@ -583,8 +668,12 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       broadcastCall(room)
     }
 
-    socket.on('call:join', async (data: { conversationId: string; kind: 'dm' | 'group' }) => {
-      if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group')) return
+    socket.on('call:join', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+      if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
+      // Refuse silently, same shape every other handler in this file uses for
+      // "not allowed" — no ack is expected on this event, so there is nothing
+      // to report back beyond simply not joining.
+      if (!await canJoinCall(data.kind, data.conversationId, userId)) return
       const room = callRoom(data.kind, data.conversationId)
       let set = activeCalls.get(room)
       const wasEmpty = !set || set.size === 0
@@ -593,13 +682,19 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       joinedCallRooms.add(room)
       if (wasEmpty) {
         callStartedAt.set(room, Date.now())
-        await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
+        // No "X started a call" for a voice channel: there is no text history
+        // there to read it in, so the Message would only ever be dead weight in
+        // a conversation nobody can open. Narrowing here is also what keeps
+        // postCallSystem's signature honest.
+        if (data.kind !== 'channel') {
+          await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
+        }
       }
       broadcastCall(room)
     })
 
-    socket.on('call:leave', (data: { conversationId: string; kind: 'dm' | 'group' }) => {
-      if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group')) return
+    socket.on('call:leave', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+      if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       leaveCall(callRoom(data.kind, data.conversationId))
     })
 
@@ -692,11 +787,22 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // will need in a later cycle. `members` is selected alongside `_id` so
       // the presence announce below can reuse this same query instead of
       // running Server.find({ members: userId }) a second time.
+      //
+      // The ids are kept in `myChannelIds` rather than thrown away after the
+      // joins, because the call catch-up below needs exactly the same rule: a
+      // `voice:<channelId>` call is yours when that channel is one of these.
+      // Reusing this set keeps the catch-up and the live broadcast agreeing by
+      // construction, and costs no extra query.
+      const myChannelIds = new Set<string>()
       const myServers = await Server.find({ members: userId }).select('_id members').lean()
       if (myServers.length) {
         const myChannels = await Channel.find({ server: { $in: myServers.map(s => s._id) } })
           .select('_id').lean()
-        myChannels.forEach(c => socket.join(`chan:${c._id.toString()}`))
+        myChannels.forEach(c => {
+          const id = c._id.toString()
+          myChannelIds.add(id)
+          socket.join(`chan:${id}`)
+        })
       }
 
       // Announce only on the first socket; extra tabs shouldn't re-broadcast.
@@ -716,9 +822,14 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // online — call:state is only broadcast on join/leave, which they missed.
       for (const [room, participants] of activeCalls) {
         if (participants.size === 0) continue
-        const belongs = room.startsWith('group:')
-          ? myGroups.some(g => `group:${g._id.toString()}` === room)
-          : room.slice(3).split('_').includes(userId)
+        // Same three-way shape as broadcastCall, and for the same reason: the
+        // DM test PARSES the room name, so it has to come last or it would
+        // claim every prefix it does not recognise.
+        const belongs = room.startsWith('voice:')
+          ? myChannelIds.has(room.slice(6))
+          : room.startsWith('group:')
+            ? myGroups.some(g => `group:${g._id.toString()}` === room)
+            : room.slice(3).split('_').includes(userId)
         if (belongs) socket.emit('call:state', { room, userIds: [...participants] })
       }
     } catch (err) {

@@ -15,14 +15,20 @@
 import { computed, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
   ChevronLeft, Search, Bell, Settings as SettingsIcon,
-  UserPlus, UsersRound, Crown, ChevronRight, SlidersHorizontal,
+  UserPlus, UsersRound, Crown, ChevronRight, SlidersHorizontal, Volume2,
 } from 'lucide-vue-next'
 import { statusColor, statusLabel } from '@/composables/usePresence'
 
 export type DetailsTab = 'members' | 'media' | 'pins' | 'links' | 'files'
 
 const props = defineProps<{
-  kind: 'dm' | 'group'
+  /**
+   * `channel` covers a server channel, voice included. No call site passes it
+   * yet — this screen is the phone layout's, and that is on hold — but the
+   * kind is part of the app's vocabulary now, and the branches below are what
+   * stop a channel from being described as a group DM the day one arrives.
+   */
+  kind: 'dm' | 'group' | 'channel'
   title: string
   /** Usernames under the title — who this conversation is with. */
   subtitle: string
@@ -144,6 +150,10 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
         <button class="cd-icon" aria-label="Notification settings" @click="emit('mute')">
           <Bell :size="20" :stroke-width="2" />
         </button>
+        <!-- Group settings, not conversation settings: it opens the rename /
+             icon editor for a group DM. A channel's settings belong to the
+             server and are not this screen's to offer, and a DM has none at
+             all — so this stays the one kind's row it has always been. -->
         <button v-if="kind === 'group'" class="cd-icon" aria-label="Group settings" @click="emit('openSettings')">
           <SettingsIcon :size="20" :stroke-width="2" />
         </button>
@@ -155,6 +165,9 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
       <div class="cd-av">
         <Avatar v-if="avatar" :src="avatar" :alt="title" />
         <UsersRound v-else-if="kind === 'group'" :size="26" :stroke-width="2" />
+        <!-- A channel has no face, and its initial letter would read as a
+             person's. It gets the icon its sidebar row has instead. -->
+        <Volume2 v-else-if="kind === 'channel'" :size="26" :stroke-width="2" />
         <template v-else>{{ initial(title) }}</template>
       </div>
       <div class="cd-id-text">
