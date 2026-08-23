@@ -56,7 +56,7 @@ import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance }        from '@/composables/useAppearance'
-import { useVoice }          from '@/composables/useVoice'
+import { useVoice, isConnectedVoiceRoom } from '@/composables/useVoice'
 import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
@@ -439,14 +439,19 @@ const returnToCall = () => {
   const id = voice.activeConvId || voice.connectingConvId
   if (!id) return
   // A voice channel's call surface lives inside its server, so "back to call"
-  // means "go to that server". If you are already in it there is nothing to do
-  // — and deliberately so: navigating would have to pick a text channel, and
-  // the text channel you are reading is not this button's business.
+  // means "go to that server" — and, since the thing you're returning TO is
+  // the call itself, landing on its stage rather than on whatever text
+  // channel happens to be selected underneath it (openServer's `selectLanding`
+  // always picks a text channel and clears `viewedVoiceId`, so without this
+  // "return to call" would land you next to the call instead of on it).
   const vc = liveVoiceChannel.value
   if (vc) {
-    if (activeServerId.value === vc.serverId && view.value === 'server') return
+    const showStage = () => { viewVoiceChannel(vc.id); setActiveChannel(null) }
+    // Already in the right server: no navigation needed, but the stage may
+    // still be closed (you were reading a different channel), so re-assert it.
+    if (activeServerId.value === vc.serverId && view.value === 'server') { showStage(); return }
     const srv = servers.value.find(s => s.id === vc.serverId)
-    if (srv) void openServer(srv)
+    if (srv) void openServer(srv).then(showStage)
     return
   }
   if (voice.activeKind === 'group') {
@@ -567,7 +572,15 @@ const voiceRoomOccupants = computed<Record<string, VoiceOccupant[]>>(() => {
  */
 const liveSpeakingById = computed<Record<string, boolean>>(() => {
   const out: Record<string, boolean> = {}
-  if (voice.activeKind !== 'channel') return out
+  // `voice.connected` matters as much as the kind: teardownRoom() (useVoice's
+  // self-heal path, run up to 14 times per reconnect plus the 10s fail hold)
+  // deliberately preserves activeKind and participants across the drop so a
+  // retry has something to rejoin, but it stops the speaking analyser without
+  // a final "not speaking" update. Without this guard the sidebar rings would
+  // freeze at whatever they last showed for the whole retry/fail-hold window —
+  // CallStage doesn't have this problem because its stageTiles falls back to
+  // an optimistic `speaking: false` instead of trusting stale participants.
+  if (voice.activeKind !== 'channel' || !voice.connected) return out
   // Muted overrides a stale/lagging isSpeaking, same as the call bar's own
   // stage tiles (CallBar.vue's stageTiles) — a muted mic can't be live audio.
   for (const p of voice.participants) out[p.id] = p.speaking && !p.muted
@@ -577,7 +590,12 @@ const liveSpeakingById = computed<Record<string, boolean>>(() => {
 /** Sidebar helper: who is sitting in this voice channel right now. */
 const voiceOccupants = (channelId: string): (VoiceOccupant & { speaking: boolean })[] => {
   const list = voiceRoomOccupants.value[voiceRoomName('channel', channelId, authUser.value?.id || '')] ?? []
-  return list.map(o => ({ ...o, speaking: liveSpeakingById.value[o.id] ?? false }))
+  // liveSpeakingById is keyed by user id alone, with no room of its own — so
+  // without this it would apply just as happily to a channel you're not even
+  // in (a stale call:join whose call:leave never arrived, listing you twice).
+  // Only the channel LiveKit actually has you connected to may show rings.
+  const scoped = isConnectedVoiceRoom(channelId)
+  return list.map(o => ({ ...o, speaking: scoped && (liveSpeakingById.value[o.id] ?? false) }))
 }
 
 /**
@@ -612,6 +630,13 @@ const voiceOccupants = (channelId: string): (VoiceOccupant & { speaking: boolean
  */
 const joinVoiceChannel = (ch: Channel) => {
   viewVoiceChannel(ch.id)
+  // The stage is about to own the pane. `activeChannelId` stays pointed at
+  // the text channel underneath (see the comment above), but useSocket's own
+  // "am I looking at this?" tracker has no idea the pane got taken over — so
+  // without this a message landing in that now-hidden channel would still be
+  // treated as on-screen and never ding. `channel:receive`'s `looking` check
+  // (ChatApp.vue) covers the unread badge half of the same bug.
+  setActiveChannel(null)
   void vConnect(ch.id, 'channel', voiceChannelLabel(ch))
 }
 
@@ -638,6 +663,10 @@ watch(() => liveVoiceChannel.value?.id ?? null, (id, prev) => {
   if (viewedVoiceId.value !== prev) return
   if (view.value !== 'server' || !activeServerId.value) return
   selectLanding(activeServerId.value)
+  // The stage just gave the pane back to whatever selectLanding landed on —
+  // re-arm useSocket's tracker so that channel's own messages start dinging
+  // again (joinVoiceChannel nulled it out when the stage took over).
+  setActiveChannel(activeChannelId.value)
 })
 
 /**
@@ -1540,7 +1569,14 @@ const setupSocket = () => {
     // 201 response. Either way, having the id means we have the message.
     if (payload._id && getChannelMessages(channelId).some(m => m.dbId === payload._id)) return
     pushChannelMessage(channelId, toClientMessage(payload, authUser.value?.id))
-    const looking = view.value === 'server' && activeChannelId.value === channelId
+    // The stage hides the text pane without touching activeChannelId (see
+    // `viewedVoiceId`'s declaration in useServers), so a channel sitting
+    // underneath the stage must NOT count as "looking" — otherwise messages
+    // arriving there while you watch the call are silently swallowed: no
+    // unread badge (guarded here) and no sound (see the matching
+    // `!voiceStageOpen` teardown around joinVoiceChannel/returnToCall that
+    // keeps useSocket's `_activeChannelId` honest for the same reason).
+    const looking = view.value === 'server' && activeChannelId.value === channelId && !voiceStageOpen.value
     if (!looking) markUnread(channelId)
   })
 
@@ -1553,6 +1589,13 @@ const setupSocket = () => {
   // old one.
   socketOn('onChannelUpdated', (p: any) => upsertChannel(p.channel))
   socketOn('onChannelDeleted', (p: any) => {
+    // Captured before removeChannel touches it. If the deleted channel is the
+    // one whose stage is up, removeChannel's own guard nulls viewedVoiceId —
+    // in that case there is nothing to restore below. But if it's some OTHER
+    // (text) channel that got deleted while you were on a call's stage, that
+    // guard never fires and viewedVoiceId survives, and this recovery block
+    // must not be the thing that collapses it: you're still in the call.
+    const wasViewingVoice = viewedVoiceId.value
     removeChannel(p.serverId, p.channelId)
     // removeChannel clears activeChannelId when the deleted channel was the one
     // on screen. Land somewhere real rather than on an empty pane.
@@ -1561,10 +1604,15 @@ const setupSocket = () => {
     // clearing an unread badge, throwing a loading spinner over whatever the
     // user is actually reading, and yanking its scroll position.
     if (view.value === 'server' && !activeChannelId.value && activeServerId.value === p.serverId) {
-      selectLanding(p.serverId)
+      selectLanding(p.serverId)   // unconditionally nulls viewedVoiceId
+      const stageSurvives = !!wasViewingVoice && liveVoiceChannel.value?.id === wasViewingVoice
+      if (stageSurvives) viewedVoiceId.value = wasViewingVoice
       if (activeChannelId.value) {
-        setActiveChannel(activeChannelId.value)
         loadChannelHistory(activeChannelId.value)
+        // Only claim the pane for the sound gate if the stage isn't sitting on
+        // top of it — the landing channel is still hidden behind the call, same
+        // as joinVoiceChannel's setActiveChannel(null) above.
+        if (!stageSurvives) setActiveChannel(activeChannelId.value)
       }
     }
   })
@@ -2952,7 +3000,7 @@ onBeforeUnmount(() => {
                 @click.stop="openCategoryMenu($event, group.category)"><Ellipsis :size="14" :stroke-width="1.5"/></button>
             </div>
             <div v-for="ch in group.text" :key="ch.id"
-              class="ch-item" :class="{ active: activeChannelId===ch.id, unread: !!unreadChannels[ch.id] }"
+              class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id] }"
               role="button" tabindex="0"
               @keydown.self.enter.prevent="selectChannel(ch)"
               @keydown.self.space.prevent="selectChannel(ch)"
@@ -2972,7 +3020,14 @@ onBeforeUnmount(() => {
                  `activeChannelId`. Occupants render as sibling rows rather than
                  children so the indent is the only thing nesting them — a
                  wrapper would have to re-create the row's hover and focus
-                 behaviour to stay clickable. -->
+                 behaviour to stay clickable.
+
+                 This same condition doubles as "the stage for this channel is
+                 what's on screen right now": a stage can only be up for a
+                 channel you're connected to (see `viewedVoiceChannel`), so
+                 whenever the text row above has just given up `active` because
+                 the stage owns the pane (`&& !voiceStageOpen`), this row is
+                 already the one lit — no second selected-look needed. -->
             <template v-for="ch in group.voice" :key="ch.id">
               <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id }"
                 role="button" tabindex="0"

@@ -179,6 +179,20 @@ export const voiceRoomName = (kind: 'dm' | 'group' | 'channel', convId: string, 
   : kind === 'group' ? `group:${convId}`
   : `dm:${[myId, convId].sort().join('_')}`
 
+/**
+ * Is `channelId` the ONE voice channel you're actually connected to right now?
+ *
+ * `voice.participants` only ever holds the occupants of your own call, but
+ * that alone doesn't stop a caller from applying it to the wrong room: if
+ * server presence ever lists the same user in two rooms at once — a stale
+ * `call:join` whose matching `call:leave` never arrived — a speaking lookup
+ * keyed purely on user id would light that person up as speaking in a
+ * channel you aren't even in. Scoping every such lookup through this check
+ * first (see ChatApp.vue's `voiceOccupants`) closes that: a row only ever
+ * reflects live speaking state for the room LiveKit actually has you in.
+ */
+export const isConnectedVoiceRoom = (channelId: string) => voice.activeConvId === channelId
+
 // ── Per-participant local controls ──────────────────────────────────────────
 // Purely local: muting someone or dropping their volume affects only your ears,
 // and disabling their video only your screen. Nothing is sent to the server, so
