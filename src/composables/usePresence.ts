@@ -14,7 +14,12 @@ export type ChosenStatus = 'online' | 'idle' | 'dnd' | 'invisible'
 /** What you picked. Mirrors User.status on the server. */
 export const chosenStatus = ref<ChosenStatus>('online')
 /** What your friends are currently being told. */
-export const effectiveSelfStatus = ref<'online' | 'idle' | 'dnd' | 'offline'>('offline')
+/** What a status resolves to once reachability and idle are folded in — the
+ *  server's effectiveStatus() produces exactly these four. `invisible` is a
+ *  CHOICE, never an effective value; it reaches the UI as 'offline'. */
+export type EffectiveStatus = 'online' | 'idle' | 'dnd' | 'offline'
+
+export const effectiveSelfStatus = ref<EffectiveStatus>('offline')
 
 /**
  * How long without input before we call it idle.
@@ -119,6 +124,50 @@ export const applySelfPresence = (p: { status?: string; effective?: string }) =>
 // Previously each site inlined its own map and none of them had a case for
 // 'invisible', so it fell through to grey with the literal string "invisible"
 // as its label.
+/**
+ * Everyone else's live status, in one place.
+ *
+ * The `presence` socket event used to be applied by hand to each surface
+ * that displayed a status: find the user in the friends array and write to
+ * their copy, find them in the DM array and write to that copy. Group
+ * members were never in that list, so a group member's dot was frozen at
+ * whatever it was when the group loaded — someone could go offline and stay
+ * green for as long as you had the group open.
+ *
+ * The missing line was not the real problem. Every surface holding its own
+ * copy means the handler has to remember each one, and the next surface (the
+ * server member list) would have been missed exactly the same way. So the
+ * event writes here once, and surfaces ASK rather than being told.
+ */
+export const presenceById = ref<Record<string, EffectiveStatus>>({})
+
+const EFFECTIVE: readonly string[] = ['online', 'idle', 'dnd', 'offline']
+const isEffective = (s: unknown): s is EffectiveStatus =>
+  typeof s === 'string' && EFFECTIVE.includes(s)
+
+/** Record what the wire just said about someone. */
+export const applyPresence = (userId: string, status: string | null | undefined): void => {
+  // An unrecognised status is dropped rather than stored. The server
+  // serialises through effectiveStatus so this should be unreachable, but a
+  // value that slips through renders as a grey dot labelled with the literal
+  // word — which is how `invisible` once leaked into the UI as a visible
+  // state instead of reading as offline.
+  if (!userId || !isEffective(status)) return
+  presenceById.value = { ...presenceById.value, [userId]: status }
+}
+
+/**
+ * What to render for a user right now.
+ *
+ * `fallback` is the status that came with whatever list this surface
+ * fetched — correct at fetch time, and the best thing known until an event
+ * says otherwise. A live value always wins; that precedence IS the fix.
+ */
+export const livePresence = (userId: string, fallback?: string | null): EffectiveStatus =>
+  presenceById.value[userId] ?? (isEffective(fallback) ? fallback : 'offline')
+
+/** Logout seam — a second account must not inherit the first one's dots. */
+export const resetPresenceMap = (): void => { presenceById.value = {} }
 const COLORS: Record<string, string> = {
   online: '#23a55a', idle: '#f0a500', dnd: '#ed4245',
   offline: '#80848e', invisible: '#80848e',

@@ -20,7 +20,7 @@ import { useMessages }                      from '@/composables/useMessages'
 import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
-import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, type ChosenStatus } from '@/composables/usePresence'
+import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
 
@@ -1503,6 +1503,15 @@ const setupSocket = () => {
 
   // Presence update
   socketOn('onPresence', (p: any) => {
+    // One write, and every surface that asks gets it. This used to reach
+    // into the friends array and the DM array by hand — which is why group
+    // members, who are in neither, never updated at all.
+    applyPresence(p.userId, p.status)
+
+    // The two arrays are still patched, because both are also read in places
+    // that sort and filter on `status` rather than rendering it (the online
+    // count, Active Now). Those want the same value, and leaving them stale
+    // would trade a visible bug for a subtler one.
     const f = apiFriends.value.find(x => x.id === p.userId)
     if (f) f.status = p.status
     const dm = dmsData.value.find(d => d.id === p.userId)
@@ -2583,6 +2592,9 @@ onBeforeUnmount(() => {
   // still show the previous account's servers in the rail, and clicking one
   // would find its channels already cached and skip the fetch entirely.
   resetServers()
+  // Same reason: a second account on this device must not inherit the first
+  // one's status dots while its own presence events are still arriving.
+  resetPresenceMap()
   if (_typingTimer) clearTimeout(_typingTimer)
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('click',   onClick)
@@ -2883,7 +2895,7 @@ onBeforeUnmount(() => {
             >
               <div class="dm-av">
                 <Avatar :src="c.dm.avatar" :alt="c.dm.name" :crop="(c.dm as any).avatarCrop" />
-                <span class="dm-dot" :style="{ background: statusColor(c.dm.status) }" />
+                <span class="dm-dot" :style="{ background: statusColor(livePresence(c.dm.id, c.dm.status)) }" />
               </div>
               <div class="dm-info">
                 <span class="dm-name">{{ c.dm.name }}</span>
@@ -3146,11 +3158,11 @@ onBeforeUnmount(() => {
               >
                 <div class="f-av">
                   <Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" />
-                  <span class="f-dot" :style="{ background: statusColor(f.status) }"/>
+                  <span class="f-dot" :style="{ background: statusColor(livePresence(f.id, f.status)) }"/>
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ f.displayName||f.username }}</span>
-                  <span class="f-sub">{{ statusLabel(f.status) }}</span>
+                  <span class="f-sub">{{ statusLabel(livePresence(f.id, f.status)) }}</span>
                 </div>
                 <div class="f-actions" @click.stop>
                   <button class="f-btn" v-tip="'Message'" @click.stop="openDM({ id:f.id, name:f.displayName||f.username, avatar:avatarFor(f.username,f.avatar), status:f.status as any, lastMsg:'' })">
@@ -3172,7 +3184,7 @@ onBeforeUnmount(() => {
                    @contextmenu="openUserMenu($event, req.requester)">
                 <div class="f-av">
                   <Avatar :src="avatarFor(req.requester.username,req.requester.avatar)" :alt="req.requester.displayName" :crop="(req.requester as any).avatarCrop" />
-                  <span class="f-dot" :style="{ background: statusColor(req.requester.status) }"/>
+                  <span class="f-dot" :style="{ background: statusColor(livePresence(req.requester.id, req.requester.status)) }"/>
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ req.requester.displayName||req.requester.username }}</span>
@@ -3200,10 +3212,10 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
                  @contextmenu="openUserMenu($event, f)">
-              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><span class="an-dot" :style="{ background: statusColor(f.status) }"/></div>
+              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><span class="an-dot" :style="{ background: statusColor(livePresence(f.id, f.status)) }"/></div>
               <div class="an-info">
                 <span class="an-name">{{ f.displayName||f.username }}</span>
-                <span class="an-sub">{{ statusLabel(f.status) }}</span>
+                <span class="an-sub">{{ statusLabel(livePresence(f.id, f.status)) }}</span>
               </div>
             </div>
           </div>
@@ -3236,7 +3248,7 @@ onBeforeUnmount(() => {
               <template v-if="view==='dm' && activeDM">
                 <div class="dm-header-av" @click.stop="showUserProfile = activeDM?.id || null">
                   <Avatar :src="activeDM.avatar" :alt="activeDM.name" :crop="(activeDM as any).avatarCrop" />
-                  <span class="dm-header-dot" :style="{ background: statusColor(activeDM.status) }"/>
+                  <span class="dm-header-dot" :style="{ background: statusColor(livePresence(activeDM.id, activeDM.status)) }"/>
                 </div>
                 <!-- `display: contents` on desktop, so the row below is laid out
                      exactly as it was; a flex column on mobile, where the title
@@ -3440,8 +3452,8 @@ onBeforeUnmount(() => {
             <div class="mp-section-label">Online — {{ onlineMembers.length }}</div>
             <div v-for="m in onlineMembers" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
-              <div class="mp-av"><Avatar :src="m.avatar" :alt="m.name" :crop="(m as any).avatarCrop" /><span class="mp-dot" :style="{ background: statusColor(m.status) }"/></div>
-              <div class="mp-info"><span class="mp-name">{{ m.name }}</span><span class="mp-status" :style="{ color: statusColor(m.status) }">{{ statusLabel(m.status) }}</span></div>
+              <div class="mp-av"><Avatar :src="m.avatar" :alt="m.name" :crop="(m as any).avatarCrop" /><span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/></div>
+              <div class="mp-info"><span class="mp-name">{{ m.name }}</span><span class="mp-status" :style="{ color: statusColor(livePresence(m.id, m.status)) }">{{ statusLabel(livePresence(m.id, m.status)) }}</span></div>
             </div>
           </div>
         </aside>
@@ -3454,7 +3466,7 @@ onBeforeUnmount(() => {
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="(m as any).avatarCrop" />
-                <span class="mp-dot" :style="{ background: statusColor(m.status) }"/>
+                <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
               </div>
               <div class="mp-info">
                 <span class="mp-name">{{ m.displayName || m.username }}</span>
