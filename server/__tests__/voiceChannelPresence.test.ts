@@ -363,4 +363,24 @@ describe('the DM and group call paths still work', () => {
     expect(endedPayload.content).toBe('Call ended')
     expect(await Message.countDocuments()).toBe(before + 2)
   })
+  // The rail marks a server as having someone in voice. The client only
+  // knows which server a channel belongs to for servers it has actually
+  // opened — channels are fetched lazily — so occupancy for an unopened
+  // server would arrive unattributable. Naming the server on the wire is
+  // what removes the need for the client to poll or to fetch every server
+  // it is in on boot.
+  it('names the server the voice channel belongs to', async () => {
+    const a = await register(), b = await register()
+    const { server, voice } = await seed(a, b)
+
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    const seen = nextEvent(bSock, 'call:state')
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+
+    const payload = await seen
+    expect(payload.room).toBe(`voice:${voice.id}`)
+    expect(payload.serverId).toBe(server.id)
+  })
 })

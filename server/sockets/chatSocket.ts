@@ -27,6 +27,27 @@ const activeCalls   = new Map<string, Set<string>>()
 const callStartedAt = new Map<string, number>()
 
 let _io: IOServer | null = null
+/**
+ * Which server a voice channel belongs to.
+ *
+ * `call:state` names its room as `voice:<channelId>`, and the client uses
+ * that occupancy to mark a server in the rail as having someone in voice.
+ * But the client only knows a channel's server for servers it has actually
+ * opened — it fetches channels lazily — so on a fresh load it receives
+ * occupancy it cannot attribute to anything.
+ *
+ * Sending the server id alongside costs two fields and removes the need for
+ * the client to either poll or fetch every server's channel list on boot.
+ * Filled as sockets connect and as channels are created; a miss is harmless
+ * and simply means the payload carries no serverId.
+ */
+const channelServer = new Map<string, string>()
+export const rememberChannelServer = (channelId: string, serverId: string): void => {
+  channelServer.set(channelId, serverId)
+}
+export const forgetChannelServer = (channelId: string): void => {
+  channelServer.delete(channelId)
+}
 export const getIO = (): IOServer | null => _io
 
 // Helper: get partner ID from a DM conversationId
@@ -588,7 +609,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     const broadcastCall = (room: string) => {
       const userIds = [...(activeCalls.get(room) ?? [])]
-      const payload = { room, userIds }
+      // serverId only means anything for a voice room, and only when we know
+      // it — see channelServer. The client uses it to attribute occupancy to
+      // a server whose channel list it has not fetched.
+      const serverId = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
+      const payload = { room, userIds, ...(serverId ? { serverId } : {}) }
       if (room.startsWith('voice:')) {
         // Occupancy is server-wide news: everyone should see who is sitting in
         // a voice channel without being in it. Every member joined the socket
@@ -796,11 +821,15 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const myChannelIds = new Set<string>()
       const myServers = await Server.find({ members: userId }).select('_id members').lean()
       if (myServers.length) {
+        // `server` is selected alongside `_id` so this same query can fill the
+        // channel -> server map the voice-occupancy payload needs. One field,
+        // no extra round trip.
         const myChannels = await Channel.find({ server: { $in: myServers.map(s => s._id) } })
-          .select('_id').lean()
+          .select('_id server').lean()
         myChannels.forEach(c => {
           const id = c._id.toString()
           myChannelIds.add(id)
+          rememberChannelServer(id, c.server.toString())
           socket.join(`chan:${id}`)
         })
       }
@@ -830,7 +859,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           : room.startsWith('group:')
             ? myGroups.some(g => `group:${g._id.toString()}` === room)
             : room.slice(3).split('_').includes(userId)
-        if (belongs) socket.emit('call:state', { room, userIds: [...participants] })
+        if (!belongs) continue
+        const sid = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
+        socket.emit('call:state', { room, userIds: [...participants], ...(sid ? { serverId: sid } : {}) })
       }
     } catch (err) {
       // A failed setup must not take the connection down — the handlers are

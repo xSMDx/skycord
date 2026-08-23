@@ -6,7 +6,7 @@ import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversC
 import { Message } from '../models/Message'
 import { User } from '../models/User'
 import { resolveMessages } from './messagesController'
-import { getIO } from '../sockets/chatSocket'
+import { getIO, rememberChannelServer, forgetChannelServer } from '../sockets/chatSocket'
 
 /**
  * Serializes callbacks per server id, within this process only. Guards every
@@ -151,6 +151,12 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
     // join every user in the process to this channel's room. Unreachable
     // today (the owner is always a member), but structurally safe rather
     // than incidentally safe.
+    // Remember which server it belongs to before anyone can be in it: the
+    // map is filled at connect time from the channels that existed then, and
+    // this one did not. Without it the first call:state for this channel
+    // would arrive with no serverId and the rail could not attribute it.
+    rememberChannelServer(channel._id.toString(), server._id.toString())
+
     if (io && server.members.length) {
       const room = `chan:${channel._id.toString()}`
       io.in(server.members.map(m => `user:${m.toString()}`)).socketsJoin(room)
@@ -235,6 +241,9 @@ export const deleteChannel = async (req: Request, res: Response, next: NextFunct
         serverId: found.server._id.toString(), channelId,
       })
       getIO()?.in(`chan:${channelId}`).socketsLeave(`chan:${channelId}`)
+      // Nothing can reach this id again, so drop it rather than growing the
+      // map by one entry per channel anyone ever deletes.
+      forgetChannelServer(channelId)
       res.json({ ok: true })
     })
   } catch (err) { next(err) }
