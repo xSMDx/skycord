@@ -51,10 +51,6 @@ const emit = defineEmits<{
   dismiss: []; toast: [msg: string]; openSettings: [page?: 'voice']
   expand: [on: boolean]; profile: [u: { id: string; displayName: string; avatar: string }]
   previewCamera: []
-  /** Stop viewing the stage without leaving the call. Only meaningful while
-   *  `ownsPane` — for a DM or group the stage never owns the column, so
-   *  there is nothing to minimise back to. */
-  minimize: []
 }>()
 
 const { voice, connect, leave, toggleMute, toggleDeafen } = useVoice()
@@ -452,23 +448,14 @@ onBeforeUnmount(() => {
              fullscreen at all — but wanting the call bigger has nothing to
              do with whether anyone has a camera on. -->
         <div class="cb-group">
-          <!-- ...and not at all when the call already owns the pane: there is
-               no conversation behind a voice channel's stage, so "Show chat"
-               would reveal an empty column. Fullscreen still earns its place —
-               it does something here. -->
+          <!-- DM and group only. A voice channel has no bar chrome to hang
+               these from: its stage owns the column outright, and you leave
+               it by clicking a text channel, not by shrinking it. -->
           <button v-if="!ownsPane" class="cb-b" v-tip="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
             <!-- points DOWN normally; flips UP once the chat is hidden -->
             <ChevronDown :size="20" :stroke-width="2.25" :style="expanded ? 'transform: rotate(180deg)' : ''" />
           </button>
-          <!-- Minimise, for a stage that owns the column. Not the same thing
-               as "Show chat": there is no conversation behind a voice
-               channel, so this puts the text channel you were reading back
-               on screen with the call as a bar above it. You stay in the
-               call either way. -->
-          <button v-if="ownsPane" class="cb-b" v-tip="'Minimise'" @click="emit('minimize')">
-            <ChevronDown :size="20" :stroke-width="2.25" />
-          </button>
-          <button class="cb-b" v-tip="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
+          <button v-if="!ownsPane" class="cb-b" v-tip="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="toggleFullscreen">
             <component :is="isFullscreen ? Minimize2 : Maximize2" :size="20" :stroke-width="2.25" />
           </button>
         </div>

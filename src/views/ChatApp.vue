@@ -3374,8 +3374,20 @@ onBeforeUnmount(() => {
 
           <!-- Active voice call bar (participants + controls; persists while a
                call is happening here, joined or not) -->
+          <!-- Not shown in a server while you are reading a text channel.
+               A voice channel is a place you are, not a call laid over the
+               conversation you happen to be looking at — being in one is
+               already said by the Voice Connected panel above the user
+               panel, which carries mute, deafen and leave. A bar on top of
+               every text channel in the server would repeat that on every
+               screen and steal height from the messages to do it.
+
+               It still renders for the voice channel's own stage, which is
+               the CallBar drawn without any bar chrome, and for DM and
+               group calls, where the call really is an event happening over
+               a conversation. -->
           <CallBar
-            v-if="currentCall"
+            v-if="currentCall && (currentCall.kind !== 'channel' || voiceStageOpen)"
             :conv-id="currentCall.id"
             :kind="currentCall.kind"
             :name="currentCall.name"
