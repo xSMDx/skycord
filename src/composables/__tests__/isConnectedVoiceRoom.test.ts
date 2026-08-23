@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 // reached.
 import { vi } from 'vitest'
 vi.mock('../micChain', () => ({ createMicChainProcessor: () => ({}) }))
-vi.mock('../usePresence', () => ({ applySelfPresence: () => {} }))
+vi.mock('../usePresence', () => ({ applySelfPresence: () => {}, holdPresence: () => {} }))
 
 import { voice, isConnectedVoiceRoom } from '../useVoice'
 

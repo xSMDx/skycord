@@ -63,7 +63,30 @@ const emitAway = (next: boolean) => {
   getSocket()?.emit('presence:away', { away: next })
 }
 
-const goIdle = () => emitAway(true)
+/**
+ * Held open while something proves you are here even though this tab is not
+ * being touched — a voice call, today. Set by useVoice rather than read from
+ * it, because usePresence must not import the voice stack: useVoice already
+ * imports useSocket, which imports this file.
+ */
+let presenceHeld = false
+export const holdPresence = (held: boolean): void => {
+  presenceHeld = held
+  // Coming back from a hold should not inherit a countdown that expired
+  // while it was in force, and going into one should clear any idle already
+  // set — you are demonstrably here.
+  bumpActivity()
+}
+
+/**
+ * Go idle — unless something is actively vouching for you.
+ *
+ * Being in a voice call is stronger evidence of presence than a mouse move:
+ * you are audibly in the room. Alt-tabbing to a game mid-sentence used to
+ * mark you idle instantly, which told everyone you had wandered off while
+ * they were listening to you talk.
+ */
+const goIdle = () => { if (!presenceHeld) emitAway(true) }
 
 /** Any sign of life resets the countdown and pulls you back from idle. */
 const bumpActivity = () => {
@@ -77,7 +100,14 @@ const bumpActivity = () => {
  * component without stacking listeners.
  */
 export const startIdleWatch = () => {
-  if (wired) return
+  // Already listening: restart the countdown rather than returning. This
+  // used to be a bare `return`, and stopIdleWatch only clears the timer —
+  // it never unsets `wired`. So logging out and back in left the flag true,
+  // the early return fired, no timer was ever scheduled again, and idle
+  // detection was silently dead for the rest of the session. The listeners
+  // themselves are fine to keep: they only reset a timer, and rebinding them
+  // would stack a duplicate set on every login.
+  if (wired) { bumpActivity(); return }
   wired = true
 
   // `passive` on the scroll/touch listeners: these only reset a timer and must
@@ -89,7 +119,12 @@ export const startIdleWatch = () => {
   // Switching tabs or locking the phone is a stronger signal than a quiet
   // mouse — go idle immediately rather than waiting out the full timer.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) goIdle(); else bumpActivity()
+    // Hiding the tab used to go idle IMMEDIATELY, ignoring the delay you
+    // configured entirely — alt-tab for ten seconds and you were away. It is
+    // a reason to stop resetting the countdown, not a reason to skip it: a
+    // hidden tab and an idle person are different claims. Coming back is
+    // still real activity and clears it at once.
+    if (!document.hidden) bumpActivity()
   })
   window.addEventListener('blur', () => { /* focus loss alone isn't away */ })
   window.addEventListener('focus', bumpActivity)

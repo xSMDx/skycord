@@ -10,6 +10,7 @@ import {
   type RemoteTrack, type RemoteParticipant, type Participant, type LocalAudioTrack,
 } from 'livekit-client'
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
+import { holdPresence } from './usePresence'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import {
@@ -174,6 +175,19 @@ const stopLocalLevel = () => {
 // this exact rule: voiceController.roomFor and chatSocket's callRoom — if you
 // change the naming here, change both of those too (see
 // src/composables/__tests__/voiceRoomName.test.ts).
+/**
+ * Being in a call vouches for you.
+ *
+ * The idle watcher can only see this tab: it counts mouse moves and key
+ * presses, so alt-tabbing to a game while talking used to mark you idle
+ * while people were listening to you. A live call is better evidence of
+ * presence than any of that, so it holds the countdown open.
+ *
+ * A watcher rather than a call beside each of the five places that assign
+ * `connected` — those drift, and a missed one leaves presence pinned open
+ * for the rest of the session.
+ */
+watch(() => voice.connected, held => holdPresence(held), { immediate: true })
 export const voiceRoomName = (kind: 'dm' | 'group' | 'channel', convId: string, myId: string) =>
   kind === 'channel' ? `voice:${convId}`
   : kind === 'group' ? `group:${convId}`

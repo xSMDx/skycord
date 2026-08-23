@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('../micChain', () => ({ createMicChainProcessor: () => ({}) }))
 // Same story: usePresence reads localStorage at module load (idle-timeout
 // setting), which doesn't exist in vitest's node environment.
-vi.mock('../usePresence', () => ({ applySelfPresence: () => {} }))
+vi.mock('../usePresence', () => ({ applySelfPresence: () => {}, holdPresence: () => {} }))
 
 import { voiceRoomName } from '../useVoice'
 
