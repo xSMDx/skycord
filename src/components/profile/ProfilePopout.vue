@@ -16,6 +16,7 @@ import {
 import ProfileCard from './ProfileCard.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
+import { statusColor, chosenStatus } from '@/composables/usePresence'
 
 const props = withDefaults(defineProps<{
   /** Whose profile. When it matches the signed-in user, the self rows show. */
@@ -85,15 +86,40 @@ const place = async () => {
   pos.value = { left, top }
 }
 
+/**
+ * The four statuses you can CHOOSE.
+ *
+ * Colours come from usePresence rather than being written out again here.
+ * They used to be a second copy, and the copies had drifted — idle was
+ * #f0b232 here against #f0a500 there, dnd #f23f43 against #ed4245 — so the
+ * dot in this picker did not match the dot on your own avatar two
+ * centimetres away.
+ *
+ * The notes are not decoration. Do Not Disturb suppresses notifications and
+ * Invisible makes you read as offline to everyone — both are invisible to
+ * the person choosing them, so a label alone asks them to guess.
+ */
 const PRESENCE = [
-  { id: 'online',    label: 'Online',         color: '#23a55a' },
-  { id: 'idle',      label: 'Idle',           color: '#f0b232' },
-  { id: 'dnd',       label: 'Do Not Disturb', color: '#f23f43' },
-  { id: 'invisible', label: 'Invisible',      color: '#80848e' },
-]
+  { id: 'online',    label: 'Online',         note: '' },
+  { id: 'idle',      label: 'Idle',           note: 'Shown as away' },
+  { id: 'dnd',       label: 'Do Not Disturb', note: 'You will not receive notifications' },
+  { id: 'invisible', label: 'Invisible',      note: 'You will appear offline' },
+] as const
 const showPresence = ref(false)
+/**
+ * Your CHOICE, not your effective status.
+ *
+ * These are different things and the difference is the whole point of the
+ * presence model: choose Online and sit still for five minutes and everyone
+ * else correctly sees Idle — but you did not choose Idle, and a tick next to
+ * it would say you did. Choose Invisible and others see Offline, which is
+ * not even in this list, so the tick would land on nothing at all.
+ *
+ * `chosenStatus` is kept in sync by the `presence:self` event, which exists
+ * precisely so the chooser can see their own raw choice.
+ */
 const currentPresence = computed(() =>
-  PRESENCE.find(p => p.id === view.value?.status) ?? PRESENCE[0])
+  PRESENCE.find(p => p.id === chosenStatus.value) ?? PRESENCE[0])
 // Expanding the list changes the panel height, so it must be re-placed or it
 // grows off the bottom of the screen.
 const togglePresence = async () => { showPresence.value = !showPresence.value; await place() }
@@ -173,7 +199,7 @@ onBeforeUnmount(() => {
             </button>
 
             <button class="pp-row" @click="togglePresence">
-              <span class="pp-dot" :style="{ background: currentPresence.color }" />
+              <span class="pp-dot" :style="{ background: statusColor(currentPresence.id) }" />
               <span>{{ currentPresence.label }}</span>
               <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
             </button>
@@ -182,9 +208,12 @@ onBeforeUnmount(() => {
                 v-for="p in PRESENCE" :key="p.id" class="pp-row sub"
                 @click="emit('setPresence', p.id); showPresence = false"
               >
-                <span class="pp-dot" :style="{ background: p.color }" />
-                <span>{{ p.label }}</span>
-                <Check v-if="p.id === view.status" :size="14" :stroke-width="2.25" class="pp-chev" />
+                <span class="pp-dot" :style="{ background: statusColor(p.id) }" />
+                <span class="pp-presence-text">
+                  <span>{{ p.label }}</span>
+                  <span v-if="p.note" class="pp-presence-note">{{ p.note }}</span>
+                </span>
+                <Check v-if="p.id === chosenStatus" :size="14" :stroke-width="2.25" class="pp-chev" />
               </button>
             </div>
 
@@ -249,7 +278,13 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-row:hover:not(:disabled) { background: var(--hover-strong); }
 .pp-row:disabled { opacity: .5; cursor: not-allowed; }
 .pp-row svg { color: var(--text-2); flex: none; }
-.pp-row.sub { padding-left: 18px; font-size: 13.5px; color: var(--text-2); }
+.pp-row.sub { padding-left: 18px; font-size: 13.5px; color: var(--text-2); align-items: flex-start; }
+/* A status row with a note is two lines, so it stops being vertically
+   centred against a single-line sibling — the text stack owns the alignment
+   and the dot pins to the first line. */
+.pp-presence-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.pp-presence-note { font-size: 11.5px; line-height: 1.3; color: var(--text-faint); white-space: normal; }
+.pp-row.sub .pp-dot { margin-top: 5px; }
 .pp-row.danger { color: #f0716f; }
 .pp-row.danger svg { color: #f0716f; }
 .pp-row.danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
