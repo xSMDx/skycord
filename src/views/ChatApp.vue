@@ -23,6 +23,7 @@ import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
+import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
 import UserProfileModal    from '@/components/profile/UserProfileModal.vue'
@@ -628,6 +629,99 @@ const headerVoice = computed(() => {
 })
 /** Faces shown inline in the 48px header; the rest become a "+N". */
 const HEADER_VOICE_FACES = 3
+
+// ── Rail voice hover preview ────────────────────────────────────────────────
+/**
+ * Hovering a rail server that has voice activity shows a small panel naming
+ * the server, its occupied voice channels, and who is in them.
+ *
+ * Its own floating element rather than a tooltip, because `v-tip` cannot carry
+ * this. `showTip(el, text, placement)` in useTooltip takes a plain string and
+ * TooltipLayer renders it as `{{ tip.text }}` — no slot, no VNode, no HTML.
+ * Bending it into a rich panel would mean either a second `content` channel
+ * that every other v-tip ignores, or smuggling markup through a string, and
+ * the layer is `pointer-events:none`, `max-width:260px`, `text-align:center`
+ * chrome built for one line of label. So: a separate panel, and the rail item
+ * drops its `v-tip` exactly when this can appear (see the template) so a
+ * single hover never produces two floating things.
+ *
+ * The same OPEN_DELAY the tooltip uses, imported rather than restated — a rail
+ * where some items answer a hover in 400ms and others instantly reads as
+ * broken, not as two features.
+ */
+const railPreviewAnchor = ref<{ serverId: string; x: number; y: number; w: number; h: number } | null>(null)
+const railPreviewEl     = ref<HTMLElement | null>(null)
+const railPreviewTop    = ref(0)
+let railPreviewTimer: ReturnType<typeof setTimeout> | null = null
+
+const closeRailPreview = () => {
+  if (railPreviewTimer) { clearTimeout(railPreviewTimer); railPreviewTimer = null }
+  railPreviewAnchor.value = null
+}
+
+const onRailHover = (e: MouseEvent, serverId: string) => {
+  closeRailPreview()
+  if (!voiceActivityByServer.value[serverId]) return   // plain v-tip handles this one
+  const el = e.currentTarget as HTMLElement
+  railPreviewTimer = setTimeout(() => {
+    const r = el.getBoundingClientRect()
+    if (r.width === 0 && r.height === 0) return        // scrolled out from under the pointer
+    // Belt and braces for "one hover, one thing": the rail item that opened
+    // this has no v-tip text, but a tooltip from whatever the pointer crossed
+    // on the way in may still be up and warm.
+    hideTip()
+    railPreviewAnchor.value = { serverId, x: r.left, y: r.top, w: r.width, h: r.height }
+  }, TIP_OPEN_DELAY)
+}
+
+/**
+ * What the panel draws, recomputed from live state rather than captured at
+ * hover time — so the last person leaving a channel closes the panel under
+ * the pointer instead of leaving a lie on screen.
+ */
+const railPreview = computed(() => {
+  const a = railPreviewAnchor.value
+  if (!a) return null
+  const activity = voiceActivityByServer.value[a.serverId]
+  if (!activity?.length) return null
+  const srv = servers.value.find(s => s.id === a.serverId)
+  if (!srv) return null
+  return {
+    anchor: a,
+    name:   srv.name,
+    channels: activity.map(v => ({
+      id:   v.channelId,
+      // null when we hold no channel list for this server — see
+      // `voiceActivityByServer`. The template renders that case as a plain
+      // "In a voice channel" rather than guessing at a name or dropping the
+      // row, because we genuinely know someone is in voice and genuinely do
+      // not know where.
+      name: v.channelName,
+      occupants: v.userIds.map(resolveVoiceUser),
+    })),
+  }
+})
+
+/**
+ * Vertically centre the panel on the rail item, then keep it on screen —
+ * measured rather than estimated, the same as TooltipLayer, because the height
+ * depends on how many people are in the call.
+ */
+watch(railPreview, async (p) => {
+  if (!p) return
+  await nextTick()
+  const h  = railPreviewEl.value?.offsetHeight ?? 0
+  const vh = window.innerHeight
+  railPreviewTop.value = Math.max(8, Math.min(p.anchor.y + p.anchor.h / 2 - h / 2, vh - h - 8))
+})
+
+const railPreviewStyle = computed(() => ({
+  left: `${(railPreview.value?.anchor.x ?? 0) + (railPreview.value?.anchor.w ?? 0) + 8}px`,
+  top:  `${railPreviewTop.value}px`,
+}))
+
+/** Faces before the panel stops listing them one per row. */
+const PREVIEW_FACES = 6
 
 /**
  * Join a voice channel AND look at it. Instant on desktop — no confirmation,
@@ -2638,6 +2732,10 @@ onBeforeUnmount(() => {
   // one's status dots while its own presence events are still arriving.
   resetPresenceMap()
   if (_typingTimer) clearTimeout(_typingTimer)
+  // A hover in flight when the component goes away — logging out with the
+  // pointer resting on a rail server — would otherwise fire its timer into a
+  // dead component and leave a teleported panel over the auth page.
+  closeRailPreview()
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('click',   onClick)
 })
@@ -2812,6 +2910,45 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
+    <!--
+      Rail voice hover preview. Teleported for the same reason TooltipLayer is:
+      the rail is 68px wide and scrolls, so anything anchored inside it gets
+      clipped the moment it is wider than the strip it grew out of.
+
+      `pointer-events:none` is a decision, not an oversight — this is a preview,
+      not a menu. Letting the pointer enter it would mean keeping it open while
+      the pointer is inside, which is a hover intent problem this does not need
+      to have; as it stands the panel simply cannot be aimed at, and leaving the
+      rail item closes it.
+    -->
+    <Teleport to="body">
+      <Transition name="rvp">
+        <div v-if="railPreview" ref="railPreviewEl" class="rvp" :style="railPreviewStyle">
+          <div class="rvp-name">{{ railPreview.name }}</div>
+          <div v-for="ch in railPreview.channels" :key="ch.id" class="rvp-ch">
+            <div class="rvp-ch-head">
+              <Volume2 :size="13" :stroke-width="2.25" class="rvp-ch-ic"/>
+              <!--
+                A server whose channel list we have never fetched gives us
+                occupancy without a name (see `voiceActivityByServer`). Saying
+                so is the honest option: an invented name would be wrong and an
+                empty row would throw away the fact that someone IS in there.
+              -->
+              <span v-if="ch.name" class="rvp-ch-name">{{ ch.name }}</span>
+              <span v-else class="rvp-ch-name unnamed">In a voice channel</span>
+            </div>
+            <div v-for="o in ch.occupants.slice(0, PREVIEW_FACES)" :key="o.id" class="rvp-occ">
+              <span class="rvp-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" /></span>
+              <span class="rvp-occ-name">{{ o.name }}</span>
+            </div>
+            <div v-if="ch.occupants.length > PREVIEW_FACES" class="rvp-more">
+              +{{ ch.occupants.length - PREVIEW_FACES }} more
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <UserProfileModal
       v-if="showUserProfile"
       :user-id="showUserProfile"
@@ -2892,9 +3029,22 @@ onBeforeUnmount(() => {
         </div>
         <div class="ri-divider" />
         <!-- Servers -->
+        <!--
+          One hover, one thing. A server with voice activity gets the rich
+          preview panel (see `railPreview`) and NO tooltip — an empty string is
+          how `showTip` is told to stay down; every other server keeps the
+          plain name tooltip it has always had. `aria-label` is spelled out
+          rather than left to the directive, which only mirrors text it was
+          actually given: without it, the servers that gained a preview would
+          be the ones that lost their accessible name.
+        -->
         <div v-for="srv in servers" :key="srv.id"
           class="ri" :class="{ active: view==='server' && activeServerId===srv.id }"
-          v-tip="srv.name" @click.stop="openServer(srv)">
+          :aria-label="srv.name"
+          v-tip="voiceActivityByServer[srv.id] ? '' : srv.name"
+          @mouseenter="onRailHover($event, srv.id)"
+          @mouseleave="closeRailPreview"
+          @click.stop="openServer(srv)">
           <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
           <!--
@@ -3659,6 +3809,34 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    voice indicator looks like a voice indicator wherever it appears — the ring
    is what keeps a green disc legible against a green server icon. */
 .ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+
+/* ── Rail voice hover preview ──────────────────────────────────────────────
+   Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
+   below it: the two are the same gesture answered at two levels of detail, and
+   they should not look like they came from different apps. */
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding:10px 12px;border-radius:10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvp-ch{margin-top:8px}
+.rvp-ch-head{display:flex;align-items:center;gap:6px;min-width:0}
+.rvp-ch-ic{color:#23a55a;flex-shrink:0}
+.rvp-ch-name{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* The row we could not name. Same slot, visibly not a channel name — it is not
+   uppercased like one, and it does not pretend to be a title. */
+.rvp-ch-name.unnamed{text-transform:none;letter-spacing:0;font-weight:500;font-style:italic;color:var(--text-faint,var(--text-3))}
+.rvp-occ{display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:2px}
+.rvp-occ-av{display:flex;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0}
+.rvp-occ-name{font-size:12.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvp-more{font-size:11px;font-weight:600;color:var(--text-3);margin-top:6px;padding-left:30px}
+/* Slides out of the rail rather than fading in place, so the panel reads as
+   belonging to the icon the pointer is on. */
+.rvp-enter-active{transition:opacity .12s ease,transform .12s cubic-bezier(.32,.72,0,1)}
+.rvp-leave-active{transition:opacity .08s ease}
+.rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
+.rvp-leave-to{opacity:0}
+@media (prefers-reduced-motion: reduce){
+  .rvp-enter-active,.rvp-leave-active{transition:opacity .1s ease}
+  .rvp-enter-from{transform:none}
+}
 .ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius:1px;margin:4px 0}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:#23a55a}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:#23a55a}
@@ -3700,7 +3878,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-hvoice-avs{display:flex;align-items:center}
 /* Overlapped, each ringed in the sidebar's own background so the stack reads
    as separate faces rather than one smeared one. */
-.sb-hvoice-av{position:relative;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-left:-6px;box-shadow:0 0 0 2px var(--bg-raised)}
+/* display:flex, matching .vc-occ-av: Avatar's own span is inline-block at
+   100%/100%, and an inline-block in a block box picks up a baseline gap. */
+.sb-hvoice-av{position:relative;display:flex;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-left:-6px;box-shadow:0 0 0 2px var(--bg-raised)}
 .sb-hvoice-av:first-child{margin-left:0}
 /* Speaking ring, same green as the sidebar occupant rows' Avatar `ring`. Done
    with box-shadow rather than that prop because these faces overlap: the prop
