@@ -14,6 +14,7 @@ import {
   MessageCircle, UserPlus, UserMinus, ExternalLink,
 } from 'lucide-vue-next'
 import ProfileCard from './ProfileCard.vue'
+import AnchoredPanel from '@/components/ui/AnchoredPanel.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { statusColor, chosenStatus } from '@/composables/usePresence'
@@ -124,6 +125,13 @@ const showPresence = ref(false)
  * stale submenu already unfolded.
  */
 const openDurations = ref<string | null>(null)
+/** The chevron the duration panel is pinned to. */
+const durationAnchor = ref<HTMLElement | null>(null)
+const toggleDurations = (e: MouseEvent, id: string) => {
+  const open = openDurations.value === id
+  openDurations.value  = open ? null : id
+  durationAnchor.value = open ? null : (e.currentTarget as HTMLElement)
+}
 const DURATIONS = [
   { label: 'For 15 Minutes', minutes: 15 },
   { label: 'For 1 Hour',     minutes: 60 },
@@ -134,8 +142,9 @@ const DURATIONS = [
 ] as const
 const pick = (id: string, minutes?: number) => {
   emit('setPresence', id, minutes)
-  showPresence.value = false
-  openDurations.value = null
+  showPresence.value   = false
+  openDurations.value  = null
+  durationAnchor.value = null
 }
 /**
  * Your CHOICE, not your effective status.
@@ -156,7 +165,8 @@ const currentPresence = computed(() =>
 const togglePresence = async () => {
   showPresence.value = !showPresence.value
   // A reopened menu must not start with a stale duration list unfolded.
-  openDurations.value = null
+  openDurations.value  = null
+  durationAnchor.value = null
   await place()
 }
 
@@ -185,6 +195,12 @@ const onDocDown = (e: PointerEvent) => {
   const t = e.target as Node
   if (panel.value?.contains(t)) return
   if (props.anchor?.contains(t)) return   // the anchor's own handler toggles us
+  // A panel this popout opened but teleported elsewhere — the duration list —
+  // is ours even though the DOM says it is outside us. Without this, the
+  // pointerdown that tries to pick a duration closes the popout first, the
+  // panel unmounts with it, and the click lands on nothing.
+  const el = t instanceof Element ? t : t.parentElement
+  if (el?.closest('[data-anchored-panel]')) return
   emit('close')
 }
 const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
@@ -256,16 +272,19 @@ onBeforeUnmount(() => {
                        opens the duration list instead of setting anything. -->
                   <button v-if="p.chevron" class="pp-chev-btn" :class="{ open: openDurations === p.id }"
                     :aria-label="'Set ' + p.label + ' for a limited time'"
-                    @click.stop="openDurations = openDurations === p.id ? null : p.id">
+                    @click.stop="toggleDurations($event, p.id)">
                     <ChevronRight :size="14" :stroke-width="2.25" />
                   </button>
                 </div>
-                <div v-if="openDurations === p.id" class="pp-durations">
-                  <button v-for="d in DURATIONS" :key="d.label" class="pp-row sub dur"
-                    @click="pick(p.id, d.minutes)">
-                    <span>{{ d.label }}</span>
-                  </button>
-                </div>
+                <!-- Beside the chevron, not beneath it. Six durations
+                     unfolded inline pushed Copy user ID off the bottom of a
+                     popout already sitting near the screen edge, so choosing
+                     "For 3 Days" meant scrolling a menu. -->
+                <AnchoredPanel v-if="openDurations === p.id" :anchor="durationAnchor" placement="right"
+                  :width="190" @close="openDurations = null">
+                  <button v-for="d in DURATIONS" :key="d.label" class="pp-dur"
+                    @click="pick(p.id, d.minutes)">{{ d.label }}</button>
+                </AnchoredPanel>
               </template>
             </div>
 
@@ -347,8 +366,12 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-chev-btn:hover { background: var(--hover-strong); }
 .pp-chev-btn svg { transition: transform .15s ease; }
 .pp-chev-btn.open svg { transform: rotate(90deg); }
-.pp-durations { display: flex; flex-direction: column; }
-.pp-row.sub.dur { padding-left: 34px; font-size: 13px; }
+.pp-dur {
+  display: block; width: 100%; padding: 7px 10px; border-radius: 4px;
+  background: none; border: none; cursor: pointer;
+  font-size: 13.5px; color: var(--text-2); text-align: left;
+}
+.pp-dur:hover { background: var(--hover-strong); color: var(--text-1); }
 @media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition: none; } }
 .pp-row.danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }

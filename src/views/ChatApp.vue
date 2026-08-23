@@ -959,6 +959,13 @@ const showCameraPreview = ref(false)
  * several voice channels and only one list may be open at a time.
  */
 const inviteVoiceChannel = ref<Channel | null>(null)
+/** The row the floating invite panel is pinned to. */
+const inviteVoiceAnchor  = ref<HTMLElement | null>(null)
+const toggleInviteVoice = (e: MouseEvent, ch: Channel) => {
+  const open = inviteVoiceChannel.value?.id === ch.id
+  inviteVoiceChannel.value = open ? null : ch
+  inviteVoiceAnchor.value  = open ? null : (e.currentTarget as HTMLElement)
+}
 const inviteVoiceModal   = ref<Channel | null>(null)
 
 /** Friends first for the inline peek — that is who you actually pull into a
@@ -3501,7 +3508,7 @@ onBeforeUnmount(() => {
                    and Discord scopes it the same way. Inside the occupant
                    fold so a collapsed category folds it away too. -->
               <template v-if="liveVoiceChannel?.id === ch.id">
-                <button class="vc-invite" @click.stop="inviteVoiceChannel = inviteVoiceChannel?.id === ch.id ? null : ch">
+                <button class="vc-invite" @click.stop="toggleInviteVoice($event, ch)">
                   <UserPlus :size="14" :stroke-width="2" />
                   <span>Invite to Voice</span>
                 </button>
@@ -3513,7 +3520,9 @@ onBeforeUnmount(() => {
                   :channel="{ id: ch.id, name: ch.name }"
                   :people="inviteFriends"
                   :me="inviteMe"
+                  :anchor="inviteVoiceAnchor"
                   @see-more="inviteVoiceModal = ch; inviteVoiceChannel = null"
+                  @close="inviteVoiceChannel = null"
                   @toast="showToast"
                 />
               </template>

@@ -22,7 +22,8 @@
  * person doing it, a single act.
  */
 import { ref, computed } from 'vue'
-import { Search, X, Volume2, Check } from 'lucide-vue-next'
+import { Search, X, Volume2, Check, UserPlus, Users } from 'lucide-vue-next'
+import AnchoredPanel from '@/components/ui/AnchoredPanel.vue'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import Avatar from '@/components/ui/Avatar.vue'
 import { useApi } from '@/composables/useApi'
@@ -45,6 +46,8 @@ const props = defineProps<{
   me:         { name: string; avatar: string }
   /** How many rows the inline shape shows before deferring to "See more…". */
   inlineLimit?: number
+  /** What the inline panel hangs off. Ignored by the modal shape. */
+  anchor?: HTMLElement | null
 }>()
 
 const emit = defineEmits<{ close: []; seeMore: []; toast: [msg: string] }>()
@@ -117,17 +120,28 @@ const doCopy = async () => {
 </script>
 
 <template>
-  <!-- ── inline: the short list under the sidebar row ── -->
-  <div v-if="mode === 'inline'" class="iv-inline">
-    <div v-if="!shown.length" class="iv-empty">No friends to invite</div>
-    <button v-for="p in shown" :key="p.id" class="iv-row" :disabled="sending[p.id]" @click.stop="invite(p)">
-      <span class="iv-av"><Avatar :src="p.avatar || ''" :alt="nameOf(p)" :crop="p.avatarCrop ?? null" /></span>
-      <span class="iv-name">{{ nameOf(p) }}</span>
-      <Check v-if="sent[p.id]" :size="14" :stroke-width="2.5" class="iv-done" />
-      <span v-else class="iv-add">{{ sending[p.id] ? '…' : 'Invite' }}</span>
-    </button>
-    <button class="iv-more" @click.stop="emit('seeMore')">See more…</button>
-  </div>
+  <!-- ── inline: a floating panel beside the sidebar row ──
+       Beside, not underneath. As an inline expansion this pushed every
+       channel below it down the sidebar and made a list you had to scroll
+       to use; anchored, it costs the sidebar nothing. -->
+  <AnchoredPanel v-if="mode === 'inline'" :anchor="anchor ?? null" placement="right" :width="240"
+    @close="emit('close')">
+    <div class="iv-pop">
+      <div v-if="!shown.length" class="iv-empty">No friends to invite</div>
+      <button v-for="p in shown" :key="p.id" class="iv-row" :disabled="sending[p.id] || sent[p.id]"
+        @click.stop="invite(p)">
+        <span class="iv-av"><Avatar :src="p.avatar || ''" :alt="nameOf(p)" :crop="p.avatarCrop ?? null" /></span>
+        <span class="iv-name">{{ nameOf(p) }}</span>
+        <Check v-if="sent[p.id]" :size="15" :stroke-width="2.5" class="iv-done" />
+        <span v-else-if="sending[p.id]" class="iv-add">…</span>
+        <UserPlus v-else :size="15" :stroke-width="2" class="iv-add-ic" />
+      </button>
+      <div class="iv-sep" />
+      <button class="iv-more" @click.stop="emit('seeMore')">
+        <Users :size="15" :stroke-width="2" /><span>See more…</span>
+      </button>
+    </div>
+  </AnchoredPanel>
 
   <!-- ── modal: search, everyone, and the raw link ── -->
   <ModalBase v-else width="min(460px, 100%)" :z="9400" @close="emit('close')">
@@ -171,25 +185,28 @@ const doCopy = async () => {
 </template>
 
 <style scoped>
-/* inline */
-.iv-inline { display: flex; flex-direction: column; padding: 2px 0 4px 22px; }
+/* inline (floating panel) */
+.iv-pop { display: flex; flex-direction: column; }
+.iv-sep { height: 1px; margin: 4px 6px; background: rgba(255,255,255,.08); }
 .iv-row {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 4px 8px; border-radius: 4px; background: none; border: none;
-  cursor: pointer; color: var(--text-2); font-size: 13px; text-align: left;
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 6px 8px; border-radius: 4px; background: none; border: none;
+  cursor: pointer; color: var(--text-2); font-size: 13.5px; text-align: left;
 }
 .iv-row:hover:not(:disabled) { background: var(--hover); color: var(--text-1); }
 .iv-row:disabled { opacity: .6; cursor: default; }
-.iv-av { width: 20px; height: 20px; border-radius: 50%; overflow: hidden; flex: none; }
+.iv-av { width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex: none; }
 .iv-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .iv-add { font-size: 11px; color: var(--text-3); }
-.iv-row:hover .iv-add { color: var(--accent); }
+.iv-add-ic { color: var(--text-3); flex: none; }
+.iv-row:hover .iv-add-ic { color: var(--accent); }
 .iv-done { color: #23a55a; flex: none; }
 .iv-more {
-  align-self: flex-start; padding: 4px 8px; background: none; border: none;
-  cursor: pointer; font-size: 12px; color: var(--text-3);
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border-radius: 4px; background: none; border: none;
+  cursor: pointer; font-size: 13px; color: var(--text-2); text-align: left;
 }
-.iv-more:hover { color: var(--text-1); text-decoration: underline; }
+.iv-more:hover { background: var(--hover); color: var(--text-1); }
 .iv-empty { padding: 6px 8px; font-size: 12px; color: var(--text-faint); }
 
 /* modal */

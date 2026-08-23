@@ -26,6 +26,18 @@ const full         = ref(false)
 // also once the target channel has been deleted — the server resolves that
 // for us, so a dangling destination simply stops being advertised.
 const voiceChannel = ref<{ id: string; name: string } | null>(null)
+/**
+ * Membership and doneness are different questions, and conflating them is
+ * what made a voice invite useless to the people most likely to get one.
+ *
+ * A plain server invite is finished the moment you are a member, so
+ * `alreadyMember` really does mean "nothing left to do". A VOICE invite is
+ * not: being in the server is the precondition, not the point — the point is
+ * the room. Someone already in the server who is sent "come join me in
+ * General" must still get a live button, so this is tracked separately and
+ * only a plain invite is allowed to start life as 'joined'.
+ */
+const alreadyMember = ref(false)
 const joining      = ref(false)
 const errorMessage = ref('')
 
@@ -51,8 +63,10 @@ const loadPreview = async () => {
     serverInfo.value = res.server
     full.value = res.full
     voiceChannel.value = res.channel ?? null
-    // Already in the server → show "Joined" immediately rather than "Join".
-    state.value = res.alreadyMember ? 'joined' : 'loaded'
+    alreadyMember.value = res.alreadyMember
+    // Already in the server → nothing left to do, UNLESS the invite names a
+    // voice channel, in which case the room is still ahead of you.
+    state.value = res.alreadyMember && !voiceChannel.value ? 'joined' : 'loaded'
   } catch (e: any) {
     errorMessage.value = e?.message || 'This invite is invalid or has expired.'
     state.value = isTerminal(e) ? 'terminal' : 'retry'
@@ -62,7 +76,10 @@ const loadPreview = async () => {
 onMounted(loadPreview)
 
 const join = async () => {
-  if (joining.value || state.value === 'joined' || full.value) return
+  if (joining.value || state.value === 'joined') return
+  // The cap only blocks people who still have to get in. Someone already
+  // inside is not asking for a seat, just for the room.
+  if (full.value && !alreadyMember.value) return
   joining.value = true
   errorMessage.value = ''
   try {
@@ -137,9 +154,14 @@ const join = async () => {
       <button
         class="ic-btn"
         :class="{ joined: state === 'joined' }"
-        :disabled="state === 'joined' || joining || full"
+        :disabled="state === 'joined' || joining || (full && !alreadyMember)"
         @click.stop="join"
-      >{{ state === 'joined' ? 'Joined' : joining ? '…' : full ? 'Full' : voiceChannel ? 'Join Voice' : 'Join' }}</button>
+      >{{
+        state === 'joined' ? (voiceChannel ? 'In Voice' : 'Joined')
+        : joining ? '…'
+        : full && !alreadyMember ? 'Full'
+        : voiceChannel ? 'Join Voice' : 'Join'
+      }}</button>
     </template>
   </div>
 </template>
