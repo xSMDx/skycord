@@ -160,6 +160,7 @@ const {
   servers, activeServerId, activeChannelId, unreadChannels, channelsByServer,
   activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories,
   selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
+  viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
   loadServers, openServer: enterServer,
 } = useServers()
@@ -386,6 +387,31 @@ const voiceChannelLabel = (ch: Channel) => {
   return srv ? `${ch.name} / ${srv.name}` : ch.name
 }
 
+/**
+ * The voice channel whose stage is currently OWNING the chat column, or null.
+ *
+ * Two conditions, and both matter. `viewedVoiceId` is the intent — the channel
+ * you asked to look at (see its declaration in useServers for why that is not
+ * `activeChannelId`). `liveVoiceChannel` is the reality — the call that is
+ * actually up. A stage with no call behind it is an empty pane, so the moment
+ * the call stops being live (you left, or the join spent its retries) this
+ * goes null and the column falls back to the text channel underneath. The
+ * server/`activeServerId` check keeps a call in one server from taking over
+ * another server's column, exactly as `currentCall` does below.
+ *
+ * Returning the channel rather than a boolean is deliberate: the header needs
+ * its bare `name`, not `voiceChannelLabel`'s "Channel / Server" form — the
+ * server is already named by the rail and the sidebar right next to it.
+ */
+const viewedVoiceChannel = computed<Channel | null>(() => {
+  const vc = liveVoiceChannel.value
+  if (!vc || vc.id !== viewedVoiceId.value) return null
+  if (view.value !== 'server' || vc.serverId !== activeServerId.value) return null
+  return vc
+})
+/** Is the call stage the whole chat column right now? */
+const voiceStageOpen = computed(() => !!viewedVoiceChannel.value)
+
 const currentCall = computed<{ id: string; kind: 'dm' | 'group' | 'channel'; name: string } | null>(() => {
   if (view.value === 'dm'    && activeDM.value)    return { id: activeDM.value.id,    kind: 'dm',    name: activeDM.value.name }
   if (view.value === 'group' && activeGroup.value) return { id: activeGroup.value.id, kind: 'group', name: groupDisplayName(activeGroup.value) }
@@ -531,14 +557,27 @@ const voiceOccupants = (channelId: string): VoiceOccupant[] =>
   voiceRoomOccupants.value[voiceRoomName('channel', channelId, authUser.value?.id || '')] ?? []
 
 /**
- * Join a voice channel. Instant on desktop — no confirmation, same as every
- * other client — and reusing the one connect path DMs and groups already use.
+ * Join a voice channel AND look at it. Instant on desktop — no confirmation,
+ * same as every other client — and reusing the one connect path DMs and groups
+ * already use.
  *
- * It deliberately does NOT touch `activeChannelId`: voice and text are
- * independent, and people sit in voice while reading somewhere else. Clicking
- * the channel you are already in is a no-op that useVoice's own `connect()`
- * already absorbs (it returns early when the target conv is the live or
- * in-flight one), so there is no second guard here.
+ * Two separate things, on purpose. `vConnect` puts you in the call;
+ * `viewVoiceChannel` puts its stage on screen. They are separate because
+ * either can happen without the other: opening a text channel stops the
+ * viewing without hanging up (`openChannel` clears `viewedVoiceId`), and
+ * joining from somewhere other than this row — the CallBar's Join button —
+ * connects without claiming the column.
+ *
+ * It still deliberately does NOT touch `activeChannelId`: voice and text are
+ * independent, and people sit in voice while reading somewhere else. The text
+ * channel stays selected underneath the stage, which is what gives "stop
+ * looking at voice" somewhere to fall back to.
+ *
+ * Clicking the channel you are already in therefore just re-opens its stage:
+ * the connect half is a no-op that useVoice's own `connect()` absorbs (it
+ * returns early when `connectingConvId` or `activeConvId` + `activeKind`
+ * already match the target), so there is no second guard here and no
+ * reconnect.
  *
  * No `.catch` here on purpose: `connect()` fires `attemptConnect` with `void`
  * and that function swallows every error itself (retry loop, then
@@ -548,8 +587,34 @@ const voiceOccupants = (channelId: string): VoiceOccupant[] =>
  * watch below.
  */
 const joinVoiceChannel = (ch: Channel) => {
+  viewVoiceChannel(ch.id)
   void vConnect(ch.id, 'channel', voiceChannelLabel(ch))
 }
+
+/**
+ * When the call you were watching ends, land somewhere real.
+ *
+ * The stage is the whole column, so the instant it has no call behind it the
+ * user would be staring at an empty pane titled after a channel they are no
+ * longer in. `selectLanding` is the same choice entering the server makes —
+ * the channel you were last reading here, else the first text channel — and it
+ * clears `viewedVoiceId` on the way, so this is one call rather than a manual
+ * unset plus a navigation.
+ *
+ * Keyed on the LIVE call rather than on `voiceStageOpen` so it fires for every
+ * way a call can stop being live — the Leave button, the bottom-left voice
+ * panel, a join that spent all its retries — and not merely because you
+ * navigated the stage off screen. `viewedVoiceId !== prev` covers the hop
+ * straight from one voice channel to another: `viewVoiceChannel` has already
+ * pointed at the new one by the time the old call tears down, so there is
+ * nothing to rescue.
+ */
+watch(() => liveVoiceChannel.value?.id ?? null, (id, prev) => {
+  if (!prev || id === prev) return
+  if (viewedVoiceId.value !== prev) return
+  if (view.value !== 'server' || !activeServerId.value) return
+  selectLanding(activeServerId.value)
+})
 
 /**
  * The one real join-failure signal, surfaced as a toast.
@@ -3068,7 +3133,12 @@ onBeforeUnmount(() => {
 
       <!-- Chat view (DM, group, or server) -->
       <template v-else>
-        <section class="chat" :class="{ 'call-expanded': callExpanded }">
+        <!-- `call-expanded` is the ONE hide-chat mechanism (see the CSS at the
+             bottom of this file). For a DM or group it is a toggle the user
+             opts into via the CallBar; for a voice channel there is no text
+             conversation to go back to, so viewing the stage simply IS the
+             expanded state and the toggle does not exist. -->
+        <section class="chat" :class="{ 'call-expanded': callExpanded || voiceStageOpen }">
           <!-- Chat header -->
           <div class="chat-header">
             <div class="chat-header-left">
@@ -3119,6 +3189,20 @@ onBeforeUnmount(() => {
                   <Pencil :size="15" :stroke-width="1.5"/>
                 </button>
               </template>
+              <!-- The stage owns the column, so the header names the VOICE
+                   channel, not the text channel still selected underneath it.
+                   Bare `name`, not `voiceChannelLabel`: the rail and the
+                   sidebar already say which server this is. No topic line —
+                   a voice channel has nothing to say there, and inventing one
+                   would be filler. -->
+              <template v-else-if="viewedVoiceChannel">
+                <Volume2 class="ch-hash" :size="18" :stroke-width="1.5"/>
+                <div class="ch-ident ch-ident-static">
+                  <span class="ch-ident-row">
+                    <h2 class="chat-title">{{ viewedVoiceChannel.name }}</h2>
+                  </span>
+                </div>
+              </template>
               <template v-else>
                 <Hash class="ch-hash" :size="18" :stroke-width="1.5"/>
                 <div class="ch-ident ch-ident-static">
@@ -3145,7 +3229,11 @@ onBeforeUnmount(() => {
               <button v-if="view==='group' && activeGroup" class="icon-btn icon-btn-invite" v-tip="'Add friends to DM'" @click.stop="showInviteGroup = true">
                 <UserPlus :size="18" :stroke-width="1.5"/>
               </button>
-              <button v-if="view==='server' || view==='group'" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" @click.stop="membersOpen=!membersOpen">
+              <!-- Not while the stage owns the column: `.chat.call-expanded ~
+                   .members-panel` already hides the panel, so the toggle would
+                   be a button with no visible outcome — the same reason the
+                   CallBar's hide-chat control is suppressed for a channel. -->
+              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" @click.stop="membersOpen=!membersOpen">
                 <Users :size="18" :stroke-width="1.5"/>
               </button>
 
@@ -3204,6 +3292,7 @@ onBeforeUnmount(() => {
             :me="{ name: authUser?.displayName || authUser?.username || 'You', avatar: myAvatar }"
             :callee="currentCall.kind === 'dm' && activeDM ? { id: activeDM.id, name: activeDM.name, avatar: activeDM.avatar } : undefined"
             :dismissed="currentCallDismissed"
+            :owns-pane="voiceStageOpen"
             @dismiss="dismissCurrentCall"
             @toast="showToast"
             @open-settings="openSettings($event ?? 'account')"

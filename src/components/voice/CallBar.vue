@@ -39,6 +39,13 @@ const props = defineProps<{
   // stares at their own tile with no sign anyone is being called.
   callee?: { id: string; name: string; avatar: string }
   dismissed?: boolean
+  // The call IS the chat column, not a bar sitting above one — a voice
+  // channel's stage, where the parent has already hidden the message list and
+  // composer. Hide-chat is therefore not a mode the user opts into here: it is
+  // simply on, its toggle is suppressed (a button whose only outcome would be
+  // to reveal an empty pane), and the drag-to-resize edge goes with it since
+  // there is nothing left to share the column with.
+  ownsPane?: boolean
 }>()
 const emit = defineEmits<{
   dismiss: []; toast: [msg: string]; openSettings: [page?: 'voice']
@@ -168,11 +175,23 @@ const join = () => { connect(props.convId, props.kind, props.name).catch(() => {
 // the in-app expanded view, distinct from browser fullscreen.
 const expanded = ref(false)
 const toggleExpand = () => { expanded.value = !expanded.value; emit('expand', expanded.value) }
+/**
+ * Is the chat hidden right now, for ANY reason?
+ *
+ * `expanded` stays the user's own toggle — it is what `toggleExpand`, the
+ * resize drag and the unmount handoff own, and it is what gets emitted back to
+ * the parent. `ownsPane` is the parent having already given us the column
+ * (a voice channel's stage), which needs the same fill-the-column layout but
+ * must not be turned off from in here. Every LAYOUT read goes through this;
+ * every `emit('expand', …)` keeps reading `expanded`, so the parent is never
+ * told to un-hide a chat it hid itself.
+ */
+const chatHidden = computed(() => props.ownsPane || expanded.value)
 
 const callbarRef  = ref<HTMLElement | null>(null)
 const isFullscreen = ref(false)
 // Filmstrip of non-focused tiles only earns its space once the call has room.
-const showFilmstrip = computed(() => expanded.value || isFullscreen.value)
+const showFilmstrip = computed(() => chatHidden.value || isFullscreen.value)
 
 // ── Vertical resize ─────────────────────────────────────────────────────────
 // Drag the call bar's bottom edge to size it. Stored as a FRACTION of the chat
@@ -204,11 +223,13 @@ watch(hasScreen, on => {
 const dragging  = ref(false)
 let stopDrag: (() => void) | null = null
 
-// Explicit height only while the call shares the column — expanded/fullscreen
-// have their own fill rules.
+// Explicit height only while the call shares the column — hide-chat (whether
+// the user's toggle or a stage that owns the pane) and fullscreen have their
+// own fill rules. Leaving the pinned height on for a stage that owns the pane
+// is exactly the reported bug: a squashed strip with dead space beneath it.
 const barStyle = computed(() => {
   // Resizable in ANY call — audio-only too, not just when video is on the stage.
-  if (!(inCall.value && !expanded.value && !isFullscreen.value)) return {}
+  if (!(inCall.value && !chatHidden.value && !isFullscreen.value)) return {}
   // Clamp on read too: a hand-edited or legacy value must never render the bar
   // unusably small.
   return { flex: '0 0 auto', height: Math.max(heightPx.value, minPx.value) + 'px' }
@@ -382,7 +403,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': expanded, 'is-fs': isFullscreen, 'is-dragging': dragging }">
+  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': chatHidden, 'is-fs': isFullscreen, 'is-dragging': dragging }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
@@ -424,7 +445,11 @@ onBeforeUnmount(() => {
              nothing visible. They live in the control row rather than floating
              over the stage corners so every call action sits on one line. -->
         <div v-if="hasVideo" class="cb-group">
-          <button class="cb-b" v-tip="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
+          <!-- ...and not at all when the call already owns the pane: there is
+               no conversation behind a voice channel's stage, so "Show chat"
+               would reveal an empty column. Fullscreen still earns its place —
+               it does something here. -->
+          <button v-if="!ownsPane" class="cb-b" v-tip="expanded ? 'Show chat' : 'Hide chat'" @click="toggleExpand">
             <!-- points DOWN normally; flips UP once the chat is hidden -->
             <ChevronDown :size="20" :stroke-width="2.25" :style="expanded ? 'transform: rotate(180deg)' : ''" />
           </button>
@@ -436,9 +461,12 @@ onBeforeUnmount(() => {
         <button class="cb-leave" v-tip="connectingHere ? 'Cancel' : 'Leave Call'" @click="leave"><PhoneOff :size="20" :stroke-width="2.25" /></button>
       </div>
 
-      <!-- Drag the bottom edge to resize; past the top it becomes hide-chat -->
+      <!-- Drag the bottom edge to resize; past the top it becomes hide-chat.
+           Nothing to resize against once the call owns the pane — there is no
+           message list below to trade height with, and the drag's only other
+           outcome is the hide-chat flip that does not apply here. -->
       <div
-        v-if="!isFullscreen"
+        v-if="!isFullscreen && !ownsPane"
         class="cb-resize" :class="{ on: dragging }"
         v-tip="'Drag to resize the call'"
         @pointerdown="onResizeDown"
