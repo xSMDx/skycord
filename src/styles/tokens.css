@@ -61,6 +61,12 @@
   --shadow-2: 0 6px 18px rgba(0,0,0,.34);
   --shadow-3: 0 18px 48px rgba(0,0,0,.46);
 
+  /* Skeleton placeholders. The base is a raised tone rather than a darker
+     one: content arriving should feel like it is being laid ON the surface,
+     not cut out of it. */
+  --sk-base:  rgba(255, 255, 255, .055);
+  --sk-sheen: rgba(255, 255, 255, .11);
+
   /* ── Text ─────────────────────────────────────────────────────────────── */
   /* Every tier below clears 4.5:1 on --bg-chat and --bg-panel. The previous
      palette's faint tier measured 2.58:1 and was used for timestamps and

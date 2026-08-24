@@ -496,9 +496,23 @@ export const useServers = () => {
    * neither path reaches this branch. It is here so that the NEXT payload to
    * forget them degrades into a redundant request instead of a broken sidebar.
    */
+  /**
+   * True only while a server's channel list is being fetched for the first
+   * time. Scoped to the fetch, not to the whole open: a server whose detail
+   * is already cached opens instantly and must not flash a placeholder on
+   * its way to content that was there all along.
+   */
+  const loadingServerDetail = ref(false)
+
   const openServer = async (sid: string) => {
     activeServerId.value = sid
-    if (!channelsByServer.value[sid] || !categoriesByServer.value[sid]) await loadServerDetail(sid)
+    if (!channelsByServer.value[sid] || !categoriesByServer.value[sid]) {
+      loadingServerDetail.value = true
+      // finally, not a trailing assignment: a failed fetch must not leave the
+      // sidebar showing placeholders for a list that is never coming.
+      try { await loadServerDetail(sid) }
+      finally { loadingServerDetail.value = false }
+    }
     selectLanding(sid)
   }
 
@@ -666,6 +680,7 @@ export const useServers = () => {
     upsertCategory, removeCategory, toggleCategory,
     upsertMember, removeMember,
     markUnread, clearUnread, serverUnread, selectLanding, openChannel, viewVoiceChannel,
+    loadingServerDetail,
     loadServers, loadServerDetail, loadServerMembers, openServer, moveChannel,
   }
 }

@@ -50,6 +50,7 @@ import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
+import Skeleton             from '@/components/ui/Skeleton.vue'
 import InviteToVoice         from '@/components/voice/InviteToVoice.vue'
 import type { InvitePerson } from '@/components/voice/InviteToVoice.vue'
 import RtcDebugModal         from '@/components/voice/RtcDebugModal.vue'
@@ -168,6 +169,7 @@ const {
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
   clearUnread,
+  loadingServerDetail,
   upsertMember, removeMember,
   loadServers, loadServerMembers, openServer: enterServer, moveChannel,
 } = useServers()
@@ -980,6 +982,12 @@ const showCameraPreview = ref(false)
  * channel it belongs to rather than a boolean, because the sidebar can show
  * several voice channels and only one list may be open at a time.
  */
+/** Fixed shapes; see the note on SK_GROUPS in MessageList. */
+const SB_SKELETON = [
+  { k: 0, label: 62, rows: ['58%', '74%', '43%'] },
+  { k: 1, label: 84, rows: ['66%', '51%'] },
+] as const
+
 const inviteVoiceChannel = ref<Channel | null>(null)
 /** The row the floating invite panel is pinned to. */
 const inviteVoiceAnchor  = ref<HTMLElement | null>(null)
@@ -3493,6 +3501,21 @@ onBeforeUnmount(() => {
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
         <div class="sb-body">
+          <!-- The sidebar used to render nothing at all while a server's
+               channel list was in flight, so opening an uncached server
+               looked like an empty server. Shaped like a category with its
+               channels under it, at the same row rhythm, so the real list
+               replaces it without moving anything. -->
+          <div v-if="loadingServerDetail" class="sb-sk" role="status" aria-label="Loading channels">
+            <div v-for="grp in SB_SKELETON" :key="grp.k" class="sb-sk-group">
+              <Skeleton :w="grp.label" :h="9" :dim="0.55" />
+              <div v-for="(row, i) in grp.rows" :key="i" class="sb-sk-row">
+                <Skeleton :w="14" :h="14" :dim="0.5" />
+                <Skeleton :w="row" :h="12" :dim="0.8" />
+              </div>
+            </div>
+          </div>
+
           <!-- One group per category, uncategorised first and deliberately
                headerless (see `sidebarGroups`). The rows are the markup they
                have always been, moved inside the loop unchanged: `role="button"`
@@ -4226,6 +4249,10 @@ html.show-armature .sb-body {
     linear-gradient(to bottom, var(--grid-line-strong) 1px, transparent 1px);
   background-size: var(--grid-cell) var(--grid-cell);
 }
+
+.sb-sk{padding:10px 10px 4px;display:flex;flex-direction:column;gap:16px}
+.sb-sk-group{display:flex;flex-direction:column;gap:7px}
+.sb-sk-row{display:flex;align-items:center;gap:8px;padding-left:2px}
 
 .sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid var(--mat-hairline);box-shadow:0 1px 0 var(--mat-lip) inset;font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.02em;color:var(--text-strong);cursor:pointer;transition:background var(--dur-1) var(--ease-out);white-space:nowrap}
 .sb-header:hover{background:var(--hover)}

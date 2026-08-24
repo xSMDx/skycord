@@ -1,9 +1,19 @@
 <script setup lang="ts">
+import Skeleton from '@/components/ui/Skeleton.vue'
 import { ref, watch, nextTick, computed } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import MessageItem    from './MessageItem.vue'
 import TypingIndicator from './TypingIndicator.vue'
 import type { Message } from '@/types'
+
+/** Fixed shapes, not random ones — a skeleton that reshuffles on each
+ *  re-render draws the eye to itself instead of to the wait. */
+const SK_GROUPS = [
+  { k: 0, name: 96,  lines: ['62%', '38%'] },
+  { k: 1, name: 74,  lines: ['81%'] },
+  { k: 2, name: 118, lines: ['46%', '69%', '29%'] },
+  { k: 3, name: 88,  lines: ['55%'] },
+] as const
 
 const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string | null }; group?: { name: string; avatar?: string | null }; loadingMsgs: boolean }>()
 const emit  = defineEmits<{
@@ -173,9 +183,22 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
       </template>
     </div>
 
-    <div v-if="loadingMsgs" class="ml-loading">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-      Loading messages…
+    <!-- A spinner says "something is happening somewhere". This says "a
+         conversation is arriving, and it will look like this" — the layout is
+         already right when the messages land, so nothing jumps.
+         The varying widths are deliberate: uniform bars read as a loading
+         graphic, uneven ones read as text that has not resolved yet. -->
+    <div v-if="loadingMsgs" class="ml-sk" role="status" aria-label="Loading messages">
+      <div v-for="g in SK_GROUPS" :key="g.k" class="ml-sk-g">
+        <Skeleton circle :h="40" />
+        <div class="ml-sk-body">
+          <div class="ml-sk-head">
+            <Skeleton :w="g.name" :h="14" />
+            <Skeleton :w="46" :h="10" :dim="0.6" />
+          </div>
+          <Skeleton v-for="(ln, i) in g.lines" :key="i" :w="ln" :h="12" :dim="0.85" />
+        </div>
+      </div>
     </div>
     <div v-else-if="messages.length===0 && !isDM" class="ml-empty"><p>No messages yet. Say something! 👋</p></div>
 
@@ -248,6 +271,11 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .welcome p{font-size:14px;color:var(--text-3)}
 .welcome strong{color: var(--text-strong)}
 .ml-loading,.ml-empty{display:flex;align-items:center;gap:10px;padding:24px 16px;color:var(--text-faint);font-size:14px}
+/* Same rhythm as a real message group, so the swap is invisible. */
+.ml-sk{padding:16px 16px 8px;display:flex;flex-direction:column;gap:18px}
+.ml-sk-g{display:flex;gap:14px;align-items:flex-start}
+.ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.ml-sk-head{display:flex;align-items:center;gap:9px;margin-bottom:1px}
 @keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin .8s linear infinite;flex-shrink:0}
 .ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
 
