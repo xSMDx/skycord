@@ -3,6 +3,7 @@ import { buildServerMenu } from '../serverMenu'
 import { isAction, isSeparator, type MenuItem } from '../../useContextMenu'
 
 const handlers = () => ({
+  markRead: vi.fn(),
   invitePeople: vi.fn(),
   createChannel: vi.fn(),
   createCategory: vi.fn(),
@@ -17,7 +18,7 @@ const labels = (items: MenuItem[]) =>
 describe('buildServerMenu', () => {
   it('offers Invite People, Create Channel and Create Category to the owner', () => {
     const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
-    expect(l).toContain('Invite People')
+    expect(l).toContain('Invite to Server')
     expect(l).toContain('Create Channel')
     expect(l).toContain('Create Category')
   })
@@ -30,7 +31,8 @@ describe('buildServerMenu', () => {
     // up as a diff in BOTH tests.
     const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
     expect(l).toEqual([
-      'Invite People', 'Create Channel', 'Create Category', 'Copy Server ID', 'Delete Server',
+      'Mark As Read', 'Invite to Server', 'Create Channel', 'Create Category',
+      'Server Settings', 'Delete Server', 'Copy Server ID',
     ])
   })
 
@@ -68,7 +70,7 @@ describe('buildServerMenu', () => {
     // exactly this row set — not just individually lack Invite People —
     // so a future owner-only row that forgets to gate on isOwner fails here.
     const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
-    expect(l).toEqual(['Copy Server ID', 'Leave Server'])
+    expect(l).toEqual(['Mark As Read', 'Server Settings', 'Leave Server', 'Copy Server ID'])
   })
 
   it('marks the destructive row danger', () => {
@@ -98,4 +100,27 @@ describe('buildServerMenu', () => {
     expect(memberLeaveIdx).toBeGreaterThan(0)
     expect(isSeparator(member[memberLeaveIdx - 1])).toBe(true)
   })
+  it('disables Mark As Read when nothing is unread', () => {
+    // A live row that clears nothing is a small lie about the server's state.
+    const quiet = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers(), false)
+    const noisy = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers(), true)
+    const row = (items: MenuItem[]) => items.filter(isAction).find(i => i.label === 'Mark As Read')
+    expect(row(quiet)?.disabled).toBe(true)
+    expect(row(noisy)?.disabled).toBeFalsy()
+  })
+
+  it('shows Server Settings disabled rather than omitting it', () => {
+    // Deliberate: the row says "not yet" where a missing row would say "this
+    // app cannot do that". It gains a handler when the screen exists.
+    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers())
+    expect(items.filter(isAction).find(i => i.label === 'Server Settings')?.disabled).toBe(true)
+  })
+
+  it('clears every unread channel of the server it was opened on', () => {
+    const h = handlers()
+    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h, true)
+    items.filter(isAction).find(i => i.label === 'Mark As Read')!.onSelect?.()
+    expect(h.markRead).toHaveBeenCalledWith('s1')
+  })
+
 })

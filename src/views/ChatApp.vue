@@ -166,6 +166,7 @@ const {
   selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
+  clearUnread,
   upsertMember, removeMember,
   loadServers, loadServerMembers, openServer: enterServer, moveChannel,
 } = useServers()
@@ -687,7 +688,6 @@ const closeRailPreview = () => {
 
 const onRailHover = (e: MouseEvent, serverId: string) => {
   closeRailPreview()
-  if (!voiceActivityByServer.value[serverId]) return   // plain v-tip handles this one
   const el = e.currentTarget as HTMLElement
   railPreviewTimer = setTimeout(() => {
     const r = el.getBoundingClientRect()
@@ -708,13 +708,23 @@ const onRailHover = (e: MouseEvent, serverId: string) => {
 const railPreview = computed(() => {
   const a = railPreviewAnchor.value
   if (!a) return null
-  const activity = voiceActivityByServer.value[a.serverId]
-  if (!activity?.length) return null
   const srv = servers.value.find(s => s.id === a.serverId)
   if (!srv) return null
+  const activity = voiceActivityByServer.value[a.serverId] ?? []
   return {
     anchor: a,
     name:   srv.name,
+    /**
+     * The state line under the name, or null when there is nothing true to
+     * say. The reference shows "Muted" here; this app has no server mute, so
+     * that particular line is not available to be shown — inventing it would
+     * be a label that lies. These are the states we actually hold.
+     */
+    sub: srv.unread
+      ? `${srv.unread} unread`
+      : liveVoiceChannel.value?.serverId === srv.id
+        ? 'You are in voice'
+        : activity.length ? 'Someone is in voice' : null,
     channels: activity.map(v => ({
       id:   v.channelId,
       // null when we hold no channel list for this server — see
@@ -2113,7 +2123,14 @@ const openConversationMenu = (e: MouseEvent, c: any) => {
 const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const s = activeServer.value
   if (!s) return
+  // Every channel of this server that currently carries a badge. Computed
+  // here rather than inside the menu builder because unread state belongs to
+  // the sidebar, not to the menu's shape.
+  const serverChannelIds = (channelsByServer.value[s.id] ?? []).map(c => c.id)
+  const hasUnread = serverChannelIds.some(id => !!unreadChannels.value[id])
+
   const items = buildServerMenu(s, authUser.value?.id, {
+    markRead:      () => { serverChannelIds.forEach(clearUnread) },
     invitePeople:  () => { showInvite.value = true },          // Task 2
     // No category: the server menu is not scoped to one, and guessing at the
     // first one would file the channel somewhere the user never pointed at.
@@ -2125,7 +2142,7 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
     leaveServer:   doLeaveServer,
     deleteServer:  doDeleteServer,
     copy:          copyText,
-  })
+  }, hasUnread)
   if (e instanceof MouseEvent) { openMenu(e, items); return }
   // A keyboard activation carries no pointer position — anchor the menu to
   // the header itself rather than guessing at coordinates.
@@ -3118,6 +3135,7 @@ onBeforeUnmount(() => {
       <Transition name="rvp">
         <div v-if="railPreview" ref="railPreviewEl" class="rvp" :style="railPreviewStyle">
           <div class="rvp-name">{{ railPreview.name }}</div>
+          <div v-if="railPreview.sub" class="rvp-sub">{{ railPreview.sub }}</div>
           <div v-for="ch in railPreview.channels" :key="ch.id" class="rvp-ch">
             <div class="rvp-ch-head">
               <Volume2 :size="13" :stroke-width="2.25" class="rvp-ch-ic"/>
@@ -3234,7 +3252,6 @@ onBeforeUnmount(() => {
         <div v-for="srv in servers" :key="srv.id"
           class="ri" :class="{ active: view==='server' && activeServerId===srv.id }"
           :aria-label="voiceActivityByServer[srv.id] ? srv.name + ' — someone is in voice' : srv.name"
-          v-tip="voiceActivityByServer[srv.id] ? '' : srv.name"
           @mouseenter="onRailHover($event, srv.id)"
           @mouseleave="closeRailPreview"
           @pointerdown="closeRailPreview"
@@ -4065,6 +4082,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    they should not look like they came from different apps. */
 .rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding:10px 12px;border-radius:10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvp-sub{font-size:11.5px;color:var(--text-3);margin-top:1px}
 .rvp-ch{margin-top:8px}
 .rvp-ch-head{display:flex;align-items:center;gap:6px;min-width:0}
 .rvp-ch-ic{color:#23a55a;flex-shrink:0}

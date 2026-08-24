@@ -10,7 +10,7 @@
  */
 import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
 import {
-  Pencil, ChevronRight, IdCard, Check,
+  Pencil, ChevronRight, IdCard, Check, UserRoundCog,
   MessageCircle, UserPlus, UserMinus, ExternalLink,
 } from 'lucide-vue-next'
 import ProfileCard from './ProfileCard.vue'
@@ -162,8 +162,11 @@ const currentPresence = computed(() =>
   PRESENCE.find(p => p.id === chosenStatus.value) ?? PRESENCE[0])
 // Expanding the list changes the panel height, so it must be re-placed or it
 // grows off the bottom of the screen.
-const togglePresence = async () => {
-  showPresence.value = !showPresence.value
+const presenceAnchor = ref<HTMLElement | null>(null)
+const togglePresence = async (e?: MouseEvent) => {
+  const open = showPresence.value
+  showPresence.value   = !open
+  presenceAnchor.value = open ? null : ((e?.currentTarget as HTMLElement) ?? null)
   // A reopened menu must not start with a stale duration list unfolded.
   openDurations.value  = null
   durationAnchor.value = null
@@ -250,12 +253,18 @@ onBeforeUnmount(() => {
               <Pencil :size="16" :stroke-width="2.25" /><span>Edit profile</span>
             </button>
 
-            <button class="pp-row" @click="togglePresence">
+            <button class="pp-row" @click="togglePresence($event)">
               <span class="pp-dot" :style="{ background: statusColor(currentPresence.id) }" />
               <span>{{ currentPresence.label }}</span>
               <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
             </button>
-            <div v-if="showPresence" class="pp-sub">
+            <!-- Beside the popout, not inside it. The reference cascades: the
+                 popout opens a status panel, and a status opens a duration
+                 panel. Unfolded in place, four statuses with their
+                 descriptions doubled the popout's height and pushed the rows
+                 below them toward the bottom of the screen. -->
+            <AnchoredPanel v-if="showPresence" :anchor="presenceAnchor" placement="right"
+              :width="248" @close="showPresence = false">
               <template v-for="p in PRESENCE" :key="p.id">
                 <div class="pp-splitrow">
                   <!-- The row itself sets instantly, forever — unchanged. -->
@@ -286,7 +295,15 @@ onBeforeUnmount(() => {
                     @click="pick(p.id, d.minutes)">{{ d.label }}</button>
                 </AnchoredPanel>
               </template>
-            </div>
+            </AnchoredPanel>
+
+            <!-- Deliberately inert. The reference has it, and leaving the row
+                 out entirely reads as "this app cannot do that" rather than
+                 "not yet" — so it is shown, disabled, and says so on hover. -->
+            <button class="pp-row" disabled v-tip="'TBD'">
+              <UserRoundCog :size="16" :stroke-width="2.25" /><span>Switch Accounts</span>
+              <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" />
+            </button>
 
             <button class="pp-row" @click="copyId">
               <IdCard :size="16" :stroke-width="2.25" /><span>Copy user ID</span>

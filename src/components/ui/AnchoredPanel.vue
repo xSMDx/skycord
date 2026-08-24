@@ -47,11 +47,27 @@ const place = async () => {
   if (!a || !p) return
   const w = p.offsetWidth, h = p.offsetHeight
 
-  let left = props.placement === 'right' ? a.right + GAP : a.left - w - GAP
+  /**
+   * Place beside the floating CONTAINER the anchor lives in, not beside the
+   * anchor itself.
+   *
+   * A menu row is inset from the edge of the popout holding it, so measuring
+   * from the row put this panel ten pixels inside that popout — overlapping
+   * the thing it belongs to. It compounds with each cascade level, since the
+   * next panel measures from a chevron inset inside THIS one.
+   *
+   * Anything already floating counts as a container: another AnchoredPanel,
+   * or the profile popout. A row that is not inside one measures from itself,
+   * which is what a sidebar row wants.
+   */
+  const host = props.anchor?.closest('[data-anchored-panel], .pp') as HTMLElement | null
+  const hb = host && host !== p ? host.getBoundingClientRect() : a
+
+  let left = props.placement === 'right' ? hb.right + GAP : hb.left - w - GAP
   // No room on the preferred side — try the other one before clamping, so a
   // panel never ends up sitting on top of the thing it belongs to.
-  if (left + w > window.innerWidth - EDGE) left = a.left - w - GAP
-  if (left < EDGE)                          left = a.right + GAP
+  if (left + w > window.innerWidth - EDGE) left = hb.left - w - GAP
+  if (left < EDGE)                          left = hb.right + GAP
 
   let top = props.align === 'bottom' ? a.bottom - h : a.top
   if (top + h > window.innerHeight - EDGE) top = window.innerHeight - h - EDGE
