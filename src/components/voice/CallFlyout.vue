@@ -10,9 +10,14 @@
  * to compute coordinates and re-measure on resize.
  */
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useDismissal } from '@/composables/useDismissal'
 
 const props = withDefaults(defineProps<{ dir?: 'down' | 'up' }>(), { dir: 'down' })
 const emit = defineEmits<{ close: [] }>()
+
+// Close is two steps so the leave transition survives the parent unmounting
+// us. Every caller renders this as `v-if="showX" @close="showX = false"`.
+const { shown, requestClose, onAfterLeave } = useDismissal(() => emit('close'))
 
 const root  = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
@@ -44,7 +49,7 @@ const place = async () => {
   pos.value = { left, top }
 }
 
-const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose() }
 const onResize = () => { void place() }
 
 // Click-away without a backdrop element, for the same reason the context menu
@@ -57,7 +62,7 @@ const onDocPointerDown = (e: PointerEvent) => {
   const t = e.target as Node
   if (panel.value?.contains(t)) return
   if (root.value?.parentElement?.contains(t)) return
-  emit('close')
+  requestClose()
 }
 
 onMounted(() => {
@@ -76,7 +81,9 @@ onBeforeUnmount(() => {
 <template>
   <div ref="root" class="fly-anchor">
     <Teleport to="body">
+      <Transition name="fly" :duration="{ enter: 120, leave: 140 }" @after-leave="onAfterLeave">
       <div
+        v-if="shown"
         ref="panel"
         class="fly"
         :class="`fly-${dir}`"
@@ -85,6 +92,7 @@ onBeforeUnmount(() => {
       >
         <slot />
       </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -102,8 +110,20 @@ onBeforeUnmount(() => {
   border-radius: 8px; padding: 6px;
   box-shadow: 0 8px 32px rgba(0,0,0,.85);
 }
-.fly-down { animation: fly-pop-down .12s cubic-bezier(.4,0,.2,1); }
-.fly-up   { animation: fly-pop-up   .12s cubic-bezier(.4,0,.2,1); }
+/* Grows from the control that opened it rather than from its own middle —
+   a menu that expands out of its button reads as belonging to it. */
+.fly-down { animation: fly-pop-down var(--dur-1) var(--ease-out); transform-origin: top center; }
+.fly-up   { animation: fly-pop-up   var(--dur-1) var(--ease-out); transform-origin: bottom center; }
+
+/* Leaves back along the path it arrived on. `animation: none` is load-bearing:
+   an animation outranks a transition on the same property, so the entrance
+   keyframes would otherwise pin transform and opacity and nothing would move. */
+.fly-leave-active {
+  animation: none;
+  transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in);
+}
+.fly-leave-to.fly-down { opacity: 0; transform: scale(.96) translateY(-4px); }
+.fly-leave-to.fly-up   { opacity: 0; transform: scale(.96) translateY(4px); }
 
 @keyframes fly-pop-down {
   from { opacity: 0; transform: scale(.94) translateY(-4px); }

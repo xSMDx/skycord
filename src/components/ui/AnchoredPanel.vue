@@ -24,6 +24,7 @@
  * and let it through (see ProfilePopout.onDocDown).
  */
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useDismissal } from '@/composables/useDismissal'
 
 const props = withDefaults(defineProps<{
   anchor: HTMLElement | null
@@ -36,9 +37,17 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 
+// Two-step close: the parent unmounts us on `close`, so emitting it directly
+// would destroy the leave transition before it ran a frame.
+const { shown, requestClose, onAfterLeave } = useDismissal(() => emit('close'))
+
 const GAP = 8, EDGE = 8
 const panel = ref<HTMLElement | null>(null)
 const pos   = ref<{ left: number; top: number } | null>(null)
+// Which side placement actually resolved to, so the panel can grow out of
+// the edge it is attached to rather than out of its own middle. Placement
+// flips at runtime near a viewport edge, so this cannot be read off the prop.
+const side  = ref<'right' | 'left'>('right')
 
 const place = async () => {
   await nextTick()
@@ -76,6 +85,7 @@ const place = async () => {
     left: Math.min(Math.max(EDGE, left), window.innerWidth  - w - EDGE),
     top:  Math.min(Math.max(EDGE, top),  window.innerHeight - h - EDGE),
   }
+  side.value = pos.value.left >= hb.right ? 'right' : 'left'
 }
 
 // Re-place when the anchor changes identity (a different row opened it) and
@@ -98,22 +108,25 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onOutside)
 })
 
-const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose() }
 const onOutside = (e: PointerEvent) => {
   const t = e.target as Node
   if (panel.value?.contains(t)) return
   // The anchor's own handler toggles this panel; closing here too would make
   // a click on it close and immediately reopen.
   if (props.anchor?.contains(t)) return
-  emit('close')
+  requestClose()
 }
 </script>
 
 <template>
   <Teleport to="body">
+    <Transition name="ap" :duration="{ enter: 120, leave: 140 }" @after-leave="onAfterLeave">
     <div
+      v-if="shown"
       ref="panel"
       class="ap"
+      :class="`ap-${side}`"
       data-anchored-panel
       :style="{
         left:  pos ? pos.left + 'px' : '-9999px',
@@ -123,6 +136,7 @@ const onOutside = (e: PointerEvent) => {
     >
       <slot />
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -136,5 +150,19 @@ const onOutside = (e: PointerEvent) => {
   padding: 6px;
   max-height: 60vh;
   overflow-y: auto;
+}
+
+/* Grows out of the edge it is pinned to, so the cascade reads as one surface
+   unfolding rather than three unrelated boxes appearing. */
+.ap-right { transform-origin: left center; }
+.ap-left  { transform-origin: right center; }
+
+.ap-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+.ap-leave-active { transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in); }
+.ap-enter-from,
+.ap-leave-to     { opacity: 0; transform: scale(.96); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ap-enter-from, .ap-leave-to { transform: none; }
 }
 </style>

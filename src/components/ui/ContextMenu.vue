@@ -95,6 +95,15 @@ const place = async () => {
   pos.value = { x, y }
 }
 
+// The menu flips to the other side of the cursor when it would overhang, so
+// the corner it should grow from is whichever one still touches the pointer.
+// Derived from the flip rather than assumed, or a menu opened near the
+// bottom-right of the screen would expand away from the click that made it.
+const origin = computed(() => {
+  const px = pos.value.x, py = pos.value.y
+  return `${py < menu.y ? 'bottom' : 'top'} ${px < menu.x ? 'right' : 'left'}`
+})
+
 watch(() => menu.open, async (open) => {
   if (!open) { active.value = -1; closeSub(); return }
   await place()
@@ -243,19 +252,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport v-if="menu.open" to="body">
+  <Teleport to="body">
     <!-- Scrim, mobile only: a sheet needs something to sit against, and a
          tappable area to dismiss into that isn't a 44px target. -->
-    <div v-if="isMobile" class="cm-scrim" @click="closeMenu" @contextmenu.prevent />
+    <Transition name="cm-scrim">
+      <div v-if="menu.open && isMobile" class="cm-scrim" @click="closeMenu" @contextmenu.prevent />
+    </Transition>
+    <Transition name="cm" :duration="{ enter: 120, leave: 140 }">
     <div
+      v-if="menu.open"
       ref="el"
       class="cm"
       :class="{ sheet: isMobile, dragging: sheetDragging }"
       tabindex="-1"
       role="menu"
-      :style="isMobile
-        ? { transform: sheetY ? `translateY(${sheetY}px)` : undefined }
-        : { left: pos.x + 'px', top: pos.y + 'px' }"
+      :style="[
+        isMobile
+          ? { transform: sheetY ? `translateY(${sheetY}px)` : undefined }
+          : { left: pos.x + 'px', top: pos.y + 'px' },
+        // The sheet rises from the bottom edge, so it has no cursor to grow out of.
+        isMobile ? {} : { transformOrigin: origin },
+      ]"
       @click.stop
       @contextmenu.prevent.stop
     >
@@ -312,15 +329,22 @@ onBeforeUnmount(() => {
         </button>
       </template>
     </div>
+    </Transition>
 
     <!-- Submenu flyout. A sibling of the parent menu, not a child, so it can't
          be clipped by the parent's rounded corners or overflow. -->
+    <Transition name="cm" :duration="{ enter: 120, leave: 140 }">
     <div
       v-if="sub && !isMobile"
       ref="subEl"
       class="cm cm-sub"
       role="menu"
-      :style="{ left: sub.x + 'px', top: sub.y + 'px' }"
+      :style="{
+        left: sub.x + 'px', top: sub.y + 'px',
+        // Unfolds from the parent row rather than from its own middle, so the
+        // cascade reads as one surface opening out.
+        transformOrigin: sub.x >= pos.x ? 'top left' : 'top right',
+      }"
       @click.stop
       @contextmenu.prevent.stop
       @mouseleave="closeSub()"
@@ -342,6 +366,7 @@ onBeforeUnmount(() => {
         </button>
       </template>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -358,9 +383,23 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   border: 1px solid rgba(255,255,255,.1);
   border-radius: 8px; padding: 6px 0; min-width: 200px; max-width: 280px;
   box-shadow: 0 8px 32px rgba(0,0,0,.85);
-  animation: cm-pop .12s cubic-bezier(.4,0,.2,1);
+  animation: cm-pop var(--dur-1) var(--ease-out);
   outline: none;
 }
+
+/* Collapses back toward the cursor it grew from. `animation: none` is
+   load-bearing: an animation outranks a transition on the same property, so
+   the entrance keyframes would pin transform and opacity flat. */
+.cm-leave-active {
+  animation: none;
+  transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in);
+}
+.cm-leave-to { opacity: 0; transform: scale(.96); }
+/* The sheet leaves downward, the way it came up — not by shrinking. */
+.cm-leave-to.sheet { transform: translateY(100%); opacity: 1; }
+
+.cm-scrim-leave-active { transition: opacity var(--dur-exit) var(--ease-in); }
+.cm-scrim-leave-to     { opacity: 0; }
 /* ── Mobile: bottom sheet ──────────────────────────────────────────────────
    Anchoring a menu to a tap point is a desktop idea. On a phone it comes up
    from the bottom edge, full width, where the thumb already is and where

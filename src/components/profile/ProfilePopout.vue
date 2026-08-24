@@ -9,6 +9,7 @@
  * an absolutely-positioned panel and renders it squashed inside the rail.
  */
 import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
+import { useDismissal } from '@/composables/useDismissal'
 import {
   Pencil, ChevronRight, IdCard, Check, UserRoundCog,
   MessageCircle, UserPlus, UserMinus, ExternalLink,
@@ -33,6 +34,10 @@ const emit = defineEmits<{
   close: []; editProfile: []; setStatus: []; message: [user: Record<string, any>]
   viewFull: [id: string]; toast: [msg: string]; setPresence: [status: string, minutes?: number]
 }>()
+
+// Two-step close so the leave transition is not destroyed by the parent
+// unmounting us on the same tick.
+const { shown, requestClose, onAfterLeave } = useDismissal(() => emit('close'))
 
 const { user: authUser } = useAuth()
 const { getUserProfile, sendFriendRequest, removeFriend } = useApi()
@@ -191,7 +196,7 @@ const copyId = () => {
   navigator.clipboard.writeText(props.userId)
     .then(() => emit('toast', 'User ID copied'))
     .catch(() => emit('toast', 'Couldn’t copy the User ID'))
-  emit('close')
+  requestClose()
 }
 
 const onDocDown = (e: PointerEvent) => {
@@ -204,9 +209,9 @@ const onDocDown = (e: PointerEvent) => {
   // panel unmounts with it, and the click lands on nothing.
   const el = t instanceof Element ? t : t.parentElement
   if (el?.closest('[data-anchored-panel]')) return
-  emit('close')
+  requestClose()
 }
-const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose() }
 
 onMounted(() => {
   void place(); void load()
@@ -223,7 +228,9 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
+    <Transition name="pp" :duration="{ enter: 130, leave: 140 }" @after-leave="onAfterLeave">
     <div
+      v-if="shown"
       ref="panel" class="pp"
       :style="pos ? { left: pos.left + 'px', top: pos.top + 'px' } : { opacity: 0 }"
       role="dialog" :aria-label="isSelf ? 'Your profile' : 'Profile'"
@@ -335,6 +342,7 @@ onBeforeUnmount(() => {
         </template>
       </ProfileCard>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -346,9 +354,20 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   position: fixed; z-index: 1200; width: 300px;
   border-radius: 10px; overflow: hidden;
   box-shadow: 0 18px 50px rgba(0,0,0,.7);
-  animation: pp-in .13s cubic-bezier(.4,0,.2,1);
+  animation: pp-in var(--dur-1) var(--ease-out);
+  /* Opens out of the avatar that spawned it, not out of its own middle. */
+  transform-origin: top left;
 }
 @keyframes pp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* Same path back out. `animation: none` is load-bearing — an animation beats
+   a transition on the same property, so the entrance keyframes would pin
+   opacity and transform and the leave would never move. */
+.pp-leave-active {
+  animation: none;
+  transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in);
+}
+.pp-leave-to { opacity: 0; transform: translateY(6px); }
+
 @media (prefers-reduced-motion: reduce) { .pp { animation: none; } }
 
 .pp :deep(.pc) { width: 100%; box-shadow: none; border-radius: 0; }
