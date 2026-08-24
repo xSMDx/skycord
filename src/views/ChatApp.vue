@@ -60,6 +60,7 @@ import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 import AppContextMenu        from '@/components/ui/ContextMenu.vue'
 import ConnectionBanner      from '@/components/ui/ConnectionBanner.vue'
 import { openMenu, closeMenu, menu } from '@/composables/useContextMenu'
+import { useShortcuts } from '@/composables/useShortcuts'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
 import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
@@ -2990,6 +2991,35 @@ const onKey = (e: KeyboardEvent) => {
   }
 }
 const onClick = () => { closeCtx(); showEmojiPicker.value = false }
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────────
+// Discord's bindings, deliberately — see useShortcuts for why they are not
+// ours to redesign.
+useShortcuts({
+  quickSwitcher: () => { showQuickSwitcher.value = true },
+  toggleMute:    () => onToggleMute(),
+  toggleDeafen:  () => onToggleDeafen(),
+
+  // Walks the flattened text channels in the order the sidebar draws them,
+  // so Alt+Down goes to what is visually next rather than to whatever the
+  // unordered channel map happens to yield.
+  cycleChannel: (dir) => {
+    const flat = sidebarGroups.value.flatMap(g => g.text)
+    if (flat.length < 2) return
+    const at = flat.findIndex(c => c.id === activeChannelId.value)
+    const next = flat[(Math.max(0, at) + dir + flat.length) % flat.length]
+    if (next) void selectChannel(next)
+  },
+
+  // A modal owns the keyboard while it is up. confirmState is included
+  // because a destructive dialog is exactly where a stray chord does damage.
+  isBlocked: () =>
+    showSettings.value || showAddFriend.value || showQuickSwitcher.value ||
+    showEmojiPicker.value || showPinned.value || showReactionPicker.value ||
+    showNewDM.value || showEditGroup.value || showInviteGroup.value ||
+    showCreateServer.value || showInvite.value || showCreateChannel.value ||
+    !!confirmState.value || !!showUserProfile.value,
+})
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 onMounted(async () => {
