@@ -162,7 +162,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
        away with it. The scroller keeps its own class and ref. -->
   <div class="ml-wrap">
   <div class="ml" ref="el" @scroll.passive="onScroll">
-    <div class="welcome">
+    <div v-if="!loadingMsgs" class="welcome">
       <template v-if="isDM && dmPartner">
         <div class="dm-av"><Avatar :src="dmPartner.avatar ?? ''" :alt="dmPartner.name" :crop="(dmPartner as any).avatarCrop" /></div>
         <h3>{{ dmPartner.name }}</h3>
@@ -202,7 +202,9 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
     </div>
     <div v-else-if="messages.length===0 && !isDM" class="ml-empty"><p>No messages yet. Say something! 👋</p></div>
 
-    <TransitionGroup :name="messages.length ? 'msg-pop' : ''" tag="div" class="msg-list-inner">
+    <!-- v-if, not v-show: the outgoing channel's rows must leave the DOM, or
+         the skeleton renders above stale content from wherever you just were. -->
+    <TransitionGroup v-if="!loadingMsgs" :name="messages.length ? 'msg-pop' : ''" tag="div" class="msg-list-inner">
       <template v-for="row in rows" :key="row.key">
         <div v-if="row.kind === 'divider'" class="day-divider"><span>{{ row.label }}</span></div>
         <MessageItem
