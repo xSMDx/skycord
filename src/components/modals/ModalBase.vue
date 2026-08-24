@@ -11,11 +11,11 @@
  * Doing this HERE converts every modal built on ModalBase at once, and means
  * one implementation of the drag physics rather than one per modal.
  */
-import { ref, computed, watch, onMounted, provide } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide } from 'vue'
 import { useViewport } from '@/composables/useViewport'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 
-defineProps<{
+const props = defineProps<{
   title?: string
   width?: string
   /** Stack above another modal. EditField opens on top of Settings, which
@@ -64,6 +64,76 @@ const sheetStyle = computed(() =>
   isMobile.value && drag.offset.value
     ? { transform: `translateY(${drag.offset.value}px)` }
     : undefined)
+
+/**
+ * Making the dialog a dialog.
+ *
+ * Nineteen modals are built on this shell, and none of them announced
+ * itself as one: no role, no name, and -- the part that actually strands
+ * someone -- no containment. Tab from inside an open modal walked straight
+ * out into the app behind the overlay, where the focus ring was invisible
+ * under a 75% black scrim and every control it landed on was one the user
+ * had just been told they could not reach.
+ *
+ * Fixed once here rather than nineteen times, which is also why the name is
+ * derived rather than required: most of these modals already render their
+ * own heading, so the shell adopts that heading as the accessible name
+ * instead of asking every caller to repeat it in a prop.
+ */
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),\
+select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+
+const labelId = ref('')
+let restoreTo: HTMLElement | null = null
+
+// offsetParent is null for anything display:none, which is how the modals
+// hide their own conditional rows -- a tab stop the eye cannot see is worse
+// than no tab stop.
+const focusables = () => Array.from(
+  sheet.value?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []
+).filter(el => el.offsetParent !== null || getComputedStyle(el).position === 'fixed')
+
+const onKey = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') { e.stopPropagation(); requestClose(); return }
+  if (e.key !== 'Tab') return
+  // A cascade panel is teleported to body, so it is visually inside this
+  // dialog but a DOM sibling of it. Let its own rows take the focus.
+  if ((e.target as HTMLElement)?.closest?.('[data-anchored-panel]')) return
+
+  const f = focusables()
+  if (!f.length) { e.preventDefault(); sheet.value?.focus(); return }
+  const first = f[0], last = f[f.length - 1]
+  const a = document.activeElement
+  const outside = !sheet.value?.contains(a)
+  if (e.shiftKey ? (a === first || outside) : (a === last || outside)) {
+    e.preventDefault()
+    ;(e.shiftKey ? last : first).focus()
+  }
+}
+
+onMounted(async () => {
+  restoreTo = document.activeElement as HTMLElement | null
+  await nextTick()
+  const root = sheet.value
+  if (!root) return
+  // A caller-supplied title wins; otherwise adopt the heading the modal
+  // already draws, so the name matches what is on screen.
+  if (!props.title) {
+    const h = root.querySelector('h1,h2,h3')
+    if (h) {
+      if (!h.id) h.id = `mb-t-${Math.random().toString(36).slice(2, 9)}`
+      labelId.value = h.id
+    }
+  }
+  const auto = root.querySelector<HTMLElement>('[autofocus]')
+  ;(auto || focusables()[0] || root).focus()
+})
+
+// Coming back out where you went in. Without this, dismissing a modal drops
+// focus on <body> and the next Tab restarts from the top of the app.
+onBeforeUnmount(() => {
+  if (restoreTo && document.contains(restoreTo)) restoreTo.focus()
+})
 </script>
 
 <template>
@@ -86,7 +156,12 @@ const sheetStyle = computed(() =>
         class="modal"
         :class="{ sheet: isMobile, dragging: drag.dragging.value }"
         :style="[isMobile ? sheetStyle : (width ? { width } : {})]"
-        @keydown.esc="requestClose"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="title || undefined"
+        :aria-labelledby="!title && labelId ? labelId : undefined"
+        tabindex="-1"
+        @keydown="onKey"
       >
         <!-- The handle is the drag surface. Confining it here means a drag
              never starts on a control the user meant to press. -->
@@ -116,7 +191,8 @@ const sheetStyle = computed(() =>
 .mb-leave-active            { transition: opacity var(--dur-exit) var(--ease-in); }
 .mb-enter-from, .mb-leave-to{ opacity: 0; }
 
-.mb-enter-active .modal { transition:
+.mb-enter-active .modal:focus { outline: none; }
+.modal { transition:
   transform var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out); }
 .mb-leave-active .modal { transition:
   transform var(--dur-exit) var(--ease-in), opacity var(--dur-exit) var(--ease-in); }

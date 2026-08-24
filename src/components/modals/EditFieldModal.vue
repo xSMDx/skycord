@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
 import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 
@@ -13,10 +12,10 @@ defineProps<{
 
 const emit = defineEmits<{ close: []; done: [] }>()
 
-// Escape closes the modal, matching every other modal in the app
-const onKeydown = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+// Escape is ModalBase's job now -- it owns the focus trap, so focus is always
+// inside the dialog and a bubbling handler always sees the key. This listener
+// was on window, which also fired for modals that were merely mounted, and
+// ModalBase stops the event before it gets there anyway.
 </script>
 
 <template>
