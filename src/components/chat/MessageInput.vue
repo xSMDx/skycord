@@ -392,14 +392,14 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .reply-chip {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 2px 4px 2px 8px; border-radius: 12px;
-  background: rgba(var(--accent-rgb),.16); color: var(--accent-text);
+  background: rgba(var(--accent-rgb),.16); color: #c4c9ff;
   font-size: 12.5px; font-weight: 600; max-width: 180px;
 }
 .reply-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reply-chip-x {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: var(--accent-text); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+  color: #c4c9ff; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-chip-x:hover { background: var(--hover-strong); color: var(--text-strong); }
 .reply-strip-close {
@@ -451,8 +451,6 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   width: 32px; height: 32px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); background: rgba(255,255,255,.04);
-  /* Named properties, not `all`: `all` animates whatever happens to change,
-     including layout-triggering ones nobody intended. */
   transition: background var(--dur-1) var(--ease-out),
               color      var(--dur-1) var(--ease-out),
               opacity    var(--dur-1) var(--ease-out),

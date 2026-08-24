@@ -185,9 +185,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 
     <!-- A spinner says "something is happening somewhere". This says "a
          conversation is arriving, and it will look like this" — the layout is
-         already right when the messages land, so nothing jumps.
-         The varying widths are deliberate: uniform bars read as a loading
-         graphic, uneven ones read as text that has not resolved yet. -->
+         already right when the messages land, so nothing jumps. -->
     <div v-if="loadingMsgs" class="ml-sk" role="status" aria-label="Loading messages">
       <div v-for="g in SK_GROUPS" :key="g.k" class="ml-sk-g">
         <Skeleton circle :h="40" />
@@ -273,7 +271,6 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .welcome p{font-size:14px;color:var(--text-3)}
 .welcome strong{color: var(--text-strong)}
 .ml-loading,.ml-empty{display:flex;align-items:center;gap:10px;padding:24px 16px;color:var(--text-faint);font-size:14px}
-/* Same rhythm as a real message group, so the swap is invisible. */
 .ml-sk{padding:16px 16px 8px;display:flex;flex-direction:column;gap:18px}
 .ml-sk-g{display:flex;gap:14px;align-items:flex-start}
 .ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}

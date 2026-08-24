@@ -33,34 +33,30 @@ export type MsgLayout = 'cozy' | 'compact'
 
 const KEY = 'sykord_appearance'
 const DEFAULTS: Appearance = {
-  theme: 'default', accent: '#0057ff', density: 'cozy',
-  msgSize: 15, groupSpacing: 17, fontUi: 'Archivo', fontMono: 'Consolas',
+  theme: 'default', accent: '#5865f2', density: 'cozy',
+  msgSize: 15, groupSpacing: 17, fontUi: 'gg sans', fontMono: 'Consolas',
   showSendButton: true, custom: {}, scheme: 'off', contrast: 0, emojiPack: 'native',
   underlineLinks: false, displayNameStyles: true, msgLayout: 'cozy', zoom: 100,
 }
 
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
-  { name: 'Crouwel', hex: '#0057ff' }, { name: 'Green', hex: '#29d17c' },
+  { name: 'Blurple', hex: '#5865f2' }, { name: 'Green', hex: '#23a55a' },
   { name: 'Teal', hex: '#1abc9c' },    { name: 'Blue', hex: '#3498db' },
-  { name: 'Pink', hex: '#eb459e' },    { name: 'Red', hex: '#ff5c5c' },
+  { name: 'Pink', hex: '#eb459e' },    { name: 'Red', hex: '#ed4245' },
   { name: 'Orange', hex: '#e67e22' },  { name: 'Yellow', hex: '#f0b232' },
   { name: 'Purple', hex: '#9b59b6' },
 ]
 
-/**
- * Every option here is self-hosted or genuinely local. The list used to offer
- * 'gg sans' — a proprietary face this repo has never shipped, so it silently
- * rendered as whatever the OS substituted — and pulled Inter and Roboto from
- * Google's CDN, which is not something a self-hosted instance should do on
- * every load.
- */
 export const UI_FONTS: Record<string, string> = {
-  'Archivo': "'Archivo',system-ui,-apple-system,sans-serif",
+  'gg sans': "'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",
+  'Inter':   "'Inter',-apple-system,system-ui,sans-serif",
+  'Roboto':  "'Roboto',-apple-system,system-ui,sans-serif",
   'System':  "system-ui,-apple-system,BlinkMacSystemFont,sans-serif",
 }
 export const MONO_FONTS: Record<string, string> = {
-  'Consolas': "'Consolas','Menlo',monospace",
-  'System':   "ui-monospace,SFMono-Regular,'Consolas',monospace",
+  'Consolas':       "'Consolas','Menlo',monospace",
+  'Fira Code':      "'Fira Code','Consolas',monospace",
+  'JetBrains Mono': "'JetBrains Mono','Consolas',monospace",
 }
 
 // Surfaces/text the custom editor doesn't expose directly but derives from the
@@ -88,34 +84,10 @@ const shade = (hex: string, p: number) => {
   const f = (c: number) => Math.round(Math.min(255, Math.max(0, c * (1 + p))))
   return '#' + [f(r), f(g), f(b)].map(x => x.toString(16).padStart(2, '0')).join('')
 }
-/**
- * Mix toward white. Distinct from shade(), which MULTIPLIES each channel and
- * therefore cannot lift a channel that is already zero — feeding it a pure
- * blue like #0057ff just returns a more saturated blue, never a pale one.
- * A text tint has to actually approach white to clear contrast on ink.
- */
-const tint = (hex: string, p: number) => {
-  const { r, g, b } = parseHex(hex)
-  const f = (c: number) => Math.round(c + (255 - c) * p)
-  return '#' + [f(r), f(g), f(b)].map(x => x.toString(16).padStart(2, '0')).join('')
-}
 const rgbTriple = (hex: string) => { const { r, g, b } = parseHex(hex); return `${r}, ${g}, ${b}` }
 
-/** The accent every install carried before the redesign. */
-const LEGACY_ACCENT = '#5865f2'
-
 const load = (): Partial<Appearance> => {
-  let saved: Partial<Appearance>
-  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
-  // Carry existing installs onto the new accent — but only when the stored
-  // value is the OLD DEFAULT, which nobody chose. Someone who deliberately
-  // picked orange keeps orange; this is a migration, not an override.
-  if (saved.accent === LEGACY_ACCENT) delete saved.accent
-  // Same for the two faces that no longer exist: 'gg sans' was never shipped
-  // and Inter/Roboto came from a CDN this app no longer contacts.
-  if (saved.fontUi && !(saved.fontUi in UI_FONTS)) delete saved.fontUi
-  if (saved.fontMono && !(saved.fontMono in MONO_FONTS)) delete saved.fontMono
-  return saved
+  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
 }
 
 export const appearance = reactive<Appearance>({ ...DEFAULTS, ...load() })
@@ -168,13 +140,11 @@ export const applyAppearance = () => {
   root.style.setProperty('--accent', a.accent)
   root.style.setProperty('--accent-hover', shade(a.accent, -0.12))
   root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
-  const accentOnDark = !(a.theme === 'light' || a.theme === 'light-dim')
-  root.style.setProperty('--accent-text', accentOnDark ? tint(a.accent, 0.50) : shade(a.accent, -0.10))
 
   // Sizing + fonts
   root.style.setProperty('--msg-font-size', `${a.msgSize}px`)
   root.style.setProperty('--msg-group-gap', `${a.groupSpacing}px`)
-  root.style.setProperty('--font-ui', UI_FONTS[a.fontUi] || UI_FONTS['Archivo'])
+  root.style.setProperty('--font-ui', UI_FONTS[a.fontUi] || UI_FONTS['gg sans'])
   root.style.setProperty('--font-mono', MONO_FONTS[a.fontMono] || MONO_FONTS['Consolas'])
 
   // Readability + density extras

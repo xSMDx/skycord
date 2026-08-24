@@ -186,7 +186,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-input::placeholder { color: var(--text-faint); }
 .ccm-preview { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 .ccm-preview strong { color: var(--text-2); font-weight: 600; }
-.ccm-err { font-size: 12px; color: var(--state-fault); margin-top: 8px; }
+.ccm-err { font-size: 12px; color: #f08080; margin-top: 8px; }
 
 .ccm-footer {
   display: flex; justify-content: flex-end; gap: 10px;

@@ -200,7 +200,7 @@ const doCopy = async () => {
 .iv-add { font-size: 11px; color: var(--text-3); }
 .iv-add-ic { color: var(--text-3); flex: none; }
 .iv-row:hover .iv-add-ic { color: var(--accent); }
-.iv-done { color: var(--state-live); flex: none; }
+.iv-done { color: #23a55a; flex: none; }
 .iv-more {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 6px 8px; border-radius: 4px; background: none; border: none;

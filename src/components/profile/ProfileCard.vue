@@ -81,7 +81,7 @@ const bannerBg = computed(() =>
 const statusText = computed(() => props.customStatus?.text?.trim() || '')
 
 const STATUS_COLORS: Record<string, string> = {
-  online: 'var(--state-live)', idle: '#f0b232', dnd: 'var(--state-fault)', offline: '#80848e', invisible: '#80848e',
+  online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#80848e', invisible: '#80848e',
 }
 const dotColor = computed(() => STATUS_COLORS[props.status || 'offline'] || STATUS_COLORS.offline)
 

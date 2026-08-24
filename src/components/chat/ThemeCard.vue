@@ -29,7 +29,7 @@ const swatches = computed<string[]>(() => {
   if (!d) return []
   const c = (d.custom ?? {}) as Record<string, string>
   return [
-    d.accent || 'var(--accent)',
+    d.accent || '#5865f2',
     c['--bg-chat']  || THEME_BG[d.theme || 'default'] || '#313338',
     c['--bg-panel'] || '#2b2d31',
     c['--bg-floor'] || '#111214',

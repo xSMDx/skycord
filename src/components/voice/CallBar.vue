@@ -499,12 +499,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* The call controls used to fire a 300–500ms cartoon on every pointer
-   traverse — a 1.3x scale on a 20px icon, a 20-degree swing on the leave
-   button. In an app people keep open all day that is a tax, and it was
-   redundant: each of these already had a background tint saying "hovered" in
-   120ms. Six animations and five duration values deleted, replaced by the
-   press response that was actually missing. */
+/* The call controls fired a 300–500ms cartoon on every pointer traverse — a
+   1.3x scale on a 20px icon, a 20-degree swing on the leave button. Each of
+   these already reported hover with a background tint in 120ms, so the
+   animation was a second answer at 3–5x the duration hover feedback should
+   take, in an app people keep open all day. Replaced by the press response
+   they never had. */
 .cb-b:active:not(:disabled),
 .cb-chev:active:not(:disabled),
 .cb-leave:active { transform: scale(.94); }
@@ -533,10 +533,10 @@ onBeforeUnmount(() => {
 /* Clip the image to the circle on the IMAGE itself, NOT the container — the
    container must stay un-clipped so the .cb-mute badge can overhang the corner. */
 .cb-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.cb-av.speaking { box-shadow: 0 0 0 3px var(--state-live); }
+.cb-av.speaking { box-shadow: 0 0 0 3px #23a55a; }
 .cb-mute {
   position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px;
-  border-radius: 50%; background: var(--state-fault); color: #fff;
+  border-radius: 50%; background: #f23f43; color: #fff;
   display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
 }
 .cb-name { font-size: 13px; color: var(--text-1); font-weight: 600; }
@@ -555,7 +555,7 @@ onBeforeUnmount(() => {
 /* No ugly browser focus ring — a subtle bg highlight stands in for keyboard focus */
 .cb-b:focus, .cb-chev:focus, .cb-leave:focus { outline: none; }
 .cb-b:focus-visible, .cb-chev:focus-visible { background: rgba(255,255,255,.16); }
-.cb-b.off { background: var(--state-fault); color: #fff; }
+.cb-b.off { background: #f23f43; color: #fff; }
 .cb-b.off:hover:not(:disabled) { background: #d83c3f; }
 /* device-picker chevron — slim split-button next to mic/camera */
 .cb-chev {
@@ -575,7 +575,7 @@ onBeforeUnmount(() => {
 .cb-split.menuopen { background: rgba(255,255,255,.08); }
 .cb-leave {
   width: 56px; height: 44px; border-radius: 12px; flex-shrink: 0;
-  background: var(--state-fault); color: #fff;
+  background: #f23f43; color: #fff;
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out);
 }
@@ -604,7 +604,7 @@ onBeforeUnmount(() => {
 .cb-join {
   display: flex; align-items: center; gap: 8px;
   height: 40px; padding: 0 22px; border-radius: 8px;
-  background: var(--state-live); color: #fff; font-size: 14px; font-weight: 700;
+  background: #23a55a; color: #fff; font-size: 14px; font-weight: 700;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .cb-join:hover { background: #1f9450; transform: translateY(-1px); }

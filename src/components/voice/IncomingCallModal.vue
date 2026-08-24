@@ -83,16 +83,6 @@ onBeforeUnmount(soundRingStop)
 }
 .ic-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.08); }
 .ic-btn:active { transform: scale(.94); }
-.ic-btn.decline { background: var(--state-fault); }
-/* The jiggle is gone, and its absence is the fix.
-   It ran an infinite rotation on `transform` across the WHOLE timeline, and an
-   animation beats a plain declaration for the same property — so it silently
-   overrode .ic-btn:hover and .ic-btn:active above. The most important button
-   in the app, on a modal demanding a decision, had no hover and no press
-   feedback at all. It also never stopped, in a file with no reduced-motion
-   guard of its own.
-
-   A ringing call is already announced by the ring animation, the sound, and a
-   modal you cannot miss. The button does not need to wave. */
-.ic-btn.accept { background: var(--state-live); }
+.ic-btn.decline { background: #f23f43; }
+.ic-btn.accept  { background: #23a55a; }
 </style>

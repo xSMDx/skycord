@@ -78,7 +78,7 @@ const sendDM = (
     time: fmtTime(),
     timestamp: Date.now(),
     avatar,
-    avatarColor: '#0057ff',
+    avatarColor: '#5865f2',
     reactions: [],
     replyTo: replyTo && replyTo.length ? replyTo : undefined,
   }
@@ -97,7 +97,7 @@ const sendDM = (
     const msg: Message = {
       id: makeId(), author, authorId, content,
       time: fmtTime(), timestamp: Date.now(),
-      avatar, avatarColor: '#0057ff', reactions: [],
+      avatar, avatarColor: '#5865f2', reactions: [],
       replyTo: replyTo && replyTo.length ? replyTo : undefined,
     }
     pushGroupMessage(groupId, msg)

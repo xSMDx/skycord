@@ -30,11 +30,11 @@ const pwStrength = computed(() => {
   if (/[!@#$%^&*(),.?":{}|<>]/.test(p)) s++
   const map = [
     { label: '', color: '' },
-    { label: 'Very weak', color: 'var(--state-fault)' },
-    { label: 'Weak',      color: 'var(--state-fault)' },
+    { label: 'Very weak', color: '#ed4245' },
+    { label: 'Weak',      color: '#ed4245' },
     { label: 'Fair',      color: '#f0a500' },
-    { label: 'Good',      color: 'var(--accent)' },
-    { label: 'Strong',    color: 'var(--state-live)' },
+    { label: 'Good',      color: '#5865f2' },
+    { label: 'Strong',    color: '#23a55a' },
   ]
   return { score: s, ...map[s] }
 })
@@ -210,7 +210,7 @@ const submitRegister = async () => {
                 <svg v-if="!showConfirm" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               </button>
-              <svg v-if="rf.confirm && rf.password===rf.confirm" class="check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--state-live)" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-if="rf.confirm && rf.password===rf.confirm" class="check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#23a55a" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <span v-if="re.confirm" class="ferr">{{ re.confirm }}</span>
           </div>
@@ -271,7 +271,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:#2e3136; border-radius:6px; transition:transform .22s cubic-bezier(.4,0,.2,1); box-shadow:0 1px 4px rgba(0,0,0,.3); }
 .tab-slider.right { transform:translateX(100%); }
 
-.err-banner { display:flex; align-items:center; gap:8px; background:rgba(237,66,69,.12); border:1px solid rgba(237,66,69,.3); border-radius:8px; padding:10px 13px; margin-bottom:14px; color:var(--state-fault); font-size:13px; }
+.err-banner { display:flex; align-items:center; gap:8px; background:rgba(237,66,69,.12); border:1px solid rgba(237,66,69,.3); border-radius:8px; padding:10px 13px; margin-bottom:14px; color:#f08080; font-size:13px; }
 
 .form-title { font-size:21px; font-weight:800; color: var(--text-strong); margin-bottom:3px; }
 .form-sub   { font-size:13px; color:var(--text-faint); margin-bottom:18px; }
@@ -291,19 +291,19 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
   overflow:hidden;
 }
 .inp-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15); }
-.inp-wrap.match { border-color:var(--state-live); }
-.field.err .inp-wrap { border-color:var(--state-fault); }
+.inp-wrap.match { border-color:#23a55a; }
+.field.err .inp-wrap { border-color:#ed4245; }
 .field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(237,66,69,.15); }
 
-.fi { color:var(--text-faint); margin:0 9px; flex-shrink:0; }
+.fi { color:#4e5058; margin:0 9px; flex-shrink:0; }
 .inp-wrap input { flex:1; padding:10px 6px 10px 0; font-size:14px; color:var(--text-1); }
-.inp-wrap input::placeholder { color:var(--text-faint); }
+.inp-wrap input::placeholder { color:#4e5058; }
 
-.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-faint); border-radius:5px; margin-right:2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
+.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#4e5058; border-radius:5px; margin-right:2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
 .eye:hover { color:var(--text-2); }
 .check { flex-shrink:0; margin-right:9px; }
 
-.ferr { font-size:12px; color:var(--state-fault); }
+.ferr { font-size:12px; color:#f08080; }
 
 .strength { display:flex; align-items:center; gap:8px; }
 .s-bars { display:flex; gap:3px; flex:1; }

@@ -237,7 +237,7 @@ button { border: none; }
   font-size: 26px; font-weight: 700; box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow var(--dur-2) var(--ease-out);
 }
 .s-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.s-av.speaking { box-shadow: 0 0 0 3px var(--state-live); }
+.s-av.speaking { box-shadow: 0 0 0 3px #23a55a; }
 
 /* Ringing — calling them, no answer yet. Dimmed so they read as not-here-yet
    rather than present-and-silent, with two rings on an offset delay so the
@@ -262,7 +262,7 @@ button { border: none; }
 }
 .s-mute {
   position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%;
-  background: var(--state-fault); color: #fff; display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
+  background: #f23f43; color: #fff; display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
 }
 .s-name { font-size: 13px; color: var(--text-1); font-weight: 600; }
 
@@ -284,7 +284,7 @@ button { border: none; }
   display: flex; align-items: center; justify-content: center;
   transition: border-color var(--dur-2) var(--ease-out);
 }
-.g-cell.speaking { border-color: var(--state-live); }
+.g-cell.speaking { border-color: #23a55a; }
 /* Grid-only hover hint: clicking focuses this tile. Suppressed in spotlight. */
 .stage--grid:not(.stage--spotlight) .g-cell:hover { box-shadow: inset 0 0 0 2px rgba(255,255,255,.22); }
 
@@ -364,10 +364,10 @@ button { border: none; }
 .g-cell.is-cell-fs { border-radius: 0; border-color: transparent; background: #000; }
 .g-live {
   position: absolute; right: 8px; top: 8px; padding: 2px 7px; border-radius: 5px;
-  background: var(--state-fault); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .04em;
+  background: #f23f43; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .04em;
 }
 .g-mute {
   position: absolute; right: 8px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%;
-  background: var(--state-fault); color: #fff; display: flex; align-items: center; justify-content: center;
+  background: #f23f43; color: #fff; display: flex; align-items: center; justify-content: center;
 }
 </style>

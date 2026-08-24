@@ -38,7 +38,7 @@ export const toClientMessage = (m: WireMessage, myId?: string): Message => {
     timestamp:   new Date(m.createdAt).getTime(),
     avatar:      m.authorAvatar || avatarFor(m.authorName),
     avatarCrop:  m.authorAvatarCrop ?? null,
-    avatarColor: '#0057ff',
+    avatarColor: '#5865f2',
     reactions:   (m.reactions || []).map((r: any) => ({
       emoji:   r.emoji,
       count:   r.userIds?.length || 0,

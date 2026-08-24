@@ -75,7 +75,7 @@ onMounted(async () => {
     <div v-if="!splashDone" class="splash">
       <!-- Lottie-powered loading animation -->
       <div class="splash-icon">
-        <SkycordIcon mode="loading" :size="56" color="var(--accent)" />
+        <SkycordIcon mode="loading" :size="56" color="#5865f2" />
       </div>
 
       <div class="splash-wordmark">skycord</div>

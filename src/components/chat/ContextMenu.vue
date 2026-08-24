@@ -132,6 +132,6 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ctx-row:hover        { background: var(--accent); color: white; }
-.ctx-row.danger       { color: var(--state-fault); }
-.ctx-row.danger:hover { background: var(--state-fault); color: white; }
+.ctx-row.danger       { color: #ed4245; }
+.ctx-row.danger:hover { background: #ed4245; color: white; }
 </style>

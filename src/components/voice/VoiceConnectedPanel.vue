@@ -41,7 +41,7 @@ const STAGE_LABEL: Record<string, string> = {
 //   signal-medium yellow (150–250ms)
 //   signal-low    orange (>250ms) / blue while reconnecting
 //   signal-zero   red    (no route / failed)
-const GREEN = 'var(--state-live)', YELLOW = '#f0b232', ORANGE = '#f0662c', RED = 'var(--state-fault)', BLUE = 'var(--accent)'
+const GREEN = '#23a55a', YELLOW = '#f0b232', ORANGE = '#f0662c', RED = '#f23f43', BLUE = 'var(--accent)'
 const q = computed(() => {
   if (voice.connectStage === 'failed') return { icon: SignalZero, color: RED, label: 'Couldn’t connect' }
   if (voice.connecting) {
@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
   background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.vcp-leave:hover { background: var(--state-fault); color: #fff; transform: translateY(-1px); }
+.vcp-leave:hover { background: #f23f43; color: #fff; transform: translateY(-1px); }
 
 .vcp-controls { display: flex; gap: 6px; }
 .vcp-btn {
@@ -259,7 +259,7 @@ onBeforeUnmount(() => {
 .vcp-btn:active:not(:disabled) { transform: scale(.96); }
 .vcp-btn.on { background: #248046; color: #fff; }
 .vcp-btn:disabled { opacity: .45; cursor: not-allowed; }
-.vcp-back { color: var(--state-live); }
+.vcp-back { color: #3ba55d; }
 .vcp-back:hover { background: rgba(35,165,90,.18); color: #4ade80; }
 
 /* Hover popover — appears above the strip */
@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
 }
 .vcp-pop-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-3); padding: 2px 0; }
 .vcp-pop-row strong { color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums; }
-.vcp-pop-row strong.bad { color: var(--state-fault); }
+.vcp-pop-row strong.bad { color: #f23f43; }
 .vcp-pop-help { font-size: 11px; line-height: 1.45; color: var(--text-faint); margin: 10px 0 0; }
 .vcp-pop-btn {
   width: 100%; margin-top: 10px; height: 38px; border-radius: 8px;

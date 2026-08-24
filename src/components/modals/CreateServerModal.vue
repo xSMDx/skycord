@@ -133,7 +133,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 }
 .csm-input:focus { border-color: var(--accent); }
 .csm-input::placeholder { color: var(--text-faint); }
-.csm-err { font-size: 12px; color: var(--state-fault); margin-top: 8px; }
+.csm-err { font-size: 12px; color: #f08080; margin-top: 8px; }
 
 .csm-footer {
   display: flex; justify-content: flex-end; gap: 10px;

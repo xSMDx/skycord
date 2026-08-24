@@ -92,7 +92,7 @@ const place = async () => {
  *
  * Colours come from usePresence rather than being written out again here.
  * They used to be a second copy, and the copies had drifted — idle was
- * #f0b232 here against #f0a500 there, dnd var(--state-fault) against var(--state-fault) — so the
+ * #f0b232 here against #f0a500 there, dnd #f23f43 against #ed4245 — so the
  * dot in this picker did not match the dot on your own avatar two
  * centimetres away.
  *
@@ -373,8 +373,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-presence-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .pp-presence-note { font-size: 11.5px; line-height: 1.3; color: var(--text-faint); white-space: normal; }
 .pp-row.sub .pp-dot { margin-top: 5px; }
-.pp-row.danger { color: var(--state-fault); }
-.pp-row.danger svg { color: var(--state-fault); }
+.pp-row.danger { color: #f0716f; }
+.pp-row.danger svg { color: #f0716f; }
 /* A status row and the chevron that bounds it in time. The row keeps its
    full-width hover; the chevron is a sibling so both stay valid buttons. */
 .pp-splitrow { display: flex; align-items: stretch; }

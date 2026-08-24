@@ -149,7 +149,7 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
 
         <div class="rt-body" ref="scrollEl">
           <div v-if="loading" class="rt-loading">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5865f2" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
             Tracing the conversation…
           </div>
 

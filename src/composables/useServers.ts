@@ -498,9 +498,9 @@ export const useServers = () => {
    */
   /**
    * True only while a server's channel list is being fetched for the first
-   * time. Scoped to the fetch, not to the whole open: a server whose detail
-   * is already cached opens instantly and must not flash a placeholder on
-   * its way to content that was there all along.
+   * time. Scoped to the fetch, not the whole open: a cached server opens
+   * instantly and must not flash a placeholder on its way to content that was
+   * already there.
    */
   const loadingServerDetail = ref(false)
 

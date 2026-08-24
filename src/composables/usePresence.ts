@@ -248,7 +248,7 @@ export const livePresence = (userId: string, fallback?: string | null): Effectiv
 /** Logout seam — a second account must not inherit the first one's dots. */
 export const resetPresenceMap = (): void => { presenceById.value = {} }
 const COLORS: Record<string, string> = {
-  online: '#29d17c', idle: '#f0a500', dnd: '#ff5c5c',
+  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245',
   offline: '#80848e', invisible: '#80848e',
 }
 const LABELS: Record<string, string> = {

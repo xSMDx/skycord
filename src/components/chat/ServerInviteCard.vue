@@ -190,10 +190,10 @@ const join = async () => {
 .ic-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ic-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
-.ic-sub--err { color: var(--state-fault); }
+.ic-sub--err { color: #f08080; }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;
-  border-radius: 50%; background: var(--state-live); flex-shrink: 0;
+  border-radius: 50%; background: #23a55a; flex-shrink: 0;
 }
 
 .ic-btn {
