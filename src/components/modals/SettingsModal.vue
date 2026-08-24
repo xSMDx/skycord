@@ -68,7 +68,7 @@ const THEME_OPTS: { id: Theme; label: string; preview: Record<string, string> }[
   { id: 'amoled',    label: 'AMOLED',    preview: { background: '#000000' } },
   { id: 'light',     label: 'Light',     preview: { background: '#ffffff' } },
   { id: 'light-dim', label: 'Light Dim', preview: { background: '#eceef0' } },
-  { id: 'custom',    label: 'Custom',    preview: { background: 'conic-gradient(from 180deg, #ff5f6d, #ffc371, #5865f2, #ff5f6d)' } },
+  { id: 'custom',    label: 'Custom',    preview: { background: 'conic-gradient(from 180deg, #ff5f6d, #ffc371, var(--accent), #ff5f6d)' } },
 ]
 const SCHEME_OPTS: { id: SchemeName; label: string }[] = [
   { id: 'off',        label: 'Off' },
@@ -605,7 +605,7 @@ const handleLogout = () => { emit('close'); logout() }
             <h2 id="acc-standing" class="acc-section-title">Account Standing</h2>
             <div class="acc-card">
               <div class="acc-standing">
-                <CircleCheck :size="24" :stroke-width="2.25" style="color:#23a55a; flex-shrink:0" />
+                <CircleCheck :size="24" :stroke-width="2.25" style="color:var(--state-live); flex-shrink:0" />
                 <div style="flex:1">
                   <div class="acc-standing-title">Your account is all good</div>
                   <div class="acc-standing-sub">No violations. Thanks for keeping Skycord safe 🙏</div>
@@ -1001,15 +1001,15 @@ const handleLogout = () => { emit('close'); logout() }
     @done="onModalDone"
   >
     <div>
-      <label class="efm-field-label">Current Password <span style="color:#ed4245">*</span></label>
+      <label class="efm-field-label">Current Password <span style="color:var(--state-fault)">*</span></label>
       <input class="efm-input" v-model="confirmPassword" type="password" autofocus />
     </div>
     <div>
-      <label class="efm-field-label">New Password <span style="color:#ed4245">*</span></label>
+      <label class="efm-field-label">New Password <span style="color:var(--state-fault)">*</span></label>
       <input class="efm-input" v-model="newPassword" type="password" />
     </div>
     <div>
-      <label class="efm-field-label">Confirm New Password <span style="color:#ed4245">*</span></label>
+      <label class="efm-field-label">Confirm New Password <span style="color:var(--state-fault)">*</span></label>
       <input class="efm-input" v-model="confirmNewPassword" type="password" @keydown.enter="onModalDone" />
     </div>
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
@@ -1072,7 +1072,7 @@ img    { display: block; object-fit: cover; }
 .pf-sub { font-size: 13.5px; color: var(--text-3); margin: -6px 0 20px; }
 .pf-err {
   padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 13px;
-  background: rgba(237,66,69,.14); border: 1px solid rgba(237,66,69,.32); color: #f0716f;
+  background: rgba(237,66,69,.14); border: 1px solid rgba(237,66,69,.32); color: var(--state-fault);
 }
 .pf-grid { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
 .pf-rail { width: 240px; flex: none; display: flex; flex-direction: column; gap: 22px; }
@@ -1087,7 +1087,7 @@ img    { display: block; object-fit: cover; }
 .pf-idle { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
 .pf-idleval { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-1); min-width: 52px; text-align: right; }
 .pf-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-3); line-height: 1.4; }
-.pf-danger { color: #f0716f; background: none; }
+.pf-danger { color: var(--state-fault); background: none; }
 .pf-danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pf-danger:disabled { opacity: .4; cursor: not-allowed; }
 
@@ -1137,8 +1137,8 @@ img    { display: block; object-fit: cover; }
   border-radius: 4px; font-size: 14px; color: var(--text-2);
 }
 .pf-menu button:hover:not(:disabled) { background: var(--accent); color: #fff; }
-.pf-menu button.danger { color: #f0716f; }
-.pf-menu button.danger:hover:not(:disabled) { background: #ed4245; color: #fff; }
+.pf-menu button.danger { color: var(--state-fault); }
+.pf-menu button.danger:hover:not(:disabled) { background: var(--state-fault); color: #fff; }
 .pf-menu button:disabled { opacity: .4; cursor: not-allowed; }
 
 .sm-overlay {
@@ -1176,7 +1176,7 @@ img    { display: block; object-fit: cover; }
 }
 .sm-nav-item:hover { background: var(--hover); color: var(--text-strong); }
 .sm-nav-item.active { background: rgba(var(--accent-rgb),.2); color: var(--text-strong); }
-.sm-nav-item.danger { color: #ed4245; margin-top: 4px; }
+.sm-nav-item.danger { color: var(--state-fault); margin-top: 4px; }
 .sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
 .sm-nav-divider { height: 1px; background: rgba(255,255,255,.07); margin: 8px 10px; }
 
@@ -1224,12 +1224,12 @@ img    { display: block; object-fit: cover; }
 .acc-av { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--bg-raised); }
 .acc-av-status {
   position: absolute; bottom: 2px; right: 2px;
-  width: 14px; height: 14px; background: #23a55a; border-radius: 50%; border: 2px solid var(--bg-raised);
+  width: 14px; height: 14px; background: var(--state-live); border-radius: 50%; border: 2px solid var(--bg-raised);
 }
 .acc-av-names { z-index: 1; }
 .acc-display  { display: block; font-size: 20px; font-weight: 800; color: var(--text-strong); }
 .acc-tag      { font-size: 13px; color: var(--text-3); }
-.acc-save-msg { padding: 10px 14px; background: rgba(35,165,90,.15); border: 1px solid rgba(35,165,90,.3); border-radius: 8px; color: #23a55a; font-size: 13px; margin-bottom: 14px; }
+.acc-save-msg { padding: 10px 14px; background: rgba(35,165,90,.15); border: 1px solid rgba(35,165,90,.3); border-radius: 8px; color: var(--state-live); font-size: 13px; margin-bottom: 14px; }
 
 .acc-section-title {
   font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
@@ -1304,7 +1304,7 @@ img    { display: block; object-fit: cover; }
 .ap-prev-msg { display: flex; gap: 12px; padding: var(--row-pad-y, 2px) 0; }
 .ap-prev-ts { display: none; font-size: 11px; color: var(--text-faint); min-width: 52px; text-align: right; line-height: 1.5; }
 .ap-prev-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
-.ap-prev-av2 { background: #23a55a; }
+.ap-prev-av2 { background: var(--state-live); }
 .ap-prev-main { min-width: 0; }
 .ap-prev-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
 .ap-prev-name { font-weight: 600; color: var(--text-strong); }
@@ -1382,7 +1382,7 @@ img    { display: block; object-fit: cover; }
   word-break: break-all;
 }
 .ap-share-input:focus { outline: none; border-color: var(--accent); }
-.ap-share-err { font-size: 12px; color: #f08080; margin: 6px 0 2px; }
+.ap-share-err { font-size: 12px; color: var(--state-fault); margin: 6px 0 2px; }
 .ap-name-input {
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
   padding: 9px 12px; color: var(--text-1); font-size: 14px; min-width: 180px;

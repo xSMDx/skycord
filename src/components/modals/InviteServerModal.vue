@@ -185,7 +185,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .is-close:hover { background: var(--hover); color: var(--text-strong); }
 
-.is-error { padding: 12px 20px 0; font-size: 13px; color: #f08080; }
+.is-error { padding: 12px 20px 0; font-size: 13px; color: var(--state-fault); }
 
 .is-linkbox {
   display: flex; flex-direction: column; gap: 8px;
@@ -244,5 +244,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; align-items: center; justify-content: center;
   color: var(--text-3); transition: background .12s, color .12s;
 }
-.is-revoke:hover { background: var(--hover); color: #f08080; }
+.is-revoke:hover { background: var(--hover); color: var(--state-fault); }
 </style>

@@ -46,7 +46,7 @@ watch(query, (q) => {
 const avatarUrl = (u: ApiUser) => avatarFor(u.username, u.avatar)
 
 const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e'
+  online: 'var(--state-live)', idle: '#f0a500', dnd: 'var(--state-fault)', offline: '#80848e'
 }
 
 const selectUser = (u: ApiUser) => {

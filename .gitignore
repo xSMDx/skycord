@@ -30,3 +30,6 @@ Thumbs.db
 *.key
 coverage/
 .cache/
+
+# runtime state for the server-typecheck Stop hook
+.claude/.typecheck-state

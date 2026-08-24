@@ -95,7 +95,7 @@ const join = async () => {
 
 .ic-icon {
   width: 44px; height: 44px; border-radius: 10px;
-  background: #ed4245; flex-shrink: 0;
+  background: var(--state-fault); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; color: var(--text-strong);
 }
 .ic-icon--err { background: #4f3535; }
@@ -105,7 +105,7 @@ const join = async () => {
 .ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;
-  border-radius: 50%; background: #23a55a; flex-shrink: 0;
+  border-radius: 50%; background: var(--state-live); flex-shrink: 0;
 }
 
 .ic-btn {

@@ -83,7 +83,7 @@ onBeforeUnmount(soundRingStop)
 }
 .ic-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.08); }
 .ic-btn:active { transform: scale(.94); }
-.ic-btn.decline { background: #f23f43; }
-.ic-btn.accept  { background: #23a55a; animation: ic-jiggle 1.6s ease-in-out infinite; }
+.ic-btn.decline { background: var(--state-fault); }
+.ic-btn.accept  { background: var(--state-live); animation: ic-jiggle 1.6s ease-in-out infinite; }
 @keyframes ic-jiggle { 0%,92%,100% { transform: none; } 94% { transform: rotate(-12deg); } 96% { transform: rotate(12deg); } 98% { transform: rotate(-8deg); } }
 </style>

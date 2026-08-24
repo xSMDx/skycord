@@ -94,7 +94,7 @@ const lossPct = computed(() => outLossPct())
             <div class="dbg-grid">
               <Sparkline label="Available Outgoing Bitrate" :data="rtc.series.availableOutgoing"
                          :value="fmtBitrate(rtc.transport.availableOutgoingBitrate)" :fmt-tick="kbps" />
-              <Sparkline label="Ping" :data="rtc.series.ping" :value="fmtMs(rtc.transport.ping)" color="#5865f2" />
+              <Sparkline label="Ping" :data="rtc.series.ping" :value="fmtMs(rtc.transport.ping)" color="var(--accent)" />
             </div>
             <div class="dbg-rows">
               <div><span>Local Address</span><strong>{{ rtc.transport.localAddress ?? '—' }}</strong></div>
@@ -136,7 +136,7 @@ const lossPct = computed(() => outLossPct())
             <div class="dbg-grid">
               <Sparkline label="Bitrate" :data="rtc.series.outBitrate" :value="fmtBitrate(rtc.out.bitrate)" :fmt-tick="kbps" />
               <Sparkline label="Bitrate (Target)" :data="rtc.series.outTargetBitrate" :value="fmtBitrate(rtc.out.targetBitrate)" :fmt-tick="kbps" />
-              <Sparkline label="Audio Level" :data="rtc.series.outAudioLevel" :max="1" color="#23a55a"
+              <Sparkline label="Audio Level" :data="rtc.series.outAudioLevel" :max="1" color="var(--state-live)"
                          :value="rtc.out.audioLevel === null ? '—' : rtc.out.audioLevel.toFixed(3)"
                          :fmt-tick="v => v.toFixed(1)" />
               <Sparkline label="Packets Sent /s" :data="rtc.series.outPacketsSent" :value="fmtNum(last(rtc.series.outPacketsSent))" />
@@ -205,7 +205,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-who { padding: 0 8px 14px; display: flex; flex-direction: column; gap: 2px; }
 .dbg-who strong { font-size: 15px; color: var(--text-1); }
 .dbg-who span { font-size: 12px; color: var(--text-3); }
-.dbg-who span.ok { color: #23a55a; }
+.dbg-who span.ok { color: var(--state-live); }
 .dbg-navlabel {
   font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: var(--text-faint); padding: 0 8px 6px;
@@ -235,7 +235,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-h span { color: var(--text-faint); font-weight: 400; font-size: 12px; }
 .dbg-err {
   background: rgba(242,63,67,.12); border: 1px solid rgba(242,63,67,.3);
-  color: #f23f43; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
+  color: var(--state-fault); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
 }
 
 .dbg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-bottom: 20px; }
@@ -251,7 +251,7 @@ const lossPct = computed(() => outLossPct())
   color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.dbg-rows strong.bad { color: #f23f43; }
+.dbg-rows strong.bad { color: var(--state-fault); }
 .dbg-rows strong.mono { font-family: ui-monospace, monospace; font-size: 11px; }
 
 @media (max-width: 720px) {

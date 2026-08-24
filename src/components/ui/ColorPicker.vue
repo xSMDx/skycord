@@ -15,7 +15,7 @@ import { Pipette } from 'lucide-vue-next'
 const props = defineProps<{ modelValue: string | null; presets?: string[] }>()
 const emit  = defineEmits<{ 'update:modelValue': [hex: string] }>()
 
-const DEFAULT_PRESETS = ['#1e6fd9', '#1a2b57', '#2f9e5f', '#b8912f', '#c33bbd', '#ed4245']
+const DEFAULT_PRESETS = ['#1e6fd9', '#1a2b57', '#2f9e5f', '#b8912f', '#c33bbd', 'var(--state-fault)']
 
 const h = ref(0), s = ref(0), v = ref(0)
 const hexText = ref('000000')

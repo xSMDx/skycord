@@ -100,7 +100,7 @@ const copyId = () => {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#80848e', invisible: '#80848e',
+  online: 'var(--state-live)', idle: '#f0b232', dnd: 'var(--state-fault)', offline: '#80848e', invisible: '#80848e',
 }
 </script>
 
@@ -234,7 +234,7 @@ img { display: block; object-fit: cover; }
 .up-close:active { transform: scale(.94); }
 
 .up-state { padding: 72px 24px; text-align: center; color: var(--text-3); font-size: 14px; }
-.up-state.err { color: #f0716f; }
+.up-state.err { color: var(--state-fault); }
 
 .up-cols { display: flex; gap: 0; min-height: 560px; max-height: 86vh; }
 /* Inset panel with its own radius: the banner bleeds to the panel's edges
@@ -284,8 +284,8 @@ img { display: block; object-fit: cover; }
   padding: 9px 10px; border-radius: 4px; font-size: 14px; color: var(--text-2);
 }
 .up-menu button:hover { background: var(--accent); color: #fff; }
-.up-menu button.danger { color: #f0716f; }
-.up-menu button.danger:hover { background: #ed4245; color: #fff; }
+.up-menu button.danger { color: var(--state-fault); }
+.up-menu button.danger:hover { background: var(--state-fault); color: #fff; }
 
 .up-bio { font-size: 14px; color: var(--text-2); line-height: 1.55; margin-top: 18px; white-space: pre-wrap; word-break: break-word; }
 .up-meta { margin-top: 8px; }

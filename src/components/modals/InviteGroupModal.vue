@@ -21,7 +21,7 @@ const inviteUrl = ref('')
 const copied    = ref(false)
 
 const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e',
+  online: 'var(--state-live)', idle: '#f0a500', dnd: 'var(--state-fault)', offline: '#80848e',
 }
 
 const remaining = computed(() => Math.max(0, MAX_GROUP_MEMBERS - props.group.memberCount))

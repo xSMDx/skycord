@@ -392,14 +392,14 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .reply-chip {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 2px 4px 2px 8px; border-radius: 12px;
-  background: rgba(var(--accent-rgb),.16); color: #c4c9ff;
+  background: rgba(var(--accent-rgb),.16); color: var(--accent-text);
   font-size: 12.5px; font-weight: 600; max-width: 180px;
 }
 .reply-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reply-chip-x {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: #c4c9ff; transition: background .12s, color .12s;
+  color: var(--accent-text); transition: background .12s, color .12s;
 }
 .reply-chip-x:hover { background: var(--hover-strong); color: var(--text-strong); }
 .reply-strip-close {

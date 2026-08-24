@@ -43,7 +43,7 @@ const send = async (user: ApiUser) => {
 const avatarUrl = (u: ApiUser) => avatarFor(u.username, u.avatar)
 
 const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e'
+  online: 'var(--state-live)', idle: '#f0a500', dnd: 'var(--state-fault)', offline: '#80848e'
 }
 </script>
 
@@ -155,7 +155,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-spinner { flex-shrink: 0; }
 .spin { animation: rot .7s linear infinite; }
 @keyframes rot { to{transform:rotate(360deg)} }
-.af-err { font-size: 12px; color: #f08080; margin-top: 6px; padding-left: 2px; }
+.af-err { font-size: 12px; color: var(--state-fault); margin-top: 6px; padding-left: 2px; }
 
 .af-results {
   max-height: 320px; overflow-y: auto;
@@ -185,7 +185,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   transition: background .12s, transform .1s;
 }
 .af-send-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
-.af-send-btn.sent { background: rgba(35,165,90,.2); color: #23a55a; cursor: default; }
+.af-send-btn.sent { background: rgba(35,165,90,.2); color: var(--state-live); cursor: default; }
 
 .af-empty {
   display: flex; flex-direction: column; align-items: center;

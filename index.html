@@ -10,7 +10,7 @@
          accessibility for anyone who needs to pinch in. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- Tints the browser/OS chrome to match the app so the seam disappears. -->
-    <meta name="theme-color" content="#0b0c0f" />
+    <meta name="theme-color" content="#05070c" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -18,12 +18,37 @@
     <link rel="apple-touch-icon" href="/skycord-icon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Skycord</title>
-    <!-- Selectable interface + monospace fonts (Appearance settings) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" />
+    <!-- Faces are self-hosted (see public/fonts and the @font-face block in
+         src/styles/tokens.css). A self-hosted product should not fetch its
+         typography from a CDN on every load. -->
+    <link rel="preload" href="/fonts/archivo-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/chakra-petch-600.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
+    <!--
+      DIRECTION CONTRACT — Construction Grid (seed 0520e47e, direction/operate, re-roll 1 bolder)
+
+      THESIS: The interface shows its own armature. Refuses the category's soft
+      grey cards floating on soft grey; here structure is visible and load-bearing.
+
+      OWN-WORLD: Stark saturated ink ground with a real construction grid in
+      hairline, one earned accent (Crouwel Blue #0057FF) and a single diagonal as
+      the signature mark. Red is fault only. Chamfered cell-built caps for
+      structure, neutral grotesk for prose. Every ink has one job.
+
+      STORY: You are running this yourself, on your own machine, for your own
+      people — and the interface is honest about being a machine.
+
+      FIRST VIEWPORT: Rail as one cell column, channels as cells at a strict
+      rhythm, conversation as the open field. Selection fills cells; it never
+      tints them. The armature is a real toggle, not a debug mode.
+
+      FORM: Construction Grid, candidate 2 of 7, won the bolder hand on both axes.
+
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the
+      finish review, the verdict, DESIGN.md, and every shipping raster carrying
+      its provenance.
+    -->
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

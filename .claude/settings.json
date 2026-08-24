@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/typecheck-server.mjs\"",
+            "timeout": 60,
+            "statusMessage": "Typechecking server"
+          }
+        ]
+      }
+    ]
+  }
+}

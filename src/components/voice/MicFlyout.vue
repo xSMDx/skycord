@@ -185,5 +185,5 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .mf-meter { width: 100%; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
-.mf-fill  { height: 100%; background: linear-gradient(90deg, #23a55a, #f0b232 70%, #ed4245); transition: width .05s linear; }
+.mf-fill  { height: 100%; background: linear-gradient(90deg, var(--state-live), #f0b232 70%, var(--state-fault)); transition: width .05s linear; }
 </style>

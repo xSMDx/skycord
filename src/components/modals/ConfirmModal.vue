@@ -88,6 +88,6 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 /* Destructive action: the app's established danger red (ContextMenu, Settings'
    Log Out, ProfilePopout's Unfriend) rather than the accent — Delete/Leave
    Server should not look like a routine confirm. */
-.cfm-confirm.danger { background: #ed4245; }
+.cfm-confirm.danger { background: var(--state-fault); }
 .cfm-confirm.danger:hover:not(:disabled) { background: #c73e3e; }
 </style>

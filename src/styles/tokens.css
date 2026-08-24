@@ -1,69 +1,137 @@
 /*
- * Design tokens. Defaults reproduce the current palette exactly, so the base
- * theme looks identical — the Appearance settings (useAppearance.ts) flip these
- * at the document root to retheme live.
+ * Design tokens — Construction Grid.
  *
- * Accent is exposed both as a hex (--accent / --accent-hover) and as an RGB
- * triple (--accent-rgb) so tints can use rgba(var(--accent-rgb), .x).
+ * The world: a stark saturated ink ground carrying a real construction grid,
+ * one earned accent (Crouwel Blue), and a single diagonal as the signature
+ * mark. Every ink has exactly one job; none is decorative. Structure is
+ * visible and load-bearing rather than softened away.
+ *
+ * Dark is primary because the use scene forces it: people keep this open all
+ * day on a second monitor, often at night, beside a game or a terminal. The
+ * light themes are the same system on the grammar's other permitted ground
+ * (white with construction hairlines), not a separate design.
+ *
+ * Accent is exposed as a hex and as an RGB triple (--accent-rgb) so tints can
+ * use rgba(var(--accent-rgb), .x). --accent is a FILL colour; on a dark ground
+ * it is too dark to read as text, so text uses --accent-text.
  */
 :root {
-  /* Accent */
-  --accent:        #5865f2;
-  --accent-hover:  #4752c4;
-  --accent-rgb:    88, 101, 242;
+  /* ── Accent: one ink, earned ──────────────────────────────────────────── */
+  --accent:        #0057ff;  /* fills, selection, the diagonal */
+  --accent-hover:  #2a72ff;
+  --accent-text:   #7aa5ff;  /* the accent as TEXT on a dark ground */
+  --accent-rgb:    0, 87, 255;
 
-  /* Surfaces (dark default) */
-  --bg-floor:  #111214;  /* rail / darkest chrome */
-  --bg-deep:   #17191c;  /* user panel */
-  --bg-panel:  #2b2d31;  /* sidebars, modals, panels */
-  --bg-chat:   #313338;  /* main chat surface */
-  --bg-input:  #1e1f22;  /* inputs, code blocks */
-  --bg-raised: #1e2024;  /* settings shell */
-  --bg-chatbar:       #383a40;  /* message composer box (sits above the chat surface) */
-  --bg-chatbar-focus: #3d3f45;  /* composer box when focused */
+  /* ── Surfaces: ink, not neutral grey ──────────────────────────────────── */
+  --bg-floor:  #05070c;  /* rail / darkest chrome */
+  --bg-deep:   #090d14;  /* user panel */
+  --bg-panel:  #0c111a;  /* sidebars, modals, panels */
+  --bg-chat:   #111722;  /* main chat surface — lighter than panel, as before */
+  --bg-input:  #070b12;  /* inputs, code blocks */
+  --bg-raised: #0e131d;  /* settings shell */
+  --bg-floating: #131a27; /* menus and popovers that sit above everything */
+  --bg-chatbar:       #161d2a;
+  --bg-chatbar-focus: #1b2331;
 
-  /* Text */
-  --text-strong:    #ffffff;  /* headings / strongest */
-  --text-1:         #dcddde;  /* normal body */
-  --text-2:         #b5bac1;  /* secondary */
-  --text-3:         #949ba4;  /* muted / labels */
-  --text-faint:     #6d717a;  /* faint / placeholders */
-  --text-on-accent: #ffffff;  /* text sitting on the accent colour — stays light in every theme */
+  /* ── The armature ─────────────────────────────────────────────────────── */
+  /* The construction grid is a real material, not decoration: --grid-cell is
+     the pitch every surface aligns to, and --grid-line is what it looks like
+     when shown. `html.show-armature` turns it visible as a genuine state. */
+  --grid-cell: 24px;
+  --grid-line: rgba(122, 165, 255, .055);
+  --grid-line-strong: rgba(122, 165, 255, .11);
 
-  /* Borders */
-  --border:  rgba(255,255,255,.08);
-  --divider: rgba(255,255,255,.06);
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  /* Every tier below clears 4.5:1 on --bg-chat and --bg-panel. The previous
+     palette's faint tier measured 2.58:1 and was used for timestamps and
+     placeholders — text people actually need to read. */
+  --text-strong:    #ffffff;
+  --text-1:         #e8edf5;  /* body */
+  --text-2:         #bcc6d4;  /* secondary */
+  --text-3:         #9aa5b6;  /* muted / labels */
+  --text-faint:     #8894a6;  /* placeholders, timestamps — still passes 4.5:1 */
+  --text-on-accent: #ffffff;
 
-  /* Typography */
-  --font-ui:   'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-  --font-mono: 'Consolas','Menlo',monospace;
+  /* ── State: semantic, never decorative ────────────────────────────────── */
+  /* One meaning each. `--state-fault` replaces four separate hardcoded reds,
+     and is distinct from "you are muted", which is not a fault. */
+  --state-live:  #29d17c;
+  --state-warn:  #ffb020;
+  --state-fault: #ff5c5c;
+  --state-self-muted: #ff9d5c;
 
-  /* Message sizing */
-  --msg-pad-y:     1px;   /* density: vertical padding */
-  --msg-font-size: 15px;  /* message text size */
-  --msg-group-gap: 17px;  /* gap above a new author group */
+  /* ── Borders ──────────────────────────────────────────────────────────── */
+  --border:  rgba(122, 165, 255, .10);
+  --divider: rgba(122, 165, 255, .07);
 
-  /* Readability toggles (flipped by html classes below) */
-  --link-decoration: none;     /* "Always underline links" off */
-  --name-hover:      #8d96f8;  /* display-name hover tint when name styles on */
+  /* ── Typography ───────────────────────────────────────────────────────── */
+  /* Self-hosted, both of them. A self-hosted product that fetches its faces
+     from Google on every load is not self-hosted, and the previous stack
+     asked for 'gg sans' — a face this repo has never shipped — so what users
+     actually saw was whatever the OS happened to substitute. */
+  --font-ui:      'Archivo', system-ui, -apple-system, sans-serif;
+  --font-display: 'Chakra Petch', 'Archivo', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Consolas', 'Menlo', monospace;
 
-  /* Mentions & time tokens — theme-aware so they stay legible in every theme.
-     Dark uses a lightened accent; light themes override to the full accent
-     (a lightened accent is invisible on a white surface). */
-  --mention-fg:      #8d96f8;
-  --mention-bg:      rgba(var(--accent-rgb), .18);
+  /* Structural labels are built, not typed: chamfered caps, tight, small. */
+  --label-tracking: .08em;
+
+  /* ── Edges: chamfer, not radius ───────────────────────────────────────── */
+  /* This world is cell-built and square. The old palette carried 16 distinct
+     border-radius values; these four are the whole scale. */
+  --edge-0: 0;
+  --edge-1: 2px;
+  --edge-2: 3px;
+  --edge-3: 4px;
+  --edge-pill: 999px;  /* badges and counters only */
+
+  /* ── Space ────────────────────────────────────────────────────────────── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  /* Four bands, because the app's 36 ad-hoc durations already clustered into
+     four. Exits are shorter than entrances: the user stopped caring about a
+     surface by the time it leaves. Indicators do not use these at all — a
+     lamp does not ease on. */
+  --dur-1: 120ms;    /* hover/press tint, colour */
+  --dur-2: 180ms;    /* chevrons, folds, small enters */
+  --dur-3: 240ms;    /* popovers, menus, panels */
+  --dur-4: 340ms;    /* sheets, modals, large spatial moves */
+  --dur-exit: 140ms; /* every dismissal */
+
+  --ease-out:   cubic-bezier(.32, .72, 0, 1);  /* arriving — the house curve */
+  --ease-in:    cubic-bezier(.4, 0, 1, 1);     /* leaving, decisively */
+  --ease-inout: cubic-bezier(.4, 0, .2, 1);    /* on-screen state changes */
+  --ease-pop:   cubic-bezier(.34, 1.56, .64, 1); /* only where momentum was real */
+
+  /* ── Message sizing ───────────────────────────────────────────────────── */
+  --msg-pad-y:     1px;
+  --msg-font-size: 15px;
+  --msg-group-gap: 17px;
+
+  /* ── Readability toggles (flipped by html classes below) ──────────────── */
+  --link-decoration: none;
+  --name-hover:      var(--accent-text);
+
+  /* ── Mentions & time tokens ───────────────────────────────────────────── */
+  --mention-fg:      var(--accent-text);
+  --mention-bg:      rgba(var(--accent-rgb), .22);
   --mention-all-fg:  var(--text-strong);
-  --mention-all-bg:  rgba(240, 178, 0, .22);
-  --time-token-fg:   #c4c9ff;
-  --time-token-bg:   rgba(var(--accent-rgb), .16);
-  /* Whole-row highlight for messages that ping @everyone (or you). */
-  --mention-row-bg:       rgba(240, 178, 0, .07);
-  --mention-row-bg-hover: rgba(240, 178, 0, .11);
-  --mention-row-bar:      #f0b232;
+  --mention-all-bg:  rgba(255, 176, 32, .20);
+  --time-token-fg:   var(--accent-text);
+  --time-token-bg:   rgba(var(--accent-rgb), .18);
+  --mention-row-bg:       rgba(255, 176, 32, .06);
+  --mention-row-bg-hover: rgba(255, 176, 32, .10);
+  --mention-row-bar:      var(--state-warn);
 
-  /* Hover / active surface tints — theme-aware (dark = white-alpha) */
-  --hover:        rgba(255,255,255,.06);
-  --hover-strong: rgba(255,255,255,.10);
+  /* ── Hover / active surface tints ─────────────────────────────────────── */
+  --hover:        rgba(122, 165, 255, .07);
+  --hover-strong: rgba(122, 165, 255, .12);
 }
 
 /* Appearance: "Always underline links" */
@@ -72,80 +140,146 @@ html.underline-links { --link-decoration: underline; }
 html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
+/* The grammar's other permitted ground: white with the construction grid in
+   hairline. Same system, same one accent, same state inks. */
 [data-theme="light"] {
-  --bg-floor:  #e3e5e8;
-  --bg-deep:   #ebedef;
-  --bg-panel:  #f2f3f5;
+  --bg-floor:  #e7eaf0;
+  --bg-deep:   #eff1f5;
+  --bg-panel:  #f5f7fa;
   --bg-chat:   #ffffff;
-  --bg-input:  #ebedef;
+  --bg-input:  #eff1f5;
   --bg-raised: #ffffff;
-  --bg-chatbar:       #ebedef;
-  --bg-chatbar-focus: #e0e3e7;
-  --text-strong: #060607;
-  --text-1:      #2e3338;
-  --text-2:      #4e5058;
-  --text-3:      #5c5e66;
-  --text-faint:  #80848e;
-  --border:  rgba(0,0,0,.08);
-  --divider: rgba(0,0,0,.06);
-  --hover:        rgba(0,0,0,.06);
-  --hover-strong: rgba(0,0,0,.10);
-  /* Mentions/time tokens: full accent + deeper tints read clearly on white. */
+  --bg-floating: #ffffff;
+  --bg-chatbar:       #eff1f5;
+  --bg-chatbar-focus: #e5e9f0;
+  --accent-text: var(--accent);   /* #0057ff reads correctly on white */
+  --text-strong: #05070c;
+  --text-1:      #1b2230;
+  --text-2:      #3c4658;
+  --text-3:      #556072;
+  --text-faint:  #66718a;
+  --state-live:  #0f8a4d;
+  --state-warn:  #9a6600;
+  --state-fault: #c8302f;
+  --border:  rgba(10, 30, 80, .12);
+  --divider: rgba(10, 30, 80, .08);
+  --grid-line:        rgba(10, 40, 120, .06);
+  --grid-line-strong: rgba(10, 40, 120, .12);
+  --hover:        rgba(10, 30, 80, .05);
+  --hover-strong: rgba(10, 30, 80, .09);
   --mention-fg:    var(--accent);
-  --mention-bg:    rgba(var(--accent-rgb), .15);
+  --mention-bg:    rgba(var(--accent-rgb), .12);
   --time-token-fg: var(--accent);
-  --time-token-bg: rgba(var(--accent-rgb), .13);
-  --mention-all-bg:       rgba(200, 142, 0, .24);
-  --mention-row-bg:       rgba(200, 142, 0, .10);
-  --mention-row-bg-hover: rgba(200, 142, 0, .15);
+  --time-token-bg: rgba(var(--accent-rgb), .10);
+  --mention-all-bg:       rgba(154, 102, 0, .18);
+  --mention-row-bg:       rgba(154, 102, 0, .08);
+  --mention-row-bg-hover: rgba(154, 102, 0, .13);
 }
 [data-theme="light-dim"] {
-  --bg-floor:  #c7ccd1;
-  --bg-deep:   #d4d7dc;
-  --bg-panel:  #dfe1e4;
-  --bg-chat:   #eceef0;
-  --bg-input:  #dfe1e4;
-  --bg-raised: #eceef0;
-  --bg-chatbar:       #dfe1e4;
-  --bg-chatbar-focus: #d4d7dc;
-  --text-strong: #0a0a0b;
-  --text-1:      #2e3338;
-  --text-2:      #4e5058;
-  --text-3:      #5c5e66;
-  --text-faint:  #7a7d85;
-  --border:  rgba(0,0,0,.1);
-  --divider: rgba(0,0,0,.07);
-  --hover:        rgba(0,0,0,.06);
-  --hover-strong: rgba(0,0,0,.10);
+  --bg-floor:  #ccd2dc;
+  --bg-deep:   #d9dee6;
+  --bg-panel:  #e4e8ee;
+  --bg-chat:   #f0f2f6;
+  --bg-input:  #e4e8ee;
+  --bg-raised: #f0f2f6;
+  --bg-floating: #f6f8fb;
+  --bg-chatbar:       #e4e8ee;
+  --bg-chatbar-focus: #d9dee6;
+  --accent-text: var(--accent);
+  --text-strong: #05070c;
+  --text-1:      #1b2230;
+  --text-2:      #3c4658;
+  --text-3:      #4e5869;
+  --text-faint:  #5e6980;
+  --state-live:  #0e7a45;
+  --state-warn:  #8a5c00;
+  --state-fault: #b82b2a;
+  --border:  rgba(10, 30, 80, .14);
+  --divider: rgba(10, 30, 80, .09);
+  --grid-line:        rgba(10, 40, 120, .07);
+  --grid-line-strong: rgba(10, 40, 120, .13);
+  --hover:        rgba(10, 30, 80, .05);
+  --hover-strong: rgba(10, 30, 80, .09);
   --mention-fg:    var(--accent);
-  --mention-bg:    rgba(var(--accent-rgb), .15);
+  --mention-bg:    rgba(var(--accent-rgb), .12);
   --time-token-fg: var(--accent);
-  --time-token-bg: rgba(var(--accent-rgb), .13);
-  --mention-all-bg:       rgba(200, 142, 0, .24);
-  --mention-row-bg:       rgba(200, 142, 0, .10);
-  --mention-row-bg-hover: rgba(200, 142, 0, .15);
+  --time-token-bg: rgba(var(--accent-rgb), .10);
+  --mention-all-bg:       rgba(138, 92, 0, .18);
+  --mention-row-bg:       rgba(138, 92, 0, .08);
+  --mention-row-bg-hover: rgba(138, 92, 0, .13);
 }
 
 /* ── Theme presets (dark family — text stays light) ─────────────────────── */
 [data-theme="midnight"] {
-  --bg-floor:  #050507;
-  --bg-deep:   #0b0c0f;
-  --bg-panel:  #15161a;
-  --bg-chat:   #1a1b1f;
-  --bg-input:  #0e0f12;
-  --bg-raised: #15161a;
-  --bg-chatbar:       #202127;
-  --bg-chatbar-focus: #25262d;
+  --bg-floor:  #01030a;
+  --bg-deep:   #04070f;
+  --bg-panel:  #070b15;
+  --bg-chat:   #0a0f1b;
+  --bg-input:  #03060d;
+  --bg-raised: #070b15;
+  --bg-floating: #0d1320;
+  --bg-chatbar:       #101728;
+  --bg-chatbar-focus: #141c2f;
 }
 [data-theme="amoled"] {
   --bg-floor:  #000000;
   --bg-deep:   #000000;
-  --bg-panel:  #0a0a0c;
+  --bg-panel:  #04060a;
   --bg-chat:   #000000;
-  --bg-input:  #0a0a0c;
-  --bg-raised: #0a0a0c;
-  --bg-chatbar:       #141416;
-  --bg-chatbar-focus: #1a1a1d;
+  --bg-input:  #04060a;
+  --bg-raised: #04060a;
+  --bg-floating: #080c14;
+  --bg-chatbar:       #0c1119;
+  --bg-chatbar-focus: #101722;
+}
+
+/* ── Self-hosted faces ──────────────────────────────────────────────────── */
+/* Archivo ships as one variable file for the whole weight range; Chakra Petch
+   ships three static cuts because only three weights are used. */
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-var.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/chakra-petch-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/chakra-petch-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/chakra-petch-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* ── Reduced motion: the floor under every component ────────────────────── */
+/* Individual components still carry their own considered blocks; this is the
+   backstop beneath them, and it is what stops the app's infinite animations
+   from running at someone who asked them not to. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; --dur-exit: 1ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Progress spinners carry information; stopping them removes it. */
+  .spin, .cb-spin, .loading-spinner {
+    animation-duration: .8s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 /* ── Density ─────────────────────────────────────────────────────────────── */
