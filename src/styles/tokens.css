@@ -107,7 +107,11 @@
   --ease-out:   cubic-bezier(.32, .72, 0, 1);  /* arriving — the house curve */
   --ease-in:    cubic-bezier(.4, 0, 1, 1);     /* leaving, decisively */
   --ease-inout: cubic-bezier(.4, 0, .2, 1);    /* on-screen state changes */
-  --ease-pop:   cubic-bezier(.34, 1.56, .64, 1); /* only where momentum was real */
+  /* There is deliberately no overshoot curve. This world is cell-built and
+     rational — it snapped rather than sprang — so a bounce would be borrowed
+     from a different grammar. Four components still carry a literal
+     cubic-bezier(.34,1.56,.64,1) from the old look; they move to --ease-out
+     when the world reaches them. */
 
   /* ── Message sizing ───────────────────────────────────────────────────── */
   --msg-pad-y:     1px;
