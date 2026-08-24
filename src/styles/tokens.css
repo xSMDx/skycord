@@ -28,7 +28,7 @@
   --text-1:         #dcddde;  /* normal body */
   --text-2:         #b5bac1;  /* secondary */
   --text-3:         #949ba4;  /* muted / labels */
-  --text-faint:     #6d717a;  /* faint / placeholders */
+  --text-faint:     #999ca2;  /* faint / placeholders — 4.58:1 on chat, 4.99 on panel */
   --text-on-accent: #ffffff;  /* text sitting on the accent colour — stays light in every theme */
 
   /* Borders */
@@ -105,7 +105,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --text-1:      #2e3338;
   --text-2:      #4e5058;
   --text-3:      #5c5e66;
-  --text-faint:  #80848e;
+  --text-faint:  #6c6f77;   /* 5.04:1 on chat, 4.54 on panel */
   --border:  rgba(0,0,0,.08);
   --divider: rgba(0,0,0,.06);
   --hover:        rgba(0,0,0,.06);
@@ -138,7 +138,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --text-1:      #2e3338;
   --text-2:      #4e5058;
   --text-3:      #5c5e66;
-  --text-faint:  #7a7d85;
+  --text-faint:  #62646a;   /* 5.09:1 on chat, 4.52 on panel */
   --border:  rgba(0,0,0,.1);
   --divider: rgba(0,0,0,.07);
   --hover:        rgba(0,0,0,.06);

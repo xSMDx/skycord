@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import ModalBase from './ModalBase.vue'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   title:         string
   message:       string
   /** Label for the affirmative button. Defaults to 'Confirm' — pass something
@@ -18,10 +18,22 @@ withDefaults(defineProps<{
 
 const emit = defineEmits<{ confirm: []; close: [] }>()
 
-// Focused on mount so Enter confirms — a focused button answers Enter with a
-// click natively, so parking focus here is the whole mechanism.
+/**
+ * Which button Enter answers.
+ *
+ * A focused button answers Enter with a click natively, so whichever one
+ * holds focus on mount is the default action. For an ordinary confirm that
+ * should be the affirmative button — you opened the dialog to say yes.
+ *
+ * For a destructive one it must not be. The dialog exists precisely because
+ * the action cannot be taken back, and a keyboard user who hits Enter out of
+ * habit — or who never saw the dialog because a screen reader was still
+ * announcing it — would destroy the thing the dialog was protecting. Cancel
+ * takes focus instead; Confirm is still one Tab away.
+ */
 const confirmBtn = ref<HTMLButtonElement | null>(null)
-onMounted(() => confirmBtn.value?.focus())
+const cancelBtn  = ref<HTMLButtonElement | null>(null)
+onMounted(() => (props.danger ? cancelBtn : confirmBtn).value?.focus())
 </script>
 
 <template>
@@ -36,7 +48,7 @@ onMounted(() => confirmBtn.value?.focus())
       </div>
 
       <div class="cfm-footer">
-        <button class="cfm-cancel" :disabled="busy" @click="emit('close')">Cancel</button>
+        <button ref="cancelBtn" class="cfm-cancel" :disabled="busy" @click="emit('close')">Cancel</button>
         <button
           ref="confirmBtn"
           class="cfm-confirm"
