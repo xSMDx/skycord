@@ -4127,19 +4127,23 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* ── Rail ──────────────────────────────────────────────────────────────── */
 .rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px;overflow-y:auto}
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius:0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition:height .18s}
+.ri-pip{position:absolute;left:0;width:3px;background:var(--accent);border-radius:0;height:0;top:50%;transform:translateY(-50%);transition:height var(--dur-2) var(--ease-out)}
 .ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}
-.ri-icon{width:44px;height:44px;border-radius:50%;overflow:hidden;background:var(--bg-panel);transition:border-radius .2s,transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center}
+/* A server is a cell. The old rule morphed a circle into a 16px squircle on
+   hover — the reference's signature gesture — across three different
+   durations, so the corners finished 50ms after the scale. Here the shape
+   never changes: selection fills the cell and marks its edge. */
+.ri-icon{width:44px;height:44px;border-radius:var(--edge-2);overflow:hidden;background:var(--bg-panel);box-shadow:inset 0 0 0 1px var(--border);transition:box-shadow var(--dur-1) var(--ease-out),background var(--dur-1) var(--ease-out);display:flex;align-items:center;justify-content:center}
 .ri-icon img{width:100%;height:100%}
-.ri:hover .ri-icon{border-radius:16px;transform:scale(1.05)}
-.ri.active .ri-icon{border-radius:16px;box-shadow:0 4px 16px rgba(var(--accent-rgb),.4)}
+.ri:hover .ri-icon{box-shadow:inset 0 0 0 1px var(--grid-line-strong)}
+.ri.active .ri-icon{box-shadow:inset 0 0 0 2px var(--accent)}
 /* Home logo colour is driven by the SkycordIcon `color` prop (accent in the
    friend zone, currentColor=--text-1 in a channel), so the icon colour is NOT
    set here — only the surrounding circle's surface changes. */
 .ri.home .ri-icon{background:var(--bg-chat);color:var(--text-1)}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
-.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding:0 4px;background:var(--state-fault);color:white;font-size:10px;font-weight:700;border-radius:8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding:0 4px;background:var(--state-fault);color:white;font-size:10px;font-weight:700;border-radius:var(--edge-3);border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
 /* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
    is both unread and occupied shows two marks that never touch: this one at
    x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
@@ -4155,7 +4159,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding:10px 12px;border-radius:10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding:10px 12px;border-radius:var(--edge-3);background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top:1px}
 .rvp-ch{margin-top:8px}
@@ -4179,7 +4183,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .rvp-enter-active,.rvp-leave-active{transition:opacity .1s ease}
   .rvp-enter-from{transform:none}
 }
-.ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius:1px;margin:4px 0}
+.ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius:var(--edge-1);margin:4px 0}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:var(--state-live)}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:var(--state-live)}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
@@ -4189,11 +4193,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
 .sb-search{padding:8px 8px 4px;flex-shrink:0}
-.sb-search-btn{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition:background .12s,color .12s}
+.sb-search-btn{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border-radius:var(--edge-2);background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition:background .12s,color .12s}
 .sb-search-btn:hover{background:rgba(0,0,0,.5);color:var(--text-1)}
 
 .sb-nav{padding:4px 8px}
-.sb-nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border-radius:6px;font-size:14px;font-weight:500;color:var(--text-3);transition:background .12s,color .12s}
+.sb-nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border-radius:var(--edge-2);font-size:14px;font-weight:500;color:var(--text-3);transition:background .12s,color .12s}
 .sb-nav-item:hover{background:var(--hover);color:var(--text-1)}
 .sb-nav-item.active{background:rgba(var(--accent-rgb),.16);color:var(--accent-text)}
 
@@ -4202,7 +4206,25 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
-.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition:background .15s;white-space:nowrap}
+/* ── The armature ────────────────────────────────────────────────────────
+   The construction grid is a real material here, drawn at --grid-cell, the
+   same pitch the layout measures from. It sits under the content on the two
+   large surfaces and nowhere else: a grid behind a dense list is noise, but a
+   grid behind the open field of the conversation is the thing that says this
+   interface was built rather than arranged. */
+.chat, .sb-body {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-cell) var(--grid-cell);
+}
+/* Shown explicitly — a real state, not a debug mode. */
+html.show-armature .chat,
+html.show-armature .sb-body { background-image:
+    linear-gradient(to right, var(--grid-line-strong) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line-strong) 1px, transparent 1px); }
+
+.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid var(--divider);font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.02em;color:var(--text-strong);cursor:pointer;transition:background var(--dur-1) var(--ease-out);white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
 /* The one flexible child, so the voice cluster and the chevron keep their
    size and a 40-character server name ellipses instead of shoving them out
@@ -4233,7 +4255,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
 .sb-body{flex:1;overflow-y:auto;padding:8px 0}
 
-.dm-item{display:flex;align-items:center;gap:10px;padding:6px 10px;margin:0 6px;border-radius:6px;cursor:pointer;transition:background .12s;position:relative}
+.dm-item{display:flex;align-items:center;gap:10px;padding:6px 10px;margin:0 6px;border-radius:var(--edge-2);cursor:pointer;transition:background .12s;position:relative}
 .dm-item:hover{background:var(--hover)}
 .dm-item.active{background:rgba(var(--accent-rgb),.16)}
 .dm-av{position:relative;width:32px;height:32px;flex-shrink:0}
@@ -4242,7 +4264,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-info{flex:1;min-width:0}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dm-unread{min-width:18px;height:18px;padding:0 5px;background:var(--state-fault);color:white;font-size:11px;font-weight:700;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-unread{min-width:18px;height:18px;padding:0 5px;background:var(--state-fault);color:white;font-size:11px;font-weight:700;border-radius:var(--edge-3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Muted: the count still matters, it just stops shouting. */
 .dm-unread.muted{background:var(--text-3);opacity:.6}
 .dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
@@ -4254,7 +4276,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    reading it. */
 .dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
 .dm-call{width:18px;height:18px;border-radius:50%;background:var(--state-live);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
+.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:var(--edge-1);transition:opacity .1s,color .1s;flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
 .dm-x:hover{color: var(--text-strong)}
 
@@ -4274,7 +4296,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* Edit Group pencil in header */
 .ch-edit-btn{
-  width:26px;height:26px;border-radius:6px;flex-shrink:0;
+  width:26px;height:26px;border-radius:var(--edge-2);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
   color:var(--text-2);transition:background .12s,color .12s;
 }
@@ -4285,7 +4307,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .icon-btn-leave:hover{background:rgba(237,66,69,.12) !important}
 
 /* @everyone toast */
-.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--state-live);color: var(--text-strong);font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--state-live);color: var(--text-strong);font-size:14px;font-weight:600;padding:10px 18px;border-radius:var(--edge-3);box-shadow:0 8px 24px rgba(0,0,0,.45)}
 .toast-pop-enter-active,.toast-pop-leave-active{transition:opacity .2s ease,transform .2s ease}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
@@ -4302,7 +4324,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .filters-pop-leave-active{transition:opacity .1s ease,transform .1s ease}
 .filters-pop-enter-from,.filters-pop-leave-to{opacity:0;transform:translateY(-4px)}
 .ch-search-input{
-  width:220px;height:30px;padding:0 30px 0 10px;border-radius:6px;
+  width:220px;height:30px;padding:0 30px 0 10px;border-radius:var(--edge-2);
   background:var(--bg-input);border:1px solid transparent;color:var(--text-1);font-size:13px;outline:none;
   transition:border-color .15s;
 }
@@ -4311,30 +4333,30 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-search-ico{position:absolute;right:9px;color:var(--text-3);pointer-events:none}
 .ch-filters{
   position:absolute;top:38px;right:0;width:300px;z-index:200;
-  background:var(--bg-floor);border:1px solid rgba(0,0,0,.4);border-radius:8px;
+  background:var(--bg-floor);border:1px solid rgba(0,0,0,.4);border-radius:var(--edge-3);
   padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);
 }
 @keyframes ch-filters-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .ch-filters-label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);padding:6px 8px}
-.ch-filter-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px;border-radius:6px;color:var(--text-2);transition:background .12s,color .12s}
+.ch-filter-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px;border-radius:var(--edge-2);color:var(--text-2);transition:background .12s,color .12s}
 .ch-filter-row:hover{background:var(--hover);color: var(--text-strong)}
 .cf-text{display:flex;flex-direction:column;gap:1px;min-width:0}
 .cf-title{font-size:13.5px;font-weight:600;color:var(--text-2)}
 .cf-sub{font-size:12px;color:var(--text-faint)}
-.cf-sub em{color:#8d96f8;font-style:normal;background:rgba(var(--accent-rgb),.14);padding:0 4px;border-radius:3px}
+.cf-sub em{color:#8d96f8;font-style:normal;background:rgba(var(--accent-rgb),.14);padding:0 4px;border-radius:var(--edge-1)}
 
 /* Group member panel — owner tag + invite button */
 .mp-owner{font-size:11px;color:var(--text-3)}
 .mp-invite{
   display:flex;align-items:center;justify-content:center;gap:8px;
-  margin:8px 12px 14px;padding:9px 12px;border-radius:6px;
+  margin:8px 12px 14px;padding:9px 12px;border-radius:var(--edge-2);
   font-size:14px;font-weight:600;color: var(--text-strong);
   background:var(--accent);transition:background .12s;
 }
 .mp-invite:hover{background:var(--accent-hover)}
 
 .ch-group{padding:0 6px;margin-bottom:4px}
-.ch-group-label{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition:color .15s;white-space:nowrap}
+.ch-group-label{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:var(--edge-1);font-family:var(--font-display);font-size:11px;font-weight:600;letter-spacing:var(--label-tracking);color:var(--text-3);text-transform:uppercase;cursor:pointer;transition:color var(--dur-1) var(--ease-out);white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
 .ch-group-label span{flex:1}
 /* Right when folded, down when open — the chevron is the only thing that says
@@ -4359,7 +4381,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Where the drag would land. min-height keeps the headerless uncategorised
    group hittable while it is empty — during a drag it is the only visible
    thing saying "you can put this outside every category". */
-.ch-group.drop-target{outline:1px dashed var(--accent);outline-offset:1px;border-radius:6px;background:rgba(var(--accent-rgb),.07);min-height:26px}
+.ch-group.drop-target{outline:1px dashed var(--accent);outline-offset:1px;border-radius:var(--edge-2);background:rgba(var(--accent-rgb),.07);min-height:26px}
 .ch-item.dragging{opacity:.4}
 
 @media (prefers-reduced-motion: reduce){
@@ -4369,28 +4391,33 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s;flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
-.ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition:background .12s,color .12s,padding-left .12s;white-space:nowrap}
-.ch-item:hover{background:var(--hover);color:var(--text-2);padding-left:12px}
-.ch-item.active{background:rgba(var(--accent-rgb),.16);color:var(--accent-text)}
+.ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:var(--edge-1);font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition:background var(--dur-1) var(--ease-out),color var(--dur-1) var(--ease-out),opacity var(--dur-1) var(--ease-out);white-space:nowrap}
+.ch-item:hover{background:var(--hover);color:var(--text-2)}
+/* Filled, not tinted: an active cell is the one place the accent owns a whole
+   region, which is the donation this direction took from the identity system
+   it beat. --text-on-accent stays light in every theme. */
+.ch-item.active{background:var(--accent);color:var(--text-on-accent)}
+.ch-item.active:hover{background:var(--accent-hover);color:var(--text-on-accent)}
+.ch-item.active .ch-icon,.ch-item.active .ch-more{color:var(--text-on-accent)}
 .ch-item.unread{color:var(--text-2);font-weight:600}
-.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
+.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:var(--edge-1);transition:opacity .1s,color .1s;flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}
 .ch-icon{flex-shrink:0}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
-.ch-unread{min-width:16px;height:16px;padding:0 4px;background:var(--state-fault);color:white;font-size:10px;font-weight:700;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.ch-unread{min-width:16px;height:16px;padding:0 4px;background:var(--state-fault);color:white;font-size:10px;font-weight:700;border-radius:var(--edge-3);display:flex;align-items:center;justify-content:center}
 /* Who is sitting in a voice channel. Indented under its row so the nesting is
    read from the left edge, and deliberately quieter than the channel name —
    these are occupants of the row above, not siblings of it. The reference also
    shows an avatar-only density for crowded servers; that needs a trigger
    (a per-server setting, or a count threshold) and is not built here. */
-.vc-invite{display:flex;align-items:center;gap:6px;width:calc(100% - 22px);margin-left:22px;padding:4px 8px;border-radius:4px;background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12.5px;text-align:left}
+.vc-invite{display:flex;align-items:center;gap:6px;width:calc(100% - 22px);margin-left:22px;padding:4px 8px;border-radius:var(--edge-2);background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12.5px;text-align:left}
 .vc-invite:hover{background:var(--hover);color:var(--text-1)}
 .vc-occ-ic{display:flex;flex-shrink:0;color:var(--text-3)}
 /* Not an icon: the reference uses a word, and a word survives being the
    only red thing in a list of grey ones. */
-.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:var(--state-fault);border-radius:3px;padding:1px 4px;line-height:1.4}
-.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:6px;cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
+.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:var(--state-fault);border-radius:var(--edge-1);padding:1px 4px;line-height:1.4}
+.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:var(--edge-2);cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
 .vc-occ-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -4402,7 +4429,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* User Panel */
 .user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px}
-.up-left{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .15s;flex:1;min-width:0}
+.up-left{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:var(--edge-2);transition:background .15s;flex:1;min-width:0}
 .up-left:hover{background:var(--hover)}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius:50%;overflow:hidden}
@@ -4425,13 +4452,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
 .up-btns{display:flex;gap:1px;flex-shrink:0}
-.up-btn{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .12s}
+.up-btn{width:30px;height:30px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .12s}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
 .up-btn.danger{color:var(--state-fault);background:rgba(237,66,69,.12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
-.up-chev{width:14px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:background .12s,color .12s}
+.up-chev{width:14px;height:30px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:background .12s,color .12s}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
 /* The chevron points down when the menu is shut and up while it is open, so
    the button says which way it will move things. It was a hardcoded
@@ -4517,7 +4544,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .ch-ident{
   display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
   gap:1px;min-width:0;flex:1;height:100%;
-  padding:0 4px;border-radius:8px;text-align:left;
+  padding:0 4px;border-radius:var(--edge-3);text-align:left;
   transition:background .12s;
 }
 .shell.mobile .ch-ident:active{background:var(--hover)}
@@ -4557,7 +4584,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   min-width:18px;height:18px;padding:0 5px;
   background:var(--state-fault);color:#fff;
   font-size:11px;font-weight:700;line-height:1;
-  border-radius:9px;border:2px solid var(--bg-chat);
+  border-radius:var(--edge-3);border:2px solid var(--bg-chat);
   pointer-events:none;
 }
 
@@ -4629,7 +4656,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .m-back{
   display:flex;align-items:center;justify-content:center;
   min-width:44px;min-height:44px;margin-left:-6px;
-  color:var(--text-2);border-radius:8px;flex-shrink:0;
+  color:var(--text-2);border-radius:var(--edge-3);flex-shrink:0;
 }
 .m-back:active{background:var(--hover);color:var(--text-strong)}
 
@@ -4642,18 +4669,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .fh-icon{color:var(--text-3);flex-shrink:0}
 .fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right:4px;white-space:nowrap}
 .fh-tabs{display:flex;gap:2px}
-.ftab{padding:5px 12px;border-radius:6px;font-size:13px;font-weight:500;color:var(--text-2);transition:background .12s,color .12s;white-space:nowrap}
+.ftab{padding:5px 12px;border-radius:var(--edge-2);font-size:13px;font-weight:500;color:var(--text-2);transition:background .12s,color .12s;white-space:nowrap}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
 .pend-tab{position:relative}
-.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;background:var(--state-fault);color:white;font-size:10px;font-weight:700;border-radius:8px;margin-left:4px}
-.add-friend-btn{margin-left:auto;padding:6px 14px;background:var(--accent);color:white;border-radius:6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s;white-space:nowrap}
+.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;background:var(--state-fault);color:white;font-size:10px;font-weight:700;border-radius:var(--edge-3);margin-left:4px}
+.add-friend-btn{margin-left:auto;padding:6px 14px;background:var(--accent);color:white;border-radius:var(--edge-2);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s;white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
 .friends-list{flex:1;overflow-y:auto;padding:16px}
 .f-loading{display:flex;align-items:center;gap:10px;padding:20px;color:var(--text-faint);font-size:14px}
-.f-search{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border-radius:6px;padding:7px 12px;margin-bottom:16px}
+.f-search{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border-radius:var(--edge-2);padding:7px 12px;margin-bottom:16px}
 .f-search input{flex:1;font-size:14px;color:var(--text-1)}
 .f-search input::placeholder{color:var(--text-faint)}
 .f-section-label{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
@@ -4662,9 +4689,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-empty p{font-size:16px;font-weight:700;color:var(--text-1)}
 .f-empty span{font-size:14px;line-height:1.5}
 .f-empty strong{color:var(--text-1)}
-.f-empty-btn{margin-top:8px;padding:8px 18px;border-radius:6px;background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s}
+.f-empty-btn{margin-top:8px;padding:8px 18px;border-radius:var(--edge-2);background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
-.f-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s}
+.f-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--edge-3);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s}
 .f-row:hover{background:var(--hover);border-color:transparent}
 .f-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .f-av img{border-radius:50%}
@@ -4684,9 +4711,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding:16px;overflow-y:auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom:16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text-faint);padding:32px 0;font-size:13px;text-align:center}
-.an-add-btn{margin-top:8px;padding:6px 14px;border-radius:6px;background:var(--accent);color:white;font-size:13px;font-weight:600;transition:background .12s}
+.an-add-btn{margin-top:8px;padding:6px 14px;border-radius:var(--edge-2);background:var(--accent);color:white;font-size:13px;font-weight:600;transition:background .12s}
 .an-add-btn:hover{background:var(--accent-hover)}
-.an-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.04);margin-bottom:8px;cursor:pointer;transition:background .12s}
+.an-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--edge-3);background:rgba(255,255,255,.04);margin-bottom:8px;cursor:pointer;transition:background .12s}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .an-av img{border-radius:50%}
@@ -4696,7 +4723,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .an-sub{display:block;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── Chat view ─────────────────────────────────────────────────────────── */
-.chat{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0;position:relative}
+.chat{flex:1;display:flex;flex-direction:column;background-color:var(--bg-chat);overflow:hidden;min-width:0;position:relative}
 /* Call "hide chat": the call takes the whole column — messages and composer step
    aside (rails stay). Beats the :has() 34% split rule below via the extra class. */
 /* ── Members as a bottom sheet (mobile) ──────────────────────────────────────
@@ -4726,7 +4753,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Grab handle, so it reads as a sheet rather than a panel that appeared. */
 .shell.mobile .members-panel::before{
   content:'';position:absolute;top:8px;left:50%;margin-left:-18px;
-  width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.22);
+  width:36px;height:4px;border-radius:var(--edge-1);background:rgba(255,255,255,.22);
 }
 .shell.mobile .mp-header{padding-top:20px}
 .shell.mobile .mp-member{min-height:56px}
@@ -4785,7 +4812,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-header-av img{border-radius:50%}
 .dm-header-dot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:50%;border:2px solid var(--bg-chat)}
 
-.icon-btn{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .15s}
+.icon-btn{width:32px;height:32px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .15s}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
 .icon-btn:active{transform:scale(.88)}
 .icon-btn.active{color:#8d96f8;background:rgba(var(--accent-rgb),.15)}
@@ -4807,17 +4834,17 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .members-panel.closed{width:0;opacity:0;pointer-events:none}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,.25);display:flex;align-items:center;padding:0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap:6px}
-.mp-count{font-size:11px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:10px;color:var(--text-3)}
-.mp-search{margin:8px 10px;background:rgba(0,0,0,.2);border-radius:6px;display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid transparent;transition:border-color .15s}
+.mp-count{font-size:11px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:var(--edge-3);color:var(--text-3)}
+.mp-search{margin:8px 10px;background:rgba(0,0,0,.2);border-radius:var(--edge-2);display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid transparent;transition:border-color .15s}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
 .mp-search input::placeholder{color:var(--text-faint)}
 .mp-list{flex:1;overflow-y:auto;padding:4px 6px}
-.mp-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:6px 8px 4px}
+.mp-section-label{font-family:var(--font-display);font-size:11px;font-weight:600;letter-spacing:var(--label-tracking);text-transform:uppercase;color:var(--text-3);padding:6px 8px 4px}
 /* Sections read as sections when there is air between them — but only from
    the second one on, or the list starts with a hole under the search box. */
 .mp-section-label:not(:first-child){margin-top:14px}
-.mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .12s}
+.mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--edge-2);cursor:pointer;transition:background .12s}
 .mp-member:hover{background:var(--hover)}
 .mp-member.mp-offline{opacity:.35}
 .mp-member.mp-offline:hover{opacity:.8}
@@ -4839,7 +4866,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Scrollbars */
 .sb-body::-webkit-scrollbar,.friends-list::-webkit-scrollbar,.active-now::-webkit-scrollbar,.mp-list::-webkit-scrollbar{width:4px}
 .sb-body::-webkit-scrollbar-track,.friends-list::-webkit-scrollbar-track,.active-now::-webkit-scrollbar-track,.mp-list::-webkit-scrollbar-track{background:transparent}
-.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
+.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:var(--edge-1)}
 
 /* Reply banner — neutral, blends with chat surface */
 .reply-banner {
@@ -4856,7 +4883,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 .reply-bar {
   width: 2px; height: 28px; background: var(--text-faint);
-  border-radius: 1px; flex-shrink: 0;
+  border-radius:var(--edge-1); flex-shrink: 0;
 }
 .reply-banner-info { flex: 1; min-width: 0; }
 .reply-banner-label {
