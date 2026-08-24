@@ -72,7 +72,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cfm-cancel {
   padding: 10px 16px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-1);
-  transition: background .12s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .cfm-cancel:hover:not(:disabled) { background: var(--hover); }
 .cfm-cancel:disabled { opacity: .5; cursor: not-allowed; }
@@ -80,7 +80,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cfm-confirm {
   padding: 10px 16px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, transform .1s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .cfm-confirm:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
 .cfm-confirm:disabled { opacity: .5; cursor: not-allowed; }

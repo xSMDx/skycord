@@ -144,12 +144,12 @@ onBeforeUnmount(() => {
 .fly .fr:hover .fr-check { color: #fff; }
 .fly .fr-tog {
   flex-shrink: 0; width: 38px; height: 20px; border-radius: 10px;
-  background: rgba(128,132,142,.5); position: relative; transition: background .15s; display: inline-block;
+  background: rgba(128,132,142,.5); position: relative; transition: background var(--dur-2) var(--ease-out); display: inline-block;
 }
 .fly .fr-tog.on { background: var(--state-live); }
 .fly .fr-tog > span {
   position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-  border-radius: 50%; background: #fff; transition: transform .15s;
+  border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out);
 }
 .fly .fr-tog.on > span { transform: translateX(18px); }
 </style>

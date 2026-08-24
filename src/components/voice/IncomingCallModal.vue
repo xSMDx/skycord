@@ -79,11 +79,20 @@ onBeforeUnmount(soundRingStop)
 .ic-btn {
   width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: transform .12s, filter .12s; box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  transition: transform var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out); box-shadow: 0 6px 18px rgba(0,0,0,.35);
 }
 .ic-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.08); }
 .ic-btn:active { transform: scale(.94); }
 .ic-btn.decline { background: var(--state-fault); }
-.ic-btn.accept  { background: var(--state-live); animation: ic-jiggle 1.6s ease-in-out infinite; }
-@keyframes ic-jiggle { 0%,92%,100% { transform: none; } 94% { transform: rotate(-12deg); } 96% { transform: rotate(12deg); } 98% { transform: rotate(-8deg); } }
+/* The jiggle is gone, and its absence is the fix.
+   It ran an infinite rotation on `transform` across the WHOLE timeline, and an
+   animation beats a plain declaration for the same property — so it silently
+   overrode .ic-btn:hover and .ic-btn:active above. The most important button
+   in the app, on a modal demanding a decision, had no hover and no press
+   feedback at all. It also never stopped, in a file with no reduced-motion
+   guard of its own.
+
+   A ringing call is already announced by the ring animation, the sound, and a
+   modal you cannot miss. The button does not need to wave. */
+.ic-btn.accept { background: var(--state-live); }
 </style>

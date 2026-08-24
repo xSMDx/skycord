@@ -171,7 +171,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-close  {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ig-close:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -179,14 +179,14 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-search {
   flex: 1; padding: 9px 12px; border-radius: 6px;
   background: var(--bg-input); border: 1px solid transparent;
-  font-size: 14px; color: var(--text-1); outline: none; transition: border-color .15s;
+  font-size: 14px; color: var(--text-1); outline: none; transition: border-color var(--dur-2) var(--ease-out);
 }
 .ig-search:focus { border-color: var(--accent); }
 .ig-search::placeholder { color: var(--text-faint); }
 .ig-add {
   padding: 0 22px; border-radius: 4px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, opacity .12s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .ig-add:hover:not(:disabled) { background: var(--accent-hover); }
 .ig-add:disabled { opacity: .5; cursor: not-allowed; }
@@ -196,7 +196,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-list { padding: 8px 12px; max-height: 280px; overflow-y: auto; margin-top: 4px; }
 .ig-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 7px 8px; border-radius: 6px; cursor: pointer; transition: background .1s;
+  padding: 7px 8px; border-radius: 6px; cursor: pointer; transition: background var(--dur-1) var(--ease-out);
 }
 .ig-item:hover { background: var(--hover); }
 .ig-item.selected { background: rgba(var(--accent-rgb),.12); }
@@ -212,7 +212,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-checkbox {
   width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0;
   border: 2px solid var(--text-faint); display: flex; align-items: center; justify-content: center;
-  transition: background .12s, border-color .12s;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ig-checkbox.checked { background: var(--accent); border-color: var(--accent); }
 
@@ -234,7 +234,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-copy {
   padding: 0 22px; border-radius: 4px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, opacity .12s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .ig-copy:hover:not(:disabled) { background: var(--accent-hover); }
 .ig-copy.copied { background: #248046; }

@@ -140,7 +140,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .eg-close  {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .eg-close:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -152,7 +152,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .eg-avatar-inner {
   display: flex; align-items: center; justify-content: center;
   width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
-  background: var(--accent); color: var(--text-on-accent); transition: filter .12s;
+  background: var(--accent); color: var(--text-on-accent); transition: filter var(--dur-1) var(--ease-out);
 }
 .eg-avatar:hover .eg-avatar-inner { filter: brightness(.92); }
 .eg-avatar-edit {
@@ -172,7 +172,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   align-self: stretch; padding: 10px 12px; border-radius: 6px;
   background: var(--bg-input); border: 1px solid transparent;
   font-size: 15px; color: var(--text-1); outline: none;
-  transition: border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .eg-input:focus { border-color: var(--accent); }
 .eg-input::placeholder { color: var(--text-faint); }
@@ -189,7 +189,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .eg-save {
   padding: 9px 28px; border-radius: 4px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, opacity .12s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .eg-save:hover:not(:disabled) { background: var(--accent-hover); }
 .eg-save:disabled { opacity: .5; cursor: not-allowed; }

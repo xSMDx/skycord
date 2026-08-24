@@ -102,13 +102,13 @@ const style = computed(() => ({ left: `${pos.value.left}px`, top: `${pos.value.t
 
 /* Rises slightly toward the control it belongs to, so the motion points at the
    thing being described rather than appearing from nowhere. */
-.tip-enter-active { transition: opacity .12s ease, transform .12s cubic-bezier(.32,.72,0,1); }
-.tip-leave-active { transition: opacity .08s ease; }
+.tip-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform .12s cubic-bezier(.32,.72,0,1); }
+.tip-leave-active { transition: opacity var(--dur-1) var(--ease-out); }
 .tip-enter-from { opacity: 0; transform: translateY(3px) scale(.97); }
 .tip-leave-to   { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tip-enter-active, .tip-leave-active { transition: opacity .1s ease; }
+  .tip-enter-active, .tip-leave-active { transition: opacity var(--dur-1) var(--ease-out); }
   .tip-enter-from { transform: none; }
 }
 </style>

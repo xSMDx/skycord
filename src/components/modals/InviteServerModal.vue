@@ -181,7 +181,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-close  {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .is-close:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -201,7 +201,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-copy {
   padding: 0 22px; border-radius: 4px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, opacity .12s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .is-copy:hover:not(:disabled) { background: var(--accent-hover); }
 .is-copy.copied { background: #248046; }
@@ -212,7 +212,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   padding: 10px 12px; border-radius: 6px;
   background: var(--bg-input); color: var(--text-2);
   border: 1px solid transparent; font-size: 14px; font-weight: 600;
-  transition: background .12s, color .12s, border-color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .is-expiry-btn:hover:not(:disabled) { color: var(--text-strong); }
 .is-expiry-btn.active { border-color: var(--accent); color: var(--text-strong); background: rgba(var(--accent-rgb),.14); }
@@ -221,7 +221,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-mint {
   padding: 10px 16px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, opacity .12s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .is-mint:hover:not(:disabled) { background: var(--accent-hover); }
 .is-mint:disabled { opacity: .5; cursor: not-allowed; }
@@ -242,7 +242,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-revoke {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .is-revoke:hover { background: var(--hover); color: var(--state-fault); }
 </style>

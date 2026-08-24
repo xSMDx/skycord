@@ -4143,7 +4143,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
   margin-top:var(--conn-h, 0px);
   overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
-  transition:height .18s ease-out, margin-top .26s cubic-bezier(.32,.72,0,1);
+  transition: height var(--dur-2) var(--ease-out), margin-top .26s cubic-bezier(.32,.72,0,1);
 }
 .shell{display:flex;height:100%;overflow:hidden}
 
@@ -4198,12 +4198,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rvp-more{font-size:11px;font-weight:600;color:var(--text-3);margin-top:6px;padding-left:30px}
 /* Slides out of the rail rather than fading in place, so the panel reads as
    belonging to the icon the pointer is on. */
-.rvp-enter-active{transition:opacity .12s ease,transform .12s cubic-bezier(.32,.72,0,1)}
-.rvp-leave-active{transition:opacity .08s ease}
+.rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform .12s cubic-bezier(.32,.72,0,1)}
+.rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
 .rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
 .rvp-leave-to{opacity:0}
 @media (prefers-reduced-motion: reduce){
-  .rvp-enter-active,.rvp-leave-active{transition:opacity .1s ease}
+  .rvp-enter-active,.rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
   .rvp-enter-from{transform:none}
 }
 .ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius:var(--edge-1);margin:4px 0}
@@ -4212,20 +4212,20 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid rgba(0,0,0,.3);transition:width .22s,opacity .22s;overflow:hidden}
+.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid rgba(0,0,0,.3);transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
 .sb-search{padding:8px 8px 4px;flex-shrink:0}
-.sb-search-btn{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border-radius:var(--edge-2);background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition:background .12s,color .12s}
+.sb-search-btn{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border-radius:var(--edge-2);background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-search-btn:hover{background:rgba(0,0,0,.5);color:var(--text-1)}
 
 .sb-nav{padding:4px 8px}
-.sb-nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border-radius:var(--edge-2);font-size:14px;font-weight:500;color:var(--text-3);transition:background .12s,color .12s}
+.sb-nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border-radius:var(--edge-2);font-size:14px;font-weight:500;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-nav-item:hover{background:var(--hover);color:var(--text-1)}
 .sb-nav-item.active{background:rgba(var(--accent-rgb),.16);color:var(--accent-text)}
 
 .sb-section-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:12px 16px 4px;white-space:nowrap}
-.sb-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s}
+.sb-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
@@ -4253,6 +4253,19 @@ html.show-armature .sb-body {
 .sb-sk{padding:10px 10px 4px;display:flex;flex-direction:column;gap:16px}
 .sb-sk-group{display:flex;flex-direction:column;gap:7px}
 .sb-sk-row{display:flex;align-items:center;gap:8px;padding-left:2px}
+
+/* Seven decorative hover keyframes lived here — a gear that spun 180 degrees,
+   a mic that wiggled 15, a magnifier that scaled 1.22. Every one of these
+   controls already had a background tint reporting hover in 120ms, so the
+   animation was a second answer to a question nobody asked twice, at 3–5x the
+   duration apple-design allows for hover feedback. Deleted; the press
+   response they never had takes their place. */
+.icon-btn:active:not(:disabled),
+.up-btn:active:not(:disabled) { transform: scale(.94); }
+.icon-btn, .up-btn { transition:
+  background var(--dur-1) var(--ease-out),
+  color      var(--dur-1) var(--ease-out),
+  transform  var(--dur-1) var(--ease-out); }
 
 .sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid var(--mat-hairline);box-shadow:0 1px 0 var(--mat-lip) inset;font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.02em;color:var(--text-strong);cursor:pointer;transition:background var(--dur-1) var(--ease-out);white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
@@ -4285,7 +4298,7 @@ html.show-armature .sb-body {
 .sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
 .sb-body{flex:1;overflow-y:auto;padding:8px 0}
 
-.dm-item{display:flex;align-items:center;gap:10px;padding:6px 10px;margin:0 6px;border-radius:var(--edge-2);cursor:pointer;transition:background .12s;position:relative}
+.dm-item{display:flex;align-items:center;gap:10px;padding:6px 10px;margin:0 6px;border-radius:var(--edge-2);cursor:pointer;transition: background var(--dur-1) var(--ease-out);position:relative}
 .dm-item:hover{background:var(--hover)}
 .dm-item.active{background:rgba(var(--accent-rgb),.16)}
 .dm-av{position:relative;width:32px;height:32px;flex-shrink:0}
@@ -4306,7 +4319,7 @@ html.show-armature .sb-body {
    reading it. */
 .dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
 .dm-call{width:18px;height:18px;border-radius:50%;background:var(--state-live);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:var(--edge-1);transition:opacity .1s,color .1s;flex-shrink:0}
+.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:var(--edge-1);transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
 .dm-x:hover{color: var(--text-strong)}
 
@@ -4328,7 +4341,7 @@ html.show-armature .sb-body {
 .ch-edit-btn{
   width:26px;height:26px;border-radius:var(--edge-2);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  color:var(--text-2);transition:background .12s,color .12s;
+  color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ch-edit-btn:hover{background:var(--hover);color: var(--text-strong)}
 
@@ -4338,7 +4351,7 @@ html.show-armature .sb-body {
 
 /* @everyone toast */
 .app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--state-live);color: var(--text-strong);font-size:14px;font-weight:600;padding:10px 18px;border-radius:var(--edge-3);box-shadow:0 8px 24px rgba(0,0,0,.45)}
-.toast-pop-enter-active,.toast-pop-leave-active{transition:opacity .2s ease,transform .2s ease}
+.toast-pop-enter-active,.toast-pop-leave-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
 
@@ -4346,17 +4359,17 @@ html.show-armature .sb-body {
 .ch-search{position:relative;display:flex;align-items:center}
 .ch-search-box{position:relative;display:flex;align-items:center}
 /* open + close animation for the search box */
-.search-box-enter-active{transition:opacity .18s ease,transform .18s ease}
-.search-box-leave-active{transition:opacity .14s ease,transform .14s ease}
+.search-box-enter-active{transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
+.search-box-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .search-box-enter-from,.search-box-leave-to{opacity:0;transform:translateX(14px)}
 /* open + close animation for the filters popup */
-.filters-pop-enter-active{transition:opacity .14s ease,transform .14s ease}
-.filters-pop-leave-active{transition:opacity .1s ease,transform .1s ease}
+.filters-pop-enter-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.filters-pop-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .filters-pop-enter-from,.filters-pop-leave-to{opacity:0;transform:translateY(-4px)}
 .ch-search-input{
   width:220px;height:30px;padding:0 30px 0 10px;border-radius:var(--edge-2);
   background:var(--bg-input);border:1px solid transparent;color:var(--text-1);font-size:13px;outline:none;
-  transition:border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .ch-search-input:focus{border-color:var(--accent)}
 .ch-search-input::placeholder{color:var(--text-faint)}
@@ -4368,7 +4381,7 @@ html.show-armature .sb-body {
 }
 @keyframes ch-filters-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .ch-filters-label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);padding:6px 8px}
-.ch-filter-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px;border-radius:var(--edge-2);color:var(--text-2);transition:background .12s,color .12s}
+.ch-filter-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px;border-radius:var(--edge-2);color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .ch-filter-row:hover{background:var(--hover);color: var(--text-strong)}
 .cf-text{display:flex;flex-direction:column;gap:1px;min-width:0}
 .cf-title{font-size:13.5px;font-weight:600;color:var(--text-2)}
@@ -4381,7 +4394,7 @@ html.show-armature .sb-body {
   display:flex;align-items:center;justify-content:center;gap:8px;
   margin:8px 12px 14px;padding:9px 12px;border-radius:var(--edge-2);
   font-size:14px;font-weight:600;color: var(--text-strong);
-  background:var(--accent);transition:background .12s;
+  background:var(--accent);transition: background var(--dur-1) var(--ease-out);
 }
 .mp-invite:hover{background:var(--accent-hover)}
 
@@ -4394,7 +4407,7 @@ html.show-armature .sb-body {
    and active rows and so is never reliably empty.
    NOT `.ch-chev`, which is already taken by the chat header's mobile
    disclosure chevron and carries a desktop `display:none`. */
-.ch-group-chev{flex-shrink:0;transition:transform .18s ease}
+.ch-group-chev{flex-shrink:0;transition: transform var(--dur-2) var(--ease-out)}
 .ch-group-chev.open{transform:rotate(90deg)}
 /* Folding a category is an animation, not a v-if. `interpolate-size:
    allow-keywords` lets height animate to and from `auto` without measuring
@@ -4405,7 +4418,7 @@ html.show-armature .sb-body {
    measured 31px, then reopened to 1fr and measured 0), so a fold that used
    it closed once and never came back. Timing matches .ch-group-chev so the
    chevron and the rows read as one motion. */
-.ch-fold{overflow:hidden;height:auto;interpolate-size:allow-keywords;transition:height .18s ease}
+.ch-fold{overflow:hidden;height:auto;interpolate-size:allow-keywords;transition: height var(--dur-2) var(--ease-out)}
 .ch-fold.folded{height:0}
 
 /* Where the drag would land. min-height keeps the headerless uncategorised
@@ -4418,7 +4431,7 @@ html.show-armature .sb-body {
   .ch-fold{transition:none}
   .ch-group-chev{transition:none}
 }
-.ch-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s;flex-shrink:0}
+.ch-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
 .ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:var(--edge-1);font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition:background var(--dur-1) var(--ease-out),color var(--dur-1) var(--ease-out),opacity var(--dur-1) var(--ease-out);white-space:nowrap}
@@ -4430,7 +4443,7 @@ html.show-armature .sb-body {
 .ch-item.active:hover{background:var(--accent-hover);color:var(--text-on-accent)}
 .ch-item.active .ch-icon,.ch-item.active .ch-more{color:var(--text-on-accent)}
 .ch-item.unread{color:var(--text-2);font-weight:600}
-.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:var(--edge-1);transition:opacity .1s,color .1s;flex-shrink:0}
+.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:var(--edge-1);transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}
 .ch-icon{flex-shrink:0}
@@ -4447,7 +4460,7 @@ html.show-armature .sb-body {
 /* Not an icon: the reference uses a word, and a word survives being the
    only red thing in a list of grey ones. */
 .vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:var(--state-fault);border-radius:var(--edge-1);padding:1px 4px;line-height:1.4}
-.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:var(--edge-2);cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
+.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:var(--edge-2);cursor:pointer;text-align:left;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
 .vc-occ-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -4459,12 +4472,12 @@ html.show-armature .sb-body {
 
 /* User Panel */
 .user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px}
-.up-left{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:var(--edge-2);transition:background .15s;flex:1;min-width:0}
+.up-left{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:var(--edge-2);transition: background var(--dur-2) var(--ease-out);flex:1;min-width:0}
 .up-left:hover{background:var(--hover)}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius:50%;overflow:hidden}
 .up-av-img img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#80848e;border-radius:50%;border:2px solid var(--bg-deep);transition:background .15s}
+.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#80848e;border-radius:50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
 .up-info{display:flex;flex-direction:column;gap:1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
@@ -4482,27 +4495,21 @@ html.show-armature .sb-body {
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
 .up-btns{display:flex;gap:1px;flex-shrink:0}
-.up-btn{width:30px;height:30px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .12s}
+.up-btn{width:30px;height:30px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
 .up-btn.danger{color:var(--state-fault);background:rgba(237,66,69,.12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
-.up-chev{width:14px;height:30px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:background .12s,color .12s}
+.up-chev{width:14px;height:30px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
 /* The chevron points down when the menu is shut and up while it is open, so
    the button says which way it will move things. It was a hardcoded
    ChevronDown that never changed. */
-.up-chev-ic{transition:transform .16s ease}
+.up-chev-ic{transition: transform var(--dur-2) var(--ease-out)}
 .up-chev.open .up-chev-ic{transform:rotate(180deg)}
 @media (prefers-reduced-motion: reduce){.up-chev-ic{transition:none}}
 .up-chev:disabled{opacity:.45;cursor:not-allowed}
-@keyframes wiggle-mic{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
-@keyframes bob-phones{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(-3px) scale(1.08)}60%{transform:translateY(1px) scale(.97)}}
-@keyframes spin-gear{to{transform:rotate(180deg)}}
-.btn-mic:hover svg{animation:wiggle-mic .5s ease-in-out}
-.btn-headphones:hover svg{animation:bob-phones .5s ease-in-out}
-.btn-settings:hover svg{animation:spin-gear .4s ease-in-out}
 
 /* ── Friends view ──────────────────────────────────────────────────────── */
 .main-content{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0}
@@ -4575,7 +4582,7 @@ html.show-armature .sb-body {
   display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
   gap:1px;min-width:0;flex:1;height:100%;
   padding:0 4px;border-radius:var(--edge-3);text-align:left;
-  transition:background .12s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .shell.mobile .ch-ident:active{background:var(--hover)}
 .shell.mobile .ch-ident-static:active{background:none}
@@ -4693,18 +4700,18 @@ html.show-armature .sb-body {
 @media (prefers-reduced-motion: reduce){
   .shell.mobile .sidebar,
   .shell.mobile .main-content,
-  .shell.mobile .chat{transition:opacity .2s ease}
+  .shell.mobile .chat{transition: opacity var(--dur-3) var(--ease-out)}
 }
 .friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;gap:8px;padding:0 16px}
 .fh-icon{color:var(--text-3);flex-shrink:0}
 .fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right:4px;white-space:nowrap}
 .fh-tabs{display:flex;gap:2px}
-.ftab{padding:5px 12px;border-radius:var(--edge-2);font-size:13px;font-weight:500;color:var(--text-2);transition:background .12s,color .12s;white-space:nowrap}
+.ftab{padding:5px 12px;border-radius:var(--edge-2);font-size:13px;font-weight:500;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
 .pend-tab{position:relative}
 .pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;background:var(--state-fault);color:white;font-size:10px;font-weight:700;border-radius:var(--edge-3);margin-left:4px}
-.add-friend-btn{margin-left:auto;padding:6px 14px;background:var(--accent);color:white;border-radius:var(--edge-2);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s;white-space:nowrap}
+.add-friend-btn{margin-left:auto;padding:6px 14px;background:var(--accent);color:white;border-radius:var(--edge-2);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
@@ -4719,9 +4726,9 @@ html.show-armature .sb-body {
 .f-empty p{font-size:16px;font-weight:700;color:var(--text-1)}
 .f-empty span{font-size:14px;line-height:1.5}
 .f-empty strong{color:var(--text-1)}
-.f-empty-btn{margin-top:8px;padding:8px 18px;border-radius:var(--edge-2);background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s}
+.f-empty-btn{margin-top:8px;padding:8px 18px;border-radius:var(--edge-2);background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
-.f-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--edge-3);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s}
+.f-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--edge-3);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .f-row:hover{background:var(--hover);border-color:transparent}
 .f-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .f-av img{border-radius:50%}
@@ -4730,7 +4737,7 @@ html.show-armature .sb-body {
 .f-name{display:block;font-size:15px;font-weight:600;color: var(--text-strong)}
 .f-sub{display:block;font-size:13px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .f-actions{display:flex;gap:6px}
-.f-btn{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition:background .12s,color .12s,transform .1s}
+.f-btn{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
 .f-btn.accept{background:rgba(35,165,90,.15);color:var(--state-live)}
 .f-btn.accept:hover{background:rgba(35,165,90,.28);transform:scale(1.1)}
@@ -4741,9 +4748,9 @@ html.show-armature .sb-body {
 .active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding:16px;overflow-y:auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom:16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text-faint);padding:32px 0;font-size:13px;text-align:center}
-.an-add-btn{margin-top:8px;padding:6px 14px;border-radius:var(--edge-2);background:var(--accent);color:white;font-size:13px;font-weight:600;transition:background .12s}
+.an-add-btn{margin-top:8px;padding:6px 14px;border-radius:var(--edge-2);background:var(--accent);color:white;font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
-.an-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--edge-3);background:rgba(255,255,255,.04);margin-bottom:8px;cursor:pointer;transition:background .12s}
+.an-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--edge-3);background:rgba(255,255,255,.04);margin-bottom:8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .an-av img{border-radius:50%}
@@ -4796,7 +4803,7 @@ html.show-armature .sb-body {
 @keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
 
 @media (prefers-reduced-motion: reduce){
-  .shell.mobile .members-panel{transition:opacity .2s ease}
+  .shell.mobile .members-panel{transition: opacity var(--dur-3) var(--ease-out)}
 }
 
 /* Hide-chat: the whole point is that the call gets the column, so everything
@@ -4828,7 +4835,7 @@ html.show-armature .sb-body {
 .ch-ident-row{display:contents}
 .ch-chev,.ch-topic-dot,.m-back-badge{display:none}
 /* Voice/video call header buttons — animated + colour-coded */
-.call-btn{transition:transform .12s,color .12s,background .12s}
+.call-btn{transition: transform var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out)}
 .call-btn:hover{transform:translateY(-1px) scale(1.08)}
 .call-btn:active{transform:scale(.9)}
 .call-btn.video{color:var(--text-2)}
@@ -4842,30 +4849,22 @@ html.show-armature .sb-body {
 .dm-header-av img{border-radius:50%}
 .dm-header-dot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:50%;border:2px solid var(--bg-chat)}
 
-.icon-btn{width:32px;height:32px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .15s}
+.icon-btn{width:32px;height:32px;border-radius:var(--edge-2);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
 .icon-btn:active{transform:scale(.88)}
 .icon-btn.active{color:#8d96f8;background:rgba(var(--accent-rgb),.15)}
-@keyframes bounce-pin{0%,100%{transform:translateY(0)}35%{transform:translateY(-4px) rotate(-20deg)}70%{transform:translateY(2px)}}
-@keyframes pulse-users{0%,100%{transform:scale(1)}40%{transform:scale(1.18)}70%{transform:scale(.92)}}
-@keyframes zoom-search{0%,100%{transform:scale(1)}50%{transform:scale(1.22)}}
-@keyframes sidebar-spin{to{transform:rotate(180deg)}}
-.icon-btn-pin:hover svg{animation:bounce-pin .4s ease}
-.icon-btn-members:hover svg{animation:pulse-users .4s ease}
-.icon-btn-search:hover svg{animation:zoom-search .3s ease}
-.icon-btn-sidebar:hover svg{animation:sidebar-spin .35s ease}
 
 /* Pinned sidebar */
 .pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);animation:slide-in .18s cubic-bezier(.4,0,.2,1)}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
-.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);display:flex;flex-direction:column;transition:width .22s,opacity .22s;overflow:hidden}
+.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);display:flex;flex-direction:column;transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .members-panel.closed{width:0;opacity:0;pointer-events:none}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,.25);display:flex;align-items:center;padding:0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap:6px}
 .mp-count{font-size:11px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:var(--edge-3);color:var(--text-3)}
-.mp-search{margin:8px 10px;background:rgba(0,0,0,.2);border-radius:var(--edge-2);display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid transparent;transition:border-color .15s}
+.mp-search{margin:8px 10px;background:rgba(0,0,0,.2);border-radius:var(--edge-2);display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
 .mp-search input::placeholder{color:var(--text-faint)}
@@ -4874,7 +4873,7 @@ html.show-armature .sb-body {
 /* Sections read as sections when there is air between them — but only from
    the second one on, or the list starts with a hole under the search box. */
 .mp-section-label:not(:first-child){margin-top:14px}
-.mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--edge-2);cursor:pointer;transition:background .12s}
+.mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--edge-2);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .mp-member:hover{background:var(--hover)}
 .mp-member.mp-offline{opacity:.35}
 .mp-member.mp-offline:hover{opacity:.8}
@@ -4929,7 +4928,7 @@ html.show-armature .sb-body {
   width: 22px; height: 22px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); flex-shrink: 0;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-banner-close:hover { background: var(--hover-strong); color: var(--text-strong); }
 

@@ -131,7 +131,7 @@ const sheetStyle = computed(() =>
 
 /* A sheet under the finger must not fight the finger. */
 .mb-enter-active .modal.dragging,
-.mb-leave-active .modal.dragging { transition: none; }
+.mb-leave-active .modal.dragging { transition:none; }
 
 @media (prefers-reduced-motion: reduce) {
   .mb-enter-from .modal, .mb-leave-to .modal,
@@ -167,11 +167,11 @@ const sheetStyle = computed(() =>
   border-radius: 18px 18px 0 0;
   /* The sheet owns the bottom edge, so it owns the home indicator inset. */
   padding-bottom: env(safe-area-inset-bottom);
-  transition: transform .26s cubic-bezier(.2,.8,.3,1);
+  transition:transform .26s cubic-bezier(.2,.8,.3,1);
 }
 /* While a finger is down the drag IS the position — easing it would put the
    sheet behind the thumb. */
-.modal.sheet.dragging { transition: none; }
+.modal.sheet.dragging { transition:none; }
 
 .m-grab {
   flex-shrink: 0; padding: 8px 0 2px;
@@ -184,7 +184,7 @@ const sheetStyle = computed(() =>
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .modal, .modal.sheet { animation: none; transition: none; }
+  .modal, .modal.sheet { animation: none; transition:none; }
   .overlay { animation: none; }
 }
 </style>

@@ -112,7 +112,7 @@ const join = async () => {
   padding: 8px 16px; border-radius: 6px; border: none;
   font-size: 14px; font-weight: 600; cursor: pointer;
   background: var(--accent); color: var(--text-on-accent);
-  transition: background .12s, opacity .12s;
+  transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
   flex-shrink: 0;
 }
 .ic-btn:hover:not(:disabled) { background: var(--accent-hover); }

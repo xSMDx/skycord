@@ -112,14 +112,14 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
 .tc-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .tc-preview {
   border: none; background: none; padding: 4px 2px; cursor: pointer;
-  font-size: 13px; font-weight: 600; color: var(--text-3); transition: color .12s;
+  font-size: 13px; font-weight: 600; color: var(--text-3); transition: color var(--dur-1) var(--ease-out);
 }
 .tc-preview:hover { color: var(--text-strong); text-decoration: underline; }
 .tc-btn {
   padding: 8px 16px; border-radius: 6px; border: none;
   font-size: 14px; font-weight: 600; cursor: pointer;
   background: var(--accent); color: var(--text-on-accent);
-  transition: background .12s; flex-shrink: 0;
+  transition: background var(--dur-1) var(--ease-out); flex-shrink: 0;
 }
 .tc-btn:hover { background: var(--accent-hover); }
 </style>

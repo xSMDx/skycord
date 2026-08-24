@@ -228,7 +228,7 @@ img { display: block; object-fit: cover; }
   width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-2); background: rgba(0,0,0,.4);
-  transition: background .12s, color .12s, transform .1s ease-out;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .up-close:hover  { color: var(--text-strong); background: rgba(0,0,0,.65); }
 .up-close:active { transform: scale(.94); }
@@ -260,7 +260,7 @@ img { display: block; object-fit: cover; }
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600;
   background: var(--hover-strong); color: var(--text-strong);
-  transition: background .12s, transform .1s ease-out;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .up-btn:hover:not(:disabled)  { background: rgba(255,255,255,.16); }
 .up-btn:active:not(:disabled) { transform: scale(.97); }
@@ -315,7 +315,7 @@ img { display: block; object-fit: cover; }
 .up-mutual {
   display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
   padding: 9px 11px; border-radius: 8px;
-  transition: background .1s, transform .1s ease-out;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .up-mutual:hover  { background: var(--hover-strong); }
 .up-mutual:active { transform: scale(.99); }

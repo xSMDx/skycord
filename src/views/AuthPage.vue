@@ -266,7 +266,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .logo-name { font-size:22px; font-weight:800; color: var(--text-strong); letter-spacing:-.4px; }
 
 .tabs { display:flex; position:relative; background:rgba(0,0,0,.25); border-radius:9px; padding:3px; margin-bottom:20px; }
-.tab { flex:1; padding:7px; border-radius:6px; font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition:color .18s; }
+.tab { flex:1; padding:7px; border-radius:6px; font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition: color var(--dur-2) var(--ease-out); }
 .tab.active { color: var(--text-strong); }
 .tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:#2e3136; border-radius:6px; transition:transform .22s cubic-bezier(.4,0,.2,1); box-shadow:0 1px 4px rgba(0,0,0,.3); }
 .tab-slider.right { transform:translateX(100%); }
@@ -281,13 +281,13 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
 .field label { font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--text-2); }
 .lrow { display:flex; align-items:center; justify-content:space-between; }
-.forgot { font-size:11px; font-weight:600; color:var(--accent); text-transform:none; letter-spacing:0; transition:color .12s; }
+.forgot { font-size:11px; font-weight:600; color:var(--accent); text-transform:none; letter-spacing:0; transition: color var(--dur-1) var(--ease-out); }
 .forgot:hover { color:#8d96f8; }
 
 .inp-wrap {
   display:flex; align-items:center;
   background:rgba(0,0,0,.28); border:1.5px solid rgba(255,255,255,.08); border-radius:8px;
-  transition:border-color .15s, box-shadow .15s;
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   overflow:hidden;
 }
 .inp-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15); }
@@ -299,7 +299,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .inp-wrap input { flex:1; padding:10px 6px 10px 0; font-size:14px; color:var(--text-1); }
 .inp-wrap input::placeholder { color:var(--text-faint); }
 
-.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-faint); border-radius:5px; margin-right:2px; flex-shrink:0; transition:color .12s; }
+.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-faint); border-radius:5px; margin-right:2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
 .eye:hover { color:var(--text-2); }
 .check { flex-shrink:0; margin-right:9px; }
 
@@ -307,13 +307,13 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .strength { display:flex; align-items:center; gap:8px; }
 .s-bars { display:flex; gap:3px; flex:1; }
-.s-bar { flex:1; height:4px; background:rgba(255,255,255,.1); border-radius:2px; opacity:.3; transition:background .2s, opacity .2s; }
+.s-bar { flex:1; height:4px; background:rgba(255,255,255,.1); border-radius:2px; opacity:.3; transition: background var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
 
 .submit {
   width:100%; padding:12px; margin-top:4px;
   background:var(--accent); color:white;
   font-size:15px; font-weight:700; border-radius:9px;
-  transition:background .15s, transform .12s, box-shadow .15s;
+  transition: background var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   box-shadow:0 4px 16px rgba(var(--accent-rgb),.35);
   display:flex; align-items:center; justify-content:center; gap:8px;
 }
@@ -332,9 +332,9 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .switch button { color:var(--accent); font-weight:600; }
 .switch button:hover { color:#8d96f8; text-decoration:underline; }
 
-.slide-enter-active,.slide-leave-active{transition:all .2s ease}
+.slide-enter-active,.slide-leave-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
 .slide-enter-from{opacity:0;transform:translateX(18px)}
 .slide-leave-to{opacity:0;transform:translateX(-18px)}
-.drop-enter-active,.drop-leave-active{transition:all .18s ease}
+.drop-enter-active,.drop-leave-active{transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out)}
 .drop-enter-from,.drop-leave-to{opacity:0;transform:translateY(-6px)}
 </style>

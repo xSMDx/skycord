@@ -117,7 +117,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   flex: 1; height: 36px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   font-size: 20px;
-  transition: background .1s, transform .12s;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .ctx-qr:hover { background: var(--hover-strong); transform: scale(1.28); }
 .ctx-qr-more  { color: var(--text-3); font-size: 16px; }
@@ -129,7 +129,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; align-items: center; gap: 10px;
   padding: 8px 14px; font-size: 14px; color: var(--text-1);
   width: 100%; text-align: left;
-  transition: background .08s, color .08s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ctx-row:hover        { background: var(--accent); color: white; }
 .ctx-row.danger       { color: var(--state-fault); }

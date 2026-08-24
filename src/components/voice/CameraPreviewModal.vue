@@ -133,7 +133,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-radius: 8px;
   background: var(--accent); color: var(--text-on-accent);
-  font-size: 14px; font-weight: 600; transition: filter .12s;
+  font-size: 14px; font-weight: 600; transition: filter var(--dur-1) var(--ease-out);
 }
 .cp-go:hover:not(:disabled) { filter: brightness(1.08); }
 .cp-go:disabled { opacity: .5; cursor: default; }

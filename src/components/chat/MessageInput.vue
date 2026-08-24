@@ -399,17 +399,17 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .reply-chip-x {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: var(--accent-text); transition: background .12s, color .12s;
+  color: var(--accent-text); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-chip-x:hover { background: var(--hover-strong); color: var(--text-strong); }
 .reply-strip-close {
   width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-2); background: rgba(255,255,255,.06);
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-strip-close:hover { background: var(--hover-strong); color: var(--text-strong); }
-.reply-strip-enter-active, .reply-strip-leave-active { transition: opacity .15s ease, transform .15s ease; }
+.reply-strip-enter-active, .reply-strip-leave-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
 .reply-strip-enter-from, .reply-strip-leave-to { opacity: 0; transform: translateY(6px); }
 
 .input-wrapper {
@@ -417,7 +417,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   background: var(--bg-chatbar); border-radius: 10px;
   padding: 0 8px 0 4px;
   border: 1px solid transparent;
-  transition: background .15s, border-color .15s;
+  transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
 .input-wrapper.with-reply   { border-radius: 0 0 10px 10px; }
 .input-wrapper:focus-within { background: var(--bg-chatbar-focus); border-color: rgba(var(--accent-rgb),.4); }
@@ -427,7 +427,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   width: 36px; height: 36px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); flex-shrink: 0;
-  transition: color .12s, transform .12s;
+  transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .input-attach:hover { color: var(--text-1); transform: rotate(15deg) scale(1.1); }
 
@@ -442,7 +442,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .input-action-btn {
   width: 30px; height: 30px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-faint); transition: color .12s, transform .12s;
+  color: var(--text-faint); transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .input-action-btn:hover { color: var(--text-1); transform: scale(1.12); }
 .gif-label { font-size: 11px; font-weight: 800; letter-spacing: -.3px; }
@@ -451,7 +451,12 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   width: 32px; height: 32px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); background: rgba(255,255,255,.04);
-  transition: all .15s;
+  /* Named properties, not `all`: `all` animates whatever happens to change,
+     including layout-triggering ones nobody intended. */
+  transition: background var(--dur-1) var(--ease-out),
+              color      var(--dur-1) var(--ease-out),
+              opacity    var(--dur-1) var(--ease-out),
+              transform  var(--dur-1) var(--ease-out);
 }
 .send-btn.ready { background: var(--accent); color: white; }
 .send-btn.ready:hover  { background: var(--accent-hover); transform: scale(1.06) rotate(8deg); }
@@ -503,7 +508,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .fmt-toolbar button {
   width: 30px; height: 30px; border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-2); transition: background .12s, color .12s;
+  color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .fmt-toolbar button:hover { background: var(--hover-strong); color: var(--text-strong); }
 </style>

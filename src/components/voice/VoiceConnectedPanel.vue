@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
 .vcp-sig {
   display: flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; flex-shrink: 0;
-  transition: color .2s, transform .16s cubic-bezier(.34,1.56,.64,1);
+  transition: color var(--dur-3) var(--ease-out), transform .16s cubic-bezier(.34,1.56,.64,1);
 }
 .vcp-sig :deep(svg) { overflow: visible; }
 /* Lucide draws the bars shortest-first, so staggering by child index animates
@@ -244,7 +244,7 @@ onBeforeUnmount(() => {
 .vcp-leave {
   width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
   background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
-  display: flex; align-items: center; justify-content: center; transition: background .12s, color .12s, transform .1s;
+  display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .vcp-leave:hover { background: var(--state-fault); color: #fff; transform: translateY(-1px); }
 
@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
   flex: 1; height: 32px; border-radius: 8px;
   background: rgba(255,255,255,.06); color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s, transform .1s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .vcp-btn:hover:not(:disabled) { background: rgba(255,255,255,.11); color: var(--text-1); }
 .vcp-btn:active:not(:disabled) { transform: scale(.96); }
@@ -268,7 +268,7 @@ onBeforeUnmount(() => {
   background: var(--bg-floor); border: 1px solid var(--border); border-radius: 10px;
   padding: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.5); z-index: 50;
   opacity: 0; transform: translateY(6px); pointer-events: none;
-  transition: opacity .14s, transform .14s;
+  transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 /* The gap between strip and popover is unhoverable, and crossing it used to
    drop both :hover targets for a frame and close the popover mid-travel. This
@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .vcp-pop-btn:hover { background: var(--accent); color: #fff; }
 .vcp-pop-btn:active { transform: scale(.98); }

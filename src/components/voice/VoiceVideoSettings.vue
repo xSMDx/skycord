@@ -308,7 +308,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-mictest { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
 .vv-meter { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
 /* Dim until the gate opens, so you can SEE when you're actually transmitting */
-.vv-meter-fill { height: 100%; background: linear-gradient(90deg, var(--state-live), #f0b232 70%, var(--state-fault)); transition: width .05s linear; opacity: .35; }
+.vv-meter-fill { height: 100%; background: linear-gradient(90deg, var(--state-live), #f0b232 70%, var(--state-fault)); transition:width .05s linear; opacity: .35; }
 .vv-meter-fill.open { opacity: 1; }
 .vv-meter-thresh { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-1); border-radius: 1px; }
 .vv-divider { height: 1px; background: var(--border); margin: 22px 0; }
@@ -323,11 +323,11 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-toggle-text { display: flex; flex-direction: column; min-width: 0; }
 .vv-tog {
   flex-shrink: 0; width: 44px; height: 24px; border-radius: 12px; border: none; padding: 0;
-  background: rgba(128,132,142,.5); position: relative; cursor: pointer; transition: background .15s;
+  background: rgba(128,132,142,.5); position: relative; cursor: pointer; transition: background var(--dur-2) var(--ease-out);
   box-sizing: border-box;
 }
 .vv-tog.on { background: var(--accent); }
-.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
 .vv-tog.on span { transform: translateX(20px); }
 
 .vv-btn { padding: 9px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }

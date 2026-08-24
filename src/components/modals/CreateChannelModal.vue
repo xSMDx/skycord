@@ -152,7 +152,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); flex-shrink: 0; transition: background .12s, color .12s;
+  color: var(--text-3); flex-shrink: 0; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ccm-close:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -169,7 +169,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   padding: 10px 12px; border-radius: 6px;
   background: var(--bg-input); color: var(--text-2);
   border: 1px solid transparent; font-size: 14px; font-weight: 600;
-  transition: background .12s, color .12s, border-color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ccm-type-btn:hover { color: var(--text-strong); }
 .ccm-type-btn.active { border-color: var(--accent); color: var(--text-strong); background: rgba(var(--accent-rgb),.14); }
@@ -179,7 +179,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-input {
   width: 100%; padding: 10px 12px; border-radius: 4px;
   border: 1px solid transparent; background: var(--bg-input);
-  color: var(--text-strong); font-size: 15px; transition: border-color .12s;
+  color: var(--text-strong); font-size: 15px; transition: border-color var(--dur-1) var(--ease-out);
 }
 .ccm-input.has-icon { padding-left: 34px; }
 .ccm-input:focus { border-color: var(--accent); }
@@ -195,13 +195,13 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-cancel {
   padding: 10px 16px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-1);
-  transition: background .12s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .ccm-cancel:hover { background: var(--hover); }
 .ccm-create {
   padding: 10px 16px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, transform .1s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .ccm-create:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
 .ccm-create:disabled { opacity: .5; cursor: not-allowed; }

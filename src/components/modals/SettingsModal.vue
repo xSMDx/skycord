@@ -1096,7 +1096,7 @@ img    { display: block; object-fit: cover; }
   /* 16:5, matching .pc-banner and the crop window. A preview in a different
      shape is not a preview. */
   width: 100%; aspect-ratio: 16 / 5; border-radius: 8px; cursor: pointer;
-  border: 1px solid rgba(0,0,0,.35); transition: filter .12s;
+  border: 1px solid rgba(0,0,0,.35); transition: filter var(--dur-1) var(--ease-out);
 }
 .pf-bnbox:hover { filter: brightness(1.25); }
 .pf-bnbox { position: relative; overflow: hidden; padding: 0; }
@@ -1172,7 +1172,7 @@ img    { display: block; object-fit: cover; }
 .sm-nav-item {
   display: flex; align-items: center; gap: 10px;
   width: 100%; text-align: left; padding: 10px 12px; border-radius: 7px;
-  font-size: 16px; color: var(--text-2); transition: background .12s, color .12s;
+  font-size: 16px; color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .sm-nav-item:hover { background: var(--hover); color: var(--text-strong); }
 .sm-nav-item.active { background: rgba(var(--accent-rgb),.2); color: var(--text-strong); }
@@ -1190,7 +1190,7 @@ img    { display: block; object-fit: cover; }
 .sm-nav-subitem {
   display: block; width: 100%; text-align: left;
   padding: 8px 12px 8px 14px; border-radius: 0 6px 6px 0;
-  font-size: 14.5px; color: var(--text-3); transition: background .12s, color .12s;
+  font-size: 14.5px; color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
   /* Active indicator sits ON the subnav rail via a real border (margin pulls it
      over the container's border-left) — no absolutely-positioned pseudo that
      can detach or mis-size against the rail. */
@@ -1206,7 +1206,7 @@ img    { display: block; object-fit: cover; }
 .sm-close {
   position: absolute; top: 16px; right: 16px;
   display: flex; align-items: center; gap: 6px; color: var(--text-3);
-  transition: color .12s;
+  transition: color var(--dur-1) var(--ease-out);
 }
 .sm-close:hover { color: var(--text-strong); }
 
@@ -1244,7 +1244,7 @@ img    { display: block; object-fit: cover; }
 .acc-row-value.muted { color: var(--text-3); }
 .acc-btn {
   padding: 9px 20px; border-radius: 6px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
-  background: rgba(255,255,255,.08); white-space: nowrap; transition: background .12s, transform .1s;
+  background: rgba(255,255,255,.08); white-space: nowrap; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .acc-btn:hover { background: var(--hover-strong); transform: translateY(-1px); }
 .acc-btn:disabled { opacity: .6; cursor: not-allowed; }
@@ -1253,7 +1253,7 @@ img    { display: block; object-fit: cover; }
 .acc-row.soon { opacity: .5; }
 .acc-row.soon .acc-btn { cursor: not-allowed; }
 
-.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background .12s; }
+.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out); }
 .acc-btn-arrow:hover { background: var(--hover); color: white; }
 .acc-divider { height: 1px; background: rgba(255,255,255,.06); margin: 0 20px; }
 .reveal-btn { font-size: 12px; color: var(--accent); font-weight: 600; }
@@ -1268,7 +1268,7 @@ img    { display: block; object-fit: cover; }
 .ap-swatch {
   width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  border: 2px solid transparent; transition: transform .1s, border-color .12s;
+  border: 2px solid transparent; transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ap-swatch:hover { transform: scale(1.08); }
 .ap-swatch.active { border-color: var(--text-strong); }
@@ -1277,7 +1277,7 @@ img    { display: block; object-fit: cover; }
   border: 2px solid transparent;
   display: flex; align-items: center; justify-content: center;
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
-  transition: transform .1s, border-color .12s;
+  transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ap-custom:hover { transform: scale(1.08); }
 .ap-custom.active { border-color: var(--text-strong); }
@@ -1288,7 +1288,7 @@ img    { display: block; object-fit: cover; }
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 10px; border-radius: 10px; cursor: pointer;
   border: 2px solid rgba(255,255,255,.08); background: var(--bg-panel);
-  transition: border-color .12s; min-width: 96px;
+  transition: border-color var(--dur-1) var(--ease-out); min-width: 96px;
   font-size: 13px; font-weight: 600; color: var(--text-1);
 }
 .ap-card.active { border-color: var(--accent); }
@@ -1363,7 +1363,7 @@ img    { display: block; object-fit: cover; }
 .ap-stepwrap { max-width: 420px; margin-bottom: 16px; }
 .ap-stepwrap .ap-slider { margin-bottom: 0; }
 .ap-ticks { display: flex; justify-content: space-between; margin-top: 6px; }
-.ap-ticks span { font-size: 10px; color: var(--text-faint); transition: color .12s; }
+.ap-ticks span { font-size: 10px; color: var(--text-faint); transition: color var(--dur-1) var(--ease-out); }
 .ap-ticks span.on { color: var(--accent); font-weight: 700; }
 .ap-ticks-zoom span { font-size: 9px; }
 
@@ -1390,9 +1390,9 @@ img    { display: block; object-fit: cover; }
 .ap-name-input:focus { outline: none; border-color: var(--accent); }
 
 /* Toggle */
-.ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: rgba(128,132,142,.5); position: relative; transition: background .15s; flex-shrink: 0; }
+.ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: rgba(128,132,142,.5); position: relative; transition: background var(--dur-2) var(--ease-out); flex-shrink: 0; }
 .ap-toggle.on { background: var(--accent); }
-.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
 .ap-toggle.on span { transform: translateX(18px); }
 
 .wip-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--text-faint); text-align: center; }
@@ -1418,7 +1418,7 @@ img    { display: block; object-fit: cover; }
 .sm-modal.mobile .sm-content {
   position: absolute; inset: 0;
   width: 100%; padding-left: 0; padding-right: 0;
-  transition: transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
 }
 .sm-modal.mobile .sm-nav     { padding-top: 0; z-index: 1; }
 /* Explicit background is required, not decorative. Side by side these panes sat
@@ -1487,7 +1487,7 @@ img    { display: block; object-fit: cover; }
 
 @media (prefers-reduced-motion: reduce) {
   .sm-modal.mobile .sm-nav,
-  .sm-modal.mobile .sm-content { transition: opacity .2s ease; }
+  .sm-modal.mobile .sm-content { transition: opacity var(--dur-3) var(--ease-out); }
 }
 
 .sm-content::-webkit-scrollbar, .sm-nav::-webkit-scrollbar { width: 4px; }

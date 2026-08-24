@@ -234,7 +234,7 @@ button { border: none; }
   width: 72px; height: 72px; border-radius: 50%; position: relative;
   background: var(--accent); color: var(--text-on-accent);
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 700; box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow .15s;
+  font-size: 26px; font-weight: 700; box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow var(--dur-2) var(--ease-out);
 }
 .s-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .s-av.speaking { box-shadow: 0 0 0 3px var(--state-live); }
@@ -282,7 +282,7 @@ button { border: none; }
   position: relative; height: 100%; min-height: 0; border-radius: 8px; overflow: hidden;
   background: #0b0b0f; border: 2px solid transparent; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .g-cell.speaking { border-color: var(--state-live); }
 /* Grid-only hover hint: clicking focuses this tile. Suppressed in spotlight. */
@@ -354,7 +354,7 @@ button { border: none; }
   width: 28px; height: 28px; border-radius: 6px;
   background: rgba(0,0,0,.6); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .12s, background .12s;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
 .g-cell:hover .g-fs, .g-cell.is-cell-fs .g-fs { opacity: 1; }
 .g-fs:hover { background: rgba(0,0,0,.85); }

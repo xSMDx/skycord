@@ -337,7 +337,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .ptab {
   padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--text-3);
   border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color .12s, border-color .12s;
+  transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ptab:hover { color: var(--text-1); }
 .ptab.active { color: var(--text-on-accent); border-color: var(--accent); }
@@ -346,13 +346,13 @@ img    { display: block; width: 100%; object-fit: cover; }
   display: flex; align-items: center; gap: 8px;
   margin: 8px; background: rgba(0,0,0,.3); border-radius: 6px;
   padding: 7px 10px; border: 1px solid rgba(255,255,255,.06);
-  flex-shrink: 0; transition: border-color .15s;
+  flex-shrink: 0; transition: border-color var(--dur-2) var(--ease-out);
 }
 .picker-search:focus-within { border-color: rgba(var(--accent-rgb),.5); }
 .ps-icon { color: var(--text-faint); flex-shrink: 0; }
 .picker-search input { flex: 1; font-size: 13px; color: var(--text-1); }
 .picker-search input::placeholder { color: var(--text-faint); }
-.ps-clear { color: var(--text-faint); width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background .12s, color .12s; flex-shrink: 0; }
+.ps-clear { color: var(--text-faint); width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); flex-shrink: 0; }
 .ps-clear:hover { background: var(--hover-strong); color: var(--text-strong); }
 
 .picker-cats {
@@ -362,7 +362,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .cat-btn {
   width: 28px; height: 28px; border-radius: 5px; font-size: 16px;
   display: flex; align-items: center; justify-content: center;
-  transition: background .1s; opacity: .7;
+  transition: background var(--dur-1) var(--ease-out); opacity: .7;
 }
 .cat-btn:hover, .cat-btn.active { background: var(--hover-strong); opacity: 1; }
 
@@ -373,7 +373,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .emoji-btn {
   width: 34px; height: 34px; border-radius: 5px; font-size: 20px;
   display: flex; align-items: center; justify-content: center;
-  transition: background .1s, transform .1s;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .emoji-btn:hover { background: var(--hover-strong); transform: scale(1.2); }
 .sticker-btn { font-size: 26px; width: 48px; height: 48px; }
@@ -383,7 +383,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .gif-masonry { columns: 2; gap: 6px; }
 .gif-item {
   break-inside: avoid; margin-bottom: 6px; border-radius: 6px; overflow: hidden;
-  cursor: pointer; transition: opacity .12s, transform .12s;
+  cursor: pointer; transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
   background: rgba(255,255,255,.04);
 }
 .gif-item:hover { opacity: .85; transform: scale(1.02); }

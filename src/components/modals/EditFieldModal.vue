@@ -63,7 +63,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .efm-x {
   color: var(--text-3); width: 28px; height: 28px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s; flex-shrink: 0;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); flex-shrink: 0;
 }
 .efm-x:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -75,7 +75,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .efm-btn {
   padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-strong);
-  background: transparent; transition: background .12s, transform .1s;
+  background: transparent; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .efm-btn:hover { background: var(--hover); }
 .efm-btn.primary { background: var(--accent); color: var(--text-on-accent); }
@@ -88,7 +88,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 :deep(.efm-input) {
   width: 100%; background: var(--bg-input); border: 1px solid transparent; border-radius: 4px;
   padding: 9px 10px; font-size: 14px; color: var(--text-strong); outline: none;
-  font-family: inherit; transition: border-color .12s;
+  font-family: inherit; transition: border-color var(--dur-1) var(--ease-out);
 }
 :deep(.efm-input:focus) { border-color: var(--accent); }
 :deep(.efm-hint) { font-size: 12px; color: var(--text-3); margin-top: 4px; }

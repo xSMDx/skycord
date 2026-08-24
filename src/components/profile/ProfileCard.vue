@@ -168,7 +168,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; flex-direction: column;
 }
 
-.pc-banner { height: 106px; position: relative; transition: background .15s; overflow: hidden; }
+.pc-banner { height: 106px; position: relative; transition: background var(--dur-2) var(--ease-out); overflow: hidden; }
 .pc-bimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-banner.editable { cursor: pointer; }
 .pc-bpencil {
@@ -176,7 +176,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   width: 32px; height: 32px; border-radius: 50%;
   background: rgba(0,0,0,.55); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .14s;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
 .pc-banner.editable:hover .pc-bpencil,
 .pc-banner.editable:focus-visible .pc-bpencil { opacity: 1; }
@@ -187,21 +187,21 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   border: 6px solid var(--bg-panel); background: var(--bg-floor);
   overflow: hidden; position: relative;
 }
-.pc-av { transition: box-shadow .14s, transform .1s ease-out; }
+.pc-av { transition: box-shadow var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
 .pc-av.editable { cursor: pointer; }
 /* A ring on hover so a clickable avatar reads as clickable without needing a
    pencil, which belongs to edit mode only. */
 .pc-av.editable:hover, .pc-av.editable:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
 .pc-av.editable:active { transform: scale(.97); }
 @media (prefers-reduced-motion: reduce) {
-  .pc-av, .pc-status { transition: box-shadow .14s, background .12s, color .12s; }
+  .pc-av, .pc-status { transition: box-shadow var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); }
   .pc-av.editable:active, .pc-status:not(.static):active { transform: none; }
 }
 .pc-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-apencil {
   position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .14s;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
 .pc-av.editable:hover .pc-apencil,
 .pc-av.editable:focus-visible .pc-apencil { opacity: 1; }
@@ -222,12 +222,12 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   border-radius: 16px 16px 16px 4px;
   padding: 7px 12px; font-size: 13px; color: var(--text-1);
   box-shadow: 0 4px 14px rgba(0,0,0,.35);
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .pc-status:not(.static):hover { background: var(--bg-deep); color: var(--text-1); }
 /* Feedback lands on the press itself rather than waiting for release. */
 .pc-status:not(.static):active { transform: scale(.97); }
-.pc-status { transition: background .12s, color .12s, transform .1s ease-out; }
+.pc-status { transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
 .pc-status.static { cursor: default; }
 .pc-status-plus {
   flex: none; width: 16px; height: 16px; border-radius: 50%;

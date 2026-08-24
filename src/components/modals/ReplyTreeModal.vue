@@ -228,13 +228,13 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-zoom-btn {
   width: 28px; height: 28px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .rt-zoom-btn:hover { background: var(--hover-strong); color: var(--text-strong); }
 .rt-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s; margin-left: 6px;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); margin-left: 6px;
 }
 .rt-close:hover { background: var(--hover-strong); color: var(--text-strong); }
 
@@ -253,7 +253,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 /* The scaled canvas holding both the SVG connector layer and the cards */
 .rt-canvas-wrap { min-width: 100%; min-height: 100%; }
-.rt-canvas { position: relative; transition: transform .15s ease; }
+.rt-canvas { position: relative; transition: transform var(--dur-2) var(--ease-out); }
 
 .rt-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 .rt-edge {
@@ -270,7 +270,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   background: var(--bg-raised);
   border: 1px solid rgba(255,255,255,.06);
   cursor: pointer;
-  transition: background .12s, border-color .12s, transform .1s;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .rt-card:hover { background: #25272c; border-color: rgba(255,255,255,.14); transform: translateY(-1px); }
 .rt-card.own { background: rgba(var(--accent-rgb),.1); border-color: rgba(var(--accent-rgb),.25); }
@@ -301,7 +301,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: block; width: 100%; text-align: left;
   padding: 8px 10px; border-radius: 5px;
   font-size: 13.5px; font-weight: 500; color: var(--text-2);
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .rt-ctx-item:hover { background: var(--accent); color: var(--text-on-accent); }
 .rt-card-badge {

@@ -361,7 +361,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-row {
   display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
   padding: 9px 10px; border-radius: 6px; font-size: 14px; color: var(--text-1);
-  transition: background .1s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .pp-row:hover:not(:disabled) { background: var(--hover-strong); }
 .pp-row:disabled { opacity: .5; cursor: not-allowed; }
@@ -381,7 +381,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-splitrow .pp-row { flex: 1; min-width: 0; }
 .pp-chev-btn { flex: none; display: flex; align-items: center; padding: 0 8px; background: none; border: none; cursor: pointer; color: var(--text-2); border-radius: 4px; }
 .pp-chev-btn:hover { background: var(--hover-strong); }
-.pp-chev-btn svg { transition: transform .15s ease; }
+.pp-chev-btn svg { transition: transform var(--dur-2) var(--ease-out); }
 .pp-chev-btn.open svg { transform: rotate(90deg); }
 .pp-dur {
   display: block; width: 100%; padding: 7px 10px; border-radius: 4px;
@@ -389,10 +389,10 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   font-size: 13.5px; color: var(--text-2); text-align: left;
 }
 .pp-dur:hover { background: var(--hover-strong); color: var(--text-1); }
-@media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition:none; } }
 .pp-row.danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
-.pp-chev { margin-left: auto; color: var(--text-3); transition: transform .14s; }
+.pp-chev { margin-left: auto; color: var(--text-3); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }
 .pp-note { font-size: 12.5px; color: var(--text-3); padding: 9px 10px; background: var(--hover); border-radius: 6px; }

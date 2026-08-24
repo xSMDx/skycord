@@ -499,6 +499,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* The call controls used to fire a 300–500ms cartoon on every pointer
+   traverse — a 1.3x scale on a 20px icon, a 20-degree swing on the leave
+   button. In an app people keep open all day that is a tax, and it was
+   redundant: each of these already had a background tint saying "hovered" in
+   120ms. Six animations and five duration values deleted, replaced by the
+   press response that was actually missing. */
+.cb-b:active:not(:disabled),
+.cb-chev:active:not(:disabled),
+.cb-leave:active { transform: scale(.94); }
+.cb-b, .cb-chev, .cb-leave { transition:
+  background var(--dur-1) var(--ease-out),
+  color      var(--dur-1) var(--ease-out),
+  transform  var(--dur-1) var(--ease-out); }
 .callbar {
   position: relative;
   background: var(--bg-floor); border-bottom: 1px solid var(--border);
@@ -515,7 +528,7 @@ onBeforeUnmount(() => {
   background: var(--accent); color: var(--text-on-accent);
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 700;
-  box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow .15s;
+  box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow var(--dur-2) var(--ease-out);
 }
 /* Clip the image to the circle on the IMAGE itself, NOT the container — the
    container must stay un-clipped so the .cb-mute badge can overhang the corner. */
@@ -535,7 +548,7 @@ onBeforeUnmount(() => {
   width: 40px; height: 40px; border-radius: 8px;
   background: transparent; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .cb-b:hover:not(:disabled) { background: rgba(255,255,255,.08); }
 .cb-b:disabled { opacity: .45; cursor: not-allowed; }
@@ -549,14 +562,14 @@ onBeforeUnmount(() => {
   width: 18px; height: 40px; border-radius: 6px;
   background: transparent; color: #b5bac1;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.08); color: #fff; }
 .cb-chev:disabled { opacity: .45; cursor: not-allowed; }
 /* mic/cam + ▾ pair highlight: the split wrapper takes the hover bg so both
    halves light together (Discord behavior). Individual bg hovers inside the
    split go transparent; red .off / green .on states keep their own fills. */
-.cb-split { position: relative; display: flex; align-items: center; gap: 2px; border-radius: 8px; transition: background .12s; }
+.cb-split { position: relative; display: flex; align-items: center; gap: 2px; border-radius: 8px; transition: background var(--dur-1) var(--ease-out); }
 .cb-split:hover:has(.cb-b:not(:disabled)) { background: rgba(255,255,255,.08); }
 .cb-split .cb-b:hover:not(:disabled):not(.on):not(.off) { background: transparent; }
 .cb-split.menuopen { background: rgba(255,255,255,.08); }
@@ -564,36 +577,26 @@ onBeforeUnmount(() => {
   width: 56px; height: 44px; border-radius: 12px; flex-shrink: 0;
   background: var(--state-fault); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .cb-leave:hover { background: #d83c3f; }
 
 /* Per-icon hover animations — each control has its own personality */
-@keyframes cb-wiggle { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 45% { transform: rotate(11deg); } 70% { transform: rotate(-6deg); } }
-@keyframes cb-pop    { 0%,100% { transform: scale(1); } 45% { transform: scale(1.3); } }
-@keyframes cb-lift   { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px) scale(1.12); } }
-@keyframes cb-swing  { 0%,100% { transform: rotate(0); } 30% { transform: rotate(20deg); } 65% { transform: rotate(-12deg); } }
-.cb-mic:hover:not(:disabled)   svg { animation: cb-wiggle .5s ease; }
-.cb-cam:hover:not(:disabled)   svg { animation: cb-pop .4s ease; }
-.cb-share:hover:not(:disabled) svg { animation: cb-lift .45s ease; }
-.cb-more:hover:not(:disabled)  svg { animation: cb-pop .4s ease; }
-.cb-chev:hover:not(:disabled)  svg { animation: cb-pop .35s ease; }
 
 /* The chevron acknowledges its own menu.
    The "animation: none" on the open state is load-bearing, not tidiness: the
    hover pop above animates transform, and an animation beats a plain
    declaration for the same property — so without it, hovering an open
    chevron would snap back to 0deg for the length of the pop, then jump. */
-.cb-chev svg      { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
+.cb-chev svg      { transition:transform .18s cubic-bezier(.2,.7,.3,1); }
 .cb-chev.open svg { transform: rotate(180deg); animation: none; }
 .cb-chev.open:hover:not(:disabled) svg { animation: none; }
 
 /* The rotation is decoration — it says nothing the open menu does not already
    say — so it snaps for anyone who asked for less movement. */
 @media (prefers-reduced-motion: reduce) {
-  .cb-chev svg { transition: none; }
+  .cb-chev svg { transition:none; }
 }
-.cb-leave:hover                svg { animation: cb-swing .5s ease; }
 
 /* Ongoing (not joined) */
 .cb-ongoing-label { font-size: 13px; color: var(--text-3); font-weight: 600; }
@@ -602,14 +605,14 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; gap: 8px;
   height: 40px; padding: 0 22px; border-radius: 8px;
   background: var(--state-live); color: #fff; font-size: 14px; font-weight: 700;
-  transition: background .12s, transform .1s;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .cb-join:hover { background: #1f9450; transform: translateY(-1px); }
 .cb-join:active { transform: scale(.96); }
 .cb-dismiss {
   width: 40px; height: 40px; border-radius: 8px;
   background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
-  display: flex; align-items: center; justify-content: center; transition: background .12s;
+  display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out);
 }
 .cb-dismiss:hover { background: var(--hover-strong, rgba(255,255,255,.12)); }
 
@@ -646,7 +649,7 @@ onBeforeUnmount(() => {
 @media (hover: hover) {
   .callbar.sharing .cb-bar {
     opacity: 0; transform: translateY(6px); pointer-events: none;
-    transition: opacity .18s ease, transform .18s ease;
+    transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
   }
   .callbar.sharing:hover .cb-bar,
   .callbar.sharing:focus-within .cb-bar {
@@ -654,12 +657,12 @@ onBeforeUnmount(() => {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .callbar.sharing .cb-bar { transition: opacity .15s ease; transform: none; }
+  .callbar.sharing .cb-bar { transition: opacity var(--dur-2) var(--ease-out); transform: none; }
 }
 /* Vertical resize grip along the call bar's bottom edge */
 .cb-resize {
   position: absolute; left: 0; right: 0; bottom: 0; height: 6px; z-index: 3;
-  cursor: ns-resize; background: transparent; transition: background .12s;
+  cursor: ns-resize; background: transparent; transition: background var(--dur-1) var(--ease-out);
   touch-action: none;   /* stop touch browsers hijacking the drag as a scroll */
 }
 .cb-resize:hover, .cb-resize.on { background: rgba(var(--accent-rgb), .55); }

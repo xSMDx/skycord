@@ -155,6 +155,6 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-eye { color: var(--text-3); display: flex; }
 .cp-eye:hover { color: var(--text-1); }
 .cp-presets { display: flex; gap: 8px; }
-.cp-presets button { width: 32px; height: 32px; border-radius: 6px; transition: transform .1s; }
+.cp-presets button { width: 32px; height: 32px; border-radius: 6px; transition: transform var(--dur-1) var(--ease-out); }
 .cp-presets button:hover { transform: translateY(-2px); }
 </style>

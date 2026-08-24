@@ -382,9 +382,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   animation: cm-sheet-up .22s cubic-bezier(.2,.8,.3,1);
   /* No transition while a finger is on it: the drag IS the position, and
      easing it would put the sheet behind the thumb. */
-  transition: transform .22s cubic-bezier(.2,.8,.3,1);
+  transition:transform .22s cubic-bezier(.2,.8,.3,1);
 }
-.cm.sheet.dragging { transition: none; }
+.cm.sheet.dragging { transition:none; }
 @keyframes cm-sheet-up { from { transform: translateY(100%) } to { transform: translateY(0) } }
 
 .cm-grab {
@@ -415,7 +415,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm.sheet .cm-slider { padding: 10px 18px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cm.sheet { animation: none; transition: none; }
+  .cm.sheet { animation: none; transition:none; }
   .cm-scrim { animation: none; }
 }
 
@@ -430,7 +430,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; align-items: center; gap: 10px;
   padding: 8px 14px; font-size: 14px; color: var(--text-1);
   width: 100%; text-align: left;
-  transition: background .08s, color .08s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 /* Hover and keyboard focus share one state, so arrowing through the menu looks
    identical to mousing through it. */

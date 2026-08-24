@@ -137,7 +137,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .af-close:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -146,7 +146,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   display: flex; align-items: center; gap: 10px;
   background: var(--bg-raised); border: 1.5px solid rgba(255,255,255,.08);
   border-radius: 8px; padding: 10px 14px;
-  transition: border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .af-search:focus-within { border-color: var(--accent); }
 .af-search-icon { color: var(--text-faint); flex-shrink: 0; }
@@ -164,7 +164,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-user {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border-radius: 8px; cursor: default;
-  transition: background .1s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .af-user:hover { background: var(--hover); }
 .af-user-av { position: relative; width: 38px; height: 38px; flex-shrink: 0; }
@@ -182,7 +182,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   padding: 7px 14px; border-radius: 6px;
   font-size: 13px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); white-space: nowrap; flex-shrink: 0;
-  transition: background .12s, transform .1s;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .af-send-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
 .af-send-btn.sent { background: rgba(35,165,90,.2); color: var(--state-live); cursor: default; }

@@ -60,7 +60,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .tt-list { display: flex; flex-direction: column; gap: 2px; }
 .tt-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 8px 10px; border-radius: 6px; transition: background .1s;
+  padding: 8px 10px; border-radius: 6px; transition: background var(--dur-1) var(--ease-out);
 }
 .tt-row:hover { background: rgba(var(--accent-rgb),.18); }
 .tt-preview { font-size: 13.5px; color: #f2f3f5; }
