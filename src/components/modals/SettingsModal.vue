@@ -375,6 +375,30 @@ interface NavSection { label: string; items: NavItem[] }
  */
 interface NavItem    { id: string; label: string; icon?: any; soon?: boolean }
 
+/**
+ * The shortcuts the app actually listens for.
+ *
+ * Read-only, and this page says so. Rebinding needs stored bindings, a
+ * capture control and conflict detection; listing what exists is the honest
+ * half and the useful one — until now the app had four working shortcuts and
+ * nowhere that admitted it, which is barely better than not having them.
+ *
+ * Kept beside useShortcuts by convention only. If a binding changes there
+ * and not here this page starts lying, so they are cross-referenced in both
+ * directions.
+ */
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+const MOD = IS_MAC ? 'Cmd' : 'Ctrl'
+
+const KEYBINDS: { keys: string[]; label: string }[] = [
+  { keys: [MOD, 'K'],           label: 'Quick switcher' },
+  { keys: [MOD, 'Shift', 'M'],  label: 'Toggle mute' },
+  { keys: [MOD, 'Shift', 'D'],  label: 'Toggle deafen' },
+  { keys: ['Alt', '↑'],         label: 'Previous channel' },
+  { keys: ['Alt', '↓'],         label: 'Next channel' },
+  { keys: ['Esc'],              label: 'Close what is open' },
+]
+
 const navSections: NavSection[] = [
   {
     label: '',
@@ -393,7 +417,7 @@ const navSections: NavSection[] = [
     items: [
       { id: 'appearance', label: 'Appearance'       },
       { id: 'voice',      label: 'Voice & Video'    },
-      { id: 'keybinds',   label: 'Keybinds', soon: true },
+      { id: 'keybinds',   label: 'Keybinds' },
       { id: 'language',   label: 'Language & Time', soon: true },
     ]
   },
@@ -932,6 +956,25 @@ const handleLogout = () => { emit('close'); logout() }
             <VoiceVideoSettings />
           </template>
 
+          <!-- ── Keybinds ── -->
+          <template v-else-if="page === 'keybinds'">
+            <p class="kb-note">
+              These are fixed for now — customising them is not built yet.
+              They match Discord's, so anything you already have in your hands
+              should work here.
+            </p>
+            <div class="kb-list">
+              <div v-for="k in KEYBINDS" :key="k.label" class="kb-row">
+                <span class="kb-label">{{ k.label }}</span>
+                <span class="kb-keys">
+                  <template v-for="(key, i) in k.keys" :key="key">
+                    <kbd class="kb-key">{{ key }}</kbd><span v-if="i < k.keys.length - 1" class="kb-plus">+</span>
+                  </template>
+                </span>
+              </div>
+            </div>
+          </template>
+
           <!-- ── WIP pages ── -->
           <template v-else>
             <div class="wip-page">
@@ -1076,6 +1119,25 @@ const handleLogout = () => { emit('close'); logout() }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img    { display: block; object-fit: cover; }
+
+/* ── Keybinds ── */
+.kb-note { font-size: 13.5px; color: var(--text-3); line-height: 1.5; margin-bottom: 20px; max-width: 52ch; }
+.kb-list { display: flex; flex-direction: column; }
+.kb-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.kb-row:last-child { border-bottom: none; }
+.kb-label { font-size: 14px; color: var(--text-1); }
+.kb-keys  { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.kb-key {
+  font-family: var(--font-ui); font-size: 12px; font-weight: 600; line-height: 1;
+  color: var(--text-1); background: var(--bg-input);
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-bottom-width: 2px;
+  border-radius: var(--edge-sm); padding: 6px 8px; min-width: 24px; text-align: center;
+}
+.kb-plus { font-size: 11px; color: var(--text-faint); }
 
 /* ── Profile page ── */
 .pf-sub { font-size: 13.5px; color: var(--text-3); margin: -6px 0 20px; }

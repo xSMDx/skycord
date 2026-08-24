@@ -63,7 +63,7 @@ import { openMenu, closeMenu, menu } from '@/composables/useContextMenu'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
-import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
+import { buildServerMenu, buildSidebarMenu }      from '@/composables/contextMenus/serverMenu'
 import { voiceOccupantMenu, voiceSelfMenu } from '@/composables/contextMenus/voiceOccupantMenu'
 import { buildChannelMenu, type MenuChannel } from '@/composables/contextMenus/channelMenu'
 import { buildCategoryMenu, type MenuCategory } from '@/composables/contextMenus/categoryMenu'
@@ -74,6 +74,7 @@ import { formatChannelName } from '@/utils/channelName'
 // aborted ChatApp's update entirely, taking the sidebar and the incoming-call
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
+import { stripMarkers } from '@/utils/richText'
 
 import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 
@@ -2199,6 +2200,38 @@ const openConversationMenu = (e: MouseEvent, c: any) => {
 // channel management, leave/delete) that had nowhere to live before. Also the
 // keyboard activation target: Invite People / Leave / Delete Server exist
 // nowhere else in the UI, so Enter/Space here has to work, not just a click.
+/**
+ * Right-click on empty sidebar space — Discord puts the add-actions here and
+ * it is where people reach for them, rather than travelling to the header
+ * chevron for the thing you do most in a young server.
+ *
+ * Rows come from the same builder the header menu uses, so the two can never
+ * drift apart. A non-owner gets an empty list and no menu at all: an empty
+ * box that appears and does nothing is worse than nothing appearing.
+ */
+const openSidebarMenu = (e: MouseEvent) => {
+  const s = activeServer.value
+  if (!s) return
+  const items = buildSidebarMenu(s, authUser.value?.id, serverMenuHandlers())
+  if (!items.length) return
+  openMenu(e, items)
+}
+
+// Shared by the header chevron and the sidebar background so both menus act
+// through exactly the same handlers.
+const serverMenuHandlers = () => ({
+  markRead:      () => {
+    const ids = (channelsByServer.value[activeServerId.value ?? ""] ?? []).map(c => c.id)
+    ids.forEach(clearUnread)
+  },
+  invitePeople:  () => { showInvite.value = true },
+  createChannel: () => { openCreateChannel(null) },
+  createCategory: openCreateCategory,
+  leaveServer:   doLeaveServer,
+  deleteServer:  doDeleteServer,
+  copy:          copyText,
+})
+
 const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const s = activeServer.value
   if (!s) return
@@ -2208,20 +2241,8 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const serverChannelIds = (channelsByServer.value[s.id] ?? []).map(c => c.id)
   const hasUnread = serverChannelIds.some(id => !!unreadChannels.value[id])
 
-  const items = buildServerMenu(s, authUser.value?.id, {
-    markRead:      () => { serverChannelIds.forEach(clearUnread) },
-    invitePeople:  () => { showInvite.value = true },          // Task 2
-    // No category: the server menu is not scoped to one, and guessing at the
-    // first one would file the channel somewhere the user never pointed at.
-    createChannel: () => { openCreateChannel(null) },
-    // Lives here as well as on a category header because a server with no
-    // categories yet has no header to right-click — without this row the
-    // first category could never be made.
-    createCategory: openCreateCategory,
-    leaveServer:   doLeaveServer,
-    deleteServer:  doDeleteServer,
-    copy:          copyText,
-  }, hasUnread)
+  // Same handlers the sidebar-background menu uses — see serverMenuHandlers.
+  const items = buildServerMenu(s, authUser.value?.id, serverMenuHandlers(), hasUnread)
   if (e instanceof MouseEvent) { openMenu(e, items); return }
   // A keyboard activation carries no pointer position — anchor the menu to
   // the header itself rather than guessing at coordinates.
@@ -2774,15 +2795,53 @@ const handlePinById = async (msgId: number) => {
 const handlePin = (msg: Message) => handlePinById(msg.id)
 
 // Delete — remove local + broadcast
-const handleDeleteById = async (msgId: number) => {
+/**
+ * Deleting a message asks first.
+ *
+ * It used to go straight through — the only destructive action in the app
+ * without a guard, while leaving a server, deleting a server, deleting a
+ * channel and deleting a category all had one. It is also the destructive
+ * action people take most often, by a wide margin, and the one most likely to
+ * be a misclick: the row sits at the bottom of a menu whose other rows are
+ * all harmless, and there is no undo behind it.
+ *
+ * The preview is deliberately part of the question. "Delete this message?"
+ * asks you to trust that the app and you agree on which one; showing the text
+ * lets you check.
+ */
+const DELETE_PREVIEW_MAX = 120
+
+const handleDeleteById = (msgId: number) => {
   const list = getMsgList()
   const msg  = list.find(m => m.id === msgId)
   if (!msg) return
-  const dbId = (msg as any).dbId
-  deleteMessage(list, msgId)
-  if (dbId && socketConnected.value) {
-    await sendDeleteSocket(dbId)
-  }
+
+  const body = stripMarkers(msg.content || "").replace(/s+/g, " ").trim()
+  const preview = body.length > DELETE_PREVIEW_MAX
+    ? body.slice(0, DELETE_PREVIEW_MAX) + "…"
+    : body
+
+  openConfirm({
+    title: "Delete Message",
+    message: preview
+      ? `Delete this message? This cannot be undone.
+
+“${preview}”`
+      : "Delete this message? This cannot be undone.",
+    confirmLabel: "Delete",
+    danger: true,
+    action: async () => {
+      // Re-read rather than closing over the row: the confirm is open across
+      // an await, and the message can be deleted by its author on another
+      // client while the dialog sits there.
+      const live = getMsgList()
+      const still = live.find(m => m.id === msgId)
+      if (!still) return
+      const dbId = (still as any).dbId
+      deleteMessage(live, msgId)
+      if (dbId && socketConnected.value) await sendDeleteSocket(dbId)
+    },
+  })
 }
 const handleDelete = (msg: Message) => handleDeleteById(msg.id)
 
@@ -2992,6 +3051,14 @@ const onKey = (e: KeyboardEvent) => {
 }
 const onClick = () => { closeCtx(); showEmojiPicker.value = false }
 
+// Target of the skip link. Queried rather than ref-forwarded through
+// MessageInput because the composer only exists on some views, and a ref
+// that is null half the time invites callers to stop checking.
+const focusComposer = () => {
+  const el = document.querySelector<HTMLTextAreaElement>('.msg-input')
+  el?.focus()
+}
+
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────
 // Discord's bindings, deliberately — see useShortcuts for why they are not
 // ours to redesign.
@@ -3071,6 +3138,19 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app" @click="onClick">
+
+    <!--
+      Skip to the composer. It sits 42 tab stops into the page — the rail,
+      the channel list, the message actions and the member panel all come
+      first, and making the rail keyboard-reachable (correctly) pushed it
+      further out still. Typing is the reason the app is open; it should not
+      be the last thing a keyboard reaches.
+
+      Off-screen until focused rather than display:none, because a hidden
+      element is not focusable, and a skip link nobody can focus is
+      decoration.
+    -->
+    <button class="skip-link" @click="focusComposer">Skip to message box</button>
 
     <!-- Incoming DM call — ringing modal (accept joins, decline dismisses) -->
     <IncomingCallModal
@@ -3565,7 +3645,10 @@ onBeforeUnmount(() => {
           </span>
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
-        <div class="sb-body">
+        <!-- Right-click anywhere the channel rows are not. Rows and category
+             headers stop propagation on their own contextmenu, so this only
+             ever fires on empty space. -->
+        <div class="sb-body" @contextmenu.prevent="openSidebarMenu($event)">
           <!-- The sidebar rendered nothing at all while a server's channel
                list was in flight, so opening an uncached server looked like an
                empty server. Shaped like a category with channels under it, at
@@ -4465,6 +4548,20 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    group hittable while it is empty — during a drag it is the only visible
    thing saying "you can put this outside every category". */
 .ch-group.drop-target{outline:1px dashed var(--accent);outline-offset:1px;border-radius: 6px;background:rgba(var(--accent-rgb),.07);min-height:26px}
+/* Off-screen until focused. Not display:none — that is unfocusable, and an
+   unfocusable skip link is decoration. */
+.skip-link{
+  position:fixed; top:8px; left:8px; z-index:10000;
+  transform:translateY(-200%);
+  padding: 8px 14px; border-radius: 6px;
+  background:var(--bg-floating, var(--bg-panel)); color:var(--text-strong);
+  font-size:14px; font-weight:600; border:1px solid var(--active-ring);
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.skip-link:focus-visible{ transform:translateY(0); }
+@media (prefers-reduced-motion: reduce){ .skip-link{transition:none} }
+
 .ch-item.dragging{opacity:.4}
 
 @media (prefers-reduced-motion: reduce){

@@ -73,7 +73,10 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cfm-title  { font-size: 18px; font-weight: 700; color: var(--text-strong); }
 
 .cfm-body    { padding: 16px 20px; }
-.cfm-message { font-size: 14px; color: var(--text-2); line-height: 1.5; }
+/* pre-line so a caller can put the thing being destroyed on its own line —
+   the message-delete confirm quotes the message back at you, and a quote run
+   into the question is harder to check than no quote at all. */
+.cfm-message { font-size: 14px; color: var(--text-2); line-height: 1.5; white-space: pre-line; }
 
 .cfm-footer {
   display: flex; justify-content: flex-end; gap: 10px;

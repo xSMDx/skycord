@@ -13,6 +13,10 @@ import { onMounted, onBeforeUnmount } from 'vue'
  * relearn something they never chose to change. Inventing a "better" set would
  * be the one design decision guaranteed to be noticed and resented.
  *
+ * Settings > Keybinds lists these for the user. It is a hand-maintained copy
+ * (KEYBINDS in SettingsModal.vue) — change a binding here and change it there,
+ * or that page starts lying about what the app does.
+ *
  * Registered once, at the app root. A shortcut layer scattered across
  * components is how you end up with two components handling the same chord
  * differently — the same failure the two context menus were.

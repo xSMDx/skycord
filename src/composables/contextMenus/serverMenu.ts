@@ -33,6 +33,48 @@ export interface ServerMenuHandlers {
   copy:           (text: string, what: string) => void
 }
 
+/**
+ * The three rows that add something to a server.
+ *
+ * Shared by the header chevron menu and the empty-sidebar menu rather than
+ * written twice. Two menus offering the same actions under different labels
+ * or in a different order is the drift that put two context menus in this
+ * app in the first place.
+ *
+ * Owner-gated rather than disabled: the server 403s a non-owner on invites
+ * and channel creation, and a row that can only ever fail is worse than no
+ * row.
+ */
+export const buildAddRows = (serverId: string, h: ServerMenuHandlers): MenuItem[] => [
+  { label: 'Invite to Server', icon: UserPlus, onSelect: () => h.invitePeople(serverId) },
+  { label: 'Create Channel', icon: Plus, onSelect: () => h.createChannel(serverId) },
+  // Sits beside Create Channel rather than only on a category header,
+  // because a server with no categories yet has no header to right-click —
+  // this is the only way to make the first one.
+  { label: 'Create Category', icon: FolderPlus, onSelect: () => h.createCategory(serverId) },
+]
+
+/**
+ * Right-click on empty sidebar space.
+ *
+ * Discord puts the add-actions here and it is where people reach for them —
+ * the header chevron is a longer trip for the thing you do most in a young
+ * server. Nothing but the add-rows: this is not a second server menu, and
+ * duplicating Mark As Read / Leave / Delete here would make two menus that
+ * have to be kept in step forever.
+ *
+ * Empty for a non-owner, and the caller opens nothing rather than an empty
+ * box. Hide Muted Channels, which the reference shows at the top, is absent
+ * for the same reason it is absent from the header menu: there is no
+ * server-level mute to hide anything by.
+ */
+export const buildSidebarMenu = (
+  server: MenuServer,
+  myId: string | undefined,
+  h: ServerMenuHandlers,
+): MenuItem[] =>
+  (!!myId && server.owner === myId) ? buildAddRows(server.id, h) : []
+
 export const buildServerMenu = (
   server: MenuServer,
   myId: string | undefined,
@@ -50,15 +92,7 @@ export const buildServerMenu = (
     { sep: true },
   ]
   if (isOwner) {
-    items.push(
-      { label: 'Invite to Server', icon: UserPlus, onSelect: () => h.invitePeople(server.id) },
-      { label: 'Create Channel', icon: Plus, onSelect: () => h.createChannel(server.id) },
-      // Sits beside Create Channel rather than only on a category header,
-      // because a server with no categories yet has no header to right-click —
-      // this is the only way to make the first one.
-      { label: 'Create Category', icon: FolderPlus, onSelect: () => h.createCategory(server.id) },
-      { sep: true },
-    )
+    items.push(...buildAddRows(server.id, h), { sep: true })
   }
   items.push(
     // Disabled, not missing — see the note at the top of this file.
