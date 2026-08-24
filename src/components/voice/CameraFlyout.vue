@@ -35,15 +35,15 @@ onMounted(refreshDevices)
   <CallFlyout @close="emit('close')">
     <button class="fr" @click="showDevices = !showDevices">
       <span>Camera<span class="fr-sub">{{ currentCamLabel() }}</span></span>
-      <ChevronRight :size="13" :stroke-width="2.25" :style="showDevices ? 'transform:rotate(90deg)' : ''" />
+      <ChevronRight :size="14" :stroke-width="2.25" :style="showDevices ? 'transform:rotate(90deg)' : ''" />
     </button>
     <template v-if="showDevices">
       <button class="fr" @click="setCameraDevice('')">
-        <span>Default</span><Check v-if="!voiceSettings.cameraDeviceId" class="fr-check" :size="15" :stroke-width="2.25" />
+        <span>Default</span><Check v-if="!voiceSettings.cameraDeviceId" class="fr-check" :size="16" :stroke-width="2.25" />
       </button>
       <button v-for="(d,i) in cameras" :key="d.deviceId" class="fr" @click="setCameraDevice(d.deviceId)">
         <span>{{ deviceLabel(d, `Camera ${i+1}`) }}</span>
-        <Check v-if="voiceSettings.cameraDeviceId===d.deviceId" class="fr-check" :size="15" :stroke-width="2.25" />
+        <Check v-if="voiceSettings.cameraDeviceId===d.deviceId" class="fr-check" :size="16" :stroke-width="2.25" />
       </button>
     </template>
 
@@ -52,12 +52,12 @@ onMounted(refreshDevices)
          gives you two dismissable layers stacked on the same click. -->
     <button class="fr" @click="emit('previewCamera'); emit('close')">
       <span>Preview Camera<span v-if="media.localCamOn" class="fr-sub">Showing your live camera</span></span>
-      <Eye :size="15" :stroke-width="2.25" />
+      <Eye :size="16" :stroke-width="2.25" />
     </button>
 
     <div class="fr-sep" />
     <button class="fr" @click="emit('openSettings'); emit('close')">
-      <span>Video Settings</span><Settings :size="15" :stroke-width="2.25" />
+      <span>Video Settings</span><Settings :size="16" :stroke-width="2.25" />
     </button>
   </CallFlyout>
 </template>

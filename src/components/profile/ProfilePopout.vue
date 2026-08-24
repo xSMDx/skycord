@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
             <button class="pp-row" @click="togglePresence($event)">
               <span class="pp-dot" :style="{ background: statusColor(currentPresence.id) }" />
               <span>{{ currentPresence.label }}</span>
-              <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
+              <ChevronRight :size="14" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
             </button>
             <!-- Beside the popout, not inside it. The reference cascades: the
                  popout opens a status panel, and a status opens a duration
@@ -309,7 +309,7 @@ onBeforeUnmount(() => {
                  "not yet" — so it is shown, disabled, and says so on hover. -->
             <button class="pp-row" disabled v-tip="'TBD'">
               <UserRoundCog :size="16" :stroke-width="2.25" /><span>Switch Accounts</span>
-              <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" />
+              <ChevronRight :size="14" :stroke-width="2.25" class="pp-chev" />
             </button>
 
             <button class="pp-row" @click="copyId">
@@ -378,8 +378,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; flex-direction: column; gap: 2px;
 }
 .pp-row {
-  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
-  padding: 9px 10px; border-radius: 6px; font-size: 14px; color: var(--text-1);
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 8px 10px; border-radius: 6px; font-size: 14px; color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out);
 }
 .pp-row:hover:not(:disabled) { background: var(--hover-strong); }
@@ -391,7 +391,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    and the dot pins to the first line. */
 .pp-presence-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .pp-presence-note { font-size: 11.5px; line-height: 1.3; color: var(--text-faint); white-space: normal; }
-.pp-row.sub .pp-dot { margin-top: 5px; }
+.pp-row.sub .pp-dot { margin-top: 6px; }
 .pp-row.danger { color: #f0716f; }
 .pp-row.danger svg { color: #f0716f; }
 /* A status row and the chevron that bounds it in time. The row keeps its
@@ -403,7 +403,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-chev-btn svg { transition: transform var(--dur-2) var(--ease-out); }
 .pp-chev-btn.open svg { transform: rotate(90deg); }
 .pp-dur {
-  display: block; width: 100%; padding: 7px 10px; border-radius: 4px;
+  display: block; width: 100%; padding: 8px 10px; border-radius: 4px;
   background: none; border: none; cursor: pointer;
   font-size: 13.5px; color: var(--text-2); text-align: left;
 }
@@ -414,5 +414,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-chev { margin-left: auto; color: var(--text-3); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }
-.pp-note { font-size: 12.5px; color: var(--text-3); padding: 9px 10px; background: var(--hover); border-radius: 6px; }
+.pp-note { font-size: 12.5px; color: var(--text-3); padding: 8px 10px; background: var(--hover); border-radius: 6px; }
 </style>

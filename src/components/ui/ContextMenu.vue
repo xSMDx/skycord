@@ -322,7 +322,7 @@ onBeforeUnmount(() => {
           @click="select(item)"
           @mouseenter="onRowEnter(i, item, $event)"
         >
-          <component :is="item.icon" v-if="item.icon" :size="15" :stroke-width="1.5" />
+          <component :is="item.icon" v-if="item.icon" :size="16" :stroke-width="1.5" />
           <span class="cm-label">{{ item.label }}</span>
           <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
           <ChevronRight v-if="item.submenu" :size="12" :stroke-width="2.25" class="cm-caret" />
@@ -360,7 +360,7 @@ onBeforeUnmount(() => {
           @click="select(item)"
           @mouseenter="subActive = j"
         >
-          <component :is="item.icon" v-if="item.icon" :size="15" :stroke-width="1.5" />
+          <component :is="item.icon" v-if="item.icon" :size="16" :stroke-width="1.5" />
           <span class="cm-label">{{ item.label }}</span>
           <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
         </button>
@@ -463,7 +463,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   to   { opacity: 1; transform: scale(1)   translateY(0);    }
 }
 
-.cm-sep { height: 1px; background: rgba(255,255,255,.08); margin: 3px 0; }
+.cm-sep { height: 1px; background: rgba(255,255,255,.08); margin: 4px 0; }
 
 .cm-row {
   display: flex; align-items: center; gap: 10px;

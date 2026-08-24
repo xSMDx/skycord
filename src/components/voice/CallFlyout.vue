@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
 .fly .fr {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; padding: 8px 10px; border: none; background: none; text-align: left;
-  font-size: 13.5px; font-weight: 500; color: var(--text-1); border-radius: 5px;
+  font-size: 13.5px; font-weight: 500; color: var(--text-1); border-radius: 6px;
   cursor: pointer; box-sizing: border-box;
 }
 .fly .fr:hover { background: var(--accent); color: #fff; }

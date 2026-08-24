@@ -96,8 +96,8 @@ const statusColor: Record<string, string> = {
                 @click="send(u)"
                 :disabled="sentIds.has(u.id)"
               >
-                <Check v-if="sentIds.has(u.id)" :size="15" :stroke-width="2.25" />
-                <UserPlus v-else :size="15" :stroke-width="1.5" />
+                <Check v-if="sentIds.has(u.id)" :size="16" :stroke-width="2.25" />
+                <UserPlus v-else :size="16" :stroke-width="1.5" />
                 {{ sentIds.has(u.id) ? 'Sent' : 'Add Friend' }}
               </button>
             </div>
@@ -133,7 +133,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   padding: 20px 20px 0;
 }
 .af-title { font-size: 18px; font-weight: 700; color: var(--text-strong); }
-.af-sub   { font-size: 13px; color: var(--text-3); margin-top: 3px; }
+.af-sub   { font-size: 13px; color: var(--text-3); margin-top: 4px; }
 .af-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -179,7 +179,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .af-send-btn {
   display: flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: 6px;
+  padding: 8px 14px; border-radius: 6px;
   font-size: 13px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); white-space: nowrap; flex-shrink: 0;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);

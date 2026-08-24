@@ -154,10 +154,10 @@ const STATUS_COLORS: Record<string, string> = {
                   </button>
                   <div v-if="moreOpen" class="up-menu" @click.stop>
                     <button @click="copyId">
-                      <IdCard :size="15" :stroke-width="2.25" /> Copy user ID
+                      <IdCard :size="16" :stroke-width="2.25" /> Copy user ID
                     </button>
                     <button v-if="relationship === 'friends'" class="danger" @click="unfriend">
-                      <UserMinus :size="15" :stroke-width="2.25" /> Remove friend
+                      <UserMinus :size="16" :stroke-width="2.25" /> Remove friend
                     </button>
                   </div>
                 </div>
@@ -280,8 +280,8 @@ img { display: block; object-fit: cover; }
   box-shadow: 0 12px 34px rgba(0,0,0,.6);
 }
 .up-menu button {
-  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
-  padding: 9px 10px; border-radius: 4px; font-size: 14px; color: var(--text-2);
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 8px 10px; border-radius: 4px; font-size: 14px; color: var(--text-2);
 }
 .up-menu button:hover { background: var(--accent); color: #fff; }
 .up-menu button.danger { color: #f0716f; }
@@ -298,7 +298,7 @@ img { display: block; object-fit: cover; }
 .up-meta-v { font-size: 14px; color: var(--text-1); }
 .up-pending {
   margin-top: 18px; font-size: 12.5px; color: var(--text-3);
-  background: var(--hover); border-radius: 8px; padding: 9px 12px;
+  background: var(--hover); border-radius: 8px; padding: 8px 12px;
 }
 
 .up-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
@@ -313,8 +313,8 @@ img { display: block; object-fit: cover; }
 
 .up-mutuals { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .up-mutual {
-  display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
-  padding: 9px 11px; border-radius: 8px;
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  padding: 8px 12px; border-radius: 8px;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .up-mutual:hover  { background: var(--hover-strong); }

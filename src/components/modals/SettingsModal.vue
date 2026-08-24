@@ -1087,7 +1087,7 @@ img    { display: block; object-fit: cover; }
 .pf-rail { width: 240px; flex: none; display: flex; flex-direction: column; gap: 22px; }
 .pf-cardcol { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 18px; }
 .pf-field { display: flex; flex-direction: column; }
-.pf-field .acc-row-label { margin-bottom: 9px; }
+.pf-field .acc-row-label { margin-bottom: 8px; }
 
 .pf-avrow { display: flex; align-items: center; gap: 12px; }
 .pf-av { flex: none; }   /* size and shape come from Avatar, which also clips */
@@ -1110,8 +1110,8 @@ img    { display: block; object-fit: cover; }
 .pf-bnbox:hover { filter: brightness(1.25); }
 .pf-bnbox { position: relative; overflow: hidden; padding: 0; }
 .pf-bnimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.pf-bnbtns { margin-top: 9px; }
-.pf-hex { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 7px; }
+.pf-bnbtns { margin-top: 8px; }
+.pf-hex { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 8px; }
 /* The backdrop is a sibling of the panel, not a wrapper — a full-screen layer
    ABOVE the panel would swallow the very clicks the picker needs. */
 .pf-pop-backdrop { position: fixed; inset: 0; z-index: 40; }
@@ -1129,11 +1129,11 @@ img    { display: block; object-fit: cover; }
 .pf-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .pf-textarea {
   width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
-  border-radius: 5px; padding: 10px 12px; color: var(--text-1);
+  border-radius: 6px; padding: 10px 12px; color: var(--text-1);
   font: inherit; font-size: 14.5px; line-height: 1.5; resize: vertical; min-height: 74px;
 }
 .pf-textarea:focus { outline: none; border-color: var(--accent); }
-.pf-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.pf-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 6px; font-variant-numeric: tabular-nums; }
 
 .pf-menu-backdrop { position: fixed; inset: 0; z-index: 1400; }
 .pf-menu {
@@ -1142,7 +1142,7 @@ img    { display: block; object-fit: cover; }
   box-shadow: 0 12px 34px rgba(0,0,0,.6);
 }
 .pf-menu button {
-  display: block; width: 100%; text-align: left; padding: 9px 11px;
+  display: block; width: 100%; text-align: left; padding: 8px 12px;
   border-radius: 4px; font-size: 14px; color: var(--text-2);
 }
 .pf-menu button:hover:not(:disabled) { background: var(--accent); color: #fff; }
@@ -1180,7 +1180,7 @@ img    { display: block; object-fit: cover; }
 }
 .sm-nav-item {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; text-align: left; padding: 10px 12px; border-radius: 7px;
+  width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
   font-size: 16px; color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .sm-nav-item:hover { background: var(--hover); color: var(--text-strong); }
@@ -1263,7 +1263,7 @@ img    { display: block; object-fit: cover; }
 .acc-row-value { font-size: 16px; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
 .acc-row-value.muted { color: var(--text-3); }
 .acc-btn {
-  padding: 9px 20px; border-radius: 6px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
+  padding: 8px 20px; border-radius: 6px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
   background: rgba(255,255,255,.08); white-space: nowrap; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .acc-btn:hover { background: var(--hover-strong); transform: translateY(-1px); }
@@ -1330,7 +1330,7 @@ img    { display: block; object-fit: cover; }
 .ap-prev-name { font-weight: 600; color: var(--text-strong); }
 .ap-prev-time { font-size: 11px; color: var(--text-faint); }
 .ap-prev-text { display: block; color: var(--text-1); line-height: 1.4; }
-.ap-prev-text code { background: var(--bg-input); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+.ap-prev-text code { background: var(--bg-input); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
 
 /* Compact: single line — [time] Name text, no avatar */
 .ap-preview.prev-compact .ap-prev-msg { align-items: baseline; gap: 8px; margin-top: 4px !important; padding: 1px 0; }
@@ -1373,7 +1373,7 @@ img    { display: block; object-fit: cover; }
 .ap-slider::-moz-range-track { height: 6px; background: transparent; border-radius: 999px; }
 .ap-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 16px; height: 16px; margin-top: -5px; border-radius: 50%;
+  width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
   background: var(--accent); border: 2px solid var(--bg-panel); box-shadow: 0 1px 3px rgba(0,0,0,.4);
 }
 .ap-slider::-moz-range-thumb {
@@ -1405,7 +1405,7 @@ img    { display: block; object-fit: cover; }
 .ap-share-err { font-size: 12px; color: #f08080; margin: 6px 0 2px; }
 .ap-name-input {
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
-  padding: 9px 12px; color: var(--text-1); font-size: 14px; min-width: 180px;
+  padding: 8px 12px; color: var(--text-1); font-size: 14px; min-width: 180px;
 }
 .ap-name-input:focus { outline: none; border-color: var(--accent); }
 
@@ -1457,7 +1457,7 @@ img    { display: block; object-fit: cover; }
 /* Nav rows become list rows: full-bleed, 48px tall, chevron pushed right. */
 /* flex-start + gap, NOT space-between: rows like "Log Out" have an icon next to
    their label, and space-between flings the two to opposite edges. The chevron
-   is pushed right by its own margin-left:auto, which is all that was needed. */
+   is pushed right by its own margin-left: auto, which is all that was needed. */
 .sm-modal.mobile .sm-nav-item {
   display: flex; align-items: center; justify-content: flex-start; gap: 10px;
   min-height: 48px; padding: 12px 16px; border-radius: 0; font-size: 15px;

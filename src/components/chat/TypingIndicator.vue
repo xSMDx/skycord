@@ -30,7 +30,7 @@ defineProps<{ typers: string[] }>()
 .ti-dots {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 /* Each dot pulses in sequence: . → .. → ... → loop */

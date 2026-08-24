@@ -177,7 +177,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .ig-search-row { display: flex; gap: 10px; padding: 16px 20px 0; }
 .ig-search {
-  flex: 1; padding: 9px 12px; border-radius: 6px;
+  flex: 1; padding: 8px 12px; border-radius: 6px;
   background: var(--bg-input); border: 1px solid transparent;
   font-size: 14px; color: var(--text-1); outline: none; transition: border-color var(--dur-2) var(--ease-out);
 }
@@ -196,7 +196,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-list { padding: 8px 12px; max-height: 280px; overflow-y: auto; margin-top: 4px; }
 .ig-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 7px 8px; border-radius: 6px; cursor: pointer; transition: background var(--dur-1) var(--ease-out);
+  padding: 8px 8px; border-radius: 6px; cursor: pointer; transition: background var(--dur-1) var(--ease-out);
 }
 .ig-item:hover { background: var(--hover); }
 .ig-item.selected { background: rgba(var(--accent-rgb),.12); }
@@ -227,7 +227,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-link-label { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-2); }
 .ig-link-row { display: flex; gap: 10px; }
 .ig-link {
-  flex: 1; padding: 9px 12px; border-radius: 6px;
+  flex: 1; padding: 8px 12px; border-radius: 6px;
   background: var(--bg-panel); border: none;
   font-size: 14px; color: var(--text-1); outline: none;
 }

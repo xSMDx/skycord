@@ -113,7 +113,7 @@ const pickFromScreen = async () => {
       <span>#</span>
       <input :value="hexText" maxlength="6" spellcheck="false" aria-label="Hex colour" @input="onHexInput" />
       <button v-if="hasEyedropper" class="cp-eye" v-tip="'Pick from screen'" @click="pickFromScreen">
-        <Pipette :size="15" :stroke-width="1.75" />
+        <Pipette :size="16" :stroke-width="1.75" />
       </button>
     </div>
 
@@ -132,7 +132,7 @@ const pickFromScreen = async () => {
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 
 .cp { width: 240px; }
-.cp-sv { height: 150px; border-radius: 5px; position: relative; cursor: crosshair; margin-bottom: 12px; touch-action: none; }
+.cp-sv { height: 150px; border-radius: 6px; position: relative; cursor: crosshair; margin-bottom: 12px; touch-action: none; }
 .cp-hue {
   height: 12px; border-radius: 6px; position: relative; cursor: pointer; margin-bottom: 14px; touch-action: none;
   background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);
@@ -145,7 +145,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-hex {
   display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
   background: var(--bg-input); border: 1px solid var(--accent);
-  border-radius: 5px; padding: 8px 10px;
+  border-radius: 6px; padding: 8px 10px;
 }
 .cp-hex span  { color: var(--text-3); font-family: var(--font-mono); font-size: 14px; }
 .cp-hex input {

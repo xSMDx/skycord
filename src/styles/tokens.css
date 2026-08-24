@@ -82,6 +82,25 @@
      danger button. One step past --hover-strong, the same white-on-dark /
      black-on-light inversion the hover tints use. */
   --press-veil: rgba(255, 255, 255, .09);
+
+  /* ── The 2px grid ───────────────────────────────────────────────────────
+     Spacing, radii and icon sizes are even numbers. Not a scale invented
+     here — it is the one the app already used, in 27 spacing values, 20 icon
+     sizes and 12 radii of which the heavily-used ones were all even and the
+     strays were all odd. Snapping the strays moved 211 sites by at most 1px
+     each and removed roughly a third of the distinct values.
+
+     1px is a hairline, not spacing. 999px is the pill idiom. Neither is on
+     the grid and neither should be.
+
+     There are deliberately no --space-N tokens. A token per value documents
+     sprawl instead of reducing it, and named tokens only earn their place
+     when the name carries meaning the number does not. These do: */
+  --edge-sm:  4px;   /* chips, badges, small controls */
+  --edge-md:  6px;   /* rows, inputs, menu items */
+  --edge-lg:  8px;   /* panels, menus, flyouts */
+  --edge-xl: 12px;   /* modals and cards */
+  --edge-pill: 999px;
 }
 
 /* Appearance: "Always underline links" */

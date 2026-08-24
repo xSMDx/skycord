@@ -81,7 +81,7 @@ const save = async () => {
             <Avatar v-if="avatar" :src="avatar" alt="Group icon" />
             <UsersRound v-else :size="40" :stroke-width="2.25" />
           </span>
-          <span class="eg-avatar-edit"><Pencil :size="15" :stroke-width="2.25" /></span>
+          <span class="eg-avatar-edit"><Pencil :size="16" :stroke-width="2.25" /></span>
         </button>
 
         <label class="eg-label" for="eg-name">Group Name</label>
@@ -187,7 +187,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .eg-cancel { font-size: 14px; font-weight: 600; color: var(--text-1); padding: 8px 4px; }
 .eg-cancel:hover { text-decoration: underline; }
 .eg-save {
-  padding: 9px 28px; border-radius: 4px;
+  padding: 8px 28px; border-radius: 4px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }

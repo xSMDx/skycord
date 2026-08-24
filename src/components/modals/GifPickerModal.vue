@@ -34,7 +34,7 @@ const pick = (gif: any) => {
       </div>
 
       <div class="gp-search">
-        <Search :size="15" :stroke-width="1.5" />
+        <Search :size="16" :stroke-width="1.5" />
         <input v-model="search" type="text" placeholder="Search GIFs" autofocus />
       </div>
 
@@ -72,7 +72,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .gp-search {
   display: flex; align-items: center; gap: 8px;
-  margin: 14px 18px 0; padding: 9px 12px; border-radius: 8px;
+  margin: 14px 18px 0; padding: 8px 12px; border-radius: 8px;
   background: var(--bg-input); border: 1px solid transparent; color: var(--text-3);
   transition: border-color var(--dur-2) var(--ease-out);
 }

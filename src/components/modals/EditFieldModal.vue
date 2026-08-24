@@ -73,7 +73,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   padding: 20px; margin-top: 4px;
 }
 .efm-btn {
-  padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-strong);
+  padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-strong);
   background: transparent; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .efm-btn:hover { background: var(--hover); }
@@ -86,7 +86,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 :deep(.efm-field-label) { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-2); margin-bottom: 6px; display: block; }
 :deep(.efm-input) {
   width: 100%; background: var(--bg-input); border: 1px solid transparent; border-radius: 4px;
-  padding: 9px 10px; font-size: 14px; color: var(--text-strong); outline: none;
+  padding: 8px 10px; font-size: 14px; color: var(--text-strong); outline: none;
   font-family: inherit; transition: border-color var(--dur-1) var(--ease-out);
 }
 :deep(.efm-input:focus) { border-color: var(--accent); }

@@ -133,29 +133,29 @@ onBeforeUnmount(() => {
   <CallFlyout :dir="dir" @close="emit('close')">
     <button v-if="show('input')" class="fr" @click="toggleSection('input')">
       <span>Input Device<span class="fr-sub">{{ currentMicLabel() }}</span></span>
-      <ChevronRight :size="13" :stroke-width="2.25" :style="openSection==='input' ? 'transform:rotate(90deg)' : ''" />
+      <ChevronRight :size="14" :stroke-width="2.25" :style="openSection==='input' ? 'transform:rotate(90deg)' : ''" />
     </button>
     <template v-if="show('input') && openSection==='input'">
       <button class="fr" @click="setMicDevice('')">
-        <span>Default</span><Check v-if="!voiceSettings.inputDeviceId" class="fr-check" :size="15" :stroke-width="2.25" />
+        <span>Default</span><Check v-if="!voiceSettings.inputDeviceId" class="fr-check" :size="16" :stroke-width="2.25" />
       </button>
       <button v-for="(d,i) in mics" :key="d.deviceId" class="fr" @click="setMicDevice(d.deviceId)">
         <span>{{ deviceLabel(d, `Microphone ${i+1}`) }}</span>
-        <Check v-if="voiceSettings.inputDeviceId===d.deviceId" class="fr-check" :size="15" :stroke-width="2.25" />
+        <Check v-if="voiceSettings.inputDeviceId===d.deviceId" class="fr-check" :size="16" :stroke-width="2.25" />
       </button>
     </template>
 
     <button v-if="show('output')" class="fr" :disabled="!supportsSinkId" @click="toggleSection('output')">
       <span>Output Device<span class="fr-sub">{{ currentSpkLabel() }}</span></span>
-      <ChevronRight :size="13" :stroke-width="2.25" :style="openSection==='output' ? 'transform:rotate(90deg)' : ''" />
+      <ChevronRight :size="14" :stroke-width="2.25" :style="openSection==='output' ? 'transform:rotate(90deg)' : ''" />
     </button>
     <template v-if="show('output') && openSection==='output'">
       <button class="fr" @click="setSpeakerDevice('')">
-        <span>Default</span><Check v-if="!voiceSettings.outputDeviceId" class="fr-check" :size="15" :stroke-width="2.25" />
+        <span>Default</span><Check v-if="!voiceSettings.outputDeviceId" class="fr-check" :size="16" :stroke-width="2.25" />
       </button>
       <button v-for="(d,i) in speakers" :key="d.deviceId" class="fr" @click="setSpeakerDevice(d.deviceId)">
         <span>{{ deviceLabel(d, `Speaker ${i+1}`) }}</span>
-        <Check v-if="voiceSettings.outputDeviceId===d.deviceId" class="fr-check" :size="15" :stroke-width="2.25" />
+        <Check v-if="voiceSettings.outputDeviceId===d.deviceId" class="fr-check" :size="16" :stroke-width="2.25" />
       </button>
     </template>
 
@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
       <span class="fr-tog" :class="{ on: deafened }"><span /></span>
     </div>
     <button class="fr" @click="emit('openSettings'); emit('close')">
-      <span>Voice Settings</span><Settings :size="15" :stroke-width="2.25" />
+      <span>Voice Settings</span><Settings :size="16" :stroke-width="2.25" />
     </button>
   </CallFlyout>
 </template>

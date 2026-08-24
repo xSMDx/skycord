@@ -102,7 +102,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cb-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .cb-retry {
-  margin-left: 4px; padding: 3px 10px; border-radius: 999px;
+  margin-left: 4px; padding: 4px 10px; border-radius: 999px;
   background: rgba(255,255,255,.18); font-size: 12px; font-weight: 700;
   /* 44px would dwarf a 30px-tall strip; the surrounding bar is a large target
      already and this sits alone, so a smaller pill is legitimate here. */

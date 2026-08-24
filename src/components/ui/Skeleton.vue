@@ -50,7 +50,7 @@ const size = (v: number | string) => (typeof v === 'number' ? `${v}px` : v)
 .sk {
   display: block;
   flex: none;
-  border-radius: var(--edge-1);
+  border-radius: var(--edge-sm);
   /* Fixed attachment is what makes one sheen cross every bar at once rather
      than each bar animating its own. */
   background-image: linear-gradient(

@@ -194,7 +194,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-link-label { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-2); }
 .is-link-row { display: flex; gap: 10px; }
 .is-link {
-  flex: 1; padding: 9px 12px; border-radius: 6px;
+  flex: 1; padding: 8px 12px; border-radius: 6px;
   background: var(--bg-input); border: none;
   font-size: 14px; color: var(--text-1); outline: none;
 }

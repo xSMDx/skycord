@@ -240,21 +240,21 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
       <button v-if="!atBottom" class="ml-jump" @click="scrollToBottom()">
         <span v-if="missed">{{ missed }} new message{{ missed === 1 ? '' : 's' }}</span>
         <span v-else>Jump to present</span>
-        <ChevronDown :size="13" :stroke-width="2.25" />
+        <ChevronDown :size="14" :stroke-width="2.25" />
       </button>
     </Transition>
   </div>
 </template>
 <style scoped>
-*{box-sizing:border-box;margin:0;padding:0}img{display:block;width:100%;height:100%;object-fit:cover}
+*{box-sizing:border-box;margin: 0;padding: 0}img{display:block;width:100%;height:100%;object-fit:cover}
 /* min-height:0 — without it the flex child refuses to shrink and the scroller
    never actually scrolls. */
 .ml-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
-.ml{flex:1;overflow-y:auto;padding:8px 0 0;display:flex;flex-direction:column}
+.ml{flex:1;overflow-y:auto;padding: 8px 0 0;display:flex;flex-direction:column}
 .ml-jump{
   position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:5;
-  display:flex;align-items:center;gap:7px;
-  padding:7px 14px;border-radius:999px;border:none;cursor:pointer;
+  display:flex;align-items:center;gap: 8px;
+  padding: 8px 14px;border-radius: 999px;border:none;cursor:pointer;
   background:var(--accent);color:var(--text-on-accent);
   font:inherit;font-size:13px;font-weight:600;
   box-shadow:0 4px 16px rgba(0,0,0,.45);
@@ -262,21 +262,21 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .ml-jump:hover{filter:brightness(1.08)}
 .jump-enter-active,.jump-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
-.welcome{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:8px}
-.ch-icon{width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
-.dm-av{width:64px;height:64px;border-radius:50%;overflow:hidden;margin-bottom:14px;border:3px solid var(--bg-panel)}
+.welcome{padding: 20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom: 8px}
+.ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
+.dm-av{width:64px;height:64px;border-radius: 50%;overflow:hidden;margin-bottom: 14px;border:3px solid var(--bg-panel)}
 .group-av{display:flex;align-items:center;justify-content:center;background:var(--accent);border:none}
 .group-av svg{width:30px;height:30px}
-.welcome h3{font-size:26px;font-weight:800;color: var(--text-strong);margin-bottom:4px}
+.welcome h3{font-size:26px;font-weight:800;color: var(--text-strong);margin-bottom: 4px}
 .welcome p{font-size:14px;color:var(--text-3)}
 .welcome strong{color: var(--text-strong)}
-.ml-loading,.ml-empty{display:flex;align-items:center;gap:10px;padding:24px 16px;color:var(--text-faint);font-size:14px}
-.ml-sk{padding:16px 16px 8px;display:flex;flex-direction:column;gap:18px}
-.ml-sk-g{display:flex;gap:14px;align-items:flex-start}
-.ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
-.ml-sk-head{display:flex;align-items:center;gap:9px;margin-bottom:1px}
+.ml-loading,.ml-empty{display:flex;align-items:center;gap: 10px;padding: 24px 16px;color:var(--text-faint);font-size:14px}
+.ml-sk{padding: 16px 16px 8px;display:flex;flex-direction:column;gap: 18px}
+.ml-sk-g{display:flex;gap: 14px;align-items:flex-start}
+.ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap: 8px}
+.ml-sk-head{display:flex;align-items:center;gap: 8px;margin-bottom: 1px}
 @keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin .8s linear infinite;flex-shrink:0}
-.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
+.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius: 2px}
 
 /* New message pop-in — only applies to genuinely new sends/receives via the
    msg-no-anim escape hatch set by MessageList for anything present at the
@@ -284,9 +284,9 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .msg-list-inner { display: contents; }
 
 /* Per-day date divider */
-.day-divider{display:flex;align-items:center;margin:14px 16px 6px;height:0}
+.day-divider{display:flex;align-items:center;margin: 14px 16px 6px;height:0}
 .day-divider::before,.day-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07)}
-.day-divider span{padding:0 10px;font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap}
+.day-divider span{padding: 0 10px;font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap}
 .msg-pop-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform .22s cubic-bezier(.34,1.56,.64,1); }
 .msg-pop-enter-from   { opacity: 0; transform: translateY(8px) scale(.97); }
 .msg-no-anim.msg-pop-enter-active { transition:none; }

@@ -167,7 +167,7 @@ const join = async () => {
 </template>
 
 <style scoped>
-.ic-vc { vertical-align: -2px; margin-right: 3px; }
+.ic-vc { vertical-align: -2px; margin-right: 4px; }
 .invite-card {
   display: flex; align-items: center; gap: 12px;
   background: var(--bg-floor); border: 1px solid rgba(255,255,255,.06);
@@ -189,7 +189,7 @@ const join = async () => {
 
 .ic-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ic-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
+.ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
 .ic-sub--err { color: #f08080; }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;

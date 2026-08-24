@@ -19,7 +19,7 @@ const { voiceSettings, setVoiceSettings } = useVoiceSettings()
     </div>
     <div class="fr-sep" />
     <button class="fr" @click="emit('openSettings'); emit('close')">
-      <span>Voice &amp; Video Settings</span><Settings :size="15" :stroke-width="2.25" />
+      <span>Voice &amp; Video Settings</span><Settings :size="16" :stroke-width="2.25" />
     </button>
   </CallFlyout>
 </template>

@@ -330,7 +330,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
 .vv-tog.on span { transform: translateX(20px); }
 
-.vv-btn { padding: 9px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }
+.vv-btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }
 .vv-btn:hover { background: var(--hover); }
 .vv-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .vv-btn.primary:hover { background: var(--accent-hover); }

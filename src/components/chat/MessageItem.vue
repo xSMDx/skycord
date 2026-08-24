@@ -222,18 +222,18 @@ const onReplyPillLeave = () => {
     <div class="msg-actions" :class="{ shown: hoveredId === msg.id && !isEditing }"
       @mouseenter="emit('hover', msg.id)" @click.stop>
       <button class="ap" @click.stop="emit('openEmoji', msg.id)" v-tip="'React'">😀</button>
-      <button class="ap" @click.stop="emit('reply', msg)" v-tip="'Reply'"><CornerUpLeft :size="15" :stroke-width="1.5"/></button>
-      <button v-if="isOwn" class="ap" @click.stop="emit('edit', msg)" v-tip="'Edit'"><Pencil :size="15" :stroke-width="1.5"/></button>
-      <button class="ap" @click.stop="emit('openCtx', $event, msg)" v-tip="'More'"><Ellipsis :size="15" :stroke-width="1.5"/></button>
+      <button class="ap" @click.stop="emit('reply', msg)" v-tip="'Reply'"><CornerUpLeft :size="16" :stroke-width="1.5"/></button>
+      <button v-if="isOwn" class="ap" @click.stop="emit('edit', msg)" v-tip="'Edit'"><Pencil :size="16" :stroke-width="1.5"/></button>
+      <button class="ap" @click.stop="emit('openCtx', $event, msg)" v-tip="'More'"><Ellipsis :size="16" :stroke-width="1.5"/></button>
     </div>
   </div>
 </template>
 <style scoped>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*,*::before,*::after{box-sizing:border-box;margin: 0;padding: 0}
 button{background:none;border:none;cursor:pointer;color:inherit;font:inherit}
 img{display:block;width:100%;height:100%;object-fit:cover}
 /* System log line */
-.msg-system{display:flex;align-items:center;gap:8px;padding:3px 48px 3px 18px;font-size:13.5px;color:var(--text-3)}
+.msg-system{display:flex;align-items:center;gap: 8px;padding: 4px 48px 4px 18px;font-size:13.5px;color:var(--text-3)}
 .msg-system-icon{display:flex;align-items:center;justify-content:center;width:22px;color:var(--text-3);flex-shrink:0}
 .msg-system-text{color:var(--text-2)}
 .msg-system.sys-join .msg-system-icon{color:#23a55a}
@@ -244,30 +244,30 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-system.sys-call.call-ended .msg-system-icon{color:#f23f43}
 .msg-system-link{color:#00a8fc;font-weight:500;cursor:pointer}
 .msg-system-link:hover{text-decoration:underline}
-.msg-system-time{font-size:11px;color:#5c5e66;margin-left:2px}
+.msg-system-time{font-size:11px;color:#5c5e66;margin-left: 2px}
 
-.msg{display:flex;align-items:flex-start;padding:var(--msg-pad-y, 1px) 48px var(--msg-pad-y, 1px) 16px;position:relative;transition: background var(--dur-1) var(--ease-out)}
+.msg{display:flex;align-items:flex-start;padding: var(--msg-pad-y, 1px) 48px var(--msg-pad-y, 1px) 16px;position:relative;transition: background var(--dur-1) var(--ease-out)}
 .msg:hover{background:rgba(0,0,0,.1)}
 .msg.mentioned{background:var(--mention-row-bg);box-shadow:inset 2px 0 0 var(--mention-row-bar)}
 .msg.mentioned:hover{background:var(--mention-row-bg-hover)}
-.msg:not(.consecutive){margin-top:var(--msg-group-gap, 17px)}
-.msg.consecutive{padding-top:0}
+.msg:not(.consecutive){margin-top: var(--msg-group-gap, 16px)}
+.msg.consecutive{padding-top: 0}
 .msg.failed .msg-text{color:#f08080}
-.msg-left{width:56px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
-.msg-av{width:32px;height:32px;border-radius:50%;overflow:hidden;cursor:pointer;flex-shrink:0;background:var(--bg-panel);transition: transform var(--dur-2) var(--ease-out)}
+.msg-left{width:56px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;padding-top: 4px}
+.msg-av{width:32px;height:32px;border-radius: 50%;overflow:hidden;cursor:pointer;flex-shrink:0;background:var(--bg-panel);transition: transform var(--dur-2) var(--ease-out)}
 .msg:hover .msg-av{transform:scale(1.06)}
-.msg-ts{font-size:10px;color:transparent;line-height:22px;padding-left:2px;transition: color var(--dur-1) var(--ease-out);white-space:nowrap}
+.msg-ts{font-size:10px;color:transparent;line-height:22px;padding-left: 2px;transition: color var(--dur-1) var(--ease-out);white-space:nowrap}
 .msg:hover .msg-ts{color:#4e5058}
-.msg-body{flex:1;min-width:0;padding-top:3px}
-.reply-previews{display:flex;flex-direction:column;gap:1px;margin-bottom:4px}
-.reply-preview{display:flex;align-items:center;gap:6px;margin-left:6px;font-size:13px;color:#8a8e96;overflow:hidden;position:relative;padding-left:14px;cursor:pointer;border-radius:4px;transition: background var(--dur-1) var(--ease-out);width:fit-content;max-width:100%}
+.msg-body{flex:1;min-width:0;padding-top: 4px}
+.reply-previews{display:flex;flex-direction:column;gap: 1px;margin-bottom: 4px}
+.reply-preview{display:flex;align-items:center;gap: 6px;margin-left: 6px;font-size:13px;color:#8a8e96;overflow:hidden;position:relative;padding-left: 14px;cursor:pointer;border-radius: 4px;transition: background var(--dur-1) var(--ease-out);width:fit-content;max-width:100%}
 .reply-preview:hover{background:var(--hover)}
 .reply-preview:active{background:rgba(255,255,255,.08)}
-.reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid #4e5058;border-top:2px solid #4e5058;border-radius:6px 0 0 0}
+.reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid #4e5058;border-top:2px solid #4e5058;border-radius: 6px 0 0 0}
 .reply-icon{flex-shrink:0;color:var(--text-faint);display:none}
 .reply-author{color:var(--accent-text);font-weight:600;white-space:nowrap}
 .reply-content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9a9ea6}
-.msg-meta{display:flex;align-items:baseline;gap:8px;margin-bottom:2px;flex-wrap:wrap}
+.msg-meta{display:flex;align-items:baseline;gap: 8px;margin-bottom: 2px;flex-wrap:wrap}
 .msg-author{font-size:15px;font-weight:700;color: var(--text-strong);cursor:pointer;transition: color var(--dur-1) var(--ease-out)}
 .msg-author:hover{color:var(--name-hover, #8d96f8)}
 .msg-time{font-size:11px;color:#4e5058}
@@ -275,43 +275,43 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-pin{font-size:11px}
 .msg-fail{font-size:11px;color:#f08080}
 .msg-text{font-size:var(--msg-font-size, 15px);line-height:1.5;color:var(--text-1);word-break:break-word}
-.msg-gif{max-width:320px;max-height:240px;border-radius:8px;display:block;cursor:pointer}
+.msg-gif{max-width:320px;max-height:240px;border-radius: 8px;display:block;cursor:pointer}
 .msg-text.jumbo{font-size:42px;line-height:1.25}
-.msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding:0 3px;border-radius:3px;cursor:pointer;font-weight:500}
-.msg-text :deep(.emoji){width:1.35em;height:1.35em;vertical-align:-.28em;margin:0 .02em;object-fit:contain;display:inline-block}
+.msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding: 0 4px;border-radius: 4px;cursor:pointer;font-weight:500}
+.msg-text :deep(.emoji){width:1.35em;height:1.35em;vertical-align:-.28em;margin: 0 .02em;object-fit:contain;display:inline-block}
 .msg-text :deep(.msg-link){color:#00a8fc;text-decoration:var(--link-decoration, none);word-break:break-all}
 .msg-text :deep(.msg-link):hover{text-decoration:underline}
 
 /* Compact message display — single line: [time] Author text */
-.msg.compact{align-items:baseline;padding-top:1px;padding-bottom:1px}
-.msg.compact:not(.consecutive){margin-top:6px}
-.msg.compact .msg-left{width:auto;min-width:46px;justify-content:flex-end;padding:0 8px 0 0}
+.msg.compact{align-items:baseline;padding-top: 1px;padding-bottom: 1px}
+.msg.compact:not(.consecutive){margin-top: 6px}
+.msg.compact .msg-left{width:auto;min-width:46px;justify-content:flex-end;padding: 0 8px 0 0}
 .msg.compact .msg-ts{color:#72767d;line-height:1.5}
 .msg.compact:hover .msg-ts{color:#b5bac1}
-.msg.compact .msg-body{padding-top:0}
-.msg-author-inline{display:inline;margin-right:8px;font-size:var(--msg-font-size, 15px);line-height:1.5;vertical-align:baseline}
+.msg.compact .msg-body{padding-top: 0}
+.msg-author-inline{display:inline;margin-right: 8px;font-size:var(--msg-font-size, 15px);line-height:1.5;vertical-align:baseline}
 .msg.compact .msg-text{display:inline}
 .msg-text :deep(strong){font-weight:700;color: var(--text-strong)}
 .msg-text :deep(em){font-style:italic}
 .msg-text :deep(u){text-decoration:underline}
 .msg-text :deep(s){text-decoration:line-through;color:#9a9ea6}
-.msg-text :deep(.mention-all){color: var(--mention-all-fg);background:var(--mention-all-bg);padding:0 3px;border-radius:3px;font-weight:600}
-.msg-text :deep(.msg-time-token){background:var(--time-token-bg);color:var(--time-token-fg);padding:0 4px;border-radius:3px;font-weight:500;cursor:default}
-.msg-text :deep(.msg-bq){border-left:3px solid #4e5058;padding:1px 0 1px 10px;margin:2px 0;color:#c4c7cd}
-.msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:7px 10px;margin:3px 0;font-family: var(--font-mono);font-size:13px;color:#e3e3e3;white-space:pre-wrap;word-break:break-word}
-.msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:rgba(0,0,0,.3);padding:1px 4px;border-radius:3px;color:#e3e3e3}
-.edit-wrap{display:flex;flex-direction:column;gap:4px}
-.edit-input{width:100%;padding:8px 12px;border-radius:8px;background:#40444b;border:1.5px solid rgba(var(--accent-rgb),.6);font-size:15px;color:var(--text-1);outline:none;font-family:inherit}
+.msg-text :deep(.mention-all){color: var(--mention-all-fg);background:var(--mention-all-bg);padding: 0 4px;border-radius: 4px;font-weight:600}
+.msg-text :deep(.msg-time-token){background:var(--time-token-bg);color:var(--time-token-fg);padding: 0 4px;border-radius: 4px;font-weight:500;cursor:default}
+.msg-text :deep(.msg-bq){border-left:3px solid #4e5058;padding: 1px 0 1px 10px;margin: 2px 0;color:#c4c7cd}
+.msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid rgba(255,255,255,.08);border-radius: 6px;padding: 8px 10px;margin: 4px 0;font-family: var(--font-mono);font-size:13px;color:#e3e3e3;white-space:pre-wrap;word-break:break-word}
+.msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:rgba(0,0,0,.3);padding: 1px 4px;border-radius: 4px;color:#e3e3e3}
+.edit-wrap{display:flex;flex-direction:column;gap: 4px}
+.edit-input{width:100%;padding: 8px 12px;border-radius: 8px;background:#40444b;border:1.5px solid rgba(var(--accent-rgb),.6);font-size:15px;color:var(--text-1);outline:none;font-family:inherit}
 .edit-hint{font-size:12px;color:var(--text-faint)}
 .el{color:var(--accent);font-size:12px;font-weight:600}
 .el:hover{text-decoration:underline}
-.msg-reactions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.rp{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:2px 7px;font-size:14px;cursor:pointer;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.msg-reactions{display:flex;flex-wrap:wrap;gap: 4px;margin-top: 4px}
+.rp{display:flex;align-items:center;gap: 4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius: 10px;padding: 2px 8px;font-size:14px;cursor:pointer;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .rp span{font-size:12px;font-weight:600;color:var(--text-2)}
 .rp:hover{background:var(--hover-strong);transform:scale(1.08)}
 .rp.active{background:rgba(var(--accent-rgb),.2);border-color:rgba(var(--accent-rgb),.5)}
 .rp.active span{color:#8d96f8}
-.rp-add{width:24px;height:24px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.rp-add{width:24px;height:24px;border-radius: 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .rp-add:hover{background:var(--hover-strong);color: var(--text-strong)}
 /* Hover OR keyboard focus. The toolbar used to be revealed by @mouseenter
    alone on a row that could not hold focus, so Reply, Edit, React and Delete
@@ -319,10 +319,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    width, where hover does not exist, unreachable full stop.
    :focus-within rather than a focusin handler: it is declarative, so it
    cannot desync from the DOM and needs no event to fire. */
-.msg-actions{position:absolute;right:10px;top:-16px;background:var(--bg-panel);border:1px solid rgba(255,255,255,.08);border-radius:7px;display:none;gap:1px;padding:3px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10}
+.msg-actions{position:absolute;right:10px;top:-16px;background:var(--bg-panel);border:1px solid rgba(255,255,255,.08);border-radius: 8px;display:none;gap: 1px;padding: 4px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10}
 .msg-actions.shown,
 .msg:focus-within .msg-actions{display:flex}
-.ap{width:28px;height:28px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.ap{width:28px;height:28px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .ap:hover{background:var(--hover-strong);color:var(--text-1);transform:scale(1.15)}
 .ap:active{transform:scale(.9)}
 </style>

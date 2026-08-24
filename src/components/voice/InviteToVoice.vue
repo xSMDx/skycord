@@ -132,13 +132,13 @@ const doCopy = async () => {
         @click.stop="invite(p)">
         <span class="iv-av"><Avatar :src="p.avatar || ''" :alt="nameOf(p)" :crop="p.avatarCrop ?? null" /></span>
         <span class="iv-name">{{ nameOf(p) }}</span>
-        <Check v-if="sent[p.id]" :size="15" :stroke-width="2.5" class="iv-done" />
+        <Check v-if="sent[p.id]" :size="16" :stroke-width="2.5" class="iv-done" />
         <span v-else-if="sending[p.id]" class="iv-add">…</span>
-        <UserPlus v-else :size="15" :stroke-width="2" class="iv-add-ic" />
+        <UserPlus v-else :size="16" :stroke-width="2" class="iv-add-ic" />
       </button>
       <div class="iv-sep" />
       <button class="iv-more" @click.stop="emit('seeMore')">
-        <Users :size="15" :stroke-width="2" /><span>See more…</span>
+        <Users :size="16" :stroke-width="2" /><span>See more…</span>
       </button>
     </div>
   </AnchoredPanel>
@@ -149,13 +149,13 @@ const doCopy = async () => {
       <div class="iv-head">
         <div class="iv-head-text">
           <h2>Invite friends to {{ serverName }}</h2>
-          <span class="iv-dest"><Volume2 :size="13" :stroke-width="2.25" />{{ channel.name }}</span>
+          <span class="iv-dest"><Volume2 :size="14" :stroke-width="2.25" />{{ channel.name }}</span>
         </div>
         <button class="iv-x" @click="emit('close')" aria-label="Close"><X :size="18" :stroke-width="2.25" /></button>
       </div>
 
       <div class="iv-search">
-        <Search :size="15" :stroke-width="2.25" />
+        <Search :size="16" :stroke-width="2.25" />
         <input v-model="query" type="text" placeholder="Search for friends" />
       </div>
 
@@ -189,7 +189,7 @@ const doCopy = async () => {
 .iv-pop { display: flex; flex-direction: column; }
 .iv-sep { height: 1px; margin: 4px 6px; background: rgba(255,255,255,.08); }
 .iv-row {
-  display: flex; align-items: center; gap: 9px; width: 100%;
+  display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 6px 8px; border-radius: 4px; background: none; border: none;
   cursor: pointer; color: var(--text-2); font-size: 13.5px; text-align: left;
 }
@@ -214,12 +214,12 @@ const doCopy = async () => {
 .iv-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 16px 10px; }
 .iv-head-text { flex: 1; min-width: 0; }
 .iv-head h2 { font-size: 17px; font-weight: 700; color: var(--text-strong); }
-.iv-dest { display: flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 12px; color: var(--text-3); }
+.iv-dest { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 12px; color: var(--text-3); }
 .iv-x { background: none; border: none; cursor: pointer; color: var(--text-3); flex: none; }
 .iv-x:hover { color: var(--text-1); }
 .iv-search {
-  display: flex; align-items: center; gap: 7px; margin: 0 16px 8px;
-  padding: 7px 10px; border-radius: 6px; background: rgba(0,0,0,.28); color: var(--text-3);
+  display: flex; align-items: center; gap: 8px; margin: 0 16px 8px;
+  padding: 8px 10px; border-radius: 6px; background: rgba(0,0,0,.28); color: var(--text-3);
 }
 .iv-search input { flex: 1; font-size: 13.5px; color: var(--text-1); background: none; border: none; outline: none; }
 .iv-list { flex: 1; overflow-y: auto; padding: 0 8px; min-height: 90px; }
@@ -230,7 +230,7 @@ const doCopy = async () => {
 .iv-display { font-size: 14px; font-weight: 600; color: var(--text-1); }
 .iv-handle { font-size: 11.5px; color: var(--text-faint); }
 .iv-btn {
-  flex: none; padding: 5px 14px; border-radius: 4px; font-size: 13px; font-weight: 600;
+  flex: none; padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: 600;
   border: 1px solid var(--accent); background: none; color: var(--accent); cursor: pointer;
 }
 .iv-btn:hover:not(:disabled) { background: var(--accent); color: #fff; }
@@ -248,5 +248,5 @@ const doCopy = async () => {
 }
 .iv-copy:hover:not(:disabled) { background: var(--accent-hover); }
 .iv-copy:disabled { opacity: .6; cursor: default; }
-.iv-note { display: block; margin-top: 7px; font-size: 11.5px; color: var(--text-faint); }
+.iv-note { display: block; margin-top: 8px; font-size: 11.5px; color: var(--text-faint); }
 </style>

@@ -218,7 +218,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
 
     <!-- Search -->
     <div class="picker-search">
-      <Search :size="13" :stroke-width="1.5" class="ps-icon" />
+      <Search :size="14" :stroke-width="1.5" class="ps-icon" />
       <input
         v-model="search"
         type="text"
@@ -345,7 +345,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .picker-search {
   display: flex; align-items: center; gap: 8px;
   margin: 8px; background: rgba(0,0,0,.3); border-radius: 6px;
-  padding: 7px 10px; border: 1px solid rgba(255,255,255,.06);
+  padding: 8px 10px; border: 1px solid rgba(255,255,255,.06);
   flex-shrink: 0; transition: border-color var(--dur-2) var(--ease-out);
 }
 .picker-search:focus-within { border-color: rgba(var(--accent-rgb),.5); }
@@ -360,7 +360,7 @@ img    { display: block; width: 100%; object-fit: cover; }
   border-bottom: 1px solid rgba(255,255,255,.06);
 }
 .cat-btn {
-  width: 28px; height: 28px; border-radius: 5px; font-size: 16px;
+  width: 28px; height: 28px; border-radius: 6px; font-size: 16px;
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out); opacity: .7;
 }
@@ -371,7 +371,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .cat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); margin-bottom: 6px; padding: 0 4px; }
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 1px; }
 .emoji-btn {
-  width: 34px; height: 34px; border-radius: 5px; font-size: 20px;
+  width: 34px; height: 34px; border-radius: 6px; font-size: 20px;
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

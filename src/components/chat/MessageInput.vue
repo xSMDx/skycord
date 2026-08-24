@@ -412,7 +412,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 /* Reply strip fused to the input box */
 .reply-strip {
   display: flex; align-items: center; gap: 10px;
-  padding: 7px 12px 7px 14px;
+  padding: 8px 12px 8px 14px;
   background: var(--bg-panel);
   border-radius: 10px 10px 0 0;
   border-bottom: 1px solid rgba(0,0,0,.22);
@@ -420,7 +420,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .reply-strip-label { font-size: 13px; color: var(--text-2); flex-shrink: 0; }
 .reply-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 .reply-chip {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
   padding: 2px 4px 2px 8px; border-radius: 12px;
   background: rgba(var(--accent-rgb),.16); color: var(--accent-text);
   font-size: 12.5px; font-weight: 600; max-width: 180px;
@@ -462,7 +462,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .input-attach:hover { color: var(--text-1); transform: rotate(15deg) scale(1.1); }
 
 .msg-input {
-  flex: 1; padding: 11px 4px;
+  flex: 1; padding: 12px 4px;
   font-size: 15px; color: var(--text-1);
   /* A textarea is inline-block and sits on the text baseline, which left a
      few pixels of descender gap under it inside the flex row. */
@@ -543,7 +543,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   box-shadow: 0 6px 20px rgba(0,0,0,.5);
 }
 .fmt-toolbar button {
-  width: 30px; height: 30px; border-radius: 5px;
+  width: 30px; height: 30px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }

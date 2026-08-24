@@ -92,7 +92,7 @@ const close   = () => { stop(); emit('close') }
             <span>Always preview video</span>
           </label>
           <button class="cp-go" :disabled="!!error" @click="confirm">
-            <Video :size="17" :stroke-width="2.25" /> Turn On Camera
+            <Video :size="16" :stroke-width="2.25" /> Turn On Camera
           </button>
         </div>
     </div>
@@ -121,7 +121,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 
 .cp-select {
-  width: 100%; padding: 9px 11px; border-radius: 8px;
+  width: 100%; padding: 8px 12px; border-radius: 8px;
   background: var(--bg-input); color: var(--text-1);
   border: 1px solid rgba(255,255,255,.08); font: inherit; font-size: 14px; outline: none;
 }

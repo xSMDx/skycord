@@ -73,7 +73,7 @@ onBeforeUnmount(soundRingStop)
 }
 
 .ic-name { font-size: 19px; font-weight: 700; color: var(--text-strong); }
-.ic-sub  { font-size: 13px; color: var(--text-3); margin-top: 3px; }
+.ic-sub  { font-size: 13px; color: var(--text-3); margin-top: 4px; }
 
 .ic-actions { display: flex; gap: 36px; margin-top: 24px; }
 .ic-btn {

@@ -212,7 +212,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
               <span class="cd-m-text">
                 <span class="cd-m-name">
                   {{ m.displayName || m.username }}
-                  <Crown v-if="m.id === ownerId" :size="13" :stroke-width="2.5" class="cd-m-owner" />
+                  <Crown v-if="m.id === ownerId" :size="14" :stroke-width="2.5" class="cd-m-owner" />
                 </span>
                 <span class="cd-m-user">{{ m.username }}</span>
               </span>
@@ -258,7 +258,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-searchfield {
   display: flex; align-items: center; gap: 8px;
   height: 44px; width: 44px; min-width: 44px;
-  padding: 0 11px; border-radius: 22px;
+  padding: 0 12px; border-radius: 22px;
   border: 1.5px solid transparent; background: transparent;
   color: var(--text-2); cursor: pointer; overflow: hidden;
   transition:width .28s cubic-bezier(.2,.8,.3,1), background var(--dur-3) var(--ease-out), border-color var(--dur-3) var(--ease-out), padding .28s cubic-bezier(.2,.8,.3,1);
@@ -389,7 +389,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 }
 .cd-m-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .cd-m-name {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 6px;
   font-size: 15px; font-weight: 600; color: var(--text-1);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
