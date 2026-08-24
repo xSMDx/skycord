@@ -83,6 +83,16 @@
      black-on-light inversion the hover tints use. */
   --press-veil: rgba(255, 255, 255, .09);
 
+  /* Selected row in the left sidebar. An outline rather than a fill: the
+     accent tint is also what a hovered row, a mention and a primary button
+     use, so a filled selection competed with all of them and read as one more
+     coloured thing in a column of coloured things. A hairline ring says
+     "this one" without adding another colour to the surface.
+
+     Inverted on the light themes for the obvious reason — a white ring on a
+     white sidebar is not a ring. */
+  --active-ring: rgba(255, 255, 255, .62);
+
   /* ── The 2px grid ───────────────────────────────────────────────────────
      Spacing, radii and icon sizes are even numbers. Not a scale invented
      here — it is the one the app already used, in 27 spacing values, 20 icon
@@ -110,6 +120,7 @@ html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  --active-ring: rgba(0, 0, 0, .42);
   --press-veil: rgba(0, 0, 0, .10);
   --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #e3e5e8;
@@ -143,6 +154,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --mention-row-bg-hover: rgba(200, 142, 0, .15);
 }
 [data-theme="light-dim"] {
+  --active-ring: rgba(0, 0, 0, .42);
   --press-veil: rgba(0, 0, 0, .10);
   --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #c7ccd1;
