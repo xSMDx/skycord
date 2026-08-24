@@ -5,7 +5,7 @@ import {
   Search, Users, ChevronDown,
   Mic, MicOff, Headphones, Settings,
   Pin, BellOff, PanelLeft, Compass,
-  MessageCircle, X, UserPlus,
+  MessageCircle, X, UserPlus, HeadphoneOff,
   Check, Ellipsis,
   Pencil, UsersRound,
   User, Paperclip, AtSign, SlidersHorizontal, Copy,
@@ -21,7 +21,7 @@ import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireCh
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls } from '@/composables/useSocket'
+import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
 import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
@@ -618,14 +618,25 @@ const liveSpeakingById = computed<Record<string, boolean>>(() => {
 })
 
 /** Sidebar helper: who is sitting in this voice channel right now. */
-const voiceOccupants = (channelId: string): (VoiceOccupant & { speaking: boolean })[] => {
-  const list = voiceRoomOccupants.value[voiceRoomName('channel', channelId, authUser.value?.id || '')] ?? []
+const voiceOccupants = (channelId: string):
+    (VoiceOccupant & { speaking: boolean; muted: boolean; deafened: boolean; sharing: boolean })[] => {
+  const room = voiceRoomName('channel', channelId, authUser.value?.id || '')
+  const list = voiceRoomOccupants.value[room] ?? []
+  // Server-published, so it is known for every voice channel in the sidebar —
+  // not only the one this client is connected to. See voiceStates.
+  const states = voiceStates.value[room] ?? {}
   // liveSpeakingById is keyed by user id alone, with no room of its own — so
   // without this it would apply just as happily to a channel you're not even
   // in (a stale call:join whose call:leave never arrived, listing you twice).
   // Only the channel LiveKit actually has you connected to may show rings.
   const scoped = isConnectedVoiceRoom(channelId)
-  return list.map(o => ({ ...o, speaking: scoped && (liveSpeakingById.value[o.id] ?? false) }))
+  return list.map(o => ({
+    ...o,
+    speaking: scoped && (liveSpeakingById.value[o.id] ?? false),
+    muted:    !!states[o.id]?.muted,
+    deafened: !!states[o.id]?.deafened,
+    sharing:  !!states[o.id]?.sharing,
+  }))
 }
 
 /**
@@ -3519,6 +3530,12 @@ onBeforeUnmount(() => {
                 class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })">
                 <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
+                <!-- Deafened implies muted, so only the stronger of the two is
+                     shown: a row wearing both icons says the same thing twice
+                     and leaves less room for the name. -->
+                <span v-if="o.deafened" class="vc-occ-ic" v-tip="'Deafened'"><HeadphoneOff :size="13" :stroke-width="2.25"/></span>
+                <span v-else-if="o.muted" class="vc-occ-ic" v-tip="'Muted'"><MicOff :size="13" :stroke-width="2.25"/></span>
+                <span v-if="o.sharing" class="vc-live" v-tip="'Sharing their screen'">LIVE</span>
               </button>
               <!-- Only for the channel you are actually in: an invite to a
                    room you are not sitting in is a link to an empty room,
@@ -4311,6 +4328,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    (a per-server setting, or a count threshold) and is not built here. */
 .vc-invite{display:flex;align-items:center;gap:6px;width:calc(100% - 22px);margin-left:22px;padding:4px 8px;border-radius:4px;background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12.5px;text-align:left}
 .vc-invite:hover{background:var(--hover);color:var(--text-1)}
+.vc-occ-ic{display:flex;flex-shrink:0;color:var(--text-3)}
+/* Not an icon: the reference uses a word, and a word survives being the
+   only red thing in a list of grey ones. */
+.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:#f23f43;border-radius:3px;padding:1px 4px;line-height:1.4}
 .vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:6px;cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}

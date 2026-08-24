@@ -58,6 +58,21 @@ export const activeCalls = ref<Record<string, string[]>>({})
 export const voiceRoomServers = ref<Record<string, string>>({})
 
 /**
+ * `voice:<channelId>` (or dm:/group:) -> userId -> what they are doing.
+ *
+ * A sibling of `activeCalls` for the same reason `voiceRoomServers` is: the
+ * occupancy set is read as a plain string[] in a dozen places, and widening
+ * it to carry per-user detail would cost every one of them. Written in the
+ * same handler, in the same branch, so the two cannot drift.
+ *
+ * The server is authoritative here even for people in the room with you.
+ * LiveKit could answer for their microphone, but not for deafening, and not
+ * at all for the channels you are merely looking at.
+ */
+export interface VoiceMemberState { muted: boolean; deafened: boolean; sharing: boolean }
+export const voiceStates = ref<Record<string, Record<string, VoiceMemberState>>>({})
+
+/**
  * Forget a voice room outright — occupancy and attribution together.
  *
  * Deleting an occupied voice channel is the one case the `call:state` stream
@@ -74,6 +89,9 @@ export const voiceRoomServers = ref<Record<string, string>>({})
  */
 export const forgetVoiceRoom = (channelId: string): void => {
   const room = `voice:${channelId}`
+  if (room in voiceStates.value) {
+    const next = { ...voiceStates.value }; delete next[room]; voiceStates.value = next
+  }
   if (room in activeCalls.value) {
     const next = { ...activeCalls.value }; delete next[room]; activeCalls.value = next
   }
@@ -93,8 +111,9 @@ export const forgetVoiceRoom = (channelId: string): void => {
  * a leaked entry had nowhere to show up.
  */
 export const resetCalls = (): void => {
-  activeCalls.value     = {}
+  activeCalls.value      = {}
   voiceRoomServers.value = {}
+  voiceStates.value      = {}
 }
 
 let _activeDMPartnerId: string | null = null
@@ -308,11 +327,22 @@ export const useSocket = () => {
     //
     // `serverId` rides along on voice rooms (see voiceRoomServers above) and is
     // kept in step with occupancy here, in the one handler that owns both.
-    _socket.on('call:state', (p: { room: string; userIds: string[]; serverId?: string }) => {
+    _socket.on('call:state', (p: {
+      room: string; userIds: string[]; serverId?: string
+      states?: Record<string, VoiceMemberState>
+    }) => {
       const next = { ...activeCalls.value }
       if (p.userIds?.length) next[p.room] = p.userIds
       else delete next[p.room]
       activeCalls.value = next
+
+      // Replaced wholesale rather than merged: the server sends the room's
+      // complete state every time, so a merge would keep an entry for someone
+      // who has since gone quiet or left.
+      const nextStates = { ...voiceStates.value }
+      if (p.userIds?.length && p.states) nextStates[p.room] = p.states
+      else delete nextStates[p.room]
+      voiceStates.value = nextStates
 
       // Three cases, and the third is the interesting one. Empty room -> drop
       // the attribution with the occupancy. Carries a serverId -> record it.
