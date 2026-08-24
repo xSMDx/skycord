@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  Hash, Volume2, Plus, ChevronRight, ChevronLeft,
-  Search, Users, ChevronDown,
-  Mic, MicOff, Headphones, Settings,
-  Pin, BellOff, PanelLeft, Compass,
-  MessageCircle, X, UserPlus, HeadphoneOff,
-  Check, Ellipsis,
-  Pencil, UsersRound,
-  User, Paperclip, AtSign, SlidersHorizontal, Copy,
-  Phone, Camera, PhoneOff
+  ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+import {
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, User, Paperclip, AtSign, SlidersHorizontal, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch,
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
@@ -44,7 +37,6 @@ import ModalBase           from '@/components/modals/ModalBase.vue'
 import MessageList   from '@/components/chat/MessageList.vue'
 import MessageInput  from '@/components/chat/MessageInput.vue'
 import ServerInviteCard from '@/components/chat/ServerInviteCard.vue'
-import ContextMenu          from '@/components/chat/ContextMenu.vue'
 import ReactionPickerModal  from '@/components/modals/ReactionPickerModal.vue'
 import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
@@ -67,7 +59,7 @@ import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // above still owns its own surface until it's migrated onto this one.
 import AppContextMenu        from '@/components/ui/ContextMenu.vue'
 import ConnectionBanner      from '@/components/ui/ConnectionBanner.vue'
-import { openMenu }          from '@/composables/useContextMenu'
+import { openMenu, closeMenu, menu } from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
 import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
@@ -1111,7 +1103,17 @@ const replyTargetMeta = computed(() =>
 )
 
 // ── Context menu ───────────────────────────────────────────────────────────
-const ctxMenu = ref<{ x: number; y: number; msg: Message } | null>(null)
+/**
+ * The message the open context menu belongs to, or null for every other
+ * menu in the app. Only drives the quick-reaction strip in the shared menu's
+ * header slot — position, keyboard handling and dismissal all belong to
+ * ContextMenu now.
+ */
+const ctxMsg = ref<Message | null>(null)
+
+// The five that carried over from the bespoke menu, unchanged — these are
+// muscle memory for anyone arriving from Discord.
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢'] as const
 
 // ── Refs to child components ───────────────────────────────────────────────
 const msgListRef = ref<InstanceType<typeof MessageList> | null>(null)
@@ -2941,12 +2943,33 @@ const openCtx = (e: MouseEvent, msg: Message) => {
     ])
     return
   }
-  const mH = 340, mW = 220
-  const y  = e.clientY + mH > window.innerHeight ? e.clientY - mH : e.clientY
-  const x  = e.clientX + mW > window.innerWidth  ? e.clientX - mW : e.clientX
-  ctxMenu.value = { x, y, msg }
+  const isOwn = msg.authorId === (authUser.value?.id || "me")
+  ctxMsg.value = msg
+  openMenu(e, [
+    { label: "Add Reaction", icon: Smile, onSelect: () => openReactionPicker(msg) },
+    { label: "Reply", icon: CornerUpLeft, onSelect: () => handleReply(msg) },
+    ...(msg.replyTo
+      ? [{ label: "View Reply Chain", icon: GitBranch, onSelect: () => openReplyTree(msg) }]
+      : []),
+    ...(isOwn
+      ? [{ label: "Edit Message", icon: Pencil, onSelect: () => handleCtxEdit(msg) }]
+      : []),
+    { sep: true },
+    { label: "Copy Text", icon: Copy, onSelect: () => handleCopy(msg) },
+    { label: msg.pinned ? "Unpin Message" : "Pin Message", icon: Pin, onSelect: () => handlePin(msg) },
+    { label: "Copy Message ID", icon: Copy, onSelect: () => handleCopyId(msg) },
+    { sep: true },
+    { label: "Delete Message", icon: Trash2, danger: true, onSelect: () => handleDelete(msg) },
+  ])
 }
-const closeCtx = () => { ctxMenu.value = null }
+const closeCtx = () => closeMenu()
+
+// Cleared after the menu has finished leaving, not the moment it closes:
+// clearing synchronously would pull the quick-reaction strip out from under
+// the exit transition while the rest of the menu is still fading.
+watch(() => menu.open, (open) => {
+  if (!open) setTimeout(() => { if (!menu.open) ctxMsg.value = null }, 160)
+})
 
 // ── Global key / click handlers ────────────────────────────────────────────
 const onKey = (e: KeyboardEvent) => {
@@ -3258,23 +3281,6 @@ onBeforeUnmount(() => {
     </Teleport>
 
     <!-- Context menu -->
-    <ContextMenu
-      v-if="ctxMenu"
-      :msg="ctxMenu.msg"
-      :x="ctxMenu.x"
-      :y="ctxMenu.y"
-      :isOwn="ctxMenu.msg.authorId === (authUser?.id || 'me')"
-      @close="closeCtx"
-      @edit="handleCtxEdit"
-      @reply="handleReply"
-      @openTree="openReplyTree"
-      @pin="handlePin"
-      @copy="handleCopy"
-      @copyId="handleCopyId"
-      @delete="handleDelete"
-      @react="handleCtxReact"
-      @openEmoji="openReactionPicker"
-    />
 
     <!-- Reply tree — branching family tree of every reply variant -->
     <ReplyTreeModal
@@ -3288,7 +3294,28 @@ onBeforeUnmount(() => {
     />
 
     <!-- App-wide right-click menu — mounted once, driven by openMenu() -->
-    <AppContextMenu />
+    <AppContextMenu>
+      <!-- Quick reactions. The only part of the old message menu that was not
+           expressible as menu data — a horizontal strip of targets rather than
+           a list of rows — so it rides the header slot the shared menu already
+           provides for one-off content. -->
+      <template #header>
+        <div v-if="ctxMsg" class="qr-strip">
+          <button
+            v-for="e in QUICK_REACTIONS" :key="e"
+            class="qr"
+            :aria-label="`React with ${e}`"
+            @click="handleCtxReact(ctxMsg!, e); closeCtx()"
+          >{{ e }}</button>
+          <button
+            class="qr qr-more"
+            v-tip="'More reactions'"
+            aria-label="More reactions"
+            @click="openReactionPicker(ctxMsg!); closeCtx()"
+          ><SmilePlus :size="16" :stroke-width="1.75" /></button>
+        </div>
+      </template>
+    </AppContextMenu>
 
     <!-- Connection status. Mounted at app level rather than inside a pane so it
          survives navigation and can't be covered by a modal. -->
@@ -4918,4 +4945,25 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   0%   { background: rgba(var(--accent-rgb),.18); }
   100% { background: transparent; }
 }
+</style>
+
+<style>
+/* Quick-reaction strip — slot content inside ContextMenu, so it cannot be
+   scoped from here (the slot renders in that component's scope, not this
+   one). Prefixed instead, the same way CallFlyout handles its row styles. */
+.cm .qr-strip {
+  display: flex; gap: 2px; padding: 2px 6px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  margin-bottom: 4px;
+}
+.cm .qr {
+  flex: 1; height: 36px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; color: inherit;
+  font-size: 20px; line-height: 1;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.cm .qr:hover { background: var(--hover-strong); transform: scale(1.28); }
+.cm .qr-more  { color: var(--text-3); font-size: 16px; }
+.cm .qr-more:hover { color: var(--text-1); }
 </style>
