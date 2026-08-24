@@ -366,7 +366,14 @@ const onBioInput = (e: Event) => {
 }
 
 interface NavSection { label: string; items: NavItem[] }
-interface NavItem    { id: string; label: string; icon?: any }
+/**
+ * `soon` marks a section whose page is still the WIP placeholder. Seven of the
+ * eleven are, and finding that out by clicking each one in turn is the worst
+ * way to learn it -- you go looking for a setting, navigate away from what you
+ * were doing, and land on a traffic cone. The badge moves that answer into the
+ * nav, where it costs one glance instead of seven clicks.
+ */
+interface NavItem    { id: string; label: string; icon?: any; soon?: boolean }
 
 const navSections: NavSection[] = [
   {
@@ -374,11 +381,11 @@ const navSections: NavSection[] = [
     items: [
       { id: 'account',         label: 'Account'           },
       { id: 'profile',         label: 'Profile'           },
-      { id: 'content-social',  label: 'Content & Social'  },
-      { id: 'data-privacy',    label: 'Data & Privacy'    },
-      { id: 'authorized-apps', label: 'Authorized Apps'   },
-      { id: 'connections',     label: 'Connections'       },
-      { id: 'notifs',          label: 'Notifications'     },
+      { id: 'content-social',  label: 'Content & Social', soon: true },
+      { id: 'data-privacy',    label: 'Data & Privacy', soon: true },
+      { id: 'authorized-apps', label: 'Authorized Apps', soon: true },
+      { id: 'connections',     label: 'Connections', soon: true },
+      { id: 'notifs',          label: 'Notifications', soon: true },
     ]
   },
   {
@@ -386,8 +393,8 @@ const navSections: NavSection[] = [
     items: [
       { id: 'appearance', label: 'Appearance'       },
       { id: 'voice',      label: 'Voice & Video'    },
-      { id: 'keybinds',   label: 'Keybinds'         },
-      { id: 'language',   label: 'Language & Time'  },
+      { id: 'keybinds',   label: 'Keybinds', soon: true },
+      { id: 'language',   label: 'Language & Time', soon: true },
     ]
   },
 ]
@@ -490,10 +497,12 @@ const handleLogout = () => { emit('close'); logout() }
             <template v-for="item in section.items" :key="item.id">
               <button
                 class="sm-nav-item"
-                :class="{ active: page === item.id }"
+                :class="{ active: page === item.id, soon: item.soon }"
+                :aria-label="item.soon ? item.label + ' — coming soon' : undefined"
                 @click="selectPage(item.id)"
               >
                 {{ item.label }}
+                <span v-if="item.soon" class="sm-soon">Soon</span>
                 <!-- A chevron says "this pushes a screen". Without it a phone
                      user can't tell a list row from a toggle. -->
                 <ChevronRight v-if="isMobile" class="sm-nav-chev" :size="14" :stroke-width="2.25" />
@@ -1178,6 +1187,17 @@ img    { display: block; object-fit: cover; }
 .sm-nav-item.active { background: rgba(var(--accent-rgb),.2); color: var(--text-strong); }
 .sm-nav-item.danger { color: #ed4245; margin-top: 4px; }
 .sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
+/* Reads as a quiet annotation on the row, not an alert. The row itself dims
+   slightly so the eye skips the unfinished sections when scanning. */
+.sm-nav-item.soon { color: var(--text-3); }
+.sm-nav-item.soon.active { color: var(--text-1); }
+.sm-soon {
+  margin-left: auto;
+  font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  padding: 1px 6px; border-radius: 999px;
+  background: rgba(255, 255, 255, .07); color: var(--text-3);
+}
+.sm-nav-item.active .sm-soon { background: rgba(255, 255, 255, .16); }
 .sm-nav-divider { height: 1px; background: rgba(255,255,255,.07); margin: 8px 10px; }
 
 /* In-page sub-nav — a continuous vertical rail (like Discord) with the active
@@ -1448,6 +1468,10 @@ img    { display: block; object-fit: cover; }
    permanently-lit row just looks like a stuck selection. */
 .sm-modal.mobile .sm-nav-item.active { background: transparent; color: var(--text-1); }
 .sm-nav-chev { color: var(--text-3); flex-shrink: 0; margin-left: auto; }
+/* Two auto margins on one row split the slack between them, which left the
+   badges at a different x on every row. With a badge present the badge owns
+   the slack and the chevron just follows it. */
+.sm-soon + .sm-nav-chev { margin-left: 8px; }
 .sm-modal.mobile .sm-nav-label { padding-left: 16px; }
 .sm-modal.mobile .sm-nav-divider { margin: 8px 0; }
 /* The in-page sub-nav duplicates headings that are already in the scrolling

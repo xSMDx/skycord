@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   Pencil, CornerUpLeft, Copy,
-  Pin, Mail, Trash2, Smile
+  Pin, Trash2, Smile
 } from 'lucide-vue-next'
 import type { Message } from '@/types'
 
@@ -72,9 +72,6 @@ const safeY = Math.min(props.y, window.innerHeight - 380)
       <button class="ctx-row" @click="emit('pin', msg); emit('close')">
         <Pin :size="15" :stroke-width="1.5" />
         <span>{{ msg.pinned ? 'Unpin Message' : 'Pin Message' }}</span>
-      </button>
-      <button class="ctx-row" @click="emit('close')">
-        <Mail :size="15" :stroke-width="1.5" /><span>Mark as Unread</span>
       </button>
       <button class="ctx-row" @click="emit('copyId', msg); emit('close')">
         <Copy :size="15" :stroke-width="1.5" /><span>Copy Message ID</span>
