@@ -361,6 +361,23 @@ export const useServers = () => {
     writeCollapsedCategories(collapsedCategories.value)
   }
 
+  /**
+   * The rail badge, derived rather than stored.
+   *
+   * `Server.unread` exists on the type and nothing has ever written to it —
+   * only DMs and groups get their counter bumped — so the rail badge and any
+   * "N unread" label read a field that is permanently undefined. Summing the
+   * channel counters is the honest answer and cannot drift from them, which a
+   * second stored counter would.
+   *
+   * Only covers servers whose channel list has been fetched: a channel we do
+   * not hold cannot be attributed to a server. That is the same limit the
+   * voice badge has, and it resolves the moment the server is opened.
+   */
+  const serverUnread = (sid: string): number =>
+    (channelsByServer.value[sid] ?? [])
+      .reduce((n, c) => n + (unreadChannels.value[c.id] ?? 0), 0)
+
   const markUnread  = (cid: string) => { unreadChannels.value[cid] = (unreadChannels.value[cid] || 0) + 1 }
   const clearUnread = (cid: string) => { delete unreadChannels.value[cid] }
 
@@ -648,7 +665,7 @@ export const useServers = () => {
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     upsertCategory, removeCategory, toggleCategory,
     upsertMember, removeMember,
-    markUnread, clearUnread, selectLanding, openChannel, viewVoiceChannel,
+    markUnread, clearUnread, serverUnread, selectLanding, openChannel, viewVoiceChannel,
     loadServers, loadServerDetail, loadServerMembers, openServer, moveChannel,
   }
 }

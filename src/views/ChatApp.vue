@@ -164,7 +164,7 @@ const {
   servers, activeServerId, activeChannelId, unreadChannels, channelsByServer, membersByServer,
   activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories, activeMembers,
   voiceActivityByServer,
-  selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
+  selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread, serverUnread,
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
   clearUnread,
@@ -732,8 +732,8 @@ const railPreview = computed(() => {
      * that particular line is not available to be shown — inventing it would
      * be a label that lies. These are the states we actually hold.
      */
-    sub: srv.unread
-      ? `${srv.unread} unread`
+    sub: serverUnread(srv.id)
+      ? `${serverUnread(srv.id)} unread`
       : liveVoiceChannel.value?.serverId === srv.id
         ? 'You are in voice'
         : activity.length ? 'Someone is in voice' : null,
@@ -3339,7 +3339,7 @@ onBeforeUnmount(() => {
             :class="{ mine: myVoiceServerId === srv.id }" aria-hidden="true">
             <Volume2 :size="11" :stroke-width="2.75"/>
           </span>
-          <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
+          <span v-if="serverUnread(srv.id)" class="ri-badge">{{ serverUnread(srv.id) }}</span>
         </div>
         <div class="ri-divider" />
         <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
