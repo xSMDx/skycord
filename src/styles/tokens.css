@@ -108,10 +108,13 @@
   --ease-in:    cubic-bezier(.4, 0, 1, 1);     /* leaving, decisively */
   --ease-inout: cubic-bezier(.4, 0, .2, 1);    /* on-screen state changes */
   /* There is deliberately no overshoot curve. This world is cell-built and
-     rational — it snapped rather than sprang — so a bounce would be borrowed
-     from a different grammar. Four components still carry a literal
-     cubic-bezier(.34,1.56,.64,1) from the old look; they move to --ease-out
-     when the world reaches them. */
+     rational — it snaps rather than springs — so a bounce would be borrowed
+     from a different grammar. Five declarations still carry the old looks
+     overshoot easing (grep the y-value 1.56); they move to --ease-out as the
+     world reaches their components. Written without the literal curve on
+     purpose: spelling it here would trip the design detector on a comment
+     that exists to say the curve is banned, and an ignore-value broad enough
+     to silence that would also silence the five real ones. */
 
   /* ── Message sizing ───────────────────────────────────────────────────── */
   --msg-pad-y:     1px;
