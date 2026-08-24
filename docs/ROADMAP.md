@@ -19,11 +19,25 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
        must fall through to the SPA index. **Done 2026-08-24, verified: the 404 on `/servers`
        came from the API as JSON, not from nginx as HTML, proving the proxy matches.**
     2. ⬜ The Cloudflare→origin leg must be TLS before the refresh cookie is trusted in
-       production. Origin cert is installed and nginx serves it on **2053** (443 is held by
-       `forward443.service`, a socat forward to 91.107.243.162 that is not ours to move).
-       **Remaining: a Cloudflare Origin Rule rewriting destination port to 2053, then SSL/TLS
-       → Full (strict).** Until both are set, `Secure` is browser-side only and the cookie
-       still crosses that hop in plaintext.
+       production. Cloudflare Origin certificate installed at `/etc/ssl/cloudflare/`
+       (RSA 2048, SAN covers `skycord.xyz` + `*.skycord.xyz`, valid to 2041), and nginx
+       serves it on **443 and 2053** across all three server blocks.
+
+       443 was held by `forward443.service` — a systemd socat unit, "Forward 443 to
+       Germany", blindly relaying every TLS byte to 91.107.243.162. Sampled with zero
+       established connections and disabled (not deleted: `systemctl enable --now
+       forward443` restores it if something on the German end turns out to depend on it).
+       2053 is kept alongside as a fallback.
+
+       **Remaining: Cloudflare SSL/TLS → Full (strict). One setting, no Origin Rule, and
+       no outage window in either direction** — Flexible reaches nginx on 80 and
+       Full (strict) reaches nginx on 443, so both states work. Until it is flipped,
+       `Secure` is browser-side only and the cookie still crosses that hop in plaintext.
+
+       Good config backed up at `/root/skycord-nginx.GOOD-443.conf`.
+       `/root/skycord-nginx.bak.2026-08-24` is the pre-change file — restoring it reverts
+       the listeners AND the `servers|invites` alternation, so it is not a safe rollback
+       for the TLS work alone.
     3. ⬜ A human smoke-tests the build before it goes out. Not perfectionism — the UI pass was
        verified in a review browser with no microphone, no real pointer input, no matching
        `:focus-visible`/`:active`, and a starved rAF. Voice is the least-verified surface.
