@@ -134,8 +134,27 @@ export const renderMessage = (raw: string): string => {
   // 7b. Emoji pack — swap native glyphs for the chosen image set (if not native).
   s = emojify(s)
 
-  // 8. Restore stashed HTML.
-  return s.replace(new RegExp(S + '(\\d+)' + S, 'g'), (_m, i) => ph[+i] ?? '')
+  // 8. Line breaks.
+  //
+  // The composer could not produce these until it became a textarea, so the
+  // renderer never had to handle them -- it passed the newline through
+  // untouched and the browser collapsed it to a space, flattening a
+  // multi-line message into one run-on line.
+  //
+  // <br> rather than white-space:pre-wrap on the container: pre-wrap would
+  // also honour the newlines sitting either side of a block element, so a
+  // code fence or a quote would gain a blank line above and below it. Here
+  // the breaks are explicit, and the ones adjacent to a block are dropped
+  // because the block already breaks the line by itself.
+  s = s.replace(/\n/g, '<br>')
+
+  // 9. Restore stashed HTML.
+  s = s.replace(new RegExp(S + '(\\d+)' + S, 'g'), (_m, i) => ph[+i] ?? '')
+
+  const BLOCK = '(?:pre|blockquote)'
+  return s
+    .replace(new RegExp('<br>(?=<' + BLOCK + '\\b)', 'g'), '')
+    .replace(new RegExp('(?<=</' + BLOCK + '>)<br>', 'g'), '')
 }
 
 // ── Strip to plain text (reply previews, tree cards, sidebar last-message) ──

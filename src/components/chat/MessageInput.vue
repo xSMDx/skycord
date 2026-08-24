@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import {
   Paperclip, Smile, Send, X, CornerUpLeft,
   Bold, Italic, Underline, Strikethrough, Quote, Code, Link,
@@ -29,7 +29,16 @@ const emit = defineEmits<{
   clearAllReply:       []
 }>()
 
-const inputEl = ref<HTMLInputElement | null>(null)
+/**
+ * A textarea, not an input.
+ *
+ * onKeydown has always let Shift+Enter through so it could insert a
+ * newline -- but this was <input type="text">, which cannot hold one, so
+ * the branch did nothing and multi-line messages were impossible to write
+ * even though the renderer displays them fine. The composer also stayed one
+ * line tall no matter how much you typed, scrolling sideways.
+ */
+const inputEl = ref<HTMLTextAreaElement | null>(null)
 const setValue = (v: string, caret = v.length) => {
   emit('update:modelValue', v)
   nextTick(() => { inputEl.value?.focus(); inputEl.value?.setSelectionRange(caret, caret) })
@@ -206,7 +215,7 @@ const refreshAc = () => {
 }
 
 const onInput = (e: Event) => {
-  emit('update:modelValue', (e.target as HTMLInputElement).value)
+  emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
   emit('typing')
   // Editing the text after opening the @time picker dismisses it (e.g. deleting
   // the "@" you typed) — otherwise it lingered with nothing tying it to input.
@@ -269,6 +278,27 @@ const onKeydown = (e: KeyboardEvent) => {
   emit('typing')
 }
 const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = false }, 150)
+
+/**
+ * Grow with the content, up to a ceiling.
+ *
+ * Height is reset to auto before reading scrollHeight, because scrollHeight
+ * never reports less than the element's current height -- without the reset
+ * the box would grow and then refuse to shrink when you delete a line.
+ */
+const MAX_ROWS_PX = 50 * 4   // roughly four lines before it scrolls instead
+const autoGrow = () => {
+  const el = inputEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, MAX_ROWS_PX) + 'px'
+}
+
+// Sending clears the text from the parent, which is not something the input
+// event sees -- without this the box keeps the height of the message you
+// just sent.
+watch(() => props.modelValue, () => nextTick(autoGrow))
+onMounted(autoGrow)
 </script>
 
 <template>
@@ -326,9 +356,10 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         <Paperclip :size="20" :stroke-width="1.5" />
       </button>
 
-      <input
+      <textarea
         ref="inputEl"
         :value="modelValue"
+        rows="1"
         @input="onInput"
         @keydown="onKeydown"
         @paste="onPaste"
@@ -336,11 +367,10 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         @pointerup="onInputPointerUp"
         @select="onSelect"
         @blur="onBlur"
-        type="text"
         :placeholder="placeholder"
         class="msg-input"
         :disabled="sending"
-      />
+      ></textarea>
 
       <div class="input-actions">
         <button class="input-action-btn btn-gif" v-tip="'GIF'" @click.stop="emit('openGif')">
@@ -371,7 +401,7 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
 <style scoped>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
-input  { background: none; border: none; outline: none; color: inherit; font: inherit; }
+input, textarea { background: none; border: none; outline: none; color: inherit; font: inherit; }
 
 .input-area { padding: 0 16px 16px; flex-shrink: 0; position: relative; }
 
@@ -434,6 +464,15 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .msg-input {
   flex: 1; padding: 11px 4px;
   font-size: 15px; color: var(--text-1);
+  /* A textarea is inline-block and sits on the text baseline, which left a
+     few pixels of descender gap under it inside the flex row. */
+  display: block;
+  resize: none;
+  overflow-y: auto;
+  max-height: 200px;
+  line-height: 1.375;
+  /* Long unbroken strings must wrap rather than force the row wider. */
+  word-break: break-word;
 }
 .msg-input::placeholder { color: var(--text-faint); }
 .msg-input:disabled     { opacity: .5; }
