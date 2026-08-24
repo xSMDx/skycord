@@ -143,8 +143,13 @@ const onReplyPillLeave = () => {
     <span class="msg-system-time">{{ msg.time }}</span>
   </div>
 
+  <!-- tabindex="0" so the row can hold focus, which is what lets the action
+       toolbar inside it appear for a keyboard. No role: this is a container
+       of content and controls, not a control, and calling it a button would
+       hide the controls inside it from assistive tech. -->
   <div v-else class="msg" :class="{ consecutive, own: isOwn, compact, failed: (msg as any).failed, mentioned: hasEveryone }"
     :data-msg-id="msg.id"
+    tabindex="0"
     @mouseenter="emit('hover', msg.id)" @mouseleave="emit('hover', null)"
     @contextmenu.prevent="emit('openCtx', $event, msg)">
 
@@ -214,7 +219,7 @@ const onReplyPillLeave = () => {
       </div>
     </div>
 
-    <div v-show="hoveredId === msg.id && !isEditing" class="msg-actions"
+    <div class="msg-actions" :class="{ shown: hoveredId === msg.id && !isEditing }"
       @mouseenter="emit('hover', msg.id)" @click.stop>
       <button class="ap" @click.stop="emit('openEmoji', msg.id)" v-tip="'React'">😀</button>
       <button class="ap" @click.stop="emit('reply', msg)" v-tip="'Reply'"><CornerUpLeft :size="15" :stroke-width="1.5"/></button>
@@ -308,7 +313,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rp.active span{color:#8d96f8}
 .rp-add{width:24px;height:24px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .rp-add:hover{background:var(--hover-strong);color: var(--text-strong)}
-.msg-actions{position:absolute;right:10px;top:-16px;background:var(--bg-panel);border:1px solid rgba(255,255,255,.08);border-radius:7px;display:flex;gap:1px;padding:3px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10}
+/* Hover OR keyboard focus. The toolbar used to be revealed by @mouseenter
+   alone on a row that could not hold focus, so Reply, Edit, React and Delete
+   were unreachable without a mouse — and on a touchscreen laptop at desktop
+   width, where hover does not exist, unreachable full stop.
+   :focus-within rather than a focusin handler: it is declarative, so it
+   cannot desync from the DOM and needs no event to fire. */
+.msg-actions{position:absolute;right:10px;top:-16px;background:var(--bg-panel);border:1px solid rgba(255,255,255,.08);border-radius:7px;display:none;gap:1px;padding:3px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10}
+.msg-actions.shown,
+.msg:focus-within .msg-actions{display:flex}
 .ap{width:28px;height:28px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .ap:hover{background:var(--hover-strong);color:var(--text-1);transform:scale(1.15)}
 .ap:active{transform:scale(.9)}

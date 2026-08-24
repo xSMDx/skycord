@@ -3325,9 +3325,17 @@ onBeforeUnmount(() => {
           actually given: without it, the servers that gained a preview would
           be the ones that lost their accessible name.
         -->
+        <!-- role + tabindex, not just aria-label: this was a plain div with a
+             label, so a screen reader could name it and a keyboard could never
+             reach it. A Tab walk started at "Add server" and never touched a
+             single server the user belongs to. -->
         <div v-for="srv in servers" :key="srv.id"
           class="ri" :class="{ active: view==='server' && activeServerId===srv.id }"
+          role="button" tabindex="0"
           :aria-label="voiceActivityByServer[srv.id] ? srv.name + ' — someone is in voice' : srv.name"
+          :aria-current="view==='server' && activeServerId===srv.id ? 'page' : undefined"
+          @keydown.self.enter.prevent="openServer(srv)"
+          @keydown.self.space.prevent="openServer(srv)"
           @mouseenter="onRailHover($event, srv.id)"
           @mouseleave="closeRailPreview"
           @pointerdown="closeRailPreview"
@@ -3553,6 +3561,7 @@ onBeforeUnmount(() => {
             <div
               class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id], dragging: dragChannelId===ch.id }"
               role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+              :aria-current="activeChannelId===ch.id && !voiceStageOpen ? 'page' : undefined"
               :draggable="isServerOwner"
               @dragstart="onChannelDragStart($event, ch)"
               @dragend="endChannelDrag"
@@ -3589,6 +3598,7 @@ onBeforeUnmount(() => {
               <div class="ch-fold-in">
               <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id, dragging: dragChannelId===ch.id }"
                 role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+                :aria-current="liveVoiceChannel?.id === ch.id ? 'true' : undefined"
                 :draggable="isServerOwner"
                 @dragstart="onChannelDragStart($event, ch)"
                 @dragend="endChannelDrag"
