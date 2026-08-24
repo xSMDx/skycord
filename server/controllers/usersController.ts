@@ -12,8 +12,11 @@ import { effectiveStatus } from '../state/presence'
  * invisible user was identifiable by anyone reading the payload, and it never
  * applied auto-idle, so someone idle for an hour still read as online.
  */
-const presenceFor = (userId: string, stored: string | null | undefined): string =>
-  effectiveStatus(stored, userId)
+const presenceFor = (
+  userId: string,
+  stored: string | null | undefined,
+  until:  Date | string | null | undefined,
+): string => effectiveStatus(stored, userId, until)
 
 // ── Search users by username/displayName ────────────────────────────────────
 export const searchUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -46,7 +49,7 @@ export const searchUsers = async (req: Request, res: Response, next: NextFunctio
       discriminator: u.discriminator,
       avatar:        u.avatar,
       avatarCrop:    u.avatarCrop ?? null,
-      status:        presenceFor(u._id.toString(), u.status),
+      status:        presenceFor(u._id.toString(), u.status, u.statusUntil),
     })) })
   } catch (err) { next(err) }
 }
@@ -95,7 +98,7 @@ export const sendFriendRequest = async (req: Request, res: Response, next: NextF
           discriminator: requester?.discriminator ?? '0000',
           avatar:        requester?.avatar        ?? null,
           avatarCrop:    requester?.avatarCrop    ?? null,
-          status:        effectiveStatus(requester?.status, requesterId),
+          status:        effectiveStatus(requester?.status, requesterId, requester?.statusUntil),
         },
         createdAt: friendship.createdAt.toISOString(),
       })
@@ -152,7 +155,7 @@ export const getFriends = async (req: Request, res: Response, next: NextFunction
     const friends = friendships.map(f => {
       const friend: any = f.requester._id.toString() === userId ? f.receiver : f.requester
       const o = friend.toObject ? friend.toObject() : { ...friend }
-      o.status = presenceFor(o._id.toString(), o.status)
+      o.status = presenceFor(o._id.toString(), o.status, o.statusUntil)
       o.customStatus = liveStatus(o.customStatus)   // never hand back an expired one
       return o
     })
@@ -251,13 +254,18 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
       }
     }
 
+    // The HTTP path has no duration support, so a status set over it means
+    // forever -- and forever must overwrite whatever deadline the previous
+    // status left, same rule as the socket path.
+    if (allowed.status !== undefined) (allowed as any).statusUntil = null
+
     const user = await User.findByIdAndUpdate(userId, allowed, { new: true })
     if (!user) { res.status(404).json({ message: 'User not found' }); return }
 
     // Changing your status over HTTP has to reach your friends immediately.
     // Without this the database was updated and nobody was told, so picking
     // "Do Not Disturb" did nothing visible until the other side reconnected.
-    if (allowed.status) await broadcastStatusToFriends(userId, allowed.status)
+    if (allowed.status) await broadcastStatusToFriends(userId, allowed.status, user.statusUntil ?? null)
 
     // Your OWN response carries the raw choice, so the picker can show
     // "Invisible" ticked while everyone else is told you're offline.
@@ -269,10 +277,14 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
  * Push a status change out over the socket layer to everyone entitled to see
  * it. Mirrors the socket handler's `broadcastPresence`, for the HTTP path.
  */
-const broadcastStatusToFriends = async (userId: string, chosen: string) => {
+const broadcastStatusToFriends = async (
+  userId: string,
+  chosen: string,
+  until:  Date | null,
+) => {
   const io = getIO()
   if (!io) return
-  const status = effectiveStatus(chosen, userId)
+  const status = effectiveStatus(chosen, userId, until)
   const fr = await Friendship.find({
     status: 'accepted',
     $or: [{ requester: userId }, { receiver: userId }],
@@ -536,7 +548,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
     const profile: any = user.toPublicJSON()
     // toPublicJSON carries the account's own email; nobody else may see it.
     delete profile.email
-    profile.status = presenceFor(userId, user.status)
+    profile.status = presenceFor(userId, user.status, user.statusUntil)
 
     // Relationship with the viewer.
     const rel = await Friendship.findOne({
@@ -561,7 +573,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
 
     const mutualFriends = mutualIds.length
       ? (await User.find({ _id: { $in: mutualIds } })
-          .select('username displayName discriminator avatar avatarCrop status customStatus').lean())
+          .select('username displayName discriminator avatar avatarCrop status customStatus statusUntil').lean())
           .map((u: any) => ({
             id: u._id.toString(),
             username: u.username,
@@ -569,7 +581,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
             discriminator: u.discriminator,
             avatar: u.avatar ?? null,
             avatarCrop: u.avatarCrop ?? null,
-            status: presenceFor(u._id.toString(), u.status),
+            status: presenceFor(u._id.toString(), u.status, u.statusUntil),
             customStatus: liveStatus(u.customStatus),
           }))
       : []

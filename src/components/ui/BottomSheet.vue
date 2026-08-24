@@ -80,14 +80,14 @@ watch(() => props.open, o => { if (o) dragY.value = 0 })
 const style = computed(() => ({
   height: `${Math.round(props.height * 100)}dvh`,
   transform: dragY.value ? `translate3d(0, ${dragY.value}px, 0)` : '',
-  transition: dragging.value ? 'none' : undefined,
+  transition:dragging.value ? 'none' : undefined,
 }))
 
 /** Scrim fades as the sheet is dragged away — the two are one gesture. */
 const scrimStyle = computed(() => {
   const h = sheet.value?.offsetHeight || 1
   const p = Math.min(1, Math.max(0, dragY.value / h))
-  return { opacity: String(1 - p * 0.85), transition: dragging.value ? 'none' : undefined }
+  return { opacity: String(1 - p * 0.85), transition:dragging.value ? 'none' : undefined }
 })
 
 const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && props.open) emit('close') }
@@ -133,7 +133,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   box-shadow: 0 -12px 40px rgba(0,0,0,.5);
   /* The home indicator sits under the sheet's own bottom edge. */
   padding-bottom: env(safe-area-inset-bottom);
-  transition: transform .34s cubic-bezier(.32,.72,0,1);
+  transition:transform .34s cubic-bezier(.32,.72,0,1);
   touch-action: none;   /* the sheet owns vertical drag; the body re-enables it */
 }
 
@@ -154,13 +154,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 /* Enter/exit along the same path — it came from the bottom, it leaves there. */
-.sheet-enter-active .bs, .sheet-leave-active .bs { transition: transform .34s cubic-bezier(.32,.72,0,1) }
-.sheet-enter-active .bs-scrim, .sheet-leave-active .bs-scrim { transition: opacity .28s ease }
+.sheet-enter-active .bs, .sheet-leave-active .bs { transition:transform .34s cubic-bezier(.32,.72,0,1) }
+.sheet-enter-active .bs-scrim, .sheet-leave-active .bs-scrim { transition: opacity var(--dur-3) var(--ease-out)}
 .sheet-enter-from .bs, .sheet-leave-to .bs { transform: translate3d(0, 100%, 0) }
 .sheet-enter-from .bs-scrim, .sheet-leave-to .bs-scrim { opacity: 0 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sheet-enter-active .bs, .sheet-leave-active .bs { transition: opacity .2s ease }
+  .sheet-enter-active .bs, .sheet-leave-active .bs { transition: opacity var(--dur-3) var(--ease-out)}
   .sheet-enter-from .bs, .sheet-leave-to .bs { transform: none; opacity: 0 }
 }
 </style>

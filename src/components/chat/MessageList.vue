@@ -1,9 +1,19 @@
 <script setup lang="ts">
+import Skeleton from '@/components/ui/Skeleton.vue'
 import { ref, watch, nextTick, computed } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import MessageItem    from './MessageItem.vue'
 import TypingIndicator from './TypingIndicator.vue'
 import type { Message } from '@/types'
+
+/** Fixed shapes, not random ones — a skeleton that reshuffles on each
+ *  re-render draws the eye to itself instead of to the wait. */
+const SK_GROUPS = [
+  { k: 0, name: 96,  lines: ['62%', '38%'] },
+  { k: 1, name: 74,  lines: ['81%'] },
+  { k: 2, name: 118, lines: ['46%', '69%', '29%'] },
+  { k: 3, name: 88,  lines: ['55%'] },
+] as const
 
 const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string | null }; group?: { name: string; avatar?: string | null }; loadingMsgs: boolean }>()
 const emit  = defineEmits<{
@@ -16,8 +26,14 @@ const emit  = defineEmits<{
   openReplyTree: [msg: Message]
   jumpToMessage: [dbId: string]
   groupJoined:   [group: any]
-  serverJoined:  [server: any]
+  serverJoined:  [server: any, channel: { id: string; name: string } | null]
 }>()
+
+// Named rather than inline in the template: an object type written into a
+// template attribute puts semicolons where the compiler expects expression
+// separators, so the annotation has to live out here.
+const onServerJoined = (s: any, ch: { id: string; name: string } | null) =>
+  emit('serverJoined', s, ch)
 
 const el          = ref<HTMLElement | null>(null)
 const hoveredId   = ref<number | null>(null)
@@ -146,7 +162,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
        away with it. The scroller keeps its own class and ref. -->
   <div class="ml-wrap">
   <div class="ml" ref="el" @scroll.passive="onScroll">
-    <div class="welcome">
+    <div v-if="!loadingMsgs" class="welcome">
       <template v-if="isDM && dmPartner">
         <div class="dm-av"><Avatar :src="dmPartner.avatar ?? ''" :alt="dmPartner.name" :crop="(dmPartner as any).avatarCrop" /></div>
         <h3>{{ dmPartner.name }}</h3>
@@ -167,13 +183,26 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
       </template>
     </div>
 
-    <div v-if="loadingMsgs" class="ml-loading">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5865f2" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-      Loading messages…
+    <!-- A spinner says "something is happening somewhere". This says "a
+         conversation is arriving, and it will look like this" — the layout is
+         already right when the messages land, so nothing jumps. -->
+    <div v-if="loadingMsgs" class="ml-sk" role="status" aria-label="Loading messages">
+      <div v-for="g in SK_GROUPS" :key="g.k" class="ml-sk-g">
+        <Skeleton circle :h="40" />
+        <div class="ml-sk-body">
+          <div class="ml-sk-head">
+            <Skeleton :w="g.name" :h="14" />
+            <Skeleton :w="46" :h="10" :dim="0.6" />
+          </div>
+          <Skeleton v-for="(ln, i) in g.lines" :key="i" :w="ln" :h="12" :dim="0.85" />
+        </div>
+      </div>
     </div>
     <div v-else-if="messages.length===0 && !isDM" class="ml-empty"><p>No messages yet. Say something! 👋</p></div>
 
-    <TransitionGroup :name="messages.length ? 'msg-pop' : ''" tag="div" class="msg-list-inner">
+    <!-- v-if, not v-show: the outgoing channel's rows must leave the DOM, or
+         the skeleton renders above stale content from wherever you just were. -->
+    <TransitionGroup v-if="!loadingMsgs" :name="messages.length ? 'msg-pop' : ''" tag="div" class="msg-list-inner">
       <template v-for="row in rows" :key="row.key">
         <div v-if="row.kind === 'divider'" class="day-divider"><span>{{ row.label }}</span></div>
         <MessageItem
@@ -199,7 +228,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
           @openReplyTree="(msg) => emit('openReplyTree',msg)"
           @jumpToMessage="(dbId) => emit('jumpToMessage',dbId)"
           @groupJoined="(g) => emit('groupJoined',g)"
-          @serverJoined="(s) => emit('serverJoined',s)"
+          @serverJoined="onServerJoined"
         />
       </template>
     </TransitionGroup>
@@ -211,39 +240,43 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
       <button v-if="!atBottom" class="ml-jump" @click="scrollToBottom()">
         <span v-if="missed">{{ missed }} new message{{ missed === 1 ? '' : 's' }}</span>
         <span v-else>Jump to present</span>
-        <ChevronDown :size="13" :stroke-width="2.25" />
+        <ChevronDown :size="14" :stroke-width="2.25" />
       </button>
     </Transition>
   </div>
 </template>
 <style scoped>
-*{box-sizing:border-box;margin:0;padding:0}img{display:block;width:100%;height:100%;object-fit:cover}
+*{box-sizing:border-box;margin: 0;padding: 0}img{display:block;width:100%;height:100%;object-fit:cover}
 /* min-height:0 — without it the flex child refuses to shrink and the scroller
    never actually scrolls. */
 .ml-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
-.ml{flex:1;overflow-y:auto;padding:8px 0 0;display:flex;flex-direction:column}
+.ml{flex:1;overflow-y:auto;padding: 8px 0 0;display:flex;flex-direction:column}
 .ml-jump{
   position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:5;
-  display:flex;align-items:center;gap:7px;
-  padding:7px 14px;border-radius:999px;border:none;cursor:pointer;
+  display:flex;align-items:center;gap: 8px;
+  padding: 8px 14px;border-radius: 999px;border:none;cursor:pointer;
   background:var(--accent);color:var(--text-on-accent);
   font:inherit;font-size:13px;font-weight:600;
   box-shadow:0 4px 16px rgba(0,0,0,.45);
 }
 .ml-jump:hover{filter:brightness(1.08)}
-.jump-enter-active,.jump-leave-active{transition:opacity .14s,transform .14s}
+.jump-enter-active,.jump-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
-.welcome{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:8px}
-.ch-icon{width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
-.dm-av{width:64px;height:64px;border-radius:50%;overflow:hidden;margin-bottom:14px;border:3px solid var(--bg-panel)}
+.welcome{padding: 20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom: 8px}
+.ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
+.dm-av{width:64px;height:64px;border-radius: 50%;overflow:hidden;margin-bottom: 14px;border:3px solid var(--bg-panel)}
 .group-av{display:flex;align-items:center;justify-content:center;background:var(--accent);border:none}
 .group-av svg{width:30px;height:30px}
-.welcome h3{font-size:26px;font-weight:800;color: var(--text-strong);margin-bottom:4px}
+.welcome h3{font-size:26px;font-weight:800;color: var(--text-strong);margin-bottom: 4px}
 .welcome p{font-size:14px;color:var(--text-3)}
 .welcome strong{color: var(--text-strong)}
-.ml-loading,.ml-empty{display:flex;align-items:center;gap:10px;padding:24px 16px;color:var(--text-faint);font-size:14px}
+.ml-loading,.ml-empty{display:flex;align-items:center;gap: 10px;padding: 24px 16px;color:var(--text-faint);font-size:14px}
+.ml-sk{padding: 16px 16px 8px;display:flex;flex-direction:column;gap: 18px}
+.ml-sk-g{display:flex;gap: 14px;align-items:flex-start}
+.ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap: 8px}
+.ml-sk-head{display:flex;align-items:center;gap: 8px;margin-bottom: 1px}
 @keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin .8s linear infinite;flex-shrink:0}
-.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
+.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius: 2px}
 
 /* New message pop-in — only applies to genuinely new sends/receives via the
    msg-no-anim escape hatch set by MessageList for anything present at the
@@ -251,11 +284,11 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .msg-list-inner { display: contents; }
 
 /* Per-day date divider */
-.day-divider{display:flex;align-items:center;margin:14px 16px 6px;height:0}
+.day-divider{display:flex;align-items:center;margin: 14px 16px 6px;height:0}
 .day-divider::before,.day-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07)}
-.day-divider span{padding:0 10px;font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap}
-.msg-pop-enter-active { transition: opacity .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1); }
+.day-divider span{padding: 0 10px;font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap}
+.msg-pop-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform .22s cubic-bezier(.34,1.56,.64,1); }
 .msg-pop-enter-from   { opacity: 0; transform: translateY(8px) scale(.97); }
-.msg-no-anim.msg-pop-enter-active { transition: none; }
+.msg-no-anim.msg-pop-enter-active { transition:none; }
 .msg-no-anim.msg-pop-enter-from   { opacity: 1; transform: none; }
 </style>

@@ -24,6 +24,35 @@ export const getOnlineUserIds = presence.onlineUserIds
 // members who AREN'T in the room yet see "a call is happening / who's in it"
 // (header Join state + "In a call" badges) without joining the LiveKit room.
 const activeCalls   = new Map<string, Set<string>>()
+
+/**
+ * What each occupant of a voice room is doing: muted, deafened, sharing.
+ *
+ * Keyed room -> userId -> state, deliberately parallel to `activeCalls`
+ * rather than folded into it. Occupancy is a set and is read as one in a
+ * dozen places; widening it to carry per-user detail would cost every one of
+ * those call sites.
+ *
+ * The server has to be the one holding this. A client can observe the mic
+ * state of people in the room IT is connected to, but a sidebar shows every
+ * voice channel in the server — and deafening is a purely local decision
+ * about playback that publishes no track at all, so no other client can
+ * observe it however close they are. Both facts have to be told, then fanned
+ * out with the occupancy that gives them meaning.
+ *
+ * Per ROOM, not per user: leaving a channel drops the entry, so nobody
+ * carries a stale "sharing" flag into the next one they walk into.
+ */
+export interface VoiceMemberState { muted: boolean; deafened: boolean; sharing: boolean }
+const voiceStates = new Map<string, Map<string, VoiceMemberState>>()
+
+/** The states for a room, shaped for the wire. Omitted entirely when empty so
+ *  the common case adds nothing to every call:state payload. */
+const statesFor = (room: string): Record<string, VoiceMemberState> | undefined => {
+  const m = voiceStates.get(room)
+  if (!m || m.size === 0) return undefined
+  return Object.fromEntries(m)
+}
 const callStartedAt = new Map<string, number>()
 
 let _io: IOServer | null = null
@@ -263,6 +292,15 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // presence handlers below can re-derive what friends should see without a
     // database round-trip on every idle flicker.
     let myStatus: presence.ChosenStatus = 'online'
+    // The chosen status's end, carried beside the choice itself. Held per
+    // socket for the same reason myStatus is: effectiveStatus needs both on
+    // every broadcast, and re-reading the row on each one would be a database
+    // round trip per presence event.
+    let myStatusUntil: Date | null = null
+    // The connect-time load below runs after several awaits. A presence:set
+    // that lands inside that window must win over the stale row the load
+    // read before it — this flag is how the load knows it lost the race.
+    let statusTouched = false
 
     // ── Send DM ───────────────────────────────────────────────────────────
     socket.on('dm:send', async (data: {
@@ -613,7 +651,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // it — see channelServer. The client uses it to attribute occupancy to
       // a server whose channel list it has not fetched.
       const serverId = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
-      const payload = { room, userIds, ...(serverId ? { serverId } : {}) }
+      const states = statesFor(room)
+      const payload = { room, userIds, ...(serverId ? { serverId } : {}), ...(states ? { states } : {}) }
       if (room.startsWith('voice:')) {
         // Occupancy is server-wide news: everyone should see who is sitting in
         // a voice channel without being in it. Every member joined the socket
@@ -685,14 +724,52 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const set = activeCalls.get(room)
       if (!set || !set.has(userId)) return
       set.delete(userId)
+      // State outliving its occupant would render a ghost row: every client
+      // reads occupancy and state together.
+      const st = voiceStates.get(room)
+      if (st) { st.delete(userId); if (st.size === 0) voiceStates.delete(room) }
       joinedCallRooms.delete(room)
       if (set.size === 0) {
-        activeCalls.delete(room); callStartedAt.delete(room)
+        activeCalls.delete(room); callStartedAt.delete(room); voiceStates.delete(room)
         void postCallEnded(room)
       }
       broadcastCall(room)
     }
 
+    /**
+     * Report what you are doing in the call you are in.
+     *
+     * Carries no user id on purpose: the socket already knows who is
+     * speaking, and accepting one would let any client mute anyone. It also
+     * names no room — you can only be in one voice room at a time from a
+     * given socket, and taking a room from the payload would let a client
+     * write state into a channel it never joined.
+     */
+    socket.on('voice:state', (raw: unknown) => {
+      if (!raw || typeof raw !== 'object') return
+      // The one voice room this socket is actually in. Nothing to describe
+      // otherwise, and nowhere to broadcast it.
+      const room = [...joinedCallRooms].find(r => r.startsWith('voice:'))
+      if (!room || !activeCalls.get(room)?.has(userId)) return
+
+      const r = raw as Record<string, unknown>
+      // Coerced, not trusted: a missing flag means false rather than
+      // undefined, so the wire shape is the same for every occupant.
+      const next: VoiceMemberState = {
+        muted:    !!r.muted,
+        deafened: !!r.deafened,
+        sharing:  !!r.sharing,
+      }
+      let m = voiceStates.get(room)
+      if (!m) { m = new Map(); voiceStates.set(room, m) }
+      const prev = m.get(userId)
+      // A client that re-reports an unchanged state (a reconnect, a
+      // redundant mute) must not fan a payload out to the whole channel.
+      if (prev && prev.muted === next.muted && prev.deafened === next.deafened
+          && prev.sharing === next.sharing) return
+      m.set(userId, next)
+      broadcastCall(room)
+    })
     socket.on('call:join', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       // Refuse silently, same shape every other handler in this file uses for
@@ -730,26 +807,38 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * at one of the call sites.
      */
     const broadcastPresence = async () => {
-      const status = presence.effectiveStatus(myStatus, userId)
+      const status = presence.effectiveStatus(myStatus, userId, myStatusUntil)
       const audience = await presenceAudience(userId)
       for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status })
       // Your own other tabs get the RAW choice — you must see your own
       // "Invisible", even while your friends are being told you're offline.
-      io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status })
+      io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status, until: myStatusUntil })
     }
 
     /** The user picked a status. Persist the choice, then tell people. */
     socket.on('presence:set', async (raw: unknown, ack?: (r: any) => void) => {
       const next = typeof raw === 'string' ? raw : (raw as any)?.status
       if (!presence.isChosenStatus(next)) { ack?.({ ok: false, error: 'Unknown status' }); return }
-      myStatus = next
+
+      // An optional duration, in minutes. A bare string still works — that is
+      // the "Forever" case and the shape every existing client sends.
+      const mins = typeof raw === 'object' && raw ? Number((raw as any).minutes) : NaN
+      let until: Date | null = null
+      if (Number.isFinite(mins) && mins > 0) until = new Date(Date.now() + mins * 60_000)
+
+      myStatus      = next
+      myStatusUntil = until
+      statusTouched = true
       // Choosing a status explicitly means you're at the keyboard.
       presence.setAway(userId, false)
       try {
-        await User.findByIdAndUpdate(userId, { status: next })
+        // statusUntil is always written, never merged: picking a status with
+        // no duration has to clear whatever expiry the previous one left, or
+        // "Online forever" would silently inherit the old DND's end time.
+        await User.findByIdAndUpdate(userId, { status: next, statusUntil: until })
       } catch { ack?.({ ok: false, error: 'Could not save that' }); return }
       await broadcastPresence()
-      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId) })
+      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, myStatusUntil), until: myStatusUntil })
     })
 
     /**
@@ -793,8 +882,14 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // write was the reason Do Not Disturb never survived a sign-in.
       const me = await User.findByIdAndUpdate(
         userId, { lastSeenAt: new Date() }, { new: true }
-      ).select('avatar avatarCrop displayName username status').lean()
-      myStatus = presence.isChosenStatus(me?.status) ? me!.status : 'online'
+      ).select('avatar avatarCrop displayName username status statusUntil').lean()
+      // Skipped entirely when presence:set beat this load: the row was read
+    // before that write, so "catching up" from it would roll the fresher
+    // choice back to the stale one.
+    if (!statusTouched) {
+      myStatus      = presence.isChosenStatus(me?.status) ? me!.status : 'online'
+      myStatusUntil = (me?.statusUntil as Date | null | undefined) ?? null
+    }
 
       // Looked up once per connection rather than trusting what the client
       // sends per-message. A reconnect after changing your avatar or display
@@ -841,7 +936,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // the user chose to join. Invisible is still a full opt-out, because
       // effectiveStatus maps it to offline.
       if (wasOffline) {
-        const eff = presence.effectiveStatus(myStatus, userId)
+        const eff = presence.effectiveStatus(myStatus, userId, myStatusUntil)
         const audience = await presenceAudience(userId, myServers)
         for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status: eff })
       }
@@ -861,7 +956,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
             : room.slice(3).split('_').includes(userId)
         if (!belongs) continue
         const sid = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
-        socket.emit('call:state', { room, userIds: [...participants], ...(sid ? { serverId: sid } : {}) })
+        // Without this a late arrival sees the room's occupants but none of
+        // their state until somebody happens to change theirs.
+        const catchUpStates = statesFor(room)
+        socket.emit('call:state', { room, userIds: [...participants], ...(sid ? { serverId: sid } : {}), ...(catchUpStates ? { states: catchUpStates } : {}) })
       }
     } catch (err) {
       // A failed setup must not take the connection down — the handlers are

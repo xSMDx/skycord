@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  Hash, Volume2, Plus, ChevronRight, ChevronLeft,
-  Search, Users, ChevronDown,
-  Mic, MicOff, Headphones, Settings,
-  Pin, BellOff, PanelLeft, Compass,
-  MessageCircle, X, UserPlus,
-  Check, Ellipsis,
-  Pencil, UsersRound,
-  User, Paperclip, AtSign, SlidersHorizontal, Copy,
-  Phone, Camera, PhoneOff
+  ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+import {
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, User, Paperclip, AtSign, SlidersHorizontal, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch,
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
@@ -21,7 +14,7 @@ import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireCh
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls } from '@/composables/useSocket'
+import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
 import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
@@ -44,12 +37,14 @@ import ModalBase           from '@/components/modals/ModalBase.vue'
 import MessageList   from '@/components/chat/MessageList.vue'
 import MessageInput  from '@/components/chat/MessageInput.vue'
 import ServerInviteCard from '@/components/chat/ServerInviteCard.vue'
-import ContextMenu          from '@/components/chat/ContextMenu.vue'
 import ReactionPickerModal  from '@/components/modals/ReactionPickerModal.vue'
 import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
+import Skeleton             from '@/components/ui/Skeleton.vue'
+import InviteToVoice         from '@/components/voice/InviteToVoice.vue'
+import type { InvitePerson } from '@/components/voice/InviteToVoice.vue'
 import RtcDebugModal         from '@/components/voice/RtcDebugModal.vue'
 import ConversationDetails    from '@/components/chat/ConversationDetails.vue'
 import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
@@ -57,17 +52,19 @@ import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance }        from '@/composables/useAppearance'
-import { useVoice, isConnectedVoiceRoom } from '@/composables/useVoice'
+import { useVoice, isConnectedVoiceRoom, userPref, setUserPref } from '@/composables/useVoice'
 import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
 // above still owns its own surface until it's migrated onto this one.
 import AppContextMenu        from '@/components/ui/ContextMenu.vue'
 import ConnectionBanner      from '@/components/ui/ConnectionBanner.vue'
-import { openMenu }          from '@/composables/useContextMenu'
+import { openMenu, closeMenu, menu } from '@/composables/useContextMenu'
+import { useShortcuts } from '@/composables/useShortcuts'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
-import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
+import { buildServerMenu, buildSidebarMenu }      from '@/composables/contextMenus/serverMenu'
+import { voiceOccupantMenu, voiceSelfMenu } from '@/composables/contextMenus/voiceOccupantMenu'
 import { buildChannelMenu, type MenuChannel } from '@/composables/contextMenus/channelMenu'
 import { buildCategoryMenu, type MenuCategory } from '@/composables/contextMenus/categoryMenu'
 import { formatChannelName } from '@/utils/channelName'
@@ -77,6 +74,7 @@ import { formatChannelName } from '@/utils/channelName'
 // aborted ChatApp's update entirely, taking the sidebar and the incoming-call
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
+import { stripMarkers } from '@/utils/richText'
 
 import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 
@@ -161,11 +159,13 @@ const {
   servers, activeServerId, activeChannelId, unreadChannels, channelsByServer, membersByServer,
   activeServer, activeChannel, activeCategories, groupedChannels, collapsedCategories, activeMembers,
   voiceActivityByServer,
-  selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread,
+  selectLanding, openChannel, upsertServer, removeServer, upsertChannel, removeChannel, markUnread, serverUnread,
   viewedVoiceId, viewVoiceChannel,
   upsertCategory, removeCategory, toggleCategory,
+  clearUnread,
+  loadingServerDetail,
   upsertMember, removeMember,
-  loadServers, loadServerMembers, openServer: enterServer,
+  loadServers, loadServerMembers, openServer: enterServer, moveChannel,
 } = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -354,6 +354,17 @@ const { muted: micOff, deafened: deafOff, toggleMute: onToggleMute, toggleDeafen
  * the id up in `channelsByServer` answers "is this a voice channel, and whose
  * server is it?" in one step, for both phases of the join.
  */
+/**
+ * The server whose voice I am actually connected to, or null.
+ *
+ * Drives the two-state rail badge. Read from the LIVE call rather than from
+ * anything the sidebar is merely displaying: you can be sitting in one
+ * server's voice channel while reading a different server entirely, and the
+ * badge has to follow the call, not the view.
+ */
+const myVoiceServerId = computed<string | null>(() => liveVoiceChannel.value?.serverId ?? null)
+
+
 const liveVoiceChannel = computed<Channel | null>(() => {
   // A join that has permanently failed (spent all its retries — a deleted
   // channel, a server you were removed from) must stop looking "live"
@@ -604,14 +615,25 @@ const liveSpeakingById = computed<Record<string, boolean>>(() => {
 })
 
 /** Sidebar helper: who is sitting in this voice channel right now. */
-const voiceOccupants = (channelId: string): (VoiceOccupant & { speaking: boolean })[] => {
-  const list = voiceRoomOccupants.value[voiceRoomName('channel', channelId, authUser.value?.id || '')] ?? []
+const voiceOccupants = (channelId: string):
+    (VoiceOccupant & { speaking: boolean; muted: boolean; deafened: boolean; sharing: boolean })[] => {
+  const room = voiceRoomName('channel', channelId, authUser.value?.id || '')
+  const list = voiceRoomOccupants.value[room] ?? []
+  // Server-published, so it is known for every voice channel in the sidebar —
+  // not only the one this client is connected to. See voiceStates.
+  const states = voiceStates.value[room] ?? {}
   // liveSpeakingById is keyed by user id alone, with no room of its own — so
   // without this it would apply just as happily to a channel you're not even
   // in (a stale call:join whose call:leave never arrived, listing you twice).
   // Only the channel LiveKit actually has you connected to may show rings.
   const scoped = isConnectedVoiceRoom(channelId)
-  return list.map(o => ({ ...o, speaking: scoped && (liveSpeakingById.value[o.id] ?? false) }))
+  return list.map(o => ({
+    ...o,
+    speaking: scoped && (liveSpeakingById.value[o.id] ?? false),
+    muted:    !!states[o.id]?.muted,
+    deafened: !!states[o.id]?.deafened,
+    sharing:  !!states[o.id]?.sharing,
+  }))
 }
 
 /**
@@ -674,7 +696,6 @@ const closeRailPreview = () => {
 
 const onRailHover = (e: MouseEvent, serverId: string) => {
   closeRailPreview()
-  if (!voiceActivityByServer.value[serverId]) return   // plain v-tip handles this one
   const el = e.currentTarget as HTMLElement
   railPreviewTimer = setTimeout(() => {
     const r = el.getBoundingClientRect()
@@ -695,13 +716,23 @@ const onRailHover = (e: MouseEvent, serverId: string) => {
 const railPreview = computed(() => {
   const a = railPreviewAnchor.value
   if (!a) return null
-  const activity = voiceActivityByServer.value[a.serverId]
-  if (!activity?.length) return null
   const srv = servers.value.find(s => s.id === a.serverId)
   if (!srv) return null
+  const activity = voiceActivityByServer.value[a.serverId] ?? []
   return {
     anchor: a,
     name:   srv.name,
+    /**
+     * The state line under the name, or null when there is nothing true to
+     * say. The reference shows "Muted" here; this app has no server mute, so
+     * that particular line is not available to be shown — inventing it would
+     * be a label that lies. These are the states we actually hold.
+     */
+    sub: serverUnread(srv.id)
+      ? `${serverUnread(srv.id)} unread`
+      : liveVoiceChannel.value?.serverId === srv.id
+        ? 'You are in voice'
+        : activity.length ? 'Someone is in voice' : null,
     channels: activity.map(v => ({
       id:   v.channelId,
       // null when we hold no channel list for this server — see
@@ -922,10 +953,13 @@ const toggleSelfPopout = (e: MouseEvent) =>
  * told nobody, so the change wasn't visible to anyone until they reconnected.
  * Falls back to HTTP when the socket is down, so it still saves offline.
  */
-const setPresence = async (status: string) => {
+const setPresence = async (status: string, minutes?: number) => {
   profilePopout.value = null
   const s = status as ChosenStatus
-  if (await setChosenStatus(s)) { if (authUser.value) updateUser({ ...authUser.value, status: s } as any); return }
+  if (await setChosenStatus(s, minutes)) { if (authUser.value) updateUser({ ...authUser.value, status: s } as any); return }
+  // The HTTP fallback has no duration support — a timed pick made while the
+  // socket is down degrades to the plain status, which is the honest option:
+  // a deadline nothing acknowledged would drift from what the picker showed.
   try {
     const res = await authFetch('/users/me', { method: 'PATCH', body: JSON.stringify({ status: s }) })
     if (res.ok) updateUser((await res.json()).user)
@@ -933,6 +967,55 @@ const setPresence = async (status: string) => {
   } catch { showToast('Couldn’t update your status') }
 }
 const showCameraPreview = ref(false)
+
+/**
+ * "Invite to Voice" — the row under a voice channel, and the modal behind
+ * its "See more…".
+ *
+ * inviteVoiceChannel doubles as "is the inline list open", holding the
+ * channel it belongs to rather than a boolean, because the sidebar can show
+ * several voice channels and only one list may be open at a time.
+ */
+/** Fixed shapes; see the note on SK_GROUPS in MessageList. */
+const SB_SKELETON = [
+  { k: 0, label: 62, rows: ['58%', '74%', '43%'] },
+  { k: 1, label: 84, rows: ['66%', '51%'] },
+] as const
+
+const inviteVoiceChannel = ref<Channel | null>(null)
+/** The row the floating invite panel is pinned to. */
+const inviteVoiceAnchor  = ref<HTMLElement | null>(null)
+const toggleInviteVoice = (e: MouseEvent, ch: Channel) => {
+  const open = inviteVoiceChannel.value?.id === ch.id
+  inviteVoiceChannel.value = open ? null : ch
+  inviteVoiceAnchor.value  = open ? null : (e.currentTarget as HTMLElement)
+}
+const inviteVoiceModal   = ref<Channel | null>(null)
+
+/** Friends first for the inline peek — that is who you actually pull into a
+ *  call. The modal widens to every member of the server. */
+const inviteFriends = computed<InvitePerson[]>(() =>
+  apiFriends.value.map(f => ({
+    id: f.id, username: f.username, displayName: (f as any).displayName,
+    avatar: f.avatar ?? null, avatarCrop: (f as any).avatarCrop ?? null,
+  })))
+
+const inviteMembers = computed<InvitePerson[]>(() => {
+  const me = authUser.value?.id
+  // Everyone but you — inviting yourself into the room you are standing in
+  // is the one row that can never do anything.
+  return [...activeMembers.value.online, ...activeMembers.value.offline]
+    .filter(m => m.id !== me)
+    .map(m => ({
+      id: m.id, username: m.username, displayName: m.displayName,
+      avatar: m.avatar ?? null, avatarCrop: (m as any).avatarCrop ?? null,
+    }))
+})
+
+const inviteMe = computed(() => ({
+  name: authUser.value?.displayName || authUser.value?.username || 'You',
+  avatar: myAvatar.value,
+}))
 // Which user-panel device menu is open. Same flyouts as the call bar, but
 // anchored upward — the panel is pinned to the bottom of the sidebar.
 const upMenu = ref<'' | 'mic' | 'out'>('')
@@ -1022,7 +1105,17 @@ const replyTargetMeta = computed(() =>
 )
 
 // ── Context menu ───────────────────────────────────────────────────────────
-const ctxMenu = ref<{ x: number; y: number; msg: Message } | null>(null)
+/**
+ * The message the open context menu belongs to, or null for every other
+ * menu in the app. Only drives the quick-reaction strip in the shared menu's
+ * header slot — position, keyboard handling and dismissal all belong to
+ * ContextMenu now.
+ */
+const ctxMsg = ref<Message | null>(null)
+
+// The five that carried over from the bespoke menu, unchanged — these are
+// muscle memory for anyone arriving from Discord.
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢'] as const
 
 // ── Refs to child components ───────────────────────────────────────────────
 const msgListRef = ref<InstanceType<typeof MessageList> | null>(null)
@@ -1150,23 +1243,23 @@ watch([activeDM, activeGroup], () => { showDetails.value = false })
 // that filtered the mock arrays are gone.
 
 /**
- * `groupedChannels` with the two things the state layer has no business
+ * `groupedChannels` with the one thing the state layer has no business
  * knowing about folded in: whether each category is folded shut on THIS
- * device, and which rows survive that fold.
+ * device.
  *
- * A collapsed category is not emptied. It keeps showing the channel you are
- * currently reading and anything with an unread badge, which is what Discord
- * does and for two concrete reasons: hiding the channel on screen leaves the
- * sidebar with nothing highlighted while its messages are right there, and
- * hiding an unread one throws away the only notice that it has traffic — the
- * badge exists to be seen, and folding a category is a request for less
- * clutter, not for less news.
+ * Every row is handed to the template whatever the fold says, because the
+ * fold is an ANIMATION now (see `.ch-fold` in this file's stylesheet) and a
+ * row that is not rendered cannot be animated away. `rowFolded` below is what
+ * decides which of them collapse to zero height; this computed only decides
+ * which groups exist and whether each one is shut.
  *
  * The leading uncategorised group is dropped when it has no channels: it
  * renders no header (an "Uncategorised" label over every server's #general
  * would be noise), so with no rows there is nothing left but a hover target
- * and 4px of margin. Every *category* group survives empty — an empty
- * category still has to be visible to be renamed, deleted, or filled.
+ * and 4px of margin. It comes back for the duration of a drag, where it is
+ * the only visible thing saying "you can put this outside every category" —
+ * see `dragChannelId`. Every *category* group survives empty regardless — an
+ * empty category still has to be visible to be renamed, deleted, or filled.
  */
 /** useServers keys its collapse map `${serverId}:${categoryId}`. Spelling that
  *  format out once here keeps the two readers below from drifting from each
@@ -1186,25 +1279,114 @@ interface SidebarGroup {
 }
 const sidebarGroups = computed<SidebarGroup[]>(() =>
   groupedChannels.value
-    .map(g => {
-      const collapsed = !!g.category && isCategoryCollapsed(g.category.serverId, g.category.id)
-      const survives  = (c: Channel) =>
-        !collapsed || c.id === activeChannelId.value || !!unreadChannels.value[c.id]
-      return {
-        key:       g.category?.id ?? 'uncategorised',
-        category:  g.category,
-        collapsed,
-        text:      g.text.filter(survives),
-        voice:     g.voice.filter(survives),
-      }
-    })
-    .filter(g => g.category !== null || g.text.length > 0 || g.voice.length > 0)
+    .map(g => ({
+      key:       g.category?.id ?? 'uncategorised',
+      category:  g.category,
+      collapsed: !!g.category && isCategoryCollapsed(g.category.serverId, g.category.id),
+      text:      g.text,
+      voice:     g.voice,
+    }))
+    .filter(g =>
+      g.category !== null || g.text.length > 0 || g.voice.length > 0 || !!dragChannelId.value)
 )
+
+/**
+ * Which rows a shut category folds away, and which it keeps.
+ *
+ * A collapsed category is not emptied. It keeps showing the channel you are
+ * currently reading and anything with an unread badge, which is what Discord
+ * does and for two concrete reasons: hiding the channel on screen leaves the
+ * sidebar with nothing highlighted while its messages are right there, and
+ * hiding an unread one throws away the only notice that it has traffic — the
+ * badge exists to be seen, and folding a category is a request for less
+ * clutter, not for less news.
+ *
+ * Phrased as "is this one folded" rather than "does this one survive" because
+ * that is the direction the class binding needs, and inverting it at the call
+ * site is how a `v-if` and a class drift apart.
+ */
+const rowFolded = (g: SidebarGroup, c: Channel) =>
+  g.collapsed && c.id !== activeChannelId.value && !unreadChannels.value[c.id]
 
 /** Fold/unfold from a category header. A no-op on the headerless
  *  uncategorised group, which has nothing to fold and no header to click. */
 const toggleGroup = (g: SidebarGroup) => {
   if (g.category) toggleCategory(g.category.serverId, g.category.id)
+}
+
+/**
+ * Dragging a channel between categories.
+ *
+ * HTML5 drag-and-drop, not a library and not a bespoke pointer-event rig:
+ * this list needs "pick a row up, drop it on a header", which the platform
+ * already does, including the drag image and the Escape-to-cancel that a
+ * hand-rolled version would have to reinvent.
+ *
+ * Two refs rather than one, because "a drag is happening" and "where it would
+ * land" answer different questions: the first decides whether the drop strip
+ * exists at all, the second which group is lit. `dropCategory` is `null` for
+ * the uncategorised group, the same spelling `moveChannel` takes, so nothing
+ * has to translate between them.
+ *
+ * `dragChannelId` is deliberately the source of truth for WHAT is moving,
+ * never the id on the dataTransfer: that payload exists only because Firefox
+ * refuses to start a drag without one, and reading it back would let a drop
+ * from another window move a channel in this one.
+ */
+const dragChannelId = ref<string | null>(null)
+const dropCategory  = ref<string | null>(null)
+
+const onChannelDragStart = (e: DragEvent, ch: Channel) => {
+  // Owners only — `updateChannel` is requireOwner server-side, so a
+  // non-owner's drag could only ever end in a 403. The rows carry
+  // `draggable="false"` for them as well; this is the second half of the same
+  // fence, not a substitute for it.
+  if (!isServerOwner.value) { e.preventDefault(); return }
+  dragChannelId.value = ch.id
+  // Start lit on the group it is already in, so the indicator says something
+  // true from the first frame rather than flashing "uncategorised" until the
+  // first dragover lands.
+  dropCategory.value  = ch.category ?? null
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', ch.id)
+  }
+}
+
+const endChannelDrag = () => { dragChannelId.value = null }
+
+/** `category` is the group under the pointer — `null` for "outside every
+ *  category", which `.sb-body` supplies for anything not over a group. */
+const onChannelDragOver = (e: DragEvent, category: string | null) => {
+  // Not our drag. Leaving preventDefault uncalled is what tells the browser
+  // this is not a drop target, so a file dragged over the sidebar still gets
+  // the browser's own refusal rather than being silently swallowed.
+  if (!dragChannelId.value) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropCategory.value = category
+}
+
+const onChannelDrop = async (e: DragEvent, category: string | null) => {
+  const cid = dragChannelId.value
+  if (!cid) return
+  e.preventDefault()
+  const sid = activeServerId.value
+  // Cleared before the request, not after: the row is going to move
+  // optimistically anyway, and leaving the drag state up would keep a drop
+  // strip and a lit group on screen until the server answered.
+  endChannelDrag()
+  if (!sid || !isServerOwner.value) return
+  try {
+    await moveChannel(sid, cid, category)
+  } catch (err: any) {
+    console.error('[onChannelDrop]', err)
+    // moveChannel has already put the channel back where it was; this is the
+    // only thing that says why. Same message source as the context menu's
+    // Move to Category, so "That category does not belong to this server"
+    // reads identically however the move was started.
+    showToast(err?.message || 'Couldn’t move that channel')
+  }
 }
 
 const activeNow       = computed(() => apiFriends.value.filter(f => f.status === 'online' || f.status === 'idle'))
@@ -1526,9 +1708,21 @@ const handleGroupJoined = async (rawGroup: any) => {
 // folded the response into state via receiveDetail, so this is exactly
 // onServerCreated's path — enterServer finds the server cached and makes no
 // second request.
-const handleServerJoined = async (server: any) => {
+const handleServerJoined = async (
+  server: any, channel?: { id: string; name: string } | null,
+) => {
   joinPromptCode.value = null   // close the direct-link modal, if that's how we got here
   await onServerCreated(server.id)
+  // An invite to a voice channel does not merely deliver you to the server —
+  // it delivers you to the room. Resolved against the freshly-cached channel
+  // list rather than trusting the id blind: joinVoiceChannel needs the whole
+  // Channel object, and the list has just been written by receiveDetail.
+  if (!channel) return
+  const ch = channelsByServer.value[server.id]?.find(c => c.id === channel.id)
+  // Gone between the preview and now, or somehow not in the payload. The join
+  // itself succeeded, so this stays silent rather than throwing an error at
+  // someone who did land where the link's primary promise said.
+  if (ch) joinVoiceChannel(ch)
 }
 
 const doLeaveGroup = async (groupId: string) => {
@@ -1882,6 +2076,62 @@ const userMenuHandlers = {
 const openUserMenu = (e: MouseEvent, u: MenuUser, ctx: { isSelf?: boolean; isCurrentDM?: boolean } = {}) =>
   openMenu(e, userMenu(u, userMenuHandlers, ctx))
 
+
+/**
+ * Right-clicking a voice-channel occupant in the sidebar.
+ *
+ * Builders, not arrays: these carry live state — the mute checkmark, the
+ * volume readout — and an array is a snapshot that can never update while
+ * the menu is open. Same reason CallBar passes builders for its tiles.
+ */
+const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string; name: string; avatar: string }) => {
+  const u: MenuUser = { id: o.id, displayName: o.name, avatar: o.avatar }
+  const isMe = o.id === authUser.value?.id
+  const handlers = {
+    openProfile: userMenuHandlers.openProfile,
+    openDM:      userMenuHandlers.openDM,
+    startCall:   userMenuHandlers.startCall,
+    inviteToServer: () => { showInvite.value = true },
+    // Only offered to a non-friend (the builder gates on isFriend), so the
+    // request can never be a duplicate of an existing friendship.
+    addFriend: async (target: MenuUser) => {
+      try {
+        await api.sendFriendRequest(target.id)
+        showToast(`Friend request sent to ${target.displayName || target.username}`)
+      } catch (e: any) {
+        showToast(e?.message || 'Could not send that friend request')
+      }
+    },
+    copy:        copyText,
+    setUserVolume:   (id: string, v: number) => setUserPref(id, { volume: v }),
+    toggleUserMute:  (id: string) => setUserPref(id, { muted: !userPref(id).muted }),
+    toggleUserVideo: (id: string) => setUserPref(id, { videoOff: !userPref(id).videoOff }),
+    toggleMute:   onToggleMute,
+    toggleDeafen: onToggleDeafen,
+    openVoiceSettings: () => openSettings('voice'),
+  }
+  if (isMe) {
+    openMenu(e, () => voiceSelfMenu(u, {
+      channelId,
+      selfMuted: voice.localMuted,
+      selfDeafened: voice.localDeafened,
+    }, handlers))
+    return
+  }
+  openMenu(e, () => {
+    const pref = userPref(o.id)
+    return voiceOccupantMenu(u, {
+      channelId,
+      volume: pref.volume, muted: pref.muted, videoOff: pref.videoOff,
+      isFriend: apiFriends.value.some(f => f.id === o.id),
+      // Volume and local mute act on an audio element that only exists
+      // while you share a room; from a channel you are merely looking at
+      // there is nothing behind them.
+      inCallWithThem: liveVoiceChannel.value?.id === channelId,
+    }, handlers)
+  })
+}
+
 const copyText = (text: string, what: string) => {
   navigator.clipboard.writeText(text)
     .then(() => showToast(`${what} copied`))
@@ -1950,22 +2200,49 @@ const openConversationMenu = (e: MouseEvent, c: any) => {
 // channel management, leave/delete) that had nowhere to live before. Also the
 // keyboard activation target: Invite People / Leave / Delete Server exist
 // nowhere else in the UI, so Enter/Space here has to work, not just a click.
+/**
+ * Right-click on empty sidebar space — Discord puts the add-actions here and
+ * it is where people reach for them, rather than travelling to the header
+ * chevron for the thing you do most in a young server.
+ *
+ * Rows come from the same builder the header menu uses, so the two can never
+ * drift apart. A non-owner gets an empty list and no menu at all: an empty
+ * box that appears and does nothing is worse than nothing appearing.
+ */
+const openSidebarMenu = (e: MouseEvent) => {
+  const s = activeServer.value
+  if (!s) return
+  const items = buildSidebarMenu(s, authUser.value?.id, serverMenuHandlers())
+  if (!items.length) return
+  openMenu(e, items)
+}
+
+// Shared by the header chevron and the sidebar background so both menus act
+// through exactly the same handlers.
+const serverMenuHandlers = () => ({
+  markRead:      () => {
+    const ids = (channelsByServer.value[activeServerId.value ?? ""] ?? []).map(c => c.id)
+    ids.forEach(clearUnread)
+  },
+  invitePeople:  () => { showInvite.value = true },
+  createChannel: () => { openCreateChannel(null) },
+  createCategory: openCreateCategory,
+  leaveServer:   doLeaveServer,
+  deleteServer:  doDeleteServer,
+  copy:          copyText,
+})
+
 const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const s = activeServer.value
   if (!s) return
-  const items = buildServerMenu(s, authUser.value?.id, {
-    invitePeople:  () => { showInvite.value = true },          // Task 2
-    // No category: the server menu is not scoped to one, and guessing at the
-    // first one would file the channel somewhere the user never pointed at.
-    createChannel: () => { openCreateChannel(null) },
-    // Lives here as well as on a category header because a server with no
-    // categories yet has no header to right-click — without this row the
-    // first category could never be made.
-    createCategory: openCreateCategory,
-    leaveServer:   doLeaveServer,
-    deleteServer:  doDeleteServer,
-    copy:          copyText,
-  })
+  // Every channel of this server that currently carries a badge. Computed
+  // here rather than inside the menu builder because unread state belongs to
+  // the sidebar, not to the menu's shape.
+  const serverChannelIds = (channelsByServer.value[s.id] ?? []).map(c => c.id)
+  const hasUnread = serverChannelIds.some(id => !!unreadChannels.value[id])
+
+  // Same handlers the sidebar-background menu uses — see serverMenuHandlers.
+  const items = buildServerMenu(s, authUser.value?.id, serverMenuHandlers(), hasUnread)
   if (e instanceof MouseEvent) { openMenu(e, items); return }
   // A keyboard activation carries no pointer position — anchor the menu to
   // the header itself rather than guessing at coordinates.
@@ -2518,15 +2795,53 @@ const handlePinById = async (msgId: number) => {
 const handlePin = (msg: Message) => handlePinById(msg.id)
 
 // Delete — remove local + broadcast
-const handleDeleteById = async (msgId: number) => {
+/**
+ * Deleting a message asks first.
+ *
+ * It used to go straight through — the only destructive action in the app
+ * without a guard, while leaving a server, deleting a server, deleting a
+ * channel and deleting a category all had one. It is also the destructive
+ * action people take most often, by a wide margin, and the one most likely to
+ * be a misclick: the row sits at the bottom of a menu whose other rows are
+ * all harmless, and there is no undo behind it.
+ *
+ * The preview is deliberately part of the question. "Delete this message?"
+ * asks you to trust that the app and you agree on which one; showing the text
+ * lets you check.
+ */
+const DELETE_PREVIEW_MAX = 120
+
+const handleDeleteById = (msgId: number) => {
   const list = getMsgList()
   const msg  = list.find(m => m.id === msgId)
   if (!msg) return
-  const dbId = (msg as any).dbId
-  deleteMessage(list, msgId)
-  if (dbId && socketConnected.value) {
-    await sendDeleteSocket(dbId)
-  }
+
+  const body = stripMarkers(msg.content || "").replace(/s+/g, " ").trim()
+  const preview = body.length > DELETE_PREVIEW_MAX
+    ? body.slice(0, DELETE_PREVIEW_MAX) + "…"
+    : body
+
+  openConfirm({
+    title: "Delete Message",
+    message: preview
+      ? `Delete this message? This cannot be undone.
+
+“${preview}”`
+      : "Delete this message? This cannot be undone.",
+    confirmLabel: "Delete",
+    danger: true,
+    action: async () => {
+      // Re-read rather than closing over the row: the confirm is open across
+      // an await, and the message can be deleted by its author on another
+      // client while the dialog sits there.
+      const live = getMsgList()
+      const still = live.find(m => m.id === msgId)
+      if (!still) return
+      const dbId = (still as any).dbId
+      deleteMessage(live, msgId)
+      if (dbId && socketConnected.value) await sendDeleteSocket(dbId)
+    },
+  })
 }
 const handleDelete = (msg: Message) => handleDeleteById(msg.id)
 
@@ -2688,12 +3003,33 @@ const openCtx = (e: MouseEvent, msg: Message) => {
     ])
     return
   }
-  const mH = 340, mW = 220
-  const y  = e.clientY + mH > window.innerHeight ? e.clientY - mH : e.clientY
-  const x  = e.clientX + mW > window.innerWidth  ? e.clientX - mW : e.clientX
-  ctxMenu.value = { x, y, msg }
+  const isOwn = msg.authorId === (authUser.value?.id || "me")
+  ctxMsg.value = msg
+  openMenu(e, [
+    { label: "Add Reaction", icon: Smile, onSelect: () => openReactionPicker(msg) },
+    { label: "Reply", icon: CornerUpLeft, onSelect: () => handleReply(msg) },
+    ...(msg.replyTo
+      ? [{ label: "View Reply Chain", icon: GitBranch, onSelect: () => openReplyTree(msg) }]
+      : []),
+    ...(isOwn
+      ? [{ label: "Edit Message", icon: Pencil, onSelect: () => handleCtxEdit(msg) }]
+      : []),
+    { sep: true },
+    { label: "Copy Text", icon: Copy, onSelect: () => handleCopy(msg) },
+    { label: msg.pinned ? "Unpin Message" : "Pin Message", icon: Pin, onSelect: () => handlePin(msg) },
+    { label: "Copy Message ID", icon: Copy, onSelect: () => handleCopyId(msg) },
+    { sep: true },
+    { label: "Delete Message", icon: Trash2, danger: true, onSelect: () => handleDelete(msg) },
+  ])
 }
-const closeCtx = () => { ctxMenu.value = null }
+const closeCtx = () => closeMenu()
+
+// Cleared after the menu has finished leaving, not the moment it closes:
+// clearing synchronously would pull the quick-reaction strip out from under
+// the exit transition while the rest of the menu is still fading.
+watch(() => menu.open, (open) => {
+  if (!open) setTimeout(() => { if (!menu.open) ctxMsg.value = null }, 160)
+})
 
 // ── Global key / click handlers ────────────────────────────────────────────
 const onKey = (e: KeyboardEvent) => {
@@ -2714,6 +3050,43 @@ const onKey = (e: KeyboardEvent) => {
   }
 }
 const onClick = () => { closeCtx(); showEmojiPicker.value = false }
+
+// Target of the skip link. Queried rather than ref-forwarded through
+// MessageInput because the composer only exists on some views, and a ref
+// that is null half the time invites callers to stop checking.
+const focusComposer = () => {
+  const el = document.querySelector<HTMLTextAreaElement>('.msg-input')
+  el?.focus()
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────────
+// Discord's bindings, deliberately — see useShortcuts for why they are not
+// ours to redesign.
+useShortcuts({
+  quickSwitcher: () => { showQuickSwitcher.value = true },
+  toggleMute:    () => onToggleMute(),
+  toggleDeafen:  () => onToggleDeafen(),
+
+  // Walks the flattened text channels in the order the sidebar draws them,
+  // so Alt+Down goes to what is visually next rather than to whatever the
+  // unordered channel map happens to yield.
+  cycleChannel: (dir) => {
+    const flat = sidebarGroups.value.flatMap(g => g.text)
+    if (flat.length < 2) return
+    const at = flat.findIndex(c => c.id === activeChannelId.value)
+    const next = flat[(Math.max(0, at) + dir + flat.length) % flat.length]
+    if (next) void selectChannel(next)
+  },
+
+  // A modal owns the keyboard while it is up. confirmState is included
+  // because a destructive dialog is exactly where a stray chord does damage.
+  isBlocked: () =>
+    showSettings.value || showAddFriend.value || showQuickSwitcher.value ||
+    showEmojiPicker.value || showPinned.value || showReactionPicker.value ||
+    showNewDM.value || showEditGroup.value || showInviteGroup.value ||
+    showCreateServer.value || showInvite.value || showCreateChannel.value ||
+    !!confirmState.value || !!showUserProfile.value,
+})
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 onMounted(async () => {
@@ -2766,6 +3139,19 @@ onBeforeUnmount(() => {
 <template>
   <div class="app" @click="onClick">
 
+    <!--
+      Skip to the composer. It sits 42 tab stops into the page — the rail,
+      the channel list, the message actions and the member panel all come
+      first, and making the rail keyboard-reachable (correctly) pushed it
+      further out still. Typing is the reason the app is open; it should not
+      be the last thing a keyboard reaches.
+
+      Off-screen until focused rather than display:none, because a hidden
+      element is not focusable, and a skip link nobody can focus is
+      decoration.
+    -->
+    <button class="skip-link" @click="focusComposer">Skip to message box</button>
+
     <!-- Incoming DM call — ringing modal (accept joins, decline dismisses) -->
     <IncomingCallModal
       v-if="incomingCall"
@@ -2797,6 +3183,17 @@ onBeforeUnmount(() => {
     />
     <SettingsModal    v-if="showSettings"      :initial-page="settingsPage" @close="showSettings = false" />
     <CameraPreviewModal v-if="showCameraPreview" @close="showCameraPreview = false" @confirm="onCameraConfirmed" />
+    <InviteToVoice
+      v-if="inviteVoiceModal"
+      mode="modal"
+      :server-id="activeServerId || ''"
+      :server-name="activeServer?.name || ''"
+      :channel="{ id: inviteVoiceModal.id, name: inviteVoiceModal.name }"
+      :people="inviteMembers"
+      :me="inviteMe"
+      @close="inviteVoiceModal = null"
+      @toast="showToast"
+    />
     <RtcDebugModal v-if="showRtcDebug" @close="showRtcDebug = false" @toast="showToast" />
     <ConversationDetails
       v-if="showDetails && isMobile && (view === 'dm' || view === 'group')"
@@ -2947,9 +3344,10 @@ onBeforeUnmount(() => {
       <Transition name="rvp">
         <div v-if="railPreview" ref="railPreviewEl" class="rvp" :style="railPreviewStyle">
           <div class="rvp-name">{{ railPreview.name }}</div>
+          <div v-if="railPreview.sub" class="rvp-sub">{{ railPreview.sub }}</div>
           <div v-for="ch in railPreview.channels" :key="ch.id" class="rvp-ch">
             <div class="rvp-ch-head">
-              <Volume2 :size="13" :stroke-width="2.25" class="rvp-ch-ic"/>
+              <Volume2 :size="14" :stroke-width="2.25" class="rvp-ch-ic"/>
               <!--
                 A server whose channel list we have never fetched gives us
                 occupancy without a name (see `voiceActivityByServer`). Saying
@@ -2993,23 +3391,6 @@ onBeforeUnmount(() => {
     </Teleport>
 
     <!-- Context menu -->
-    <ContextMenu
-      v-if="ctxMenu"
-      :msg="ctxMenu.msg"
-      :x="ctxMenu.x"
-      :y="ctxMenu.y"
-      :isOwn="ctxMenu.msg.authorId === (authUser?.id || 'me')"
-      @close="closeCtx"
-      @edit="handleCtxEdit"
-      @reply="handleReply"
-      @openTree="openReplyTree"
-      @pin="handlePin"
-      @copy="handleCopy"
-      @copyId="handleCopyId"
-      @delete="handleDelete"
-      @react="handleCtxReact"
-      @openEmoji="openReactionPicker"
-    />
 
     <!-- Reply tree — branching family tree of every reply variant -->
     <ReplyTreeModal
@@ -3023,7 +3404,28 @@ onBeforeUnmount(() => {
     />
 
     <!-- App-wide right-click menu — mounted once, driven by openMenu() -->
-    <AppContextMenu />
+    <AppContextMenu>
+      <!-- Quick reactions. The only part of the old message menu that was not
+           expressible as menu data — a horizontal strip of targets rather than
+           a list of rows — so it rides the header slot the shared menu already
+           provides for one-off content. -->
+      <template #header>
+        <div v-if="ctxMsg" class="qr-strip">
+          <button
+            v-for="e in QUICK_REACTIONS" :key="e"
+            class="qr"
+            :aria-label="`React with ${e}`"
+            @click="handleCtxReact(ctxMsg!, e); closeCtx()"
+          >{{ e }}</button>
+          <button
+            class="qr qr-more"
+            v-tip="'More reactions'"
+            aria-label="More reactions"
+            @click="openReactionPicker(ctxMsg!); closeCtx()"
+          ><SmilePlus :size="16" :stroke-width="1.75" /></button>
+        </div>
+      </template>
+    </AppContextMenu>
 
     <!-- Connection status. Mounted at app level rather than inside a pane so it
          survives navigation and can't be covered by a modal. -->
@@ -3060,10 +3462,17 @@ onBeforeUnmount(() => {
           actually given: without it, the servers that gained a preview would
           be the ones that lost their accessible name.
         -->
+        <!-- role + tabindex, not just aria-label: this was a plain div with a
+             label, so a screen reader could name it and a keyboard could never
+             reach it. A Tab walk started at "Add server" and never touched a
+             single server the user belongs to. -->
         <div v-for="srv in servers" :key="srv.id"
           class="ri" :class="{ active: view==='server' && activeServerId===srv.id }"
+          role="button" tabindex="0"
           :aria-label="voiceActivityByServer[srv.id] ? srv.name + ' — someone is in voice' : srv.name"
-          v-tip="voiceActivityByServer[srv.id] ? '' : srv.name"
+          :aria-current="view==='server' && activeServerId===srv.id ? 'page' : undefined"
+          @keydown.self.enter.prevent="openServer(srv)"
+          @keydown.self.space.prevent="openServer(srv)"
           @mouseenter="onRailHover($event, srv.id)"
           @mouseleave="closeRailPreview"
           @pointerdown="closeRailPreview"
@@ -3079,10 +3488,11 @@ onBeforeUnmount(() => {
             one 44px circle is a puzzle, and the number lives in the hover
             preview where there is room to say who.
           -->
-          <span v-if="voiceActivityByServer[srv.id]" class="ri-voice" aria-hidden="true">
+          <span v-if="voiceActivityByServer[srv.id]" class="ri-voice"
+            :class="{ mine: myVoiceServerId === srv.id }" aria-hidden="true">
             <Volume2 :size="11" :stroke-width="2.75"/>
           </span>
-          <span v-if="srv.unread" class="ri-badge">{{ srv.unread }}</span>
+          <span v-if="serverUnread(srv.id)" class="ri-badge">{{ serverUnread(srv.id) }}</span>
         </div>
         <div class="ri-divider" />
         <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
@@ -3099,7 +3509,9 @@ onBeforeUnmount(() => {
             <span>Find or start a conversation</span>
           </button>
         </div>
-        <div class="sb-body">
+        <div class="sb-body"
+          @dragover="onChannelDragOver($event, null)"
+          @drop="onChannelDrop($event, null)">
           <div class="sb-nav">
             <button class="sb-nav-item" :class="{ active: view==='friends' }" @click="openFriends">
               <Users :size="18" :stroke-width="1.5" /> Friends
@@ -3133,7 +3545,7 @@ onBeforeUnmount(() => {
               <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" v-tip="'In a call'"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isConvMuted(c.dm.id) }">{{ c.dm.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
-                <X :size="13" :stroke-width="1.5" />
+                <X :size="14" :stroke-width="1.5" />
               </button>
             </div>
             <!-- Group DM -->
@@ -3145,7 +3557,7 @@ onBeforeUnmount(() => {
             >
               <div class="grp-av">
                 <Avatar v-if="c.group.avatar" :src="c.group.avatar" :alt="groupDisplayName(c.group)" />
-                <UsersRound v-else :size="17" :stroke-width="2.25" />
+                <UsersRound v-else :size="16" :stroke-width="2.25" />
               </div>
               <div class="dm-info">
                 <span class="dm-name">{{ groupDisplayName(c.group) }}</span>
@@ -3156,7 +3568,7 @@ onBeforeUnmount(() => {
               <span v-if="convHasCall('group', c.group.id)" class="dm-call" v-tip="'In a call'"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isConvMuted(c.group.id) }">{{ c.group.unread }}</span>
               <button class="dm-x" @click.stop="openConversationMenu($event, c)">
-                <X :size="13" :stroke-width="1.5" />
+                <X :size="14" :stroke-width="1.5" />
               </button>
             </div>
           </template>
@@ -3220,7 +3632,7 @@ onBeforeUnmount(() => {
             are the part you cannot get anywhere else at a glance.
           -->
           <span v-if="headerVoice" class="sb-hvoice" v-tip="'In voice — ' + headerVoice.channel.name">
-            <Volume2 class="sb-hvoice-ic" :size="13" :stroke-width="2.25"/>
+            <Volume2 class="sb-hvoice-ic" :size="14" :stroke-width="2.25"/>
             <span class="sb-hvoice-avs">
               <span v-for="o in headerVoice.occupants.slice(0, HEADER_VOICE_FACES)" :key="o.id"
                 class="sb-hvoice-av" :class="{ speaking: o.speaking }">
@@ -3233,7 +3645,25 @@ onBeforeUnmount(() => {
           </span>
           <ChevronDown :size="14" :stroke-width="1.5"/>
         </div>
-        <div class="sb-body">
+        <!-- Right-click anywhere the channel rows are not. Rows and category
+             headers stop propagation on their own contextmenu, so this only
+             ever fires on empty space. -->
+        <div class="sb-body" @contextmenu.prevent="openSidebarMenu($event)">
+          <!-- The sidebar rendered nothing at all while a server's channel
+               list was in flight, so opening an uncached server looked like an
+               empty server. Shaped like a category with channels under it, at
+               the same row rhythm, so the real list replaces it without
+               moving anything. -->
+          <div v-if="loadingServerDetail" class="sb-sk" role="status" aria-label="Loading channels">
+            <div v-for="grp in SB_SKELETON" :key="grp.k" class="sb-sk-group">
+              <Skeleton :w="grp.label" :h="9" :dim="0.55" />
+              <div v-for="(row, i) in grp.rows" :key="i" class="sb-sk-row">
+                <Skeleton :w="14" :h="14" :dim="0.5" />
+                <Skeleton :w="row" :h="12" :dim="0.8" />
+              </div>
+            </div>
+          </div>
+
           <!-- One group per category, uncategorised first and deliberately
                headerless (see `sidebarGroups`). The rows are the markup they
                have always been, moved inside the loop unchanged: `role="button"`
@@ -3241,7 +3671,10 @@ onBeforeUnmount(() => {
                `.self` on BOTH key handlers so Enter/Space on the nested
                `.ch-more` button activates that button instead of being swallowed
                by the row underneath it. -->
-          <div v-for="group in sidebarGroups" :key="group.key" class="ch-group">
+          <div v-for="group in sidebarGroups" :key="group.key" class="ch-group"
+            :class="{ 'drop-target': dragChannelId && dropCategory === (group.category?.id ?? null) }"
+            @dragover.stop="onChannelDragOver($event, group.category?.id ?? null)"
+            @drop.stop="onChannelDrop($event, group.category?.id ?? null)">
             <!-- Headerless for the uncategorised group. Same activation contract
                  as the row below it — a header you can only fold with a mouse is
                  a header a keyboard user cannot get past — and `.self` again so
@@ -3263,19 +3696,27 @@ onBeforeUnmount(() => {
               <button class="ch-add-btn" v-tip="'More'"
                 @click.stop="openCategoryMenu($event, group.category)"><Ellipsis :size="14" :stroke-width="1.5"/></button>
             </div>
-            <div v-for="ch in group.text" :key="ch.id"
-              class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id] }"
-              role="button" tabindex="0"
+            <div v-for="ch in group.text" :key="ch.id" class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
+            <div class="ch-fold-in">
+            <div
+              class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id], dragging: dragChannelId===ch.id }"
+              role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+              :aria-current="activeChannelId===ch.id && !voiceStageOpen ? 'page' : undefined"
+              :draggable="isServerOwner"
+              @dragstart="onChannelDragStart($event, ch)"
+              @dragend="endChannelDrag"
               @keydown.self.enter.prevent="selectChannel(ch)"
               @keydown.self.space.prevent="selectChannel(ch)"
               @click="selectChannel(ch)"
               @contextmenu.prevent.stop="openChannelMenu($event, ch)">
-              <Hash class="ch-icon" :size="15" :stroke-width="1.5"/>
+              <Hash class="ch-icon" :size="16" :stroke-width="1.5"/>
               <span class="ch-name">{{ ch.name }}</span>
               <span v-if="unreadChannels[ch.id]" class="ch-unread">{{ unreadChannels[ch.id] }}</span>
               <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
                 <Ellipsis :size="14" :stroke-width="1.5"/>
               </button>
+            </div>
+            </div>
             </div>
             <!-- Clicking connects straight away — no confirmation, the way every
                  other client does it. `.active` here means "you are in this
@@ -3293,23 +3734,65 @@ onBeforeUnmount(() => {
                  the stage owns the pane (`&& !voiceStageOpen`), this row is
                  already the one lit — no second selected-look needed. -->
             <template v-for="ch in group.voice" :key="ch.id">
-              <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id }"
-                role="button" tabindex="0"
+              <div class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
+              <div class="ch-fold-in">
+              <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id, dragging: dragChannelId===ch.id }"
+                role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+                :aria-current="liveVoiceChannel?.id === ch.id ? 'true' : undefined"
+                :draggable="isServerOwner"
+                @dragstart="onChannelDragStart($event, ch)"
+                @dragend="endChannelDrag"
                 @click="joinVoiceChannel(ch)"
                 @keydown.self.enter.prevent="joinVoiceChannel(ch)"
                 @keydown.self.space.prevent="joinVoiceChannel(ch)"
                 @contextmenu.prevent.stop="openChannelMenu($event, ch)">
-                <Volume2 class="ch-icon" :size="15" :stroke-width="1.5"/>
+                <Volume2 class="ch-icon" :size="16" :stroke-width="1.5"/>
                 <span class="ch-name">{{ ch.name }}</span>
                 <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
                   <Ellipsis :size="14" :stroke-width="1.5"/>
                 </button>
               </div>
+              </div>
+              </div>
+              <div class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
+              <div class="ch-fold-in">
               <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
-                class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })">
+                class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })"
+                @contextmenu.prevent.stop="openVoiceOccupantMenu($event, ch.id, o)">
                 <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
+                <!-- Deafened implies muted, so only the stronger of the two is
+                     shown: a row wearing both icons says the same thing twice
+                     and leaves less room for the name. -->
+                <span v-if="o.deafened" class="vc-occ-ic" v-tip="'Deafened'"><HeadphoneOff :size="14" :stroke-width="2.25"/></span>
+                <span v-else-if="o.muted" class="vc-occ-ic" v-tip="'Muted'"><MicOff :size="14" :stroke-width="2.25"/></span>
+                <span v-if="o.sharing" class="vc-live" v-tip="'Sharing their screen'">LIVE</span>
               </button>
+              <!-- Only for the channel you are actually in: an invite to a
+                   room you are not sitting in is a link to an empty room,
+                   and Discord scopes it the same way. Inside the occupant
+                   fold so a collapsed category folds it away too. -->
+              <template v-if="liveVoiceChannel?.id === ch.id">
+                <button class="vc-invite" @click.stop="toggleInviteVoice($event, ch)">
+                  <UserPlus :size="14" :stroke-width="2" />
+                  <span>Invite to Voice</span>
+                </button>
+                <InviteToVoice
+                  v-if="inviteVoiceChannel?.id === ch.id"
+                  mode="inline"
+                  :server-id="activeServerId || ''"
+                  :server-name="activeServer?.name || ''"
+                  :channel="{ id: ch.id, name: ch.name }"
+                  :people="inviteFriends"
+                  :me="inviteMe"
+                  :anchor="inviteVoiceAnchor"
+                  @see-more="inviteVoiceModal = ch; inviteVoiceChannel = null"
+                  @close="inviteVoiceChannel = null"
+                  @toast="showToast"
+                />
+              </template>
+              </div>
+              </div>
             </template>
           </div>
         </div>
@@ -3370,7 +3853,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <button class="add-friend-btn" @click.stop="showAddFriend=true">
-            <UserPlus :size="15" :stroke-width="1.5"/> Add Friend
+            <UserPlus :size="16" :stroke-width="1.5"/> Add Friend
           </button>
         </div>
 
@@ -3398,7 +3881,7 @@ onBeforeUnmount(() => {
                 <p>No friends yet</p>
                 <span>Click <strong>Add Friend</strong> to find people on Skycord</span>
                 <button class="f-empty-btn" @click.stop="showAddFriend=true">
-                  <UserPlus :size="15" :stroke-width="1.5"/> Add Friend
+                  <UserPlus :size="16" :stroke-width="1.5"/> Add Friend
                 </button>
               </div>
               <!-- Friend rows -->
@@ -3518,7 +4001,7 @@ onBeforeUnmount(() => {
               <template v-else-if="view==='group' && activeGroup">
                 <div class="grp-header-av">
                   <Avatar v-if="activeGroup.avatar" :src="activeGroup.avatar" :alt="groupDisplayName(activeGroup)" />
-                  <UsersRound v-else :size="17" :stroke-width="2.25"/>
+                  <UsersRound v-else :size="16" :stroke-width="2.25"/>
                 </div>
                 <button class="ch-ident" @click.stop="openConversationDetails">
                   <span class="ch-ident-row">
@@ -3529,7 +4012,7 @@ onBeforeUnmount(() => {
                   <span class="ch-topic">{{ groupSubtitle }}</span>
                 </button>
                 <button class="ch-edit-btn" v-tip="'Edit Group'" @click.stop="showEditGroup = true">
-                  <Pencil :size="15" :stroke-width="1.5"/>
+                  <Pencil :size="16" :stroke-width="1.5"/>
                 </button>
               </template>
               <!-- The stage owns the column, so the header names the VOICE
@@ -3596,7 +4079,7 @@ onBeforeUnmount(() => {
                       @focus="searchFocused = true"
                       @blur="onSearchBlur"
                     />
-                    <Search class="ch-search-ico" :size="15" :stroke-width="1.5"/>
+                    <Search class="ch-search-ico" :size="16" :stroke-width="1.5"/>
                     <Transition name="filters-pop">
                       <div v-if="searchFocused" class="ch-filters" @mousedown.prevent>
                         <div class="ch-filters-label">Filters</div>
@@ -3715,7 +4198,7 @@ onBeforeUnmount(() => {
         <aside v-if="view==='server'" class="members-panel" :class="{ closed: !membersOpen }">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
-            <Search :size="13" :stroke-width="1.5"/>
+            <Search :size="14" :stroke-width="1.5"/>
             <input type="text" placeholder="Search members…"/>
           </div>
           <div class="mp-list">
@@ -3744,7 +4227,6 @@ onBeforeUnmount(() => {
                    @contextmenu="openUserMenu($event, m)">
                 <div class="mp-av">
                   <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
-                  <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
                 </div>
                 <div class="mp-info">
                   <span class="mp-name">{{ m.displayName || m.username }}</span>
@@ -3782,7 +4264,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*,*::before,*::after{box-sizing:border-box;margin: 0;padding: 0}
 button{background:none;border:none;cursor:pointer;color:inherit;font:inherit}
 input{background:none;border:none;outline:none;color:inherit;font:inherit}
 img{display:block;width:100%;height:100%;object-fit:cover}
@@ -3809,87 +4291,106 @@ img{display:block;width:100%;height:100%;object-fit:cover}
      Shifting down by it, and shrinking to match, keeps the strip from covering
      the chat header — it was hiding the back button. */
   height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
-  margin-top:var(--conn-h, 0px);
+  margin-top: var(--conn-h, 0px);
   overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
-  transition:height .18s ease-out, margin-top .26s cubic-bezier(.32,.72,0,1);
+  transition: height var(--dur-2) var(--ease-out), margin-top .26s cubic-bezier(.32,.72,0,1);
 }
 .shell{display:flex;height:100%;overflow:hidden}
 
 /* ── Rail ──────────────────────────────────────────────────────────────── */
-.rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px;overflow-y:auto}
+.rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding: 10px 0;gap: 2px;overflow-y:auto}
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius:0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition:height .18s}
+.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition: height var(--dur-2) var(--ease-out)}
 .ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}
-.ri-icon{width:44px;height:44px;border-radius:50%;overflow:hidden;background:var(--bg-panel);transition:border-radius .2s,transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center}
+.ri-icon{width:44px;height:44px;border-radius: 50%;overflow:hidden;background:var(--bg-panel);transition: border-radius var(--dur-3) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);display:flex;align-items:center;justify-content:center}
 .ri-icon img{width:100%;height:100%}
-.ri:hover .ri-icon{border-radius:16px;transform:scale(1.05)}
-.ri.active .ri-icon{border-radius:16px;box-shadow:0 4px 16px rgba(var(--accent-rgb),.4)}
+.ri:hover .ri-icon{border-radius: 16px;transform:scale(1.05)}
+.ri.active .ri-icon{border-radius: 16px;box-shadow:0 4px 16px rgba(var(--accent-rgb),.4)}
 /* Home logo colour is driven by the SkycordIcon `color` prop (accent in the
    friend zone, currentColor=--text-1 in a channel), so the icon colour is NOT
    set here — only the surrounding circle's surface changes. */
 .ri.home .ri-icon{background:var(--bg-chat);color:var(--text-1)}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
-.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
 /* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
    is both unread and occupied shows two marks that never touch: this one at
    x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
    Same 18px circle + 2px floor-coloured ring as .dm-call in the DM list, so a
    voice indicator looks like a voice indicator wherever it appears — the ring
    is what keeps a green disc legible against a green server icon. */
-.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius: 50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+/* Green means you are in this one. Every other server with voice activity
+   keeps the dark chip — the user asked for two colours, not a palette. */
+.ri-voice.mine{background:#23a55a}
 
 /* ── Rail voice hover preview ──────────────────────────────────────────────
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding:10px 12px;border-radius:10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rvp-ch{margin-top:8px}
-.rvp-ch-head{display:flex;align-items:center;gap:6px;min-width:0}
+.rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
+.rvp-ch{margin-top: 8px}
+.rvp-ch-head{display:flex;align-items:center;gap: 6px;min-width:0}
 .rvp-ch-ic{color:#23a55a;flex-shrink:0}
 .rvp-ch-name{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* The row we could not name. Same slot, visibly not a channel name — it is not
    uppercased like one, and it does not pretend to be a title. */
 .rvp-ch-name.unnamed{text-transform:none;letter-spacing:0;font-weight:500;font-style:italic;color:var(--text-faint,var(--text-3))}
-.rvp-occ{display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:2px}
-.rvp-occ-av{display:flex;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0}
+.rvp-occ{display:flex;align-items:center;gap: 8px;margin-top: 6px;padding-left: 2px}
+.rvp-occ-av{display:flex;width:20px;height:20px;border-radius: 50%;overflow:hidden;flex-shrink:0}
 .rvp-occ-name{font-size:12.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rvp-more{font-size:11px;font-weight:600;color:var(--text-3);margin-top:6px;padding-left:30px}
+.rvp-more{font-size:11px;font-weight:600;color:var(--text-3);margin-top: 6px;padding-left: 30px}
 /* Slides out of the rail rather than fading in place, so the panel reads as
    belonging to the icon the pointer is on. */
-.rvp-enter-active{transition:opacity .12s ease,transform .12s cubic-bezier(.32,.72,0,1)}
-.rvp-leave-active{transition:opacity .08s ease}
+.rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform .12s cubic-bezier(.32,.72,0,1)}
+.rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
 .rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
 .rvp-leave-to{opacity:0}
 @media (prefers-reduced-motion: reduce){
-  .rvp-enter-active,.rvp-leave-active{transition:opacity .1s ease}
+  .rvp-enter-active,.rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
   .rvp-enter-from{transform:none}
 }
-.ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius:1px;margin:4px 0}
+.ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius: 1px;margin: 4px 0}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:#23a55a}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:#23a55a}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid rgba(0,0,0,.3);transition:width .22s,opacity .22s;overflow:hidden}
+.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid rgba(0,0,0,.3);transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
-.sb-search{padding:8px 8px 4px;flex-shrink:0}
-.sb-search-btn{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition:background .12s,color .12s}
+.sb-search{padding: 8px 8px 4px;flex-shrink:0}
+.sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-search-btn:hover{background:rgba(0,0,0,.5);color:var(--text-1)}
 
-.sb-nav{padding:4px 8px}
-.sb-nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border-radius:6px;font-size:14px;font-weight:500;color:var(--text-3);transition:background .12s,color .12s}
+.sb-nav{padding: 4px 8px}
+.sb-nav-item{display:flex;align-items:center;gap: 10px;width:100%;padding: 8px 10px;border-radius: 6px;font-size:14px;font-weight:500;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-nav-item:hover{background:var(--hover);color:var(--text-1)}
-.sb-nav-item.active{background:rgba(var(--accent-rgb),.16);color:#c4c9ff}
+.sb-nav-item.active{color:var(--text-strong);outline:1px solid var(--active-ring);outline-offset:-1px}
 
-.sb-section-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:12px 16px 4px;white-space:nowrap}
-.sb-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s}
+.sb-section-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding: 12px 16px 4px;white-space:nowrap}
+.sb-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
-.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition:background .15s;white-space:nowrap}
+.sb-sk{padding: 10px 10px 4px;display:flex;flex-direction:column;gap: 16px}
+.sb-sk-group{display:flex;flex-direction:column;gap: 8px}
+.sb-sk-row{display:flex;align-items:center;gap: 8px;padding-left: 2px}
+
+/* Seven decorative hover keyframes lived here — a gear spinning 180 degrees,
+   a mic wiggling 15, a magnifier scaling 1.22. Every one of these controls
+   already reported hover with a tint in 120ms. Deleted; the press response
+   they never had takes their place. */
+.icon-btn:active:not(:disabled),
+.up-btn:active:not(:disabled) { transform: scale(.94); }
+.icon-btn, .up-btn { transition:
+  background var(--dur-1) var(--ease-out),
+  color      var(--dur-1) var(--ease-out),
+  transform  var(--dur-1) var(--ease-out); }
+
+.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap: 8px;padding: 0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition: background var(--dur-2) var(--ease-out);white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
 /* The one flexible child, so the voice cluster and the chevron keep their
    size and a 40-character server name ellipses instead of shoving them out
@@ -3902,15 +4403,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    server name stays the loudest thing in it. */
 /* No cursor of its own: the whole 48px bar is one button that opens the server
    menu, and a default cursor over part of it would claim otherwise. */
-.sb-hvoice{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.sb-hvoice{display:flex;align-items:center;gap: 6px;flex-shrink:0}
 .sb-hvoice-ic{color:#23a55a;flex-shrink:0}
 .sb-hvoice-avs{display:flex;align-items:center}
 /* Overlapped, each ringed in the sidebar's own background so the stack reads
    as separate faces rather than one smeared one. */
 /* display:flex, matching .vc-occ-av: Avatar's own span is inline-block at
    100%/100%, and an inline-block in a block box picks up a baseline gap. */
-.sb-hvoice-av{position:relative;display:flex;width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-left:-6px;box-shadow:0 0 0 2px var(--bg-raised)}
-.sb-hvoice-av:first-child{margin-left:0}
+.sb-hvoice-av{position:relative;display:flex;width:20px;height:20px;border-radius: 50%;overflow:hidden;flex-shrink:0;margin-left: -6px;box-shadow:0 0 0 2px var(--bg-raised)}
+.sb-hvoice-av:first-child{margin-left: 0}
 /* Speaking ring, same green as the sidebar occupant rows' Avatar `ring`. Done
    with box-shadow rather than that prop because these faces overlap: the prop
    draws inside the image, which the neighbour would then cover. The z-index
@@ -3918,18 +4419,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    whole ring rather than a crescent. */
 .sb-hvoice-av.speaking{z-index:1;box-shadow:0 0 0 2px var(--bg-raised),0 0 0 3.5px #23a55a}
 .sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
-.sb-body{flex:1;overflow-y:auto;padding:8px 0}
+.sb-body{flex:1;overflow-y:auto;padding: 8px 0}
 
-.dm-item{display:flex;align-items:center;gap:10px;padding:6px 10px;margin:0 6px;border-radius:6px;cursor:pointer;transition:background .12s;position:relative}
+.dm-item{display:flex;align-items:center;gap: 10px;padding: 6px 10px;margin: 0 6px;border-radius: 6px;cursor:pointer;transition: background var(--dur-1) var(--ease-out);position:relative}
 .dm-item:hover{background:var(--hover)}
-.dm-item.active{background:rgba(var(--accent-rgb),.16)}
+.dm-item.active{outline:1px solid var(--active-ring);outline-offset:-1px}
 .dm-av{position:relative;width:32px;height:32px;flex-shrink:0}
-.dm-av img{border-radius:50%}
-.dm-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg-raised)}
+.dm-av img{border-radius: 50%}
+.dm-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-raised)}
 .dm-info{flex:1;min-width:0}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dm-unread{min-width:18px;height:18px;padding:0 5px;background:#ed4245;color:white;font-size:11px;font-weight:700;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:#ed4245;color:white;font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Muted: the count still matters, it just stops shouting. */
 .dm-unread.muted{background:var(--text-3);opacity:.6}
 .dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
@@ -3940,30 +4441,30 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    still need to be noticeable. The active row stays at full strength — you're
    reading it. */
 .dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
-.dm-call{width:18px;height:18px;border-radius:50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
+.dm-call{width:18px;height:18px;border-radius: 50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
 .dm-x:hover{color: var(--text-strong)}
 
 /* Group DM sidebar item */
 .grp-av{
-  width:32px;height:32px;border-radius:50%;flex-shrink:0;overflow:hidden;
+  width:32px;height:32px;border-radius: 50%;flex-shrink:0;overflow:hidden;
   background:linear-gradient(135deg,var(--accent),#7b68ee);
   display:flex;align-items:center;justify-content:center;color: var(--text-strong);
 }
 
 /* Group header avatar */
 .grp-header-av{
-  width:28px;height:28px;border-radius:50%;flex-shrink:0;overflow:hidden;
+  width:28px;height:28px;border-radius: 50%;flex-shrink:0;overflow:hidden;
   background:linear-gradient(135deg,var(--accent),#7b68ee);
   display:flex;align-items:center;justify-content:center;color: var(--text-strong);
 }
 
 /* Edit Group pencil in header */
 .ch-edit-btn{
-  width:26px;height:26px;border-radius:6px;flex-shrink:0;
+  width:26px;height:26px;border-radius: 6px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  color:var(--text-2);transition:background .12s,color .12s;
+  color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ch-edit-btn:hover{background:var(--hover);color: var(--text-strong)}
 
@@ -3972,8 +4473,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .icon-btn-leave:hover{background:rgba(237,66,69,.12) !important}
 
 /* @everyone toast */
-.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:#23a55a;color: var(--text-strong);font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
-.toast-pop-enter-active,.toast-pop-leave-active{transition:opacity .2s ease,transform .2s ease}
+.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:#23a55a;color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.toast-pop-enter-active,.toast-pop-leave-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
 
@@ -3981,47 +4482,47 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-search{position:relative;display:flex;align-items:center}
 .ch-search-box{position:relative;display:flex;align-items:center}
 /* open + close animation for the search box */
-.search-box-enter-active{transition:opacity .18s ease,transform .18s ease}
-.search-box-leave-active{transition:opacity .14s ease,transform .14s ease}
+.search-box-enter-active{transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
+.search-box-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .search-box-enter-from,.search-box-leave-to{opacity:0;transform:translateX(14px)}
 /* open + close animation for the filters popup */
-.filters-pop-enter-active{transition:opacity .14s ease,transform .14s ease}
-.filters-pop-leave-active{transition:opacity .1s ease,transform .1s ease}
+.filters-pop-enter-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.filters-pop-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .filters-pop-enter-from,.filters-pop-leave-to{opacity:0;transform:translateY(-4px)}
 .ch-search-input{
-  width:220px;height:30px;padding:0 30px 0 10px;border-radius:6px;
+  width:220px;height:30px;padding: 0 30px 0 10px;border-radius: 6px;
   background:var(--bg-input);border:1px solid transparent;color:var(--text-1);font-size:13px;outline:none;
-  transition:border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .ch-search-input:focus{border-color:var(--accent)}
 .ch-search-input::placeholder{color:var(--text-faint)}
 .ch-search-ico{position:absolute;right:9px;color:var(--text-3);pointer-events:none}
 .ch-filters{
   position:absolute;top:38px;right:0;width:300px;z-index:200;
-  background:var(--bg-floor);border:1px solid rgba(0,0,0,.4);border-radius:8px;
-  padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);
+  background:var(--bg-floor);border:1px solid rgba(0,0,0,.4);border-radius: 8px;
+  padding: 8px;box-shadow:0 8px 24px rgba(0,0,0,.5);
 }
 @keyframes ch-filters-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-.ch-filters-label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);padding:6px 8px}
-.ch-filter-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px;border-radius:6px;color:var(--text-2);transition:background .12s,color .12s}
+.ch-filters-label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);padding: 6px 8px}
+.ch-filter-row{display:flex;align-items:center;gap: 12px;width:100%;text-align:left;padding: 8px;border-radius: 6px;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .ch-filter-row:hover{background:var(--hover);color: var(--text-strong)}
-.cf-text{display:flex;flex-direction:column;gap:1px;min-width:0}
+.cf-text{display:flex;flex-direction:column;gap: 1px;min-width:0}
 .cf-title{font-size:13.5px;font-weight:600;color:var(--text-2)}
 .cf-sub{font-size:12px;color:var(--text-faint)}
-.cf-sub em{color:#8d96f8;font-style:normal;background:rgba(var(--accent-rgb),.14);padding:0 4px;border-radius:3px}
+.cf-sub em{color:#8d96f8;font-style:normal;background:rgba(var(--accent-rgb),.14);padding: 0 4px;border-radius: 4px}
 
 /* Group member panel — owner tag + invite button */
 .mp-owner{font-size:11px;color:var(--text-3)}
 .mp-invite{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  margin:8px 12px 14px;padding:9px 12px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;gap: 8px;
+  margin: 8px 12px 14px;padding: 8px 12px;border-radius: 6px;
   font-size:14px;font-weight:600;color: var(--text-strong);
-  background:var(--accent);transition:background .12s;
+  background:var(--accent);transition: background var(--dur-1) var(--ease-out);
 }
 .mp-invite:hover{background:var(--accent-hover)}
 
-.ch-group{padding:0 6px;margin-bottom:4px}
-.ch-group-label{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition:color .15s;white-space:nowrap}
+.ch-group{padding: 0 6px;margin-bottom: 4px}
+.ch-group-label{display:flex;align-items:center;gap: 4px;padding: 6px 6px;border-radius: 4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition: color var(--dur-2) var(--ease-out);white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
 .ch-group-label span{flex:1}
 /* Right when folded, down when open — the chevron is the only thing that says
@@ -4029,45 +4530,87 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    and active rows and so is never reliably empty.
    NOT `.ch-chev`, which is already taken by the chat header's mobile
    disclosure chevron and carries a desktop `display:none`. */
-.ch-group-chev{flex-shrink:0;transition:transform .15s}
+.ch-group-chev{flex-shrink:0;transition: transform var(--dur-2) var(--ease-out)}
 .ch-group-chev.open{transform:rotate(90deg)}
-.ch-add-btn{color:var(--text-3);opacity:0;transition:opacity .12s,color .12s;flex-shrink:0}
+/* Folding a category is an animation, not a v-if. `interpolate-size:
+   allow-keywords` lets height animate to and from `auto` without measuring
+   anything, which matters because categories hold different numbers of
+   channels and channel names wrap. NOT the grid 0fr/1fr trick: in this
+   Chromium, `transition: grid-template-rows` between fr endpoints settles on
+   the WRONG endpoint (verified in isolation — a probe closed to 0fr still
+   measured 31px, then reopened to 1fr and measured 0), so a fold that used
+   it closed once and never came back. Timing matches .ch-group-chev so the
+   chevron and the rows read as one motion. */
+.ch-fold{overflow:hidden;height:auto;interpolate-size:allow-keywords;transition: height var(--dur-2) var(--ease-out)}
+.ch-fold.folded{height:0}
+
+/* Where the drag would land. min-height keeps the headerless uncategorised
+   group hittable while it is empty — during a drag it is the only visible
+   thing saying "you can put this outside every category". */
+.ch-group.drop-target{outline:1px dashed var(--accent);outline-offset:1px;border-radius: 6px;background:rgba(var(--accent-rgb),.07);min-height:26px}
+/* Off-screen until focused. Not display:none — that is unfocusable, and an
+   unfocusable skip link is decoration. */
+.skip-link{
+  position:fixed; top:8px; left:8px; z-index:10000;
+  transform:translateY(-200%);
+  padding: 8px 14px; border-radius: 6px;
+  background:var(--bg-floating, var(--bg-panel)); color:var(--text-strong);
+  font-size:14px; font-weight:600; border:1px solid var(--active-ring);
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.skip-link:focus-visible{ transform:translateY(0); }
+@media (prefers-reduced-motion: reduce){ .skip-link{transition:none} }
+
+.ch-item.dragging{opacity:.4}
+
+@media (prefers-reduced-motion: reduce){
+  .ch-fold{transition:none}
+  .ch-group-chev{transition:none}
+}
+.ch-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
-.ch-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition:background .12s,color .12s,padding-left .12s;white-space:nowrap}
-.ch-item:hover{background:var(--hover);color:var(--text-2);padding-left:12px}
-.ch-item.active{background:rgba(var(--accent-rgb),.16);color:#c4c9ff}
+.ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), padding-left var(--dur-1) var(--ease-out);white-space:nowrap}
+.ch-item:hover{background:var(--hover);color:var(--text-2);padding-left: 12px}
+.ch-item.active{color:var(--text-strong);outline:1px solid var(--active-ring);outline-offset:-1px}
 .ch-item.unread{color:var(--text-2);font-weight:600}
-.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:opacity .1s,color .1s;flex-shrink:0}
+.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}
 .ch-icon{flex-shrink:0}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
-.ch-unread{min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
 /* Who is sitting in a voice channel. Indented under its row so the nesting is
    read from the left edge, and deliberately quieter than the channel name —
    these are occupants of the row above, not siblings of it. The reference also
    shows an avatar-only density for crowded servers; that needs a trigger
    (a per-server setting, or a count threshold) and is not built here. */
-.vc-occ{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px 5px 26px;border:none;background:none;border-radius:6px;cursor:pointer;text-align:left;color:var(--text-3);transition:background .12s,color .12s}
+.vc-invite{display:flex;align-items:center;gap: 6px;width:calc(100% - 22px);margin-left: 22px;padding: 4px 8px;border-radius: 4px;background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12.5px;text-align:left}
+.vc-invite:hover{background:var(--hover);color:var(--text-1)}
+.vc-occ-ic{display:flex;flex-shrink:0;color:var(--text-3)}
+/* Not an icon: the reference uses a word, and a word survives being the
+   only red thing in a list of grey ones. */
+.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:#f23f43;border-radius: 4px;padding: 1px 4px;line-height:1.4}
+.vc-occ{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 8px 6px 26px;border:none;background:none;border-radius: 6px;cursor:pointer;text-align:left;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
 .vc-occ-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Occupants are a group hanging off the channel above them, not more rows in
    the same list. Without this they butt straight against the channel name and
    against the next channel, and the hierarchy disappears. */
-.ch-item.voice + .vc-occ{margin-top:3px}
-.vc-occ:last-child{margin-bottom:5px}
+.ch-item.voice + .vc-occ{margin-top: 4px}
+.vc-occ:last-child{margin-bottom: 6px}
 
 /* User Panel */
-.user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px}
-.up-left{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .15s;flex:1;min-width:0}
+.user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px}
+.up-left{display:flex;align-items:center;gap: 8px;cursor:pointer;padding: 4px 6px;border-radius: 6px;transition: background var(--dur-2) var(--ease-out);flex:1;min-width:0}
 .up-left:hover{background:var(--hover)}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
-.up-av-img{width:100%;height:100%;border-radius:50%;overflow:hidden}
-.up-av-img img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#80848e;border-radius:50%;border:2px solid var(--bg-deep);transition:background .15s}
-.up-info{display:flex;flex-direction:column;gap:1px;min-width:0}
+.up-av-img{width:100%;height:100%;border-radius: 50%;overflow:hidden}
+.up-av-img img{width:100%;height:100%;object-fit:cover;border-radius: 50%}
+.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#80848e;border-radius: 50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
+.up-info{display:flex;flex-direction:column;gap: 1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
 /* Back-to-call. Icon-only, and sized like every other control in this panel.
@@ -4083,28 +4626,22 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-callback.connecting svg{animation:up-cb-pulse 1.1s ease-in-out infinite}
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
-.up-btns{display:flex;gap:1px;flex-shrink:0}
-.up-btn{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .12s}
+.up-btns{display:flex;gap: 1px;flex-shrink:0}
+.up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
 .up-btn.danger{color:#ed4245;background:rgba(237,66,69,.12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
-.up-chev{width:14px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:background .12s,color .12s}
+.up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
 /* The chevron points down when the menu is shut and up while it is open, so
    the button says which way it will move things. It was a hardcoded
    ChevronDown that never changed. */
-.up-chev-ic{transition:transform .16s ease}
+.up-chev-ic{transition: transform var(--dur-2) var(--ease-out)}
 .up-chev.open .up-chev-ic{transform:rotate(180deg)}
 @media (prefers-reduced-motion: reduce){.up-chev-ic{transition:none}}
 .up-chev:disabled{opacity:.45;cursor:not-allowed}
-@keyframes wiggle-mic{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
-@keyframes bob-phones{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(-3px) scale(1.08)}60%{transform:translateY(1px) scale(.97)}}
-@keyframes spin-gear{to{transform:rotate(180deg)}}
-.btn-mic:hover svg{animation:wiggle-mic .5s ease-in-out}
-.btn-headphones:hover svg{animation:bob-phones .5s ease-in-out}
-.btn-settings:hover svg{animation:spin-gear .4s ease-in-out}
 
 /* ── Friends view ──────────────────────────────────────────────────────── */
 .main-content{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0}
@@ -4155,8 +4692,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* Safe areas: the sidebar header and the user panel are the top and bottom
    edges of the screen once the rail is gone, so they carry the insets. */
-.shell.mobile .sb-header{padding-top:env(safe-area-inset-top)}
-.shell.mobile .user-panel{padding-bottom:env(safe-area-inset-bottom)}
+.shell.mobile .sb-header{padding-top: env(safe-area-inset-top)}
+.shell.mobile .user-panel{padding-bottom: env(safe-area-inset-bottom)}
 /* ── Mobile chat header ────────────────────────────────────────────────────
    The old rule added padding-top for the notch on top of a FIXED 48px height.
    With border-box that comes out of the content box, so on a phone with a
@@ -4164,24 +4701,24 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    inset instead, and the row sits below it. */
 .shell.mobile .chat-header{
   height:calc(56px + env(safe-area-inset-top));
-  padding:env(safe-area-inset-top) 4px 0 4px;
+  padding: env(safe-area-inset-top) 4px 0 4px;
   align-items:stretch;
-  gap:2px;
+  gap: 2px;
 }
-.shell.mobile .chat-header-left{flex:1;min-width:0;gap:2px;align-items:center}
-.shell.mobile .m-back{margin-left:0}
-.shell.mobile .chat-header-right{gap:0;align-items:center}
+.shell.mobile .chat-header-left{flex:1;min-width:0;gap: 2px;align-items:center}
+.shell.mobile .m-back{margin-left: 0}
+.shell.mobile .chat-header-right{gap: 0;align-items:center}
 
 /* Title + subtitle stack, and the whole block is the tap target for details. */
 .shell.mobile .ch-ident{
   display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
-  gap:1px;min-width:0;flex:1;height:100%;
-  padding:0 4px;border-radius:8px;text-align:left;
-  transition:background .12s;
+  gap: 1px;min-width:0;flex:1;height:100%;
+  padding: 0 4px;border-radius: 8px;text-align:left;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .shell.mobile .ch-ident:active{background:var(--hover)}
 .shell.mobile .ch-ident-static:active{background:none}
-.shell.mobile .ch-ident-row{display:flex;align-items:center;gap:3px;min-width:0;max-width:100%}
+.shell.mobile .ch-ident-row{display:flex;align-items:center;gap: 4px;min-width:0;max-width:100%}
 .shell.mobile .ch-ident .chat-title{
   font-size:16px;font-weight:600;line-height:1.15;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
@@ -4192,12 +4729,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* The desktop separator dot is meaningless once the two lines are stacked. */
 .shell.mobile .ch-topic-sep{display:none}
 .shell.mobile .ch-topic{
-  display:flex;align-items:center;gap:5px;
+  display:flex;align-items:center;gap: 6px;
   font-size:12px;line-height:1.2;color:var(--text-3);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
 }
 .shell.mobile .ch-topic-dot{
-  display:block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  display:block;width:8px;height:8px;border-radius: 50%;flex-shrink:0;
 }
 .shell.mobile .ch-topic-dot.online{background:#23a55a}
 
@@ -4213,10 +4750,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .m-back-badge{
   display:flex;align-items:center;justify-content:center;
   position:absolute;top:3px;right:0;
-  min-width:18px;height:18px;padding:0 5px;
+  min-width:18px;height:18px;padding: 0 6px;
   background:#f23f43;color:#fff;
   font-size:11px;font-weight:700;line-height:1;
-  border-radius:9px;border:2px solid var(--bg-chat);
+  border-radius: 8px;border:2px solid var(--bg-chat);
   pointer-events:none;
 }
 
@@ -4233,7 +4770,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* Touch targets. The desktop sizes are built for a cursor; 44px is the floor
    for a fingertip, and the taller rows also make the list easier to scan. */
-.shell.mobile .dm-item{padding:10px 12px;margin:0 8px;min-height:56px}
+.shell.mobile .dm-item{padding: 10px 12px;margin: 0 8px;min-height:56px}
 .shell.mobile .icon-btn{min-width:44px;min-height:44px}
 /* Every interactive control on a phone, not just .icon-btn. Measured at 390px:
    up-chev was 14x30, the user-panel buttons 30x30, the Friends tabs 63x27 and
@@ -4287,52 +4824,52 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    it, with instant press feedback rather than a hover state. */
 .m-back{
   display:flex;align-items:center;justify-content:center;
-  min-width:44px;min-height:44px;margin-left:-6px;
-  color:var(--text-2);border-radius:8px;flex-shrink:0;
+  min-width:44px;min-height:44px;margin-left: -6px;
+  color:var(--text-2);border-radius: 8px;flex-shrink:0;
 }
 .m-back:active{background:var(--hover);color:var(--text-strong)}
 
 @media (prefers-reduced-motion: reduce){
   .shell.mobile .sidebar,
   .shell.mobile .main-content,
-  .shell.mobile .chat{transition:opacity .2s ease}
+  .shell.mobile .chat{transition: opacity var(--dur-3) var(--ease-out)}
 }
-.friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;gap:8px;padding:0 16px}
+.friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;gap: 8px;padding: 0 16px}
 .fh-icon{color:var(--text-3);flex-shrink:0}
-.fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right:4px;white-space:nowrap}
-.fh-tabs{display:flex;gap:2px}
-.ftab{padding:5px 12px;border-radius:6px;font-size:13px;font-weight:500;color:var(--text-2);transition:background .12s,color .12s;white-space:nowrap}
+.fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right: 4px;white-space:nowrap}
+.fh-tabs{display:flex;gap: 2px}
+.ftab{padding: 6px 12px;border-radius: 6px;font-size:13px;font-weight:500;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
 .pend-tab{position:relative}
-.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius:8px;margin-left:4px}
-.add-friend-btn{margin-left:auto;padding:6px 14px;background:var(--accent);color:white;border-radius:6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s;white-space:nowrap}
+.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
+.add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:white;border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
-.friends-list{flex:1;overflow-y:auto;padding:16px}
-.f-loading{display:flex;align-items:center;gap:10px;padding:20px;color:var(--text-faint);font-size:14px}
-.f-search{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border-radius:6px;padding:7px 12px;margin-bottom:16px}
+.friends-list{flex:1;overflow-y:auto;padding: 16px}
+.f-loading{display:flex;align-items:center;gap: 10px;padding: 20px;color:var(--text-faint);font-size:14px}
+.f-search{display:flex;align-items:center;gap: 8px;background:rgba(0,0,0,.25);border-radius: 6px;padding: 8px 12px;margin-bottom: 16px}
 .f-search input{flex:1;font-size:14px;color:var(--text-1)}
 .f-search input::placeholder{color:var(--text-faint)}
-.f-section-label{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
-.f-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px 20px;text-align:center;color:var(--text-faint)}
-.f-empty-icon{font-size:48px;margin-bottom:4px}
+.f-section-label{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom: 8px}
+.f-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;padding: 40px 20px;text-align:center;color:var(--text-faint)}
+.f-empty-icon{font-size:48px;margin-bottom: 4px}
 .f-empty p{font-size:16px;font-weight:700;color:var(--text-1)}
 .f-empty span{font-size:14px;line-height:1.5}
 .f-empty strong{color:var(--text-1)}
-.f-empty-btn{margin-top:8px;padding:8px 18px;border-radius:6px;background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s}
+.f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
-.f-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s}
+.f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .f-row:hover{background:var(--hover);border-color:transparent}
 .f-av{position:relative;width:36px;height:36px;flex-shrink:0}
-.f-av img{border-radius:50%}
-.f-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-chat)}
+.f-av img{border-radius: 50%}
+.f-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
 .f-info{flex:1;min-width:0}
 .f-name{display:block;font-size:15px;font-weight:600;color: var(--text-strong)}
 .f-sub{display:block;font-size:13px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.f-actions{display:flex;gap:6px}
-.f-btn{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition:background .12s,color .12s,transform .1s}
+.f-actions{display:flex;gap: 6px}
+.f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
 .f-btn.accept{background:rgba(35,165,90,.15);color:#23a55a}
 .f-btn.accept:hover{background:rgba(35,165,90,.28);transform:scale(1.1)}
@@ -4340,16 +4877,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}
 
 /* Active Now */
-.active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding:16px;overflow-y:auto}
-.an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom:16px}
-.an-empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text-faint);padding:32px 0;font-size:13px;text-align:center}
-.an-add-btn{margin-top:8px;padding:6px 14px;border-radius:6px;background:var(--accent);color:white;font-size:13px;font-weight:600;transition:background .12s}
+.active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding: 16px;overflow-y:auto}
+.an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
+.an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
+.an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:white;font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
-.an-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.04);margin-bottom:8px;cursor:pointer;transition:background .12s}
+.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:rgba(255,255,255,.04);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
-.an-av img{border-radius:50%}
-.an-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-chat)}
+.an-av img{border-radius: 50%}
+.an-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
 .an-info{flex:1;min-width:0}
 .an-name{display:block;font-size:14px;font-weight:600;color: var(--text-strong)}
 .an-sub{display:block;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -4371,9 +4908,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   position:fixed;left:0;right:0;bottom:0;top:auto;
   width:100%;max-width:none;height:70dvh;
   z-index:960;
-  border-left:none;border-radius:16px 16px 0 0;
+  border-left:none;border-radius: 16px 16px 0 0;
   box-shadow:0 -12px 40px rgba(0,0,0,.5);
-  padding-bottom:env(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
   transform:translate3d(0,0,0);
   transition:transform .34s cubic-bezier(.32,.72,0,1);
 }
@@ -4384,10 +4921,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 /* Grab handle, so it reads as a sheet rather than a panel that appeared. */
 .shell.mobile .members-panel::before{
-  content:'';position:absolute;top:8px;left:50%;margin-left:-18px;
-  width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.22);
+  content:'';position:absolute;top:8px;left:50%;margin-left: -18px;
+  width:36px;height:4px;border-radius: 2px;background:rgba(255,255,255,.22);
 }
-.shell.mobile .mp-header{padding-top:20px}
+.shell.mobile .mp-header{padding-top: 20px}
 .shell.mobile .mp-member{min-height:56px}
 
 .m-sheet-scrim{
@@ -4398,7 +4935,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
 
 @media (prefers-reduced-motion: reduce){
-  .shell.mobile .members-panel{transition:opacity .2s ease}
+  .shell.mobile .members-panel{transition: opacity var(--dur-3) var(--ease-out)}
 }
 
 /* Hide-chat: the whole point is that the call gets the column, so everything
@@ -4424,64 +4961,60 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Same reason as above — the child's root is .ml-wrap, so targeting .ml from
    here does nothing and the split never applied when video was on the stage. */
 .chat:has(.callbar.has-video) .ml-wrap { flex: 1 1 auto; min-height: 0; }
-.chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 12px}
-.chat-header-left,.chat-header-right{display:flex;align-items:center;gap:4px}
+.chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px 0 12px}
+.chat-header-left,.chat-header-right{display:flex;align-items:center;gap: 4px}
 .ch-ident{display:contents}
 .ch-ident-row{display:contents}
 .ch-chev,.ch-topic-dot,.m-back-badge{display:none}
 /* Voice/video call header buttons — animated + colour-coded */
-.call-btn{transition:transform .12s,color .12s,background .12s}
+.call-btn{transition: transform var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out)}
 .call-btn:hover{transform:translateY(-1px) scale(1.08)}
 .call-btn:active{transform:scale(.9)}
 .call-btn.video{color:var(--text-2)}
 .call-btn.calling{color:#f23f43;animation:call-pulse 1.25s ease-in-out infinite}
 @keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(242,63,67,0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(242,63,67,.6))}}
 .chat-title{font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
-.ch-hash{color:var(--text-3);flex-shrink:0;margin-right:4px}
-.ch-topic-sep{width:1px;height:16px;background:rgba(255,255,255,.12);margin:0 10px;flex-shrink:0}
+.ch-hash{color:var(--text-3);flex-shrink:0;margin-right: 4px}
+.ch-topic-sep{width:1px;height:16px;background:rgba(255,255,255,.12);margin: 0 10px;flex-shrink:0}
 .ch-topic{font-size:13px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dm-header-av{position:relative;width:28px;height:28px;margin-right:4px;flex-shrink:0;cursor:pointer}
-.dm-header-av img{border-radius:50%}
-.dm-header-dot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:50%;border:2px solid var(--bg-chat)}
+.dm-header-av{position:relative;width:28px;height:28px;margin-right: 4px;flex-shrink:0;cursor:pointer}
+.dm-header-av img{border-radius: 50%}
+.dm-header-dot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius: 50%;border:2px solid var(--bg-chat)}
 
-.icon-btn{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:background .12s,color .15s}
+.icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
 .icon-btn:active{transform:scale(.88)}
 .icon-btn.active{color:#8d96f8;background:rgba(var(--accent-rgb),.15)}
-@keyframes bounce-pin{0%,100%{transform:translateY(0)}35%{transform:translateY(-4px) rotate(-20deg)}70%{transform:translateY(2px)}}
-@keyframes pulse-users{0%,100%{transform:scale(1)}40%{transform:scale(1.18)}70%{transform:scale(.92)}}
-@keyframes zoom-search{0%,100%{transform:scale(1)}50%{transform:scale(1.22)}}
-@keyframes sidebar-spin{to{transform:rotate(180deg)}}
-.icon-btn-pin:hover svg{animation:bounce-pin .4s ease}
-.icon-btn-members:hover svg{animation:pulse-users .4s ease}
-.icon-btn-search:hover svg{animation:zoom-search .3s ease}
-.icon-btn-sidebar:hover svg{animation:sidebar-spin .35s ease}
 
 /* Pinned sidebar */
 .pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);animation:slide-in .18s cubic-bezier(.4,0,.2,1)}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
-.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);display:flex;flex-direction:column;transition:width .22s,opacity .22s;overflow:hidden}
+.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);display:flex;flex-direction:column;transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .members-panel.closed{width:0;opacity:0;pointer-events:none}
-.mp-header{height:48px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,.25);display:flex;align-items:center;padding:0 14px}
-.mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap:6px}
-.mp-count{font-size:11px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:10px;color:var(--text-3)}
-.mp-search{margin:8px 10px;background:rgba(0,0,0,.2);border-radius:6px;display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid transparent;transition:border-color .15s}
+.mp-header{height:48px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,.25);display:flex;align-items:center;padding: 0 14px}
+.mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
+.mp-count{font-size:11px;background:rgba(255,255,255,.1);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
+.mp-search{margin: 8px 10px;background:rgba(0,0,0,.2);border-radius: 6px;display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
 .mp-search input::placeholder{color:var(--text-faint)}
-.mp-list{flex:1;overflow-y:auto;padding:4px 6px}
-.mp-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:6px 8px 4px}
-.mp-member{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .12s}
+.mp-list{flex:1;overflow-y:auto;padding: 4px 6px}
+.mp-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding: 6px 8px 4px}
+/* Sections read as sections when there is air between them — but only from
+   the second one on, or the list starts with a hole under the search box. */
+.mp-section-label:not(:first-child){margin-top: 14px}
+.mp-member{display:flex;align-items:center;gap: 10px;padding: 6px 8px;border-radius: 6px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .mp-member:hover{background:var(--hover)}
-.mp-member.mp-offline{opacity:.5}
+.mp-member.mp-offline{opacity:.35}
 .mp-member.mp-offline:hover{opacity:.8}
-.mp-av{position:relative;width:30px;height:30px;flex-shrink:0}
-.mp-av img{width:100%;height:100%;border-radius:50%;object-fit:cover}
-.mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg-panel)}
+.mp-av{position:relative;width:32px;height:32px;flex-shrink:0}
+.mp-av img{width:100%;height:100%;border-radius: 50%;object-fit:cover}
+.mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-panel)}
 .mp-info{flex:1;min-width:0}
-.mp-name{display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-name{display:block;font-size:14px;font-weight:600;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-member:hover .mp-name{color:var(--text-1)}
 
 /* Emoji float */
 .emoji-float{position:fixed;bottom:72px;right:20px;z-index:500;animation:pop-up .15s cubic-bezier(.4,0,.2,1)}
@@ -4494,7 +5027,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Scrollbars */
 .sb-body::-webkit-scrollbar,.friends-list::-webkit-scrollbar,.active-now::-webkit-scrollbar,.mp-list::-webkit-scrollbar{width:4px}
 .sb-body::-webkit-scrollbar-track,.friends-list::-webkit-scrollbar-track,.active-now::-webkit-scrollbar-track,.mp-list::-webkit-scrollbar-track{background:transparent}
-.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
+.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius: 2px}
 
 /* Reply banner — neutral, blends with chat surface */
 .reply-banner {
@@ -4527,7 +5060,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   width: 22px; height: 22px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); flex-shrink: 0;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-banner-close:hover { background: var(--hover-strong); color: var(--text-strong); }
 
@@ -4539,4 +5072,25 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   0%   { background: rgba(var(--accent-rgb),.18); }
   100% { background: transparent; }
 }
+</style>
+
+<style>
+/* Quick-reaction strip — slot content inside ContextMenu, so it cannot be
+   scoped from here (the slot renders in that component's scope, not this
+   one). Prefixed instead, the same way CallFlyout handles its row styles. */
+.cm .qr-strip {
+  display: flex; gap: 2px; padding: 2px 6px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  margin-bottom: 4px;
+}
+.cm .qr {
+  flex: 1; height: 36px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; color: inherit;
+  font-size: 20px; line-height: 1;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.cm .qr:hover { background: var(--hover-strong); transform: scale(1.28); }
+.cm .qr-more  { color: var(--text-3); font-size: 16px; }
+.cm .qr-more:hover { color: var(--text-1); }
 </style>

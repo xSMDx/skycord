@@ -25,7 +25,7 @@ const shapeGroup = (group: any, memberDocs: any[]) => ({
     displayName: m.displayName,
     avatar:      m.avatar ?? null,
     avatarCrop:  m.avatarCrop ?? null,
-    status:      effectiveStatus(m.status, m._id.toString()),
+    status:      effectiveStatus(m.status, m._id.toString(), m.statusUntil),
   })),
   lastMessageAt: group.lastMessageAt,
   createdAt:     group.createdAt,
@@ -115,7 +115,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
     })
 
     const memberDocs = await User.find({ _id: { $in: uniqueMembers } })
-      .select('username displayName avatar avatarCrop status').lean()
+      .select('username displayName avatar avatarCrop status statusUntil').lean()
 
     // Notify every other member in real time so the group shows up in their
     // conversation list immediately.
@@ -139,7 +139,7 @@ export const getMyConversations = async (req: Request, res: Response, next: Next
 
     const allMemberIds = [...new Set(groups.flatMap(g => g.members.map(m => m.toString())))]
     const memberDocs = await User.find({ _id: { $in: allMemberIds } })
-      .select('username displayName avatar avatarCrop status').lean()
+      .select('username displayName avatar avatarCrop status statusUntil').lean()
     const memberById = new Map(memberDocs.map(m => [m._id.toString(), m]))
 
     const shaped = groups.map(g =>
@@ -192,7 +192,7 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
     }
 
     const partners = await User.find({ _id: { $in: [...byPartner.keys()] } })
-      .select('username displayName avatar avatarCrop status').lean()
+      .select('username displayName avatar avatarCrop status statusUntil').lean()
 
     // A deleted account leaves messages behind; skip those rather than
     // shipping a row the client can't render a name for.
@@ -204,7 +204,7 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
         displayName:   p.displayName,
         avatar:        p.avatar,
         avatarCrop:    p.avatarCrop ?? null,
-        status:        effectiveStatus(p.status, p._id.toString()),
+        status:        effectiveStatus(p.status, p._id.toString(), p.statusUntil),
         lastMessage:   r.lastKind ? '' : String(r.lastMessage || ''),
         lastMessageAt: r.lastMessageAt,
       }
@@ -340,7 +340,7 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
     }
 
     const members = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar avatarCrop status').lean()
+      .select('username displayName avatar avatarCrop status statusUntil').lean()
 
     res.json({
       members: members.map(m => ({
@@ -349,7 +349,7 @@ export const getGroupMembers = async (req: Request, res: Response, next: NextFun
         displayName: m.displayName,
         avatar:      m.avatar ?? null,
         avatarCrop:  m.avatarCrop ?? null,
-        status:      effectiveStatus(m.status, m._id.toString()),
+        status:      effectiveStatus(m.status, m._id.toString(), m.statusUntil),
         isOwner:     group.owner.toString() === m._id.toString(),
       })),
     })
@@ -386,7 +386,7 @@ export const addGroupMembers = async (req: Request, res: Response, next: NextFun
     await group.save()
 
     const memberDocs = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar avatarCrop status').lean()
+      .select('username displayName avatar avatarCrop status statusUntil').lean()
 
     const io = getIO()
     if (io) {
@@ -444,7 +444,7 @@ export const updateGroup = async (req: Request, res: Response, next: NextFunctio
     await group.save()
 
     const memberDocs = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar avatarCrop status').lean()
+      .select('username displayName avatar avatarCrop status statusUntil').lean()
     const shaped = shapeGroup(group, memberDocs)
 
     const io = getIO()
@@ -497,7 +497,7 @@ export const leaveGroup = async (req: Request, res: Response, next: NextFunction
 
     if (io) {
       const memberDocs = await User.find({ _id: { $in: group.members } })
-        .select('username displayName avatar avatarCrop status').lean()
+        .select('username displayName avatar avatarCrop status statusUntil').lean()
       const shaped = shapeGroup(group, memberDocs)
       group.members.forEach(m => io.to(`user:${m.toString()}`).emit('group:updated', shaped))
     }
@@ -600,7 +600,7 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
     }
 
     const memberDocs = await User.find({ _id: { $in: group.members } })
-      .select('username displayName avatar avatarCrop status').lean()
+      .select('username displayName avatar avatarCrop status statusUntil').lean()
     const shaped = shapeGroup(group, memberDocs)
 
     if (!alreadyIn) {

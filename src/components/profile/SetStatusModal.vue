@@ -121,18 +121,18 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .ss-input {
   width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
-  border-radius: 5px; padding: 11px 12px; color: var(--text-1); font: inherit; font-size: 15px;
+  border-radius: 6px; padding: 12px 12px; color: var(--text-1); font: inherit; font-size: 15px;
 }
 .ss-input:focus { outline: none; border-color: var(--accent); }
-.ss-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.ss-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 6px; font-variant-numeric: tabular-nums; }
 
 .ss-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
 .ss-row-l { font-size: 13px; color: var(--text-2); }
-.ss-select { width: auto; padding: 9px 11px; font-size: 14px; cursor: pointer; }
+.ss-select { width: auto; padding: 8px 12px; font-size: 14px; cursor: pointer; }
 .ss-hint { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 
 .ss-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-.ss-btn { font-size: 14px; font-weight: 500; padding: 9px 17px; border-radius: 5px; color: var(--text-strong); background: var(--hover-strong); }
+.ss-btn { font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 6px; color: var(--text-strong); background: var(--hover-strong); }
 .ss-btn:hover { background: rgba(255,255,255,.16); }
 .ss-btn.primary { background: var(--accent); }
 .ss-btn.primary:hover { background: var(--accent-hover); }

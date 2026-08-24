@@ -33,19 +33,56 @@ authenticator (TOTP — new backend and schema, not a UI change).
 Plans live in `docs/superpowers/plans/`, ledger in `.superpowers/sdd/progress.md`.
 
 Merged: servers/channels API, channel messaging, 3a client slice, 3b operable server,
-3c categories, 3d voice + invites, 3e voice stage, 3f members and presence UI.
+3c categories, 3d voice + invites, 3e voice stage, 3f members and presence UI,
+3g polish (two-colour voice badge, camera modal, animated chevrons, category animation,
+drag between categories, timed statuses, Invite to Voice, cascading menus, voice member
+state, voice occupant menus).
 
-Outstanding:
+### Blocking the rest
 
-- **Server Settings** — a real screen. None exists. Next up by the user's instruction.
-- **Drag-to-reorder channels and categories** (owners). No reorder endpoint exists at all;
-  `position` is assigned on create and never updated. No list-reordering primitive in `src/`.
-- **Invite expiry choice** — the server accepts `24h`/`7d`/`never` and the modal displays expiry,
-  but the client never sends a choice, so every invite silently gets 24h.
-- **Text chat under the voice stage** — the Stoat-style "chat down there where your voice chat is"
-  the user liked. Deferred deliberately: it reverses the spec's "text inside voice channels is out
-  of scope" and needs a conversationId, history and a composer per voice channel.
-- Per-channel permissions, roles, per-server profile.
+- **Server Settings** — a real screen. Nothing exists: no component, no route. The user has
+  named it next more than once, and three other items are queued behind it.
+- **Roles and permissions** — no role field anywhere in the model. Everything is
+  owner-vs-member today, which is why invites and channel CRUD are owner-only and why the
+  moderation rows below cannot be built.
+
+### Queued behind those
+
+- **Moderation in voice** — Server Mute, Server Deafen, Disconnect, Kick. They act on
+  someone else's client and need the permissions model. Deliberately parked with kick/ban.
+- **Server mute** — no field, no endpoint. The rail label's reference shows a "Muted" line
+  that cannot be shown truthfully until this exists.
+- **Notification settings, Hide Muted Channels, Privacy Settings, per-server profile** —
+  all absent from the server menu for the same reason: nothing behind them.
+
+### Independent of settings
+
+- **Reordering *within* a category.** `position` is assigned on create
+  (channelsController, categoriesController) and never updated — there is no write path.
+  Moving *between* categories now works and is not this.
+- **Text chat under the voice stage** — the Stoat-style layout the user liked. Deferred
+  deliberately: it reverses the spec's "text inside voice channels is out of scope" and
+  needs a conversationId, history and a composer per voice channel.
+- **Mention / Add Note / Block / Ignore / Apps / Soundboard** in the user menus — each
+  needs its own backing (composer insertion API, per-relationship data, a block model).
+
+### Known defects, unscheduled
+
+- Deleting a channel orphans its `Message` documents server-side.
+- Group reactions are unverified — un-gating `handleReact` in 3a fixed groups incidentally,
+  and no test covers a group reaction.
+- Non-owner paths across 3b are unit-tested only, never exercised in a browser.
+- Rail double-click race: two fast clicks on two uncached servers can leave
+  `activeChannelId` from server A while `activeServerId` is B.
+- `role="button"` on `.ch-item` wrapping a real `<button>` is ARIA
+  children-presentational; the correct shape is a plain row with the label inside the
+  button and `.ch-more` as its sibling.
+- `withServerLock` is per-process, valid only while the API is one pm2 process.
+
+### Before anything ships
+
+- nginx needs `servers` and `invites` in its location alternation, and `/join/<code>` must
+  fall through to the SPA index.
 
 ---
 

@@ -152,7 +152,7 @@ onBeforeUnmount(() => {
       <div class="s-av" :class="{ speaking: t.speaking, ringing: !!t.ring }">
         <Avatar v-if="t.avatar" :src="t.avatar" :alt="t.name" :crop="(t as any).avatarCrop" />
         <template v-else>{{ initial(t.name) }}</template>
-        <span v-if="t.muted" class="s-mute"><MicOff :size="13" :stroke-width="2.25" /></span>
+        <span v-if="t.muted" class="s-mute"><MicOff :size="14" :stroke-width="2.25" /></span>
         <!-- Dialling happens BEFORE any video exists, so this layout — not the
              grid — is where a ringing tile actually appears. -->
         <template v-if="t.ring === 'ringing'">
@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
         <button class="g-fs"
                 v-tip="fsKey === c.key ? 'Exit fullscreen' : `Fullscreen ${c.name}`"
                 @click="toggleCellFs(c.key, $event)">
-          <component :is="fsKey === c.key ? Minimize2 : Maximize2" :size="15" :stroke-width="2.25" />
+          <component :is="fsKey === c.key ? Minimize2 : Maximize2" :size="16" :stroke-width="2.25" />
         </button>
       </template>
       <template v-else>
@@ -207,10 +207,10 @@ onBeforeUnmount(() => {
             <template v-else>{{ initial(c.name) }}</template>
           </div>
         </div>
-        <span v-if="c.muted" class="g-mute"><MicOff :size="13" :stroke-width="2.25" /></span>
+        <span v-if="c.muted" class="g-mute"><MicOff :size="14" :stroke-width="2.25" /></span>
       </template>
       <span class="g-name">
-        <Monitor v-if="c.kind === 'video' && c.source === 'screen'" :size="13" :stroke-width="2.25" />
+        <Monitor v-if="c.kind === 'video' && c.source === 'screen'" :size="14" :stroke-width="2.25" />
         {{ c.name }}<template v-if="c.kind === 'avatar' && c.ring"> · {{ c.ring === 'ringing' ? 'ringing…' : 'no answer' }}</template>
       </span>
     </div>
@@ -234,7 +234,7 @@ button { border: none; }
   width: 72px; height: 72px; border-radius: 50%; position: relative;
   background: var(--accent); color: var(--text-on-accent);
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 700; box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow .15s;
+  font-size: 26px; font-weight: 700; box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow var(--dur-2) var(--ease-out);
 }
 .s-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .s-av.speaking { box-shadow: 0 0 0 3px #23a55a; }
@@ -282,7 +282,7 @@ button { border: none; }
   position: relative; height: 100%; min-height: 0; border-radius: 8px; overflow: hidden;
   background: #0b0b0f; border: 2px solid transparent; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .g-cell.speaking { border-color: #23a55a; }
 /* Grid-only hover hint: clicking focuses this tile. Suppressed in spotlight. */
@@ -342,8 +342,8 @@ button { border: none; }
   @keyframes g-wave-fade { 0%,100% { opacity: .2 } 50% { opacity: .8 } }
 }
 .g-name {
-  position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 5px;
-  max-width: calc(100% - 16px); padding: 3px 8px; border-radius: 6px;
+  position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 16px); padding: 4px 8px; border-radius: 6px;
   background: rgba(0,0,0,.65); color: #fff; font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -354,7 +354,7 @@ button { border: none; }
   width: 28px; height: 28px; border-radius: 6px;
   background: rgba(0,0,0,.6); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .12s, background .12s;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
 .g-cell:hover .g-fs, .g-cell.is-cell-fs .g-fs { opacity: 1; }
 .g-fs:hover { background: rgba(0,0,0,.85); }
@@ -363,7 +363,7 @@ button { border: none; }
 /* The fullscreened cell IS the viewport — drop the tile chrome. */
 .g-cell.is-cell-fs { border-radius: 0; border-color: transparent; background: #000; }
 .g-live {
-  position: absolute; right: 8px; top: 8px; padding: 2px 7px; border-radius: 5px;
+  position: absolute; right: 8px; top: 8px; padding: 2px 8px; border-radius: 6px;
   background: #f23f43; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .04em;
 }
 .g-mute {

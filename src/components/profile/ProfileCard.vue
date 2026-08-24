@@ -104,7 +104,7 @@ const memberSinceLabel = computed(() => {
       @keydown.space.prevent="editable && emit('editBanner')"
     >
       <AnimatedImage v-if="banner" :src="banner" class="pc-bimg" :crop="bannerCrop" />
-      <span v-if="editable" class="pc-bpencil"><Pencil :size="15" :stroke-width="2.25" /></span>
+      <span v-if="editable" class="pc-bpencil"><Pencil :size="16" :stroke-width="2.25" /></span>
     </div>
 
     <div class="pc-avwrap">
@@ -117,12 +117,12 @@ const memberSinceLabel = computed(() => {
         @keydown.space.prevent="avatarActs && onAvatar()"
       >
         <AnimatedImage :src="avatarSrc" :alt="name" :crop="avatarCrop" />
-        <span v-if="editable" class="pc-apencil"><Pencil :size="19" :stroke-width="2.25" /></span>
+        <span v-if="editable" class="pc-apencil"><Pencil :size="20" :stroke-width="2.25" /></span>
       </div>
       <span class="pc-dot" :style="{ background: dotColor }" />
 
       <button v-if="editable || statusButton" class="pc-status" @click.stop="emit('editStatus')">
-        <Plus v-if="!statusText" :size="13" :stroke-width="2.25" class="pc-status-plus" />
+        <Plus v-if="!statusText" :size="14" :stroke-width="2.25" class="pc-status-plus" />
         <span class="pc-status-txt">{{ statusText || 'Add status' }}</span>
       </button>
       <div v-else-if="statusText" class="pc-status static">
@@ -168,7 +168,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; flex-direction: column;
 }
 
-.pc-banner { height: 106px; position: relative; transition: background .15s; overflow: hidden; }
+.pc-banner { height: 106px; position: relative; transition: background var(--dur-2) var(--ease-out); overflow: hidden; }
 .pc-bimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-banner.editable { cursor: pointer; }
 .pc-bpencil {
@@ -176,7 +176,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   width: 32px; height: 32px; border-radius: 50%;
   background: rgba(0,0,0,.55); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .14s;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
 .pc-banner.editable:hover .pc-bpencil,
 .pc-banner.editable:focus-visible .pc-bpencil { opacity: 1; }
@@ -187,21 +187,21 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   border: 6px solid var(--bg-panel); background: var(--bg-floor);
   overflow: hidden; position: relative;
 }
-.pc-av { transition: box-shadow .14s, transform .1s ease-out; }
+.pc-av { transition: box-shadow var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
 .pc-av.editable { cursor: pointer; }
 /* A ring on hover so a clickable avatar reads as clickable without needing a
    pencil, which belongs to edit mode only. */
 .pc-av.editable:hover, .pc-av.editable:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
 .pc-av.editable:active { transform: scale(.97); }
 @media (prefers-reduced-motion: reduce) {
-  .pc-av, .pc-status { transition: box-shadow .14s, background .12s, color .12s; }
+  .pc-av, .pc-status { transition: box-shadow var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); }
   .pc-av.editable:active, .pc-status:not(.static):active { transform: none; }
 }
 .pc-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-apencil {
   position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .14s;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
 .pc-av.editable:hover .pc-apencil,
 .pc-av.editable:focus-visible .pc-apencil { opacity: 1; }
@@ -217,17 +217,17 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    tail, pointing back at the avatar it belongs to. */
 .pc-status {
   position: absolute; left: 96px; top: 2px; max-width: 200px;
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; gap: 8px;
   background: var(--bg-raised); border: 1px solid rgba(255,255,255,.08);
   border-radius: 16px 16px 16px 4px;
-  padding: 7px 12px; font-size: 13px; color: var(--text-1);
+  padding: 8px 12px; font-size: 13px; color: var(--text-1);
   box-shadow: 0 4px 14px rgba(0,0,0,.35);
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .pc-status:not(.static):hover { background: var(--bg-deep); color: var(--text-1); }
 /* Feedback lands on the press itself rather than waiting for release. */
 .pc-status:not(.static):active { transform: scale(.97); }
-.pc-status { transition: background .12s, color .12s, transform .1s ease-out; }
+.pc-status { transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
 .pc-status.static { cursor: default; }
 .pc-status-plus {
   flex: none; width: 16px; height: 16px; border-radius: 50%;
@@ -251,7 +251,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-lg .pc-status  { left: 136px; top: 6px; max-width: 230px; }
 .pc-lg .pc-body    { padding: 16px 22px 24px; }
 .pc-lg .pc-name    { font-size: 26px; letter-spacing: -.022em; line-height: 1.1; }
-.pc-lg .pc-tag     { font-size: 14.5px; margin-top: 3px; }
+.pc-lg .pc-tag     { font-size: 14.5px; margin-top: 4px; }
 .pc-lg .pc-bio     { font-size: 14px; margin-top: 18px; line-height: 1.55; }
 .pc-lg .pc-label   { margin-top: 20px; }
 .pc-bio  {
@@ -261,7 +261,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-bio.placeholder { font-style: italic; color: var(--text-3); }
 .pc-label {
   font-size: 11.5px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .4px; color: var(--text-3); margin: 16px 0 3px;
+  letter-spacing: .4px; color: var(--text-3); margin: 16px 0 4px;
 }
 .pc-val { font-size: 13.5px; color: var(--text-1); }
 </style>

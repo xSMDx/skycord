@@ -117,7 +117,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .csm-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); flex-shrink: 0; transition: background .12s, color .12s;
+  color: var(--text-3); flex-shrink: 0; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .csm-close:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -129,7 +129,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .csm-input {
   width: 100%; padding: 10px 12px; border-radius: 4px;
   border: 1px solid transparent; background: var(--bg-input);
-  color: var(--text-strong); font-size: 15px; transition: border-color .12s;
+  color: var(--text-strong); font-size: 15px; transition: border-color var(--dur-1) var(--ease-out);
 }
 .csm-input:focus { border-color: var(--accent); }
 .csm-input::placeholder { color: var(--text-faint); }
@@ -142,13 +142,13 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .csm-cancel {
   padding: 10px 16px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-1);
-  transition: background .12s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .csm-cancel:hover { background: var(--hover); }
 .csm-create {
   padding: 10px 16px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
-  background: var(--accent); transition: background .12s, transform .1s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .csm-create:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
 .csm-create:disabled { opacity: .5; cursor: not-allowed; }

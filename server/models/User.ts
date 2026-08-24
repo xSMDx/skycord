@@ -17,6 +17,9 @@ export interface IUserDocument extends Document {
   /** The user's OWN choice, persisted. Never written by connect/disconnect.
     *  What others see is derived — see server/state/presence.ts. */
   status:        ChosenStatus
+  /** When the chosen status stops applying. Null means never. Applied on
+    *  READ by chosenNow(), never by a sweeper — same rule as customStatus. */
+  statusUntil:   Date | null
   isVerified:    boolean
   tokenVersion:  number
   lastSeenAt:    Date
@@ -150,6 +153,11 @@ const UserSchema = new Schema<IUserDocument, IUserModel>(
       enum: CHOSEN_STATUSES,
       default: 'online',
     },
+    // Null means the status never expires. Note this default does NOT reach
+    // rows that already exist, and every read here is .lean(), which surfaces
+    // the missing field as undefined rather than null — chosenNow() treats
+    // both as "no expiry" for exactly that reason.
+    statusUntil: { type: Date, default: null },
     isVerified:   { type: Boolean, default: false },
     tokenVersion: { type: Number,  default: 0, select: false },
     lastSeenAt:   { type: Date,    default: Date.now },
@@ -215,7 +223,7 @@ UserSchema.methods.toPublicJSON = function (): PublicUser {
     // (never "invisible") when they've chosen to be invisible. This method
     // feeds every payload that reaches another user, so the mapping lives
     // here rather than at each call site where one could be forgotten.
-    status:        effectiveStatus(this.status, this._id.toString()),
+    status:        effectiveStatus(this.status, this._id.toString(), this.statusUntil),
     isVerified:    this.isVerified,
     bannerColor:   this.bannerColor ?? null,
     avatarCrop:    this.avatarCrop ?? null,

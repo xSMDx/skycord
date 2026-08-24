@@ -73,17 +73,16 @@ onBeforeUnmount(soundRingStop)
 }
 
 .ic-name { font-size: 19px; font-weight: 700; color: var(--text-strong); }
-.ic-sub  { font-size: 13px; color: var(--text-3); margin-top: 3px; }
+.ic-sub  { font-size: 13px; color: var(--text-3); margin-top: 4px; }
 
 .ic-actions { display: flex; gap: 36px; margin-top: 24px; }
 .ic-btn {
   width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: transform .12s, filter .12s; box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  transition: transform var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out); box-shadow: 0 6px 18px rgba(0,0,0,.35);
 }
 .ic-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.08); }
 .ic-btn:active { transform: scale(.94); }
 .ic-btn.decline { background: #f23f43; }
-.ic-btn.accept  { background: #23a55a; animation: ic-jiggle 1.6s ease-in-out infinite; }
-@keyframes ic-jiggle { 0%,92%,100% { transform: none; } 94% { transform: rotate(-12deg); } 96% { transform: rotate(12deg); } 98% { transform: rotate(-8deg); } }
+.ic-btn.accept  { background: #23a55a; }
 </style>

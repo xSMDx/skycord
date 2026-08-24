@@ -130,7 +130,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .rp-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .rp-close:hover { background: var(--hover-strong); color: var(--text-strong); }
 
@@ -139,7 +139,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   margin: 12px 12px 0; background: rgba(0,0,0,.3);
   border: 1.5px solid rgba(255,255,255,.08);
   border-radius: 8px; padding: 8px 12px;
-  transition: border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .rp-search:focus-within { border-color: var(--accent); }
 .rp-search-icon { color: var(--text-faint); flex-shrink: 0; }
@@ -153,7 +153,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .rp-cat-btn {
   width: 34px; height: 34px; border-radius: 6px; font-size: 18px;
   display: flex; align-items: center; justify-content: center;
-  transition: background .1s, transform .1s;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .rp-cat-btn:hover  { background: var(--hover-strong); transform: scale(1.15); }
 .rp-cat-btn.active { background: rgba(var(--accent-rgb),.25); }
@@ -171,7 +171,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .rp-emoji-btn {
   width: 38px; height: 38px; border-radius: 6px; font-size: 22px;
   display: flex; align-items: center; justify-content: center;
-  transition: background .1s, transform .12s;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .rp-emoji-btn:hover { background: var(--hover-strong); transform: scale(1.25); }
 .rp-emoji-btn:active { transform: scale(.9); }

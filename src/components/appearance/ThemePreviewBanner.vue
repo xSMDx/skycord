@@ -34,14 +34,14 @@ const { themePreview, keepPreview, revertPreview } = useAppearance()
 .tpb-text { font-size: 14px; color: var(--text-1); flex: 1; min-width: 0; }
 .tpb-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .tpb-btn {
-  padding: 8px 16px; border-radius: 7px; font-size: 14px; font-weight: 600;
-  cursor: pointer; transition: background .12s, transform .1s;
+  padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .tpb-btn.ghost { color: var(--text-2); background: rgba(128,132,142,.16); }
 .tpb-btn.ghost:hover { background: rgba(128,132,142,.28); color: var(--text-strong); }
 .tpb-btn.primary { color: var(--text-on-accent); background: var(--accent); }
 .tpb-btn.primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
 
-.tpb-slide-enter-active, .tpb-slide-leave-active { transition: opacity .2s, transform .2s; }
+.tpb-slide-enter-active, .tpb-slide-leave-active { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
 .tpb-slide-enter-from, .tpb-slide-leave-to { opacity: 0; transform: translate(-50%, 16px); }
 </style>

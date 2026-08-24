@@ -106,7 +106,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-close  {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ndm-close:hover { background: var(--hover); color: white; }
 
@@ -115,7 +115,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   margin: 16px 20px 0;
   background: rgba(0,0,0,.3); border: 1.5px solid rgba(255,255,255,.08);
   border-radius: 8px; padding: 8px 12px;
-  transition: border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .ndm-search:focus-within { border-color: var(--accent); }
 .ndm-search input { flex: 1; font-size: 14px; color: var(--text-1); background: none; border: none; outline: none; }
@@ -125,7 +125,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-item {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 12px; border-radius: 8px; cursor: pointer;
-  transition: background .1s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .ndm-item:hover { background: var(--hover); }
 .ndm-item.selected { background: rgba(var(--accent-rgb),.12); }
@@ -142,7 +142,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-checkbox {
   width: 20px; height: 20px; border-radius: 4px;
   border: 2px solid var(--text-3); display: flex; align-items: center; justify-content: center;
-  transition: background .12s, border-color .12s;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ndm-checkbox.checked { background: var(--accent); border-color: var(--accent); }
 .ndm-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 24px; }
@@ -155,13 +155,13 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   flex: 1; padding: 10px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-1);
   background: rgba(255,255,255,.06);
-  transition: background .12s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .ndm-cancel:hover { background: var(--hover-strong); }
 .ndm-create {
   flex: 2; padding: 10px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: white;
-  background: var(--accent); transition: background .12s, transform .1s;
+  background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .ndm-create:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
 .ndm-create:disabled { opacity: .5; cursor: not-allowed; }

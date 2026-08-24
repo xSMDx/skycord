@@ -9,11 +9,13 @@
  * an absolutely-positioned panel and renders it squashed inside the rail.
  */
 import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
+import { useDismissal } from '@/composables/useDismissal'
 import {
-  Pencil, ChevronRight, IdCard, Check,
+  Pencil, ChevronRight, IdCard, Check, UserRoundCog,
   MessageCircle, UserPlus, UserMinus, ExternalLink,
 } from 'lucide-vue-next'
 import ProfileCard from './ProfileCard.vue'
+import AnchoredPanel from '@/components/ui/AnchoredPanel.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { statusColor, chosenStatus } from '@/composables/usePresence'
@@ -30,8 +32,12 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   close: []; editProfile: []; setStatus: []; message: [user: Record<string, any>]
-  viewFull: [id: string]; toast: [msg: string]; setPresence: [status: string]
+  viewFull: [id: string]; toast: [msg: string]; setPresence: [status: string, minutes?: number]
 }>()
+
+// Two-step close so the leave transition is not destroyed by the parent
+// unmounting us on the same tick.
+const { shown, requestClose, onAfterLeave } = useDismissal(() => emit('close'))
 
 const { user: authUser } = useAuth()
 const { getUserProfile, sendFriendRequest, removeFriend } = useApi()
@@ -117,6 +123,35 @@ const PRESENCE = [
 ] as const
 const showPresence = ref(false)
 /**
+ * The duration list, one status at a time. Clicking a status row still sets
+ * it instantly and forever — the chevron is the ONLY thing that opens this,
+ * so the fast path stays one click and the timed path is a deliberate second
+ * one. Reset alongside showPresence so a reopened menu never starts with a
+ * stale submenu already unfolded.
+ */
+const openDurations = ref<string | null>(null)
+/** The chevron the duration panel is pinned to. */
+const durationAnchor = ref<HTMLElement | null>(null)
+const toggleDurations = (e: MouseEvent, id: string) => {
+  const open = openDurations.value === id
+  openDurations.value  = open ? null : id
+  durationAnchor.value = open ? null : (e.currentTarget as HTMLElement)
+}
+const DURATIONS = [
+  { label: 'For 15 Minutes', minutes: 15 },
+  { label: 'For 1 Hour',     minutes: 60 },
+  { label: 'For 8 Hours',    minutes: 480 },
+  { label: 'For 24 Hours',   minutes: 1440 },
+  { label: 'For 3 Days',     minutes: 4320 },
+  { label: 'Forever',        minutes: undefined },
+] as const
+const pick = (id: string, minutes?: number) => {
+  emit('setPresence', id, minutes)
+  showPresence.value   = false
+  openDurations.value  = null
+  durationAnchor.value = null
+}
+/**
  * Your CHOICE, not your effective status.
  *
  * These are different things and the difference is the whole point of the
@@ -132,7 +167,16 @@ const currentPresence = computed(() =>
   PRESENCE.find(p => p.id === chosenStatus.value) ?? PRESENCE[0])
 // Expanding the list changes the panel height, so it must be re-placed or it
 // grows off the bottom of the screen.
-const togglePresence = async () => { showPresence.value = !showPresence.value; await place() }
+const presenceAnchor = ref<HTMLElement | null>(null)
+const togglePresence = async (e?: MouseEvent) => {
+  const open = showPresence.value
+  showPresence.value   = !open
+  presenceAnchor.value = open ? null : ((e?.currentTarget as HTMLElement) ?? null)
+  // A reopened menu must not start with a stale duration list unfolded.
+  openDurations.value  = null
+  durationAnchor.value = null
+  await place()
+}
 
 const addFriend = async () => {
   if (busy.value) return
@@ -152,16 +196,22 @@ const copyId = () => {
   navigator.clipboard.writeText(props.userId)
     .then(() => emit('toast', 'User ID copied'))
     .catch(() => emit('toast', 'Couldn’t copy the User ID'))
-  emit('close')
+  requestClose()
 }
 
 const onDocDown = (e: PointerEvent) => {
   const t = e.target as Node
   if (panel.value?.contains(t)) return
   if (props.anchor?.contains(t)) return   // the anchor's own handler toggles us
-  emit('close')
+  // A panel this popout opened but teleported elsewhere — the duration list —
+  // is ours even though the DOM says it is outside us. Without this, the
+  // pointerdown that tries to pick a duration closes the popout first, the
+  // panel unmounts with it, and the click lands on nothing.
+  const el = t instanceof Element ? t : t.parentElement
+  if (el?.closest('[data-anchored-panel]')) return
+  requestClose()
 }
-const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose() }
 
 onMounted(() => {
   void place(); void load()
@@ -178,7 +228,9 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
+    <Transition name="pp" :duration="{ enter: 130, leave: 140 }" @after-leave="onAfterLeave">
     <div
+      v-if="shown"
       ref="panel" class="pp"
       :style="pos ? { left: pos.left + 'px', top: pos.top + 'px' } : { opacity: 0 }"
       role="dialog" :aria-label="isSelf ? 'Your profile' : 'Profile'"
@@ -208,25 +260,57 @@ onBeforeUnmount(() => {
               <Pencil :size="16" :stroke-width="2.25" /><span>Edit profile</span>
             </button>
 
-            <button class="pp-row" @click="togglePresence">
+            <button class="pp-row" @click="togglePresence($event)">
               <span class="pp-dot" :style="{ background: statusColor(currentPresence.id) }" />
               <span>{{ currentPresence.label }}</span>
-              <ChevronRight :size="13" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
+              <ChevronRight :size="14" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
             </button>
-            <div v-if="showPresence" class="pp-sub">
-              <button
-                v-for="p in PRESENCE" :key="p.id" class="pp-row sub"
-                @click="emit('setPresence', p.id); showPresence = false"
-              >
-                <span class="pp-dot" :style="{ background: statusColor(p.id) }" />
-                <span class="pp-presence-text">
-                  <span>{{ p.label }}</span>
-                  <span v-if="p.note" class="pp-presence-note">{{ p.note }}</span>
-                </span>
-                <Check v-if="p.id === chosenStatus" :size="14" :stroke-width="2.25" class="pp-chev" />
-                <ChevronRight v-else-if="p.chevron" :size="14" :stroke-width="2.25" class="pp-chev" />
-              </button>
-            </div>
+            <!-- Beside the popout, not inside it. The reference cascades: the
+                 popout opens a status panel, and a status opens a duration
+                 panel. Unfolded in place, four statuses with their
+                 descriptions doubled the popout's height and pushed the rows
+                 below them toward the bottom of the screen. -->
+            <AnchoredPanel v-if="showPresence" :anchor="presenceAnchor" placement="right"
+              :width="248" @close="showPresence = false">
+              <template v-for="p in PRESENCE" :key="p.id">
+                <div class="pp-splitrow">
+                  <!-- The row itself sets instantly, forever — unchanged. -->
+                  <button class="pp-row sub" @click="pick(p.id)">
+                    <span class="pp-dot" :style="{ background: statusColor(p.id) }" />
+                    <span class="pp-presence-text">
+                      <span>{{ p.label }}</span>
+                      <span v-if="p.note" class="pp-presence-note">{{ p.note }}</span>
+                    </span>
+                    <Check v-if="p.id === chosenStatus" :size="14" :stroke-width="2.25" class="pp-chev" />
+                  </button>
+                  <!-- Its own button, not an icon inside the row: a nested
+                       button is invalid HTML, and this one now has a job — it
+                       opens the duration list instead of setting anything. -->
+                  <button v-if="p.chevron" class="pp-chev-btn" :class="{ open: openDurations === p.id }"
+                    :aria-label="'Set ' + p.label + ' for a limited time'"
+                    @click.stop="toggleDurations($event, p.id)">
+                    <ChevronRight :size="14" :stroke-width="2.25" />
+                  </button>
+                </div>
+                <!-- Beside the chevron, not beneath it. Six durations
+                     unfolded inline pushed Copy user ID off the bottom of a
+                     popout already sitting near the screen edge, so choosing
+                     "For 3 Days" meant scrolling a menu. -->
+                <AnchoredPanel v-if="openDurations === p.id" :anchor="durationAnchor" placement="right"
+                  :width="190" @close="openDurations = null">
+                  <button v-for="d in DURATIONS" :key="d.label" class="pp-dur"
+                    @click="pick(p.id, d.minutes)">{{ d.label }}</button>
+                </AnchoredPanel>
+              </template>
+            </AnchoredPanel>
+
+            <!-- Deliberately inert. The reference has it, and leaving the row
+                 out entirely reads as "this app cannot do that" rather than
+                 "not yet" — so it is shown, disabled, and says so on hover. -->
+            <button class="pp-row" disabled v-tip="'TBD'">
+              <UserRoundCog :size="16" :stroke-width="2.25" /><span>Switch Accounts</span>
+              <ChevronRight :size="14" :stroke-width="2.25" class="pp-chev" />
+            </button>
 
             <button class="pp-row" @click="copyId">
               <IdCard :size="16" :stroke-width="2.25" /><span>Copy user ID</span>
@@ -258,6 +342,7 @@ onBeforeUnmount(() => {
         </template>
       </ProfileCard>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -269,9 +354,20 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   position: fixed; z-index: 1200; width: 300px;
   border-radius: 10px; overflow: hidden;
   box-shadow: 0 18px 50px rgba(0,0,0,.7);
-  animation: pp-in .13s cubic-bezier(.4,0,.2,1);
+  animation: pp-in var(--dur-1) var(--ease-out);
+  /* Opens out of the avatar that spawned it, not out of its own middle. */
+  transform-origin: top left;
 }
 @keyframes pp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* Same path back out. `animation: none` is load-bearing — an animation beats
+   a transition on the same property, so the entrance keyframes would pin
+   opacity and transform and the leave would never move. */
+.pp-leave-active {
+  animation: none;
+  transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in);
+}
+.pp-leave-to { opacity: 0; transform: translateY(6px); }
+
 @media (prefers-reduced-motion: reduce) { .pp { animation: none; } }
 
 .pp :deep(.pc) { width: 100%; box-shadow: none; border-radius: 0; }
@@ -282,9 +378,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; flex-direction: column; gap: 2px;
 }
 .pp-row {
-  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
-  padding: 9px 10px; border-radius: 6px; font-size: 14px; color: var(--text-1);
-  transition: background .1s;
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 8px 10px; border-radius: 6px; font-size: 14px; color: var(--text-1);
+  transition: background var(--dur-1) var(--ease-out);
 }
 .pp-row:hover:not(:disabled) { background: var(--hover-strong); }
 .pp-row:disabled { opacity: .5; cursor: not-allowed; }
@@ -295,13 +391,28 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    and the dot pins to the first line. */
 .pp-presence-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .pp-presence-note { font-size: 11.5px; line-height: 1.3; color: var(--text-faint); white-space: normal; }
-.pp-row.sub .pp-dot { margin-top: 5px; }
+.pp-row.sub .pp-dot { margin-top: 6px; }
 .pp-row.danger { color: #f0716f; }
 .pp-row.danger svg { color: #f0716f; }
+/* A status row and the chevron that bounds it in time. The row keeps its
+   full-width hover; the chevron is a sibling so both stay valid buttons. */
+.pp-splitrow { display: flex; align-items: stretch; }
+.pp-splitrow .pp-row { flex: 1; min-width: 0; }
+.pp-chev-btn { flex: none; display: flex; align-items: center; padding: 0 8px; background: none; border: none; cursor: pointer; color: var(--text-2); border-radius: 4px; }
+.pp-chev-btn:hover { background: var(--hover-strong); }
+.pp-chev-btn svg { transition: transform var(--dur-2) var(--ease-out); }
+.pp-chev-btn.open svg { transform: rotate(90deg); }
+.pp-dur {
+  display: block; width: 100%; padding: 8px 10px; border-radius: 4px;
+  background: none; border: none; cursor: pointer;
+  font-size: 13.5px; color: var(--text-2); text-align: left;
+}
+.pp-dur:hover { background: var(--hover-strong); color: var(--text-1); }
+@media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition:none; } }
 .pp-row.danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
-.pp-chev { margin-left: auto; color: var(--text-3); transition: transform .14s; }
+.pp-chev { margin-left: auto; color: var(--text-3); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }
-.pp-note { font-size: 12.5px; color: var(--text-3); padding: 9px 10px; background: var(--hover); border-radius: 6px; }
+.pp-note { font-size: 12.5px; color: var(--text-3); padding: 8px 10px; background: var(--hover); border-radius: 6px; }
 </style>

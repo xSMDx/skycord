@@ -366,7 +366,38 @@ const onBioInput = (e: Event) => {
 }
 
 interface NavSection { label: string; items: NavItem[] }
-interface NavItem    { id: string; label: string; icon?: any }
+/**
+ * `soon` marks a section whose page is still the WIP placeholder. Seven of the
+ * eleven are, and finding that out by clicking each one in turn is the worst
+ * way to learn it -- you go looking for a setting, navigate away from what you
+ * were doing, and land on a traffic cone. The badge moves that answer into the
+ * nav, where it costs one glance instead of seven clicks.
+ */
+interface NavItem    { id: string; label: string; icon?: any; soon?: boolean }
+
+/**
+ * The shortcuts the app actually listens for.
+ *
+ * Read-only, and this page says so. Rebinding needs stored bindings, a
+ * capture control and conflict detection; listing what exists is the honest
+ * half and the useful one — until now the app had four working shortcuts and
+ * nowhere that admitted it, which is barely better than not having them.
+ *
+ * Kept beside useShortcuts by convention only. If a binding changes there
+ * and not here this page starts lying, so they are cross-referenced in both
+ * directions.
+ */
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+const MOD = IS_MAC ? 'Cmd' : 'Ctrl'
+
+const KEYBINDS: { keys: string[]; label: string }[] = [
+  { keys: [MOD, 'K'],           label: 'Quick switcher' },
+  { keys: [MOD, 'Shift', 'M'],  label: 'Toggle mute' },
+  { keys: [MOD, 'Shift', 'D'],  label: 'Toggle deafen' },
+  { keys: ['Alt', '↑'],         label: 'Previous channel' },
+  { keys: ['Alt', '↓'],         label: 'Next channel' },
+  { keys: ['Esc'],              label: 'Close what is open' },
+]
 
 const navSections: NavSection[] = [
   {
@@ -374,11 +405,11 @@ const navSections: NavSection[] = [
     items: [
       { id: 'account',         label: 'Account'           },
       { id: 'profile',         label: 'Profile'           },
-      { id: 'content-social',  label: 'Content & Social'  },
-      { id: 'data-privacy',    label: 'Data & Privacy'    },
-      { id: 'authorized-apps', label: 'Authorized Apps'   },
-      { id: 'connections',     label: 'Connections'       },
-      { id: 'notifs',          label: 'Notifications'     },
+      { id: 'content-social',  label: 'Content & Social', soon: true },
+      { id: 'data-privacy',    label: 'Data & Privacy', soon: true },
+      { id: 'authorized-apps', label: 'Authorized Apps', soon: true },
+      { id: 'connections',     label: 'Connections', soon: true },
+      { id: 'notifs',          label: 'Notifications', soon: true },
     ]
   },
   {
@@ -386,8 +417,8 @@ const navSections: NavSection[] = [
     items: [
       { id: 'appearance', label: 'Appearance'       },
       { id: 'voice',      label: 'Voice & Video'    },
-      { id: 'keybinds',   label: 'Keybinds'         },
-      { id: 'language',   label: 'Language & Time'  },
+      { id: 'keybinds',   label: 'Keybinds' },
+      { id: 'language',   label: 'Language & Time', soon: true },
     ]
   },
 ]
@@ -490,10 +521,12 @@ const handleLogout = () => { emit('close'); logout() }
             <template v-for="item in section.items" :key="item.id">
               <button
                 class="sm-nav-item"
-                :class="{ active: page === item.id }"
+                :class="{ active: page === item.id, soon: item.soon }"
+                :aria-label="item.soon ? item.label + ' — coming soon' : undefined"
                 @click="selectPage(item.id)"
               >
                 {{ item.label }}
+                <span v-if="item.soon" class="sm-soon">Soon</span>
                 <!-- A chevron says "this pushes a screen". Without it a phone
                      user can't tell a list row from a toggle. -->
                 <ChevronRight v-if="isMobile" class="sm-nav-chev" :size="14" :stroke-width="2.25" />
@@ -923,6 +956,25 @@ const handleLogout = () => { emit('close'); logout() }
             <VoiceVideoSettings />
           </template>
 
+          <!-- ── Keybinds ── -->
+          <template v-else-if="page === 'keybinds'">
+            <p class="kb-note">
+              These are fixed for now — customising them is not built yet.
+              They match Discord's, so anything you already have in your hands
+              should work here.
+            </p>
+            <div class="kb-list">
+              <div v-for="k in KEYBINDS" :key="k.label" class="kb-row">
+                <span class="kb-label">{{ k.label }}</span>
+                <span class="kb-keys">
+                  <template v-for="(key, i) in k.keys" :key="key">
+                    <kbd class="kb-key">{{ key }}</kbd><span v-if="i < k.keys.length - 1" class="kb-plus">+</span>
+                  </template>
+                </span>
+              </div>
+            </div>
+          </template>
+
           <!-- ── WIP pages ── -->
           <template v-else>
             <div class="wip-page">
@@ -1068,6 +1120,25 @@ const handleLogout = () => { emit('close'); logout() }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img    { display: block; object-fit: cover; }
 
+/* ── Keybinds ── */
+.kb-note { font-size: 13.5px; color: var(--text-3); line-height: 1.5; margin-bottom: 20px; max-width: 52ch; }
+.kb-list { display: flex; flex-direction: column; }
+.kb-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.kb-row:last-child { border-bottom: none; }
+.kb-label { font-size: 14px; color: var(--text-1); }
+.kb-keys  { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.kb-key {
+  font-family: var(--font-ui); font-size: 12px; font-weight: 600; line-height: 1;
+  color: var(--text-1); background: var(--bg-input);
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-bottom-width: 2px;
+  border-radius: var(--edge-sm); padding: 6px 8px; min-width: 24px; text-align: center;
+}
+.kb-plus { font-size: 11px; color: var(--text-faint); }
+
 /* ── Profile page ── */
 .pf-sub { font-size: 13.5px; color: var(--text-3); margin: -6px 0 20px; }
 .pf-err {
@@ -1078,7 +1149,7 @@ img    { display: block; object-fit: cover; }
 .pf-rail { width: 240px; flex: none; display: flex; flex-direction: column; gap: 22px; }
 .pf-cardcol { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 18px; }
 .pf-field { display: flex; flex-direction: column; }
-.pf-field .acc-row-label { margin-bottom: 9px; }
+.pf-field .acc-row-label { margin-bottom: 8px; }
 
 .pf-avrow { display: flex; align-items: center; gap: 12px; }
 .pf-av { flex: none; }   /* size and shape come from Avatar, which also clips */
@@ -1096,13 +1167,13 @@ img    { display: block; object-fit: cover; }
   /* 16:5, matching .pc-banner and the crop window. A preview in a different
      shape is not a preview. */
   width: 100%; aspect-ratio: 16 / 5; border-radius: 8px; cursor: pointer;
-  border: 1px solid rgba(0,0,0,.35); transition: filter .12s;
+  border: 1px solid rgba(0,0,0,.35); transition: filter var(--dur-1) var(--ease-out);
 }
 .pf-bnbox:hover { filter: brightness(1.25); }
 .pf-bnbox { position: relative; overflow: hidden; padding: 0; }
 .pf-bnimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.pf-bnbtns { margin-top: 9px; }
-.pf-hex { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 7px; }
+.pf-bnbtns { margin-top: 8px; }
+.pf-hex { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 8px; }
 /* The backdrop is a sibling of the panel, not a wrapper — a full-screen layer
    ABOVE the panel would swallow the very clicks the picker needs. */
 .pf-pop-backdrop { position: fixed; inset: 0; z-index: 40; }
@@ -1120,11 +1191,11 @@ img    { display: block; object-fit: cover; }
 .pf-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .pf-textarea {
   width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
-  border-radius: 5px; padding: 10px 12px; color: var(--text-1);
+  border-radius: 6px; padding: 10px 12px; color: var(--text-1);
   font: inherit; font-size: 14.5px; line-height: 1.5; resize: vertical; min-height: 74px;
 }
 .pf-textarea:focus { outline: none; border-color: var(--accent); }
-.pf-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.pf-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 6px; font-variant-numeric: tabular-nums; }
 
 .pf-menu-backdrop { position: fixed; inset: 0; z-index: 1400; }
 .pf-menu {
@@ -1133,7 +1204,7 @@ img    { display: block; object-fit: cover; }
   box-shadow: 0 12px 34px rgba(0,0,0,.6);
 }
 .pf-menu button {
-  display: block; width: 100%; text-align: left; padding: 9px 11px;
+  display: block; width: 100%; text-align: left; padding: 8px 12px;
   border-radius: 4px; font-size: 14px; color: var(--text-2);
 }
 .pf-menu button:hover:not(:disabled) { background: var(--accent); color: #fff; }
@@ -1171,13 +1242,24 @@ img    { display: block; object-fit: cover; }
 }
 .sm-nav-item {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; text-align: left; padding: 10px 12px; border-radius: 7px;
-  font-size: 16px; color: var(--text-2); transition: background .12s, color .12s;
+  width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
+  font-size: 16px; color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .sm-nav-item:hover { background: var(--hover); color: var(--text-strong); }
 .sm-nav-item.active { background: rgba(var(--accent-rgb),.2); color: var(--text-strong); }
 .sm-nav-item.danger { color: #ed4245; margin-top: 4px; }
 .sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
+/* Reads as a quiet annotation on the row, not an alert. The row itself dims
+   slightly so the eye skips the unfinished sections when scanning. */
+.sm-nav-item.soon { color: var(--text-3); }
+.sm-nav-item.soon.active { color: var(--text-1); }
+.sm-soon {
+  margin-left: auto;
+  font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  padding: 1px 6px; border-radius: 999px;
+  background: rgba(255, 255, 255, .07); color: var(--text-3);
+}
+.sm-nav-item.active .sm-soon { background: rgba(255, 255, 255, .16); }
 .sm-nav-divider { height: 1px; background: rgba(255,255,255,.07); margin: 8px 10px; }
 
 /* In-page sub-nav — a continuous vertical rail (like Discord) with the active
@@ -1190,7 +1272,7 @@ img    { display: block; object-fit: cover; }
 .sm-nav-subitem {
   display: block; width: 100%; text-align: left;
   padding: 8px 12px 8px 14px; border-radius: 0 6px 6px 0;
-  font-size: 14.5px; color: var(--text-3); transition: background .12s, color .12s;
+  font-size: 14.5px; color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
   /* Active indicator sits ON the subnav rail via a real border (margin pulls it
      over the container's border-left) — no absolutely-positioned pseudo that
      can detach or mis-size against the rail. */
@@ -1206,7 +1288,7 @@ img    { display: block; object-fit: cover; }
 .sm-close {
   position: absolute; top: 16px; right: 16px;
   display: flex; align-items: center; gap: 6px; color: var(--text-3);
-  transition: color .12s;
+  transition: color var(--dur-1) var(--ease-out);
 }
 .sm-close:hover { color: var(--text-strong); }
 
@@ -1243,8 +1325,8 @@ img    { display: block; object-fit: cover; }
 .acc-row-value { font-size: 16px; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
 .acc-row-value.muted { color: var(--text-3); }
 .acc-btn {
-  padding: 9px 20px; border-radius: 6px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
-  background: rgba(255,255,255,.08); white-space: nowrap; transition: background .12s, transform .1s;
+  padding: 8px 20px; border-radius: 6px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
+  background: rgba(255,255,255,.08); white-space: nowrap; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .acc-btn:hover { background: var(--hover-strong); transform: translateY(-1px); }
 .acc-btn:disabled { opacity: .6; cursor: not-allowed; }
@@ -1253,7 +1335,7 @@ img    { display: block; object-fit: cover; }
 .acc-row.soon { opacity: .5; }
 .acc-row.soon .acc-btn { cursor: not-allowed; }
 
-.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background .12s; }
+.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out); }
 .acc-btn-arrow:hover { background: var(--hover); color: white; }
 .acc-divider { height: 1px; background: rgba(255,255,255,.06); margin: 0 20px; }
 .reveal-btn { font-size: 12px; color: var(--accent); font-weight: 600; }
@@ -1268,7 +1350,7 @@ img    { display: block; object-fit: cover; }
 .ap-swatch {
   width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  border: 2px solid transparent; transition: transform .1s, border-color .12s;
+  border: 2px solid transparent; transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ap-swatch:hover { transform: scale(1.08); }
 .ap-swatch.active { border-color: var(--text-strong); }
@@ -1277,7 +1359,7 @@ img    { display: block; object-fit: cover; }
   border: 2px solid transparent;
   display: flex; align-items: center; justify-content: center;
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
-  transition: transform .1s, border-color .12s;
+  transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ap-custom:hover { transform: scale(1.08); }
 .ap-custom.active { border-color: var(--text-strong); }
@@ -1288,7 +1370,7 @@ img    { display: block; object-fit: cover; }
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 10px; border-radius: 10px; cursor: pointer;
   border: 2px solid rgba(255,255,255,.08); background: var(--bg-panel);
-  transition: border-color .12s; min-width: 96px;
+  transition: border-color var(--dur-1) var(--ease-out); min-width: 96px;
   font-size: 13px; font-weight: 600; color: var(--text-1);
 }
 .ap-card.active { border-color: var(--accent); }
@@ -1310,7 +1392,7 @@ img    { display: block; object-fit: cover; }
 .ap-prev-name { font-weight: 600; color: var(--text-strong); }
 .ap-prev-time { font-size: 11px; color: var(--text-faint); }
 .ap-prev-text { display: block; color: var(--text-1); line-height: 1.4; }
-.ap-prev-text code { background: var(--bg-input); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+.ap-prev-text code { background: var(--bg-input); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
 
 /* Compact: single line — [time] Name text, no avatar */
 .ap-preview.prev-compact .ap-prev-msg { align-items: baseline; gap: 8px; margin-top: 4px !important; padding: 1px 0; }
@@ -1353,7 +1435,7 @@ img    { display: block; object-fit: cover; }
 .ap-slider::-moz-range-track { height: 6px; background: transparent; border-radius: 999px; }
 .ap-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 16px; height: 16px; margin-top: -5px; border-radius: 50%;
+  width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
   background: var(--accent); border: 2px solid var(--bg-panel); box-shadow: 0 1px 3px rgba(0,0,0,.4);
 }
 .ap-slider::-moz-range-thumb {
@@ -1363,7 +1445,7 @@ img    { display: block; object-fit: cover; }
 .ap-stepwrap { max-width: 420px; margin-bottom: 16px; }
 .ap-stepwrap .ap-slider { margin-bottom: 0; }
 .ap-ticks { display: flex; justify-content: space-between; margin-top: 6px; }
-.ap-ticks span { font-size: 10px; color: var(--text-faint); transition: color .12s; }
+.ap-ticks span { font-size: 10px; color: var(--text-faint); transition: color var(--dur-1) var(--ease-out); }
 .ap-ticks span.on { color: var(--accent); font-weight: 700; }
 .ap-ticks-zoom span { font-size: 9px; }
 
@@ -1385,14 +1467,14 @@ img    { display: block; object-fit: cover; }
 .ap-share-err { font-size: 12px; color: #f08080; margin: 6px 0 2px; }
 .ap-name-input {
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
-  padding: 9px 12px; color: var(--text-1); font-size: 14px; min-width: 180px;
+  padding: 8px 12px; color: var(--text-1); font-size: 14px; min-width: 180px;
 }
 .ap-name-input:focus { outline: none; border-color: var(--accent); }
 
 /* Toggle */
-.ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: rgba(128,132,142,.5); position: relative; transition: background .15s; flex-shrink: 0; }
+.ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: rgba(128,132,142,.5); position: relative; transition: background var(--dur-2) var(--ease-out); flex-shrink: 0; }
 .ap-toggle.on { background: var(--accent); }
-.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
 .ap-toggle.on span { transform: translateX(18px); }
 
 .wip-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--text-faint); text-align: center; }
@@ -1418,7 +1500,7 @@ img    { display: block; object-fit: cover; }
 .sm-modal.mobile .sm-content {
   position: absolute; inset: 0;
   width: 100%; padding-left: 0; padding-right: 0;
-  transition: transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
 }
 .sm-modal.mobile .sm-nav     { padding-top: 0; z-index: 1; }
 /* Explicit background is required, not decorative. Side by side these panes sat
@@ -1437,7 +1519,7 @@ img    { display: block; object-fit: cover; }
 /* Nav rows become list rows: full-bleed, 48px tall, chevron pushed right. */
 /* flex-start + gap, NOT space-between: rows like "Log Out" have an icon next to
    their label, and space-between flings the two to opposite edges. The chevron
-   is pushed right by its own margin-left:auto, which is all that was needed. */
+   is pushed right by its own margin-left: auto, which is all that was needed. */
 .sm-modal.mobile .sm-nav-item {
   display: flex; align-items: center; justify-content: flex-start; gap: 10px;
   min-height: 48px; padding: 12px 16px; border-radius: 0; font-size: 15px;
@@ -1448,6 +1530,10 @@ img    { display: block; object-fit: cover; }
    permanently-lit row just looks like a stuck selection. */
 .sm-modal.mobile .sm-nav-item.active { background: transparent; color: var(--text-1); }
 .sm-nav-chev { color: var(--text-3); flex-shrink: 0; margin-left: auto; }
+/* Two auto margins on one row split the slack between them, which left the
+   badges at a different x on every row. With a badge present the badge owns
+   the slack and the chevron just follows it. */
+.sm-soon + .sm-nav-chev { margin-left: 8px; }
 .sm-modal.mobile .sm-nav-label { padding-left: 16px; }
 .sm-modal.mobile .sm-nav-divider { margin: 8px 0; }
 /* The in-page sub-nav duplicates headings that are already in the scrolling
@@ -1487,7 +1573,7 @@ img    { display: block; object-fit: cover; }
 
 @media (prefers-reduced-motion: reduce) {
   .sm-modal.mobile .sm-nav,
-  .sm-modal.mobile .sm-content { transition: opacity .2s ease; }
+  .sm-modal.mobile .sm-content { transition: opacity var(--dur-3) var(--ease-out); }
 }
 
 .sm-content::-webkit-scrollbar, .sm-nav::-webkit-scrollbar { width: 4px; }

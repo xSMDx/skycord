@@ -151,6 +151,6 @@ onMounted(async () => {
 }
 
 /* Fade out when splash is done */
-.splash-fade-leave-active { transition: opacity .4s ease; }
+.splash-fade-leave-active { transition: opacity var(--dur-4) var(--ease-out); }
 .splash-fade-leave-to     { opacity: 0; }
 </style>

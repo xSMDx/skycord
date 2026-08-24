@@ -102,7 +102,7 @@ const join = async () => {
 
 .ic-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ic-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
+.ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;
   border-radius: 50%; background: #23a55a; flex-shrink: 0;
@@ -112,7 +112,7 @@ const join = async () => {
   padding: 8px 16px; border-radius: 6px; border: none;
   font-size: 14px; font-weight: 600; cursor: pointer;
   background: var(--accent); color: var(--text-on-accent);
-  transition: background .12s, opacity .12s;
+  transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
   flex-shrink: 0;
 }
 .ic-btn:hover:not(:disabled) { background: var(--accent-hover); }

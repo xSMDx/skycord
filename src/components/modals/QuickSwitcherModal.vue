@@ -178,7 +178,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .qs-item {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 16px; cursor: pointer;
-  transition: background .08s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .qs-item:hover { background: var(--hover); }
 .qs-item:hover .qs-arrow { opacity: 1; }
@@ -189,7 +189,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .qs-info { flex: 1; min-width: 0; }
 .qs-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qs-sub  { display: block; font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qs-arrow { color: var(--text-faint); opacity: 0; transition: opacity .1s; flex-shrink: 0; }
+.qs-arrow { color: var(--text-faint); opacity: 0; transition: opacity var(--dur-1) var(--ease-out); flex-shrink: 0; }
 
 .qs-tip { padding: 10px 16px 12px; font-size: 12px; color: var(--text-faint); }
 .qs-tip-label { color: var(--accent); font-weight: 700; }

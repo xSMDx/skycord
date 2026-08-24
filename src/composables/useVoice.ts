@@ -14,12 +14,12 @@ import { holdPresence } from './usePresence'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import {
-  emitCallJoin, emitCallLeave,
+  emitCallJoin, emitCallLeave, getSocket,
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
 import { voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded } from './useVoiceSettings'
-import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia } from './useVoiceMedia'
+import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia, media } from './useVoiceMedia'
 import { resetRtcStats } from './useRtcStats'
 
 export interface VoiceParticipant {
@@ -188,6 +188,29 @@ const stopLocalLevel = () => {
  * for the rest of the session.
  */
 watch(() => voice.connected, held => holdPresence(held), { immediate: true })
+
+/**
+ * Tell the server what we are doing in the call, so everyone else can see it.
+ *
+ * Mute, deafen and screen-share are all invisible to other clients from where
+ * they sit: LiveKit only reports on the room you are personally connected to,
+ * and deafening publishes nothing at all because it is a decision about
+ * playback. The sidebar has to show these for every voice channel in the
+ * server, so the facts go to the server and come back with the occupancy.
+ *
+ * Only while connected. The server ignores state from someone not in a call,
+ * and emitting on the way out would be a payload that describes nothing.
+ * Reconnecting re-sends, because the socket that held it is gone; the server
+ * drops a duplicate rather than fanning it out again.
+ */
+watch(
+  () => [voice.connected, voice.localMuted, voice.localDeafened, media.localScreenOn] as const,
+  ([connected, muted, deafened, sharing]) => {
+    if (!connected) return
+    getSocket()?.emit('voice:state', { muted, deafened, sharing })
+  },
+  { immediate: true },
+)
 export const voiceRoomName = (kind: 'dm' | 'group' | 'channel', convId: string, myId: string) =>
   kind === 'channel' ? `voice:${convId}`
   : kind === 'group' ? `group:${convId}`

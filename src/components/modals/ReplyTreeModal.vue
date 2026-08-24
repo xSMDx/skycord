@@ -140,9 +140,9 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
             <p>Every branch of replies that led to this point</p>
           </div>
           <div class="rt-header-actions">
-            <button class="rt-zoom-btn" @click="zoomOut" v-tip="'Zoom out'"><ZoomOut :size="15" :stroke-width="1.5" /></button>
+            <button class="rt-zoom-btn" @click="zoomOut" v-tip="'Zoom out'"><ZoomOut :size="16" :stroke-width="1.5" /></button>
             <button class="rt-zoom-btn" @click="zoomReset" v-tip="'Reset zoom'"><Expand :size="14" :stroke-width="1.5" /></button>
-            <button class="rt-zoom-btn" @click="zoomIn" v-tip="'Zoom in'"><ZoomIn :size="15" :stroke-width="1.5" /></button>
+            <button class="rt-zoom-btn" @click="zoomIn" v-tip="'Zoom in'"><ZoomIn :size="16" :stroke-width="1.5" /></button>
             <button class="rt-close" @click="emit('close')"><X :size="18" :stroke-width="1.5" /></button>
           </div>
         </div>
@@ -228,13 +228,13 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-zoom-btn {
   width: 28px; height: 28px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .rt-zoom-btn:hover { background: var(--hover-strong); color: var(--text-strong); }
 .rt-close {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s; margin-left: 6px;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); margin-left: 6px;
 }
 .rt-close:hover { background: var(--hover-strong); color: var(--text-strong); }
 
@@ -253,7 +253,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 /* The scaled canvas holding both the SVG connector layer and the cards */
 .rt-canvas-wrap { min-width: 100%; min-height: 100%; }
-.rt-canvas { position: relative; transition: transform .15s ease; }
+.rt-canvas { position: relative; transition: transform var(--dur-2) var(--ease-out); }
 
 .rt-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 .rt-edge {
@@ -265,12 +265,12 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-card {
   position: absolute;
   width: 200px;
-  padding: 9px 12px;
-  border-radius: 9px;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: var(--bg-raised);
   border: 1px solid rgba(255,255,255,.06);
   cursor: pointer;
-  transition: background .12s, border-color .12s, transform .1s;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .rt-card:hover { background: #25272c; border-color: rgba(255,255,255,.14); transform: translateY(-1px); }
 .rt-card.own { background: rgba(var(--accent-rgb),.1); border-color: rgba(var(--accent-rgb),.25); }
@@ -280,7 +280,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   box-shadow: 0 0 0 1px rgba(var(--accent-rgb),.3), 0 4px 16px rgba(var(--accent-rgb),.2);
 }
 
-.rt-card-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
+.rt-card-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
 .rt-card-author { font-size: 12.5px; font-weight: 700; color: var(--text-strong); }
 .rt-card-time   { font-size: 10.5px; color: var(--text-faint); }
 .rt-card-content {
@@ -299,24 +299,24 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .rt-ctx-item {
   display: block; width: 100%; text-align: left;
-  padding: 8px 10px; border-radius: 5px;
+  padding: 8px 10px; border-radius: 6px;
   font-size: 13.5px; font-weight: 500; color: var(--text-2);
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .rt-ctx-item:hover { background: var(--accent); color: var(--text-on-accent); }
 .rt-card-badge {
-  display: inline-block; margin-top: 5px;
+  display: inline-block; margin-top: 6px;
   font-size: 9.5px; font-weight: 700; color: #8d96f8;
   background: rgba(var(--accent-rgb),.18); padding: 1px 6px; border-radius: 4px;
   letter-spacing: .3px; text-transform: uppercase;
 }
 
 .rt-footer {
-  padding: 9px 18px; border-top: 1px solid rgba(255,255,255,.06);
+  padding: 8px 18px; border-top: 1px solid rgba(255,255,255,.06);
   font-size: 11.5px; color: var(--text-faint); text-align: center; flex-shrink: 0;
 }
 
 .rt-body::-webkit-scrollbar { height: 6px; width: 6px; }
 .rt-body::-webkit-scrollbar-track { background: transparent; }
-.rt-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+.rt-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
 </style>

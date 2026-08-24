@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
 import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 
@@ -13,10 +12,10 @@ defineProps<{
 
 const emit = defineEmits<{ close: []; done: [] }>()
 
-// Escape closes the modal, matching every other modal in the app
-const onKeydown = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+// Escape is ModalBase's job now -- it owns the focus trap, so focus is always
+// inside the dialog and a bubbling handler always sees the key. This listener
+// was on window, which also fired for modals that were merely mounted, and
+// ModalBase stops the event before it gets there anyway.
 </script>
 
 <template>
@@ -63,7 +62,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .efm-x {
   color: var(--text-3); width: 28px; height: 28px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s; flex-shrink: 0;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); flex-shrink: 0;
 }
 .efm-x:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -74,8 +73,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   padding: 20px; margin-top: 4px;
 }
 .efm-btn {
-  padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-strong);
-  background: transparent; transition: background .12s, transform .1s;
+  padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-strong);
+  background: transparent; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .efm-btn:hover { background: var(--hover); }
 .efm-btn.primary { background: var(--accent); color: var(--text-on-accent); }
@@ -87,8 +86,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 :deep(.efm-field-label) { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-2); margin-bottom: 6px; display: block; }
 :deep(.efm-input) {
   width: 100%; background: var(--bg-input); border: 1px solid transparent; border-radius: 4px;
-  padding: 9px 10px; font-size: 14px; color: var(--text-strong); outline: none;
-  font-family: inherit; transition: border-color .12s;
+  padding: 8px 10px; font-size: 14px; color: var(--text-strong); outline: none;
+  font-family: inherit; transition: border-color var(--dur-1) var(--ease-out);
 }
 :deep(.efm-input:focus) { border-color: var(--accent); }
 :deep(.efm-hint) { font-size: 12px; color: var(--text-3); margin-top: 4px; }

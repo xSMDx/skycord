@@ -69,6 +69,29 @@ export const setAway = (userId: string, isAway: boolean): void => {
 export const isAway = (userId: string): boolean => away.has(userId)
 
 /**
+ * The chosen status, once the clock has been consulted.
+ *
+ * Expiry is applied on READ, with no sweeper — the same rule ICustomStatus
+ * already follows via liveStatus(), and for the same reason: a sweeper is a
+ * second source of truth that is wrong for the length of its own interval.
+ *
+ * An expired status hands the user back to 'online', not to offline and not
+ * to nothing. They are still here; they just stopped being busy.
+ *
+ * `until` is deliberately wide. A hydrated document gives a Date, `.lean()`
+ * gives a Date or `undefined` (a Mongoose default does not reach rows that
+ * already existed), and anything that has been through JSON gives a string.
+ */
+export const chosenNow = (
+  chosen: string | null | undefined,
+  until:  Date | string | null | undefined,
+): ChosenStatus => {
+  const c: ChosenStatus = isChosenStatus(chosen) ? chosen : 'online'
+  if (!until) return c
+  return new Date(until).getTime() <= Date.now() ? 'online' : c
+}
+
+/**
  * What everyone else sees. The ONLY status that should ever be broadcast or
  * serialised for a third party.
  *
@@ -76,9 +99,17 @@ export const isAway = (userId: string): boolean => away.has(userId)
  * walked away still means Do Not Disturb — silently demoting that to Idle
  * would tell their friends it's fine to ping them.
  */
-export const effectiveStatus = (chosen: string | null | undefined, userId: string): EffectiveStatus => {
+export const effectiveStatus = (
+  chosen: string | null | undefined,
+  userId: string,
+  until:  Date | string | null | undefined,
+): EffectiveStatus => {
   if (!isOnline(userId)) return 'offline'
-  const c: ChosenStatus = isChosenStatus(chosen) ? chosen : 'online'
+  // Required rather than optional on purpose. An optional parameter lets a
+  // call site that was never updated keep reporting an expired status
+  // indefinitely, and say nothing about it; a required one is a compile error
+  // at every site that has not been considered.
+  const c = chosenNow(chosen, until)
   if (c === 'invisible') return 'offline'
   if (c === 'online' && isAway(userId)) return 'idle'
   return c

@@ -79,8 +79,8 @@ const lossPct = computed(() => outLossPct())
             <ArrowDownToLine :size="14" :stroke-width="2" /> Inbound
           </button>
           <div class="dbg-navfoot">
-            <button class="dbg-act" @click="copy"><Copy :size="13" :stroke-width="2" /> Copy</button>
-            <button class="dbg-act" @click="download"><Download :size="13" :stroke-width="2" /> Save</button>
+            <button class="dbg-act" @click="copy"><Copy :size="14" :stroke-width="2" /> Copy</button>
+            <button class="dbg-act" @click="download"><Download :size="14" :stroke-width="2" /> Save</button>
           </div>
         </aside>
 
@@ -193,7 +193,7 @@ const lossPct = computed(() => outLossPct())
   position: absolute; top: 12px; right: 12px; z-index: 2;
   width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
   background: transparent; color: var(--text-3);
-  display: flex; align-items: center; justify-content: center; transition: background .12s, color .12s;
+  display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .dbg-x:hover { background: var(--hover); color: var(--text-1); }
 
@@ -212,19 +212,19 @@ const lossPct = computed(() => outLossPct())
 }
 .dbg-nav > button {
   display: flex; align-items: center; gap: 8px;
-  padding: 7px 8px; border: none; border-radius: 6px; cursor: pointer;
+  padding: 8px 8px; border: none; border-radius: 6px; cursor: pointer;
   background: transparent; color: var(--text-2); font-size: 13px; text-align: left;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .dbg-nav > button:hover { background: var(--hover); color: var(--text-1); }
 .dbg-nav > button.on { background: var(--active, rgba(255,255,255,.09)); color: var(--text-1); font-weight: 600; }
 
 .dbg-navfoot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
 .dbg-act {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 7px 6px; border: none; border-radius: 6px; cursor: pointer;
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 6px; border: none; border-radius: 6px; cursor: pointer;
   background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .dbg-act:hover { background: rgba(255,255,255,.12); color: var(--text-1); }
 .dbg-act:active { transform: scale(.97); }

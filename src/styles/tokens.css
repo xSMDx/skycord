@@ -10,6 +10,7 @@
   /* Accent */
   --accent:        #5865f2;
   --accent-hover:  #4752c4;
+  --accent-deep:   #3f49ae;  /* accent text on an accent tint, light themes */
   --accent-rgb:    88, 101, 242;
 
   /* Surfaces (dark default) */
@@ -27,7 +28,7 @@
   --text-1:         #dcddde;  /* normal body */
   --text-2:         #b5bac1;  /* secondary */
   --text-3:         #949ba4;  /* muted / labels */
-  --text-faint:     #6d717a;  /* faint / placeholders */
+  --text-faint:     #999ca2;  /* faint / placeholders — 4.58:1 on chat, 4.99 on panel */
   --text-on-accent: #ffffff;  /* text sitting on the accent colour — stays light in every theme */
 
   /* Borders */
@@ -54,6 +55,10 @@
   --mention-bg:      rgba(var(--accent-rgb), .18);
   --mention-all-fg:  var(--text-strong);
   --mention-all-bg:  rgba(240, 178, 0, .22);
+  /* Text sitting ON a translucent accent tint. Pale in dark themes, the
+     accent itself in light ones — the same split --time-token-fg already
+     uses, because a pale lavender on a pale tint is invisible. */
+  --accent-text:     #c4c9ff;
   --time-token-fg:   #c4c9ff;
   --time-token-bg:   rgba(var(--accent-rgb), .16);
   /* Whole-row highlight for messages that ping @everyone (or you). */
@@ -64,6 +69,48 @@
   /* Hover / active surface tints — theme-aware (dark = white-alpha) */
   --hover:        rgba(255,255,255,.06);
   --hover-strong: rgba(255,255,255,.10);
+
+  /* Keyboard focus ring. Deliberately NOT the accent: the accent is also the
+     colour of selected rows and primary buttons, so a ring drawn in it
+     disappears exactly when it lands on one. A near-white ring on the dark
+     themes (near-black on the light ones) is the one value that never
+     collides with a surface the ring can land on. */
+  --focus-ring: rgba(255, 255, 255, .92);
+
+  /* Press response — a veil laid over whatever the control already is, so it
+     works the same on a neutral row, an accent-filled selected row and a red
+     danger button. One step past --hover-strong, the same white-on-dark /
+     black-on-light inversion the hover tints use. */
+  --press-veil: rgba(255, 255, 255, .09);
+
+  /* Selected row in the left sidebar. An outline rather than a fill: the
+     accent tint is also what a hovered row, a mention and a primary button
+     use, so a filled selection competed with all of them and read as one more
+     coloured thing in a column of coloured things. A hairline ring says
+     "this one" without adding another colour to the surface.
+
+     Inverted on the light themes for the obvious reason — a white ring on a
+     white sidebar is not a ring. */
+  --active-ring: rgba(255, 255, 255, .62);
+
+  /* ── The 2px grid ───────────────────────────────────────────────────────
+     Spacing, radii and icon sizes are even numbers. Not a scale invented
+     here — it is the one the app already used, in 27 spacing values, 20 icon
+     sizes and 12 radii of which the heavily-used ones were all even and the
+     strays were all odd. Snapping the strays moved 211 sites by at most 1px
+     each and removed roughly a third of the distinct values.
+
+     1px is a hairline, not spacing. 999px is the pill idiom. Neither is on
+     the grid and neither should be.
+
+     There are deliberately no --space-N tokens. A token per value documents
+     sprawl instead of reducing it, and named tokens only earn their place
+     when the name carries meaning the number does not. These do: */
+  --edge-sm:  4px;   /* chips, badges, small controls */
+  --edge-md:  6px;   /* rows, inputs, menu items */
+  --edge-lg:  8px;   /* panels, menus, flyouts */
+  --edge-xl: 12px;   /* modals and cards */
+  --edge-pill: 999px;
 }
 
 /* Appearance: "Always underline links" */
@@ -73,6 +120,9 @@ html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  --active-ring: rgba(0, 0, 0, .42);
+  --press-veil: rgba(0, 0, 0, .10);
+  --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #e3e5e8;
   --bg-deep:   #ebedef;
   --bg-panel:  #f2f3f5;
@@ -85,7 +135,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --text-1:      #2e3338;
   --text-2:      #4e5058;
   --text-3:      #5c5e66;
-  --text-faint:  #80848e;
+  --text-faint:  #6c6f77;   /* 5.04:1 on chat, 4.54 on panel */
   --border:  rgba(0,0,0,.08);
   --divider: rgba(0,0,0,.06);
   --hover:        rgba(0,0,0,.06);
@@ -93,6 +143,10 @@ html.names-plain { --name-hover: var(--text-strong); }
   /* Mentions/time tokens: full accent + deeper tints read clearly on white. */
   --mention-fg:    var(--accent);
   --mention-bg:    rgba(var(--accent-rgb), .15);
+  /* --accent-hover, not --accent: the accent itself only reaches 3.75:1 on
+     its own 16% tint, and this is 14px body text. accent-hover is derived
+     (shade(accent, -12%)) so a custom accent darkens with it. */
+  --accent-text:   var(--accent-deep);
   --time-token-fg: var(--accent);
   --time-token-bg: rgba(var(--accent-rgb), .13);
   --mention-all-bg:       rgba(200, 142, 0, .24);
@@ -100,6 +154,9 @@ html.names-plain { --name-hover: var(--text-strong); }
   --mention-row-bg-hover: rgba(200, 142, 0, .15);
 }
 [data-theme="light-dim"] {
+  --active-ring: rgba(0, 0, 0, .42);
+  --press-veil: rgba(0, 0, 0, .10);
+  --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #c7ccd1;
   --bg-deep:   #d4d7dc;
   --bg-panel:  #dfe1e4;
@@ -112,13 +169,17 @@ html.names-plain { --name-hover: var(--text-strong); }
   --text-1:      #2e3338;
   --text-2:      #4e5058;
   --text-3:      #5c5e66;
-  --text-faint:  #7a7d85;
+  --text-faint:  #62646a;   /* 5.09:1 on chat, 4.52 on panel */
   --border:  rgba(0,0,0,.1);
   --divider: rgba(0,0,0,.07);
   --hover:        rgba(0,0,0,.06);
   --hover-strong: rgba(0,0,0,.10);
   --mention-fg:    var(--accent);
   --mention-bg:    rgba(var(--accent-rgb), .15);
+  /* --accent-hover, not --accent: the accent itself only reaches 3.75:1 on
+     its own 16% tint, and this is 14px body text. accent-hover is derived
+     (shade(accent, -12%)) so a custom accent darkens with it. */
+  --accent-text:   var(--accent-deep);
   --time-token-fg: var(--accent);
   --time-token-bg: rgba(var(--accent-rgb), .13);
   --mention-all-bg:       rgba(200, 142, 0, .24);
@@ -154,3 +215,46 @@ html.names-plain { --name-hover: var(--text-strong); }
 :root            { --row-pad-y: 2px; }
 [data-density="compact"] { --msg-pad-y: 0px; --row-pad-y: 0px; }
 [data-density="roomy"]   { --msg-pad-y: 6px; --row-pad-y: 6px; }
+
+
+/* ── Motion ────────────────────────────────────────────────────────────────
+ * Four bands and four curves. The app previously had 36 ad-hoc durations and
+ * 11 easings, and 169 of 175 live transitions resolved to the browser default
+ * `ease` — a curve nobody chose, and the wrong one, since it is slow-IN and so
+ * delays the onset of every hover. The bands are the ones those 36 values
+ * already clustered into, so timings barely moved; what changed is that they
+ * now move together.
+ */
+:root {
+  --dur-1: 120ms;    /* hover/press tint, colour   */
+  --dur-2: 180ms;    /* chevrons, folds, small enters */
+  --dur-3: 240ms;    /* popovers, menus, panels    */
+  --dur-4: 340ms;    /* sheets, modals, big moves  */
+  --dur-exit: 140ms; /* every dismissal — shorter than its entrance */
+
+  --ease-out:   cubic-bezier(.32, .72, 0, 1);  /* arriving — the house curve */
+  --ease-in:    cubic-bezier(.4, 0, 1, 1);     /* leaving, decisively        */
+  --ease-inout: cubic-bezier(.4, 0, .2, 1);    /* on-screen state changes    */
+
+  /* Skeleton placeholders. A raised tone, not a darker one: content arriving
+     should read as laid ON the surface rather than cut out of it. */
+  --sk-base:  rgba(255, 255, 255, .055);
+  --sk-sheen: rgba(255, 255, 255, .11);
+}
+
+/* One backstop for the 37 files that animate without a reduced-motion guard
+   of their own, including six infinite animations that otherwise never stop. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; --dur-exit: 1ms; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Spinners encode progress; stopping them removes information. */
+  .spin, .cb-spin, .loading-spinner {
+    animation-duration: .8s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

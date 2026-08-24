@@ -102,7 +102,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cb-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .cb-retry {
-  margin-left: 4px; padding: 3px 10px; border-radius: 999px;
+  margin-left: 4px; padding: 4px 10px; border-radius: 999px;
   background: rgba(255,255,255,.18); font-size: 12px; font-weight: 700;
   /* 44px would dwarf a 30px-tall strip; the surrounding bar is a large target
      already and this sits alone, so a smaller pill is legitimate here. */
@@ -115,11 +115,11 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 /* Slides from the top edge and leaves the same way, so it reads as one object
    coming and going rather than two unrelated events. */
-.cb-enter-active, .cb-leave-active { transition: transform .26s cubic-bezier(.32,.72,0,1), opacity .26s; }
+.cb-enter-active, .cb-leave-active { transition:transform .26s cubic-bezier(.32,.72,0,1), opacity var(--dur-3) var(--ease-out); }
 .cb-enter-from, .cb-leave-to { transform: translateY(-100%); opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cb-enter-active, .cb-leave-active { transition: opacity .2s ease; }
+  .cb-enter-active, .cb-leave-active { transition: opacity var(--dur-3) var(--ease-out); }
   .cb-enter-from, .cb-leave-to { transform: none; }
   .cb-spin { animation: none; }
 }

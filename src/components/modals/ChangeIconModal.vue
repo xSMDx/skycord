@@ -72,7 +72,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ci-close  {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .ci-close:hover { background: var(--hover); color: var(--text-strong); }
 
@@ -81,7 +81,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   position: relative; flex: 1; aspect-ratio: 1 / .8;
   border-radius: 10px; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  transition: transform .1s, filter .12s;
+  transition: transform var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out);
 }
 .ci-card:hover { filter: brightness(1.08); }
 .ci-card:active { transform: scale(.98); }

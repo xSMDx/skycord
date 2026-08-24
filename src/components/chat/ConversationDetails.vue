@@ -212,7 +212,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
               <span class="cd-m-text">
                 <span class="cd-m-name">
                   {{ m.displayName || m.username }}
-                  <Crown v-if="m.id === ownerId" :size="13" :stroke-width="2.5" class="cd-m-owner" />
+                  <Crown v-if="m.id === ownerId" :size="14" :stroke-width="2.5" class="cd-m-owner" />
                 </span>
                 <span class="cd-m-user">{{ m.username }}</span>
               </span>
@@ -258,11 +258,10 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-searchfield {
   display: flex; align-items: center; gap: 8px;
   height: 44px; width: 44px; min-width: 44px;
-  padding: 0 11px; border-radius: 22px;
+  padding: 0 12px; border-radius: 22px;
   border: 1.5px solid transparent; background: transparent;
   color: var(--text-2); cursor: pointer; overflow: hidden;
-  transition: width .28s cubic-bezier(.2,.8,.3,1),
-              background .2s ease, border-color .2s ease, padding .28s cubic-bezier(.2,.8,.3,1);
+  transition:width .28s cubic-bezier(.2,.8,.3,1), background var(--dur-3) var(--ease-out), border-color var(--dur-3) var(--ease-out), padding .28s cubic-bezier(.2,.8,.3,1);
 }
 .cd-head.searching .cd-searchfield {
   width: 100%; cursor: text;
@@ -286,19 +285,19 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
    and animate on width rather than being removed — removing them makes the
    row jump instead of moving. */
 .cd-head.searching .cd-head-actions { width: 0; overflow: hidden; }
-.cd-head-actions { transition: width .28s cubic-bezier(.2,.8,.3,1); }
+.cd-head-actions { transition:width .28s cubic-bezier(.2,.8,.3,1); }
 .cd-filter { flex-shrink: 0; color: var(--text-2); }
 .cd-filter:active { background: var(--hover); color: var(--text-1); }
 
 @media (prefers-reduced-motion: reduce) {
-  .cd-searchfield, .cd-head-actions { transition: none; }
+  .cd-searchfield, .cd-head-actions { transition:none; }
 }
 .cd-icon {
   display: flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px;
   border: none; background: none; cursor: pointer;
   color: var(--text-2); border-radius: 8px;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .cd-icon:active { background: var(--hover); color: var(--text-1); }
 
@@ -336,7 +335,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   min-height: 44px; padding: 0 10px;
   border: none; background: none; cursor: pointer;
   color: var(--text-3); font-size: 15px; font-weight: 600;
-  transition: color .12s;
+  transition: color var(--dur-1) var(--ease-out);
 }
 .cd-tab.on { color: var(--accent); }
 .cd-tab.on::after {
@@ -355,7 +354,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   min-height: 56px; padding: 0 14px;
   border: none; border-radius: 10px; cursor: pointer;
   background: var(--bg-raised); color: var(--text-1);
-  text-align: left; transition: background .12s;
+  text-align: left; transition: background var(--dur-1) var(--ease-out);
 }
 .cd-row:active { background: var(--hover); }
 .cd-row-ico { display: flex; color: var(--text-2); flex-shrink: 0; }
@@ -374,7 +373,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   display: flex; align-items: center; gap: 12px; width: 100%;
   min-height: 60px; padding: 8px 14px;
   border: none; background: none; cursor: pointer; text-align: left;
-  transition: background .12s;
+  transition: background var(--dur-1) var(--ease-out);
 }
 .cd-member:active { background: var(--hover); }
 .cd-m-av {
@@ -390,7 +389,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 }
 .cd-m-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .cd-m-name {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 6px;
   font-size: 15px; font-weight: 600; color: var(--text-1);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -400,6 +399,6 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-soon { padding: 32px 16px; text-align: center; color: var(--text-3); font-size: 14px; line-height: 1.5; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cd-icon, .cd-row, .cd-member, .cd-tab { transition: none; }
+  .cd-icon, .cd-row, .cd-member, .cd-tab { transition:none; }
 }
 </style>

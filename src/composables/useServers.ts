@@ -361,6 +361,23 @@ export const useServers = () => {
     writeCollapsedCategories(collapsedCategories.value)
   }
 
+  /**
+   * The rail badge, derived rather than stored.
+   *
+   * `Server.unread` exists on the type and nothing has ever written to it —
+   * only DMs and groups get their counter bumped — so the rail badge and any
+   * "N unread" label read a field that is permanently undefined. Summing the
+   * channel counters is the honest answer and cannot drift from them, which a
+   * second stored counter would.
+   *
+   * Only covers servers whose channel list has been fetched: a channel we do
+   * not hold cannot be attributed to a server. That is the same limit the
+   * voice badge has, and it resolves the moment the server is opened.
+   */
+  const serverUnread = (sid: string): number =>
+    (channelsByServer.value[sid] ?? [])
+      .reduce((n, c) => n + (unreadChannels.value[c.id] ?? 0), 0)
+
   const markUnread  = (cid: string) => { unreadChannels.value[cid] = (unreadChannels.value[cid] || 0) + 1 }
   const clearUnread = (cid: string) => { delete unreadChannels.value[cid] }
 
@@ -413,6 +430,53 @@ export const useServers = () => {
   }
 
   /**
+   * Move a channel into a category, or (with `null`) out of every category.
+   *
+   * Optimistic, and that is the point: this is what a drag calls, and a
+   * channel that lands where it was dropped and then visibly snaps back a
+   * beat later reads as a broken drag, not as a slow one. So the local
+   * `category` is rewritten first, the PATCH follows, and a failure puts the
+   * old value back before rethrowing — the caller surfaces the server's own
+   * message (see `doMoveChannel` in ChatApp.vue), and the sidebar is never
+   * left showing a move the server refused.
+   *
+   * Ordering is untouched. `position` is assigned on create and never
+   * updated anywhere in this codebase, so a channel keeps its number when it
+   * changes category; `upsertChannel`'s re-sort therefore drops it back into
+   * position order inside its new group rather than at the end of it.
+   * Reordering *within* a category would need a `position` write path that
+   * does not exist, and is deliberately not attempted here.
+   *
+   * The channel is looked up again after the await rather than held across
+   * it: `removeChannel` and `receiveDetail` both replace the array outright,
+   * so the object captured before the request can be one nothing renders any
+   * more, and writing the rollback into it would restore nothing.
+   */
+  const moveChannel = async (sid: string, cid: string, categoryId: string | null) => {
+    const channel = channelsByServer.value[sid]?.find(c => c.id === cid)
+    // A channel this client does not hold. Nothing to move optimistically and
+    // nothing to roll back to, so the request is not worth making blind.
+    if (!channel) return
+    const previous = channel.category ?? null
+    // Dropping something back where it already was. The server would take it
+    // (a no-op save and a broadcast), but there is nothing to tell anyone.
+    if (previous === categoryId) return
+
+    channel.category = categoryId
+    try {
+      const { channel: updated } = await api.moveChannel(sid, cid, categoryId)
+      // Folded in rather than waiting for the `channel:updated` echo, same as
+      // every other mutation here — the echo is harmless because
+      // upsertChannel updates in place by id.
+      upsertChannel(updated)
+    } catch (e) {
+      const still = channelsByServer.value[sid]?.find(c => c.id === cid)
+      if (still) still.category = previous
+      throw e
+    }
+  }
+
+  /**
    * Enter a server. Channels are fetched once per server and then cached —
    * `channel:created` / `:updated` / `:deleted` keep the cache honest, so
    * refetching on every rail click would be a request that changes nothing.
@@ -432,9 +496,23 @@ export const useServers = () => {
    * neither path reaches this branch. It is here so that the NEXT payload to
    * forget them degrades into a redundant request instead of a broken sidebar.
    */
+  /**
+   * True only while a server's channel list is being fetched for the first
+   * time. Scoped to the fetch, not the whole open: a cached server opens
+   * instantly and must not flash a placeholder on its way to content that was
+   * already there.
+   */
+  const loadingServerDetail = ref(false)
+
   const openServer = async (sid: string) => {
     activeServerId.value = sid
-    if (!channelsByServer.value[sid] || !categoriesByServer.value[sid]) await loadServerDetail(sid)
+    if (!channelsByServer.value[sid] || !categoriesByServer.value[sid]) {
+      loadingServerDetail.value = true
+      // finally, not a trailing assignment: a failed fetch must not leave the
+      // sidebar showing placeholders for a list that is never coming.
+      try { await loadServerDetail(sid) }
+      finally { loadingServerDetail.value = false }
+    }
     selectLanding(sid)
   }
 
@@ -601,8 +679,9 @@ export const useServers = () => {
     upsertServer, removeServer, receiveDetail, upsertChannel, removeChannel,
     upsertCategory, removeCategory, toggleCategory,
     upsertMember, removeMember,
-    markUnread, clearUnread, selectLanding, openChannel, viewVoiceChannel,
-    loadServers, loadServerDetail, loadServerMembers, openServer,
+    markUnread, clearUnread, serverUnread, selectLanding, openChannel, viewVoiceChannel,
+    loadingServerDetail,
+    loadServers, loadServerDetail, loadServerMembers, openServer, moveChannel,
   }
 }
 

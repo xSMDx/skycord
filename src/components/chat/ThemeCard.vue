@@ -107,19 +107,19 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
 .tc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tc-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-sub { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 8px; }
-.tc-swatches { display: inline-flex; gap: 3px; }
+.tc-swatches { display: inline-flex; gap: 4px; }
 .tc-swatches i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.25); }
 .tc-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .tc-preview {
   border: none; background: none; padding: 4px 2px; cursor: pointer;
-  font-size: 13px; font-weight: 600; color: var(--text-3); transition: color .12s;
+  font-size: 13px; font-weight: 600; color: var(--text-3); transition: color var(--dur-1) var(--ease-out);
 }
 .tc-preview:hover { color: var(--text-strong); text-decoration: underline; }
 .tc-btn {
   padding: 8px 16px; border-radius: 6px; border: none;
   font-size: 14px; font-weight: 600; cursor: pointer;
   background: var(--accent); color: var(--text-on-accent);
-  transition: background .12s; flex-shrink: 0;
+  transition: background var(--dur-1) var(--ease-out); flex-shrink: 0;
 }
 .tc-btn:hover { background: var(--accent-hover); }
 </style>

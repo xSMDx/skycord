@@ -63,7 +63,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .pinned-close {
   margin-left: auto; width: 26px; height: 26px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .pinned-close:hover { background: var(--hover); color: white; }
 
@@ -78,7 +78,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .pinned-msg {
   display: flex; gap: 10px; padding: 10px; border-radius: 8px;
-  transition: background .1s; cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out); cursor: pointer;
 }
 .pinned-msg:hover { background: var(--hover); }
 .pm-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }

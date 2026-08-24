@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import {
   Paperclip, Smile, Send, X, CornerUpLeft,
   Bold, Italic, Underline, Strikethrough, Quote, Code, Link,
@@ -29,7 +29,16 @@ const emit = defineEmits<{
   clearAllReply:       []
 }>()
 
-const inputEl = ref<HTMLInputElement | null>(null)
+/**
+ * A textarea, not an input.
+ *
+ * onKeydown has always let Shift+Enter through so it could insert a
+ * newline -- but this was <input type="text">, which cannot hold one, so
+ * the branch did nothing and multi-line messages were impossible to write
+ * even though the renderer displays them fine. The composer also stayed one
+ * line tall no matter how much you typed, scrolling sideways.
+ */
+const inputEl = ref<HTMLTextAreaElement | null>(null)
 const setValue = (v: string, caret = v.length) => {
   emit('update:modelValue', v)
   nextTick(() => { inputEl.value?.focus(); inputEl.value?.setSelectionRange(caret, caret) })
@@ -206,7 +215,7 @@ const refreshAc = () => {
 }
 
 const onInput = (e: Event) => {
-  emit('update:modelValue', (e.target as HTMLInputElement).value)
+  emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
   emit('typing')
   // Editing the text after opening the @time picker dismisses it (e.g. deleting
   // the "@" you typed) — otherwise it lingered with nothing tying it to input.
@@ -269,6 +278,27 @@ const onKeydown = (e: KeyboardEvent) => {
   emit('typing')
 }
 const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = false }, 150)
+
+/**
+ * Grow with the content, up to a ceiling.
+ *
+ * Height is reset to auto before reading scrollHeight, because scrollHeight
+ * never reports less than the element's current height -- without the reset
+ * the box would grow and then refuse to shrink when you delete a line.
+ */
+const MAX_ROWS_PX = 50 * 4   // roughly four lines before it scrolls instead
+const autoGrow = () => {
+  const el = inputEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, MAX_ROWS_PX) + 'px'
+}
+
+// Sending clears the text from the parent, which is not something the input
+// event sees -- without this the box keeps the height of the message you
+// just sent.
+watch(() => props.modelValue, () => nextTick(autoGrow))
+onMounted(autoGrow)
 </script>
 
 <template>
@@ -326,9 +356,10 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         <Paperclip :size="20" :stroke-width="1.5" />
       </button>
 
-      <input
+      <textarea
         ref="inputEl"
         :value="modelValue"
+        rows="1"
         @input="onInput"
         @keydown="onKeydown"
         @paste="onPaste"
@@ -336,11 +367,10 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
         @pointerup="onInputPointerUp"
         @select="onSelect"
         @blur="onBlur"
-        type="text"
         :placeholder="placeholder"
         class="msg-input"
         :disabled="sending"
-      />
+      ></textarea>
 
       <div class="input-actions">
         <button class="input-action-btn btn-gif" v-tip="'GIF'" @click.stop="emit('openGif')">
@@ -371,7 +401,7 @@ const onBlur = () => setTimeout(() => { ac.value = null; showTimePicker.value = 
 <style scoped>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
-input  { background: none; border: none; outline: none; color: inherit; font: inherit; }
+input, textarea { background: none; border: none; outline: none; color: inherit; font: inherit; }
 
 .input-area { padding: 0 16px 16px; flex-shrink: 0; position: relative; }
 
@@ -382,7 +412,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 /* Reply strip fused to the input box */
 .reply-strip {
   display: flex; align-items: center; gap: 10px;
-  padding: 7px 12px 7px 14px;
+  padding: 8px 12px 8px 14px;
   background: var(--bg-panel);
   border-radius: 10px 10px 0 0;
   border-bottom: 1px solid rgba(0,0,0,.22);
@@ -390,26 +420,26 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .reply-strip-label { font-size: 13px; color: var(--text-2); flex-shrink: 0; }
 .reply-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 .reply-chip {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
   padding: 2px 4px 2px 8px; border-radius: 12px;
-  background: rgba(var(--accent-rgb),.16); color: #c4c9ff;
+  background: rgba(var(--accent-rgb),.16); color: var(--accent-text);
   font-size: 12.5px; font-weight: 600; max-width: 180px;
 }
 .reply-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reply-chip-x {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: #c4c9ff; transition: background .12s, color .12s;
+  color: var(--accent-text); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-chip-x:hover { background: var(--hover-strong); color: var(--text-strong); }
 .reply-strip-close {
   width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-2); background: rgba(255,255,255,.06);
-  transition: background .12s, color .12s;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-strip-close:hover { background: var(--hover-strong); color: var(--text-strong); }
-.reply-strip-enter-active, .reply-strip-leave-active { transition: opacity .15s ease, transform .15s ease; }
+.reply-strip-enter-active, .reply-strip-leave-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
 .reply-strip-enter-from, .reply-strip-leave-to { opacity: 0; transform: translateY(6px); }
 
 .input-wrapper {
@@ -417,7 +447,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   background: var(--bg-chatbar); border-radius: 10px;
   padding: 0 8px 0 4px;
   border: 1px solid transparent;
-  transition: background .15s, border-color .15s;
+  transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
 .input-wrapper.with-reply   { border-radius: 0 0 10px 10px; }
 .input-wrapper:focus-within { background: var(--bg-chatbar-focus); border-color: rgba(var(--accent-rgb),.4); }
@@ -427,13 +457,22 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   width: 36px; height: 36px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); flex-shrink: 0;
-  transition: color .12s, transform .12s;
+  transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .input-attach:hover { color: var(--text-1); transform: rotate(15deg) scale(1.1); }
 
 .msg-input {
-  flex: 1; padding: 11px 4px;
+  flex: 1; padding: 12px 4px;
   font-size: 15px; color: var(--text-1);
+  /* A textarea is inline-block and sits on the text baseline, which left a
+     few pixels of descender gap under it inside the flex row. */
+  display: block;
+  resize: none;
+  overflow-y: auto;
+  max-height: 200px;
+  line-height: 1.375;
+  /* Long unbroken strings must wrap rather than force the row wider. */
+  word-break: break-word;
 }
 .msg-input::placeholder { color: var(--text-faint); }
 .msg-input:disabled     { opacity: .5; }
@@ -442,7 +481,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .input-action-btn {
   width: 30px; height: 30px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-faint); transition: color .12s, transform .12s;
+  color: var(--text-faint); transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .input-action-btn:hover { color: var(--text-1); transform: scale(1.12); }
 .gif-label { font-size: 11px; font-weight: 800; letter-spacing: -.3px; }
@@ -451,7 +490,10 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   width: 32px; height: 32px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); background: rgba(255,255,255,.04);
-  transition: all .15s;
+  transition: background var(--dur-1) var(--ease-out),
+              color      var(--dur-1) var(--ease-out),
+              opacity    var(--dur-1) var(--ease-out),
+              transform  var(--dur-1) var(--ease-out);
 }
 .send-btn.ready { background: var(--accent); color: white; }
 .send-btn.ready:hover  { background: var(--accent-hover); transform: scale(1.06) rotate(8deg); }
@@ -501,9 +543,9 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   box-shadow: 0 6px 20px rgba(0,0,0,.5);
 }
 .fmt-toolbar button {
-  width: 30px; height: 30px; border-radius: 5px;
+  width: 30px; height: 30px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-2); transition: background .12s, color .12s;
+  color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .fmt-toolbar button:hover { background: var(--hover-strong); color: var(--text-strong); }
 </style>

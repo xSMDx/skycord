@@ -16,4 +16,57 @@ body {
 
 ::selection { background: rgba(var(--accent-rgb),0.35); color: var(--text-strong); }
 
-:focus-visible { outline: 2px solid rgba(var(--accent-rgb),0.7); outline-offset: 2px; }
+/* ── Press response ───────────────────────────────────────────────────────
+   217 hover rules against 42 active ones. The app lit up as the cursor
+   approached and then did nothing at the moment you actually committed —
+   which is backwards: hover is discoverability, press is response, and Apple
+   puts response first because everything else is built on it.
+
+   An inset veil rather than a background colour, because it lays over
+   whatever the control already is — a neutral row, an accent-filled selected
+   row, a red danger button — without this rule having to know which. A
+   background override would need writing per component, which is how the app
+   ended up with 42 of these instead of 217.
+
+   Not brightness(): the hover tints are white at 10% alpha, and brightness
+   multiplies colour channels, so white is already clamped and nothing would
+   happen on exactly the neutral rows that make up most of the app — while
+   accent-filled rows would jump. An inset shadow also creates no containing
+   block, so unlike filter or transform it cannot strand a fixed-position
+   descendant.
+
+   No transition on purpose. Press feedback that eases in is late feedback;
+   the whole point is that it lands on pointer-down. */
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+[role="menuitem"]:not([aria-disabled="true"]):active,
+[role="tab"]:active,
+summary:active {
+  box-shadow: inset 0 0 0 100vmax var(--press-veil);
+}
+
+/* Anything already dimmed for being unavailable must not react to a press —
+   feedback on a control that will not act is a lie. */
+button:disabled:active,
+[aria-disabled="true"]:active { box-shadow: none; }
+
+/* ── Keyboard focus ───────────────────────────────────────────────────────
+   This rule existed and did almost nothing. Thirty-odd components carry a
+   scoped `input { ... outline: none }` reset, and Vue compiles that to
+   `input[data-v-xxxx]` -- specificity (0,1,1). A bare `:focus-visible` is
+   (0,1,0), so it lost in every one of those files, which is most of the
+   places you actually type.
+
+   `!important` is the point rather than a shortcut: this is the backstop
+   that must survive a component-local reset, including ones written after
+   this comment. Raising the specificity instead would only win until the
+   next component adds its own reset. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* A container that takes focus programmatically (the modal shell) is not a
+   keyboard journey -- Chromium already withholds :focus-visible there, and
+   this states the intent for anything that does not. */
+[tabindex="-1"]:focus-visible { outline: none !important; }

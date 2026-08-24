@@ -1,3 +1,4 @@
+import { Types } from 'mongoose'
 import type { Request, Response, NextFunction } from 'express'
 import { Server, MAX_SERVER_MEMBERS } from '../models/Server'
 import { Channel } from '../models/Channel'
@@ -13,12 +14,54 @@ const DAY = 24 * 60 * 60 * 1000
 const expiryFor = (v: unknown): Date | null =>
   v === 'never' ? null : v === '7d' ? new Date(Date.now() + 7 * DAY) : new Date(Date.now() + DAY)
 
-const shapeInvite = (i: any, inviter?: any) => ({
+/**
+ * Turn a `channel` from a request body into something storable.
+ *
+ * Mirrors `resolveCategory` in channelsController: an id that names a channel
+ * of a DIFFERENT server is refused rather than quietly stored, because an
+ * invite carrying a foreign channel would hand the joiner a destination they
+ * cannot see inside a server they did not ask about.
+ *
+ * Voice only. A text channel is somewhere you read, not somewhere you can be,
+ * so "land in it" has no meaning and the caller almost certainly made a
+ * mistake worth hearing about.
+ *
+ * Returns `undefined` when the value is unusable, which the caller turns into
+ * a 400 — distinct from `null`, which is a legitimate "no destination".
+ */
+const resolveInviteChannel = async (
+  raw: unknown, serverId: string,
+): Promise<Types.ObjectId | null | undefined> => {
+  if (raw === undefined || raw === null || raw === '') return null
+  if (typeof raw !== 'string' || !Types.ObjectId.isValid(raw)) return undefined
+  const ch = await Channel.findById(raw).select('server type').lean()
+  if (!ch) return undefined
+  if (ch.server.toString() !== serverId) return undefined
+  if (ch.type !== 'voice') return undefined
+  return ch._id
+}
+
+/**
+ * The invite's destination, resolved for a reader.
+ *
+ * Null when there was never one AND when the channel has since been deleted:
+ * an invite outlives the rooms inside it, and a dangling id must degrade to a
+ * plain server invite rather than to an error. Callers rely on that — the
+ * join path keeps its primary promise (the server) either way.
+ */
+const inviteChannel = async (id: unknown): Promise<{ id: string; name: string } | null> => {
+  if (!id) return null
+  const ch = await Channel.findById(id as any).select('name').lean()
+  return ch ? { id: (ch as any)._id.toString(), name: (ch as any).name } : null
+}
+
+const shapeInvite = (i: any, inviter?: any, channel: { id: string; name: string } | null = null) => ({
   code:      i.code,
   uses:      i.uses,
   expiresAt: i.expiresAt ?? null,
   createdAt: i.createdAt,
   inviter:   inviter ? { id: inviter._id.toString(), username: inviter.username } : null,
+  channel,
 })
 
 export const createInvite = async (req: Request, res: Response, next: NextFunction) => {
@@ -30,10 +73,18 @@ export const createInvite = async (req: Request, res: Response, next: NextFuncti
     let code = generateInviteCode()
     for (let i = 0; i < 5 && await ServerInvite.exists({ code }); i++) code = generateInviteCode()
 
+    const channel = await resolveInviteChannel(req.body.channel, server._id.toString())
+    if (channel === undefined) {
+      res.status(400).json({ message: 'That voice channel is not part of this server' }); return
+    }
+
     const invite = await ServerInvite.create({
-      code, server: server._id, createdBy: req.user!.sub, expiresAt: expiryFor(req.body.expiry),
+      code, server: server._id, createdBy: req.user!.sub, expiresAt: expiryFor(req.body.expiry), channel,
     })
-    res.status(201).json({ invite: shapeInvite(invite, { _id: req.user!.sub, username: req.user!.username }) })
+    res.status(201).json({
+      invite: shapeInvite(invite, { _id: req.user!.sub, username: req.user!.username },
+                          await inviteChannel(channel)),
+    })
   } catch (err) { next(err) }
 }
 
@@ -87,6 +138,9 @@ export const previewInvite = async (req: Request, res: Response, next: NextFunct
       },
       alreadyMember: server.members.some(m => m.toString() === userId),
       full:          server.members.length >= MAX_SERVER_MEMBERS,
+      // Null once the channel has been deleted — the card must not promise a
+      // room that is gone.
+      channel:       await inviteChannel((invite as any).channel),
     })
   } catch (err) { next(err) }
 }
@@ -145,7 +199,7 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
         server = fresh
 
         const joiner = await User.findById(userId)
-          .select('username displayName avatar avatarCrop status').lean()
+          .select('username displayName avatar avatarCrop status statusUntil').lean()
         if (joiner) {
           emitToServer(fresh, 'server:memberJoined', {
             serverId: fresh._id.toString(),
@@ -156,7 +210,7 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
               avatar:      (joiner as any).avatar ?? null,
               avatarCrop:  (joiner as any).avatarCrop ?? null,
               // Computed, never the stored column.
-              status:      effectiveStatus((joiner as any).status, userId),
+              status:      effectiveStatus((joiner as any).status, userId, (joiner as any).statusUntil),
               isOwner:     false,
             },
           })
@@ -206,6 +260,9 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
       channels:   channels.map(shapeChannel),
       categories: categories.map(shapeCategory),
       joined,
+      // Returned for an already-member too: there is no join to perform, but
+      // the destination is the whole point of the link.
+      channel:    await inviteChannel((invite as any).channel),
     })
   } catch (err) { next(err) }
 }

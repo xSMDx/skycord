@@ -34,7 +34,7 @@ const pick = (gif: any) => {
       </div>
 
       <div class="gp-search">
-        <Search :size="15" :stroke-width="1.5" />
+        <Search :size="16" :stroke-width="1.5" />
         <input v-model="search" type="text" placeholder="Search GIFs" autofocus />
       </div>
 
@@ -66,15 +66,15 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .gp-close  {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); transition: background .12s, color .12s;
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .gp-close:hover { background: var(--hover); color: var(--text-strong); }
 
 .gp-search {
   display: flex; align-items: center; gap: 8px;
-  margin: 14px 18px 0; padding: 9px 12px; border-radius: 8px;
+  margin: 14px 18px 0; padding: 8px 12px; border-radius: 8px;
   background: var(--bg-input); border: 1px solid transparent; color: var(--text-3);
-  transition: border-color .15s;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .gp-search:focus-within { border-color: var(--accent); }
 .gp-search input { flex: 1; font-size: 14px; color: var(--text-1); background: none; border: none; outline: none; }
@@ -86,7 +86,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .gp-cell {
   display: block; width: 100%; margin-bottom: 8px;
   border-radius: 8px; overflow: hidden; background: var(--bg-input);
-  break-inside: avoid; transition: outline .1s;
+  break-inside: avoid; transition: outline var(--dur-1) var(--ease-out);
   outline: 0 solid var(--accent);
 }
 .gp-cell:hover { outline: 2px solid var(--accent); }

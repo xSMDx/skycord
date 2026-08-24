@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { Volume2 } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { useServers, serverIconFor } from '@/composables/useServers'
 
 const props = defineProps<{ code: string }>()
-const emit  = defineEmits<{ joined: [server: any] }>()
+// The second argument is the voice channel to land in, or null. Emitted on
+// EVERY successful join, including 'you were already a member' — that case
+// has no join to perform but is exactly when someone clicks an invite to a
+// room their friend is already sitting in.
+const emit  = defineEmits<{ joined: [server: any, channel: { id: string; name: string } | null] }>()
 
 const { getServerInvite, joinServerInvite } = useApi()
 const { receiveDetail } = useServers()
@@ -17,6 +22,22 @@ type State = 'loading' | 'loaded' | 'terminal' | 'retry' | 'joined'
 const state        = ref<State>('loading')
 const serverInfo   = ref<{ id: string; name: string; icon: string | null; memberCount: number } | null>(null)
 const full         = ref(false)
+// Where this invite points, if anywhere. Null for a plain server invite and
+// also once the target channel has been deleted — the server resolves that
+// for us, so a dangling destination simply stops being advertised.
+const voiceChannel = ref<{ id: string; name: string } | null>(null)
+/**
+ * Membership and doneness are different questions, and conflating them is
+ * what made a voice invite useless to the people most likely to get one.
+ *
+ * A plain server invite is finished the moment you are a member, so
+ * `alreadyMember` really does mean "nothing left to do". A VOICE invite is
+ * not: being in the server is the precondition, not the point — the point is
+ * the room. Someone already in the server who is sent "come join me in
+ * General" must still get a live button, so this is tracked separately and
+ * only a plain invite is allowed to start life as 'joined'.
+ */
+const alreadyMember = ref(false)
 const joining      = ref(false)
 const errorMessage = ref('')
 
@@ -41,8 +62,11 @@ const loadPreview = async () => {
     const res = await getServerInvite(props.code)
     serverInfo.value = res.server
     full.value = res.full
-    // Already in the server → show "Joined" immediately rather than "Join".
-    state.value = res.alreadyMember ? 'joined' : 'loaded'
+    voiceChannel.value = res.channel ?? null
+    alreadyMember.value = res.alreadyMember
+    // Already in the server → nothing left to do, UNLESS the invite names a
+    // voice channel, in which case the room is still ahead of you.
+    state.value = res.alreadyMember && !voiceChannel.value ? 'joined' : 'loaded'
   } catch (e: any) {
     errorMessage.value = e?.message || 'This invite is invalid or has expired.'
     state.value = isTerminal(e) ? 'terminal' : 'retry'
@@ -52,7 +76,10 @@ const loadPreview = async () => {
 onMounted(loadPreview)
 
 const join = async () => {
-  if (joining.value || state.value === 'joined' || full.value) return
+  if (joining.value || state.value === 'joined') return
+  // The cap only blocks people who still have to get in. Someone already
+  // inside is not asking for a seat, just for the room.
+  if (full.value && !alreadyMember.value) return
   joining.value = true
   errorMessage.value = ''
   try {
@@ -67,7 +94,9 @@ const join = async () => {
     // sidebar then renders every channel flat until a page reload.
     receiveDetail(res.server, res.channels, res.categories)
     state.value = 'joined'
-    emit('joined', res.server)
+    // The join response is the authority on the destination, not the preview:
+    // the channel can be deleted between the two.
+    emit('joined', res.server, res.channel ?? null)
   } catch (e: any) {
     errorMessage.value = e?.message || 'Something went wrong. Please try again.'
     // Only a message we recognise as permanently invalid replaces the button.
@@ -115,19 +144,30 @@ const join = async () => {
         <span v-if="errorMessage" class="ic-sub ic-sub--err">{{ errorMessage }}</span>
         <span v-else class="ic-sub">
           <span class="ic-dot" />{{ serverInfo?.memberCount }} Member{{ serverInfo?.memberCount !== 1 ? 's' : '' }}
+          <!-- An invite to a room reads differently from an invite to a
+               server, and the difference is the whole reason this exists. -->
+          <template v-if="voiceChannel">
+            <span class="ic-dot" /><Volume2 :size="12" :stroke-width="2.25" class="ic-vc" />{{ voiceChannel.name }}
+          </template>
         </span>
       </div>
       <button
         class="ic-btn"
         :class="{ joined: state === 'joined' }"
-        :disabled="state === 'joined' || joining || full"
+        :disabled="state === 'joined' || joining || (full && !alreadyMember)"
         @click.stop="join"
-      >{{ state === 'joined' ? 'Joined' : joining ? '…' : full ? 'Full' : 'Join' }}</button>
+      >{{
+        state === 'joined' ? (voiceChannel ? 'In Voice' : 'Joined')
+        : joining ? '…'
+        : full && !alreadyMember ? 'Full'
+        : voiceChannel ? 'Join Voice' : 'Join'
+      }}</button>
     </template>
   </div>
 </template>
 
 <style scoped>
+.ic-vc { vertical-align: -2px; margin-right: 4px; }
 .invite-card {
   display: flex; align-items: center; gap: 12px;
   background: var(--bg-floor); border: 1px solid rgba(255,255,255,.06);
@@ -149,7 +189,7 @@ const join = async () => {
 
 .ic-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ic-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
+.ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
 .ic-sub--err { color: #f08080; }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;
@@ -160,7 +200,7 @@ const join = async () => {
   padding: 8px 16px; border-radius: 6px; border: none;
   font-size: 14px; font-weight: 600; cursor: pointer;
   background: var(--accent); color: var(--text-on-accent);
-  transition: background .12s, opacity .12s;
+  transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
   flex-shrink: 0;
 }
 .ic-btn:hover:not(:disabled) { background: var(--accent-hover); }
