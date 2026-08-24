@@ -191,8 +191,7 @@ onBeforeUnmount(() => {
 .mb-leave-active            { transition: opacity var(--dur-exit) var(--ease-in); }
 .mb-enter-from, .mb-leave-to{ opacity: 0; }
 
-.mb-enter-active .modal:focus { outline: none; }
-.modal { transition:
+.mb-enter-active .modal { transition:
   transform var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out); }
 .mb-leave-active .modal { transition:
   transform var(--dur-exit) var(--ease-in), opacity var(--dur-exit) var(--ease-in); }
@@ -219,6 +218,9 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; justify-content: center;
   z-index: 1000;
 }
+/* The shell takes focus when a dialog has no controls of its own. A ring
+   around the whole box is noise -- the containment is the point, not the ring. */
+.modal:focus { outline: none; }
 .modal {
   background: var(--bg-panel);
   border-radius: 12px;

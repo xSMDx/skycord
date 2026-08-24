@@ -69,6 +69,13 @@
   /* Hover / active surface tints — theme-aware (dark = white-alpha) */
   --hover:        rgba(255,255,255,.06);
   --hover-strong: rgba(255,255,255,.10);
+
+  /* Keyboard focus ring. Deliberately NOT the accent: the accent is also the
+     colour of selected rows and primary buttons, so a ring drawn in it
+     disappears exactly when it lands on one. A near-white ring on the dark
+     themes (near-black on the light ones) is the one value that never
+     collides with a surface the ring can land on. */
+  --focus-ring: rgba(255, 255, 255, .92);
 }
 
 /* Appearance: "Always underline links" */
@@ -78,6 +85,7 @@ html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #e3e5e8;
   --bg-deep:   #ebedef;
   --bg-panel:  #f2f3f5;
@@ -109,6 +117,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --mention-row-bg-hover: rgba(200, 142, 0, .15);
 }
 [data-theme="light-dim"] {
+  --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #c7ccd1;
   --bg-deep:   #d4d7dc;
   --bg-panel:  #dfe1e4;

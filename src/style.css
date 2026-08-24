@@ -16,4 +16,23 @@ body {
 
 ::selection { background: rgba(var(--accent-rgb),0.35); color: var(--text-strong); }
 
-:focus-visible { outline: 2px solid rgba(var(--accent-rgb),0.7); outline-offset: 2px; }
+/* ── Keyboard focus ───────────────────────────────────────────────────────
+   This rule existed and did almost nothing. Thirty-odd components carry a
+   scoped `input { ... outline: none }` reset, and Vue compiles that to
+   `input[data-v-xxxx]` -- specificity (0,1,1). A bare `:focus-visible` is
+   (0,1,0), so it lost in every one of those files, which is most of the
+   places you actually type.
+
+   `!important` is the point rather than a shortcut: this is the backstop
+   that must survive a component-local reset, including ones written after
+   this comment. Raising the specificity instead would only win until the
+   next component adds its own reset. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* A container that takes focus programmatically (the modal shell) is not a
+   keyboard journey -- Chromium already withholds :focus-visible there, and
+   this states the intent for anything that does not. */
+[tabindex="-1"]:focus-visible { outline: none !important; }
