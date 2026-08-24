@@ -4,8 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Skycord — your crew's place to talk</title>
-<meta name="description" content="Voice and video calls, screen share, and themes you can send in chat — on our own server." />
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%235865f2' stroke-linecap='round' stroke-linejoin='round' stroke-width='16' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='12' fill='%235865f2'/%3E%3Ccircle cx='164' cy='140' r='12' fill='%235865f2'/%3E%3C/svg%3E" />
+<meta name="description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours today, yours when we open-source." />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%23E8853A' stroke-linecap='round' stroke-linejoin='round' stroke-width='16' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='12' fill='%23E8853A'/%3E%3Ccircle cx='164' cy='140' r='12' fill='%23E8853A'/%3E%3C/svg%3E" />
 <link rel="canonical" href="https://skycord.xyz/" />
 <meta name="theme-color" content="#0b0c0f" />
 
@@ -16,7 +16,7 @@
 <meta property="og:url"         content="https://skycord.xyz/" />
 <meta property="og:site_name"   content="Skycord" />
 <meta property="og:title"       content="Skycord — your crew's place to talk" />
-<meta property="og:description" content="Voice and video calls, screen share, and themes you can send in chat — running on our own server." />
+<meta property="og:description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours today, yours when we open-source." />
 <meta property="og:image"        content="https://skycord.xyz/og.jpg" />
 <meta property="og:image:width"  content="1200" />
 <meta property="og:image:height" content="630" />
@@ -24,37 +24,39 @@
 <meta name="twitter:card"        content="summary_large_image" />
 <meta name="twitter:image"       content="https://skycord.xyz/og.jpg" />
 <meta name="twitter:title"       content="Skycord — your crew's place to talk" />
-<meta name="twitter:description" content="Voice and video calls, screen share, and themes you can send in chat — running on our own server." />
+<meta name="twitter:description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours today, yours when we open-source." />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet" />
 <style>
   /* ── Tokens ─────────────────────────────────────────── */
+  /* Ember — the machine in the closet. A warm charcoal room and one amber
+     light: the box is running, your people are on it. Deliberately not
+     slate-blue and not blurple; the app may look like Discord because muscle
+     memory is binding, but the landing page wearing Discord's colour would
+     say "clone" before a single word is read. */
   :root {
-    --ink:     #0b0c0f;
-    --floor:   #111214;
-    --panel:   #1a1b1f;
-    --border:  rgba(255,255,255,.07);
-    --blurple: #5865f2;
-    --blurple-deep: #4752c4;
-    --speak:   #23a55a;
-    --live:    #f23f43;
-    --text:    #e8eaf0;
-    --dim:     #86899a;
-    --faint:   #5c5f6e;
-    --gradient: linear-gradient(135deg, #5865f2 0%, #7c5cbf 100%);
-    --pink:    #eb459e;
-    --yellow:  #faa61a;
-    --green:   #3ba55c;
-    --red:     #ed4245;
-    --cyan:    #00b0f4;
+    --ink:     #14110F;   /* ground */
+    --floor:   #191512;
+    --panel:   #1E1A17;   /* cards, nav */
+    --border:  #35302B;   /* hairlines — solid, not alpha, so they read as drawn lines */
+    --ember:   #E8853A;   /* the accent: CTAs, live states, the LED */
+    --ember-hi:#F09D5B;
+    --sage:    #8A9A7B;   /* mono accents: uptime, specs, versions */
+    --speak:   #8A9A7B;
+    --live:    #E8853A;
+    --text:    #F2EDE7;   /* warm white */
+    --dim:     #B8AFA4;
+    --faint:   #8C8478;
+    --green:   var(--sage);
+    --red:     var(--ember);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
     background: var(--ink); color: var(--text);
-    font: 400 16px/1.6 Inter, system-ui, sans-serif;
+    font: 400 16px/1.6 'Fira Sans', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
     overflow-x: hidden;
@@ -103,7 +105,7 @@
     0%, 90%, 100% { transform: scaleY(1); }
     93%, 97% { transform: scaleY(0.1); }
   }
-  .mark b { font: 700 19px 'Space Grotesk', Inter, sans-serif; letter-spacing: .3px; }
+  .mark b { font: 700 19px 'Fira Sans', 'Fira Sans', sans-serif; letter-spacing: .3px; }
   .tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
   .tab {
     padding: 7px 18px; border-radius: 7px; font-size: 14px; font-weight: 600; color: var(--dim);
@@ -112,9 +114,9 @@
   }
   .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
   .tab.on { 
-    background: rgba(88,101,242,.16); 
-    color: #aab4ff;
-    box-shadow: 0 2px 8px rgba(88,101,242,.2);
+    background: rgba(232,133,58,.16); 
+    color: var(--ember-hi);
+    box-shadow: 0 2px 8px rgba(232,133,58,.2);
   }
   .tab.on::after {
     content: '';
@@ -124,20 +126,20 @@
     transform: translateX(-50%);
     width: 20px;
     height: 2px;
-    background: var(--blurple);
+    background: var(--ember);
     border-radius: 2px;
   }
   .cta-mini {
     padding: 9px 18px; border-radius: 9px; font-size: 14px; font-weight: 700;
-    background: var(--gradient); color: #fff; 
+    background: var(--ember); color: #1A120B; 
     transition: all .2s cubic-bezier(.4,0,.2,1);
-    box-shadow: 0 4px 12px rgba(88,101,242,.3);
+    box-shadow: 0 4px 12px rgba(232,133,58,.3);
     position: relative;
     overflow: hidden;
   }
   .cta-mini:hover { 
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(88,101,242,.4);
+    box-shadow: 0 6px 20px rgba(232,133,58,.4);
   }
 
   /* ── Panels ─────────────────────────────────────────────────── */
@@ -161,8 +163,8 @@
     inset: -40% -20% auto; 
     height: 130%;
     background:
-      radial-gradient(560px 300px at 30% 20%, rgba(88,101,242,.2), transparent 65%),
-      radial-gradient(480px 280px at 72% 12%, rgba(35,165,90,.1), transparent 60%),
+      radial-gradient(560px 300px at 30% 20%, rgba(232,133,58,.2), transparent 65%),
+      radial-gradient(480px 280px at 72% 12%, rgba(138,154,123,.1), transparent 60%),
       radial-gradient(600px 400px at 50% 50%, rgba(124,92,191,.05), transparent 70%);
     pointer-events: none;
     animation: pulse 8s ease-in-out infinite;
@@ -173,7 +175,7 @@
   }
   .hero h1 {
     position: relative;
-    font: 700 clamp(40px, 6vw, 68px)/1.1 'Space Grotesk', Inter, sans-serif;
+    font: 700 clamp(40px, 6vw, 68px)/1.1 'Fira Sans', 'Fira Sans', sans-serif;
     letter-spacing: -.5px;
     animation: fadeUp .6s ease-out;
   }
@@ -181,12 +183,14 @@
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
   }
-  .hero h1 em { 
-    font-style: normal; 
-    background: var(--gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  /* Flat ember, no gradient clip — Ember has one accent and it is opaque.
+     (A background-clip:text over background:none renders invisible text,
+     which is also why this could not stay a token swap.) */
+  .hero h1 em { font-style: normal; color: var(--ember); }
+  .selfhost {
+    margin-top: 14px;
+    font: 400 13px/1.5 'Fira Code', monospace;
+    color: var(--sage);
   }
   .hero p.sub {
     position: relative; 
@@ -203,16 +207,16 @@
     border-radius: 12px; 
     font-size: 17px; 
     font-weight: 700;
-    background: var(--gradient); 
-    color: #fff;
-    box-shadow: 0 8px 34px rgba(88,101,242,.4);
+    background: var(--ember); 
+    color: #1A120B;
+    box-shadow: 0 8px 34px rgba(232,133,58,.4);
     transition: all .25s cubic-bezier(.4,0,.2,1);
     animation: fadeUp .6s ease-out .4s both;
     overflow: hidden;
   }
   .cta:hover { 
     transform: translateY(-3px); 
-    box-shadow: 0 14px 44px rgba(88,101,242,.5);
+    box-shadow: 0 14px 44px rgba(232,133,58,.5);
   }
   .cta small { 
     display: block; 
@@ -223,229 +227,66 @@
   }
 
   /* ── Signature: the call stage ─────────────────────────────────────── */
+  /* ── The machine in the closet ─────────────────────────────────────
+     The hero visual is not a fake app screenshot — it is the thing the
+     product is actually about: an old tower with one warm light on,
+     running the place your friends talk. Nobody else in this category
+     can honestly use this image. */
   .stage {
-    position: relative; 
-    display: grid; 
-    grid-template-columns: 1.45fr 1fr; 
-    gap: 12px;
-    max-width: 780px; 
-    margin: 60px auto 0; 
-    padding: 14px;
-    background: var(--floor); 
-    border: 1px solid var(--border); 
-    border-radius: 18px;
-    box-shadow: 0 30px 80px rgba(0,0,0,.6);
-    animation: fadeUp .6s ease-out .6s both;
-    transition: transform .3s ease;
+    display: flex; align-items: center; justify-content: center; gap: 44px;
+    max-width: 640px; margin: 64px auto 0; padding: 36px 32px;
+    background: var(--floor);
+    border: 1px solid var(--border); border-radius: 16px;
+    /* The one shadow on the page. */
+    box-shadow: 0 30px 80px rgba(0,0,0,.55);
   }
-  .stage:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 35px 90px rgba(0,0,0,.7);
+  .machine {
+    flex-shrink: 0;
+    width: 120px; height: 190px;
+    background: var(--panel);
+    border: 1px solid var(--border); border-radius: 10px;
+    position: relative; padding: 16px 14px;
   }
-  .tile {
-    position: relative; 
-    aspect-ratio: 16/9; 
-    border-radius: 10px; 
-    overflow: hidden;
-    background: var(--panel); 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    transition: all .3s ease;
+  /* The LED. The one moving thing in the hero, and it moves like a
+     machine breathing, not like an alert. */
+  .m-led {
+    display: block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--ember);
+    box-shadow: 0 0 10px 2px rgba(232,133,58,.55);
+    animation: m-breathe 3.2s ease-in-out infinite;
   }
-  .tile:hover {
-    transform: scale(1.02);
-    z-index: 2;
-  }
-  .tile .name {
-    position: absolute; 
-    left: 10px; 
-    bottom: 10px;
-    padding: 3px 9px; 
-    border-radius: 6px; 
-    background: rgba(0,0,0,.7);
-    backdrop-filter: blur(8px);
-    font-size: 12px; 
-    font-weight: 600; 
-    display: flex; 
-    align-items: center; 
-    gap: 5px;
-  }
-  .tile .live {
-    position: absolute; 
-    right: 10px; 
-    top: 10px;
-    padding: 2px 8px; 
-    border-radius: 5px; 
-    background: var(--live);
-    font: 600 10px/1.7 Inter, sans-serif; 
-    letter-spacing: .06em; 
-    color: #fff;
-    animation: blink 2s ease-in-out infinite;
-  }
-  @keyframes blink {
+  @keyframes m-breathe {
     0%, 100% { opacity: 1; }
-    50% { opacity: .7; }
+    50%      { opacity: .45; box-shadow: 0 0 5px 1px rgba(232,133,58,.3); }
   }
-  .tile .q {
-    position: absolute; 
-    right: 66px; 
-    top: 10px;
-    padding: 2px 8px; 
-    border-radius: 5px; 
-    background: rgba(0,0,0,.7);
-    backdrop-filter: blur(8px);
-    font: 600 10px/1.7 'JetBrains Mono', monospace; 
-    color: var(--dim);
+  .m-slot {
+    display: block; height: 6px; border-radius: 3px;
+    background: var(--ink); border: 1px solid var(--border);
+    margin-top: 14px;
   }
-  .tile.share { 
-    background: linear-gradient(160deg, #17181d 0%, #101116 100%);
-    cursor: pointer;
+  .m-slot.short { width: 60%; }
+  .m-vents {
+    position: absolute; left: 14px; right: 14px; bottom: 14px;
+    display: flex; flex-direction: column; gap: 5px;
   }
-  .fakewin { 
-    width: 74%; 
-    border-radius: 8px; 
-    background: #1e2027; 
-    border: 1px solid var(--border); 
-    overflow: hidden;
-    transition: all .3s ease;
+  .m-vents i {
+    display: block; height: 2px; border-radius: 1px;
+    background: var(--border);
   }
-  .fakewin .fbar { 
-    height: 14px; 
-    background: #262933; 
-    display: flex; 
-    align-items: center; 
-    gap: 4px; 
-    padding: 0 7px; 
+  .m-caption {
+    display: flex; flex-direction: column; gap: 10px;
+    font: 400 14px/1.6 'Fira Code', monospace;
+    color: var(--sage); text-align: left;
   }
-  .fakewin .fbar i { 
-    width: 5px; 
-    height: 5px; 
-    border-radius: 50%; 
-    background: #3d414f;
-  }
-  .fakewin .frow { 
-    height: 8px; 
-    margin: 8px 10px; 
-    border-radius: 4px; 
-    background: #2b2e3a;
-    animation: shimmer 2s ease-in-out infinite;
-  }
-  .fakewin .frow.w60 { width: 60%; } 
-  .fakewin .frow.w80 { width: 80%; } 
-  .fakewin .frow.w45 { width: 45%; animation-delay: .5s; }
-  @keyframes shimmer {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .6; }
-  }
-  .tile.cat { 
-    grid-row: span 2; 
-    aspect-ratio: auto; 
-    padding-bottom: 54px;
-    background: linear-gradient(180deg, #1a1b1f 0%, #0f1014 100%);
-  }
-  .avatarball {
-    width: 108px; 
-    height: 108px; 
-    border-radius: 50%;
-    background: radial-gradient(circle at 34% 30%, #6b77ff, #3d47b8);
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    box-shadow: 0 0 0 4px var(--speak), 0 0 26px rgba(35,165,90,.45);
-    animation: ring 4.6s ease-in-out infinite, float 3s ease-in-out infinite;
-    transition: transform .3s;
-  }
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
-  /*
-   * This ring is the same one the app draws around whoever is talking, so its
-   * timing is the difference between the hero showing a call and showing a
-   * loading spinner. An even two-step sine is a metronome; real speech comes
-   * in bursts with a pause between them, which is what the uneven stops and
-   * the long quiet tail from 52% are for.
-   */
-  @keyframes ring {
-    0%, 6%   { box-shadow: 0 0 0 3px rgba(35,165,90,.35), 0 0 14px rgba(35,165,90,.20); }
-    11%      { box-shadow: 0 0 0 5px var(--speak),        0 0 30px rgba(35,165,90,.55); }
-    19%      { box-shadow: 0 0 0 3px rgba(35,165,90,.45), 0 0 18px rgba(35,165,90,.28); }
-    26%      { box-shadow: 0 0 0 6px var(--speak),        0 0 34px rgba(35,165,90,.60); }
-    34%      { box-shadow: 0 0 0 4px rgba(35,165,90,.50), 0 0 20px rgba(35,165,90,.30); }
-    41%      { box-shadow: 0 0 0 5px var(--speak),        0 0 28px rgba(35,165,90,.52); }
-    52%,100% { box-shadow: 0 0 0 3px rgba(35,165,90,.30), 0 0 14px rgba(35,165,90,.18); }
-  }
-  .avatar-svg {
-    width: 58px;
-    height: 58px;
-    animation: avatarBob 3s ease-in-out infinite;
-  }
-  @keyframes avatarBob {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
-  }
-  .avatar-svg .eye {
-    animation: eyeBlink 4s ease-in-out infinite;
-    transform-origin: center;
-  }
-  .pill {
-    position: absolute; 
-    left: 50%; 
-    bottom: 12px; 
-    transform: translateX(-50%);
-    display: flex; 
-    align-items: center; 
-    gap: 7px;
-    background: rgba(17,18,22,.95); 
-    border: 1px solid var(--border); 
-    border-radius: 13px; 
-    padding: 6px 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.6);
-    backdrop-filter: blur(12px);
-    transition: all .3s ease;
-  }
-  .pill i {
-    width: 34px; 
-    height: 34px; 
-    border-radius: 8px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    color: #d6d9e4; 
-    background: rgba(255,255,255,.05); 
-    font-style: normal;
-    cursor: pointer; 
-    transition: all .2s;
-    position: relative;
-  }
-  .pill i:hover { 
-    background: rgba(255,255,255,.15);
-    transform: scale(1.1);
-  }
-  .pill i.green { background: #248046; color: #fff; }
-  .pill i.red { 
-    background: var(--live); 
-    color: #fff; 
-    width: 46px; 
-    border-radius: 10px; 
-  }
-  .pill svg { width: 18px; height: 18px; }
+  .m-caption b { color: var(--text); font-weight: 600; }
 
   @keyframes wig   { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 45% { transform: rotate(11deg); } 70% { transform: rotate(-6deg); } }
-  @keyframes pop   { 0%,100% { transform: scale(1); } 45% { transform: scale(1.28); } }
-  @keyframes lift  { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px) scale(1.12); } }
-  @keyframes swing { 0%,100% { transform: rotate(0); } 30% { transform: rotate(20deg); } 65% { transform: rotate(-12deg); } }
-  .pill i.mic:hover   svg { animation: wig .5s ease; }
-  .pill i.green:hover svg { animation: pop .4s ease; }
-  .pill i.scr:hover   svg { animation: lift .45s ease; }
-  .pill i.red:hover   svg { animation: swing .5s ease; }
   .mark:hover .logo-container { animation: wig .5s ease; }
 
   /* ── Features grid ─────────────────────────────────────────────────── */
   .feats { padding: 96px 0 90px; }
   .feats h2 {
-    font: 700 15px 'JetBrains Mono', monospace; 
+    font: 700 15px 'Fira Code', monospace; 
     letter-spacing: .16em; 
     text-transform: uppercase;
     color: var(--faint); 
@@ -460,20 +301,20 @@
     left: 0;
     width: 40px;
     height: 3px;
-    background: var(--gradient);
+    background: var(--ember);
     border-radius: 2px;
   }
-  /* Mono, because these are readings rather than prose — and JetBrains Mono
+  /* Mono, because these are readings rather than prose — and Fira Code
      is already being fetched for the changelog. */
   .shipping {
     margin: 18px 0 0;
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-family: 'Fira Code', ui-monospace, SFMono-Regular, monospace;
     font-size: 12.5px;
     letter-spacing: .01em;
     color: rgba(255,255,255,.42);
   }
   .shipping a { color: rgba(255,255,255,.62); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.18); }
-  .shipping a:hover { color: #fff; border-bottom-color: var(--blurple); }
+  .shipping a:hover { color: #fff; border-bottom-color: var(--ember); }
 
   /* One card carries more weight than the other eight so the grid has a
      first read instead of nine equal voices. It is the flagship and already
@@ -501,7 +342,7 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: var(--gradient);
+    background: var(--ember);
     transform: scaleX(0);
     transition: transform .3s ease;
   }
@@ -509,7 +350,7 @@
     transform: scaleX(1);
   }
   .card:hover { 
-    border-color: rgba(88,101,242,.4); 
+    border-color: rgba(232,133,58,.4); 
     transform: translateY(-4px);
     box-shadow: 0 12px 32px rgba(0,0,0,.4);
   }
@@ -521,13 +362,13 @@
     display: flex; 
     align-items: center; 
     justify-content: center;
-    background: rgba(88,101,242,.13); 
-    color: var(--blurple);
+    background: rgba(232,133,58,.13); 
+    color: var(--ember);
     transition: all .3s cubic-bezier(.4,0,.2,1);
   }
   .card:hover .ic { 
-    background: var(--gradient); 
-    color: #fff;
+    background: var(--ember); 
+    color: #1A120B;
     transform: rotate(-5deg) scale(1.1);
   }
   /*
@@ -541,7 +382,7 @@
    */
   .card .ic svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; }
   .card h3 { 
-    font: 600 16px/1.3 Inter, sans-serif; 
+    font: 600 16px/1.3 'Fira Sans', sans-serif; 
     margin-bottom: 8px;
   }
   .card p { 
@@ -566,7 +407,7 @@
     content: '•';
     position: absolute;
     left: 0;
-    color: var(--blurple);
+    color: var(--ember);
     font-weight: bold;
   }
 
@@ -577,7 +418,7 @@
     position: relative;
   }
   .roadmap-hero h1 {
-    font: 700 clamp(32px, 4vw, 48px)/1.2 'Space Grotesk', Inter, sans-serif;
+    font: 700 clamp(32px, 4vw, 48px)/1.2 'Fira Sans', 'Fira Sans', sans-serif;
     margin-bottom: 16px;
   }
   .roadmap-hero p {
@@ -607,19 +448,19 @@
     box-shadow: 0 12px 32px rgba(0,0,0,.4);
   }
   .roadmap-card.now {
-    border-color: rgba(88,101,242,.4);
-    background: linear-gradient(135deg, rgba(88,101,242,.15) 0%, var(--floor) 100%);
-    border-left: 4px solid var(--blurple);
+    border-color: rgba(232,133,58,.4);
+    background: linear-gradient(135deg, rgba(232,133,58,.15) 0%, var(--floor) 100%);
+    border-left: 4px solid var(--ember);
   }
   .roadmap-card.next {
-    border-color: rgba(250,166,26,.4);
-    background: linear-gradient(135deg, rgba(250,166,26,.1) 0%, var(--floor) 100%);
-    border-left: 4px solid var(--yellow);
+    border-color: rgba(232,133,58,.28);
+    background: linear-gradient(135deg, rgba(232,133,58,.06) 0%, var(--floor) 100%);
+    border-left: 4px solid rgba(232,133,58,.5);
   }
   .roadmap-card.idea {
-    border-color: rgba(235,69,158,.4);
-    background: linear-gradient(135deg, rgba(235,69,158,.1) 0%, var(--floor) 100%);
-    border-left: 4px solid var(--pink);
+    border-color: rgba(138,154,123,.45);
+    background: linear-gradient(135deg, rgba(138,154,123,.08) 0%, var(--floor) 100%);
+    border-left: 4px solid var(--sage);
   }
   .roadmap-card .status {
     display: inline-flex;
@@ -627,24 +468,24 @@
     gap: 6px;
     padding: 4px 12px;
     border-radius: 6px;
-    font: 600 11px/1.5 'JetBrains Mono', monospace;
+    font: 600 11px/1.5 'Fira Code', monospace;
     letter-spacing: .05em;
     margin-bottom: 16px;
   }
   .roadmap-card.now .status {
-    background: rgba(88,101,242,.2);
-    color: #aab4ff;
+    background: rgba(232,133,58,.2);
+    color: var(--ember-hi);
   }
   .roadmap-card.next .status {
-    background: rgba(250,166,26,.2);
-    color: #fbbf24;
+    background: rgba(232,133,58,.14);
+    color: #D9A06A;
   }
   .roadmap-card.idea .status {
-    background: rgba(235,69,158,.2);
-    color: #f472b6;
+    background: rgba(138,154,123,.16);
+    color: #A9B899;
   }
   .roadmap-card h3 {
-    font: 700 20px 'Space Grotesk', Inter, sans-serif;
+    font: 700 20px 'Fira Sans', 'Fira Sans', sans-serif;
     margin-bottom: 12px;
   }
   .roadmap-card .card-content {
@@ -677,13 +518,13 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--blurple);
+    background: var(--ember);
   }
   .roadmap-card.next li::before {
-    background: var(--yellow);
+    background: rgba(232,133,58,.5);
   }
   .roadmap-card.idea li::before {
-    background: var(--pink);
+    background: var(--sage);
   }
   .expand-icon {
     position: absolute;
@@ -704,7 +545,7 @@
     position: relative;
   }
   .changelog-hero h1 {
-    font: 700 clamp(32px, 4vw, 48px)/1.2 'Space Grotesk', Inter, sans-serif;
+    font: 700 clamp(32px, 4vw, 48px)/1.2 'Fira Sans', 'Fira Sans', sans-serif;
     margin-bottom: 16px;
   }
   .changelog-hero p {
@@ -729,7 +570,7 @@
     position: relative;
   }
   .release:hover {
-    border-color: rgba(88,101,242,.4);
+    border-color: rgba(232,133,58,.4);
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(0,0,0,.3);
   }
@@ -748,17 +589,17 @@
   }
   .version-badge {
     padding: 4px 12px;
-    background: rgba(88,101,242,.15);
-    color: #aab4ff;
+    background: rgba(232,133,58,.15);
+    color: var(--ember-hi);
     border-radius: 6px;
-    font: 600 14px 'JetBrains Mono', monospace;
+    font: 600 14px 'Fira Code', monospace;
   }
   .release-date {
     color: var(--faint);
-    font: 400 13px 'JetBrains Mono', monospace;
+    font: 400 13px 'Fira Code', monospace;
   }
   .release-title {
-    font: 700 18px 'Space Grotesk', Inter, sans-serif;
+    font: 700 18px 'Fira Sans', 'Fira Sans', sans-serif;
     margin-bottom: 16px;
     color: var(--text);
   }
@@ -786,14 +627,14 @@
     flex-shrink: 0;
     min-width: 72px;
     text-align: center;
-    font: 600 10.5px/1.9 'JetBrains Mono', monospace;
+    font: 600 10.5px/1.9 'Fira Code', monospace;
     letter-spacing: .05em;
     border-radius: 5px;
     padding: 0 8px;
   }
-  .change-type.added { background: rgba(35,165,90,.14); color: #4ade80; }
-  .change-type.improved { background: rgba(88,101,242,.14); color: #aab4ff; }
-  .change-type.fixed { background: rgba(242,63,67,.12); color: #f87171; }
+  .change-type.added { background: rgba(138,154,123,.14); color: #4ade80; }
+  .change-type.improved { background: rgba(232,133,58,.14); color: var(--ember-hi); }
+  .change-type.fixed { background: rgba(232,133,58,.12); color: #f87171; }
   .release .expand-icon {
     position: absolute;
     top: 24px;
@@ -823,7 +664,7 @@
 
   /* ── Responsive + a11y ─────────────────────────────────────────────── */
   :focus-visible { 
-    outline: 2px solid var(--blurple); 
+    outline: 2px solid var(--ember); 
     outline-offset: 2px; 
     border-radius: 6px; 
   }
@@ -841,8 +682,8 @@
   }
   @media (max-width: 860px) {
     .grid { grid-template-columns: 1fr 1fr; }
-    .stage { grid-template-columns: 1fr; }
-    .tile.cat { grid-row: auto; aspect-ratio: 16/9; }
+    .stage { flex-direction: column; gap: 24px; padding: 28px 20px; }
+    .m-caption { text-align: center; }
     .hero { padding-top: 60px; }
     .roadmap-grid { grid-template-columns: 1fr; }
   }
@@ -870,10 +711,10 @@
     <a class="mark" id="mark" href="#features">
       <div class="logo-container">
         <svg class="logo-svg" viewBox="0 0 256 256" fill="none">
-          <path stroke="#5865f2" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+          <path stroke="#E8853A" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
             d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>
-          <circle class="eye" cx="92" cy="140" r="12" fill="#5865f2"/>
-          <circle class="eye" cx="164" cy="140" r="12" fill="#5865f2"/>
+          <circle class="eye" cx="92" cy="140" r="12" fill="#E8853A"/>
+          <circle class="eye" cx="164" cy="140" r="12" fill="#E8853A"/>
         </svg>
       </div>
       <b>skycord</b>
@@ -892,35 +733,24 @@
   <section class="hero">
     <div class="wrap">
       <h1>Your crew's<br/>place to <em>talk</em>.</h1>
-      <p class="sub">Voice and video calls, screen share, and themes you can send in chat — running on our own server, not someone else's.</p>
+      <p class="sub">Voice, video and screen share for people who already know each
+      other. Runs on hardware you own — ours today, yours when we open-source.</p>
       <a class="cta" href="https://app.skycord.xyz">Open Skycord<small>runs in your browser — no install</small></a>
+      <p class="selfhost">Self-hosting lands with the open-source release.</p>
       <p class="shipping" id="shipping"></p>
 
       <div class="stage" aria-hidden="true">
-        <div class="tile share">
-          <div class="fakewin">
-            <div class="fbar"><i></i><i></i><i></i></div>
-            <div class="frow w80"></div><div class="frow w60"></div><div class="frow w45"></div>
-          </div>
-          <span class="q">1080p&nbsp;30</span><span class="live">LIVE</span>
-          <span class="name">🖥 SMD</span>
+        <div class="machine">
+          <span class="m-led"></span>
+          <span class="m-slot"></span>
+          <span class="m-slot short"></span>
+          <div class="m-vents"><i></i><i></i><i></i><i></i></div>
         </div>
-        <div class="tile cat">
-          <div class="avatarball">
-            <svg class="avatar-svg" viewBox="0 0 256 256" fill="none">
-              <path stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
-                d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>
-              <circle class="eye" cx="92" cy="140" r="12" fill="#fff"/>
-              <circle class="eye" cx="164" cy="140" r="12" fill="#fff"/>
-            </svg>
-          </div>
-          <span class="name">sky</span>
-          <div class="pill">
-            <i class="mic" title="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></i>
-            <i class="green" title="Camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></i>
-            <i class="scr" title="Share your screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></i>
-            <i class="red" title="Leave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></i>
-          </div>
+        <div class="m-caption">
+          <span>uptime <b>214 days</b></span>
+          <span><b>8 friends</b> connected</span>
+          <span>your hardware</span>
+        </div>
         </div>
       </div>
     </div>
@@ -997,14 +827,14 @@
           </ul>
         </div>
         <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
-          <h3>Mobile support</h3>
-          <p>Skycord works on your phone like a native app.</p>
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg></div>
+          <h3>Channels &amp; servers</h3>
+          <p>Make a server for your crew, and give every topic its own room.</p>
           <ul class="features-list">
-            <li>Installable to home screen</li>
-            <li>Touch-first interface</li>
-            <li>Press-and-hold for menus</li>
-            <li>Full-screen conversations</li>
+            <li>Text and voice channels, grouped in categories</li>
+            <li>Invite links — including straight into a voice channel</li>
+            <li>Member list with live presence</li>
+            <li>Timed statuses that expire on their own</li>
           </ul>
         </div>
         <div class="card">
@@ -1077,19 +907,22 @@
 // Roadmap data
 const ROADMAP = [
   {
-    stage: 'now', label: 'Building now', title: 'Mobile app',
+    stage: 'now', label: 'Building now', title: 'Channels & servers',
+    items: [
+      'Servers with text and voice channels, categories, and invite links — live now',
+      'Roles and permissions',
+      'Server settings'
+    ]
+  },
+  {
+    // On hold in favour of the desktop experience — listed honestly rather
+    // than promised. It read 'Building now' here while the roadmap doc had it
+    // frozen, which is the kind of lie a landing page gets caught in.
+    stage: 'idea', label: 'Being looked at', title: 'Mobile app',
     items: [
       'Installable, touch-first, and the whole app rather than a cut-down version',
       'Members and profiles as pull-up sheets',
       'Push notifications, once the desktop and mobile apps can receive them'
-    ]
-  },
-  {
-    stage: 'next', label: 'Next up', title: 'Channels',
-    items: [
-      'Servers with real channels, not just group DMs',
-      'Roles and permissions',
-      'Search with tags across a server'
     ]
   },
   {
