@@ -4206,25 +4206,28 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
-/* ── The armature ────────────────────────────────────────────────────────
-   The construction grid is a real material here, drawn at --grid-cell, the
-   same pitch the layout measures from. It sits under the content on the two
-   large surfaces and nowhere else: a grid behind a dense list is noise, but a
-   grid behind the open field of the conversation is the thing that says this
-   interface was built rather than arranged. */
-.chat, .sb-body {
+/* ── Material, not blueprint ──────────────────────────────────────────────
+   The armature used to be drawn here as literal rule lines. It read as
+   structure showing through the skin, so depth comes from material now:
+   a long tonal fall across the conversation, and light caught on the lip of
+   every raised surface. The grid still governs alignment; it is just no
+   longer something you look at.
+
+   The 24px pitch remains available as an explicit state for anyone who wants
+   to see what the layout is built on. */
+.chat {
+  background-image: radial-gradient(120% 100% at 50% 0%,
+    rgba(122,165,255,.045) 0%, rgba(122,165,255,0) 58%);
+}
+html.show-armature .chat,
+html.show-armature .sb-body {
   background-image:
-    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-line-strong) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line-strong) 1px, transparent 1px);
   background-size: var(--grid-cell) var(--grid-cell);
 }
-/* Shown explicitly — a real state, not a debug mode. */
-html.show-armature .chat,
-html.show-armature .sb-body { background-image:
-    linear-gradient(to right, var(--grid-line-strong) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-line-strong) 1px, transparent 1px); }
 
-.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid var(--divider);font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.02em;color:var(--text-strong);cursor:pointer;transition:background var(--dur-1) var(--ease-out);white-space:nowrap}
+.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;border-bottom:1px solid var(--mat-hairline);box-shadow:0 1px 0 var(--mat-lip) inset;font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.02em;color:var(--text-strong);cursor:pointer;transition:background var(--dur-1) var(--ease-out);white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
 /* The one flexible child, so the voice cluster and the chevron keep their
    size and a 40-character server name ellipses instead of shoving them out

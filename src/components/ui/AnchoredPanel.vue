@@ -111,14 +111,20 @@ const onOutside = (e: PointerEvent) => {
 
 <template>
   <Teleport to="body">
+    <!-- Always mounted, because place() measures this element to decide
+         where it goes; a v-if on `pos` would mean it can never be measured
+         and so never positioned. It parks off-screen until then, and
+         materialises when it gains `ap--in`. -->
     <div
       ref="panel"
       class="ap"
+      :class="{ 'ap--in': !!pos }"
       data-anchored-panel
       :style="{
         left:  pos ? pos.left + 'px' : '-9999px',
         top:   pos ? pos.top  + 'px' : '0px',
         width: width + 'px',
+        transformOrigin: placement === 'right' ? 'left center' : 'right center',
       }"
     >
       <slot />
@@ -130,11 +136,32 @@ const onOutside = (e: PointerEvent) => {
 .ap {
   position: fixed;
   z-index: 1300;              /* above ProfilePopout (1200), below modals */
-  background: var(--bg-floating, var(--bg-panel));
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .32);
+  /* A menu is a medium-weight material: heavy enough to separate itself from
+     the content it covers, light enough to read as floating above it. The
+     inset top line is light catching the lip; the outer hairline is its body.
+     Both degrade to solid colour under prefers-reduced-transparency. */
+  background: var(--mat-medium);
+  backdrop-filter: blur(var(--mat-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 var(--mat-lip),
+    0 0 0 1px var(--mat-hairline),
+    var(--shadow-2);
+  border-radius: var(--edge-3);
   padding: 6px;
   max-height: 60vh;
   overflow-y: auto;
 }
+
+/* Materialise, don't just fade: blur, scale and opacity move together so the
+   panel reads as a surface arriving rather than an image cross-fading in. It
+   grows out of the row that spawned it — transform-origin follows placement.
+
+   Exit is still instant: the parent unmounts this with a v-if, so there is no
+   leave phase to animate. That is the same gap ModalBase has across 21
+   surfaces, and it gets fixed once, there, rather than papered over here. */
+.ap { opacity: 0; transform: translateX(-6px) scale(.97);
+      transition: opacity var(--dur-2) var(--ease-out),
+                  transform var(--dur-2) var(--ease-out); }
+.ap.ap--in { opacity: 1; transform: none; }
 </style>

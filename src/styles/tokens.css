@@ -34,12 +34,32 @@
   --bg-chatbar-focus: #1b2331;
 
   /* ── The armature ─────────────────────────────────────────────────────── */
-  /* The construction grid is a real material, not decoration: --grid-cell is
-     the pitch every surface aligns to, and --grid-line is what it looks like
-     when shown. `html.show-armature` turns it visible as a genuine state. */
+  /* The grid is what everything ALIGNS to; it is no longer drawn.
+     Rendering it as visible rule lines made the app look like a wireframe of
+     itself — structure showing through the skin. The pitch stays load-bearing
+     (every measure derives from it), the lines only appear on demand. */
   --grid-cell: 24px;
   --grid-line: rgba(122, 165, 255, .055);
   --grid-line-strong: rgba(122, 165, 255, .11);
+
+  /* ── Materials ────────────────────────────────────────────────────────────
+     Depth comes from translucency and light now, not from drawn lines. Three
+     weights, because weight encodes hierarchy: heavier materials separate
+     structural regions, lighter ones carry interactive surfaces. Never stack
+     a lighter material on a lighter one — legibility collapses.
+     Every one of these degrades under prefers-reduced-transparency below. */
+  --mat-thin:   rgba(24, 32, 48, .62);   /* chips, small popovers            */
+  --mat-medium: rgba(20, 27, 41, .78);   /* menus, panels, popouts           */
+  --mat-thick:  rgba(14, 19, 30, .88);   /* modals, sheets — the heaviest    */
+  --mat-blur:   18px;
+  --mat-blur-thick: 28px;
+  /* The bright top edge is light catching the lip of a real material; the
+     hairline is its body. Both are what replaced the 1px hard dividers. */
+  --mat-lip:      rgba(255, 255, 255, .10);
+  --mat-hairline: rgba(255, 255, 255, .055);
+  --shadow-1: 0 1px 2px rgba(0,0,0,.28);
+  --shadow-2: 0 6px 18px rgba(0,0,0,.34);
+  --shadow-3: 0 18px 48px rgba(0,0,0,.46);
 
   /* ── Text ─────────────────────────────────────────────────────────────── */
   /* Every tier below clears 4.5:1 on --bg-chat and --bg-panel. The previous
@@ -74,15 +94,19 @@
   --font-mono:    'JetBrains Mono', 'Consolas', 'Menlo', monospace;
 
   /* Structural labels are built, not typed: chamfered caps, tight, small. */
-  --label-tracking: .08em;
+  --label-tracking: .08em;   /* structural labels, 11px, uppercase */
+  /* Large text reads too loose as it grows; body wants none. */
+  --track-display: -.021em;
+  --track-title:   -.011em;
+  --track-body:     0;
 
   /* ── Edges: chamfer, not radius ───────────────────────────────────────── */
   /* This world is cell-built and square. The old palette carried 16 distinct
      border-radius values; these four are the whole scale. */
   --edge-0: 0;
-  --edge-1: 2px;
-  --edge-2: 3px;
-  --edge-3: 4px;
+  --edge-1: 4px;
+  --edge-2: 7px;
+  --edge-3: 11px;
   --edge-pill: 999px;  /* badges and counters only */
 
   /* ── Space ────────────────────────────────────────────────────────────── */
@@ -272,6 +296,30 @@ html.names-plain { --name-hover: var(--text-strong); }
 /* Individual components still carry their own considered blocks; this is the
    backstop beneath them, and it is what stops the app's infinite animations
    from running at someone who asked them not to. */
+
+/* Translucency is a preference, not a given. Frostier and solid rather than
+   blurred — the hierarchy the materials encode has to survive without them,
+   so the weights stay distinguishable as flat colours. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --mat-thin:   #182030;
+    --mat-medium: #141b29;
+    --mat-thick:  #0e131e;
+    --mat-blur: 0px;
+    --mat-blur-thick: 0px;
+  }
+}
+
+/* High contrast wants defined edges, not implied ones. */
+@media (prefers-contrast: more) {
+  :root {
+    --mat-thin: #0d1117; --mat-medium: #0b0f16; --mat-thick: #080b11;
+    --mat-blur: 0px; --mat-blur-thick: 0px;
+    --mat-hairline: rgba(255,255,255,.34);
+    --mat-lip:      rgba(255,255,255,.42);
+    --divider:      rgba(255,255,255,.34);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; --dur-exit: 1ms;
