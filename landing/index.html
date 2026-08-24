@@ -966,6 +966,35 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.11', date: 'Aug 25, 2026', title: 'Servers, channels, and a lot of small honesty',
+    items: [
+      ['add', 'Servers with real text and voice channels, grouped into categories you can collapse'],
+      ['add', 'Invite links — including one that drops the person straight into the voice channel you are sitting in'],
+      ['add', 'A member list showing who is online, and who is in voice without you opening the call'],
+      ['add', 'Mute, deafen and screen-share show on people in the channel list, so you can see the room at a glance'],
+      ['add', 'Right-click someone in a voice channel for their profile, or to set their volume just for you'],
+      ['add', 'Statuses that expire on their own — set one for an hour and forget about it'],
+      ['add', 'Owners can drag a channel from one category into another'],
+      ['add', 'Keyboard shortcuts, the same ones you already know: Ctrl+K to jump anywhere, Ctrl+Shift+M to mute, Ctrl+Shift+D to deafen, Alt and the arrow keys to change channel'],
+      ['add', 'A Keybinds page in settings that lists them, instead of the placeholder that was there'],
+      ['add', 'Shift+Enter writes a second line. The message box used to be a single-line field that could not hold one'],
+      ['add', 'Deleting a message asks first, and quotes the message back so you can see which one you are about to lose'],
+      ['imp', 'Menus, popouts and flyouts now close the way they opened. Seven of them used to fade in over a quarter of a second and then vanish between two frames'],
+      ['imp', 'Buttons respond when you press them, not only when you point at them'],
+      ['imp', 'Menus grow out of the thing you clicked instead of appearing from nowhere'],
+      ['imp', 'Right-clicking a message gives you a menu you can drive with the arrow keys — it was the one menu in the app you could only use with a mouse'],
+      ['imp', 'The whole app is reachable by keyboard now: the server rail, the channel list, and the buttons on a message. There is a skip link to jump straight to the message box'],
+      ['imp', 'The selected channel is marked with an outline instead of a colour fill, so you can tell an open text channel and the voice channel you are sitting in apart'],
+      ['imp', 'Long messages stop running the full width of a wide monitor'],
+      ['imp', 'Settings sections that are not built yet say Soon, rather than looking finished until you click them'],
+      ['fix', 'Timestamps and placeholder text were too faint to read. They failed a readability check on every single theme'],
+      ['fix', 'The open channel was invisible in both light themes'],
+      ['fix', 'Enter on a delete confirmation used to press Delete. It presses Cancel now'],
+      ['fix', 'Mark as Unread did nothing at all. It has been removed rather than left there looking real'],
+      ['fix', 'The loading placeholder appeared above your messages instead of in place of them']
+    ]
+  },
+  {
     v: 'v0.10.1', date: 'Aug 17, 2026', title: 'Who is actually here',
     items: [
       ['fix', 'Everyone showed as offline in group members and the direct message list, even while they were online'],
