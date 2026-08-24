@@ -76,6 +76,12 @@
      themes (near-black on the light ones) is the one value that never
      collides with a surface the ring can land on. */
   --focus-ring: rgba(255, 255, 255, .92);
+
+  /* Press response — a veil laid over whatever the control already is, so it
+     works the same on a neutral row, an accent-filled selected row and a red
+     danger button. One step past --hover-strong, the same white-on-dark /
+     black-on-light inversion the hover tints use. */
+  --press-veil: rgba(255, 255, 255, .09);
 }
 
 /* Appearance: "Always underline links" */
@@ -85,6 +91,7 @@ html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  --press-veil: rgba(0, 0, 0, .10);
   --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #e3e5e8;
   --bg-deep:   #ebedef;
@@ -117,6 +124,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --mention-row-bg-hover: rgba(200, 142, 0, .15);
 }
 [data-theme="light-dim"] {
+  --press-veil: rgba(0, 0, 0, .10);
   --focus-ring: rgba(0, 0, 0, .86);
   --bg-floor:  #c7ccd1;
   --bg-deep:   #d4d7dc;
