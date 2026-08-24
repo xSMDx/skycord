@@ -4,12 +4,30 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 
 ## Standing directives
 
-- **No deploys until channels is finished.** Everything lands on `main` unpushed and unshipped.
-  The gate is: channels complete → **UI/UX audit and polish** → then ship. (Stated 2026-08-21,
-  extended 2026-08-23.)
+- **Ship channels incrementally. (Superseded the old gate 2026-08-24.)** The previous directive
+  was "no deploys until channels is finished — channels complete → UI/UX audit → then ship."
+  That is retired. The user's reasoning: Discord's own channels were not complete at launch
+  either; they grew a piece at a time. A slice ships when it is *safe*, not when the feature set
+  is *finished*.
+
+  What that changes: **Server Settings and roles no longer block a deploy.** They are the next
+  slices, not a gate. Absent capabilities are badged "Soon" in the UI rather than hidden, so
+  shipping without them is honest rather than misleading.
+
+  What it does NOT change — these are safety gates and still hold:
+    1. ✅ nginx location alternation must include `servers` and `invites`, and `/join/<code>`
+       must fall through to the SPA index. **Done 2026-08-24, verified: the 404 on `/servers`
+       came from the API as JSON, not from nginx as HTML, proving the proxy matches.**
+    2. ⬜ The Cloudflare→origin leg must be TLS before the refresh cookie is trusted in
+       production. Origin cert is installed and nginx serves it on **2053** (443 is held by
+       `forward443.service`, a socat forward to 91.107.243.162 that is not ours to move).
+       **Remaining: a Cloudflare Origin Rule rewriting destination port to 2053, then SSL/TLS
+       → Full (strict).** Until both are set, `Secure` is browser-side only and the cookie
+       still crosses that hop in plaintext.
+    3. ⬜ A human smoke-tests the build before it goes out. Not perfectionism — the UI pass was
+       verified in a review browser with no microphone, no real pointer input, no matching
+       `:focus-visible`/`:active`, and a starved rAF. Voice is the least-verified surface.
 - **Phone / mobile layout is on hold.** Do not spend effort on touch variants.
-- The nginx deploy gate is still required before anything ships: `servers` and `invites` must be
-  in the location alternation, and `/join/<code>` must fall through to the SPA index.
 
 ## Queue
 
@@ -38,7 +56,7 @@ Merged: servers/channels API, channel messaging, 3a client slice, 3b operable se
 drag between categories, timed statuses, Invite to Voice, cascading menus, voice member
 state, voice occupant menus).
 
-### Blocking the rest
+### Next slices (no longer blocking a deploy — see Standing directives)
 
 - **Server Settings** — a real screen. Nothing exists: no component, no route. The user has
   named it next more than once, and three other items are queued behind it.

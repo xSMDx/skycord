@@ -274,7 +274,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-edited{font-size:10px;color:var(--text-faint);font-style:italic}
 .msg-pin{font-size:11px}
 .msg-fail{font-size:11px;color:#f08080}
-.msg-text{font-size:var(--msg-font-size, 15px);line-height:1.5;color:var(--text-1);word-break:break-word}
+/* Cap the measure, not the row.
+
+   At 1512px the text ran to about 150 characters a line with no limit at all,
+   and wider on a bigger display — roughly double what the eye tracks before it
+   loses its place on the return sweep. The cap is on the TEXT, so the row keeps
+   its full width and the hover tint, actions and selection still span the pane.
+
+   80ch rather than the 65 a book would use: chat is short lines and scanning
+   rather than sustained reading, and a narrow column in a wide pane reads as a
+   layout mistake. Discord does not cap this either, so it is a deliberate
+   departure — revert by deleting the max-width alone. */
+.msg-text{font-size:var(--msg-font-size, 15px);line-height:1.5;color:var(--text-1);word-break:break-word;max-width:80ch}
 .msg-gif{max-width:320px;max-height:240px;border-radius: 8px;display:block;cursor:pointer}
 .msg-text.jumbo{font-size:42px;line-height:1.25}
 .msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding: 0 4px;border-radius: 4px;cursor:pointer;font-weight:500}
