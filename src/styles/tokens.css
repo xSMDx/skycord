@@ -10,6 +10,7 @@
   /* Accent */
   --accent:        #5865f2;
   --accent-hover:  #4752c4;
+  --accent-deep:   #3f49ae;  /* accent text on an accent tint, light themes */
   --accent-rgb:    88, 101, 242;
 
   /* Surfaces (dark default) */
@@ -54,6 +55,10 @@
   --mention-bg:      rgba(var(--accent-rgb), .18);
   --mention-all-fg:  var(--text-strong);
   --mention-all-bg:  rgba(240, 178, 0, .22);
+  /* Text sitting ON a translucent accent tint. Pale in dark themes, the
+     accent itself in light ones — the same split --time-token-fg already
+     uses, because a pale lavender on a pale tint is invisible. */
+  --accent-text:     #c4c9ff;
   --time-token-fg:   #c4c9ff;
   --time-token-bg:   rgba(var(--accent-rgb), .16);
   /* Whole-row highlight for messages that ping @everyone (or you). */
@@ -93,6 +98,10 @@ html.names-plain { --name-hover: var(--text-strong); }
   /* Mentions/time tokens: full accent + deeper tints read clearly on white. */
   --mention-fg:    var(--accent);
   --mention-bg:    rgba(var(--accent-rgb), .15);
+  /* --accent-hover, not --accent: the accent itself only reaches 3.75:1 on
+     its own 16% tint, and this is 14px body text. accent-hover is derived
+     (shade(accent, -12%)) so a custom accent darkens with it. */
+  --accent-text:   var(--accent-deep);
   --time-token-fg: var(--accent);
   --time-token-bg: rgba(var(--accent-rgb), .13);
   --mention-all-bg:       rgba(200, 142, 0, .24);
@@ -119,6 +128,10 @@ html.names-plain { --name-hover: var(--text-strong); }
   --hover-strong: rgba(0,0,0,.10);
   --mention-fg:    var(--accent);
   --mention-bg:    rgba(var(--accent-rgb), .15);
+  /* --accent-hover, not --accent: the accent itself only reaches 3.75:1 on
+     its own 16% tint, and this is 14px body text. accent-hover is derived
+     (shade(accent, -12%)) so a custom accent darkens with it. */
+  --accent-text:   var(--accent-deep);
   --time-token-fg: var(--accent);
   --time-token-bg: rgba(var(--accent-rgb), .13);
   --mention-all-bg:       rgba(200, 142, 0, .24);

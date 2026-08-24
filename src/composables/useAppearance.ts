@@ -139,6 +139,11 @@ export const applyAppearance = () => {
   // Accent (always)
   root.style.setProperty('--accent', a.accent)
   root.style.setProperty('--accent-hover', shade(a.accent, -0.12))
+  // Text sitting ON an accent tint in a LIGHT theme. -12% is not enough: on
+  // light-dim's mid-tone panel the tinted row composites to #d4d8f0, where
+  // accent-hover measures 4.02:1 against 14px body text. -28% clears 4.5 on
+  // both light themes with room to spare.
+  root.style.setProperty('--accent-deep', shade(a.accent, -0.28))
   root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
 
   // Sizing + fonts

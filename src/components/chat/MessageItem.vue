@@ -260,7 +260,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .reply-preview:active{background:rgba(255,255,255,.08)}
 .reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid #4e5058;border-top:2px solid #4e5058;border-radius:6px 0 0 0}
 .reply-icon{flex-shrink:0;color:var(--text-faint);display:none}
-.reply-author{color:#c4c9ff;font-weight:600;white-space:nowrap}
+.reply-author{color:var(--accent-text);font-weight:600;white-space:nowrap}
 .reply-content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9a9ea6}
 .msg-meta{display:flex;align-items:baseline;gap:8px;margin-bottom:2px;flex-wrap:wrap}
 .msg-author{font-size:15px;font-weight:700;color: var(--text-strong);cursor:pointer;transition: color var(--dur-1) var(--ease-out)}
