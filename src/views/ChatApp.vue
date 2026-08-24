@@ -59,7 +59,7 @@ import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance }        from '@/composables/useAppearance'
-import { useVoice, isConnectedVoiceRoom } from '@/composables/useVoice'
+import { useVoice, isConnectedVoiceRoom, userPref, setUserPref } from '@/composables/useVoice'
 import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
@@ -70,6 +70,7 @@ import { openMenu }          from '@/composables/useContextMenu'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
 import { buildServerMenu }      from '@/composables/contextMenus/serverMenu'
+import { voiceOccupantMenu, voiceSelfMenu } from '@/composables/contextMenus/voiceOccupantMenu'
 import { buildChannelMenu, type MenuChannel } from '@/composables/contextMenus/channelMenu'
 import { buildCategoryMenu, type MenuCategory } from '@/composables/contextMenus/categoryMenu'
 import { formatChannelName } from '@/utils/channelName'
@@ -2063,6 +2064,62 @@ const userMenuHandlers = {
 const openUserMenu = (e: MouseEvent, u: MenuUser, ctx: { isSelf?: boolean; isCurrentDM?: boolean } = {}) =>
   openMenu(e, userMenu(u, userMenuHandlers, ctx))
 
+
+/**
+ * Right-clicking a voice-channel occupant in the sidebar.
+ *
+ * Builders, not arrays: these carry live state — the mute checkmark, the
+ * volume readout — and an array is a snapshot that can never update while
+ * the menu is open. Same reason CallBar passes builders for its tiles.
+ */
+const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string; name: string; avatar: string }) => {
+  const u: MenuUser = { id: o.id, displayName: o.name, avatar: o.avatar }
+  const isMe = o.id === authUser.value?.id
+  const handlers = {
+    openProfile: userMenuHandlers.openProfile,
+    openDM:      userMenuHandlers.openDM,
+    startCall:   userMenuHandlers.startCall,
+    inviteToServer: () => { showInvite.value = true },
+    // Only offered to a non-friend (the builder gates on isFriend), so the
+    // request can never be a duplicate of an existing friendship.
+    addFriend: async (target: MenuUser) => {
+      try {
+        await api.sendFriendRequest(target.id)
+        showToast(`Friend request sent to ${target.displayName || target.username}`)
+      } catch (e: any) {
+        showToast(e?.message || 'Could not send that friend request')
+      }
+    },
+    copy:        copyText,
+    setUserVolume:   (id: string, v: number) => setUserPref(id, { volume: v }),
+    toggleUserMute:  (id: string) => setUserPref(id, { muted: !userPref(id).muted }),
+    toggleUserVideo: (id: string) => setUserPref(id, { videoOff: !userPref(id).videoOff }),
+    toggleMute:   onToggleMute,
+    toggleDeafen: onToggleDeafen,
+    openVoiceSettings: () => openSettings('voice'),
+  }
+  if (isMe) {
+    openMenu(e, () => voiceSelfMenu(u, {
+      channelId,
+      selfMuted: voice.localMuted,
+      selfDeafened: voice.localDeafened,
+    }, handlers))
+    return
+  }
+  openMenu(e, () => {
+    const pref = userPref(o.id)
+    return voiceOccupantMenu(u, {
+      channelId,
+      volume: pref.volume, muted: pref.muted, videoOff: pref.videoOff,
+      isFriend: apiFriends.value.some(f => f.id === o.id),
+      // Volume and local mute act on an audio element that only exists
+      // while you share a room; from a channel you are merely looking at
+      // there is nothing behind them.
+      inCallWithThem: liveVoiceChannel.value?.id === channelId,
+    }, handlers)
+  })
+}
+
 const copyText = (text: string, what: string) => {
   navigator.clipboard.writeText(text)
     .then(() => showToast(`${what} copied`))
@@ -3527,7 +3584,8 @@ onBeforeUnmount(() => {
               <div class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
               <div class="ch-fold-in">
               <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
-                class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })">
+                class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })"
+                @contextmenu.prevent.stop="openVoiceOccupantMenu($event, ch.id, o)">
                 <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
                 <!-- Deafened implies muted, so only the stronger of the two is
