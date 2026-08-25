@@ -13,7 +13,13 @@
     "sourceMap": true
   },
   "include": ["server/**/*.ts"],
-  "exclude": ["node_modules", "src", "dist"],
+  // server/__tests__ is excluded from the production compile: the tests import
+  // vitest and supertest, which are devDependencies. On a server without them
+  // this made `npm run build` exit non-zero with 26 TS2307 errors while still
+  // emitting a perfectly good dist/server — a build that fails and works at the
+  // same time, which teaches everyone to ignore the error. Tests are still
+  // typechecked by `npm run typecheck` and by vitest itself.
+  "exclude": ["node_modules", "src", "dist", "server/__tests__"],
   "ts-node": {
     "transpileOnly": true,
     "files": true,
