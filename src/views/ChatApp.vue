@@ -1645,6 +1645,11 @@ const openGroup = async (group: Group) => {
  */
 const selectChannel = async (ch: Channel) => {
   if (ch.type !== 'text') return
+  // Push to the conversation screen, same as openDM/openGroup/openFriends.
+  // A no-op on desktop. This was missing because until the rail came back a
+  // channel could not be tapped on a phone at all, so opening one loaded the
+  // messages behind a list screen that never got out of the way.
+  mobileNav.openConversation()
   openChannel(ch.id)
   setActiveChannel(ch.id)
   await loadChannelHistory(ch.id)
