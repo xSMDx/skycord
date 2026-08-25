@@ -4656,18 +4656,54 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    moves without triggering layout on every frame. */
 .shell.mobile{position:relative}
 
-/* The rail is 68px of permanent chrome whose only real content today is Home.
-   Servers aren't real until channels ship, so it's hidden rather than ported
-   as an empty strip — it gets designed alongside channels. */
-.shell.mobile .rail{display:none}
+/* ── The rail on a phone ───────────────────────────────────────────────
+   It used to be display:none, with a note saying it would be designed
+   alongside channels. Channels shipped, so this is that: without the rail
+   there is no way to reach a server on a phone at all.
+
+   68px, the desktop width, deliberately. Every part of the rail — the 68x54
+   row, the 44x44 icon, the active pip, unread badges — is built for it, and
+   narrowing to save 12px would mean re-tuning six things. 307px is left for
+   channel names at 375px, which is plenty for a screen you pass through
+   rather than dwell in. The 44px icon also already clears the 44x44 touch
+   minimum, which is the number that would otherwise have forced a redesign. */
+.shell.mobile .rail{
+  display:flex;
+  position:absolute;top:0;bottom:0;left:0;width:68px;
+  /* The rail is the left edge of the screen now, and shares the top and
+     bottom with nothing, so it carries all three insets itself. */
+  padding-top:calc(10px + env(safe-area-inset-top));
+  padding-bottom:calc(10px + env(safe-area-inset-bottom));
+  padding-left:env(safe-area-inset-left);
+  /* Same travel as the sidebar, in vw rather than %.
+
+     A percentage resolves against each element's OWN width, so the identical
+     declaration moved the 68px rail 19px and the 307px sidebar 86px — they
+     drifted 67px apart mid-push instead of reading as one sheet. Parallax
+     between layers is the point elsewhere; between two halves of the same
+     surface it is just a seam.
+
+     -28vw is also exactly what the sidebar used to travel when it was the
+     full 375px width, so this preserves the original feel rather than
+     inventing a new one. */
+  transform:translate3d(calc(var(--m, 0) * -28vw), 0, 0);
+  opacity:calc(1 - (var(--m, 0) * 0.35));
+  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  z-index:1;
+}
 
 .shell.mobile .sidebar{
-  position:absolute;inset:0;width:100%;
+  position:absolute;top:0;bottom:0;right:0;left:68px;width:auto;
   border-right:none;
   /* Parallax: the list trails the conversation rather than moving with it, so
      the two read as separate layers instead of one sliding sheet. Same trick
-     iOS uses on a navigation push. */
-  transform:translate3d(calc(var(--m, 0) * -28%), 0, 0);
+     iOS uses on a navigation push.
+
+     vw, not %: the sidebar is no longer full-width now the rail sits beside
+     it, so -28% quietly became -86px instead of the -105px it travelled
+     before. Keyed to the screen it keeps its original distance and matches
+     the rail exactly. */
+  transform:translate3d(calc(var(--m, 0) * -28vw), 0, 0);
   opacity:calc(1 - (var(--m, 0) * 0.35));
   transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
   z-index:1;
@@ -4686,12 +4722,33 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 
 /* Mid-drag the finger owns the position; a transition here would fight it. */
+.shell.mobile.m-drag .rail,
 .shell.mobile.m-drag .sidebar,
 .shell.mobile.m-drag .main-content,
 .shell.mobile.m-drag .chat{transition:none}
 
 /* Safe areas: the sidebar header and the user panel are the top and bottom
    edges of the screen once the rail is gone, so they carry the insets. */
+/* ── Touch targets ─────────────────────────────────────────────────────
+   A channel row is 31px on desktop, which a mouse hits precisely and a
+   thumb does not. Everything tappable in the list gets the 44px minimum.
+   min-height rather than padding so a wrapping name still grows the row
+   instead of overflowing it. */
+.shell.mobile .ch-item{min-height:44px}
+.shell.mobile .vc-occ{min-height:44px}
+.shell.mobile .vc-invite{min-height:44px}
+.shell.mobile .ch-group-label{min-height:44px}
+.shell.mobile .dm-item{min-height:44px}
+
+/* ── Hover does not exist here ─────────────────────────────────────────
+   These two are opacity:0 until :hover, which on a phone means never. The
+   consequence was not cosmetic: with no visible + and no visible row
+   actions, there was no discoverable way to make a channel or open a
+   channel menu on a phone. Long-press reaches the same menu, but nothing
+   advertises long-press. They are permanent on touch instead. */
+.shell.mobile .ch-add-btn{opacity:1}
+.shell.mobile .ch-more{opacity:1}
+
 .shell.mobile .sb-header{padding-top: env(safe-area-inset-top)}
 .shell.mobile .user-panel{padding-bottom: env(safe-area-inset-bottom)}
 /* ── Mobile chat header ────────────────────────────────────────────────────
