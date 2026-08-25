@@ -6,8 +6,9 @@
 
 web
 
-Desktop-first. A phone layout exists but is explicitly on hold and is not a design target
-right now. An Electron desktop shell is planned (partly to reach OS-level idle detection and a
+Desktop-first, but the phone layout is a live target again as of 2026-08-25 — it was on hold
+while channels was desktop-only, and is being built out in slices now that channels has
+shipped. An Electron desktop shell is planned (partly to reach OS-level idle detection and a
 secure mic context without a certificate), but it wraps this same web UI — it does not introduce
 a native design language.
 

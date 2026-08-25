@@ -41,7 +41,19 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
     3. ⬜ A human smoke-tests the build before it goes out. Not perfectionism — the UI pass was
        verified in a review browser with no microphone, no real pointer input, no matching
        `:focus-visible`/`:active`, and a starved rAF. Voice is the least-verified surface.
-- **Phone / mobile layout is on hold.** Do not spend effort on touch variants.
+- **Phone / mobile layout is ACTIVE again (2026-08-25).** The hold is lifted. It was
+  frozen while channels was desktop-only; channels shipped, and none of it was reachable
+  on a phone — the rail was `display: none` with a note saying it would be designed
+  alongside channels.
+
+  Being built in slices, same as channels:
+    1. ✅ **Navigation** — the rail returns beside the channel list on the list screen,
+       keeping the existing two-screen push. Touch targets to 44px, and the hover-only
+       `+` and row actions made permanent (hover does not exist on a phone, so there was
+       no discoverable way to create a channel). Spec:
+       `docs/superpowers/specs/2026-08-25-phone-channels-nav-design.md`
+    2. ⬜ **Voice on a phone** — the stage, call controls, occupant list as phone screens.
+    3. ⬜ **Server management on a phone** — create channel/category, invites, members.
 
 ## Queue
 
