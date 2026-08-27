@@ -3751,7 +3751,7 @@ onBeforeUnmount(() => {
                 @keydown.self.enter.prevent="joinVoiceChannel(ch)"
                 @keydown.self.space.prevent="joinVoiceChannel(ch)"
                 @contextmenu.prevent.stop="openChannelMenu($event, ch)">
-                <Volume2 class="ch-icon" :size="16" :stroke-width="1.5"/>
+                <Volume2 class="ch-icon" :class="{ occupied: voiceOccupants(ch.id).length > 0 }" :size="16" :stroke-width="1.5"/>
                 <span class="ch-name">{{ ch.name }}</span>
                 <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
                   <Ellipsis :size="14" :stroke-width="1.5"/>
@@ -4327,7 +4327,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius: 50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
 /* Green means you are in this one. Every other server with voice activity
    keeps the dark chip — the user asked for two colours, not a palette. */
-.ri-voice.mine{background:#23a55a}
+.ri-voice.mine{background:var(--green)}
 
 /* ── Rail voice hover preview ──────────────────────────────────────────────
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
@@ -4338,7 +4338,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
 .rvp-ch{margin-top: 8px}
 .rvp-ch-head{display:flex;align-items:center;gap: 6px;min-width:0}
-.rvp-ch-ic{color:#23a55a;flex-shrink:0}
+.rvp-ch-ic{color:var(--green);flex-shrink:0}
 .rvp-ch-name{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* The row we could not name. Same slot, visibly not a channel name — it is not
    uppercased like one, and it does not pretend to be a title. */
@@ -4358,8 +4358,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .rvp-enter-from{transform:none}
 }
 .ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius: 1px;margin: 4px 0}
-.add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:#23a55a}
-.ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:#23a55a}
+.add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:var(--green)}
+.ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:var(--green)}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
@@ -4409,7 +4409,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* No cursor of its own: the whole 48px bar is one button that opens the server
    menu, and a default cursor over part of it would claim otherwise. */
 .sb-hvoice{display:flex;align-items:center;gap: 6px;flex-shrink:0}
-.sb-hvoice-ic{color:#23a55a;flex-shrink:0}
+.sb-hvoice-ic{color:var(--green);flex-shrink:0}
 .sb-hvoice-avs{display:flex;align-items:center}
 /* Overlapped, each ringed in the sidebar's own background so the stack reads
    as separate faces rather than one smeared one. */
@@ -4422,7 +4422,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    draws inside the image, which the neighbour would then cover. The z-index
    lifts a speaking face above the one stacked on top of it, so its ring is a
    whole ring rather than a crescent. */
-.sb-hvoice-av.speaking{z-index:1;box-shadow:0 0 0 2px var(--bg-raised),0 0 0 3.5px #23a55a}
+.sb-hvoice-av.speaking{z-index:1;box-shadow:0 0 0 2px var(--bg-raised),0 0 0 3.5px var(--green)}
 .sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
 .sb-body{flex:1;overflow-y:auto;padding: 8px 0}
 
@@ -4446,7 +4446,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    still need to be noticeable. The active row stays at full strength — you're
    reading it. */
 .dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
-.dm-call{width:18px;height:18px;border-radius: 50%;background:#23a55a;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-call{width:18px;height:18px;border-radius: 50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
 .dm-x:hover{color: var(--text-strong)}
@@ -4478,7 +4478,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .icon-btn-leave:hover{background:rgba(237,66,69,.12) !important}
 
 /* @everyone toast */
-.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:#23a55a;color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
 .toast-pop-enter-active,.toast-pop-leave-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
@@ -4578,7 +4578,19 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-add-btn:hover{color:var(--text-strong)}
 .ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), padding-left var(--dur-1) var(--ease-out);white-space:nowrap}
 .ch-item:hover{background:var(--hover);color:var(--text-2);padding-left: 12px}
-.ch-item.active{color:var(--text-strong);outline:1px solid var(--active-ring);outline-offset:-1px}
+.ch-item.active{color:var(--text-strong);background:var(--active-bg);outline:1px solid var(--active-ring);outline-offset:-1px}
+/* Hover still has somewhere to go on a selected row: without this the
+   active fill would swallow the hover tint, since both are (0,2,0) and
+   .active is declared later. */
+.ch-item.active:hover{background:var(--hover-strong)}
+/* A voice channel you are in drops the ring entirely — the green speaker
+   below already says where you are, and outlining it as well says the same
+   thing twice while making it compete with the open text channel. */
+.ch-item.voice.active{outline:none}
+/* Green whenever ANYONE is in there, whether or not that includes you.
+   The row is otherwise identical to an empty channel, so occupancy was
+   only discoverable by reading the names underneath it. */
+.ch-item.voice .ch-icon.occupied{color:var(--green)}
 .ch-item.unread{color:var(--text-2);font-weight:600}
 .ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
@@ -4798,7 +4810,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .ch-topic-dot{
   display:block;width:8px;height:8px;border-radius: 50%;flex-shrink:0;
 }
-.shell.mobile .ch-topic-dot.online{background:#23a55a}
+.shell.mobile .ch-topic-dot.online{background:var(--green)}
 
 /* Bigger avatar to match the two-line block beside it. */
 .shell.mobile .dm-header-av,
@@ -4933,7 +4945,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-actions{display:flex;gap: 6px}
 .f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
-.f-btn.accept{background:rgba(35,165,90,.15);color:#23a55a}
+.f-btn.accept{background:rgba(35,165,90,.15);color:var(--green)}
 .f-btn.accept:hover{background:rgba(35,165,90,.28);transform:scale(1.1)}
 .f-btn.decline{background:rgba(237,66,69,.15);color:#ed4245}
 .f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}

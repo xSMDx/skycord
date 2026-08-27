@@ -91,7 +91,22 @@
 
      Inverted on the light themes for the obvious reason — a white ring on a
      white sidebar is not a ring. */
-  --active-ring: rgba(255, 255, 255, .62);
+  /* Thinner-reading than it was: the selected row now also carries a lighter
+     background, so the ring only has to edge it rather than carry the state
+     on its own. 1px is the crispest an outline gets, so "thinner" is done
+     with weight rather than width. */
+  --active-ring: rgba(255, 255, 255, .34);
+
+  /* Selected row fill — a step lighter than the panel it sits on. */
+  --active-bg: rgba(255, 255, 255, .045);
+
+  /* The app's green: live, online, affirmative. It was a raw #23a55a in 11
+     places — the rail voice pip, the header voice cluster, speaking rings,
+     add/explore, the DM call button, the toast, the accept button — and this
+     adds a twelfth (a voice channel with someone in it), so it is a token now
+     and all of them point at it. Named for the colour rather than one role,
+     because no single role covers a success toast AND an explore button. */
+  --green: #23a55a;
 
   /* ── The 2px grid ───────────────────────────────────────────────────────
      Spacing, radii and icon sizes are even numbers. Not a scale invented
@@ -120,6 +135,7 @@ html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  --active-bg: rgba(0, 0, 0, .05);
   --active-ring: rgba(0, 0, 0, .42);
   --press-veil: rgba(0, 0, 0, .10);
   --focus-ring: rgba(0, 0, 0, .86);
@@ -154,6 +170,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --mention-row-bg-hover: rgba(200, 142, 0, .15);
 }
 [data-theme="light-dim"] {
+  --active-bg: rgba(0, 0, 0, .05);
   --active-ring: rgba(0, 0, 0, .42);
   --press-veil: rgba(0, 0, 0, .10);
   --focus-ring: rgba(0, 0, 0, .86);
