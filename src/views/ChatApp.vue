@@ -798,6 +798,11 @@ const PREVIEW_FACES = 6
  * watch below.
  */
 const joinVoiceChannel = (ch: Channel) => {
+  // The stage lives in the .chat pane, which on a phone is the pushed screen.
+  // Without this you joined the call — occupant row, connected panel, audio —
+  // while the stage itself sat entirely off screen at x=375, the exact mirror
+  // of the bug selectChannel had. A no-op on desktop.
+  mobileNav.openConversation()
   viewVoiceChannel(ch.id)
   // The stage is about to own the pane. `activeChannelId` stays pointed at
   // the text channel underneath (see the comment above), but useSocket's own
