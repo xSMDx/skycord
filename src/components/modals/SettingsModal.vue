@@ -604,6 +604,30 @@ const handleLogout = () => { emit('close'); logout() }
               </div>
             </div>
 
+            <!-- Presence.
+                 Moved here from Profile: Profile is what OTHER people see —
+                 avatar, banner, display name, the live card beside it. How
+                 long your own inactivity takes to register is a behaviour of
+                 the account, not part of that picture. -->
+            <h2 id="acc-presence" class="acc-section-title">Presence</h2>
+            <div class="acc-card">
+              <div class="acc-row acc-row-idle">
+                <div class="acc-row-left">
+                  <span class="acc-row-label">Go idle after</span>
+                  <span class="acc-row-value muted">Only while your status is Online — Do Not Disturb
+                    and Invisible stay as you set them.</span>
+                </div>
+                <div class="acc-idlerow">
+                  <input
+                    class="pf-idle" type="range" :min="IDLE_MIN" :max="IDLE_MAX" step="1"
+                    :value="idleMinutes"
+                    aria-label="Minutes of inactivity before your status turns to Idle"
+                    @input="setIdleMinutes(+($event.target as HTMLInputElement).value)" />
+                  <span class="pf-idleval">{{ idleMinutes }} min</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Password & Security -->
             <h2 id="acc-password" class="acc-section-title">Password &amp; Security</h2>
             <div class="acc-card">
@@ -713,19 +737,6 @@ const handleLogout = () => { emit('close'); logout() }
                   </div>
                 </div>
 
-                <div class="pf-field">
-                  <span class="acc-row-label">Go idle after</span>
-                  <div class="pf-idlerow">
-                    <input
-                      class="pf-idle" type="range" :min="IDLE_MIN" :max="IDLE_MAX" step="1"
-                      :value="idleMinutes"
-                      aria-label="Minutes of inactivity before your status turns to Idle"
-                      @input="setIdleMinutes(+($event.target as HTMLInputElement).value)" />
-                    <span class="pf-idleval">{{ idleMinutes }} min</span>
-                  </div>
-                  <p class="pf-hint">Only applies while your status is Online. Do Not Disturb and
-                    Invisible stay as you set them.</p>
-                </div>
               </div>
 
               <!-- live card -->
@@ -1154,10 +1165,16 @@ img    { display: block; object-fit: cover; }
 .pf-avrow { display: flex; align-items: center; gap: 12px; }
 .pf-av { flex: none; }   /* size and shape come from Avatar, which also clips */
 .pf-avbtns { display: flex; gap: 8px; flex-wrap: wrap; }
-.pf-idlerow { display: flex; align-items: center; gap: 12px; }
+/* The idle control now sits in an .acc-row on the Account page, which is a
+   space-between flex row: the slider needs its own width there rather than
+   the flex:1 it had while it owned a full-width Profile field. */
+.acc-idlerow { display: flex; align-items: center; gap: 12px; flex-shrink: 0; width: 240px; }
+/* On a phone a 240px slider plus the label cannot share a row inside a 375px
+   screen, so the row stacks and the slider takes the full width instead. */
+.sm-modal.mobile .acc-row-idle { flex-wrap: wrap; }
+.sm-modal.mobile .acc-row-idle .acc-idlerow { width: 100%; }
 .pf-idle { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
 .pf-idleval { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-1); min-width: 52px; text-align: right; }
-.pf-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-3); line-height: 1.4; }
 .pf-danger { color: #f0716f; background: none; }
 .pf-danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pf-danger:disabled { opacity: .4; cursor: not-allowed; }

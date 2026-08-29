@@ -296,11 +296,32 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(237,66,69,.15); }
 
 .fi { color:#4e5058; margin: 0 8px; flex-shrink:0; }
-.inp-wrap input { flex:1; padding: 10px 6px 10px 0; font-size:14px; color:var(--text-1); }
+/* min-width:0 because a flex item defaults to min-width:auto and so refuses to
+   shrink below its own content. A long value (an email, a pasted password)
+   then pushed the row wider than .inp-wrap, and since the wrapper is
+   overflow:hidden, what got clipped was the eye button on the end. */
+.inp-wrap input { flex:1; min-width:0; padding: 10px 6px 10px 0; font-size:14px; color:var(--text-1); }
 .inp-wrap input::placeholder { color:#4e5058; }
 
 .eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#4e5058; border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
 .eye:hover { color:var(--text-2); }
+
+/* ── Phone ────────────────────────────────────────────────────────────────
+   This view had NO media query at all, which is why the eye misbehaved across
+   phone sizes rather than at one width.
+
+   The 16px is the real fix. iOS zooms the viewport in whenever a focused
+   field is under 16px and does not zoom back out — at 14px, tapping the
+   password field scaled the whole page up, which slid the eye button toward
+   or past the right edge and made it land in a different place on every
+   screen size. Same platform constraint the composer documents. */
+@media (max-width: 768px) {
+  .inp-wrap input { font-size: 16px; }
+  /* 34px was under the 44px touch minimum, on the control you tap when a
+     password has already gone wrong once. */
+  .eye { width: 44px; height: 44px; }
+  .eye:active { color: var(--text-2); }
+}
 .check { flex-shrink:0; margin-right: 8px; }
 
 .ferr { font-size:12px; color:#f08080; }

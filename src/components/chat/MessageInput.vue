@@ -451,7 +451,22 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
 .input-wrapper.with-reply   { border-radius: 0 0 10px 10px; }
-.input-wrapper:focus-within { background: var(--bg-chatbar-focus); border-color: rgba(var(--accent-rgb),.4); }
+/* The composer's focus signal is the wrapper, not an outline on the textarea.
+   The global :focus-visible backstop drew a 2px hard white rectangle around
+   the field -- and because Chromium always matches :focus-visible on a text
+   input, even a mouse click got it, so the harshest treatment in the app was
+   also the one shown most often. The accent border, halo and lift below say
+   "focused" at least as clearly and belong to the design. */
+.input-wrapper:focus-within {
+  background: var(--bg-chatbar-focus);
+  border-color: rgba(var(--accent-rgb),.55);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.10);
+}
+/* Suppressing the ring HERE rather than only under [data-input="pointer"], so
+   tabbing to the composer gets the same treatment as clicking it. This is not
+   a focus indicator being removed -- the rule above replaces it with one that
+   changes border, background and halo together. */
+.input-wrapper:focus-within .msg-input:focus-visible { outline: none !important; }
 .input-wrapper.sending      { opacity: .7; pointer-events: none; }
 
 .input-attach {
@@ -530,6 +545,22 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   .input-attach:active,
   .input-action-btn:active { color: var(--text-1); transform: scale(.92); }
   .send-btn:active { transform: scale(.92); }
+
+  /* Send, with nothing typed, carried a faint plate (rgba(255,255,255,.04))
+     that reads as a subtle affordance at its desktop 32px. Blown up to the
+     44px touch target it became a large grey square sitting immediately
+     beside two bare icons of the same size — the odd one out in a row of
+     three, and the more prominent for being the disabled one.
+     No plate until it can actually send; then the accent fill earns it. */
+  .send-btn:not(.ready) { background: transparent; }
+
+  /* Matching the other two so the row reads as one set of controls. */
+  .send-btn { border-radius: 6px; }
+
+  /* The glyph did not grow with the button: a 16px icon centred in 44px next
+     to 18px icons in the same 44px looked shrunken. Set on the SVG because
+     lucide writes width/height as attributes, which CSS overrides. */
+  .send-btn svg { width: 20px; height: 20px; }
 }
 
 @keyframes spin { to { transform: rotate(360deg) } }

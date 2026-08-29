@@ -70,3 +70,17 @@ button:disabled:active,
    keyboard journey -- Chromium already withholds :focus-visible there, and
    this states the intent for anything that does not. */
 [tabindex="-1"]:focus-visible { outline: none !important; }
+
+/* ...but a mouse click is not a keyboard journey either, and Chromium only
+   knows that for NATIVE controls. On a `<div role="button" tabindex="0">` --
+   the server rail, channel rows, the sidebar header, category labels -- it
+   matches :focus-visible on a plain click, so picking a server lit it with a
+   hard white ring and left it lit until something else took focus.
+
+   main.ts marks the current input modality on <html>. The ring is what
+   keyboard users navigate by and it keeps its full strength for them; this
+   only makes a click behave the way clicking a native button already does.
+   Pressing Tab or an arrow key clears the flag and the ring comes back. */
+:root[data-input="pointer"] :focus-visible {
+  outline: none !important;
+}

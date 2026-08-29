@@ -17,6 +17,29 @@ applyAppearance()   // restore saved theme/accent/density before first paint
 installLongPress()
 
 /**
+ * Track whether the last interaction was a pointer or the keyboard.
+ *
+ * Chromium's `:focus-visible` heuristic gets native controls right — clicking a
+ * <button> with a mouse does not match, tabbing to it does. It does NOT get
+ * author-focusable elements right: a `<div role="button" tabindex="0">` matches
+ * on a plain mouse click. Most of this app's clickable rows are exactly that —
+ * the server rail, channel rows, the sidebar header, category labels — so
+ * clicking a server lit it with the 2px white focus ring and left it lit.
+ *
+ * Marking the modality on <html> lets the ring stay for keyboard users, which
+ * is the whole reason it exists, while a mouse click behaves the way a native
+ * button does. Capture phase so a stopPropagation() somewhere in the app cannot
+ * desynchronise the flag from reality.
+ */
+const _root = document.documentElement
+addEventListener('pointerdown', () => _root.setAttribute('data-input', 'pointer'), true)
+addEventListener('keydown', e => {
+  // Only navigation keys re-arm it. Typing into a field is not a request to
+  // see focus rings everywhere.
+  if (e.key === 'Tab' || e.key.startsWith('Arrow')) _root.removeAttribute('data-input')
+}, true)
+
+/**
  * Suppress the browser's own right-click menu app-wide.
  *
  * Skycord provides its own menus, and having the browser's appear alongside

@@ -626,6 +626,17 @@ onBeforeUnmount(() => {
   /* The row is the closest thing to the bottom edge, so it owns the home
      indicator inset rather than letting the controls sit under it. */
   .cb-bar   { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* A floor under the stage on phones and tablets.
+     .cb-stagewrap is `flex: 1 1 auto; min-height: 0`, so with no video it
+     collapsed to whatever the avatars needed and several tiles ended up
+     squeezed against each other in a strip barely taller than one row. On a
+     desktop the chat column is tall enough that this never showed.
+     The floor goes on the WRAPPER, not on the tiles: `.stage--spotlight
+     .is-main` carries a deliberate `min-height: 0` because a fixed floor
+     there makes a tile taller than the stage containing it. Giving the
+     container the room instead is what that comment asks for. */
+  .cb-stagewrap { min-height: 300px; }
 }
 
 /* Per-icon hover animations — each control has its own personality */
