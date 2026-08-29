@@ -58,8 +58,8 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 |---|------|-------|
 | 1 | **Channels** | in progress — see below |
 | 2 | **UI/UX audit and polish (whole app)** | queued, scoped below |
-| 3 | E2EE | designed, not built — `docs/superpowers/specs/2026-08-09-e2ee-design.md` |
-| 4 | Electron desktop shell + auto-update | parked, needs a brainstorm on pickup |
+| 3 | Electron desktop shell + auto-update | parked, needs a brainstorm on pickup — now blocks E2EE |
+| 4 | E2EE (DMs only) | designed, not built — `docs/superpowers/specs/2026-08-30-e2ee-revision.md`; gated on native mobile **and** desktop apps |
 
 Done and shipped: context menus (v0.6), mobile/PWA rebuild (v0.10), profile picture and banner
 framing, landing page, call telemetry (v0.9), presence fixes (v0.10.1).

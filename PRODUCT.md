@@ -38,7 +38,7 @@ Three claims, in the order they matter:
 
 1. **You can run it yourself.** Your hardware, your data, no company in the middle. This is not
    a marketing line — it drives real technical decisions and is allowed to constrain them.
-2. **Real end-to-end encryption** — opt-in per conversation and permanent once enabled, with
+2. **Real end-to-end encryption** — opt-in per conversation and permanent once enabled, DMs first, with
    device authorisation derived from the ECDH shared secret rather than issued by the server.
    Designed in detail, **not yet built**; do not present it as shipped.
 3. **Open and donation-funded.** Open-source once the app is in good shape, funded by donations.
@@ -98,4 +98,4 @@ Voice runs on LiveKit. The client is Vue 3 + TypeScript; the server is Express +
 ## Open Decisions
 
 - Whether education (classes, cohorts) becomes a first-class capability or stays a use case.
-- Whether E2EE ships before or after the desktop shell.
+- ~~Whether E2EE ships before or after the desktop shell.~~ **Resolved 2026-08-30: after.** Delete-on-delivery makes the client the only copy, and LAN sync needs mDNS — neither is safe or possible in a browser.
