@@ -74,7 +74,10 @@ const scheduleRefresh = () => {
   _timer = setTimeout(() => silentRefresh(), 14 * 60 * 1000)
 }
  
-const silentRefresh = async (): Promise<boolean> => {
+/** Exported for useSocket: a rejected socket handshake is usually an expired
+ *  access token, and the socket layer needs to mint a new one before retrying.
+ *  The 14-minute timer above cannot be relied on for that — see the call site. */
+export const silentRefresh = async (): Promise<boolean> => {
   try {
     const res = await authFetch('/auth/refresh', { method: 'POST' })
     if (!res.ok) { user.value = null; accessToken.value = null; return false }

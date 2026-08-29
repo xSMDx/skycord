@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { io, Socket } from 'socket.io-client'
-import { useAuth }    from './useAuth'
+import { useAuth, silentRefresh } from './useAuth'
 import { isMuted }    from './useConvPrefs'
 
 /** The DM's real conversation id, matching the server's dmConvId: both user ids
@@ -189,6 +189,8 @@ export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'ch
  * combination — a long-lived tab that has reconnected twenty times ends up
  * firing twenty nudges at one network event.
  */
+/** Guards the one-shot token refresh in connect_error. Cleared on connect. */
+let _authRetried = false
 let _netWatchInstalled = false
 const installNetworkWatch = () => {
   if (_netWatchInstalled || typeof window === 'undefined') return
@@ -204,6 +206,11 @@ export const useSocket = () => {
   const { accessToken, user } = useAuth()
 
   const connect = () => {
+    // A deliberate new connection is a new attempt, so it gets its own shot at
+    // a token refresh. Clearing this only on a successful 'connect' would mean
+    // a failed login followed by a good one went straight to 'offline' without
+    // trying, because the guard was still set from the previous attempt.
+    _authRetried = false
     // The old guard was `if (_socket?.connected) return`, which let a socket
     // that existed but was mid-reconnect fall straight through and be
     // REPLACED — abandoning the previous one with every listener still
@@ -220,13 +227,18 @@ export const useSocket = () => {
       _socket = null
     }
     _socket = io('/', {
-      auth: { token: accessToken.value },
+      // A FUNCTION, not an object. Socket.IO captures a plain `auth` object
+      // once and re-sends that same snapshot on every reconnection attempt —
+      // so a token that expires during an outage is replayed, expired, until
+      // the attempts run out. The callback form is re-evaluated per attempt,
+      // so each retry carries whatever token is current.
+      auth: (cb: (d: Record<string, unknown>) => void) => cb({ token: accessToken.value }),
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 15,
       reconnectionDelay:    2000,
     })
 
-    _socket.on('connect',    () => { connected.value = true;  connState.value = 'connected';  console.log('[WS] connected') })
+    _socket.on('connect',    () => { connected.value = true;  connState.value = 'connected';  _authRetried = false; console.log('[WS] connected') })
     _socket.on('disconnect', () => {
       connected.value = false
       // A disconnect isn't automatically fatal — Socket.IO starts retrying by
@@ -234,7 +246,38 @@ export const useSocket = () => {
       connState.value = 'connecting'
       console.log('[WS] disconnected')
     })
-    _socket.on('connect_error', e => { connState.value = 'connecting'; console.warn('[WS]', e.message) })
+    /**
+     * Not every connect_error is a retry in progress.
+     *
+     * Socket.IO v4 sets `socket.active` false when the SERVER rejected the
+     * handshake — our own auth middleware calling `next(new Error(...))` —
+     * as opposed to the server simply being unreachable. After a rejection
+     * nothing retries, and `reconnect_failed` never fires either, because no
+     * reconnection was ever scheduled. Reporting 'connecting' there left the
+     * banner spinning "Reconnecting…" forever over a socket that had given up,
+     * and because ConnectionBanner only offers "Try again" on 'offline', the
+     * user's only way out was reloading the page.
+     *
+     * The cause is almost always an expired access token. They last 15 minutes
+     * and are renewed by a 14-minute setTimeout in useAuth — but timers are
+     * suspended while the machine sleeps or the tab is backgrounded, which is
+     * exactly when a socket drops. Waking up after 20 minutes means the refresh
+     * never ran and the reconnect presents a token that died mid-sleep.
+     *
+     * So: mint a fresh token and try once more. Once, guarded — if the server
+     * still refuses us with a valid token, the problem isn't the token.
+     */
+    _socket.on('connect_error', e => {
+      console.warn('[WS]', e.message)
+      if (!_socket || _socket.active) { connState.value = 'connecting'; return }
+      if (_authRetried) { connState.value = 'offline'; return }
+      _authRetried = true
+      silentRefresh().then(ok => {
+        if (!ok) { connState.value = 'offline'; return }
+        connState.value = 'connecting'
+        _socket?.connect()
+      })
+    })
 
     // Fired once reconnectionAttempts is exhausted. Past this point nothing
     // will retry on its own, so the UI has to offer the user a way out.
