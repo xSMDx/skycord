@@ -1,0 +1,37 @@
+# Line endings.
+#
+# Development happens on Windows; production is a Linux VPS. Without this, blobs
+# went into the repo with mixed endings, so every `git pull` on the server found
+# eight files "modified" that nobody had touched and refused to fast-forward —
+# a manual `git checkout -- .` before every single deploy.
+#
+# `text=auto` normalises everything git detects as text to LF *in the repo*.
+# `eol=lf` also checks it out as LF on every platform, overriding the local
+# core.autocrlf=true, so Windows and the VPS hold byte-identical files and the
+# "LF will be replaced by CRLF" warnings stop.
+* text=auto eol=lf
+
+# Windows-only scripts that must keep CRLF to run correctly.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binaries: never touched, never diffed as text. `text=auto` detects most of
+# these on its own, but a misdetection corrupts the file, and being explicit
+# costs nothing.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.mp3  binary
+*.ogg  binary
+*.wav  binary
+*.webm binary
+*.mp4  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.pdf  binary
