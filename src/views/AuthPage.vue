@@ -121,19 +121,19 @@ const submitRegister = async () => {
           <p class="form-sub">So excited to see you again 👋</p>
 
           <div class="field" :class="{err: le.identifier}">
-            <label>Username or Email</label>
+            <label for="login-identifier">Username or Email</label>
             <div class="inp-wrap">
               <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <input v-model="lf.identifier" type="text" placeholder="username or email" autocomplete="username" @keydown.enter="submitLogin"/>
+              <input id="login-identifier" v-model="lf.identifier" type="text" placeholder="username or email" autocomplete="username" @keydown.enter="submitLogin"/>
             </div>
             <span v-if="le.identifier" class="ferr">{{ le.identifier }}</span>
           </div>
 
           <div class="field" :class="{err: le.password}">
-            <label class="lrow">Password <button class="forgot" type="button">Forgot?</button></label>
+            <label for="login-password" class="lrow">Password <button class="forgot" type="button">Forgot?</button></label>
             <div class="inp-wrap">
               <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <input v-model="lf.password" :type="showPw?'text':'password'" placeholder="your password" autocomplete="current-password" @keydown.enter="submitLogin"/>
+              <input id="login-password" v-model="lf.password" :type="showPw?'text':'password'" placeholder="your password" autocomplete="current-password" @keydown.enter="submitLogin"/>
               <button class="eye" type="button" @click="showPw=!showPw">
                 <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -157,36 +157,36 @@ const submitRegister = async () => {
 
           <div class="row2">
             <div class="field" :class="{err: re.username}">
-              <label>Username *</label>
+              <label for="reg-username">Username *</label>
               <div class="inp-wrap">
                 <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
-                <input v-model="rf.username" type="text" placeholder="pixel_wizard" maxlength="32" autocomplete="username"/>
+                <input id="reg-username" v-model="rf.username" type="text" placeholder="pixel_wizard" maxlength="32" autocomplete="username"/>
               </div>
               <span v-if="re.username" class="ferr">{{ re.username }}</span>
             </div>
             <div class="field">
-              <label>Display Name</label>
+              <label for="reg-displayname">Display Name</label>
               <div class="inp-wrap">
                 <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                <input v-model="rf.displayName" type="text" placeholder="Optional" maxlength="50"/>
+                <input id="reg-displayname" v-model="rf.displayName" type="text" placeholder="Optional" maxlength="50"/>
               </div>
             </div>
           </div>
 
           <div class="field" :class="{err: re.email}">
-            <label>Email *</label>
+            <label for="reg-email">Email *</label>
             <div class="inp-wrap">
               <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-              <input v-model="rf.email" type="email" placeholder="you@example.com" autocomplete="email"/>
+              <input id="reg-email" v-model="rf.email" type="email" placeholder="you@example.com" autocomplete="email"/>
             </div>
             <span v-if="re.email" class="ferr">{{ re.email }}</span>
           </div>
 
           <div class="field" :class="{err: re.password}">
-            <label>Password *</label>
+            <label for="reg-password">Password *</label>
             <div class="inp-wrap">
               <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <input v-model="rf.password" :type="showPw?'text':'password'" placeholder="Min 8 chars, uppercase, number, symbol" autocomplete="new-password"/>
+              <input id="reg-password" v-model="rf.password" :type="showPw?'text':'password'" placeholder="Min 8 chars, uppercase, number, symbol" autocomplete="new-password"/>
               <button class="eye" type="button" @click="showPw=!showPw">
                 <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -202,10 +202,10 @@ const submitRegister = async () => {
           </div>
 
           <div class="field" :class="{err: re.confirm}">
-            <label>Confirm Password *</label>
+            <label for="reg-confirm">Confirm Password *</label>
             <div class="inp-wrap" :class="{match: rf.confirm && rf.password===rf.confirm}">
               <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <input v-model="rf.confirm" :type="showConfirm?'text':'password'" placeholder="Re-enter password" autocomplete="new-password" @keydown.enter="submitRegister"/>
+              <input id="reg-confirm" v-model="rf.confirm" :type="showConfirm?'text':'password'" placeholder="Re-enter password" autocomplete="new-password" @keydown.enter="submitRegister"/>
               <button class="eye" type="button" @click="showConfirm=!showConfirm">
                 <svg v-if="!showConfirm" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>

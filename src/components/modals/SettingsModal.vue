@@ -817,7 +817,7 @@ const handleLogout = () => { emit('close'); logout() }
               </button>
               <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: appearance.accent }">
                 <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-                <input type="color" :value="appearance.accent" @input="setAppearance({ accent: ($event.target as HTMLInputElement).value })" />
+                <input type="color" aria-label="Custom accent colour" :value="appearance.accent" @input="setAppearance({ accent: ($event.target as HTMLInputElement).value })" />
               </label>
             </div>
 
@@ -841,14 +841,14 @@ const handleLogout = () => { emit('close'); logout() }
             </div>
             <template v-if="appearance.scheme !== 'off'">
               <h3 class="ap-sub">Contrast — {{ CONTRAST_LABELS[contrastIdx] }}</h3>
-              <input class="ap-slider" type="range" min="0" max="3" step="1" :value="contrastIdx" :style="{ '--fill': fillPct(contrastIdx, 0, 3) }" @input="setAppearance({ contrast: CONTRAST_STEPS[+($event.target as HTMLInputElement).value] })" />
+              <input class="ap-slider" aria-label="Contrast" type="range" min="0" max="3" step="1" :value="contrastIdx" :style="{ '--fill': fillPct(contrastIdx, 0, 3) }" @input="setAppearance({ contrast: CONTRAST_STEPS[+($event.target as HTMLInputElement).value] })" />
               <p class="ap-hint">Scheme generates the whole palette from your accent color. Set the scheme to <strong>Off</strong> to use the theme presets above.</p>
             </template>
 
             <!-- ── Text Readability ── -->
             <h2 id="ap-readability" class="acc-section-title">Text Readability</h2>
             <h3 class="ap-sub">Text size in chat — {{ appearance.msgSize }}px</h3>
-            <input class="ap-slider" type="range" min="13" max="20" step="1" :value="appearance.msgSize" :style="{ '--fill': fillPct(appearance.msgSize, 13, 20) }" @input="setAppearance({ msgSize: +($event.target as HTMLInputElement).value })" />
+            <input class="ap-slider" aria-label="Message font size" type="range" min="13" max="20" step="1" :value="appearance.msgSize" :style="{ '--fill': fillPct(appearance.msgSize, 13, 20) }" @input="setAppearance({ msgSize: +($event.target as HTMLInputElement).value })" />
 
             <div class="acc-card">
               <div class="acc-row">
@@ -893,14 +893,14 @@ const handleLogout = () => { emit('close'); logout() }
 
             <h3 class="ap-sub">Space Between Message Groups — {{ appearance.groupSpacing }}px</h3>
             <div class="ap-stepwrap">
-              <input class="ap-slider" type="range" min="0" :max="GAP_STEPS.length - 1" step="1" :value="gapIdx" :style="{ '--fill': fillPct(gapIdx, 0, GAP_STEPS.length - 1) }" @input="setAppearance({ groupSpacing: GAP_STEPS[+($event.target as HTMLInputElement).value] })" />
+              <input class="ap-slider" aria-label="Space between message groups" type="range" min="0" :max="GAP_STEPS.length - 1" step="1" :value="gapIdx" :style="{ '--fill': fillPct(gapIdx, 0, GAP_STEPS.length - 1) }" @input="setAppearance({ groupSpacing: GAP_STEPS[+($event.target as HTMLInputElement).value] })" />
               <div class="ap-ticks"><span v-for="g in GAP_STEPS" :key="g" :class="{ on: GAP_STEPS[gapIdx] === g }">{{ g }}px</span></div>
             </div>
 
             <h3 class="ap-sub">Zoom level — {{ appearance.zoom }}%</h3>
             <p class="ap-hint ap-hint-top">Adjust the size of the interface.</p>
             <div class="ap-stepwrap">
-              <input class="ap-slider" type="range" min="0" :max="ZOOM_STEPS.length - 1" step="1" :value="zoomIdx" :style="{ '--fill': fillPct(zoomIdx, 0, ZOOM_STEPS.length - 1) }" @input="setAppearance({ zoom: ZOOM_STEPS[+($event.target as HTMLInputElement).value] })" />
+              <input class="ap-slider" aria-label="Interface zoom" type="range" min="0" :max="ZOOM_STEPS.length - 1" step="1" :value="zoomIdx" :style="{ '--fill': fillPct(zoomIdx, 0, ZOOM_STEPS.length - 1) }" @input="setAppearance({ zoom: ZOOM_STEPS[+($event.target as HTMLInputElement).value] })" />
               <div class="ap-ticks ap-ticks-zoom"><span v-for="z in ZOOM_STEPS" :key="z" :class="{ on: ZOOM_STEPS[zoomIdx] === z }">{{ z }}</span></div>
             </div>
 
@@ -932,14 +932,14 @@ const handleLogout = () => { emit('close'); logout() }
             <h2 id="ap-share" class="acc-section-title">Share Theme</h2>
             <p class="ap-hint ap-hint-top">Copy your current look as a code or a link and send it to anyone — they can preview it before keeping it.</p>
             <div class="ap-share">
-              <input class="ap-name-input" v-model="themeName" placeholder="Theme name (optional)" maxlength="60" />
+              <input class="ap-name-input" aria-label="Theme name" v-model="themeName" placeholder="Theme name (optional)" maxlength="60" />
               <button class="acc-btn primary" @click="copyThemeCode">{{ copyFlash ? 'Copied!' : 'Copy theme code' }}</button>
               <button class="acc-btn" :disabled="linkBusy" @click="createShareLink">{{ linkFlash ? 'Link copied!' : linkBusy ? '…' : 'Create share link' }}</button>
             </div>
 
             <h3 class="ap-sub">Load a theme</h3>
             <textarea
-              class="ap-share-input" rows="2" spellcheck="false"
+              class="ap-share-input" aria-label="Theme code" rows="2" spellcheck="false"
               placeholder="Paste a sykord-theme:… code here"
               v-model="themeCodeInput"
             />

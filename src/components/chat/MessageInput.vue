@@ -368,6 +368,7 @@ onMounted(autoGrow)
         @select="onSelect"
         @blur="onBlur"
         :placeholder="placeholder"
+        :aria-label="placeholder"
         class="msg-input"
         :disabled="sending"
       ></textarea>

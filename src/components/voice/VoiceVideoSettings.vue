@@ -202,11 +202,11 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
     <div class="vv-row2">
       <label class="vv-field">
         <span class="vv-label">Input Volume — {{ voiceSettings.inputVolume }}%</span>
-        <input class="vv-slider" type="range" min="0" max="100" :value="voiceSettings.inputVolume" @input="setVoiceSettings({ inputVolume: +($event.target as HTMLInputElement).value })" />
+        <input class="vv-slider" aria-label="Input volume" type="range" min="0" max="100" :value="voiceSettings.inputVolume" @input="setVoiceSettings({ inputVolume: +($event.target as HTMLInputElement).value })" />
       </label>
       <label class="vv-field">
         <span class="vv-label">Output Volume — {{ voiceSettings.outputVolume }}%</span>
-        <input class="vv-slider" type="range" min="0" max="100" :value="voiceSettings.outputVolume" @input="onOutputVolume(+($event.target as HTMLInputElement).value)" />
+        <input class="vv-slider" aria-label="Output volume" type="range" min="0" max="100" :value="voiceSettings.outputVolume" @input="onOutputVolume(+($event.target as HTMLInputElement).value)" />
       </label>
     </div>
 
@@ -233,7 +233,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 
     <template v-if="voiceSettings.inputMode==='voice'">
       <h3 class="vv-sub">Input Sensitivity — {{ voiceSettings.sensitivity }}</h3>
-      <input class="vv-slider" type="range" min="0" max="100" :value="voiceSettings.sensitivity" @input="setVoiceSettings({ sensitivity: +($event.target as HTMLInputElement).value })" />
+      <input class="vv-slider" aria-label="Input sensitivity" type="range" min="0" max="100" :value="voiceSettings.sensitivity" @input="setVoiceSettings({ sensitivity: +($event.target as HTMLInputElement).value })" />
     </template>
     <template v-else>
       <h3 class="vv-sub">Push-to-Talk Key</h3>

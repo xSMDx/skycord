@@ -3873,7 +3873,7 @@ onBeforeUnmount(() => {
             <template v-else-if="friendsTab!=='pending'">
               <div class="f-search">
                 <Search :size="14" :stroke-width="1.5"/>
-                <input v-model="friendSearch" type="text" placeholder="Search"/>
+                <input v-model="friendSearch" type="text" aria-label="Search friends" placeholder="Search"/>
               </div>
               <div class="f-section-label">
                 {{ friendsTab==='online'
@@ -4080,6 +4080,7 @@ onBeforeUnmount(() => {
                       v-model="searchQuery"
                       class="ch-search-input"
                       type="text"
+                      aria-label="Search this conversation"
                       placeholder="Search"
                       @focus="searchFocused = true"
                       @blur="onSearchBlur"
@@ -4204,7 +4205,7 @@ onBeforeUnmount(() => {
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="14" :stroke-width="1.5"/>
-            <input type="text" placeholder="Search members…"/>
+            <input type="text" aria-label="Search members" placeholder="Search members…"/>
           </div>
           <div class="mp-list">
             <!-- Wrapped for the same reason the Offline block below is: a section
