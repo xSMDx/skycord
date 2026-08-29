@@ -18,26 +18,23 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
     1. ✅ nginx location alternation must include `servers` and `invites`, and `/join/<code>`
        must fall through to the SPA index. **Done 2026-08-24, verified: the 404 on `/servers`
        came from the API as JSON, not from nginx as HTML, proving the proxy matches.**
-    2. ⬜ The Cloudflare→origin leg must be TLS before the refresh cookie is trusted in
-       production. Cloudflare Origin certificate installed at `/etc/ssl/cloudflare/`
-       (RSA 2048, SAN covers `skycord.xyz` + `*.skycord.xyz`, valid to 2041), and nginx
-       serves it on **443 and 2053** across all three server blocks.
+    2. ✅ **DONE 2026-08-30.** The Cloudflare→origin leg is TLS and the refresh cookie is
+       protected end to end. Cloudflare Origin certificate at `/etc/ssl/cloudflare/`
+       (RSA 2048, SAN `skycord.xyz` + `*.skycord.xyz`, valid to 2041); nginx listens on
+       443 and 2053; Cloudflare SSL/TLS set to **Full (strict)**; `.env` on
+       `NODE_ENV=production` with `CLIENT_ORIGIN=https://app.skycord.xyz`; pm2 running
+       the compiled `dist/server/index.js`. Verified on a fresh login rather than
+       assumed: `syk_rt` carries HttpOnly, Secure and SameSite=Strict.
 
-       443 was held by `forward443.service` — a systemd socat unit, "Forward 443 to
-       Germany", blindly relaying every TLS byte to 91.107.243.162. Sampled with zero
-       established connections and disabled (not deleted: `systemctl enable --now
-       forward443` restores it if something on the German end turns out to depend on it).
-       2053 is kept alongside as a fallback.
+       443 was reclaimed from `forward443.service`, a socat unit relaying the whole
+       port to 91.107.243.162. Sampled at zero established connections and disabled,
+       **not deleted** — `systemctl enable --now forward443` restores it if the far end
+       turns out to need it. 2053 stays as a fallback.
 
-       **Remaining: Cloudflare SSL/TLS → Full (strict). One setting, no Origin Rule, and
-       no outage window in either direction** — Flexible reaches nginx on 80 and
-       Full (strict) reaches nginx on 443, so both states work. Until it is flipped,
-       `Secure` is browser-side only and the cookie still crosses that hop in plaintext.
+       Fixed in the same session: `cp -r dist/*` had been publishing the compiled
+       backend and its sourcemaps into the public web root on every deploy. See the
+       deploy notes for the nginx trailing-slash trap that fix walked into.
 
-       Good config backed up at `/root/skycord-nginx.GOOD-443.conf`.
-       `/root/skycord-nginx.bak.2026-08-24` is the pre-change file — restoring it reverts
-       the listeners AND the `servers|invites` alternation, so it is not a safe rollback
-       for the TLS work alone.
     3. ⬜ A human smoke-tests the build before it goes out. Not perfectionism — the UI pass was
        verified in a review browser with no microphone, no real pointer input, no matching
        `:focus-visible`/`:active`, and a starved rAF. Voice is the least-verified surface.
