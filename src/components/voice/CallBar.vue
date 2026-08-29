@@ -544,6 +544,12 @@ onBeforeUnmount(() => {
 /* Discord-style controls — no container shape, buttons float on the call bg */
 .cb-bar { display: flex; align-items: center; gap: 8px; }
 .cb-group { display: flex; align-items: center; gap: 2px; background: var(--bg-input); border-radius: 16px; padding: 4px; }
+/* One of these groups holds controls that only exist for DM and group calls.
+   In a voice channel it has no children at all and rendered as a bare 10px
+   pill — its own padding and nothing else — plus the 8px gap beside it. On a
+   desktop that is an unnoticed nub; on a phone the 18px it wasted was exactly
+   what pushed Leave Call onto a second row. */
+.cb-group:empty { display: none; }
 .cb-b {
   width: 40px; height: 40px; border-radius: 8px;
   background: transparent; color: #fff;
@@ -580,6 +586,47 @@ onBeforeUnmount(() => {
   transition: background var(--dur-1) var(--ease-out);
 }
 .cb-leave:hover { background: #d83c3f; }
+
+/* ── Touch sizing ──────────────────────────────────────────────────────────
+   Measured on a phone, six of the seven call controls were under 44x44: the
+   mic, camera, screen-share and More buttons at 40x40, and worse, the two
+   device chevrons at 18x40. An 18px-wide target is not hittable with a thumb.
+
+   Keyed to (pointer: coarse) rather than a width, because this is about
+   fingers, not screens — a touchscreen laptop at 1200px has the same problem
+   and the same fix.
+
+   Not solved by growing the hit area with a transparent ::after: at these
+   spacings a 44px box around the mic would overlap the box around its own
+   chevron, and overlapping targets just move the mis-tap somewhere less
+   predictable.
+
+   The chevrons stay narrower than 44 deliberately. They are the secondary
+   half of a split control, so the worst case of a mis-tap is hitting the mic
+   instead of the mic device list — a forgiving failure, and the only
+   alternative that fully complies is dropping device switching from a phone
+   call entirely. 28x48 is a 2.3x bigger target than 18x40. */
+@media (pointer: coarse) {
+  /* 44 wide, not 48. The bar lives inside the stage wrapper, which is inset
+     16px each side, so the real budget at 375px is 343 — not 375. At 48 the
+     row measured 348 and wrapped Leave Call onto a second line, which reads
+     as a mistake rather than a layout. 44 is the touch minimum anyway; the
+     extra 4px was generosity the width could not pay for. Heights stay 48,
+     which costs nothing horizontally and helps the thumb. */
+  .cb-b     { width: 44px; height: 48px; border-radius: 10px; }
+  .cb-chev  { width: 24px; height: 48px; }
+  .cb-leave { width: 52px; height: 48px; }
+  /* Room between distinct controls, so the gap itself is a target buffer. */
+  .cb-group { gap: 4px; padding: 5px; }
+  /* Sized to fit 375px: at 64px leave and 28px chevrons the row measured
+     380px wide and pushed Leave Call off the right edge, with Mute flush
+     against the left at x=1. The inline padding keeps both ends off the
+     bezel; wrap is a safety net for a narrower phone rather than a layout. */
+  .cb-bar   { gap: 8px; padding-inline: 8px; flex-wrap: wrap; justify-content: center; row-gap: 8px; }
+  /* The row is the closest thing to the bottom edge, so it owns the home
+     indicator inset rather than letting the controls sit under it. */
+  .cb-bar   { padding-bottom: env(safe-area-inset-bottom); }
+}
 
 /* Per-icon hover animations — each control has its own personality */
 
