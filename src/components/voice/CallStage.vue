@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
           <span class="s-wave s-wave2" />
         </template>
       </div>
-      <span class="s-name">{{ t.name }}<template v-if="t.ring"> · {{ t.ring === 'ringing' ? 'ringing…' : 'no answer' }}</template></span>
+      <span class="s-name" :title="t.name">{{ t.name }}<template v-if="t.ring"> · {{ t.ring === 'ringing' ? 'ringing…' : 'no answer' }}</template></span>
     </div>
   </div>
 
@@ -168,7 +168,8 @@ onBeforeUnmount(() => {
        One loop the whole time: entering spotlight only restyles the same cells
        (the focused one becomes .is-main, the rest .is-thumb), so VideoTile nodes
        are never remounted and the video never flashes. -->
-  <div v-else class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight, 'no-strip': inSpotlight && !showFilmstrip }">
+  <div v-else class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight, 'no-strip': inSpotlight && !showFilmstrip }"
+    :style="{ '--cols': renderCells.length <= 2 ? 1 : 2 }">
     <div
       v-for="c in renderCells" :key="c.key"
       :ref="setCellEl(c.key)"
@@ -264,7 +265,16 @@ button { border: none; }
   position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%;
   background: #f23f43; color: #fff; display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
 }
-.s-name { font-size: 13px; color: var(--text-1); font-weight: 600; }
+/* Capped, because the name is what sizes the tile. An avatar is 72px, but
+   the tile is as wide as its longest child — so one long display name made
+   a 186px tile beside 72px neighbours, and on a phone that one tile ate a
+   whole row of three. Uniform tiles wrap predictably; the full name is on
+   the title attribute and in the tile menu. Matches how .ch-name and
+   .vc-occ-name already behave. */
+.s-name {
+  font-size: 13px; color: var(--text-1); font-weight: 600;
+  max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* Layout 2 — rectangular grid */
 .stage--grid {
@@ -287,6 +297,23 @@ button { border: none; }
 .g-cell.speaking { border-color: #23a55a; }
 /* Grid-only hover hint: clicking focuses this tile. Suppressed in spotlight. */
 .stage--grid:not(.stage--spotlight) .g-cell:hover { box-shadow: inset 0 0 0 2px rgba(255,255,255,.22); }
+
+/* ── The grid on a phone ───────────────────────────────────────────────
+   auto-fit with a 200px floor needs 410px to make two columns, so on a
+   375px screen — 327 usable inside the stage padding — everyone stacked in
+   a single column no matter how many were in the call. Four people meant
+   four 327x155 letterbox slots.
+
+   Column count comes from the participant count rather than the width,
+   because the right answer is not monotonic: one or two people want the
+   full width each (a face reads better in a landscape box than a tall
+   narrow one), and only at three or more does two-up win. auto-fit cannot
+   express that — it only knows pixels, not how many things there are. */
+@media (pointer: coarse) {
+  .stage--grid:not(.stage--spotlight) {
+    grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+  }
+}
 
 /* Spotlight ("big screen"): focused cell fills the top, the rest wrap into a
    thumbnail strip below. Overrides the grid display (defined after .stage--grid
