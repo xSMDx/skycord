@@ -30,7 +30,7 @@ export const resetDb = async (): Promise<void> => {
 export const app = () => request(createApp())
 
 let seq = 0
-export interface TestUser { token: string; id: string; username: string }
+export interface TestUser { token: string; id: string; username: string; email: string; password: string }
 
 /** Registers a real account through the real endpoint and returns its token. */
 export const register = async (name?: string): Promise<TestUser> => {
@@ -44,7 +44,10 @@ export const register = async (name?: string): Promise<TestUser> => {
       displayName: username,
     })
   if (res.status !== 201) throw new Error(`register failed: ${res.status} ${res.text}`)
-  return { token: res.body.accessToken, id: res.body.user.id, username }
+  // email and password returned too: anything testing login, password change or
+  // reset needs the credentials this helper just made up.
+  return { token: res.body.accessToken, id: res.body.user.id, username,
+           email: `${username}@test.local`, password: 'TestPass123!' }
 }
 
 /** Authorization header for a test user. */

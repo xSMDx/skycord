@@ -3,16 +3,76 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import SkycordIcon from '@/components/SkycordIcon.vue'
 
-const mode        = ref<'login' | 'register'>('login')
+/**
+ * `reset` is reached from the emailed link, not from the tabs — it is the only
+ * mode chosen by the URL rather than by a click, so it is decided at mount
+ * before anything renders.
+ */
+const mode        = ref<'login' | 'register' | 'forgot' | 'reset'>('login')
 const showPw      = ref(false)
 const showConfirm = ref(false)
 const serverError = ref('')
 
-const { login, register, loading, serverDown, probeServer } = useAuth()
+const { login, register, loading, serverDown, probeServer,
+        forgotPassword, resetPassword, resetAvailable } = useAuth()
+
+// ── Password reset ────────────────────────────────────────────────────────
+const ff        = reactive({ email: '' })
+const rsf       = reactive({ password: '', confirm: '' })
+const resetTok  = ref('')
+const resetNote = ref('')          // the server's own words, shown verbatim
+const resetErr  = ref('')
+const resetDone = ref(false)
+/** Null until the check answers. Null renders nothing rather than flashing
+ *  "unavailable" at everyone for one frame on a perfectly good instance. */
+const canReset  = ref<boolean | null>(null)
 
 // Surface a dead API immediately on page load (not only after a failed
 // submit) — probeServer keeps re-checking and the banner self-clears.
-onMounted(() => { void probeServer() })
+onMounted(async () => {
+  void probeServer()
+
+  // The reset link lands here with ?token=… — read it before first paint so
+  // the page opens on the form rather than on login and then jumping.
+  const token = new URLSearchParams(location.search).get('token')
+  if (token) { resetTok.value = token; mode.value = 'reset' }
+
+  canReset.value = await resetAvailable()
+})
+
+const submitForgot = async () => {
+  resetErr.value = ''
+  const email = ff.email.trim()
+  if (!email) { resetErr.value = 'Enter your email address'; return }
+  const res = await forgotPassword(email)
+  // Shown whether or not the address exists — the server does not say, and
+  // neither can this. See forgotPassword in authController.
+  if (res.ok) { resetNote.value = res.message; resetDone.value = true }
+  else        { resetErr.value  = res.message || 'Something went wrong' }
+}
+
+const submitReset = async () => {
+  resetErr.value = ''
+  if (rsf.password.length < 8)      { resetErr.value = 'Password must be at least 8 characters'; return }
+  if (rsf.password !== rsf.confirm) { resetErr.value = 'Passwords do not match'; return }
+  const res = await resetPassword(resetTok.value, rsf.password)
+  if (res.ok) {
+    resetNote.value = res.message
+    resetDone.value = true
+    // Drop the token from the address bar: it is spent, and leaving it there
+    // puts a used credential in history and in any screenshot of this page.
+    history.replaceState({}, '', location.pathname)
+  } else {
+    resetErr.value = res.message || 'Something went wrong'
+  }
+}
+
+/** Leaving reset always lands on login — the point of the flow is signing in. */
+const backToLogin = () => {
+  mode.value = 'login'
+  resetErr.value = ''; resetNote.value = ''; resetDone.value = false
+  ff.email = ''; rsf.password = ''; rsf.confirm = ''
+}
 
 const lf = reactive({ identifier: '', password: '' })
 const rf = reactive({ username: '', displayName: '', email: '', password: '', confirm: '' })
@@ -92,7 +152,9 @@ const submitRegister = async () => {
       </div>
 
       <!-- Tabs -->
-      <div class="tabs">
+      <!-- Hidden during reset: those screens are not a third tab, and leaving
+           the pair visible invites a click that abandons a flow mid-way. -->
+      <div v-if="mode==='login' || mode==='register'" class="tabs">
         <button class="tab" :class="{active: mode==='login'}"    @click="switchMode('login')">Sign in</button>
         <button class="tab" :class="{active: mode==='register'}" @click="switchMode('register')">Create account</button>
         <div class="tab-slider" :class="{right: mode==='register'}"/>
@@ -130,7 +192,12 @@ const submitRegister = async () => {
           </div>
 
           <div class="field" :class="{err: le.password}">
-            <label for="login-password" class="lrow">Password <button class="forgot" type="button">Forgot?</button></label>
+            <!-- Hidden rather than disabled when the instance cannot send mail:
+                 a dead "Forgot?" is worse than none, because the person who
+                 clicks it is already locked out and has no way to read why. -->
+            <label for="login-password" class="lrow">Password
+              <button v-if="canReset" class="forgot" type="button" @click="mode='forgot'">Forgot?</button>
+            </label>
             <div class="inp-wrap">
               <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               <input id="login-password" v-model="lf.password" :type="showPw?'text':'password'" placeholder="your password" autocomplete="current-password" @keydown.enter="submitLogin"/>
@@ -151,7 +218,7 @@ const submitRegister = async () => {
         </div>
 
         <!-- ── REGISTER ──────────────────────────────────────── -->
-        <div v-else key="r" class="form">
+        <div v-else-if="mode==='register'" key="r" class="form">
           <p class="form-title">Create account</p>
           <p class="form-sub">Join the Skycord community today 🚀</p>
 
@@ -224,6 +291,95 @@ const submitRegister = async () => {
 
           <p class="switch">Have an account? <button type="button" @click="switchMode('login')">Sign in</button></p>
         </div>
+
+        <!-- ── FORGOT ────────────────────────────────────────── -->
+        <div v-else-if="mode==='forgot'" key="f" class="form">
+          <p class="form-title">Reset your password</p>
+          <p class="form-sub">We’ll email you a link to set a new one.</p>
+
+          <!-- The confirmation deliberately does not say whether the address is
+               registered — the server does not tell us, so that we cannot tell
+               anyone else. -->
+          <template v-if="resetDone">
+            <div class="ok-banner">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              {{ resetNote }}
+            </div>
+            <p class="form-sub reset-hint">Check your spam folder if it hasn’t arrived in a minute. The link expires in 30 minutes.</p>
+            <button class="submit" @click="backToLogin">Back to sign in</button>
+          </template>
+
+          <template v-else>
+            <div class="field" :class="{err: resetErr}">
+              <label for="forgot-email">Email</label>
+              <div class="inp-wrap">
+                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+                <input id="forgot-email" v-model="ff.email" type="email" placeholder="you@example.com" autocomplete="email" autofocus @keydown.enter="submitForgot"/>
+              </div>
+              <span v-if="resetErr" class="ferr">{{ resetErr }}</span>
+            </div>
+
+            <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitForgot">
+              <template v-if="!loading">Send reset link</template>
+              <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Sending…</template>
+            </button>
+
+            <p class="switch">Remembered it? <button type="button" @click="backToLogin">Sign in</button></p>
+          </template>
+        </div>
+
+        <!-- ── RESET (arrived from the emailed link) ──────────── -->
+        <div v-else key="rs" class="form">
+          <p class="form-title">Set a new password</p>
+
+          <template v-if="resetDone">
+            <div class="ok-banner">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              {{ resetNote }}
+            </div>
+            <!-- Said plainly because it is surprising: a reset signs out every
+                 device, which is the point when the reason for resetting is
+                 that someone else was signed in. -->
+            <p class="form-sub reset-hint">Every device signed into this account has been signed out.</p>
+            <button class="submit" @click="backToLogin">Sign in</button>
+          </template>
+
+          <template v-else>
+            <p class="form-sub">Pick something you haven’t used here before.</p>
+
+            <div class="field" :class="{err: resetErr}">
+              <label for="reset-pw">New password</label>
+              <div class="inp-wrap">
+                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <input id="reset-pw" v-model="rsf.password" :type="showPw?'text':'password'" placeholder="at least 8 characters" autocomplete="new-password" autofocus/>
+                <button class="eye" type="button" @click="showPw=!showPw" :aria-label="showPw ? 'Hide password' : 'Show password'">
+                  <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="reset-confirm">Confirm password</label>
+              <div class="inp-wrap" :class="{match: rsf.confirm && rsf.password === rsf.confirm}">
+                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <input id="reset-confirm" v-model="rsf.confirm" :type="showConfirm?'text':'password'" placeholder="repeat it" autocomplete="new-password" @keydown.enter="submitReset"/>
+                <button class="eye" type="button" @click="showConfirm=!showConfirm" :aria-label="showConfirm ? 'Hide password' : 'Show password'">
+                  <svg v-if="!showConfirm" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+              <span v-if="resetErr" class="ferr">{{ resetErr }}</span>
+            </div>
+
+            <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitReset">
+              <template v-if="!loading">Set new password</template>
+              <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving…</template>
+            </button>
+
+            <p class="switch">Link expired? <button type="button" @click="mode='forgot'; resetErr=''">Ask for a new one</button></p>
+          </template>
+        </div>
       </transition>
     </div>
   </div>
@@ -273,8 +429,16 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .err-banner { display:flex; align-items:center; gap: 8px; background:rgba(237,66,69,.12); border:1px solid rgba(237,66,69,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#f08080; font-size:13px; }
 
+/* The success twin of .err-banner. Green rather than red because these two
+   appear in the same slot and a reset confirmation that is styled like a
+   failure gets read as one. */
+.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(35,165,90,.12); border:1px solid rgba(35,165,90,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#3ba55d; font-size:13px; line-height:1.45; }
+
 .form-title { font-size:21px; font-weight:800; color: var(--text-strong); margin-bottom: 4px; }
 .form-sub   { font-size:13px; color:var(--text-faint); margin-bottom: 18px; }
+/* Sits under a banner rather than under a heading, so it needs its own spacing
+   instead of .form-sub's 18px gap meant for a title. */
+.reset-hint { margin-bottom: 16px; line-height:1.5; }
 
 .row2 { display:grid; grid-template-columns:1fr 1fr; gap: 10px; }
 

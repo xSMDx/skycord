@@ -13,6 +13,7 @@ runs: your hardware, your database, no company in the middle.
 **Docs:** [Self-hosting](./docs/self-hosting/) ·
 [Installing](./docs/self-hosting/installing.md) ·
 [Networking & Cloudflare](./docs/self-hosting/networking.md) ·
+[Email & password reset](./docs/self-hosting/email.md) ·
 [Roadmap](./docs/ROADMAP.md)
 
 ---
@@ -117,6 +118,11 @@ rather than showing an error and telling you to retry something that will never
 work. The key is server-side only: KLIPY puts it in the URL path, so any
 browser-side call would ship it in the bundle.
 
+**Password reset (Resend).** Set `RESEND_API_KEY` and `EMAIL_FROM` to let
+people reset a forgotten password. Without them "Forgot?" is hidden rather than
+offered and broken. Domain verification is the step that catches people out —
+see [email.md](./docs/self-hosting/email.md).
+
 **Voice and video (LiveKit).** Set `LIVEKIT_URL`, `LIVEKIT_API_KEY` and
 `LIVEKIT_API_SECRET`. Without them everything except calls works normally.
 Setup, and the UDP requirements that trip people up, are in
@@ -137,7 +143,7 @@ npm run dev             # client on :5173, API on :3001
 ```
 
 ```bash
-npm test                # 429 tests
+npm test                # 444 tests
 npm run typecheck       # client + server
 ```
 

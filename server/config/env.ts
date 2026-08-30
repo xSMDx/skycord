@@ -33,6 +33,16 @@ export const config = {
     apiKey:    opt('LIVEKIT_API_KEY', ''),
     apiSecret: opt('LIVEKIT_API_SECRET', ''),
   },
+  email: {
+    resendApiKey: opt('RESEND_API_KEY', ''),
+    /** Must be an address on a domain verified in Resend, or every send is
+     *  rejected. `Skycord <noreply@yourdomain>` is a valid value. */
+    from:         opt('EMAIL_FROM', ''),
+    /** Where the reset link points. Separate from CLIENT_ORIGIN only because
+     *  a self-hoster may serve the app somewhere other than the API's CORS
+     *  origin; defaults to it, which is right for a normal setup. */
+    appUrl:       opt('APP_URL', opt('CLIENT_ORIGIN', 'http://localhost:5173')),
+  },
 } as const
 
 /**

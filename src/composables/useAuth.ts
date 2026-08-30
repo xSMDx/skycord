@@ -129,6 +129,56 @@ export const useAuth = () => {
     finally   { loading.value = false }
   }
  
+  /**
+   * Ask for a reset link.
+   *
+   * The server answers the same way for a registered address and an unknown
+   * one, on purpose, so this cannot report "no such account" even if a caller
+   * wanted it to — there is nothing in the response to report.
+   */
+  const forgotPassword = async (email: string) => {
+    loading.value = true
+    try {
+      const res  = await authFetch('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) })
+      const data = await readJson(res)
+      if (!res.ok) {
+        if (!data) { flagServerDown('/auth/forgot-password', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        return { ok: false as const, message: data.message }
+      }
+      serverDown.value = false
+      return { ok: true as const, message: data.message as string }
+    } catch (e) { flagServerDown('/auth/forgot-password', e); return { ok: false as const, message: OFFLINE_MSG } }
+    finally   { loading.value = false }
+  }
+
+  /** Redeem a token from the emailed link. Unlike the request step this one
+   *  can be specific: holding a token already implies the account exists. */
+  const resetPassword = async (token: string, password: string) => {
+    loading.value = true
+    try {
+      const res  = await authFetch('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) })
+      const data = await readJson(res)
+      if (!res.ok) {
+        if (!data) { flagServerDown('/auth/reset-password', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        return { ok: false as const, message: data.message }
+      }
+      serverDown.value = false
+      return { ok: true as const, message: data.message as string }
+    } catch (e) { flagServerDown('/auth/reset-password', e); return { ok: false as const, message: OFFLINE_MSG } }
+    finally   { loading.value = false }
+  }
+
+  /** Whether this instance can send mail at all. Read once when the auth page
+   *  mounts, so a self-hosted instance without a provider can say so rather
+   *  than accepting a request for a link that will never arrive. */
+  const resetAvailable = async (): Promise<boolean> => {
+    try {
+      const res = await authFetch('/auth/reset-available')
+      const data = await readJson(res)
+      return !!data?.enabled
+    } catch { return false }
+  }
+
   const logout = async () => {
     try { await authFetch('/auth/logout', { method: 'POST' }) } finally {
       user.value = null
@@ -156,6 +206,7 @@ export const useAuth = () => {
   return {
     user, accessToken, loading, initialized, isAuthed,
     register, login, logout, initialize, updateUser,
+    forgotPassword, resetPassword, resetAvailable,
     authFetch, serverDown, probeServer
   }
 }

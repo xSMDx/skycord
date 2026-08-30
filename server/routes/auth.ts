@@ -1,5 +1,8 @@
 import { Router } from 'express'
-import { register, login, refresh, logout, me } from '../controllers/authController'
+import {
+  register, login, refresh, logout, me,
+  forgotPassword, resetPassword, resetAvailability,
+} from '../controllers/authController'
 import { requireAuth } from '../middleware/auth'
 import { make } from '../middleware/rateLimit'
 
@@ -18,6 +21,17 @@ router.post('/register', strictLimit,  register)
 router.post('/login',    strictLimit,  login)
 router.post('/refresh',  refreshLimit, refresh)
 router.post('/logout',               logout)
+
+// Both behind strictLimit, and for different reasons. Requesting a link is a
+// way to make this server send mail to an address of the caller's choosing, so
+// it is a spam lever as much as an account one. Redeeming is a guessing surface
+// -- 256-bit tokens make that hopeless, but a limit costs nothing and means a
+// mistake in the token check is not also an unlimited oracle.
+router.post('/forgot-password', strictLimit, forgotPassword)
+router.post('/reset-password',  strictLimit, resetPassword)
+// Unlimited: a boolean about this deployment, read once when the login page
+// renders, revealing nothing about any account.
+router.get( '/reset-available', resetAvailability)
 router.get( '/me',       requireAuth,  me)
 
 export default router
