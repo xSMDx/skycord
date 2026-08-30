@@ -3506,7 +3506,7 @@ onBeforeUnmount(() => {
       <!-- Server Rail -->
       <nav class="rail">
         <!-- Home -->
-        <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip="'Home'" @click.stop="openFriends">
+        <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip:right="'Home'" @click.stop="openFriends">
           <div class="ri-pip" />
           <div class="ri-icon home-icon">
             <SkycordIcon mode="lucky" :color="homeActive ? appearance.accent : 'currentColor'" :size="26" />
@@ -3556,8 +3556,8 @@ onBeforeUnmount(() => {
           <span v-if="serverUnread(srv.id)" class="ri-badge">{{ serverUnread(srv.id) }}</span>
         </div>
         <div class="ri-divider" />
-        <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
-        <button class="ri explore" :class="{ active: view==='discover' }" v-tip="'Explore'"
+        <button class="ri add"     v-tip:right="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri explore" :class="{ active: view==='discover' }" v-tip:right="'Explore'"
           :aria-current="view==='discover' ? 'page' : undefined"
           @click.stop="openDiscover"><div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
       </nav>
@@ -3565,7 +3565,13 @@ onBeforeUnmount(() => {
       <!-- ── Left sidebar ──────────────────────────────────────────────── -->
 
       <!-- Friends / DM / Group sidebar -->
-      <aside v-if="view==='friends'||view==='dm'||view==='group'" class="sidebar">
+      <!-- The `isMobile && discover` arm is not cosmetic. Discover has no
+           sidebar of its own, and on a phone the sidebar IS the list screen you
+           swipe back to — without this, backing out of Discover lands on a bare
+           68px rail and nothing else. Keeping the conversation list mounted
+           makes back go somewhere. Desktop is unaffected: it never shows this
+           aside for Discover. -->
+      <aside v-if="view==='friends'||view==='dm'||view==='group'||(isMobile && view==='discover')" class="sidebar">
         <div class="sb-search">
           <button class="sb-search-btn" @click.stop="showQuickSwitcher = true">
             <Search :size="14" :stroke-width="1.5" />
@@ -3675,7 +3681,12 @@ onBeforeUnmount(() => {
       </aside>
 
       <!-- Channel sidebar (server view) -->
-      <aside v-else class="sidebar" :class="{ collapsed: !sidebarOpen }">
+      <!-- v-else-if, not a bare v-else. As `v-else` this caught every view that
+           was not friends/dm/group, so Discover rendered the channel list of
+           whichever server you happened to be in last — a sidebar belonging to
+           a place you were not looking at. Discover has no sidebar of its own
+           and takes the full width. -->
+      <aside v-else-if="view==='server'" class="sidebar" :class="{ collapsed: !sidebarOpen }">
         <div class="sb-header" role="button" tabindex="0"
           @click.stop="openServerMenu($event)"
           @keydown.enter.prevent="openServerMenu($event)"
