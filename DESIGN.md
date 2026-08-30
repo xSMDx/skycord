@@ -624,20 +624,42 @@ a long name refuses to shrink and pushes the row's actions off the edge.
 }
 ```
 
-### Warning callout
+### Callout
 
 ```css
-.warn {
-  font-size: 12.5px; line-height: 1.55; color: var(--text-2);
+.callout {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 11px 13px;
   background: var(--bg-input);
-  border-left: 2px solid var(--accent);
-  border-radius: 0 6px 6px 0;
-  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--edge-lg);
+  font-size: 12.5px; line-height: 1.55; color: var(--text-2);
 }
+.callout-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 ```
 
-A left bar and a flat left edge. Used where the user should know something
-before acting, not where something has gone wrong.
+```html
+<p class="callout">
+  <Info class="callout-icon" :size="15" :stroke-width="2.25" />
+  <span>Everyone in the call is told which server they are on.</span>
+</p>
+```
+
+Used where the user should know something before acting, not where something has
+gone wrong — that is `--text-2` prose, not a red error.
+
+**The colour is carried by the icon, not by a bar down the side.** This used to
+be a 2px accent left border with a flattened left edge, and it was changed
+everywhere at once (2026-08-31) for two reasons. It read as a generic
+admonition block rather than as part of this system — every other container here
+is a full 1px `--border` all the way round. And an icon is a shape as well as a
+colour, so it still says "pay attention" to someone who cannot separate the
+hues, which a coloured bar does not. That is the same rule stated under
+Accessibility: colour is never the only signal.
+
+The `<span>` around the text is not optional. The callout is a flex container,
+so every bare text node becomes its own flex item and picks up the `gap` —
+which puts a space before the full stop. That shipped once.
 
 ### Empty state
 

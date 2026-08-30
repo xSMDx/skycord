@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { X, Plus, Trash2, Check } from 'lucide-vue-next'
+import { X, Plus, Trash2, Check, Info } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi, type WireVoiceServer } from '@/composables/useApi'
 
@@ -89,9 +89,14 @@ const remove = async (row: WireVoiceServer) => {
       <!-- Said plainly rather than buried in a tooltip. Whoever supplies the
            media server can record what crosses it, and a person joining a call
            deserves to know that is a thing rather than discover it. -->
-      <p class="vs-warn">
-        Calls on a server you add run through <strong>your</strong> machine. Everyone
-        in the call is told which server they are on.
+      <p class="vs-callout">
+        <Info class="vs-callout-icon" :size="15" :stroke-width="2.25" />
+        <!-- One span, not bare text: the callout is a flex container, so every
+             loose text node would become its own flex item and pick up the gap. -->
+        <span>
+          Calls on a server you add run through <strong>your</strong> machine. Everyone
+          in the call is told which server they are on.
+        </span>
       </p>
 
       <p v-if="error" class="vs-error">{{ error }}</p>
@@ -175,11 +180,18 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .vs-close:hover { background: var(--hover); color: var(--text-strong); }
 
 .vs-lead { font-size: 13px; line-height: 1.55; color: var(--text-2); margin-bottom: 12px; }
-.vs-warn {
+/* The house callout — see DESIGN.md. The colour is carried by the icon, not a
+   bar down the side: an icon is a shape as well as a colour, so it still reads
+   to someone who cannot separate the hues. */
+.vs-callout {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 11px 13px; margin-bottom: 18px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--edge-lg);
   font-size: 12.5px; line-height: 1.55; color: var(--text-2);
-  background: var(--bg-input); border-left: 2px solid var(--accent);
-  border-radius: 0 6px 6px 0; padding: 10px 12px; margin-bottom: 18px;
 }
+.vs-callout-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 .vs-error { font-size: 13px; color: #f0716f; margin-bottom: 12px; }
 .vs-empty { font-size: 13px; color: var(--text-3); padding: 16px 0; }
 
