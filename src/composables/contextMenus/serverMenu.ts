@@ -18,7 +18,7 @@
  * 403s a non-owner on invites, channel creation and deletion — a row that can
  * only ever fail is worse than no row.
  */
-import { Check, UserPlus, Plus, FolderPlus, Copy, Trash2, LogOut, Settings } from 'lucide-vue-next'
+import { Check, UserPlus, Plus, FolderPlus, Copy, Trash2, LogOut, Settings, Server as ServerIcon } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 
 export interface MenuServer { id: string; name: string; owner?: string }
@@ -30,6 +30,7 @@ export interface ServerMenuHandlers {
   createCategory: (serverId: string) => void
   leaveServer:    (serverId: string) => void
   deleteServer:   (serverId: string) => void
+  voiceServers:   (serverId: string) => void
   copy:           (text: string, what: string) => void
 }
 
@@ -94,9 +95,17 @@ export const buildServerMenu = (
   if (isOwner) {
     items.push(...buildAddRows(server.id, h), { sep: true })
   }
+  // Voice Servers is owner-only and live, sitting where Server Settings
+  // eventually will. It is deliberately NOT folded into the disabled Server
+  // Settings row: this is the one server-level setting that exists today, and
+  // hiding a working screen behind a row that says "not yet" would leave the
+  // owner nothing to click.
   items.push(
     // Disabled, not missing — see the note at the top of this file.
     { label: 'Server Settings', icon: Settings, disabled: true, onSelect: () => {} },
+    ...(isOwner
+      ? [{ label: 'Voice Servers', icon: ServerIcon, onSelect: () => h.voiceServers(server.id) }]
+      : []),
     { sep: true },
     isOwner
       ? { label: 'Delete Server', icon: Trash2, danger: true, onSelect: () => h.deleteServer(server.id) }

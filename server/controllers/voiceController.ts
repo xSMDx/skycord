@@ -8,6 +8,9 @@ import { User } from '../models/User'
 import { Channel } from '../models/Channel'
 import { Server } from '../models/Server'
 import { dmConvId } from './messagesController'
+import {
+  getCallVoiceServer, fixCallVoiceServer, setCallVoiceServer, announceCallVoiceServer,
+} from '../sockets/chatSocket'
 
 // A LiveKit room name for a conversation. DMs use the stable sorted-pair id so
 // both participants land in the same room; groups use the group id; server
@@ -92,14 +95,28 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
      * unauthorised caller learn whether a channel has a custom voice server
      * from the shape of the failure, before being told they cannot join it.
      */
-    const voice = chosenChannel
-      ? await resolveForChannel(chosenChannel.server, chosenChannel.voiceServer ?? null)
-      : await resolveForConversation(
-          voiceServerId,
-          // Scoped to servers this user belongs to, so a preference cannot be
-          // pointed at a media server whose owner never offered it to them.
-          (await Server.find({ members: userId }).select('_id').lean()).map(s => s._id),
-        )
+let voice
+    if (chosenChannel) {
+      voice = await resolveForChannel(chosenChannel.server, chosenChannel.voiceServer ?? null)
+    } else {
+      // A DM or group has no guild to answer for everybody, so the FIRST token
+      // issued for the room fixes the answer and every later joiner is handed
+      // it. Without this, two people with different defaults mint tokens
+      // against two different LiveKit servers, join same-named rooms on each,
+      // and hear nothing while the UI shows a call in progress. A preference is
+      // a request to be first, not a right to be answered.
+      const fixed = getCallVoiceServer(room)
+      voice = await resolveForConversation(
+        // Scoped to servers this user belongs to, so a preference cannot be
+        // pointed at a media server whose owner never offered it to them. A
+        // room fixed on one this caller cannot see degrades to the instance's
+        // own the same way any unusable entry does — which splits the call, but
+        // only for someone who has left the community since it started.
+        fixed !== undefined ? fixed : voiceServerId,
+        (await Server.find({ members: userId }).select('_id').lean()).map(s => s._id),
+      )
+      if (voice) fixCallVoiceServer(room, voice.id)
+    }
 
     // 503 here rather than at the top of the handler: with per-server voice
     // servers, an instance with no LiveKit of its own is still perfectly able
@@ -118,5 +135,63 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       token, url: voice.url, room,
       voiceServer: { id: voice.id, name: voice.name },
     })
+  } catch (err) { next(err) }
+}
+
+/**
+ * Move a DM or group call to a different media server.
+ *
+ * Anyone in the call may do it — it is their call, and the alternative is that
+ * whoever dialled first decides for everybody until it ends. Everyone in the
+ * room is told and rejoins, because LiveKit rooms do not span servers: the only
+ * honest way to change one is to leave the old room and enter a new one.
+ *
+ * Channels are refused rather than supported. A voice channel's server is a
+ * setting of the channel, changed in its settings dialog by someone who can
+ * edit it — letting any occupant move it from the call bar would hand every
+ * member an edit they were never granted.
+ *
+ * The requested id is put through the same resolver a join uses, so a value
+ * that cannot be honoured degrades to the instance's own server rather than
+ * failing — and the response says where the call actually went.
+ */
+export const moveVoiceCall = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user!.sub
+    const { conversationId, kind, voiceServerId } = req.body as {
+      conversationId?: string; kind?: 'dm' | 'group'; voiceServerId?: string | null
+    }
+    if (!conversationId || (kind !== 'dm' && kind !== 'group')) {
+      res.status(400).json({ message: 'conversationId and kind are required' }); return
+    }
+
+    // Same membership checks as the token endpoint's dm/group branches, and
+    // for the same reason: this writes state that decides where other people's
+    // audio goes.
+    if (kind === 'group') {
+      if (!mongoose.isValidObjectId(conversationId)) { res.status(400).json({ message: 'Invalid group' }); return }
+      const group = await Conversation.findById(conversationId).select('members').lean()
+      if (!group) { res.status(404).json({ message: 'Group not found' }); return }
+      if (!group.members.some(m => m.toString() === userId)) {
+        res.status(403).json({ message: 'You are not a member of this group' }); return
+      }
+    } else {
+      if (conversationId === userId) { res.status(400).json({ message: 'Invalid DM' }); return }
+      const partner = await User.findById(conversationId).select('_id').lean()
+      if (!partner) { res.status(404).json({ message: 'User not found' }); return }
+    }
+
+    const room = roomFor(kind, conversationId, userId)
+    const voice = await resolveForConversation(
+      voiceServerId,
+      (await Server.find({ members: userId }).select('_id').lean()).map(s => s._id),
+    )
+    if (!voice) { res.status(503).json({ message: 'Voice is not configured on this server' }); return }
+
+    setCallVoiceServer(room, voice.id)
+    // Announced before responding so the mover is not the only one who has
+    // rejoined by the time the others are told.
+    announceCallVoiceServer(room, { id: voice.id, name: voice.name })
+    res.json({ voiceServer: { id: voice.id, name: voice.name } })
   } catch (err) { next(err) }
 }

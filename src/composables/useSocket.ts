@@ -58,6 +58,21 @@ export const activeCalls = ref<Record<string, string[]>>({})
 export const voiceRoomServers = ref<Record<string, string>>({})
 
 /**
+ * The last "this call has moved to another media server" announcement.
+ *
+ * A stamped ref rather than a callback because useVoice imports from THIS
+ * module, so this module must not import back — a ref crosses that boundary
+ * without a cycle. `at` is what makes two consecutive moves back to the same
+ * server two separate events rather than one no-op.
+ *
+ * Sent only to people actually in the call; nobody merely watching the badge
+ * has to care, because nothing they can see has changed.
+ */
+export const callServerMoved = ref<
+  { room: string; voiceServer: { id: string | null; name: string }; at: number } | null
+>(null)
+
+/**
  * `voice:<channelId>` (or dm:/group:) -> userId -> what they are doing.
  *
  * A sibling of `activeCalls` for the same reason `voiceRoomServers` is: the
@@ -370,6 +385,14 @@ export const useSocket = () => {
     //
     // `serverId` rides along on voice rooms (see voiceRoomServers above) and is
     // kept in step with occupancy here, in the one handler that owns both.
+    // Sent to the occupants of a call whose media server someone changed.
+    // Acting on it is useVoice's job — this only records it.
+    _socket.on('call:voice-server', (p: {
+      room: string; voiceServer: { id: string | null; name: string }
+    }) => {
+      callServerMoved.value = { room: p.room, voiceServer: p.voiceServer, at: Date.now() }
+    })
+
     _socket.on('call:state', (p: {
       room: string; userIds: string[]; serverId?: string
       states?: Record<string, VoiceMemberState>

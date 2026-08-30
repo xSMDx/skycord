@@ -11,10 +11,11 @@ import {
 } from 'livekit-client'
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
 import { holdPresence } from './usePresence'
+import { useAuth } from './useAuth'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import {
-  emitCallJoin, emitCallLeave, getSocket,
+  emitCallJoin, emitCallLeave, getSocket, callServerMoved,
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
@@ -50,13 +51,19 @@ interface VoiceState {
   ping:         number | null      // round-trip ms, null until first sample
   quality:      VoiceQuality       // LiveKit connection quality
   micBlocked:   boolean            // joined listen-only (no mic — needs HTTPS/localhost)
+  // Where this call actually landed, as the SERVER resolved it — not what
+  // was asked for. A request can fall back (the entry was deleted, the
+  // channel points at another guild), and the UI must name the room people
+  // are really on. null while not in a call, or on an instance with no
+  // registered servers.
+  voiceServer:  { id: string; name: string } | null
 }
 
 export const voice = reactive<VoiceState>({
   activeConvId: null, activeKind: null, activeName: '',
   connecting: false, connectStage: null, connectAttempt: 0, connectingConvId: null, connected: false,
   localMuted: false, localDeafened: false, participants: [],
-  ping: null, quality: 'unknown', micBlocked: false,
+  ping: null, quality: 'unknown', micBlocked: false, voiceServer: null,
 })
 
 const audioEls = new Map<string, HTMLAudioElement>()   // trackSid -> <audio>
@@ -66,6 +73,10 @@ let statsTimer: ReturnType<typeof setInterval> | null = null
 let connectSeq = 0   // bumped per connect() attempt; lets a superseded join bail out
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let failTimer: ReturnType<typeof setTimeout> | null = null
+// The media server the CURRENT call asked for, remembered across retries and
+// auto-reconnects: a drop must rejoin the same room, not silently fall back
+// to the default and split the call in two.
+let preferredVoiceServer: string | null = null
 let intentionalLeave = false  // true while WE tear the room down, so the Disconnected
                               // handler doesn't try to reconnect our own hangup
 const RETRY_DELAY_MS = 1600   // pause on the red "No route" flash before retrying
@@ -406,6 +417,8 @@ const cleanup = () => {
   voice.activeConvId = null
   voice.activeKind = null
   voice.activeName = ''
+  voice.voiceServer = null
+  preferredVoiceServer = null
   voice.participants = []
   voice.localMuted = false
   voice.localDeafened = false
@@ -496,9 +509,14 @@ watch(() => [voiceSettings.noiseMode, voiceSettings.sensitivity,
 // Module-scoped (not inside useVoice) so wireRoom's Disconnected handler can
 // reach attemptConnect to auto-reconnect. useApi/useAuth are plain singletons,
 // safe to read here at import time; getVoiceToken reads the token at call time.
-const { getVoiceToken } = useApi()
+const { getVoiceToken, moveVoiceCall } = useApi()
 
-const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: string) => {
+/**
+ * @param voiceServerId Preferred media server for a DM or group call — the
+ * caller's own default, or whatever they picked in the call bar. Ignored for
+ * a channel call, where the channel and its guild decide for everyone.
+ */
+const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: string, voiceServerId?: string | null) => {
     // Already in — or already joining — this exact call: no-op. Guarding the
     // join window (connectingConvId, since activeConvId isn't set until success)
     // is what stops a second click/accept during the ~1s join from spinning up a
@@ -509,6 +527,9 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     // Switching calls (or recovering from a stale attempt): fully tear the old
     // room down before opening a new one, so we never hold two sessions at once.
     if (getRoom() || voice.connected || voice.connecting) await leave()
+    // Set after leave(): cleanup() clears it, and clearing it after we set it
+    // would drop the choice on every call that follows another.
+    preferredVoiceServer = kind === 'channel' ? null : (voiceServerId ?? voiceSettings.defaultVoiceServer) || null
     void attemptConnect(convId, kind, name, 1)
   }
 
@@ -526,7 +547,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     voice.connectingConvId = convId
     voice.activeName = name   // set now so the "Connecting…" strip can label the call
     try {
-      const { token, url } = await getVoiceToken(convId, kind)
+      const { token, url, voiceServer } = await getVoiceToken(convId, kind, preferredVoiceServer)
       if (seq !== connectSeq) return                                  // superseded while fetching token
       voice.connectStage = 'connecting'
       const r = new Room({ adaptiveStream: true, dynacast: true })
@@ -558,6 +579,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       voice.activeKind = kind
       voice.activeName = name
       voice.micBlocked = !canCapture
+      voice.voiceServer = voiceServer ?? null
       voice.localMuted = voiceSettings.inputMode === 'ptt' || !canCapture
       syncParticipants()
       emitCallJoin(convId, kind)
@@ -637,4 +659,44 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
 // Re-apply output volume / sink to live audio elements (called from settings).
 const applyOutput = () => audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
 
-export const useVoice = () => ({ voice, voiceRoomName, connect, leave, toggleMute, toggleDeafen, applyOutput })
+/**
+ * Move the call I am in to a different media server.
+ *
+ * Only asks the server to do it — the rejoin happens through the same
+ * announcement everyone else receives, so the person who pressed the button
+ * takes exactly the same path as the people who did not. Doing it locally as
+ * well would move them twice.
+ *
+ * Refused for a channel call: that server is a channel setting, changed by
+ * someone who can edit the channel, not by whoever happens to be in it.
+ */
+const switchVoiceServer = async (voiceServerId: string | null): Promise<void> => {
+  const convId = voice.activeConvId, kind = voice.activeKind
+  if (!convId || !kind || kind === 'channel') return
+  await moveVoiceCall(convId, kind, voiceServerId)
+}
+
+/**
+ * Someone moved the call I am in — rejoin on the new server.
+ *
+ * A full reconnect, because LiveKit rooms do not span servers. The token
+ * endpoint reads the room's now-updated choice on its own, so nothing has to
+ * be passed here; asking for the announced id explicitly would race with a
+ * second move landing between the announcement and the join.
+ */
+watch(callServerMoved, m => {
+  if (!m || !voice.connected) return
+  const convId = voice.activeConvId, kind = voice.activeKind, name = voice.activeName
+  const myId = useAuth().user.value?.id
+  if (!convId || !kind || !myId) return
+  if (voiceRoomName(kind, convId, myId) !== m.room) return
+  // Same identity, new room: tear the old session down first so LiveKit never
+  // sees two sessions for one identity (the DUPLICATE_IDENTITY reconnect loop).
+  intentionalLeave = true
+  teardownRoom()
+  voice.connected = false
+  intentionalLeave = false
+  void attemptConnect(convId, kind, name, 1)
+})
+
+export const useVoice = () => ({ voice, voiceRoomName, connect, leave, toggleMute, toggleDeafen, applyOutput, switchVoiceServer })

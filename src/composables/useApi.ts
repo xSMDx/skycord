@@ -207,6 +207,7 @@ export const useApi = () => {
       // Overview. Numbers are clamped server-side rather than rejected, so a
       // slider cannot produce a 400 — only a blank name can.
       topic?: string | null; slowmode?: number; userLimit?: number; bitrate?: number
+      voiceServer?: string | null
     },
   ) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
@@ -284,6 +285,30 @@ export const useApi = () => {
   const listServerInvites = (sid: string) =>
     get<{ invites: WireInvite[] }>(`/servers/${sid}/invites`)
 
+  // ── Voice servers (per Skycord server) ─────────────────────────────────
+  // The list is readable by any member — the channel dialog and the call bar
+  // both need to NAME a server — but no response ever carries an API secret,
+  // only a hint of it. Create/update/delete are owner-only server-side.
+  const listVoiceServers = (sid: string) =>
+    get<{ voiceServers: WireVoiceServer[] }>(`/servers/${sid}/voice-servers`)
+
+  const createVoiceServer = (
+    sid: string,
+    body: { name: string; url: string; apiKey: string; apiSecret: string; isDefault?: boolean },
+  ) =>
+    post<{ voiceServer: WireVoiceServer }>(`/servers/${sid}/voice-servers`, body)
+
+  // Omitting apiSecret means "leave it alone" — the client cannot read it back,
+  // so an edit that only renames must not blank it.
+  const updateVoiceServer = (
+    sid: string, vid: string,
+    body: Partial<{ name: string; url: string; apiKey: string; apiSecret: string; isDefault: boolean }>,
+  ) =>
+    patch<{ voiceServer: WireVoiceServer }>(`/servers/${sid}/voice-servers/${vid}`, body)
+
+  const deleteVoiceServer = (sid: string, vid: string) =>
+    del<{ ok: boolean }>(`/servers/${sid}/voice-servers/${vid}`)
+
   const revokeServerInvite = (sid: string, code: string) =>
     del<{ ok: boolean }>(`/servers/${sid}/invites/${code}`)
 
@@ -342,8 +367,30 @@ export const useApi = () => {
     get<{ slug: string; name: string; authorName: string; data: Record<string, unknown> }>(`/themes/${slug}`)
 
   // ── Voice ────────────────────────────────────────────────────────────────
-  const getVoiceToken = (conversationId: string, kind: 'dm' | 'group' | 'channel') =>
-    post<{ token: string; url: string; room: string }>('/voice/token', { conversationId, kind })
+  /**
+   * `voiceServerId` is a REQUEST, not a command — the server resolves it and
+   * may fall back, so the response says where the call actually landed rather
+   * than echoing what was asked for. It is meaningless for a channel call,
+   * where the channel's own override (or the guild default) wins.
+   */
+  const getVoiceToken = (
+    conversationId: string, kind: 'dm' | 'group' | 'channel', voiceServerId?: string | null,
+  ) =>
+    post<{ token: string; url: string; room: string; voiceServer: { id: string; name: string } }>(
+      '/voice/token', { conversationId, kind, voiceServerId: voiceServerId || undefined })
+
+  /** Every voice server the caller could be routed to, across all their servers. */
+  const listMyVoiceServers = () =>
+    get<{ voiceServers: WireMyVoiceServer[] }>('/voice/servers')
+
+  /**
+   * Move a DM or group call everyone is already in. The reply says where it
+   * actually went, which can differ from what was asked — and everyone in the
+   * call, including the caller, is told over the socket and rejoins.
+   */
+  const moveVoiceCall = (conversationId: string, kind: 'dm' | 'group', voiceServerId: string | null) =>
+    post<{ voiceServer: { id: string | null; name: string } }>(
+      '/voice/move', { conversationId, kind, voiceServerId })
 
   // Conversations you actually have, from message history — independent of
   // whether you're still friends with the person.
@@ -369,6 +416,9 @@ export const useApi = () => {
     updateGroup, addGroupMembers,
     createTheme, getTheme,
     getVoiceToken,
+    listMyVoiceServers,
+    moveVoiceCall,
+    listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer,
     createServerApi, getMyServers, getDiscoverServers, joinPublicServer, setServerPublic, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
     createChannelApi, updateChannelApi, moveChannel, deleteChannelApi,
     createCategoryApi, updateCategoryApi, deleteCategoryApi,
@@ -470,6 +520,8 @@ export interface WireChannel {
   slowmode:  number
   userLimit: number
   bitrate:   number
+  /** A registered voice server id, or null to follow the server default. */
+  voiceServer: string | null
 }
 
 /**
@@ -499,6 +551,22 @@ export interface WireMember {
 }
 
 /** Exactly `shapeInvite` in server/controllers/invitesController.ts:15. */
+/**
+ * Exactly `shape` in server/controllers/voiceServersController.ts.
+ *
+ * There is deliberately no `apiSecret` here. It is never sent, so the type
+ * should not exist to tempt anyone into reading one — `secretHint` (the last
+ * four characters) is what the settings list shows instead.
+ */
+export interface WireVoiceServer {
+  id:         string
+  name:       string
+  url:        string
+  apiKey:     string
+  secretHint: string
+  isDefault:  boolean
+}
+
 export interface WireInvite {
   code:      string
   uses:      number
@@ -508,4 +576,14 @@ export interface WireInvite {
   /** The voice channel this invite lands you in, or null for a plain
    *  server invite. Also null once that channel has been deleted. */
   channel:   { id: string; name: string } | null
+}
+/**
+ * A voice server seen from OUTSIDE the community that owns it — what
+ * GET /voice/servers returns. Carries the owning server's name because the
+ * settings picker lists rows from several communities at once and "Frankfurt"
+ * on its own does not say whose Frankfurt.
+ */
+export interface WireMyVoiceServer extends WireVoiceServer {
+  server:     string
+  serverName: string
 }

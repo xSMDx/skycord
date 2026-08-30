@@ -55,6 +55,66 @@ const statesFor = (room: string): Record<string, VoiceMemberState> | undefined =
 }
 const callStartedAt = new Map<string, number>()
 
+/**
+ * Which media server a DM or group call settled on: room -> VoiceServer id,
+ * or null for the instance's own.
+ *
+ * A voice CHANNEL needs nothing like this — its guild answers the question the
+ * same way for everyone who asks. A DM has no guild, so the answer used to be
+ * "whatever the person asking prefers", and two people with different
+ * preferences would mint tokens against two different LiveKit servers, join
+ * rooms of the same name on each, and hear silence while the UI showed a call
+ * in progress. So the FIRST token issued for a room fixes the answer and every
+ * later joiner is handed the same one.
+ *
+ * Lives beside activeCalls and is cleared with it: once the room is empty the
+ * next call is free to land somewhere else.
+ *
+ * PER-PROCESS, like activeCalls itself. Two API processes would each fix their
+ * own answer and reintroduce the split — the same constraint already documented
+ * on the server lock in channelsController.
+ */
+const callVoiceServer = new Map<string, string | null>()
+
+/** The choice already fixed for this room, or `undefined` if it is not fixed
+ *  yet. `null` is a real answer (the instance's own server), so callers must
+ *  test for `undefined` rather than falsiness. */
+export const getCallVoiceServer = (room: string): string | null | undefined =>
+  callVoiceServer.get(room)
+
+/** Fix the choice for a room, if it is not fixed already. Returns what the
+ *  room is now on, which is NOT necessarily what was passed. */
+export const fixCallVoiceServer = (room: string, id: string | null): string | null => {
+  if (!callVoiceServer.has(room)) callVoiceServer.set(room, id)
+  return callVoiceServer.get(room)!
+}
+
+/** Move a room that is already fixed. Unlike `fixCallVoiceServer` this
+ *  overwrites, and is only reached from the deliberate "move this call"
+ *  action — never from an ordinary join, which must never relocate a call out
+ *  from under the people already in it. */
+export const setCallVoiceServer = (room: string, id: string | null): void => {
+  callVoiceServer.set(room, id)
+}
+
+/**
+ * Tell everyone IN a call that it has moved, so they rejoin.
+ *
+ * Addressed to the occupants through their personal rooms rather than
+ * reproducing broadcastCall's prefix grammar: only people actually in the call
+ * have to do anything, and `activeCalls` already knows exactly who they are.
+ * People merely watching the call badge see no change, because nothing they
+ * can see has changed.
+ */
+export const announceCallVoiceServer = (
+  room: string, voiceServer: { id: string | null; name: string },
+): void => {
+  const io = getIO(); if (!io) return
+  for (const uid of activeCalls.get(room) ?? []) {
+    io.to(`user:${uid}`).emit('call:voice-server', { room, voiceServer })
+  }
+}
+
 let _io: IOServer | null = null
 /**
  * Which server a voice channel belongs to.
@@ -731,6 +791,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       joinedCallRooms.delete(room)
       if (set.size === 0) {
         activeCalls.delete(room); callStartedAt.delete(room); voiceStates.delete(room)
+        callVoiceServer.delete(room)
         void postCallEnded(room)
       }
       broadcastCall(room)

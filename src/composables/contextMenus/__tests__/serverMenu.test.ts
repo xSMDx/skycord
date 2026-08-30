@@ -9,6 +9,7 @@ const handlers = () => ({
   createCategory: vi.fn(),
   leaveServer: vi.fn(),
   deleteServer: vi.fn(),
+  voiceServers: vi.fn(),
   copy: vi.fn(),
 })
 
@@ -32,7 +33,7 @@ describe('buildServerMenu', () => {
     const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
     expect(l).toEqual([
       'Mark As Read', 'Invite to Server', 'Create Channel', 'Create Category',
-      'Server Settings', 'Delete Server', 'Copy Server ID',
+      'Server Settings', 'Voice Servers', 'Delete Server', 'Copy Server ID',
     ])
   })
 
@@ -123,4 +124,26 @@ describe('buildServerMenu', () => {
     expect(h.markRead).toHaveBeenCalledWith('s1')
   })
 
+})
+
+describe('buildServerMenu — voice servers', () => {
+  it('offers Voice Servers to the owner', () => {
+    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
+    expect(l).toContain('Voice Servers')
+  })
+
+  it('does not offer it to a member', () => {
+    // Every endpoint behind this modal is owner-only server-side, so a member
+    // clicking the row could only ever get a 403 screen.
+    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
+    expect(l).not.toContain('Voice Servers')
+  })
+
+  it('calls through with the server id', () => {
+    const h = handlers()
+    const row = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
+      .filter(isAction).find(i => i.label === 'Voice Servers')!
+    row.onSelect?.()
+    expect(h.voiceServers).toHaveBeenCalledWith('s1')
+  })
 })

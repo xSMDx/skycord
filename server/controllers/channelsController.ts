@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
 import { Channel, MAX_SLOWMODE, MAX_USER_LIMIT, MIN_BITRATE, MAX_BITRATE } from '../models/Channel'
+import { VoiceServer } from '../models/VoiceServer'
 import { Category } from '../models/Category'
 import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversController'
 import { Message } from '../models/Message'
@@ -179,7 +180,7 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     const wantsCategory = req.body.category !== undefined
     // The Overview form submits whichever fields it shows, so the "nothing to
     // change" guard has to count these too or saving only a topic 400s.
-    const OVERVIEW = ['topic', 'slowmode', 'userLimit', 'bitrate'] as const
+    const OVERVIEW = ['topic', 'slowmode', 'userLimit', 'bitrate', 'voiceServer'] as const
     const wantsOverview = OVERVIEW.some(k => req.body[k] !== undefined)
     if (!wantsName && !wantsCategory && !wantsOverview) {
       res.status(400).json({ message: 'Give the channel a name' }); return
@@ -219,6 +220,23 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     if (req.body.slowmode  !== undefined) overview.slowmode  = clamp(req.body.slowmode,  0, MAX_SLOWMODE,   0)
     if (req.body.userLimit !== undefined) overview.userLimit = clamp(req.body.userLimit, 0, MAX_USER_LIMIT, 0)
     if (req.body.bitrate   !== undefined) overview.bitrate   = clamp(req.body.bitrate,   MIN_BITRATE, MAX_BITRATE, 64)
+    if (req.body.voiceServer !== undefined) {
+      const raw = req.body.voiceServer
+      // null clears it back to "follow the server default". Anything that is
+      // not a real entry of THIS server is refused rather than stored: a
+      // channel pointing at another guild's media server would be resolved
+      // away at call time anyway, so storing it only creates a setting that
+      // silently does nothing.
+      if (raw === null || raw === '') {
+        overview.voiceServer = null
+      } else if (typeof raw === 'string' && Types.ObjectId.isValid(raw)) {
+        const owned = await VoiceServer.exists({ _id: raw, server: found.server._id })
+        if (!owned) { res.status(400).json({ message: 'That voice server does not belong to this server' }); return }
+        overview.voiceServer = new Types.ObjectId(raw)
+      } else {
+        res.status(400).json({ message: 'That voice server does not belong to this server' }); return
+      }
+    }
     // This save() moves the channel into a category (or out of one); it has
     // the same race as createChannel against deleteCategory's
     // reparent-then-delete — resolve-then-persist has to be atomic with that,

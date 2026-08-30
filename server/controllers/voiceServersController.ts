@@ -11,6 +11,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
 import { VoiceServer, MAX_VOICE_SERVERS } from '../models/VoiceServer'
 import { Channel } from '../models/Channel'
+import { Server } from '../models/Server'
 import { loadServer, requireOwner } from './serversController'
 import { seal, hint } from '../utils/secretBox'
 
@@ -52,6 +53,35 @@ export const listVoiceServers = async (req: Request, res: Response, next: NextFu
     // the list would see an id. No secret is in this shape.
     const rows = await VoiceServer.find({ server: server._id }).sort({ createdAt: 1 }).lean()
     res.json({ voiceServers: rows.map(shape) })
+  } catch (err) { next(err) }
+}
+
+/**
+ * Every voice server the caller could actually be sent to.
+ *
+ * This is what the "default voice server" picker in Voice & Video settings
+ * lists, and the set is deliberately the same one `resolveForConversation`
+ * will accept: a server you are a member of. Offering anything wider would
+ * let someone pick a media server that is then silently ignored at call time.
+ *
+ * Each row carries the name of the community it belongs to, because two
+ * admins naming their box "Frankfurt" is likely rather than exotic.
+ */
+export const listMyVoiceServers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const mine = await Server.find({ members: req.user!.sub }).select('name').lean()
+    const rows = await VoiceServer
+      .find({ server: { $in: mine.map(m => m._id) } })
+      .sort({ createdAt: 1 })
+      .lean()
+    const names = new Map(mine.map(m => [m._id.toString(), m.name]))
+    res.json({
+      voiceServers: rows.map(v => ({
+        ...shape(v),
+        server:     v.server.toString(),
+        serverName: names.get(v.server.toString()) ?? '',
+      })),
+    })
   } catch (err) { next(err) }
 }
 

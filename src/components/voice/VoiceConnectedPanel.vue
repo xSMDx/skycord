@@ -9,12 +9,13 @@ import { useVoiceMedia } from '@/composables/useVoiceMedia'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import Sparkline from '@/components/ui/Sparkline.vue'
 import { rtc, retainRtcStats, releaseRtcStats, avgPing, outLossPct } from '@/composables/useRtcStats'
+import { useApi, type WireMyVoiceServer } from '@/composables/useApi'
 
 // Persistent "Voice Connected" strip above the user panel — stays put while you
 // browse other chats, so the call survives navigation. Mute/deafen live in the
 // user panel below; this row carries the call-media actions (camera, screen
 // share) plus the way back to the call view.
-const { voice, leave } = useVoice()
+const { voice, leave, switchVoiceServer } = useVoice()
 const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
 
 const emit = defineEmits<{
@@ -94,12 +95,49 @@ let popTimer: ReturnType<typeof setTimeout> | null = null
 const CLOSE_GRACE_MS = 260
 
 const clearPopTimer = () => { if (popTimer) { clearTimeout(popTimer); popTimer = null } }
-const openPop  = () => { clearPopTimer(); popOpen.value = true }
+const openPop  = () => { clearPopTimer(); popOpen.value = true; void loadVoiceServers() }
 const closePop = () => {
   clearPopTimer()
   if (popPinned.value) return
   popTimer = setTimeout(() => { popOpen.value = false; popTimer = null }, CLOSE_GRACE_MS)
 }
+// ── Which media server this call is on ───────────────────────────────────────
+// Fetched when the popover is first opened rather than on mount: most calls
+// never have this looked at, and on an instance where nobody has registered a
+// server the answer is always the same one.
+const myVoiceServers = ref<WireMyVoiceServer[]>([])
+const vsLoaded = ref(false)
+const { listMyVoiceServers } = useApi()
+const loadVoiceServers = async () => {
+  if (vsLoaded.value) return
+  vsLoaded.value = true
+  try { myVoiceServers.value = (await listMyVoiceServers()).voiceServers }
+  catch { vsLoaded.value = false }   // let the next open try again
+}
+
+// A voice channel's server is a setting of the CHANNEL — moving it from here
+// would hand every occupant an edit they were never granted, and would move
+// people who are not even in the call yet. A DM or group belongs to the people
+// in it, so anyone in one may move it.
+const canMove = computed(() => voice.activeKind === 'dm' || voice.activeKind === 'group')
+
+// Hidden entirely when nothing is registered anywhere: there is exactly one
+// server the call could be on, and naming it tells nobody anything.
+const showVoiceServer = computed(() => myVoiceServers.value.length > 0)
+
+const moving = ref(false)
+const onMoveServer = async (id: string) => {
+  if (moving.value) return
+  moving.value = true
+  // Nothing is applied locally. The server announces the move to everyone in
+  // the call, US INCLUDED, and the rejoin happens on that single path — so the
+  // person who pressed the button and the people who did not take exactly the
+  // same route, and a failure leaves nobody moved.
+  try { await switchVoiceServer(id || null) }
+  catch { emit('toast', 'Could not move the call') }
+  finally { moving.value = false }
+}
+
 /** Click the strip to pin, click again to release. */
 const togglePin = () => {
   popPinned.value = !popPinned.value
@@ -143,6 +181,19 @@ onBeforeUnmount(() => {
                  :color="q.color" :fmt-tick="v => String(Math.round(v))" />
 
       <div class="vcp-pop-server">{{ voice.activeName || 'Voice' }}</div>
+
+      <div v-if="showVoiceServer" class="vcp-pop-row vcp-pop-vs">
+        <span>Voice server</span>
+        <select v-if="canMove" class="vcp-pop-select" :disabled="moving"
+                :value="voice.voiceServer?.id ?? ''"
+                @click.stop
+                @change="onMoveServer(($event.target as HTMLSelectElement).value)">
+          <option value="">Automatic</option>
+          <option v-for="v in myVoiceServers" :key="v.id" :value="v.id">{{ v.name }} — {{ v.serverName }}</option>
+        </select>
+        <!-- A channel call names its server but does not offer to move it. -->
+        <strong v-else>{{ voice.voiceServer?.name || '—' }}</strong>
+      </div>
 
       <div class="vcp-pop-row"><span>Average ping</span><strong>{{ avgText }}</strong></div>
       <div class="vcp-pop-row"><span>Last ping</span><strong :class="{ bad: pingBad }">{{ pingText }}</strong></div>
@@ -293,6 +344,18 @@ onBeforeUnmount(() => {
 .vcp-pop-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-3); padding: 2px 0; }
 .vcp-pop-row strong { color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums; }
 .vcp-pop-row strong.bad { color: #f23f43; }
+.vcp-pop-vs { align-items: center; }
+.vcp-pop-select {
+  flex: 1; min-width: 0; max-width: 60%;
+  padding: 3px 6px; border-radius: 4px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--text-1); font-size: 12px; font-weight: 600;
+  outline: none; cursor: pointer;
+  text-overflow: ellipsis;
+}
+.vcp-pop-select:focus { border-color: var(--accent); }
+.vcp-pop-select:disabled { opacity: .6; cursor: default; }
+.vcp-pop-select option { background: var(--bg-panel); color: var(--text-1); }
 .vcp-pop-help { font-size: 11px; line-height: 1.45; color: var(--text-faint); margin: 10px 0 0; }
 .vcp-pop-btn {
   width: 100%; margin-top: 10px; height: 38px; border-radius: 8px;

@@ -47,7 +47,7 @@ const wireServer = (id: string, name = id): WireServer => ({
 })
 
 const wireChannel = (id: string, server: string, name: string, type: 'text' | 'voice', position = 0): WireChannel =>
-  ({ id, server, name, type, position, category: null, topic: null, slowmode: 0, userLimit: 0, bitrate: 64 })
+  ({ id, server, name, type, position, category: null, topic: null, slowmode: 0, userLimit: 0, bitrate: 64, voiceServer: null })
 
 const wireCategory = (id: string, server: string, name: string, position = 0): WireCategory =>
   ({ id, server, name, position })
@@ -204,6 +204,26 @@ describe('useServers', () => {
     s.openChannel('c1')
     s.removeChannel('s1', 'c1')
     expect(s.activeChannelId.value).toBeNull()
+  })
+
+  it('carries every wire field through to the client channel', () => {
+    // Pinned as a whole rather than field by field, because the failure is
+    // always the same shape: a new setting is added to the wire, the client
+    // type marks it optional, toClientChannel is not updated, and the settings
+    // dialog quietly shows a default for a channel that has a value — then
+    // saves that default back. It has happened twice (topic/slowmode/userLimit/
+    // bitrate, then voiceServer), both times without a type error.
+    const w = {
+      ...wireChannel('c1', 's1', 'general', 'voice', 3),
+      category: 'cat1', topic: 'hello', slowmode: 10, userLimit: 5, bitrate: 32,
+      voiceServer: 'vs1',
+    }
+    s.receiveDetail(wireServer('s1'), [w])
+    expect(s.channelsByServer.value['s1'][0]).toMatchObject({
+      id: 'c1', serverId: 's1', name: 'general', type: 'voice', position: 3,
+      category: 'cat1', topic: 'hello', slowmode: 10, userLimit: 5, bitrate: 32,
+      voiceServer: 'vs1',
+    })
   })
 
   it('removing the active server clears both selections and its channels', () => {

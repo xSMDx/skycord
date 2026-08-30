@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { X, Hash, Volume2 } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
-import { useApi, type WireInvite } from '@/composables/useApi'
+import { useApi, type WireInvite, type WireVoiceServer } from '@/composables/useApi'
 import { useServers } from '@/composables/useServers'
 import { formatChannelName } from '@/utils/channelName'
 import type { Channel } from '@/types'
@@ -12,7 +12,7 @@ import type { Channel } from '@/types'
 const props = defineProps<{ serverId: string; channel: Channel }>()
 const emit  = defineEmits<{ close: [] }>()
 
-const { updateChannelApi, listServerInvites } = useApi()
+const { updateChannelApi, listServerInvites, listVoiceServers } = useApi()
 const { upsertChannel } = useServers()
 
 const isVoice = computed(() => props.channel.type === 'voice')
@@ -41,17 +41,29 @@ const tab = ref<TabId>('overview')
 // something actually differs — a dialog whose primary button is always enabled
 // cannot tell you whether it has anything to do.
 const cur = {
-  topic:     props.channel.topic ?? null,
-  slowmode:  props.channel.slowmode  ?? 0,
-  userLimit: props.channel.userLimit ?? 0,
-  bitrate:   props.channel.bitrate   ?? 64,
+  topic:       props.channel.topic ?? null,
+  slowmode:    props.channel.slowmode  ?? 0,
+  userLimit:   props.channel.userLimit ?? 0,
+  bitrate:     props.channel.bitrate   ?? 64,
+  voiceServer: props.channel.voiceServer ?? null,
 }
 const form = reactive({
-  name:      props.channel.name,
-  topic:     cur.topic ?? '',
-  slowmode:  cur.slowmode,
-  userLimit: cur.userLimit,
-  bitrate:   cur.bitrate,
+  name:        props.channel.name,
+  topic:       cur.topic ?? '',
+  slowmode:    cur.slowmode,
+  userLimit:   cur.userLimit,
+  bitrate:     cur.bitrate,
+  voiceServer: cur.voiceServer,
+})
+
+// Loaded rather than passed in: the list belongs to the server, changes when
+// the owner edits it, and only this dialog needs it.
+const voiceServers = ref<WireVoiceServer[]>([])
+const defaultName = computed(() => voiceServers.value.find(v => v.isDefault)?.name ?? '')
+onMounted(async () => {
+  if (props.channel.type !== 'voice') return
+  try { voiceServers.value = (await listVoiceServers(props.serverId)).voiceServers }
+  catch { /* the picker simply does not appear — not worth an error banner */ }
 })
 
 const dirty = computed(() =>
@@ -59,7 +71,8 @@ const dirty = computed(() =>
   (form.topic.trim() || null) !== cur.topic ||
   form.slowmode  !== cur.slowmode ||
   form.userLimit !== cur.userLimit ||
-  form.bitrate   !== cur.bitrate)
+  form.bitrate   !== cur.bitrate ||
+  form.voiceServer !== cur.voiceServer)
 
 const saving = ref(false)
 const error  = ref('')
@@ -88,6 +101,9 @@ const save = async () => {
     if (isVoice.value) {
       if (form.userLimit !== cur.userLimit) body.userLimit = form.userLimit
       if (form.bitrate   !== cur.bitrate)   body.bitrate   = form.bitrate
+      // null is a real value here — "follow the server default" — so this is
+      // sent explicitly rather than omitted when cleared.
+      if (form.voiceServer !== cur.voiceServer) body.voiceServer = form.voiceServer
     } else {
       if (form.slowmode !== cur.slowmode) body.slowmode = form.slowmode
     }
@@ -197,6 +213,28 @@ const expiry = (iso: string | null) => {
             <input id="ec-limit" v-model.number="form.userLimit" class="ec-range"
                    type="range" min="0" max="99" step="1" />
             <p class="ec-hint">0 means no limit. You can always join a full channel.</p>
+
+            <!-- Two, not one. With a single registered server that server IS
+                 the guild default (the first one added becomes it, and deleting
+                 the default promotes another), so "Server default" and naming
+                 it explicitly resolve to the same place — a control whose every
+                 option produces the same result.
+
+                 The pickers in Voice & Video settings and the call bar use one,
+                 not two, and the difference is real rather than an oversight:
+                 there the alternative to a registered server is the instance's
+                 own, which is a genuinely different machine. -->
+            <template v-if="voiceServers.length > 1">
+              <label class="ec-label" for="ec-vs">Voice server</label>
+              <select id="ec-vs" v-model="form.voiceServer" class="ec-input ec-select">
+                <option :value="null">Server default{{ defaultName ? ` — ${defaultName}` : '' }}</option>
+                <option v-for="v in voiceServers" :key="v.id" :value="v.id">{{ v.name }}</option>
+              </select>
+              <p class="ec-hint">
+                Everyone in this channel connects here, whatever their own preference —
+                a call only works if all of it is on one server.
+              </p>
+            </template>
           </template>
 
           <p v-if="error" class="ec-error">{{ error }}</p>

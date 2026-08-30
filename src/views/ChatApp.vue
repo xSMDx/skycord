@@ -26,6 +26,7 @@ import AddFriendModal      from '@/components/modals/AddFriendModal.vue'
 import CreateServerModal   from '@/components/modals/CreateServerModal.vue'
 import CreateChannelModal  from '@/components/modals/CreateChannelModal.vue'
 import EditChannelModal    from '@/components/modals/EditChannelModal.vue'
+import VoiceServersModal   from '@/components/modals/VoiceServersModal.vue'
 import ConfirmModal        from '@/components/modals/ConfirmModal.vue'
 import EditFieldModal      from '@/components/modals/EditFieldModal.vue'
 import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
@@ -2240,8 +2241,14 @@ const serverMenuHandlers = () => ({
   createCategory: openCreateCategory,
   leaveServer:   doLeaveServer,
   deleteServer:  doDeleteServer,
+  voiceServers:  () => { showVoiceServers.value = true },
   copy:          copyText,
 })
+
+// Owner-only, and gated on the row that opens it rather than re-checked here:
+// buildServerMenu omits Voice Servers entirely for a non-owner, and every
+// endpoint the modal calls 403s one server-side.
+const showVoiceServers = ref(false)
 
 const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const s = activeServer.value
@@ -3313,6 +3320,13 @@ onBeforeUnmount(() => {
       @close="showCreateChannel = false"
       @created="handleChannelCreated"
     />
+    <VoiceServersModal
+      v-if="showVoiceServers && activeServer"
+      :key="activeServer.id"
+      :server-id="activeServer.id"
+      @close="showVoiceServers = false"
+    />
+
     <EditChannelModal
       v-if="editChannelTarget && activeServer"
       :key="editChannelTarget.id"

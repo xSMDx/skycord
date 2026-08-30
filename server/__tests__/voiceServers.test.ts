@@ -231,3 +231,93 @@ describe('resolution', () => {
     expect(resolved?.apiSecret).toBe('supersecretvalue')   // decrypted for use
   })
 })
+
+/**
+ * Pointing a channel at a media server.
+ *
+ * The guard that matters is the cross-guild one: a channel carrying another
+ * community's id would mint tokens against a media server its owner never
+ * offered it. `resolveForChannel` already refuses to USE such an id — these
+ * pin that it can never be stored in the first place, so the setting a channel
+ * shows is always a setting that does something.
+ */
+describe('channel voiceServer', () => {
+  const patch = (u: TestUser, sid: string, cid: string, body: object) =>
+    app().patch(`/servers/${sid}/channels/${cid}`).set(auth(u)).send(body)
+
+  const voiceOf = (srv: any) => srv.channels.find((c: any) => c.type === 'voice')
+
+  it('a new channel follows the server default', async () => {
+    const u = await register()
+    const srv = await mkServer(u)
+    expect(voiceOf(srv).voiceServer).toBeNull()
+  })
+
+  it('accepts an entry of its own server', async () => {
+    const u = await register()
+    const srv = await mkServer(u)
+    const vs = (await add(u, srv.server.id)).body.voiceServer
+    const res = await patch(u, srv.server.id, voiceOf(srv).id, { voiceServer: vs.id })
+    expect(res.status).toBe(200)
+    expect(res.body.channel.voiceServer).toBe(vs.id)
+  })
+
+  it('refuses an entry belonging to another server', async () => {
+    const u = await register()
+    const mine  = await mkServer(u)
+    const other = await mkServer(u)
+    const theirs = (await add(u, other.server.id)).body.voiceServer
+
+    const res = await patch(u, mine.server.id, voiceOf(mine).id, { voiceServer: theirs.id })
+    expect(res.status).toBe(400)
+
+    // And nothing was written: a rejected value must not leave the channel
+    // pointing at something that will be resolved away at call time.
+    const row = await Channel.findById(voiceOf(mine).id).lean()
+    expect(row!.voiceServer ?? null).toBeNull()
+  })
+
+  it('refuses a malformed id', async () => {
+    const u = await register()
+    const srv = await mkServer(u)
+    expect((await patch(u, srv.server.id, voiceOf(srv).id, { voiceServer: 'nonsense' })).status).toBe(400)
+  })
+
+  it('null clears it back to the server default', async () => {
+    const u = await register()
+    const srv = await mkServer(u)
+    const vs = (await add(u, srv.server.id)).body.voiceServer
+    await patch(u, srv.server.id, voiceOf(srv).id, { voiceServer: vs.id })
+
+    const res = await patch(u, srv.server.id, voiceOf(srv).id, { voiceServer: null })
+    expect(res.status).toBe(200)
+    expect(res.body.channel.voiceServer).toBeNull()
+  })
+
+  it('leaves it alone when the field is absent', async () => {
+    // Every other Overview field is sent on every save, so an absent
+    // voiceServer has to mean "unchanged" rather than "clear it".
+    const u = await register()
+    const srv = await mkServer(u)
+    const vs = (await add(u, srv.server.id)).body.voiceServer
+    await patch(u, srv.server.id, voiceOf(srv).id, { voiceServer: vs.id })
+
+    const res = await patch(u, srv.server.id, voiceOf(srv).id, { topic: 'hi' })
+    expect(res.body.channel.voiceServer).toBe(vs.id)
+  })
+})
+
+describe('server deletion', () => {
+  it('takes its voice servers with it', async () => {
+    // A left-behind row is worse than untidy: it holds an encrypted API secret
+    // and nothing can ever reach it again, because every read is scoped by the
+    // server that no longer exists.
+    const u = await register()
+    const srv = await mkServer(u)
+    await add(u, srv.server.id)
+    expect(await VoiceServer.countDocuments({ server: srv.server.id })).toBe(1)
+
+    await app().delete(`/servers/${srv.server.id}`).set(auth(u))
+    expect(await VoiceServer.countDocuments({ server: srv.server.id })).toBe(0)
+  })
+})

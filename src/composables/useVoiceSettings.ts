@@ -28,6 +28,11 @@ export interface VoiceSettings {
   showOwnCamera:    boolean   // render your own camera tile in the grid
   showNonVideo:     boolean   // render avatar tiles for participants without video
   alwaysPreviewVideo: boolean // show the camera preview before going live
+  // Preferred media server for DM and group calls, '' = let the instance
+  // decide. Channel calls ignore it: a voice channel's own override, or the
+  // community default, wins there — the room has to be the same one for
+  // everybody in it.
+  defaultVoiceServer: string
 }
 
 const KEY = 'sykord_voice'
@@ -41,6 +46,7 @@ const DEFAULTS: VoiceSettings = {
   // On by default: going live with a camera you haven't checked is the kind of
   // mistake that's embarrassing rather than merely annoying.
   alwaysPreviewVideo: true,
+  defaultVoiceServer: '',
 }
 
 const load = (): Partial<VoiceSettings> => {

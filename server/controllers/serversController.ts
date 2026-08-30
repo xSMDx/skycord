@@ -4,6 +4,7 @@ import { Server, MAX_SERVER_MEMBERS } from '../models/Server'
 import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { ServerInvite } from '../models/ServerInvite'
+import { VoiceServer } from '../models/VoiceServer'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
@@ -40,6 +41,8 @@ export const shapeChannel = (c: any) => ({
   slowmode:  c.slowmode ?? 0,
   userLimit: c.userLimit ?? 0,
   bitrate:   c.bitrate ?? 64,
+  // Same `? … : null` guard as `category`, and for the same reason.
+  voiceServer: c.voiceServer ? c.voiceServer.toString() : null,
   // The `c.category ? … : null` guard is load-bearing; do not shorten it to
   // `c.category.toString()`. A Mongoose `default` is applied when a document
   // is created or hydrated, never retroactively to rows already stored, and
@@ -327,6 +330,11 @@ export const deleteServer = async (req: Request, res: Response, next: NextFuncti
     // Invites with expiresAt: null are skipped by the TTL index and would
     // otherwise outlive the server they point at.
     await ServerInvite.deleteMany({ server: server._id })
+    // Same sweep, and the one with the sharpest edge: a VoiceServer row holds
+    // an ENCRYPTED API SECRET. Left behind it is unreachable — nothing lists
+    // rows except through their server — so it would sit in the database
+    // indefinitely, belonging to nobody, with no UI that could ever delete it.
+    await VoiceServer.deleteMany({ server: server._id })
     await server.deleteOne()
     res.json({ ok: true })
   } catch (err) { next(err) }

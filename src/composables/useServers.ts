@@ -138,6 +138,7 @@ const toClientChannel = (w: WireChannel): Channel => ({
   slowmode:  w.slowmode ?? 0,
   userLimit: w.userLimit ?? 0,
   bitrate:   w.bitrate ?? 64,
+  voiceServer: w.voiceServer ?? null,
 })
 
 const toClientCategory = (w: WireCategory): Category => ({

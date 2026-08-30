@@ -5,6 +5,7 @@ import { useVoiceSettings, micCaptureOptions, gateThreshold as sharedGateThresho
 import { createRnnoiseNode } from '@/composables/rnnoiseProcessor'
 import { useVoice } from '@/composables/useVoice'
 import { soundDeafen, soundUndeafen } from '@/composables/useSocket'
+import { useApi, type WireMyVoiceServer } from '@/composables/useApi'
 
 const { voiceSettings, setVoiceSettings, resetVoiceSettings } = useVoiceSettings()
 
@@ -168,7 +169,19 @@ const capturePtt = () => {
   window.addEventListener('keydown', h)
 }
 
+// ── Voice servers ────────────────────────────────────────────────────────────
+// Every media server this account could be routed to. Empty on an instance
+// where no community has registered one, and the whole control is hidden then:
+// a picker whose only entry is "Automatic" asks a question with one answer.
+const myVoiceServers = ref<WireMyVoiceServer[]>([])
+const { listMyVoiceServers } = useApi()
+const loadVoiceServers = async () => {
+  try { myVoiceServers.value = (await listMyVoiceServers()).voiceServers }
+  catch { /* the picker just stays hidden — this is a preference, not a blocker */ }
+}
+
 onMounted(refreshDevices)
+onMounted(loadVoiceServers)
 onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 </script>
 
@@ -207,6 +220,25 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
       <label class="vv-field">
         <span class="vv-label">Output Volume — {{ voiceSettings.outputVolume }}%</span>
         <input class="vv-slider" aria-label="Output volume" type="range" min="0" max="100" :value="voiceSettings.outputVolume" @input="onOutputVolume(+($event.target as HTMLInputElement).value)" />
+      </label>
+    </div>
+
+    <div v-if="myVoiceServers.length" class="vv-row2">
+      <label class="vv-field">
+        <span class="vv-label">Default Voice Server</span>
+        <div class="vv-selwrap">
+          <select class="vv-select" :value="voiceSettings.defaultVoiceServer"
+                  @change="setVoiceSettings({ defaultVoiceServer: ($event.target as HTMLSelectElement).value })">
+            <option value="">Automatic</option>
+            <option v-for="v in myVoiceServers" :key="v.id" :value="v.id">{{ v.name }} — {{ v.serverName }}</option>
+          </select>
+          <ChevronDown class="vv-selchev" :size="14" :stroke-width="2.25" />
+        </div>
+        <span class="vv-hint">
+          Where your direct and group calls start. Anyone in the call can move it
+          afterwards. Voice channels ignore this — they use whatever their own
+          server is set to, so everyone in the room stays together.
+        </span>
       </label>
     </div>
 

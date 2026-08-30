@@ -127,6 +127,7 @@ export interface Channel {
   slowmode?:  number
   userLimit?: number
   bitrate?:   number
+  voiceServer?: string | null
   unread?:  number
   locked?:  boolean
 }
