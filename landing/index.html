@@ -962,21 +962,41 @@ const ROADMAP = [
     ]
   },
   {
-    stage: 'next', label: 'Next up', title: 'End-to-end encryption',
+    stage: 'next', label: 'Next up', title: 'Choose your voice server',
     items: [
-      'Tick a box when you make a chat and nobody but the people in it can read it',
-      'New devices approved from a device you are already signed in on',
-      'A backup code, so losing your laptop does not lose your history',
-      'Encrypted calls as well as messages'
+      'Run more than one voice server and let people pick the closest one',
+      'Or let it choose for you, on whichever answers fastest',
+      'Sitting far from the box should not mean sounding like it'
     ]
   },
   {
     stage: 'next', label: 'Next up', title: 'Desktop app',
     items: [
       'A real desktop app instead of a browser tab',
-      'Pick which server you connect to — self-host your own, like TeamSpeak',
+      'Add other people’s servers and switch between them, like TeamSpeak — your friend hosts his, you host yours, one app for both',
       'Your own screen-share picker, and push-to-talk that works unfocused',
       'Per-app audio capture, so sharing a game does not echo the call back'
+    ]
+  },
+  {
+    stage: 'next', label: 'Next up', title: 'Phone app',
+    items: [
+      'A real app rather than a website saved to your home screen',
+      'Notifications that arrive when the app is closed',
+      'The same list of servers as the desktop app'
+    ]
+  },
+  {
+    // After the apps deliberately, not by preference: with messages deleted
+    // from the server once delivered, the device holds the only copy, and a
+    // browser tab that "clear site data" can wipe is the wrong place for it.
+    stage: 'next', label: 'Next up', title: 'End-to-end encryption',
+    items: [
+      'Tick a box when you make a chat and nobody but the people in it can read it — not us, not whoever runs the server',
+      'New devices approved from a device you are already signed in on',
+      'A backup code, so losing your laptop does not lose your history',
+      'Needs the desktop and phone apps first: once messages are deleted from the server, your device holds the only copy',
+      'Encrypted calls as well as messages'
     ]
   },
   {
@@ -1002,11 +1022,12 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
-    v: 'v0.13.0', date: 'Aug 30, 2026', title: 'Doors we did not know were open',
+    v: 'v0.13.0', date: 'Aug 30, 2026', title: 'Run it yourself, properly',
     items: [
+      ['add', 'Self-hosting is real now, not a promise. Full guides for the whole thing: installing it, putting it on a domain, certificates, the firewall, email, backups — written from the server this instance actually runs on, mistakes included'],
+      ['add', 'Pick how far you want to go. On your own machine takes minutes and skips almost all of it. Public with encryption is a middle step. Fully locked down is there if you want it. Only one combination genuinely does not work, and the server refuses to start in it rather than let you discover that through a login that never sticks'],
       ['fix', 'The part of Skycord that handles logins was answering the internet directly, on its own port, without encryption — alongside the proper encrypted route, not instead of it. Nothing suggests it was ever used, and the limits on login attempts applied there too, but it was a way in that had no reason to exist. It now only accepts connections from the machine it runs on'],
       ['fix', 'A self-hosted server used to hand out a certificate naming its own domain to anyone who asked for it by address — which is how a server behind a shield gets found anyway. The guides now close that, and say plainly which parts of hiding a server actually work and which are decoration'],
-      ['imp', 'The self-hosting guides let you choose how far to go: on your own machine, public with encryption, or fully locked down. The first two skip most of the work. Only one combination is genuinely unsupported, and the server refuses to start in it rather than let you find out through a login that never sticks'],
       ['fix', 'Two mistakes in those guides, found by reading them against the server they were written from: one page of the app was missing from the setup instructions and would have quietly 404’d, and the advice on voice servers was wrong in a way that would have published your address for no benefit'],
       ['add', 'Instructions for locking down a server and for backing it up. Nothing here backs itself up, and the guide says so rather than letting you assume otherwise'],
       ['imp', 'The encryption plan now requires the protocol to be written and attacked on paper before a line of it is built. Doing that immediately found a hole in this month’s own design — worth catching in a document rather than in a release']

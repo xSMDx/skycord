@@ -58,8 +58,11 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 |---|------|-------|
 | 1 | **Channels** | in progress — see below |
 | 2 | **UI/UX audit and polish (whole app)** | queued, scoped below |
-| 3 | Electron desktop shell + auto-update | parked, needs a brainstorm on pickup — now blocks E2EE |
-| 4 | E2EE (DMs only) | designed, not built — `docs/superpowers/specs/2026-08-30-e2ee-revision.md`; gated on native mobile **and** desktop apps |
+| 3 | One-command install | Docker Compose: app + Mongo + LiveKit + proxy. Manual path is documented in `docs/self-hosting/` |
+| 4 | **Multi-LiveKit (voice server picker)** | next up. Several LiveKit URLs, per-user choice or lowest-ping auto. Same API key/secret across servers, so a list of URLs — not a credential set each |
+| 5 | Electron desktop shell + auto-update | carries **multi-instance**: add another instance's address and switch between them, TeamSpeak-style. Blocks E2EE |
+| 6 | Native phone app | push notifications, and the same instance list as desktop. Blocks E2EE |
+| 7 | E2EE (DMs only) | designed, not built — `docs/superpowers/specs/2026-08-30-e2ee-revision.md`. **After both apps**, not by preference: delete-on-delivery makes the device the only copy, and a browser tab that "clear site data" wipes is the wrong home for it. Write the protocol spec first — see that doc |
 
 Done and shipped: context menus (v0.6), mobile/PWA rebuild (v0.10), profile picture and banner
 framing, landing page, call telemetry (v0.9), presence fixes (v0.10.1).
