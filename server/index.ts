@@ -3,10 +3,25 @@ import { config }       from './config/env'
 import { connectDB }    from './config/database'
 import { createApp }    from './app'
 import { initSocket }   from './sockets/chatSocket'
+import { loadInstanceVoiceServers, setInstanceVoiceServers } from './config/instanceVoice'
 
 const start = async () => {
   try { config } catch (err) {
     console.error('❌ Env error:', (err as Error).message)
+    process.exit(1)
+  }
+
+  // Before the database and before the socket: a misconfigured media server
+  // should stop the process, not surface when somebody joins a call.
+  try {
+    const list = loadInstanceVoiceServers(config.livekit.serversFile)
+    setInstanceVoiceServers(list)
+    if (list.length) {
+      const names = list.map(s => s.name).join(', ')
+      console.log('✓ ' + list.length + ' instance voice server(s): ' + names)
+    }
+  } catch (err) {
+    console.error('❌ Voice servers:', (err as Error).message)
     process.exit(1)
   }
   try {

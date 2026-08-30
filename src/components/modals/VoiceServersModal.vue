@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { X, Plus, Trash2, Check, Info } from 'lucide-vue-next'
+import { X, Plus, Trash2, Check, Info, Lock } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi, type WireVoiceServer } from '@/composables/useApi'
 
@@ -10,6 +10,10 @@ const emit  = defineEmits<{ close: [] }>()
 const { listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer } = useApi()
 
 const rows    = ref<WireVoiceServer[]>([])
+// Split rather than filtered in the template twice: the two lists mean
+// different things and only one of them has controls.
+const instanceRows = computed(() => rows.value.filter(r => r.scope === 'instance'))
+const ownRows      = computed(() => rows.value.filter(r => r.scope === 'server'))
 const loading = ref(true)
 const error   = ref('')
 const busy    = ref(false)
@@ -103,8 +107,34 @@ const remove = async (row: WireVoiceServer) => {
       <p v-if="loading" class="vs-empty">Loading…</p>
 
       <template v-else>
-        <ul v-if="rows.length" class="vs-list">
-          <li v-for="r in rows" :key="r.id" class="vs-row">
+        <!-- Shown FIRST, and shown even though nothing here can be changed: an
+             owner who cannot see what the instance already offers will register
+             a duplicate of a server they already had. -->
+        <template v-if="instanceRows.length">
+          <h3 class="vs-sub">Provided by this instance</h3>
+          <ul class="vs-list">
+            <li v-for="r in instanceRows" :key="r.id" class="vs-row">
+              <div class="vs-row-main">
+                <div class="vs-row-top">
+                  <span class="vs-name">{{ r.name }}</span>
+                  <span v-if="r.isDefault" class="vs-badge">Default</span>
+                </div>
+                <span class="vs-url">{{ r.url }}</span>
+              </div>
+              <span class="vs-locked" v-tip="'Set in this instance’s configuration'">
+                <Lock :size="13" :stroke-width="2.25" />
+              </span>
+            </li>
+          </ul>
+          <p class="vs-sub-note">
+            These come from the server’s configuration file. Ask whoever runs this
+            instance to change them.
+          </p>
+        </template>
+
+        <h3 v-if="instanceRows.length" class="vs-sub">Yours</h3>
+        <ul v-if="ownRows.length" class="vs-list">
+          <li v-for="r in ownRows" :key="r.id" class="vs-row">
             <div class="vs-row-main">
               <div class="vs-row-top">
                 <span class="vs-name">{{ r.name }}</span>
@@ -127,7 +157,9 @@ const remove = async (row: WireVoiceServer) => {
         </ul>
 
         <p v-else class="vs-empty">
-          None yet. Calls use this instance’s own voice server.
+          {{ instanceRows.length
+            ? 'None of your own yet. Channels can use any of the above.'
+            : 'None yet. Calls use this instance’s own voice server.' }}
         </p>
 
         <!-- ── Add ─────────────────────────────────────────────────── -->
@@ -194,6 +226,13 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .vs-callout-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 .vs-error { font-size: 13px; color: #f0716f; margin-bottom: 12px; }
 .vs-empty { font-size: 13px; color: var(--text-3); padding: 16px 0; }
+
+.vs-sub {
+  font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 8px;
+}
+.vs-sub-note { font-size: 12px; line-height: 1.5; color: var(--text-3); margin: -6px 0 18px; }
+.vs-locked { display: grid; place-items: center; width: 30px; height: 30px; color: var(--text-3); flex-shrink: 0; }
 
 .vs-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .vs-row {

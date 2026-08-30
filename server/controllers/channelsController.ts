@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
 import { Channel, MAX_SLOWMODE, MAX_USER_LIMIT, MIN_BITRATE, MAX_BITRATE } from '../models/Channel'
 import { VoiceServer } from '../models/VoiceServer'
+import { findInstanceVoiceServer, isInstanceVoiceId } from '../config/instanceVoice'
 import { Category } from '../models/Category'
 import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversController'
 import { Message } from '../models/Message'
@@ -229,10 +230,17 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
       // silently does nothing.
       if (raw === null || raw === '') {
         overview.voiceServer = null
+      } else if (isInstanceVoiceId(raw)) {
+        // Offered to every guild by whoever runs the instance, so there is no
+        // ownership to check — only that it still exists in the file.
+        if (!findInstanceVoiceServer(raw)) {
+          res.status(400).json({ message: 'This instance does not offer that voice server' }); return
+        }
+        overview.voiceServer = raw
       } else if (typeof raw === 'string' && Types.ObjectId.isValid(raw)) {
         const owned = await VoiceServer.exists({ _id: raw, server: found.server._id })
         if (!owned) { res.status(400).json({ message: 'That voice server does not belong to this server' }); return }
-        overview.voiceServer = new Types.ObjectId(raw)
+        overview.voiceServer = raw
       } else {
         res.status(400).json({ message: 'That voice server does not belong to this server' }); return
       }

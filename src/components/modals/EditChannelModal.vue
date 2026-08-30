@@ -60,6 +60,8 @@ const form = reactive({
 // the owner edits it, and only this dialog needs it.
 const voiceServers = ref<WireVoiceServer[]>([])
 const defaultName = computed(() => voiceServers.value.find(v => v.isDefault)?.name ?? '')
+const instanceServers = computed(() => voiceServers.value.filter(v => v.scope === 'instance'))
+const ownServers      = computed(() => voiceServers.value.filter(v => v.scope === 'server'))
 onMounted(async () => {
   if (props.channel.type !== 'voice') return
   try { voiceServers.value = (await listVoiceServers(props.serverId)).voiceServers }
@@ -224,7 +226,14 @@ const expiry = (iso: string | null) => {
             <select id="ec-vs" v-model="form.voiceServer" class="ec-input ec-select"
                     :disabled="!voiceServers.length">
               <option :value="null">Server default{{ defaultName ? ` — ${defaultName}` : '' }}</option>
-              <option v-for="v in voiceServers" :key="v.id" :value="v.id">{{ v.name }}</option>
+              <!-- Grouped, because "whose server is this" changes who to ask
+                   when it goes wrong. -->
+              <optgroup v-if="ownServers.length" label="This server">
+                <option v-for="v in ownServers" :key="v.id" :value="v.id">{{ v.name }}</option>
+              </optgroup>
+              <optgroup v-if="instanceServers.length" label="This instance">
+                <option v-for="v in instanceServers" :key="v.id" :value="v.id">{{ v.name }}</option>
+              </optgroup>
             </select>
             <p class="ec-hint">
               <template v-if="voiceServers.length">

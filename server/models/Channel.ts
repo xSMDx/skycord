@@ -43,7 +43,11 @@ export interface IChannel extends Document {
    * preference that can be individually honoured. The member setting applies
    * to DMs and group calls, which have no channel to say otherwise.
    */
-  voiceServer: Types.ObjectId | null
+  /** A guild VoiceServer's id, or an `instance:<slug>` id from the instance's
+   *  own configuration. A String rather than an ObjectId precisely so it can
+   *  hold both — existing ObjectId values stringify to the same characters, so
+   *  nothing needs migrating. */
+  voiceServer: string | null
 
   createdAt: Date
   updatedAt: Date
@@ -77,7 +81,8 @@ const ChannelSchema = new Schema<IChannel>(
     // Not a hard ref cleanup: deleting a VoiceServer leaves channels pointing
     // at a dead id, and resolution treats an unresolvable id as "fall back to
     // the default" rather than as an error. Same tolerance `category` has.
-    voiceServer: { type: Schema.Types.ObjectId, ref: 'VoiceServer', default: null },
+    // Not a ref: the value may name an instance server, which has no document.
+    voiceServer: { type: String, default: null, maxlength: 80 },
   },
   { timestamps: true, versionKey: false }
 )

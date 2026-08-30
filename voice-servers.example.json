@@ -1,0 +1,15 @@
+[
+  {
+    "name": "Frankfurt",
+    "url": "wss://fra.example.com",
+    "apiKey": "APIyourkeyhere",
+    "apiSecret": "your-generated-secret",
+    "default": true
+  },
+  {
+    "name": "Singapore",
+    "url": "wss://sgp.example.com",
+    "apiKey": "APIanotherkey",
+    "apiSecret": "another-generated-secret"
+  }
+]

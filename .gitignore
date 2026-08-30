@@ -42,3 +42,6 @@ graphify-out/
 # so it could never check out cleanly on the Linux server. Removed from the
 # index; this stops the tool that produced it re-adding one.
 H*projects*sykord*task-*-report.md
+
+# Instance voice servers — holds LiveKit API secrets, same as .env.
+voice-servers.json

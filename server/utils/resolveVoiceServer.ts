@@ -23,6 +23,7 @@
 import { Types } from 'mongoose'
 import { config } from '../config/env'
 import { VoiceServer } from '../models/VoiceServer'
+import { findInstanceVoiceServer, instanceVoiceServers, isInstanceVoiceId } from '../config/instanceVoice'
 import { open } from './secretBox'
 
 export interface ResolvedVoice {
@@ -34,11 +35,28 @@ export interface ResolvedVoice {
   apiSecret: string
 }
 
-/** The instance's own, or null when voice is not configured at all. */
+/**
+ * The instance's own default, or null when voice is not configured at all.
+ *
+ * Two sources, in order: the voice-servers.json list (whichever entry is marked
+ * default), then the single LIVEKIT_URL trio. The second is what every
+ * deployment predating the file has, so it must keep working untouched.
+ */
 export const instanceVoice = (): ResolvedVoice | null => {
+  const listed = instanceVoiceServers().find(s => s.isDefault)
+  if (listed) {
+    return { id: listed.id, name: listed.name, url: listed.url, apiKey: listed.apiKey, apiSecret: listed.apiSecret }
+  }
   const { url, apiKey, apiSecret } = config.livekit
   if (!url || !apiKey || !apiSecret) return null
   return { id: null, name: 'Default', url, apiKey, apiSecret }
+}
+
+/** A named instance server, or null. No decryption: these come from a file the
+ *  operator wrote, not from the database. */
+const namedInstance = (id: string): ResolvedVoice | null => {
+  const s = findInstanceVoiceServer(id)
+  return s ? { id: s.id, name: s.name, url: s.url, apiKey: s.apiKey, apiSecret: s.apiSecret } : null
 }
 
 /** Unseal a stored row, or null if its secret cannot be read. */
@@ -62,9 +80,17 @@ const usable = (row: any): ResolvedVoice | null => {
  */
 export const resolveForChannel = async (
   guildId: Types.ObjectId,
-  channelVoiceServerId: Types.ObjectId | null,
+  channelVoiceServerId: string | null,
 ): Promise<ResolvedVoice | null> => {
-  if (channelVoiceServerId) {
+  // An instance server is offered to every guild by the operator, so there is
+  // no ownership to check — the cross-guild guard below exists only because a
+  // GUILD's server belongs to one guild.
+  if (isInstanceVoiceId(channelVoiceServerId)) {
+    const hit = namedInstance(channelVoiceServerId)
+    if (hit) return hit
+    // The operator removed it from the file. Fall through rather than fail: the
+    // channel keeps working on the guild or instance default.
+  } else if (channelVoiceServerId && Types.ObjectId.isValid(channelVoiceServerId)) {
     const row = await VoiceServer.findOne({ _id: channelVoiceServerId, server: guildId })
       .select('+apiSecret').lean()
     // Scoped to the guild, not looked up by id alone: without `server` in the
@@ -97,7 +123,13 @@ export const resolveForConversation = async (
   preferredId: string | null | undefined,
   memberOfServerIds: Types.ObjectId[],
 ): Promise<ResolvedVoice | null> => {
-  if (preferredId && Types.ObjectId.isValid(preferredId) && memberOfServerIds.length) {
+  // An instance server needs no membership check — the operator offers it to
+  // everyone on the build, which is the whole point of it being in the file
+  // rather than in one guild's rows.
+  if (isInstanceVoiceId(preferredId)) {
+    const hit = namedInstance(preferredId)
+    if (hit) return hit
+  } else if (preferredId && Types.ObjectId.isValid(preferredId) && memberOfServerIds.length) {
     const row = await VoiceServer.findOne({ _id: preferredId, server: { $in: memberOfServerIds } })
       .select('+apiSecret').lean()
     const hit = row && usable(row)

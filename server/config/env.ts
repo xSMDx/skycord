@@ -32,6 +32,10 @@ export const config = {
     url:       opt('LIVEKIT_URL', ''),
     apiKey:    opt('LIVEKIT_API_KEY', ''),
     apiSecret: opt('LIVEKIT_API_SECRET', ''),
+    /** Instance-wide voice servers, offered to every guild on this build. See
+     *  server/config/instanceVoice.ts. A missing file means none, which is the
+     *  normal case for a deployment using only the three variables above. */
+    serversFile: opt('VOICE_SERVERS_FILE', 'voice-servers.json'),
   },
   email: {
     resendApiKey: opt('RESEND_API_KEY', ''),

@@ -352,6 +352,41 @@ it terminating TLS for the app.
 Whichever you use, the Cloudflare setting on the subdomain does not affect media — that
 is about UDP, and no reverse proxy changes it.
 
+### More than one LiveKit
+
+`LIVEKIT_URL` names one server. If you run several — say one in Europe and one
+in Asia — list them in a JSON file and every guild on your instance can point a
+voice channel at any of them, and every user can pick one as their default for
+direct calls:
+
+```json
+[
+  { "name": "Frankfurt", "url": "wss://fra.example.com",
+    "apiKey": "APIxxx", "apiSecret": "…", "default": true },
+  { "name": "Singapore", "url": "wss://sgp.example.com",
+    "apiKey": "APIyyy", "apiSecret": "…" }
+]
+```
+
+Point `VOICE_SERVERS_FILE` at it; it defaults to `voice-servers.json` beside
+`.env`. There is a template at `voice-servers.example.json`.
+
+These show up in every server's **Voice Servers** dialog as *Provided by this
+instance*, read-only — nobody can edit or delete them from inside the app,
+because they are yours and not the app's. **Your API secrets never leave this
+file**: they are not written to the database and never sent to a browser, so a
+guild owner using one of your servers never sees the credentials for it. That is
+the main reason to use this rather than asking each owner to register your
+servers themselves.
+
+**The file holds secrets.** Treat it exactly like `.env` — gitignore it,
+`chmod 600` it, and mount it explicitly if you run in Docker. A bad entry stops
+the process at boot with a message naming the entry, rather than failing later
+when somebody joins a call.
+
+Leaving the file out changes nothing: the single `LIVEKIT_URL` remains the only
+server, which is how every installation before this worked.
+
 ## 7. Firewall
 
 Default deny, then open only what serves traffic:

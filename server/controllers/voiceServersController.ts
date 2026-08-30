@@ -14,6 +14,7 @@ import { Channel } from '../models/Channel'
 import { Server } from '../models/Server'
 import { loadServer, requireOwner } from './serversController'
 import { seal, hint } from '../utils/secretBox'
+import { instanceVoiceServers, isInstanceVoiceId } from '../config/instanceVoice'
 
 /** Never includes apiSecret. The field is `select: false` as a second line of
  *  defence, but the shape is the first. */
@@ -24,7 +25,27 @@ const shape = (v: any) => ({
   apiKey:     v.apiKey,
   secretHint: v.secretHint ?? '••••',
   isDefault:  !!v.isDefault,
+  /** Where it came from. The client uses this to group the two lists and to
+   *  withhold edit controls that the API would refuse anyway. */
+  scope:      'server' as const,
 })
+
+/**
+ * Instance servers, as the client sees them.
+ *
+ * The secret never appears — not even a hint of it. A guild owner is not the
+ * person who configured these and has no business seeing any part of the
+ * operator's credentials; they only need the name to pick from.
+ */
+const shapeInstance = () => instanceVoiceServers().map(s => ({
+  id:         s.id,
+  name:       s.name,
+  url:        s.url,
+  apiKey:     '',
+  secretHint: '',
+  isDefault:  s.isDefault,
+  scope:      'instance' as const,
+}))
 
 /**
  * A signalling URL the browser can actually reach.
@@ -52,7 +73,10 @@ export const listVoiceServers = async (req: Request, res: Response, next: NextFu
     // and the call UI both need to name a server, and a member who cannot read
     // the list would see an id. No secret is in this shape.
     const rows = await VoiceServer.find({ server: server._id }).sort({ createdAt: 1 }).lean()
-    res.json({ voiceServers: rows.map(shape) })
+    // Instance servers first: they are the ones already available without
+    // anybody doing anything, so an owner should see them before deciding to
+    // register a duplicate.
+    res.json({ voiceServers: [...shapeInstance(), ...rows.map(shape)] })
   } catch (err) { next(err) }
 }
 
@@ -76,11 +100,16 @@ export const listMyVoiceServers = async (req: Request, res: Response, next: Next
       .lean()
     const names = new Map(mine.map(m => [m._id.toString(), m.name]))
     res.json({
-      voiceServers: rows.map(v => ({
-        ...shape(v),
-        server:     v.server.toString(),
-        serverName: names.get(v.server.toString()) ?? '',
-      })),
+      voiceServers: [
+        // Available to this account wherever they are, so they lead the list
+        // and carry no owning-server name.
+        ...shapeInstance().map(s => ({ ...s, server: '', serverName: '' })),
+        ...rows.map(v => ({
+          ...shape(v),
+          server:     v.server.toString(),
+          serverName: names.get(v.server.toString()) ?? '',
+        })),
+      ],
     })
   } catch (err) { next(err) }
 }
@@ -128,6 +157,11 @@ export const updateVoiceServer = async (req: Request, res: Response, next: NextF
     if (!requireOwner(server, req.user!.sub, res)) return
 
     const { vid } = req.params
+    // File-managed, so the app is not the place to change it. Refused with a
+    // sentence rather than a 404, which would suggest it does not exist.
+    if (isInstanceVoiceId(vid)) {
+      res.status(400).json({ message: 'That voice server is provided by this instance. Whoever runs it changes it in the server’s configuration.' }); return
+    }
     if (!Types.ObjectId.isValid(vid)) { res.status(404).json({ message: 'Voice server not found' }); return }
     const row = await VoiceServer.findOne({ _id: vid, server: server._id })
     if (!row) { res.status(404).json({ message: 'Voice server not found' }); return }
@@ -173,6 +207,11 @@ export const deleteVoiceServer = async (req: Request, res: Response, next: NextF
     if (!requireOwner(server, req.user!.sub, res)) return
 
     const { vid } = req.params
+    // File-managed, so the app is not the place to change it. Refused with a
+    // sentence rather than a 404, which would suggest it does not exist.
+    if (isInstanceVoiceId(vid)) {
+      res.status(400).json({ message: 'That voice server is provided by this instance. Whoever runs it changes it in the server’s configuration.' }); return
+    }
     if (!Types.ObjectId.isValid(vid)) { res.status(404).json({ message: 'Voice server not found' }); return }
     const row = await VoiceServer.findOneAndDelete({ _id: vid, server: server._id })
     if (!row) { res.status(404).json({ message: 'Voice server not found' }); return }

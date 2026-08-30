@@ -559,6 +559,9 @@ export interface WireMember {
  * four characters) is what the settings list shows instead.
  */
 export interface WireVoiceServer {
+  /** 'server' = registered by this guild's owner and editable by them.
+   *  'instance' = provided by whoever runs this build, read-only here. */
+  scope: 'server' | 'instance'
   id:         string
   name:       string
   url:        string

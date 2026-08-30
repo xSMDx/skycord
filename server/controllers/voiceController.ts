@@ -35,7 +35,7 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
   try {
     // Captured in the channel branch below so the resolver can read the
     // override without a second lookup.
-    let chosenChannel: { server: mongoose.Types.ObjectId; voiceServer?: mongoose.Types.ObjectId | null } | null = null
+    let chosenChannel: { server: mongoose.Types.ObjectId; voiceServer?: string | null } | null = null
     const userId = req.user!.sub
     const { conversationId, kind, voiceServerId } = req.body as {
       conversationId?: string; kind?: 'dm' | 'group' | 'channel'

@@ -174,6 +174,8 @@ const capturePtt = () => {
 // where no community has registered one, and the whole control is hidden then:
 // a picker whose only entry is "Automatic" asks a question with one answer.
 const myVoiceServers = ref<WireMyVoiceServer[]>([])
+const instanceServers = computed(() => myVoiceServers.value.filter(v => v.scope === 'instance'))
+const guildServers    = computed(() => myVoiceServers.value.filter(v => v.scope === 'server'))
 const { listMyVoiceServers } = useApi()
 const loadVoiceServers = async () => {
   try { myVoiceServers.value = (await listMyVoiceServers()).voiceServers }
@@ -230,7 +232,12 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
           <select class="vv-select" :value="voiceSettings.defaultVoiceServer"
                   @change="setVoiceSettings({ defaultVoiceServer: ($event.target as HTMLSelectElement).value })">
             <option value="">Automatic</option>
-            <option v-for="v in myVoiceServers" :key="v.id" :value="v.id">{{ v.name }} — {{ v.serverName }}</option>
+            <optgroup v-if="instanceServers.length" label="This instance">
+              <option v-for="v in instanceServers" :key="v.id" :value="v.id">{{ v.name }}</option>
+            </optgroup>
+            <optgroup v-if="guildServers.length" label="Your servers">
+              <option v-for="v in guildServers" :key="v.id" :value="v.id">{{ v.name }} — {{ v.serverName }}</option>
+            </optgroup>
           </select>
           <ChevronDown class="vv-selchev" :size="14" :stroke-width="2.25" />
         </div>
