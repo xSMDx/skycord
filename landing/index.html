@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Skycord — your crew's place to talk</title>
 <meta name="description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours today, yours when we open-source." />
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%23E8853A' stroke-linecap='round' stroke-linejoin='round' stroke-width='16' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='12' fill='%23E8853A'/%3E%3Ccircle cx='164' cy='140' r='12' fill='%23E8853A'/%3E%3C/svg%3E" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%235865F2' stroke-linecap='round' stroke-linejoin='round' stroke-width='16' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='12' fill='%235865F2'/%3E%3Ccircle cx='164' cy='140' r='12' fill='%235865F2'/%3E%3C/svg%3E" />
 <link rel="canonical" href="https://skycord.xyz/" />
-<meta name="theme-color" content="#0b0c0f" />
+<meta name="theme-color" content="#000000" />
 
 <!-- Most people meet this page as a link someone pasted into a chat window,
      not as a search result, so the unfurl is the first impression. Without
@@ -31,24 +31,40 @@
 <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet" />
 <style>
   /* ── Tokens ─────────────────────────────────────────── */
-  /* Ember — the machine in the closet. A warm charcoal room and one amber
-     light: the box is running, your people are on it. Deliberately not
-     slate-blue and not blurple; the app may look like Discord because muscle
-     memory is binding, but the landing page wearing Discord's colour would
-     say "clone" before a single word is read. */
+  /* Recoloured to Discord's brand palette by request, 2026-08-30.
+     This replaces "Ember" (warm charcoal + amber), which was chosen precisely
+     so the landing page would NOT wear blurple — the reasoning recorded in
+     docs/superpowers/specs/2026-08-24-ember-landing-design.md was that the app
+     may look like Discord because muscle memory is binding, but the brand
+     surface doing the same reads as "clone" before a word is read. That
+     tradeoff was raised and the palette was chosen anyway; this note exists so
+     the next person finds the argument rather than re-deriving it.
+     Layout, type (Fira Sans/Code) and copy are untouched. */
   :root {
-    --ink:     #14110F;   /* ground */
-    --floor:   #191512;
-    --panel:   #1E1A17;   /* cards, nav */
-    --border:  #35302B;   /* hairlines — solid, not alpha, so they read as drawn lines */
-    --ember:   #E8853A;   /* the accent: CTAs, live states, the LED */
-    --ember-hi:#F09D5B;
-    --sage:    #8A9A7B;   /* mono accents: uptime, specs, versions */
-    --speak:   #8A9A7B;
-    --live:    #E8853A;
-    --text:    #F2EDE7;   /* warm white */
-    --dim:     #B8AFA4;
-    --faint:   #8C8478;
+    /* Palette, supplied:
+         #5865F2 Blurple · #E0E3FF Light Blurple · #1f1f1f Gray · #000000 Black
+       Four colours cannot fill twelve roles. The four DERIVED below are marked;
+       nothing else was invented. Token names still read "ember" and "sage" —
+       they are load-bearing across ~40 rules, and renaming them is a separate
+       change from recolouring. */
+    --ink:     #000000;   /* Black — ground */
+    --floor:   #0d0d0d;   /* derived: a step off black, for recessed areas */
+    --panel:   #1f1f1f;   /* Gray — cards, nav */
+    --border:  #2b2b2b;   /* derived: gray lifted. Solid, not alpha, so it reads as a drawn line */
+    --ember:   #5865F2;   /* Blurple — the accent: CTAs, live states, the LED */
+    --ember-hi:#E0E3FF;   /* Light Blurple — hover and bright accent text */
+    --sage:    #E0E3FF;   /* Light Blurple — mono accents: uptime, specs, versions */
+    --speak:   #E0E3FF;
+    --live:    #5865F2;
+    /* White is not one of the four, but body copy needs it: with Light Blurple
+       as the top tier there is nothing brighter to sit above it, and every tier
+       below would be a tint of one hue. */
+    --text:    #ffffff;
+    --dim:     #E0E3FF;   /* Light Blurple — secondary copy */
+    /* derived: Light Blurple desaturated and dimmed so the three text tiers
+       stay separable. It has to clear AA on Gray, not just on Black — most body
+       copy sits inside a card. */
+    --faint:   #8a8fa3;
     --green:   var(--sage);
     --red:     var(--ember);
   }
@@ -69,7 +85,7 @@
   /* ── Top bar ───────────────────────────────────────────────────────── */
   header {
     position: sticky; top: 0; z-index: 50;
-    background: rgba(11,12,15,.85); backdrop-filter: blur(16px);
+    background: rgba(0,0,0,.85); backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
     animation: slideDown .5s ease-out;
   }
@@ -114,9 +130,9 @@
   }
   .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
   .tab.on { 
-    background: rgba(232,133,58,.16); 
+    background: rgba(88,101,242,.16); 
     color: var(--ember-hi);
-    box-shadow: 0 2px 8px rgba(232,133,58,.2);
+    box-shadow: 0 2px 8px rgba(88,101,242,.2);
   }
   .tab.on::after {
     content: '';
@@ -131,15 +147,15 @@
   }
   .cta-mini {
     padding: 9px 18px; border-radius: 9px; font-size: 14px; font-weight: 700;
-    background: var(--ember); color: #1A120B; 
+    background: var(--ember); color: #000000; 
     transition: all .2s cubic-bezier(.4,0,.2,1);
-    box-shadow: 0 4px 12px rgba(232,133,58,.3);
+    box-shadow: 0 4px 12px rgba(88,101,242,.3);
     position: relative;
     overflow: hidden;
   }
   .cta-mini:hover { 
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(232,133,58,.4);
+    box-shadow: 0 6px 20px rgba(88,101,242,.4);
   }
 
   /* ── Panels ─────────────────────────────────────────────────── */
@@ -163,8 +179,8 @@
     inset: -40% -20% auto; 
     height: 130%;
     background:
-      radial-gradient(560px 300px at 30% 20%, rgba(232,133,58,.2), transparent 65%),
-      radial-gradient(480px 280px at 72% 12%, rgba(138,154,123,.1), transparent 60%),
+      radial-gradient(560px 300px at 30% 20%, rgba(88,101,242,.2), transparent 65%),
+      radial-gradient(480px 280px at 72% 12%, rgba(224,227,255,.1), transparent 60%),
       radial-gradient(600px 400px at 50% 50%, rgba(124,92,191,.05), transparent 70%);
     pointer-events: none;
     animation: pulse 8s ease-in-out infinite;
@@ -208,15 +224,15 @@
     font-size: 17px; 
     font-weight: 700;
     background: var(--ember); 
-    color: #1A120B;
-    box-shadow: 0 8px 34px rgba(232,133,58,.4);
+    color: #000000;
+    box-shadow: 0 8px 34px rgba(88,101,242,.4);
     transition: all .25s cubic-bezier(.4,0,.2,1);
     animation: fadeUp .6s ease-out .4s both;
     overflow: hidden;
   }
   .cta:hover { 
     transform: translateY(-3px); 
-    box-shadow: 0 14px 44px rgba(232,133,58,.5);
+    box-shadow: 0 14px 44px rgba(88,101,242,.5);
   }
   .cta small { 
     display: block; 
@@ -252,12 +268,12 @@
   .m-led {
     display: block; width: 8px; height: 8px; border-radius: 50%;
     background: var(--ember);
-    box-shadow: 0 0 10px 2px rgba(232,133,58,.55);
+    box-shadow: 0 0 10px 2px rgba(88,101,242,.55);
     animation: m-breathe 3.2s ease-in-out infinite;
   }
   @keyframes m-breathe {
     0%, 100% { opacity: 1; }
-    50%      { opacity: .45; box-shadow: 0 0 5px 1px rgba(232,133,58,.3); }
+    50%      { opacity: .45; box-shadow: 0 0 5px 1px rgba(88,101,242,.3); }
   }
   .m-slot {
     display: block; height: 6px; border-radius: 3px;
@@ -350,7 +366,7 @@
     transform: scaleX(1);
   }
   .card:hover { 
-    border-color: rgba(232,133,58,.4); 
+    border-color: rgba(88,101,242,.4); 
     transform: translateY(-4px);
     box-shadow: 0 12px 32px rgba(0,0,0,.4);
   }
@@ -362,13 +378,13 @@
     display: flex; 
     align-items: center; 
     justify-content: center;
-    background: rgba(232,133,58,.13); 
+    background: rgba(88,101,242,.13); 
     color: var(--ember);
     transition: all .3s cubic-bezier(.4,0,.2,1);
   }
   .card:hover .ic { 
     background: var(--ember); 
-    color: #1A120B;
+    color: #000000;
     transform: rotate(-5deg) scale(1.1);
   }
   /*
@@ -448,18 +464,18 @@
     box-shadow: 0 12px 32px rgba(0,0,0,.4);
   }
   .roadmap-card.now {
-    border-color: rgba(232,133,58,.4);
-    background: linear-gradient(135deg, rgba(232,133,58,.15) 0%, var(--floor) 100%);
+    border-color: rgba(88,101,242,.4);
+    background: linear-gradient(135deg, rgba(88,101,242,.15) 0%, var(--floor) 100%);
     border-left: 4px solid var(--ember);
   }
   .roadmap-card.next {
-    border-color: rgba(232,133,58,.28);
-    background: linear-gradient(135deg, rgba(232,133,58,.06) 0%, var(--floor) 100%);
-    border-left: 4px solid rgba(232,133,58,.5);
+    border-color: rgba(88,101,242,.28);
+    background: linear-gradient(135deg, rgba(88,101,242,.06) 0%, var(--floor) 100%);
+    border-left: 4px solid rgba(88,101,242,.5);
   }
   .roadmap-card.idea {
-    border-color: rgba(138,154,123,.45);
-    background: linear-gradient(135deg, rgba(138,154,123,.08) 0%, var(--floor) 100%);
+    border-color: rgba(224,227,255,.45);
+    background: linear-gradient(135deg, rgba(224,227,255,.08) 0%, var(--floor) 100%);
     border-left: 4px solid var(--sage);
   }
   .roadmap-card .status {
@@ -473,16 +489,16 @@
     margin-bottom: 16px;
   }
   .roadmap-card.now .status {
-    background: rgba(232,133,58,.2);
+    background: rgba(88,101,242,.2);
     color: var(--ember-hi);
   }
   .roadmap-card.next .status {
-    background: rgba(232,133,58,.14);
-    color: #D9A06A;
+    background: rgba(88,101,242,.14);
+    color: var(--dim);
   }
   .roadmap-card.idea .status {
-    background: rgba(138,154,123,.16);
-    color: #A9B899;
+    background: rgba(224,227,255,.16);
+    color: var(--faint);
   }
   .roadmap-card h3 {
     font: 700 20px 'Fira Sans', 'Fira Sans', sans-serif;
@@ -521,7 +537,7 @@
     background: var(--ember);
   }
   .roadmap-card.next li::before {
-    background: rgba(232,133,58,.5);
+    background: rgba(88,101,242,.5);
   }
   .roadmap-card.idea li::before {
     background: var(--sage);
@@ -570,7 +586,7 @@
     position: relative;
   }
   .release:hover {
-    border-color: rgba(232,133,58,.4);
+    border-color: rgba(88,101,242,.4);
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(0,0,0,.3);
   }
@@ -589,7 +605,7 @@
   }
   .version-badge {
     padding: 4px 12px;
-    background: rgba(232,133,58,.15);
+    background: rgba(88,101,242,.15);
     color: var(--ember-hi);
     border-radius: 6px;
     font: 600 14px 'Fira Code', monospace;
@@ -632,9 +648,9 @@
     border-radius: 5px;
     padding: 0 8px;
   }
-  .change-type.added { background: rgba(138,154,123,.14); color: #4ade80; }
-  .change-type.improved { background: rgba(232,133,58,.14); color: var(--ember-hi); }
-  .change-type.fixed { background: rgba(232,133,58,.12); color: #f87171; }
+  .change-type.added { background: rgba(224,227,255,.14); color: #4ade80; }
+  .change-type.improved { background: rgba(88,101,242,.14); color: var(--ember-hi); }
+  .change-type.fixed { background: rgba(88,101,242,.12); color: #f87171; }
   .release .expand-icon {
     position: absolute;
     top: 24px;
@@ -711,10 +727,10 @@
     <a class="mark" id="mark" href="#features">
       <div class="logo-container">
         <svg class="logo-svg" viewBox="0 0 256 256" fill="none">
-          <path stroke="#E8853A" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+          <path stroke="#5865F2" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
             d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>
-          <circle class="eye" cx="92" cy="140" r="12" fill="#E8853A"/>
-          <circle class="eye" cx="164" cy="140" r="12" fill="#E8853A"/>
+          <circle class="eye" cx="92" cy="140" r="12" fill="#5865F2"/>
+          <circle class="eye" cx="164" cy="140" r="12" fill="#5865F2"/>
         </svg>
       </div>
       <b>skycord</b>
