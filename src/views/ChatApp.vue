@@ -3695,8 +3695,12 @@ onBeforeUnmount(() => {
               @keydown.self.enter.prevent="toggleGroup(group)"
               @keydown.self.space.prevent="toggleGroup(group)"
               @contextmenu.prevent.stop="openCategoryMenu($event, group.category)">
-              <ChevronRight class="ch-group-chev" :class="{ open: !group.collapsed }" :size="10" :stroke-width="2.25"/>
               <span>{{ group.category.name }}</span>
+              <!-- Chevron AFTER the name, so the label starts flush with the
+                   channel names below it instead of being indented past a
+                   glyph. `span { flex: 1 }` does the pushing; the chevron then
+                   sits with the row's other controls at the right edge. -->
+              <ChevronRight class="ch-group-chev" :class="{ open: !group.collapsed }" :size="10" :stroke-width="2.25"/>
               <button v-if="isServerOwner" class="ch-add-btn" v-tip="'Create Channel'"
                 @click.stop="openCreateChannel(group.category.id)"><Plus :size="14" :stroke-width="1.5"/></button>
               <!-- Shown to everyone, not just the owner: a non-owner's menu is
