@@ -136,6 +136,86 @@ conversation. It requires both people online, and it ends.
 
 ---
 
+## Before any crypto code: write the protocol
+
+**The first artefact is a protocol specification, not an implementation.**
+
+Not an academic document — a precise state machine, with every transition, every
+message on the wire, and what each side is allowed to believe at each step. It
+exists so the design can be attacked on paper, where a mistake costs an
+afternoon rather than a migration and a disclosure.
+
+Nearly every real-world failure in systems like this has been a **protocol** flaw
+rather than a broken primitive: a key silently substituted, a message replayed,
+a revocation quietly dropped. AES and ECDH will not be the weak part. The
+sequencing will.
+
+### The state machine to specify
+
+```
+Account creation
+    ↓
+Identity creation
+    ↓
+DM encryption enabled
+    ↓
+Conversation-key distribution
+    ↓
+Message send / receive / delete
+    ↓
+New device
+    ↓
+Device verification
+    ↓
+Device removal
+    ↓
+Lost device
+    ↓
+Backup restore
+    ↓
+Key rotation
+```
+
+For each transition the spec must state: what is sent, what is stored, what each
+party can verify **without trusting the server**, and what happens when a step
+is repeated, arrives out of order, or never arrives at all.
+
+### Then attack it
+
+Assume the server is hostile — not merely compromised later, but adversarial
+now. For every transition above, ask whether the server can **lie, replay,
+replace, delay, or suppress** without either user noticing. If the answer is
+yes, the design is wrong there, however sound the cryptography is.
+
+Known attack surfaces to work through, at minimum:
+
+| Transition | What a hostile server could try |
+|---|---|
+| Identity creation | Hand your correspondent **its own public key** instead of yours, and sit in the middle. This is the classic break, and it is why the six numbers must derive from the shared secret. |
+| Conversation-key distribution | Add a member nobody invited, and wrap the key for them too. Who is authorised to *say* the member list, if not the server? |
+| Message send | Replay an old ciphertext. Reorder. Drop one silently. |
+| **Message delete** | **Claim delivery that never happened**, so the server-side copy is deleted and the recipient never sees it. This one is created by delete-on-delivery and does not exist in the original design. |
+| New device | Register a device the account owner never approved. |
+| Device removal | Accept the removal, report success, keep delivering. |
+| Lost device | Serve a stale key bundle so a revoked device still decrypts. |
+| Key rotation | Suppress the rotation, keeping a removed member able to read what follows. |
+| Backup restore | Roll a user back to an older backup to reinstate keys they retired. |
+
+The suppression case in bold deserves its own answer before anything is built.
+"Delivered" is currently a claim the server makes to itself, and the entire
+retention model hangs off it. **A delivery receipt the recipient signs** is the
+obvious direction — the server deletes on proof of receipt rather than on its
+own say-so — but it needs specifying, not assuming.
+
+### What the spec must produce
+
+- A wire format for every message, with versioning from day one.
+- A statement, per step, of what is verified **locally** versus taken on trust.
+- The failure behaviour for each: fail closed, warn, or proceed. Silent
+  proceeding is the wrong answer everywhere here.
+- A written threat model naming what is explicitly **not** defended against —
+  metadata, a compromised endpoint, screenshots.
+
 ## Why the gate is real
 
 Shipping this needs the native apps, and not arbitrarily:
@@ -156,6 +236,8 @@ re-wrap on backup-code regeneration, and whether reactions are encrypted.
 
 New here:
 
+- **How "delivered" is proven.** See the protocol section — the retention model
+  deletes on it, and today it is the server's unverified claim.
 - Backup file format, and whether export is manual or prompted on a schedule.
 - Whether LAN sync is automatic or opt-in per device pair.
 - What the sender sees when a message hits the 14-day drop.
