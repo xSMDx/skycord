@@ -13,6 +13,56 @@ was made for a reason, the reason is here.
 
 ---
 
+## 0. Pick how far you want to go
+
+Most of this document describes a hardened public deployment. **You may not want
+that**, and that is a legitimate choice rather than a mistake. Three setups,
+each fine for what it is:
+
+### A. Localhost or LAN only
+
+No domain, no TLS, no Cloudflare, no firewall rules. You and whoever is on your
+network. Follow [installing.md](./installing.md) and **stop there** — none of
+this document applies.
+
+Keep `NODE_ENV=development` for this. The server allows it while every origin is
+loopback, and cookie flags do not matter when nothing leaves the machine.
+
+Good for: trying it out, a house LAN, a LAN party. Costs you: nobody outside can
+reach it, and there is nothing protecting it from anyone who is already on the
+network.
+
+### B. Public, TLS, nothing else
+
+A domain, a reverse proxy, and a Let's Encrypt certificate. No CDN, no firewall
+tuning. This is a perfectly reasonable way to run a server for a dozen friends,
+and it is what most small self-hosted things do.
+
+Follow **§1–§4 and §6**, skip §5 (Cloudflare) and §7 (firewall).
+
+Costs you: your IP is public and known, you absorb any traffic aimed at you, and
+the box's other services are exposed to whoever looks. For a small private
+instance that is usually an acceptable trade.
+
+### C. The full setup
+
+Everything here. Worth it if the instance is genuinely public, if the machine
+runs other things you care about, or if you would rather not think about it
+again.
+
+---
+
+**The one thing that is not optional.** If your server is reachable from the
+internet, it needs TLS — not for tidiness, but because auth cookies carry the
+`Secure` flag in production and a browser will not send them over plain HTTP.
+Public + no TLS means nobody can stay logged in. The server refuses to start in
+that configuration rather than let you discover it through a login loop.
+
+So: **localhost without TLS is fine. Public without TLS does not work.** There
+is no middle option, and that is the only place this guide is strict.
+
+---
+
 ## 1. What has to be reachable
 
 Skycord is three separate things behind one domain:
@@ -41,9 +91,20 @@ A    livekit    203.0.113.10
 
 Add the apex (`@`) too if you want a landing page there.
 
-If you are using Cloudflare (§5), set app to **Proxied** (orange cloud) and
-**leave `livekit` unproxied** (grey cloud). This matters more than it looks —
-see §6.
+If you are using Cloudflare (§5), **proxy all of them** (orange cloud),
+`livekit` included.
+
+That last part is worth stating clearly, because the opposite advice is common
+and it is wrong for the reason people give. Cloudflare cannot carry UDP, so
+media does not travel through it either way — but media never uses DNS. It goes
+direct to your server over ICE candidates negotiated in-band. Only *signalling*
+resolves the hostname, and signalling is a websocket, which Cloudflare proxies
+perfectly well.
+
+Grey-clouding `livekit` therefore buys you nothing and costs you the one thing
+Cloudflare was protecting: an unproxied record publishes your origin IP to
+anybody who runs `dig`. Verified on the reference deployment — every record
+proxied, calls working.
 
 Check propagation before going further; half the "TLS is broken" reports are
 really "DNS has not propagated yet":
@@ -76,7 +137,7 @@ server {
     }
 
     # The API. Every one of these is a path the Node server owns.
-    location ~ ^/(auth|users|messages|conversations|servers|invites|gifs|stickers|voice|health) {
+    location ~ ^/(auth|users|messages|conversations|servers|invites|gifs|stickers|themes|voice|health) {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host              $host;
@@ -192,8 +253,23 @@ secure in the address bar and is not.
 
 ## 5. Cloudflare
 
-Worth using — it absorbs traffic before it reaches a small VPS and hides your
-origin IP.
+Worth using — it absorbs traffic before it reaches a small VPS, and it keeps
+your origin IP out of DNS.
+
+**It does not hide your origin on its own**, and it is worth being precise about
+that rather than assuming a proxy is a boundary. Two things give the address
+away regardless of how DNS is configured:
+
+- **Your own TLS certificate.** Connect to the origin IP on 443 and it serves a
+  certificate naming your domain. Scanners sweep all of IPv4 doing exactly this
+  and index the result, so the domain↔IP link is a search away. The fix is a
+  firewall rule limiting 443 to Cloudflare's ranges (§7) — without it, every
+  other precaution here is decorative.
+- **Anyone who joins a voice call.** ICE candidates carry the address. That is
+  inherent to WebRTC and cannot be designed away.
+
+Treat Cloudflare as protection against opportunistic traffic. **The origin
+firewall is the actual boundary.**
 
 **Settings that matter:**
 
@@ -220,16 +296,28 @@ curl -s -o /dev/null -D - https://app.example.com/ | grep -i cf-cache-status
 app shell. If you see `HIT` on `index.html` after a deploy, that is your stale
 bundle.
 
-**Do not proxy the LiveKit subdomain.** Next section.
+**Proxying the LiveKit subdomain is fine** — see §6 for why the common advice to grey-cloud it is wrong.
 
 ## 6. Voice and video (LiveKit)
 
 The part people get wrong, because it does not behave like HTTP.
 
-LiveKit signalling is a websocket over TLS — Cloudflare can proxy that. **Media
-is UDP**, and Cloudflare's proxy does not carry UDP. If `livekit.example.com`
-is orange-clouded, calls connect, both sides show as joined, and nobody hears
-anything. Grey-cloud it.
+Signalling is a websocket over TLS, which Cloudflare proxies fine. **Media is
+UDP**, which it does not carry at all.
+
+The intuitive conclusion — grey-cloud the subdomain so media can reach you — is
+wrong, and it is worth understanding why, because it also explains what to do
+when calls connect silently.
+
+**Media never resolves the hostname.** The browser learns where to send audio
+from ICE candidates, negotiated inside the signalling channel, containing your
+server's address directly. DNS is not involved. So proxying the subdomain does
+not block media, and unproxying it does not help media — it only publishes your
+origin IP.
+
+What *does* break audio is the **UDP ports being closed**, or LiveKit
+advertising an address the browser cannot reach. Those are the two things to
+check, not the cloud colour.
 
 Ports that must be open on the host firewall:
 
@@ -261,7 +349,7 @@ nginx here purely because it obtains and renews the certificate on its own,
 which is one less thing to forget. nginx works identically if you already have
 it terminating TLS for the app.
 
-Whichever you use, the subdomain still must not be proxied by Cloudflare — that
+Whichever you use, the Cloudflare setting on the subdomain does not affect media — that
 is about UDP, and no reverse proxy changes it.
 
 ## 7. Firewall
@@ -269,13 +357,67 @@ is about UDP, and no reverse proxy changes it.
 Default deny, then open only what serves traffic:
 
 ```bash
+sudo apt install -y ufw
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp
-sudo ufw allow 80,443/tcp
-sudo ufw allow 50000:60000/udp
+sudo ufw allow 80/tcp
+sudo ufw allow 3478/udp                      # TURN, if you run one
+sudo ufw allow 50000:60000/udp               # LiveKit media — CHECK YOUR RANGE
+```
+
+**443 goes to Cloudflare only.** This is the rule that closes the certificate
+leak described in §5, and it is the reason the rest of this section matters:
+
+```bash
+curl -s https://www.cloudflare.com/ips-v4 | while read -r r; do sudo ufw allow from "$r" to any port 443 proto tcp; done
+curl -s https://www.cloudflare.com/ips-v6 | while read -r r; do sudo ufw allow from "$r" to any port 443 proto tcp; done
+```
+
+**Then check for a blanket 443 rule before enabling.** A single
+`ufw allow 443` — or `ufw allow 'Nginx Full'`, which includes it — silently
+cancels all twenty rules above, and nothing warns you:
+
+```bash
+sudo ufw show added | grep 443
+```
+
+Every line must read `from <range> to any port 443`. Delete any bare
+`allow 443`, `allow 443/tcp` or `allow 'Nginx Full'`.
+
+### Before you enable
+
+`ufw enable` takes effect instantly and anything not allowed stops working. Two
+checks first, both of which have caught real mistakes:
+
+```bash
+ss -tlnp   # TCP listeners
+ss -ulnp   # UDP listeners — a TCP-only look misses voice entirely
+```
+
+**Do not take default port numbers on trust.** On the reference deployment,
+TeamSpeak was on `11269/udp`, not the documented default of `9987` — a rule
+written from the manual would have allowed a port nothing used and blocked the
+one everyone connected on, with no error message either side. `ss -ulnp` is the
+only authority on what is actually listening.
+
+The same applies to the LiveKit range above: nothing listens there while idle,
+because ports are allocated per call. Read `port_range_start` and
+`port_range_end` from LiveKit's `config.yaml` rather than trusting the default.
+
+Then:
+
+```bash
 sudo ufw enable
 ```
+
+Verify in this order, because the first fails silently:
+
+1. Connect a voice client (TeamSpeak or equivalent) — UDP, no error if blocked
+2. `curl -s -o /dev/null -w "%{http_code}\n" https://app.example.com/` → 200
+3. Make a call in Skycord — exercises the LiveKit UDP range
+
+`sudo ufw disable` reverts instantly and keeps the rules.
 
 **MongoDB must not be in that list.** It should listen on `127.0.0.1` only.
 An internet-exposed MongoDB is found by scanners within hours. Confirm:
@@ -327,7 +469,7 @@ tedious way to find out.
 |---|---|
 | Deployed, but the UI is unchanged | The build was never copied to the nginx root (§3), or `index.html` is cached (§5) |
 | "Reconnecting…" forever | WebSockets off in Cloudflare, or the `/socket.io/` block is missing the Upgrade headers |
-| Calls connect, no audio | `livekit` is orange-clouded (§6), or the UDP range is closed |
+| Calls connect, no audio | The UDP media range is closed on the firewall, or LiveKit is advertising an address the browser cannot reach (§6). **Not** the Cloudflare cloud colour — media never resolves the hostname |
 | Logged in, then logged out on refresh | `NODE_ENV` is not `production`, so the cookie has no `Secure` flag and is dropped over HTTPS |
 | One API path 404s, the rest work | A greedy `location` prefix is swallowing it (§3) |
 | Server refuses to start | Read the message — the boot guard names the variable and the value it objected to |

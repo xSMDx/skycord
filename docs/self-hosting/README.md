@@ -11,9 +11,10 @@ process manager.
 **[Email & password reset](./email.md)** — Resend setup, domain verification,
 and how the reset flow behaves. Optional; the app runs fine without it.
 
-**[Networking](./networking.md)** — putting it on a domain: DNS, reverse proxy,
-TLS, Cloudflare, the UDP requirements for voice, firewall rules, and the
-mistakes that produce a site which looks broken for no obvious reason.
+**[Networking](./networking.md)** — putting it on a domain. Opens by letting you
+pick how far to go — localhost-only, public with TLS, or fully hardened — then
+covers DNS, reverse proxy, TLS, Cloudflare, the UDP requirements for voice,
+firewall rules, and the mistakes that make a working install look broken.
 
 Read Installing first, then Networking. Email is independent — set it up whenever
 you want password reset to work. You can get a working instance on
