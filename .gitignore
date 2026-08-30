@@ -33,3 +33,12 @@ coverage/
 
 # runtime state for the server-typecheck Stop hook
 .claude/.typecheck-state
+
+# graphify's output cache — 44 files of generated AST/semantic JSON that were
+# committed by accident. Regenerated on demand; nothing reads them from git.
+graphify-out/
+
+# A Windows path committed as a single filename (the colon survived as U+F03A),
+# so it could never check out cleanly on the Linux server. Removed from the
+# index; this stops the tool that produced it re-adding one.
+H*projects*sykord*task-*-report.md
