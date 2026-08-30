@@ -3456,6 +3456,7 @@ onBeforeUnmount(() => {
       <nav class="rail">
         <!-- Home -->
         <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip="'Home'" @click.stop="openFriends">
+          <div class="ri-pip" />
           <div class="ri-icon home-icon">
             <SkycordIcon mode="lucky" :color="homeActive ? appearance.accent : 'currentColor'" :size="26" />
           </div>
@@ -3486,6 +3487,7 @@ onBeforeUnmount(() => {
           @mouseleave="closeRailPreview"
           @pointerdown="closeRailPreview"
           @click.stop="openServer(srv)">
+          <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
           <!--
             Lower-LEFT, deliberately: `.ri-badge` (unread) already owns the
@@ -3503,8 +3505,8 @@ onBeforeUnmount(() => {
           <span v-if="serverUnread(srv.id)" class="ri-badge">{{ serverUnread(srv.id) }}</span>
         </div>
         <div class="ri-divider" />
-        <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
-        <button class="ri explore" v-tip="'Explore'">     <div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri explore" v-tip="'Explore'">     <div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
       </nav>
 
       <!-- ── Left sidebar ──────────────────────────────────────────────── -->
@@ -4316,12 +4318,17 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rail{scrollbar-width:none}
 .rail::-webkit-scrollbar{width:0;height:0}
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-/* No pip. Discord's white bar on the left edge used to grow here on hover and
-   again on select; it was removed by request — a bar sliding out of the edge
-   every time you touch the rail is a lot of motion for a fact the tile already
-   states. The active server is still marked twice: .ri-icon morphs from circle
-   to squircle and picks up the accent glow, both below. `position:relative`
-   above stays — the unread and voice badges are absolutely positioned to it. */
+.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition: height var(--dur-2) var(--ease-out)}
+.ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}
+
+/* Press feedback belongs to the ICON, not the hit box.
+   `.ri` is a 68x54 target wrapping a 44px ROUND icon, and it carries
+   role="button", so the global press veil in style.css matched it and painted
+   `inset 0 0 0 100vmax` across the whole rectangle — white into the four
+   corners around the circle, with no border-radius to clip it. That read as a
+   white block appearing behind the server on every click, which is what it
+   was mistaken for. style.css opts the rail out; this is what replaces it. */
+.ri:active .ri-icon{transform:scale(.94)}
 .ri-icon{width:44px;height:44px;border-radius: 50%;overflow:hidden;background:var(--bg-panel);transition: border-radius var(--dur-3) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);display:flex;align-items:center;justify-content:center}
 .ri-icon img{width:100%;height:100%}
 .ri:hover .ri-icon{border-radius: 16px;transform:scale(1.05)}

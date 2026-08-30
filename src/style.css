@@ -45,6 +45,19 @@ summary:active {
   box-shadow: inset 0 0 0 100vmax var(--press-veil);
 }
 
+/* The server rail opts out, and it is the one place this rectangle is wrong.
+   `.ri` is a 68x54 hit box wrapping a 44px ROUND icon and carries
+   role="button", so the veil filled the whole box — white into the four
+   corners around the circle, unclipped, because the radius lives on the child.
+   Every click flashed a white block behind the server; it was reported three
+   times as "a white thing appears when you click", and mistaken in turn for
+   the focus ring and for the active pill before it was measured.
+
+   Same specificity as the rule above (0,3,0) and declared after it, so order
+   decides. The rail presses its icon instead — `.ri:active .ri-icon` in
+   ChatApp.vue, which is shaped like the thing you actually pressed. */
+.rail .ri:active { box-shadow: none; }
+
 /* Anything already dimmed for being unavailable must not react to a press —
    feedback on a control that will not act is a lie. */
 button:disabled:active,
