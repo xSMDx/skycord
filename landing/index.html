@@ -953,6 +953,15 @@ const ROADMAP = [
     ]
   },
   {
+    stage: 'next', label: 'Next up', title: 'One-command install',
+    items: [
+      'Self-hosting works today, and takes about twenty minutes of following a guide',
+      'One command instead: the app, the database, and the voice server together',
+      'Sensible defaults, so the secure setup is the one you get without reading anything',
+      'Updates that are one command too, not a list of steps to remember'
+    ]
+  },
+  {
     stage: 'next', label: 'Next up', title: 'End-to-end encryption',
     items: [
       'Tick a box when you make a chat and nobody but the people in it can read it',
@@ -992,6 +1001,17 @@ const ROADMAP = [
 
 // Changelog data
 const RELEASES = [
+  {
+    v: 'v0.12.8', date: 'Aug 30, 2026', title: 'Open source, and a way back in',
+    items: [
+      ['add', 'Forgot your password? There is finally a way out. Ask for a link, click it, pick a new one — and every device signed into that account gets signed out, which is the point if the reason you are resetting is that somebody else is signed in'],
+      ['add', 'Skycord is open source, AGPL, and the whole thing is on GitHub. Not a teaser repo — the code that runs this instance is the code you can read'],
+      ['add', 'You can run your own. Guides for the whole thing: installing it, putting it on a domain, TLS and Cloudflare, the firewall, and the mail setup — written from the server this one actually runs on, including the mistakes that made it break'],
+      ['imp', 'A server can now say when something is not set up rather than pretending it broke. No GIF key means "GIFs aren’t set up here" and a link to fix it, not a spinner and a lie'],
+      ['fix', 'A self-hosted instance can no longer start with login cookies that anything on the network could read. It refuses to boot and says which setting is wrong — the sort of mistake that otherwise looks exactly like a working install'],
+      ['imp', 'Running on Node 22, and the project now says so, so nobody spends an evening on a version that quietly cannot build it']
+    ]
+  },
   {
     v: 'v0.12.5', date: 'Aug 30, 2026', title: 'Discover, and a long list of small wrongs',
     items: [
