@@ -3456,7 +3456,6 @@ onBeforeUnmount(() => {
       <nav class="rail">
         <!-- Home -->
         <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip="'Home'" @click.stop="openFriends">
-          <div class="ri-pip" />
           <div class="ri-icon home-icon">
             <SkycordIcon mode="lucky" :color="homeActive ? appearance.accent : 'currentColor'" :size="26" />
           </div>
@@ -3487,7 +3486,6 @@ onBeforeUnmount(() => {
           @mouseleave="closeRailPreview"
           @pointerdown="closeRailPreview"
           @click.stop="openServer(srv)">
-          <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
           <!--
             Lower-LEFT, deliberately: `.ri-badge` (unread) already owns the
@@ -3505,8 +3503,8 @@ onBeforeUnmount(() => {
           <span v-if="serverUnread(srv.id)" class="ri-badge">{{ serverUnread(srv.id) }}</span>
         </div>
         <div class="ri-divider" />
-        <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
-        <button class="ri explore" v-tip="'Explore'">     <div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri explore" v-tip="'Explore'">     <div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
       </nav>
 
       <!-- ── Left sidebar ──────────────────────────────────────────────── -->
@@ -4318,8 +4316,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rail{scrollbar-width:none}
 .rail::-webkit-scrollbar{width:0;height:0}
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition: height var(--dur-2) var(--ease-out)}
-.ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}
+/* No pip. Discord's white bar on the left edge used to grow here on hover and
+   again on select; it was removed by request — a bar sliding out of the edge
+   every time you touch the rail is a lot of motion for a fact the tile already
+   states. The active server is still marked twice: .ri-icon morphs from circle
+   to squircle and picks up the accent glow, both below. `position:relative`
+   above stays — the unread and voice badges are absolutely positioned to it. */
 .ri-icon{width:44px;height:44px;border-radius: 50%;overflow:hidden;background:var(--bg-panel);transition: border-radius var(--dur-3) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);display:flex;align-items:center;justify-content:center}
 .ri-icon img{width:100%;height:100%}
 .ri:hover .ri-icon{border-radius: 16px;transform:scale(1.05)}
@@ -4596,10 +4598,20 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    active fill would swallow the hover tint, since both are (0,2,0) and
    .active is declared later. */
 .ch-item.active:hover{background:var(--hover-strong)}
-/* A voice channel you are in drops the ring entirely — the green speaker
-   below already says where you are, and outlining it as well says the same
-   thing twice while making it compete with the open text channel. */
+/* A voice channel you are in takes NEITHER the ring nor the tint. Being in one
+   is already said twice — the speaker icon turns green and the occupant list
+   opens beneath the row with your own name in it — so a ring and a background
+   are a third and fourth copy of the same fact, and they make the row compete
+   with the open text channel, which is the only genuinely "current" thing in
+   the list. The text still brightens to white, which is the one signal the row
+   itself owes you (measured settled, not mid-transition: colour animates over
+   120ms and reads as unchanged if sampled early).
+
+   :not(:hover) so this cannot swallow the hover feedback — .ch-item.active:hover
+   is the same specificity and declared earlier, so a bare background here would
+   win over it and leave the row dead to the pointer. */
 .ch-item.voice.active{outline:none}
+.ch-item.voice.active:not(:hover){background:transparent}
 /* Green whenever ANYONE is in there, whether or not that includes you.
    The row is otherwise identical to an empty channel, so occupancy was
    only discoverable by reading the names underneath it. */
