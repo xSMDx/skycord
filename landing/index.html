@@ -983,6 +983,23 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.12.5', date: 'Aug 30, 2026', title: 'Discover, and a long list of small wrongs',
+    items: [
+      ['add', 'Discover — a directory of servers, behind the compass in the rail. A server appears there only if its owner published it, so nothing private is ever listed; publishing arrives with Server Settings'],
+      ['fix', 'The connection strip could say “Reconnecting…” forever over a connection that had already given up. Access tokens last fifteen minutes and are renewed on a timer, and timers stop while a laptop sleeps — so waking up reconnected with a token that expired mid-sleep, and nothing retried. It refreshes and reconnects on its own now'],
+      ['fix', 'Clicking anything in the left rail flashed a white block behind it. The press highlight was a rectangle drawn across a square hit area wrapping a round icon'],
+      ['fix', 'Tooltips on Home, Add Server and Explore appeared above the icon, landing on top of the next server. They sit beside it now'],
+      ['fix', 'Discover borrowed the channel list of whichever server you were in last'],
+      ['imp', 'Category headers read like headers: the name starts where the channel names start, with the arrow next to it instead of adrift at the far edge'],
+      ['imp', 'A voice channel you are in no longer tints its row — the green icon and the list of who is in there already said so twice'],
+      ['imp', 'Clicking with a mouse no longer leaves a focus ring behind. Keyboard focus still shows one; that is who it was for'],
+      ['imp', 'More room for messages on a phone: a shorter header, no scrollbar eating into the server rail, and a composer that clears the home indicator instead of sitting under it'],
+      ['imp', 'The send button on a phone stopped being a large grey square beside two bare icons'],
+      ['fix', 'The eye that reveals your password moved around, and sometimes off the edge, depending on the phone. The login screen had no mobile handling at all'],
+      ['imp', '“Go idle after” moved from Profile to Account. Profile is what other people see; how long your own inactivity takes to register is not part of that']
+    ]
+  },
+  {
     v: 'v0.12', date: 'Aug 30, 2026', title: 'The phone catches up',
     items: [
       ['add', 'Servers and channels on your phone at all — the server rail sits beside the channel list, where before there was no way to reach a server from a phone'],
