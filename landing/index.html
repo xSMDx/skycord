@@ -1002,6 +1002,17 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.13.0', date: 'Aug 30, 2026', title: 'Doors we did not know were open',
+    items: [
+      ['fix', 'The part of Skycord that handles logins was answering the internet directly, on its own port, without encryption — alongside the proper encrypted route, not instead of it. Nothing suggests it was ever used, and the limits on login attempts applied there too, but it was a way in that had no reason to exist. It now only accepts connections from the machine it runs on'],
+      ['fix', 'A self-hosted server used to hand out a certificate naming its own domain to anyone who asked for it by address — which is how a server behind a shield gets found anyway. The guides now close that, and say plainly which parts of hiding a server actually work and which are decoration'],
+      ['imp', 'The self-hosting guides let you choose how far to go: on your own machine, public with encryption, or fully locked down. The first two skip most of the work. Only one combination is genuinely unsupported, and the server refuses to start in it rather than let you find out through a login that never sticks'],
+      ['fix', 'Two mistakes in those guides, found by reading them against the server they were written from: one page of the app was missing from the setup instructions and would have quietly 404’d, and the advice on voice servers was wrong in a way that would have published your address for no benefit'],
+      ['add', 'Instructions for locking down a server and for backing it up. Nothing here backs itself up, and the guide says so rather than letting you assume otherwise'],
+      ['imp', 'The encryption plan now requires the protocol to be written and attacked on paper before a line of it is built. Doing that immediately found a hole in this month’s own design — worth catching in a document rather than in a release']
+    ]
+  },
+  {
     v: 'v0.12.8', date: 'Aug 30, 2026', title: 'Open source, and a way back in',
     items: [
       ['add', 'Forgot your password? There is finally a way out. Ask for a link, click it, pick a new one — and every device signed into that account gets signed out, which is the point if the reason you are resetting is that somebody else is signed in'],
