@@ -4799,7 +4799,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    59px inset the header had nothing left to draw in. Height now GROWS by the
    inset instead, and the row sits below it. */
 .shell.mobile .chat-header{
-  height:calc(56px + env(safe-area-inset-top));
+  /* 48, matching desktop. The extra 8px was the only slack left in the column
+     — the message list already holds 692 of 812px on a 375x812 phone — and it
+     bought nothing: the header's controls are icon buttons whose own 44px
+     targets still fit inside 48, so nothing here drops below the touch
+     minimum. The notch inset is still ADDED rather than absorbed. */
+  height:calc(48px + env(safe-area-inset-top));
   padding: env(safe-area-inset-top) 4px 0 4px;
   align-items:stretch;
   gap: 2px;
