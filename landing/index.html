@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Skycord — your crew's place to talk</title>
-<meta name="description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours today, yours when we open-source." />
+<meta name="description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours, or your own: the source is on GitHub." />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%235865F2' stroke-linecap='round' stroke-linejoin='round' stroke-width='16' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='12' fill='%235865F2'/%3E%3Ccircle cx='164' cy='140' r='12' fill='%235865F2'/%3E%3C/svg%3E" />
 <link rel="canonical" href="https://skycord.xyz/" />
 <meta name="theme-color" content="#000000" />
@@ -16,7 +16,7 @@
 <meta property="og:url"         content="https://skycord.xyz/" />
 <meta property="og:site_name"   content="Skycord" />
 <meta property="og:title"       content="Skycord — your crew's place to talk" />
-<meta property="og:description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours today, yours when we open-source." />
+<meta property="og:description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours, or your own: the source is on GitHub." />
 <meta property="og:image"        content="https://skycord.xyz/og.jpg" />
 <meta property="og:image:width"  content="1200" />
 <meta property="og:image:height" content="630" />
@@ -24,7 +24,7 @@
 <meta name="twitter:card"        content="summary_large_image" />
 <meta name="twitter:image"       content="https://skycord.xyz/og.jpg" />
 <meta name="twitter:title"       content="Skycord — your crew's place to talk" />
-<meta name="twitter:description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours today, yours when we open-source." />
+<meta name="twitter:description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours, or your own: the source is on GitHub." />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -208,6 +208,15 @@
     font: 400 13px/1.5 'Fira Code', monospace;
     color: var(--sage);
   }
+  /* The global `a { color: inherit }` plus no underline would leave this link
+     visually identical to the sentence around it. Underline is the affordance;
+     colour alone would not be one for a reader who cannot separate the two. */
+  .selfhost a {
+    color: var(--text);
+    border-bottom: 1px solid rgba(88,101,242,.55);
+    transition: border-color .2s, color .2s;
+  }
+  .selfhost a:hover { color: var(--ember-hi); border-bottom-color: var(--ember-hi); }
   .hero p.sub {
     position: relative; 
     margin: 20px auto 35px; 
@@ -750,9 +759,9 @@
     <div class="wrap">
       <h1>Your crew's<br/>place to <em>talk</em>.</h1>
       <p class="sub">Voice, video and screen share for people who already know each
-      other. Runs on hardware you own — ours today, yours when we open-source.</p>
+      other. Runs on hardware you own — ours, or your own: the source is on GitHub.</p>
       <a class="cta" href="https://app.skycord.xyz">Open Skycord<small>runs in your browser — no install</small></a>
-      <p class="selfhost">Self-hosting lands with the open-source release.</p>
+      <p class="selfhost">Open source, AGPL. <a href="https://github.com/xSMDx/sykord" rel="noopener">Run your own instance</a>.</p>
       <p class="shipping" id="shipping"></p>
 
       <div class="stage" aria-hidden="true">
@@ -861,7 +870,7 @@
             <li>Security hardening</li>
             <li>Privacy controls</li>
             <li>Encrypted calls coming soon</li>
-            <li>Self-host option planned</li>
+            <li>Self-host it yourself</li>
           </ul>
         </div>
         <div class="card">
@@ -915,6 +924,7 @@
 <footer>
   <div class="wrap">
     <span>skycord</span><span>·</span><a href="https://app.skycord.xyz">open the app</a>
+    <span>·</span><a href="https://github.com/xSMDx/sykord" rel="noopener">source on GitHub</a>
     <span class="sp">built by SMD</span>
   </div>
 </footer>

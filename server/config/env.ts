@@ -34,3 +34,41 @@ export const config = {
     apiSecret: opt('LIVEKIT_API_SECRET', ''),
   },
 } as const
+
+/**
+ * Refuse to boot a public instance in development mode.
+ *
+ * `isProd` is not a logging switch — `secure` and `sameSite` on both auth
+ * cookies are derived from it (utils/cookie.ts). Running a reachable server
+ * with NODE_ENV unset or "development" serves session cookies with no `Secure`
+ * flag and `SameSite=Lax`: readable by anything on the network path, and
+ * attached to cross-site requests.
+ *
+ * The default is "development" so that `git clone && npm run dev` still works
+ * with no .env at all, and that is exactly what makes it dangerous the moment
+ * someone deploys — the failure is silent and looks like a working install.
+ * So it is only tolerated while every origin is loopback.
+ *
+ * Deliberately a throw, not a warning. A warning scrolls past in a pm2 log
+ * nobody reads, and the instance keeps serving insecure cookies for months.
+ */
+const isLoopback = (value: string): boolean => {
+  const host = value.includes('://') ? (() => { try { return new URL(value).hostname } catch { return value } })() : value
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0' || host === ''
+}
+
+if (!config.isProd) {
+  const exposed = [
+    ['CLIENT_ORIGIN', config.cors.clientOrigin],
+    ['COOKIE_DOMAIN', config.cookie.domain],
+  ].filter(([, v]) => !isLoopback(String(v)))
+
+  if (exposed.length) {
+    throw new Error(
+      `Refusing to start: NODE_ENV is "${config.nodeEnv}" but this instance is reachable ` +
+      `beyond localhost (${exposed.map(([k, v]) => `${k}=${v}`).join(', ')}).\n` +
+      `Auth cookies would be sent without the Secure flag and with SameSite=Lax.\n` +
+      `Set NODE_ENV=production in your .env — see .env.example.`
+    )
+  }
+}
