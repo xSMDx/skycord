@@ -7,8 +7,13 @@ purpose — muscle memory is binding, and a chat app that makes you relearn wher
 things are is a chat app nobody switches to. What is different is where it
 runs: your hardware, your database, no company in the middle.
 
-**Hosted instance:** [app.skycord.xyz](https://app.skycord.xyz) ·
-**About:** [skycord.xyz](https://skycord.xyz)
+**Open the app:** [app.skycord.xyz](https://app.skycord.xyz) ·
+**Site, roadmap and changelog:** [skycord.xyz](https://skycord.xyz)
+
+**Docs:** [Self-hosting](./docs/self-hosting/) ·
+[Installing](./docs/self-hosting/installing.md) ·
+[Networking & Cloudflare](./docs/self-hosting/networking.md) ·
+[Roadmap](./docs/ROADMAP.md)
 
 ---
 
@@ -49,6 +54,9 @@ private place for a group that already trusts each other, it does that well.
   without it.
 
 ## Install
+
+Full walkthrough: **[docs/self-hosting/installing.md](./docs/self-hosting/installing.md)**.
+The short version:
 
 ```bash
 git clone https://github.com/xSMDx/sykord.git
@@ -96,6 +104,29 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 **`CLIENT_ORIGIN` and `COOKIE_DOMAIN`.** Your real domain in production. These
 are what the startup guard checks.
+
+### Optional API keys
+
+Both are free, and the app works without either — it degrades honestly rather
+than breaking.
+
+**GIFs (KLIPY).** Powers the GIF picker. Request a key at
+<https://klipy.com/developers> and set `KLIPY_API_KEY`. Without it the picker
+says *"GIFs aren't set up on this server"* and names the variable to add —
+rather than showing an error and telling you to retry something that will never
+work. The key is server-side only: KLIPY puts it in the URL path, so any
+browser-side call would ship it in the bundle.
+
+**Voice and video (LiveKit).** Set `LIVEKIT_URL`, `LIVEKIT_API_KEY` and
+`LIVEKIT_API_SECRET`. Without them everything except calls works normally.
+Setup, and the UDP requirements that trip people up, are in
+[networking.md §6](./docs/self-hosting/networking.md#6-voice-and-video-livekit).
+
+### Putting it on a domain
+
+DNS, reverse proxy, TLS, Cloudflare, firewall rules and the voice/UDP gotchas
+are all in **[docs/self-hosting/networking.md](./docs/self-hosting/networking.md)**.
+Worth reading before you point a domain at this rather than after.
 
 ## Development
 

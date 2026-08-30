@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Search, X } from 'lucide-vue-next'
-import { useGifs, gifPreviewUrl, gifFullUrl } from '@/composables/useGifs'
+import { useGifs, gifPreviewUrl, gifFullUrl, GIF_SETUP_DOC } from '@/composables/useGifs'
 
 const emit = defineEmits<{ select: [value: string]; selectGif: [url: string]; close: [] }>()
 
@@ -172,7 +172,7 @@ const filteredEmojis = computed(() => {
 })
 
 // ── GIF integration (shared composable, provider-neutral) ──────────────────
-const { gifs, loading: gifsLoading, error: gifsError, fetchGifs } = useGifs()
+const { gifs, loading: gifsLoading, error: gifsError, notConfigured: gifsNotConfigured, fetchGifs } = useGifs()
 let _gifDebounce: ReturnType<typeof setTimeout> | null = null
 
 // immediate, because the composer's GIF button opens this picker ALREADY on the
@@ -265,6 +265,16 @@ const select = (v: string) => { emit('select', v); emit('close') }
         <div v-if="gifsLoading" class="picker-loading">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5865f2" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
           Loading GIFs…
+        </div>
+        <!-- Before the error state: no provider key is a permanent condition on
+             this instance, and "check your connection" would send the reader
+             after a problem they do not have. -->
+        <div v-else-if="gifsNotConfigured" class="picker-empty">
+          <div>😴</div>
+          <p>Ooooooh, your admin is LAAAAAZY — they didn’t set up GIFs</p>
+          <a class="gif-setup-link" :href="GIF_SETUP_DOC" target="_blank" rel="noopener">
+            If you’re the admin, click me to set it up
+          </a>
         </div>
         <div v-else-if="gifsError" class="picker-empty">
           <div>😕</div>
@@ -402,6 +412,16 @@ img    { display: block; width: 100%; object-fit: cover; }
 .picker-empty > div { font-size: 32px; }
 .picker-empty p    { font-size: 14px; font-weight: 600; color: var(--text-1); }
 .picker-empty span { font-size: 12px; line-height: 1.5; }
+/* The GIF tab's not-configured state ends in a link, which needs to look like
+   one — `a { color: inherit }` is global, so without this it reads as more
+   grey text and nobody clicks it. */
+.gif-setup-link {
+  font-size: 12px; line-height: 1.5; max-width: 32ch;
+  color: var(--accent);
+  border-bottom: 1px solid rgba(var(--accent-rgb), .45);
+  transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.gif-setup-link:hover { color: var(--accent-hover); border-bottom-color: var(--accent-hover); }
 
 @keyframes spin { to { transform: rotate(360deg) } }
 .spin { animation: spin .8s linear infinite; }
