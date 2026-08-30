@@ -4310,6 +4310,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* ── Rail ──────────────────────────────────────────────────────────────── */
 .rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding: 10px 0;gap: 2px;overflow-y:auto}
+/* No scrollbar on the rail. It still scrolls — it just doesn't draw a track.
+   The global 4px bar costs real width inside a 68px strip, and it lands right
+   against the 44px icons, so with enough servers it reads as a stripe down the
+   middle of the rail rather than as a scrollbar. There is nothing to read here
+   either: the icons ARE the position indicator. */
+.rail{scrollbar-width:none}
+.rail::-webkit-scrollbar{width:0;height:0}
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
 .ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition: height var(--dur-2) var(--ease-out)}
 .ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}

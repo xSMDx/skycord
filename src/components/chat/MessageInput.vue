@@ -540,6 +540,14 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
      back. This is a platform constraint, not a type choice. */
   .msg-input { font-size: 16px; }
 
+  /* The composer is the bottom-most thing in the column and had a flat 16px,
+     so on a phone with a home indicator it sat underneath it. max(), not
+     16px + env(): the 16px IS the design gap, and where the inset is larger
+     it already provides that gap — adding them stacks two gaps and gives up
+     scroll height for nothing. Phones without an indicator report 0 and keep
+     the original 16. */
+  .input-area { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+
   /* Hover does not exist on touch, so the only feedback these had was a
      transform that never fired. Press states, on pointer-down. */
   .input-attach:active,
