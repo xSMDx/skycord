@@ -4717,7 +4717,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-group{padding: 0 6px;margin-bottom: 4px}
 .ch-group-label{display:flex;align-items:center;gap: 4px;padding: 6px 6px;border-radius: 4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition: color var(--dur-2) var(--ease-out);white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
-.ch-group-label span{flex:1}
+/* The name takes only the width it needs, so the chevron sits directly after
+   it — `SERVER STAT ⌄`, the way the reference does it. With `flex: 1` here the
+   span absorbed all the free space and threw the chevron out to the right
+   edge, where it floated alone: the + and ⋯ beside it are opacity:0 until the
+   row is hovered, so at rest there was nothing out there to group it with.
+   min-width:0 + ellipsis because a flex item will not shrink below its content
+   otherwise, and a long category name would push the chevron off the row. */
+.ch-group-label span{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* Adjacent sibling, not :first-of-type — the + is owner-only, so the first
+   button here is + for an owner and ⋯ for everyone else. This pushes whichever
+   one comes first, and the rest follow it. */
+.ch-group-chev + .ch-add-btn{margin-left:auto}
 /* Right when folded, down when open — the chevron is the only thing that says
    which way the group is, since a collapsed category still shows its unread
    and active rows and so is never reliably empty.
