@@ -174,10 +174,34 @@ For a small project with no legal team, that simplification is worth a great
 deal.
 
 **Against:** Discord is 13+, and the audience for a Discord alternative skews
-younger than 18. You will turn away real users, and you'll turn away exactly the
-educational use-case that's in the product plan — schools and universities are
-full of under-18s. **These two goals are in direct conflict and you should
-resolve that before writing either.**
+younger than 18. You will turn away real users.
+
+**RESOLVED (decision, 2026-08-30):** the educational conflict I raised here is
+answered — **whoever hosts an instance sets its terms.** skycord.xyz is 18+;
+anyone who wants under-18s uses a self-hosted instance and takes on the
+corresponding obligations themselves.
+
+This is the right answer and the draft already supports it — §2's closing
+paragraph says self-hosted use "is not subject to the age requirement imposed on
+skycord.xyz, although the operator and users remain responsible for complying
+with laws applicable to their circumstances." No new clause needed; it just
+needs to survive editing, because it is now load-bearing.
+
+It is also a *better* story for the educational plan than hosting it yourself
+would have been: schools and universities usually want student data on their own
+infrastructure, and many are legally required to keep it there. "Run your own
+instance" is what an institution wants to hear.
+
+Two things this decision does **not** remove:
+
+1. **skycord.xyz still has to enforce its own 18+ rule.** Under-18s having a
+   legitimate alternative doesn't make an unenforced claim true. You still need
+   a date-of-birth field at signup and a stated process for when you learn a
+   user is underage.
+2. **The marketing has to match.** If the site advertises "channels for
+   universities and schools" while the hosted service is 18+, the two documents
+   contradict each other. Say "self-host it" wherever the educational angle
+   appears, and the contradiction disappears.
 
 **The trap either way:** an age rule you don't enforce is worse than a lower one
 you do, because you've made an assertion you can't back. If you say 18+, you
@@ -256,7 +280,11 @@ nothing addressed to you ever ships to users.
 ## Suggested order of work
 
 1. **Decide the operating entity and jurisdiction.** Everything else waits.
-2. **Decide the age rule**, and reconcile it with the educational plan.
+2. ~~Decide the age rule, and reconcile it with the educational plan.~~
+   **Decided:** skycord.xyz is 18+; hosts set the terms for their own instances,
+   and under-18 use means self-hosting. Remaining work is enforcement (a DOB
+   field and a process) and making the marketing say "self-host it" wherever the
+   educational angle appears.
 3. **Cut §6** and replace it with the honest one-liner.
 4. **Add trademark/naming** — cheapest, highest value.
 5. **Add DMCA/takedown, prohibited conduct, user termination, donations.**
