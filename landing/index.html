@@ -1022,7 +1022,19 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
-    v: 'v0.13.0', date: 'Aug 30, 2026', title: 'Run it yourself, properly',
+    v: 'v0.14.0', date: 'Aug 30, 2026', time: '20:45 UTC+2', title: 'Your own voice servers',
+    items: [
+      ['add', 'Run your own voice servers and point channels at them. A server owner adds theirs once, and a voice channel can sit on whichever one is closest to the people using it — everyone in that channel connects to the same one, because a call only works if all of it is in one place'],
+      ['add', 'Direct and group calls get a choice too: pick a default in Voice &amp; Video, and anyone in the call can move it while it is running. Everybody in the call moves together — it is their call, not whoever dialled first'],
+      ['add', 'Every call now says which server it is on, in the connection panel. Whoever runs the machine your voice passes through can record what crosses it, so being sent to one is never silent'],
+      ['add', 'A proper Edit Channel dialog — a topic, slowmode, a user limit, bitrate, invites, and the voice server, instead of renaming being the only thing you could change'],
+      ['fix', 'Slowmode did nothing. It saved, it showed up in the dialog, and no part of sending a message ever looked at it, so anyone could post as fast as they liked. It works now: the wait is counted from your last message that actually landed, so a refresh or a second tab does not reset it. The box tells you how long is left, hands your text back rather than eating it, and says plainly when you are the one it does not apply to'],
+      ['fix', 'A channel could quietly point at a voice server belonging to a different community — a setting that looked saved and did nothing. Refused now, rather than stored and ignored'],
+      ['fix', 'Deleting a server left its voice servers behind in the database, unreachable and holding an encrypted key nothing could ever delete']
+    ]
+  },
+  {
+    v: 'v0.13.0', date: 'Aug 30, 2026', time: '18:10 UTC+2', title: 'Run it yourself, properly',
     items: [
       ['add', 'Self-hosting is real now, not a promise. Full guides for the whole thing: installing it, putting it on a domain, certificates, the firewall, email, backups — written from the server this instance actually runs on, mistakes included'],
       ['add', 'Pick how far you want to go. On your own machine takes minutes and skips almost all of it. Public with encryption is a middle step. Fully locked down is there if you want it. Only one combination genuinely does not work, and the server refuses to start in it rather than let you discover that through a login that never sticks'],
@@ -1034,7 +1046,7 @@ const RELEASES = [
     ]
   },
   {
-    v: 'v0.12.8', date: 'Aug 30, 2026', title: 'Open source, and a way back in',
+    v: 'v0.12.8', date: 'Aug 30, 2026', time: '07:31 UTC+2', title: 'Open source, and a way back in',
     items: [
       ['add', 'Forgot your password? There is finally a way out. Ask for a link, click it, pick a new one — and every device signed into that account gets signed out, which is the point if the reason you are resetting is that somebody else is signed in'],
       ['add', 'Skycord is open source, AGPL, and the whole thing is on GitHub. Not a teaser repo — the code that runs this instance is the code you can read'],
@@ -1045,7 +1057,7 @@ const RELEASES = [
     ]
   },
   {
-    v: 'v0.12.5', date: 'Aug 30, 2026', title: 'Discover, and a long list of small wrongs',
+    v: 'v0.12.5', date: 'Aug 30, 2026', time: '05:51 UTC+2', title: 'Discover, and a long list of small wrongs',
     items: [
       ['add', 'Discover — a directory of servers, behind the compass in the rail. A server appears there only if its owner published it, so nothing private is ever listed; publishing arrives with Server Settings'],
       ['fix', 'The connection strip could say “Reconnecting…” forever over a connection that had already given up. Access tokens last fifteen minutes and are renewed on a timer, and timers stop while a laptop sleeps — so waking up reconnected with a token that expired mid-sleep, and nothing retried. It refreshes and reconnects on its own now'],
@@ -1062,7 +1074,7 @@ const RELEASES = [
     ]
   },
   {
-    v: 'v0.12', date: 'Aug 30, 2026', title: 'The phone catches up',
+    v: 'v0.12', date: 'Aug 30, 2026', time: '01:07 UTC+2', title: 'The phone catches up',
     items: [
       ['add', 'Servers and channels on your phone at all — the server rail sits beside the channel list, where before there was no way to reach a server from a phone'],
       ['add', 'Tapping a channel, or a voice channel, actually opens it. It used to load behind the list and leave you looking at the list'],
@@ -1073,7 +1085,7 @@ const RELEASES = [
     ]
   },
   {
-    v: 'v0.11', date: 'Aug 25, 2026', title: 'Servers, channels, and a lot of small honesty',
+    v: 'v0.11', date: 'Aug 25, 2026', time: '01:28 UTC+2', title: 'Servers, channels, and a lot of small honesty',
     items: [
       ['add', 'Servers with real text and voice channels, grouped into categories you can collapse'],
       ['add', 'Invite links — including one that drops the person straight into the voice channel you are sitting in'],
@@ -1296,7 +1308,7 @@ document.getElementById('changelog-container').innerHTML = RELEASES.map(function
     '<div class="release-header">' +
       '<div class="release-version">' +
         '<span class="version-badge">' + r.v + '</span>' +
-        '<span class="release-date">' + r.date + '</span>' +
+        '<span class="release-date">' + r.date + (r.time ? ' · ' + r.time : '') + '</span>' +
       '</div>' +
     '</div>' +
     '<h3 class="release-title">' + r.title + '</h3>' +
