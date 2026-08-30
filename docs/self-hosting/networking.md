@@ -210,6 +210,16 @@ If both participants sit behind strict NAT and media never establishes, you need
 a TURN relay. LiveKit can run one itself; the config lives in LiveKit's own
 `config.yaml`, not here.
 
+**Running LiveKit in Docker** is the easier path, and is what the reference
+deployment does — LiveKit plus a small Caddy in front of it for TLS on the
+`livekit.` subdomain, both with `--restart unless-stopped`. Caddy rather than
+nginx here purely because it obtains and renews the certificate on its own,
+which is one less thing to forget. nginx works identically if you already have
+it terminating TLS for the app.
+
+Whichever you use, the subdomain still must not be proxied by Cloudflare — that
+is about UDP, and no reverse proxy changes it.
+
 ## 7. Firewall
 
 Default deny, then open only what serves traffic:
@@ -231,6 +241,13 @@ ss -tlnp | grep 27017
 ```
 
 The address must be `127.0.0.1:27017`, never `0.0.0.0:27017`.
+
+> **If MongoDB runs in Docker, ufw will not save you.** Docker writes its own
+> iptables rules ahead of ufw's, so a container published with `-p 27017:27017`
+> is reachable from the internet even while ufw reports the port as denied.
+> Bind the publish explicitly — `-p 127.0.0.1:27017:27017` — and check with the
+> command above rather than trusting `ufw status`. The same applies to any
+> container you publish.
 
 Same principle as §1: the API on localhost, the database on localhost, and
 exactly one process facing the internet.

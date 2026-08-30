@@ -28,6 +28,35 @@ grep -o avx /proc/cpuinfo | head -1
 Nothing printed means AVX is absent, and MongoDB 5.0+ will install and then
 crash on start with an illegal-instruction error that does not explain itself.
 
+**Docker is a fine way to run it**, and is what the reference deployment uses —
+it makes the 4.4 pin explicit and keeps the version off the host:
+
+```bash
+docker run -d --name mongodb \
+  --restart unless-stopped \
+  -p 127.0.0.1:27017:27017 \
+  -v mongodata:/data/db \
+  mongo:4.4
+```
+
+Two details in there are load-bearing:
+
+- **`-p 127.0.0.1:27017:27017`**, not `-p 27017:27017`. The short form binds to
+  every interface, and Docker writes its own iptables rules — so a container
+  published that way is reachable from the internet *even with ufw denying the
+  port*. This is the most common way a self-hosted database ends up exposed.
+- **`--restart unless-stopped`**. Without it the container does not come back
+  after a reboot. The API starts fine, the process manager reports it healthy,
+  and every request fails against a database that is not running.
+
+Verify both:
+
+```bash
+ss -tlnp | grep 27017     # must say 127.0.0.1:27017, never 0.0.0.0:27017
+docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' mongodb
+systemctl is-enabled docker
+```
+
 ## Install
 
 ```bash
