@@ -2280,6 +2280,34 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
 const isServerOwner = computed(() =>
   !!activeServer.value && activeServer.value.owner === authUser.value?.id)
 
+// ── Slowmode ────────────────────────────────────────────────────────────────
+/** The active channel's setting, in seconds. Only channels have one. */
+const slowmodeSeconds = computed(() =>
+  view.value === 'server' ? (activeChannel.value?.slowmode ?? 0) : 0)
+
+/** The API exempts the owner; the composer says so rather than leaving them to
+ *  wonder why the timer they configured never appears for them. */
+const slowmodeExempt = computed(() => isServerOwner.value)
+
+/**
+ * When this person may next post, per channel, as epoch ms.
+ *
+ * Keyed by channel because the limit is: switching to a channel you have not
+ * posted in must not inherit the countdown from the one you just left. Held
+ * only for this session — the server is the authority and will answer 429 with
+ * the real remaining time, so nothing is lost by forgetting on reload.
+ */
+const slowmodeUntil = ref<Record<string, number>>({})
+const activeCooldownUntil = computed(() => {
+  if (view.value !== 'server' || slowmodeExempt.value) return 0
+  const cid = activeChannelId.value
+  return cid ? (slowmodeUntil.value[cid] ?? 0) : 0
+})
+const noteSlowmode = (cid: string, seconds: number) => {
+  if (seconds <= 0) return
+  slowmodeUntil.value = { ...slowmodeUntil.value, [cid]: Date.now() + seconds * 1000 }
+}
+
 const openChannelMenu = (e: MouseEvent, ch: Channel) => {
   // Passed as a BUILDER, not a snapshot array: `activeCategories` and the
   // channel's own `category` are both live, and a category created or deleted
@@ -2798,11 +2826,22 @@ const doSend = async () => {
     try {
       const { message } = await sendChannelRest(sid, cid, text, replyIds)
       pushChannelMessage(cid, toClientMessage(message, authUser.value?.id))
+      // Started from the send that succeeded, not from the click: a failed
+      // send must not lock the composer.
+      if (!slowmodeExempt.value) noteSlowmode(cid, slowmodeSeconds.value)
     } catch (e: any) {
-      console.error('[doSend channel]', e)
-      showToast(e?.message || 'Message failed to send')
       newMessage.value = text     // give the text back rather than losing it
       replyTargets.value = replies // ...and the reply targets it was attached to
+      // Slowmode is not an error. The composer already explains itself with a
+      // countdown, and a red toast on top of it would read as a fault. The
+      // server's remaining time wins over anything counted locally — a reload,
+      // a second tab, or a clock that drifted all end up here.
+      if (e?.status === 429 && typeof e.retryAfter === 'number') {
+        noteSlowmode(cid, e.retryAfter)
+      } else {
+        console.error('[doSend channel]', e)
+        showToast(e?.message || 'Message failed to send')
+      }
     } finally {
       sendingMsg.value = false
     }
@@ -4347,6 +4386,9 @@ onBeforeUnmount(() => {
             :sending="sendingMsg"
             :replyTargets="replyTargetMeta"
             :members="chatMembers"
+            :slowmode="slowmodeSeconds"
+            :slowmode-exempt="slowmodeExempt"
+            :cooldown-until="activeCooldownUntil"
             @send="doSend"
             @typing="handleTyping"
             @openEmoji="openEmojiForInput"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Paperclip, Smile, Send, X, CornerUpLeft,
+  Paperclip, Smile, Send, X, CornerUpLeft, Timer,
   Bold, Italic, Underline, Strikethrough, Quote, Code, Link,
 } from 'lucide-vue-next'
 import AutocompletePopup from './AutocompletePopup.vue'
@@ -17,6 +17,14 @@ const props = defineProps<{
   sending:       boolean
   replyTargets?: { id: string; author: string }[]
   members?:      { id: string; name: string; username?: string; avatar?: string }[]
+  /** The active channel's slowmode in seconds. 0 (or absent) means off — DMs
+   *  and groups never have one. */
+  slowmode?:      number
+  /** The server owner, who the API lets through regardless. Told rather than
+   *  left to wonder why a timer they were warned about never appears. */
+  slowmodeExempt?: boolean
+  /** Epoch ms until this person may post again here. 0 = free to send. */
+  cooldownUntil?: number
 }>()
 
 const emit = defineEmits<{
@@ -248,8 +256,57 @@ const onTimePick = (token: string) => {
   setValue(nv, mentionStart + token.length + 1)
 }
 
+// ── Slowmode ────────────────────────────────────────────────────────────────
+/**
+ * A ticking clock, running only while there is something to count down.
+ *
+ * `Date.now()` is not reactive, so the remaining time has to be recomputed
+ * from a ref that changes — otherwise the number renders once and then sits
+ * there. The interval is started and cleared by the watcher below rather than
+ * left running for the life of the component: this is a chat window that
+ * stays open all day, and a timer that ticks forever to display nothing is a
+ * wakeup every second for no reason.
+ */
+const nowMs = ref(Date.now())
+let cooldownTimer: ReturnType<typeof setInterval> | null = null
+const stopCooldownTimer = () => { if (cooldownTimer) { clearInterval(cooldownTimer); cooldownTimer = null } }
+
+const cooldownLeft = computed(() =>
+  Math.max(0, Math.ceil(((props.cooldownUntil ?? 0) - nowMs.value) / 1000)))
+const cooling = computed(() => cooldownLeft.value > 0)
+
+watch(() => props.cooldownUntil ?? 0, until => {
+  stopCooldownTimer()
+  if (until <= Date.now()) return
+  nowMs.value = Date.now()
+  cooldownTimer = setInterval(() => {
+    nowMs.value = Date.now()
+    if (nowMs.value >= until) stopCooldownTimer()
+  }, 250)   // finer than 1s so the number never appears to skip or stick
+}, { immediate: true })
+
+onBeforeUnmount(stopCooldownTimer)
+
+/** How the channel's setting reads in prose, for the immune tooltip. */
+const slowmodeLabel = computed(() => {
+  const s = props.slowmode ?? 0
+  if (s % 3600 === 0) return `${s / 3600}h`
+  if (s % 60 === 0)   return `${s / 60}m`
+  return `${s}s`
+})
+
+/** mm:ss once past a minute — "3:04" reads faster than "184s". */
+const cooldownText = computed(() => {
+  const s = cooldownLeft.value
+  return s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : `${s}s`
+})
+
 // ── Submit (runs slash commands) ────────────────────────────────────────────
 const submit = () => {
+  // Refused here as well as by the API. The server is the authority — this
+  // only saves a round trip and stops the composer from clearing itself into
+  // a request that was never going to land.
+  if (cooling.value) return
   const m = /^\/(\w+)(?:\s+([\s\S]*))?$/.exec(props.modelValue)
   if (m) {
     const cmd = slashCommands.find(c => c.name === m[1].toLowerCase())
@@ -331,6 +388,19 @@ onMounted(autoGrow)
       </template>
     </Teleport>
 
+    <!-- Slowmode status, above the box and right-aligned.
+         Only one of the two ever shows: you are either exempt (and will never
+         see a countdown) or you are not. Absent entirely when the channel has
+         no slowmode, so a normal channel gains no furniture. -->
+    <div v-if="slowmode && (slowmodeExempt || cooling)" class="sm-bar">
+      <span v-if="slowmodeExempt" class="sm-tag" v-tip="`Slowmode is ${slowmodeLabel}, but it does not apply to you`">
+        <Timer :size="12" :stroke-width="2.25" /> Slowmode Immune
+      </span>
+      <span v-else class="sm-tag cooling" aria-live="polite">
+        <Timer :size="12" :stroke-width="2.25" /> Wait {{ cooldownText }}
+      </span>
+    </div>
+
     <!-- Reply strip — visually fused to the top of the input box. One chip per
          targeted message (multi-parent replies). -->
     <Transition name="reply-strip">
@@ -367,10 +437,10 @@ onMounted(autoGrow)
         @pointerup="onInputPointerUp"
         @select="onSelect"
         @blur="onBlur"
-        :placeholder="placeholder"
+        :placeholder="cooling ? `Slowmode — you can post again in ${cooldownText}` : placeholder"
         :aria-label="placeholder"
         class="msg-input"
-        :disabled="sending"
+        :disabled="sending || cooling"
       ></textarea>
 
       <div class="input-actions">
@@ -411,6 +481,19 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .tt-float { position: absolute; left: 16px; bottom: 100%; margin-bottom: 8px; z-index: 51; }
 
 /* Reply strip fused to the input box */
+/* Sits above the composer, right-aligned and quiet — a status, not a control.
+   No background plate: it reads as a note on the box below it rather than as
+   another strip competing with the reply strip. */
+.sm-bar { display: flex; justify-content: flex-end; padding: 0 4px 4px; }
+.sm-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: .2px;
+  color: var(--text-3);
+}
+/* The countdown is the one that has to be noticed: it is the reason the box
+   below stopped accepting typing. */
+.sm-tag.cooling { color: var(--accent); font-variant-numeric: tabular-nums; }
+
 .reply-strip {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 12px 8px 14px;

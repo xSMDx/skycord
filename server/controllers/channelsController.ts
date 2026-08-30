@@ -341,6 +341,44 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
     const { content, replyToIds } = req.body as { content?: string; replyToIds?: string[] }
     if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
 
+    /**
+     * Slowmode.
+     *
+     * Enforced HERE and only here: this is the single path by which a channel
+     * message is created (the socket paths in chatSocket.ts create DM, group
+     * and call-system messages, never channel ones), so there is no second
+     * door to hold shut. If a socket send is ever added for channels, this
+     * check has to move somewhere both can reach.
+     *
+     * The owner is exempt, which is what the dialog has always promised and
+     * what the client shows as "Slowmode Immune". Exempting them is not a
+     * convenience: slowmode exists so one person cannot flood a room, and the
+     * person who set it is the one deciding what the room is for.
+     *
+     * Measured from the last message that person actually landed, not from a
+     * timer the client keeps — a refresh, a second tab, or a script would all
+     * reset a client-side clock, and none of them can move a stored timestamp.
+     */
+    const slowmode = found.channel.slowmode ?? 0
+    const exempt = found.server.owner.toString() === userId
+    if (slowmode > 0 && !exempt) {
+      const last = await Message
+        .findOne({ conversationId: found.channel._id.toString(), authorId: userId })
+        .sort({ createdAt: -1 }).select('createdAt').lean()
+      if (last) {
+        const elapsed = (Date.now() - new Date(last.createdAt).getTime()) / 1000
+        const remaining = Math.ceil(slowmode - elapsed)
+        if (remaining > 0) {
+          // 429 rather than 403: this is "not yet", not "not allowed", and the
+          // client shows a countdown rather than an error. retryAfter is the
+          // authority for that countdown — a client clock can drift or be
+          // reloaded, and this number cannot.
+          res.status(429).json({ message: `Slowmode is on — wait ${remaining}s`, retryAfter: remaining })
+          return
+        }
+      }
+    }
+
     // Name and avatar come from the User document, never the request body —
     // accepting them from the client is how an author-spoofing hole was opened
     // on the other send paths.

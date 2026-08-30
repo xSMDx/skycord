@@ -44,5 +44,11 @@ const MessageSchema = new Schema<IMessage>(
 
 // Efficient pagination: fetch last N messages in a conversation
 MessageSchema.index({ conversationId: 1, createdAt: -1 })
+// Slowmode asks one question on every send: when did THIS person last post
+// HERE. The index above is conversation-wide, so answering it would mean
+// walking back through everyone else's messages — in a busy channel, past
+// hundreds of them — to find one author's most recent. This makes it a single
+// index seek.
+MessageSchema.index({ conversationId: 1, authorId: 1, createdAt: -1 })
 
 export const Message = mongoose.model<IMessage>('Message', MessageSchema)

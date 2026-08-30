@@ -214,27 +214,29 @@ const expiry = (iso: string | null) => {
                    type="range" min="0" max="99" step="1" />
             <p class="ec-hint">0 means no limit. You can always join a full channel.</p>
 
-            <!-- Two, not one. With a single registered server that server IS
-                 the guild default (the first one added becomes it, and deleting
-                 the default promotes another), so "Server default" and naming
-                 it explicitly resolve to the same place — a control whose every
-                 option produces the same result.
-
-                 The pickers in Voice & Video settings and the call bar use one,
-                 not two, and the difference is real rather than an oversight:
-                 there the alternative to a registered server is the instance's
-                 own, which is a genuinely different machine. -->
-            <template v-if="voiceServers.length > 1">
-              <label class="ec-label" for="ec-vs">Voice server</label>
-              <select id="ec-vs" v-model="form.voiceServer" class="ec-input ec-select">
-                <option :value="null">Server default{{ defaultName ? ` — ${defaultName}` : '' }}</option>
-                <option v-for="v in voiceServers" :key="v.id" :value="v.id">{{ v.name }}</option>
-              </select>
-              <p class="ec-hint">
+            <!-- Always shown, never hidden. An owner who has registered
+                 nothing yet still needs to see that pinning a channel to a
+                 server is a thing this app does — a control that only appears
+                 once you already know the feature exists teaches nobody. It is
+                 disabled rather than absent in that case, with the hint saying
+                 where to go. -->
+            <label class="ec-label" for="ec-vs">Voice server</label>
+            <select id="ec-vs" v-model="form.voiceServer" class="ec-input ec-select"
+                    :disabled="!voiceServers.length">
+              <option :value="null">Server default{{ defaultName ? ` — ${defaultName}` : '' }}</option>
+              <option v-for="v in voiceServers" :key="v.id" :value="v.id">{{ v.name }}</option>
+            </select>
+            <p class="ec-hint">
+              <template v-if="voiceServers.length">
                 Everyone in this channel connects here, whatever their own preference —
                 a call only works if all of it is on one server.
-              </p>
-            </template>
+              </template>
+              <template v-else>
+                This server has no voice servers of its own yet, so calls use the
+                instance’s. Add one under <strong>Voice Servers</strong> in the server
+                menu to pin this channel to it.
+              </template>
+            </p>
           </template>
 
           <p v-if="error" class="ec-error">{{ error }}</p>
