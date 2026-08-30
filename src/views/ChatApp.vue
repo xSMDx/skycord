@@ -25,6 +25,7 @@ import PinnedMessagesModal from '@/components/modals/PinnedMessagesModal.vue'
 import AddFriendModal      from '@/components/modals/AddFriendModal.vue'
 import CreateServerModal   from '@/components/modals/CreateServerModal.vue'
 import CreateChannelModal  from '@/components/modals/CreateChannelModal.vue'
+import EditChannelModal    from '@/components/modals/EditChannelModal.vue'
 import ConfirmModal        from '@/components/modals/ConfirmModal.vue'
 import EditFieldModal      from '@/components/modals/EditFieldModal.vue'
 import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
@@ -2322,10 +2323,21 @@ const renameChannelTarget = ref<MenuChannel | null>(null)
 const renameChannelVal    = ref('')
 const renameChannelBusy   = ref(false)
 const renameChannelErr    = ref('')
+/**
+ * "Edit Channel" opens the settings dialog, which owns renaming among
+ * everything else — a separate rename prompt beside a dialog with a name field
+ * is two ways to do one thing, and they would drift.
+ *
+ * The menu hands back a MenuChannel (id, name, type), so the full record is
+ * looked up here: the dialog needs topic/slowmode/userLimit/bitrate, and
+ * seeding it from the narrow type would show defaults for a channel that has
+ * values and then save those defaults back over them.
+ */
+const editChannelTarget = ref<Channel | null>(null)
 const openRenameChannel = (ch: MenuChannel) => {
-  renameChannelTarget.value = ch
-  renameChannelVal.value    = ch.name
-  renameChannelErr.value    = ''
+  const full = (channelsByServer.value[activeServerId.value ?? ''] ?? [])
+    .find(c => c.id === ch.id)
+  if (full) editChannelTarget.value = full
 }
 const submitRenameChannel = async () => {
   const target = renameChannelTarget.value
@@ -3300,6 +3312,13 @@ onBeforeUnmount(() => {
       :category-name="createChannelCategoryName"
       @close="showCreateChannel = false"
       @created="handleChannelCreated"
+    />
+    <EditChannelModal
+      v-if="editChannelTarget && activeServer"
+      :key="editChannelTarget.id"
+      :server-id="activeServer.id"
+      :channel="editChannelTarget"
+      @close="editChannelTarget = null"
     />
     <EditFieldModal
       v-if="renameChannelTarget"

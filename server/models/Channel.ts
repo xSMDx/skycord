@@ -21,9 +21,32 @@ export interface IChannel extends Document {
    * what it is.
    */
   category: Types.ObjectId | null
+
+  // ── Overview settings ───────────────────────────────────────────────────
+  // Each defaults to the behaviour channels had before it existed, so nothing
+  // needs migrating and an old channel reads as "unset" rather than "zero".
+
+  /** Text only. Shown in the header, under the channel name. */
+  topic: string | null
+  /** Text only. Seconds between messages per member, 0 = off. */
+  slowmode: number
+  /** Voice only. 0 = unlimited, which is what every channel was until now. */
+  userLimit: number
+  /** Voice only, kbps. 64 is LiveKit's own default for speech. */
+  bitrate: number
+
   createdAt: Date
   updatedAt: Date
 }
+
+/** Above 96 the gain is inaudible for speech and the cost is real for anyone
+ *  on a poor connection — the same ceiling Discord settled on. */
+export const MAX_BITRATE = 96
+export const MIN_BITRATE = 8
+/** Matches the server member cap; a channel cannot hold more than the server. */
+export const MAX_USER_LIMIT = 99
+/** Six hours. Longer is indistinguishable from locking the channel. */
+export const MAX_SLOWMODE = 21_600
 
 const ChannelSchema = new Schema<IChannel>(
   {
@@ -32,6 +55,15 @@ const ChannelSchema = new Schema<IChannel>(
     type:     { type: String, enum: ['text', 'voice'], required: true, default: 'text' },
     position: { type: Number, default: 0 },
     category: { type: Schema.Types.ObjectId, ref: 'Category', default: null },
+
+    // Stored regardless of type rather than in a discriminator: a channel's
+    // type is fixed at creation today, but if converting one ever lands, the
+    // settings for the other kind should survive the round trip rather than
+    // being silently dropped.
+    topic:     { type: String, default: null, maxlength: 1024 },
+    slowmode:  { type: Number, default: 0, min: 0, max: MAX_SLOWMODE },
+    userLimit: { type: Number, default: 0, min: 0, max: MAX_USER_LIMIT },
+    bitrate:   { type: Number, default: 64, min: MIN_BITRATE, max: MAX_BITRATE },
   },
   { timestamps: true, versionKey: false }
 )

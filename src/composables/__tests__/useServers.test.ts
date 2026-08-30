@@ -47,7 +47,7 @@ const wireServer = (id: string, name = id): WireServer => ({
 })
 
 const wireChannel = (id: string, server: string, name: string, type: 'text' | 'voice', position = 0): WireChannel =>
-  ({ id, server, name, type, position, category: null })
+  ({ id, server, name, type, position, category: null, topic: null, slowmode: 0, userLimit: 0, bitrate: 64 })
 
 const wireCategory = (id: string, server: string, name: string, position = 0): WireCategory =>
   ({ id, server, name, position })

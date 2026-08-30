@@ -31,6 +31,15 @@ export const shapeChannel = (c: any) => ({
   name:     c.name,
   type:     c.type,
   position: c.position,
+  // Overview settings. `??` rather than `||` throughout: 0 is a real value for
+  // slowmode and userLimit ("off" and "unlimited"), and `||` would replace it
+  // with the default on every channel that has them switched off. Defaults are
+  // spelled out because a channel created before these existed has none of
+  // them stored — `.lean()` skips hydration, so Mongoose defaults never apply.
+  topic:     c.topic ?? null,
+  slowmode:  c.slowmode ?? 0,
+  userLimit: c.userLimit ?? 0,
+  bitrate:   c.bitrate ?? 64,
   // The `c.category ? … : null` guard is load-bearing; do not shorten it to
   // `c.category.toString()`. A Mongoose `default` is applied when a document
   // is created or hydrated, never retroactively to rows already stored, and

@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
-import { Channel } from '../models/Channel'
+import { Channel, MAX_SLOWMODE, MAX_USER_LIMIT, MIN_BITRATE, MAX_BITRATE } from '../models/Channel'
 import { Category } from '../models/Category'
 import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversController'
 import { Message } from '../models/Message'
@@ -177,7 +177,11 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     // 200 and a broadcast.
     const wantsName     = req.body.name !== undefined
     const wantsCategory = req.body.category !== undefined
-    if (!wantsName && !wantsCategory) {
+    // The Overview form submits whichever fields it shows, so the "nothing to
+    // change" guard has to count these too or saving only a topic 400s.
+    const OVERVIEW = ['topic', 'slowmode', 'userLimit', 'bitrate'] as const
+    const wantsOverview = OVERVIEW.some(k => req.body[k] !== undefined)
+    if (!wantsName && !wantsCategory && !wantsOverview) {
       res.status(400).json({ message: 'Give the channel a name' }); return
     }
 
@@ -188,6 +192,33 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
       name = String(req.body.name ?? '').trim()
       if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
     }
+
+    /**
+     * Overview fields, clamped rather than rejected.
+     *
+     * A slider that cannot produce an out-of-range value has no legitimate way
+     * to send one, so a 400 here would only ever answer a malformed client or a
+     * hand-rolled request — and silently pinning to the nearest legal value is
+     * the friendlier outcome for both. Names and categories still 400, because
+     * an empty name is a real thing a user can type.
+     *
+     * Validated as a block before anything is written, for the reason the
+     * comment above already gives: a bad bitrate must not leave a topic saved.
+     */
+    const clamp = (v: unknown, lo: number, hi: number, fallback: number) => {
+      const n = Number(v)
+      return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : fallback
+    }
+    const overview: Partial<Record<typeof OVERVIEW[number], unknown>> = {}
+    if (req.body.topic !== undefined) {
+      // Empty string clears it. Stored as null so "no topic" is one value
+      // rather than two the header would have to test for separately.
+      const t = req.body.topic === null ? null : String(req.body.topic).slice(0, 1024).trim()
+      overview.topic = t ? t : null
+    }
+    if (req.body.slowmode  !== undefined) overview.slowmode  = clamp(req.body.slowmode,  0, MAX_SLOWMODE,   0)
+    if (req.body.userLimit !== undefined) overview.userLimit = clamp(req.body.userLimit, 0, MAX_USER_LIMIT, 0)
+    if (req.body.bitrate   !== undefined) overview.bitrate   = clamp(req.body.bitrate,   MIN_BITRATE, MAX_BITRATE, 64)
     // This save() moves the channel into a category (or out of one); it has
     // the same race as createChannel against deleteCategory's
     // reparent-then-delete — resolve-then-persist has to be atomic with that,
@@ -205,6 +236,9 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
 
       if (name !== undefined) found.channel.name = name
       if (category !== undefined) found.channel.category = category
+      // Applied here, inside the same save, so a channel move and a settings
+      // change submitted together are one write rather than two.
+      Object.assign(found.channel, overview)
       await found.channel.save()
       return { ok: true }
     }

@@ -120,6 +120,13 @@ export interface Channel {
    *  key at all in the raw DB row, and callers must treat that the same as
    *  an explicit null rather than testing `=== null`. */
   category?: string | null
+  /** Overview settings, carried through from the wire. Optional because a
+   *  Channel can be built from a socket payload predating them; every reader
+   *  must default rather than assume. */
+  topic?:     string | null
+  slowmode?:  number
+  userLimit?: number
+  bitrate?:   number
   unread?:  number
   locked?:  boolean
 }

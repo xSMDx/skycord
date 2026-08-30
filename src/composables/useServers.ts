@@ -130,6 +130,14 @@ const toClientChannel = (w: WireChannel): Channel => ({
   // here means this field is never literally absent on a client Channel
   // either, however it got here.
   category: w.category ?? null,
+  // Carried through rather than dropped. The Edit Channel dialog reads these
+  // from the sidebar's copy, and a narrow client type that silently loses wire
+  // fields is exactly how a settings dialog ends up showing defaults for a
+  // channel that has values — and then saving those defaults back.
+  topic:     w.topic ?? null,
+  slowmode:  w.slowmode ?? 0,
+  userLimit: w.userLimit ?? 0,
+  bitrate:   w.bitrate ?? 64,
 })
 
 const toClientCategory = (w: WireCategory): Category => ({

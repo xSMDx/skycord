@@ -200,7 +200,15 @@ export const useApi = () => {
   // id moves it in. As with createChannelApi above, `''` is NOT a spelling of
   // "none" — resolveCategory 400s it on purpose. A body naming neither field
   // is a 400 too, so callers must always send at least one.
-  const updateChannelApi = (sid: string, cid: string, body: { name?: string; category?: string | null }) =>
+  const updateChannelApi = (
+    sid: string, cid: string,
+    body: {
+      name?: string; category?: string | null
+      // Overview. Numbers are clamped server-side rather than rejected, so a
+      // slider cannot produce a 400 — only a blank name can.
+      topic?: string | null; slowmode?: number; userLimit?: number; bitrate?: number
+    },
+  ) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
 
   // The one thing a drag does, named for what it means rather than for the
@@ -454,6 +462,14 @@ export interface WireChannel {
   // guard exists because a Mongoose `default` never reaches rows already in
   // the collection, only ones created or hydrated after the field existed.
   category: string | null
+
+  // Overview settings. Always present — shapeChannel fills defaults for
+  // channels created before these fields existed, same reason as `category`
+  // above. 0 is meaningful for both numbers: slowmode off, and no user limit.
+  topic:     string | null
+  slowmode:  number
+  userLimit: number
+  bitrate:   number
 }
 
 /**
