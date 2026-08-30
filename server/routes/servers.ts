@@ -13,6 +13,9 @@ import {
   createCategory, updateCategory, deleteCategory,
 } from '../controllers/categoriesController'
 import { createInvite, listInvites, revokeInvite } from '../controllers/invitesController'
+import {
+  listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer,
+} from '../controllers/voiceServersController'
 
 const router = Router()
 router.use(requireAuth)
@@ -51,6 +54,14 @@ router.post('/:sid/channels/:cid/messages', writeLimit, sendChannelMessage)
 
 // Minting an invite is a create, same class as above — writeLimit. Listing is
 // a plain scoped read. Revoking follows the DELETE-stays-unlimited convention.
+// Voice servers a server owner registers. List is member-readable (the channel
+// dialog and call UI both name a server); the rest are owner-only, enforced in
+// the controller. No secret is ever in a response.
+router.get('/:sid/voice-servers',              listVoiceServers)
+router.post('/:sid/voice-servers',        writeLimit, createVoiceServer)
+router.patch('/:sid/voice-servers/:vid',  writeLimit, updateVoiceServer)
+router.delete('/:sid/voice-servers/:vid',             deleteVoiceServer)
+
 router.post('/:sid/invites',           writeLimit,  createInvite)
 router.get('/:sid/invites',            listInvites)
 router.delete('/:sid/invites/:code',   revokeInvite)

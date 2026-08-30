@@ -34,6 +34,16 @@ export interface IChannel extends Document {
   userLimit: number
   /** Voice only, kbps. 64 is LiveKit's own default for speech. */
   bitrate: number
+  /**
+   * Voice only. Which registered VoiceServer this channel uses, or null to
+   * follow the server's default.
+   *
+   * Overrides a member's own preference deliberately: everyone in one channel
+   * has to be on the same media server to hear each other, so this is not a
+   * preference that can be individually honoured. The member setting applies
+   * to DMs and group calls, which have no channel to say otherwise.
+   */
+  voiceServer: Types.ObjectId | null
 
   createdAt: Date
   updatedAt: Date
@@ -64,6 +74,10 @@ const ChannelSchema = new Schema<IChannel>(
     slowmode:  { type: Number, default: 0, min: 0, max: MAX_SLOWMODE },
     userLimit: { type: Number, default: 0, min: 0, max: MAX_USER_LIMIT },
     bitrate:   { type: Number, default: 64, min: MIN_BITRATE, max: MAX_BITRATE },
+    // Not a hard ref cleanup: deleting a VoiceServer leaves channels pointing
+    // at a dead id, and resolution treats an unresolvable id as "fall back to
+    // the default" rather than as an error. Same tolerance `category` has.
+    voiceServer: { type: Schema.Types.ObjectId, ref: 'VoiceServer', default: null },
   },
   { timestamps: true, versionKey: false }
 )

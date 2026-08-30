@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import mongoose from 'mongoose'
 import { AccessToken } from 'livekit-server-sdk'
 import { config } from '../config/env'
+import { resolveForChannel, resolveForConversation } from '../utils/resolveVoiceServer'
 import { Conversation } from '../models/Conversation'
 import { User } from '../models/User'
 import { Channel } from '../models/Channel'
@@ -29,11 +30,15 @@ export const roomFor = (kind: 'dm' | 'group' | 'channel', convId: string, selfId
 // ── Mint a LiveKit access token for a DM/group/channel voice room ─────────────
 export const getVoiceToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!config.livekit.apiKey || !config.livekit.apiSecret || !config.livekit.url) {
-      res.status(503).json({ message: 'Voice is not configured on this server' }); return
-    }
+    // Captured in the channel branch below so the resolver can read the
+    // override without a second lookup.
+    let chosenChannel: { server: mongoose.Types.ObjectId; voiceServer?: mongoose.Types.ObjectId | null } | null = null
     const userId = req.user!.sub
-    const { conversationId, kind } = req.body as { conversationId?: string; kind?: 'dm' | 'group' | 'channel' }
+    const { conversationId, kind, voiceServerId } = req.body as {
+      conversationId?: string; kind?: 'dm' | 'group' | 'channel'
+      /** DM/group only — a channel's own setting wins over any preference. */
+      voiceServerId?: string | null
+    }
     if (!conversationId || (kind !== 'dm' && kind !== 'group' && kind !== 'channel')) {
       res.status(400).json({ message: 'conversationId and kind are required' }); return
     }
@@ -56,8 +61,9 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       // exact same 403 whether the channel is text or voice and can never
       // use this endpoint to learn which one it is.
       if (!mongoose.isValidObjectId(conversationId)) { res.status(400).json({ message: 'Invalid channel' }); return }
-      const channel = await Channel.findById(conversationId).select('server type').lean()
+      const channel = await Channel.findById(conversationId).select('server type voiceServer').lean()
       if (!channel) { res.status(404).json({ message: 'Channel not found' }); return }
+      chosenChannel = channel
       const server = await Server.findById(channel.server).select('members').lean()
       if (!server) { res.status(404).json({ message: 'Server not found' }); return }
       // Matches loadServer (serversController.ts): a non-member gets 403,
@@ -79,13 +85,38 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
     const name = me?.displayName || me?.username || 'User'
     const room = roomFor(kind, conversationId, userId)
 
-    const at = new AccessToken(config.livekit.apiKey, config.livekit.apiSecret, {
-      identity: userId,
-      name,
-    })
+    /**
+     * Which media server, resolved AFTER the membership checks above.
+     *
+     * Order matters for more than tidiness: resolving first would let an
+     * unauthorised caller learn whether a channel has a custom voice server
+     * from the shape of the failure, before being told they cannot join it.
+     */
+    const voice = chosenChannel
+      ? await resolveForChannel(chosenChannel.server, chosenChannel.voiceServer ?? null)
+      : await resolveForConversation(
+          voiceServerId,
+          // Scoped to servers this user belongs to, so a preference cannot be
+          // pointed at a media server whose owner never offered it to them.
+          (await Server.find({ members: userId }).select('_id').lean()).map(s => s._id),
+        )
+
+    // 503 here rather than at the top of the handler: with per-server voice
+    // servers, an instance with no LiveKit of its own is still perfectly able
+    // to run calls in channels whose owner registered one. Refusing up front
+    // on the instance config alone would break exactly that case.
+    if (!voice) { res.status(503).json({ message: 'Voice is not configured on this server' }); return }
+
+    const at = new AccessToken(voice.apiKey, voice.apiSecret, { identity: userId, name })
     at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true })
     const token = await at.toJwt()
 
-    res.json({ token, url: config.livekit.url, room })
+    // `voiceServer` is named so the client can SAY where the call is. Whoever
+    // supplies the media server can record what crosses it, so being routed to
+    // one must never be silent — see the note on the VoiceServer model.
+    res.json({
+      token, url: voice.url, room,
+      voiceServer: { id: voice.id, name: voice.name },
+    })
   } catch (err) { next(err) }
 }
