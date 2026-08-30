@@ -201,6 +201,69 @@ curl -s https://app.example.com/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
 If it has not changed, the copy did not happen or Cloudflare is serving a cached
 `index.html` ([networking.md §5](./networking.md#5-cloudflare)).
 
+## Backups
+
+Nothing in Skycord backs itself up. Everything — accounts, servers, every
+message — is in that one database, and a container that fails to come back takes
+all of it.
+
+A script rather than a bare cron line, because a cron line that silently stops
+working looks exactly like one that is working:
+
+```bash
+sudo tee /usr/local/bin/skycord-backup.sh >/dev/null <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEST=/var/backups/skycord
+KEEP_DAYS=14
+STAMP=$(date +%F-%H%M)
+mkdir -p "$DEST"
+
+# --archive to a single file, so one backup is one artefact to copy off the box.
+# Change `docker exec mongodb` to a plain `mongodump` if Mongo is not in Docker.
+docker exec mongodb mongodump --db=skycord --archive --gzip > "$DEST/skycord-$STAMP.gz"
+
+# A zero-length archive means mongodump failed but the redirect still made a
+# file — the failure mode that leaves you with a directory full of nothing.
+if [ ! -s "$DEST/skycord-$STAMP.gz" ]; then
+  echo "skycord-backup: EMPTY ARCHIVE, dump failed" >&2
+  rm -f "$DEST/skycord-$STAMP.gz"
+  exit 1
+fi
+
+find "$DEST" -name 'skycord-*.gz' -mtime +$KEEP_DAYS -delete
+echo "skycord-backup: ok $(du -h "$DEST/skycord-$STAMP.gz" | cut -f1)"
+EOF
+sudo chmod +x /usr/local/bin/skycord-backup.sh
+```
+
+Run it once by hand before trusting it:
+
+```bash
+sudo /usr/local/bin/skycord-backup.sh && ls -lh /var/backups/skycord
+```
+
+Then daily at 04:00:
+
+```bash
+sudo crontab -l 2>/dev/null | { cat; echo "0 4 * * * /usr/local/bin/skycord-backup.sh >> /var/log/skycord-backup.log 2>&1"; } | sudo crontab -
+```
+
+**Restore** — test this at least once, on a throwaway database. A backup you
+have never restored is a hypothesis:
+
+```bash
+docker exec -i mongodb mongorestore --archive --gzip --drop < /var/backups/skycord/skycord-2026-08-30-0400.gz
+```
+
+`--drop` replaces existing collections. Without it you get a merge, which is
+rarely what you want when recovering.
+
+**Copy them off the machine.** A backup on the same disk as the database
+survives a mistake but not a dead server. `rsync` to another host, or an
+`rclone` target, on the same schedule.
+
 ## Development
 
 ```bash

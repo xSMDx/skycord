@@ -98,6 +98,50 @@ server {
 }
 ```
 
+### Security headers
+
+Add these inside the `server` block. Six lines, no downside, and without them a
+browser will happily frame your app inside someone else's page:
+
+```nginx
+    # Force HTTPS for two years, including subdomains. Add this only once you
+    # are certain every subdomain can serve TLS — browsers honour it for the
+    # full duration and there is no quick way to take it back.
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+    # Nobody may frame this app. Without it, a login page can be loaded
+    # invisibly over an attacker's page and clicks stolen from it.
+    add_header X-Frame-Options "DENY" always;
+
+    # Do not let a browser guess a file's type. Guessing is how an uploaded
+    # image gets executed as script.
+    add_header X-Content-Type-Options "nosniff" always;
+
+    # Send the page path to same-origin destinations only, never to third
+    # parties -- an invite URL is a secret.
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Features this app never uses. Denying them means a compromised script
+    # cannot reach for them either.
+    add_header Permissions-Policy "geolocation=(), payment=(), usb=()" always;
+```
+
+`always` on every one of them is load-bearing: without it nginx omits the header
+on error responses, so exactly the pages most likely to be probed go out bare.
+
+**Not included, deliberately: `Content-Security-Policy`.** A real CSP for this
+app has to allow Google Fonts, `blob:` and `data:` media for avatars and screen
+share, and websocket connections to your LiveKit host. A copy-pasted one breaks
+calls in ways that are miserable to debug, so it belongs in a session where it
+can be tested rather than in a list of quick wins.
+
+Reload and verify:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+curl -sI https://app.example.com/ | grep -iE 'strict-transport|x-frame|x-content|referrer|permissions'
+```
+
 **Two traps worth naming, because both have bitten this project:**
 
 **Prefix matches are greedy.** A block written as `location ^~ /server` also
