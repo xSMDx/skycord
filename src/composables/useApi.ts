@@ -157,6 +157,14 @@ export const useApi = () => {
   const getMyServers = () =>
     get<{ servers: WireServer[] }>('/servers')
 
+  const getDiscoverServers = () =>
+    get<{ servers: WireServer[] }>('/servers/discover')
+
+  /** Join a published server. Returns the channel list so the caller can open
+   *  it straight away, and `joined:false` if you were already in it. */
+  const joinPublicServer = (sid: string) =>
+    post<{ server: WireServer; channels: WireChannel[]; joined: boolean }>(`/servers/${sid}/join`, {})
+
   const getServerDetail = (sid: string) =>
     get<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[] }>(`/servers/${sid}`)
 
@@ -232,6 +240,18 @@ export const useApi = () => {
   // `{ removed }` shapes it's tempting to guess from the endpoint names.
   const deleteServerApi = (sid: string) =>
     del<{ ok: boolean }>(`/servers/${sid}`)
+
+  /**
+   * Publish or unpublish a server in Discover. Owner-only, enforced server
+   * side by requireOwner in updateServer.
+   *
+   * Deliberately not wired to any UI yet: the toggle belongs in Server
+   * Settings, which does not exist. Until it does, nothing can be published
+   * and Discover shows its empty state — see the note on getDiscoverServers.
+   * The endpoint behind this is covered by discover.test.ts.
+   */
+  const setServerPublic = (sid: string, isPublic: boolean) =>
+    patch<{ server: WireServer }>(`/servers/${sid}`, { isPublic })
 
   const leaveServerApi = (sid: string, uid: string) =>
     del<{ ok: boolean }>(`/servers/${sid}/members/${uid}`)
@@ -341,7 +361,7 @@ export const useApi = () => {
     updateGroup, addGroupMembers,
     createTheme, getTheme,
     getVoiceToken,
-    createServerApi, getMyServers, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
+    createServerApi, getMyServers, getDiscoverServers, joinPublicServer, setServerPublic, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
     createChannelApi, updateChannelApi, moveChannel, deleteChannelApi,
     createCategoryApi, updateCategoryApi, deleteCategoryApi,
     deleteServerApi, leaveServerApi,
@@ -417,6 +437,7 @@ export interface WireServer {
   description: string | null
   owner:       string
   memberCount: number
+  isPublic:    boolean
   createdAt:   string
 }
 

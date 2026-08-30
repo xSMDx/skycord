@@ -17,6 +17,7 @@ export interface IServer extends Document {
   description: string | null
   owner:       Types.ObjectId
   members:     Types.ObjectId[]
+  isPublic:    boolean
   createdAt:   Date
   updatedAt:   Date
 }
@@ -32,10 +33,18 @@ const ServerSchema = new Schema<IServer>(
     description: { type: String, default: null, maxlength: 300 },
     owner:       { type: Schema.Types.ObjectId, ref: 'User', required: true },
     members:     [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    // Opt-in, and false is the only safe default. Discover lists servers by
+    // this flag alone -- listing anything the owner has not deliberately
+    // published would expose every private friend-group server on the
+    // instance, which is the opposite of what this project is for.
+    isPublic:    { type: Boolean, default: false },
   },
   { timestamps: true, versionKey: false }
 )
 
 ServerSchema.index({ members: 1 })
+// Discover reads public servers newest-first; without this it is a collection
+// scan on every visit.
+ServerSchema.index({ isPublic: 1, createdAt: -1 })
 
 export const Server = mongoose.model<IServer>('Server', ServerSchema)

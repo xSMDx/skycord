@@ -10,7 +10,7 @@ import { useViewport }                      from '@/composables/useViewport'
 import { useMobileNav }                     from '@/composables/useMobileNav'
 import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
 import { useMessages }                      from '@/composables/useMessages'
-import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel } from '@/composables/useApi'
+import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel, type WireServer } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
@@ -280,7 +280,7 @@ watch(activeCalls, (cur) => {
 }, { deep: true })
 
 // ── View state ─────────────────────────────────────────────────────────────
-const view          = ref<'friends' | 'dm' | 'server' | 'group'>('friends')
+const view          = ref<'friends' | 'dm' | 'server' | 'group' | 'discover'>('friends')
 // Home logo: accent + auto-spin in the "friend zone" (friends/DMs), neutral
 // themed colour + hover-spin once you're inside a server channel.
 const homeActive    = computed(() => view.value === 'friends' || view.value === 'dm')
@@ -2540,6 +2540,57 @@ const openFriends = () => {
   setActiveChannel(null)
 }
 
+/* ── Discover ──────────────────────────────────────────────────────────────
+   A directory of servers whose owners published them. Nothing appears here
+   that an owner did not deliberately list — see `isPublic` in the Server
+   model. Fetched on open rather than cached: it changes when other people
+   publish, not when this client does anything. */
+const discoverServers = ref<WireServer[]>([])
+const discoverLoading = ref(false)
+const discoverError   = ref('')
+const joiningServerId = ref<string | null>(null)
+
+const openDiscover = async () => {
+  view.value = 'discover'
+  mobileNav.openConversation()
+  activeDM.value = null
+  setActiveDMPartner(null)
+  setActiveGroup(null)
+  setActiveChannel(null)
+
+  discoverLoading.value = true
+  discoverError.value = ''
+  try {
+    const { servers } = await api.getDiscoverServers()
+    discoverServers.value = servers
+  } catch (e: any) {
+    discoverError.value = e?.message || 'Could not load Discover'
+  } finally {
+    discoverLoading.value = false
+  }
+}
+
+const joinFromDiscover = async (srv: WireServer) => {
+  if (joiningServerId.value) return
+  joiningServerId.value = srv.id
+  try {
+    await api.joinPublicServer(srv.id)
+    // Re-read the rail from the server rather than pushing the row in by hand:
+    // loadServers is what every other join path uses, and it keeps the rail's
+    // ordering and unread state consistent with the backend.
+    await loadServers()
+    // Drop it from the directory immediately — it is in the rail now, and the
+    // endpoint would exclude it on the next fetch anyway.
+    discoverServers.value = discoverServers.value.filter(s => s.id !== srv.id)
+    const joined = servers.value.find(s => s.id === srv.id)
+    if (joined) await openServer(joined)
+  } catch (e: any) {
+    discoverError.value = e?.message || 'Could not join that server'
+  } finally {
+    joiningServerId.value = null
+  }
+}
+
 const openServer = async (srv: Server) => {
   view.value = 'server'
   setActiveDMPartner(null)
@@ -3506,7 +3557,9 @@ onBeforeUnmount(() => {
         </div>
         <div class="ri-divider" />
         <button class="ri add"     v-tip="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
-        <button class="ri explore" v-tip="'Explore'">     <div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
+        <button class="ri explore" :class="{ active: view==='discover' }" v-tip="'Explore'"
+          :aria-current="view==='discover' ? 'page' : undefined"
+          @click.stop="openDiscover"><div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
       </nav>
 
       <!-- ── Left sidebar ──────────────────────────────────────────────── -->
@@ -3971,6 +4024,66 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <!-- Discover: the public server directory.
+           Only servers an owner published appear here; there is no ranking or
+           suggestion step that could surface a private one. -->
+      <div v-else-if="view==='discover'" class="main-content dsc">
+        <div class="friends-header">
+          <button v-if="isMobile" class="icon-btn m-back" aria-label="Back to conversations" @click.stop="mobileNav.backToList()">
+            <ChevronLeft :size="20" :stroke-width="2.25"/>
+          </button>
+          <Compass :size="20" :stroke-width="1.5" class="fh-icon"/>
+          <span class="fh-title">Discover</span>
+        </div>
+
+        <div class="dsc-body">
+          <div class="dsc-hero">
+            <h1 class="dsc-h1">Find a place to talk</h1>
+            <p class="dsc-sub">Servers on this instance whose owners chose to list them publicly.</p>
+          </div>
+
+          <p v-if="discoverError" class="dsc-msg dsc-err">{{ discoverError }}</p>
+
+          <div v-if="discoverLoading" class="dsc-grid">
+            <div v-for="n in 3" :key="n" class="dsc-card dsc-skel">
+              <div class="dsc-skel-bar" style="width:60%"></div>
+              <div class="dsc-skel-bar" style="width:90%"></div>
+              <div class="dsc-skel-bar" style="width:35%"></div>
+            </div>
+          </div>
+
+          <!-- An empty directory is the expected state on a new instance, not
+               an error, so it says what would fill it rather than apologising. -->
+          <div v-else-if="!discoverServers.length && !discoverError" class="dsc-empty">
+            <Compass :size="40" :stroke-width="1.25" class="dsc-empty-ic"/>
+            <p class="dsc-empty-t">Nothing listed yet</p>
+            <!-- Names the real reason rather than implying the user missed a
+                 setting: there is no way to publish a server yet. The toggle
+                 lands with Server Settings; the endpoint behind it already
+                 exists and is tested. -->
+            <p class="dsc-empty-s">
+              Listing a server here needs Server Settings, which isn’t built yet.
+              Once it is, owners will be able to publish a server and it’ll show up.
+            </p>
+          </div>
+
+          <div v-else class="dsc-grid">
+            <article v-for="srv in discoverServers" :key="srv.id" class="dsc-card">
+              <div class="dsc-banner" :style="{ background: srv.bannerColor || 'var(--bg-panel)' }"></div>
+              <div class="dsc-ic"><Avatar :src="srv.icon || avatarFor(srv.name, null)" :alt="srv.name" :crop="srv.iconCrop" /></div>
+              <div class="dsc-name">{{ srv.name }}</div>
+              <p class="dsc-desc">{{ srv.description || 'No description yet.' }}</p>
+              <div class="dsc-foot">
+                <span class="dsc-count">{{ srv.memberCount }} {{ srv.memberCount === 1 ? 'member' : 'members' }}</span>
+                <button class="dsc-join" :disabled="joiningServerId === srv.id" @click.stop="joinFromDiscover(srv)">
+                  {{ joiningServerId === srv.id ? 'Joining…' : 'Join' }}
+                </button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+
       <!-- Chat view (DM, group, or server) -->
       <template v-else>
         <!-- `call-expanded` is the ONE hide-chat mechanism (see the CSS at the
@@ -4321,6 +4434,55 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    either: the icons ARE the position indicator. */
 .rail{scrollbar-width:none}
 .rail::-webkit-scrollbar{width:0;height:0}
+/* ── Discover ─────────────────────────────────────────────────────────────
+   Its own surface rather than a modal: it is a place you navigate to from the
+   rail and can stay in, like Friends, which is the view it borrows its header
+   from. */
+.dsc{display:flex;flex-direction:column;min-height:0}
+.dsc-body{flex:1;overflow-y:auto;padding: 24px 24px 40px}
+.dsc-hero{margin-bottom: 24px}
+.dsc-h1{margin:0;font-size:24px;font-weight:700;color:var(--text-strong)}
+.dsc-sub{margin: 6px 0 0;font-size:14px;color:var(--text-2);max-width:60ch}
+.dsc-msg{font-size:13px;margin: 0 0 16px}
+.dsc-err{color:#f0716f}
+
+/* auto-fill, not auto-fit: with one server, auto-fit collapses the empty
+   tracks and stretches that single card the full width of the column, which
+   reads as a banner rather than as one item in a directory. */
+.dsc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+
+.dsc-card{position:relative;display:flex;flex-direction:column;background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
+.dsc-card:hover{border-color:var(--active-ring);transform:translateY(-2px)}
+.dsc-banner{height:56px;flex-shrink:0}
+/* Pulled up over the banner, the way the server icon sits on a Discord card. */
+.dsc-ic{width:44px;height:44px;border-radius:14px;overflow:hidden;margin: -22px 0 0 14px;border:3px solid var(--bg-raised);background:var(--bg-panel);flex-shrink:0}
+.dsc-name{font-size:15px;font-weight:700;color:var(--text-strong);padding: 8px 14px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Two lines, clamped: descriptions run to 300 chars server-side and an
+   unclamped one makes every card in the row a different height. */
+.dsc-desc{margin: 4px 0 0;padding: 0 14px;font-size:13px;line-height:1.4;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
+.dsc-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding: 12px 14px 14px}
+.dsc-count{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.dsc-join{padding: 7px 16px;border-radius:6px;background:var(--accent);color:var(--text-on-accent, #fff);font-size:13px;font-weight:600;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.dsc-join:hover:not(:disabled){background:var(--accent-hover)}
+.dsc-join:disabled{opacity:.6;cursor:default}
+
+.dsc-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding: 56px 24px;color:var(--text-3)}
+.dsc-empty-ic{opacity:.5;margin-bottom:14px}
+.dsc-empty-t{margin:0;font-size:16px;font-weight:600;color:var(--text-2)}
+.dsc-empty-s{margin: 6px 0 0;font-size:13px;max-width:44ch;line-height:1.5}
+
+.dsc-skel{padding: 20px 14px;gap:10px;pointer-events:none}
+.dsc-skel-bar{height:10px;border-radius:5px;background:var(--hover);animation: dsc-pulse 1.4s var(--ease-out) infinite}
+@keyframes dsc-pulse{0%,100%{opacity:.45}50%{opacity:.8}}
+@media (prefers-reduced-motion: reduce){.dsc-skel-bar{animation:none}.dsc-card:hover{transform:none}}
+
+/* Phone: one column, and the body owns the bottom safe area since nothing
+   sits below it here. */
+.shell.mobile .dsc-body{padding: 16px 16px calc(24px + env(safe-area-inset-bottom))}
+.shell.mobile .dsc-grid{grid-template-columns:1fr}
+.shell.mobile .dsc-h1{font-size:20px}
+@media (pointer: coarse){.dsc-join{min-height:44px;padding-inline:20px}}
+
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
 .ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition: height var(--dur-2) var(--ease-out)}
 .ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}

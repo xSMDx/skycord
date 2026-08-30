@@ -1,12 +1,15 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Types } from 'mongoose'
-import { Server } from '../models/Server'
+import { Server, MAX_SERVER_MEMBERS } from '../models/Server'
 import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { ServerInvite } from '../models/ServerInvite'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
+
+/** Discover is a directory, not a feed: one page, no pagination yet. */
+const DISCOVER_LIMIT = 50
 
 /** Client shape for a server row. `memberCount` rather than the id array. */
 export const shapeServer = (s: any) => ({
@@ -18,6 +21,7 @@ export const shapeServer = (s: any) => ({
   description: s.description ?? null,
   owner:       s.owner.toString(),
   memberCount: s.members.length,
+  isPublic:    !!s.isPublic,
   createdAt:   s.createdAt,
 })
 
@@ -125,6 +129,98 @@ export const getMyServers = async (req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err) }
 }
 
+/**
+ * Discover: servers whose owner has published them.
+ *
+ * `isPublic: true` is the whole filter, deliberately. There is no "popular"
+ * or "suggested" heuristic that could quietly surface a server the owner
+ * never listed — if it is here, someone chose to put it here.
+ *
+ * Servers the caller is already in are excluded rather than shown as joined:
+ * they are one click away in the rail, and a directory of places you have
+ * already been is noise.
+ */
+export const getDiscoverServers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const servers = await Server
+      .find({ isPublic: true, members: { $ne: req.user!.sub } })
+      .sort({ createdAt: -1 })
+      .limit(DISCOVER_LIMIT)
+      .lean()
+    res.json({ servers: servers.map(shapeServer) })
+  } catch (err) { next(err) }
+}
+
+/**
+ * Join a published server without an invite.
+ *
+ * The `isPublic: true` in the update filter is load-bearing and is NOT a
+ * repeat of the read below it: checking first and writing after leaves a
+ * window where an owner un-publishes between the two and the join still
+ * lands. One atomic update, with the member cap in the same filter, closes
+ * both races at once — the same shape invite acceptance uses.
+ */
+export const joinPublicServer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.sub
+    const { sid } = req.params
+    if (!Types.ObjectId.isValid(sid)) { res.status(404).json({ message: 'Server not found' }); return }
+
+    const target = await Server.findOne({ _id: sid, isPublic: true }).lean()
+    if (!target) { res.status(404).json({ message: 'Server not found' }); return }
+
+    const already = target.members.some((m: any) => m.toString() === userId)
+    if (!already) {
+      const upd = await Server.updateOne(
+        {
+          _id: sid,
+          isPublic: true,
+          members: { $ne: userId },
+          [`members.${MAX_SERVER_MEMBERS - 1}`]: { $exists: false },
+        },
+        { $addToSet: { members: userId } }
+      )
+      if (upd.modifiedCount !== 1) { res.status(409).json({ message: 'That server is full' }); return }
+    }
+
+    const fresh = await Server.findById(sid)
+    if (!fresh) { res.status(404).json({ message: 'Server not found' }); return }
+
+    if (!already) {
+      const joiner = await User.findById(userId)
+        .select('username displayName avatar avatarCrop status statusUntil').lean()
+      if (joiner) {
+        emitToServer(fresh, 'server:memberJoined', {
+          serverId: fresh._id.toString(),
+          member: {
+            id:          userId,
+            username:    (joiner as any).username,
+            displayName: (joiner as any).displayName,
+            avatar:      (joiner as any).avatar ?? null,
+            avatarCrop:  (joiner as any).avatarCrop ?? null,
+            status:      effectiveStatus((joiner as any).status, userId, (joiner as any).statusUntil),
+            isOwner:     false,
+          },
+        })
+      }
+    }
+
+    const channels = await Channel.find({ server: fresh._id }).sort({ type: 1, position: 1 }).lean()
+
+    // Same reason invite acceptance does this: sockets join `chan:` rooms once,
+    // at connect time, and this membership did not exist then. Without it the
+    // person who just joined is the one member who receives nothing from the
+    // server until they reconnect. Gated on an actual join, never on the
+    // idempotent already-a-member path whose sockets are already in the rooms.
+    if (!already) {
+      const rooms = channels.map(c => `chan:${c._id.toString()}`)
+      if (rooms.length) getIO()?.in(`user:${userId}`).socketsJoin(rooms)
+    }
+
+    res.json({ server: shapeServer(fresh), channels: channels.map(shapeChannel), joined: !already })
+  } catch (err) { next(err) }
+}
+
 export const getServer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
@@ -145,7 +241,7 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
     const server = await loadServer(req, res); if (!server) return
     if (!requireOwner(server, req.user!.sub, res)) return
 
-    const { name, icon, iconCrop, bannerColor, description } = req.body
+    const { name, icon, iconCrop, bannerColor, description, isPublic } = req.body
     if (name !== undefined) {
       const n = String(name).trim()
       if (!n || n.length > 100) { res.status(400).json({ message: 'Give the server a name' }); return }
@@ -164,6 +260,10 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
       else { res.status(400).json({ message: 'Banner colour must be a #rrggbb hex' }); return }
     }
     if (description !== undefined) server.description = description === null ? null : String(description).slice(0, 300)
+    // Owner-only, and requireOwner above already guarantees that. Coerced
+    // rather than trusted: this one field decides whether the server is
+    // visible to everyone on the instance.
+    if (isPublic !== undefined) server.isPublic = Boolean(isPublic)
     if (iconCrop !== undefined) {
       const c = iconCrop
       server.iconCrop = c && typeof c === 'object'

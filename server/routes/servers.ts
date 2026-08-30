@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth'
 import { uploadLimit, writeLimit } from '../middleware/rateLimit'
 import {
   createServer, getMyServers, getServer, updateServer, deleteServer,
+  getDiscoverServers, joinPublicServer,
   getServerMembers, removeMember,
 } from '../controllers/serversController'
 import {
@@ -18,6 +19,13 @@ router.use(requireAuth)
 
 router.post('/',                       writeLimit,  createServer)
 router.get('/',                        getMyServers)
+
+// BEFORE '/:sid'. Express matches in declaration order, so a literal path
+// registered after a parameterised one at the same depth is unreachable —
+// '/discover' would arrive as sid='discover' and 404 as an invalid ObjectId.
+router.get('/discover',                getDiscoverServers)
+router.post('/:sid/join',              writeLimit,  joinPublicServer)
+
 router.get('/:sid',                    getServer)
 router.patch('/:sid',                  uploadLimit, updateServer)
 router.delete('/:sid',                 deleteServer)

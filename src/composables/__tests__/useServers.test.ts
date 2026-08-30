@@ -42,7 +42,8 @@ vi.mock('../useSocket', async () => {
 
 const wireServer = (id: string, name = id): WireServer => ({
   id, name, icon: null, iconCrop: null, bannerColor: null,
-  description: null, owner: 'u1', memberCount: 1, createdAt: '2026-08-19T00:00:00.000Z',
+  description: null, owner: 'u1', memberCount: 1, isPublic: false,
+  createdAt: '2026-08-19T00:00:00.000Z',
 })
 
 const wireChannel = (id: string, server: string, name: string, type: 'text' | 'voice', position = 0): WireChannel =>
