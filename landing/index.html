@@ -1022,6 +1022,17 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.14.1', date: 'Aug 31, 2026', time: '02:40 UTC+2', title: 'One place to put your voice servers',
+    items: [
+      ['add', 'If you run Skycord yourself and have more than one voice server, you can now offer all of them to everyone on your instance at once. They go in a file next to your other settings, and every server on that instance can point a channel at any of them — instead of each owner adding the same ones by hand, over and over, and again every time a key changes'],
+      ['imp', 'Your keys stay yours. A server owner picking one of your voice servers never sees the credentials for it — before this, the only way to share one was to hand them over. Nothing about them is written to the database or sent to a browser'],
+      ['imp', 'They show up in every server’s voice settings marked as coming from the instance, and cannot be edited or deleted from inside the app — they are yours, not the app’s. Shown rather than hidden, so nobody re-adds a server that was already there'],
+      ['fix', 'A bad entry in that file now stops the server from starting and says which entry is wrong, instead of looking fine until somebody joins a call and it does not work'],
+      ['imp', 'Nothing changes if you do not use it. Instances with one voice server carry on exactly as before, with no file and nothing to configure'],
+      ['imp', 'Notices in the app — the one about who can see your screen, and the one about a host disconnecting — read as part of the app now instead of a generic warning box']
+    ]
+  },
+  {
     v: 'v0.14.0', date: 'Aug 30, 2026', time: '20:45 UTC+2', title: 'Your own voice servers',
     items: [
       ['add', 'Run your own voice servers and point channels at them. A server owner adds theirs once, and a voice channel can sit on whichever one is closest to the people using it — everyone in that channel connects to the same one, because a call only works if all of it is in one place'],
