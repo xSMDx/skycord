@@ -82,6 +82,14 @@ const callVoiceServer = new Map<string, string | null>()
 export const getCallVoiceServer = (room: string): string | null | undefined =>
   callVoiceServer.get(room)
 
+/** How many people are in a call room right now, and whether a given user is
+ *  already one of them. Occupancy is the only thing a user limit can be checked
+ *  against, and it lives here rather than in the database because a call is
+ *  live state, not a record. */
+export const callOccupancy = (room: string): number => activeCalls.get(room)?.size ?? 0
+export const isInCall = (room: string, userId: string): boolean =>
+  activeCalls.get(room)?.has(userId) ?? false
+
 /** Fix the choice for a room, if it is not fixed already. Returns what the
  *  room is now on, which is NOT necessarily what was passed. */
 export const fixCallVoiceServer = (room: string, id: string | null): string | null => {

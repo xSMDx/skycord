@@ -295,8 +295,14 @@ export const deleteChannel = async (req: Request, res: Response, next: NextFunct
           res.status(400).json({ message: 'You cannot delete the last text channel' }); return
         }
       }
-      await found.channel.deleteOne()
       const channelId = found.channel._id.toString()
+      await found.channel.deleteOne()
+      // Messages are addressed by conversationId, which for a channel IS the
+      // channel id — so once the channel is gone nothing can ever reach them
+      // again. Left behind they were unreachable AND permanent, growing the
+      // collection by every message of every channel anyone ever deleted.
+      // deleteServer already cascades this way; only deleteChannel did not.
+      await Message.deleteMany({ conversationId: channelId, kind: 'channel' })
       emitToServer(found.server, 'channel:deleted', {
         serverId: found.server._id.toString(), channelId,
       })

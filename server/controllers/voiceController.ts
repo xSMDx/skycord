@@ -10,6 +10,7 @@ import { Server } from '../models/Server'
 import { dmConvId } from './messagesController'
 import {
   getCallVoiceServer, fixCallVoiceServer, setCallVoiceServer, announceCallVoiceServer,
+  callOccupancy, isInCall,
 } from '../sockets/chatSocket'
 
 // A LiveKit room name for a conversation. DMs use the stable sorted-pair id so
@@ -35,7 +36,12 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
   try {
     // Captured in the channel branch below so the resolver can read the
     // override without a second lookup.
-    let chosenChannel: { server: mongoose.Types.ObjectId; voiceServer?: string | null } | null = null
+    let chosenChannel: {
+      server: mongoose.Types.ObjectId
+      voiceServer?: string | null
+      userLimit?: number
+      bitrate?: number
+    } | null = null
     const userId = req.user!.sub
     const { conversationId, kind, voiceServerId } = req.body as {
       conversationId?: string; kind?: 'dm' | 'group' | 'channel'
@@ -64,7 +70,7 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       // exact same 403 whether the channel is text or voice and can never
       // use this endpoint to learn which one it is.
       if (!mongoose.isValidObjectId(conversationId)) { res.status(400).json({ message: 'Invalid channel' }); return }
-      const channel = await Channel.findById(conversationId).select('server type voiceServer').lean()
+      const channel = await Channel.findById(conversationId).select('server type voiceServer userLimit bitrate').lean()
       if (!channel) { res.status(404).json({ message: 'Channel not found' }); return }
       chosenChannel = channel
       const server = await Server.findById(channel.server).select('members').lean()
@@ -87,6 +93,24 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
     const me = await User.findById(userId).select('username displayName').lean()
     const name = me?.displayName || me?.username || 'User'
     const room = roomFor(kind, conversationId, userId)
+
+    /**
+     * The channel's user limit.
+     *
+     * Checked here because this is the only door: LiveKit will admit anyone
+     * holding a valid token, so refusing to MINT one is what actually enforces
+     * the cap. Hiding the channel in the UI would not.
+     *
+     * `0` means unlimited, and someone already in the room is never counted
+     * out of it — otherwise a reconnect at exactly the cap would lock a person
+     * out of a call they are currently in.
+     */
+    if (chosenChannel) {
+      const limit = chosenChannel.userLimit ?? 0
+      if (limit > 0 && !isInCall(room, userId) && callOccupancy(room) >= limit) {
+        res.status(403).json({ message: 'This voice channel is full' }); return
+      }
+    }
 
     /**
      * Which media server, resolved AFTER the membership checks above.
@@ -134,6 +158,10 @@ let voice
     res.json({
       token, url: voice.url, room,
       voiceServer: { id: voice.id, name: voice.name },
+      // kbps. The client caps its microphone publish at this; a channel set to
+      // 32 is a channel where nobody sends 64. Absent for DMs and groups,
+      // which have no channel to carry a setting.
+      ...(chosenChannel ? { bitrate: chosenChannel.bitrate ?? 64 } : {}),
     })
   } catch (err) { next(err) }
 }

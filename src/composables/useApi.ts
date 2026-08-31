@@ -376,8 +376,12 @@ export const useApi = () => {
   const getVoiceToken = (
     conversationId: string, kind: 'dm' | 'group' | 'channel', voiceServerId?: string | null,
   ) =>
-    post<{ token: string; url: string; room: string; voiceServer: { id: string; name: string } }>(
-      '/voice/token', { conversationId, kind, voiceServerId: voiceServerId || undefined })
+    post<{
+      token: string; url: string; room: string
+      voiceServer: { id: string; name: string }
+      /** kbps. Channels only — DMs and groups have no channel to carry it. */
+      bitrate?: number
+    }>('/voice/token', { conversationId, kind, voiceServerId: voiceServerId || undefined })
 
   /** Every voice server the caller could be routed to, across all their servers. */
   const listMyVoiceServers = () =>

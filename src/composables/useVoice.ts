@@ -8,6 +8,7 @@ import { reactive, watch } from 'vue'
 import {
   Room, RoomEvent, Track,
   type RemoteTrack, type RemoteParticipant, type Participant, type LocalAudioTrack,
+  type LocalParticipant,
 } from 'livekit-client'
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
 import { holdPresence } from './usePresence'
@@ -77,6 +78,27 @@ let failTimer: ReturnType<typeof setTimeout> | null = null
 // auto-reconnects: a drop must rejoin the same room, not silently fall back
 // to the default and split the call in two.
 let preferredVoiceServer: string | null = null
+/**
+ * The active channel's audio ceiling, in kbps, as the server reported it.
+ *
+ * Held across the whole session rather than passed to one call: the mic is
+ * republished on unmute, on undeafen and after a reconnect, and a cap applied
+ * at only the first of those is a cap that quietly stops applying.
+ */
+let channelBitrate: number | null = null
+
+/** Publish the mic within the channel's ceiling. Every place that turns the
+ *  microphone on goes through here — there are four, and a cap applied at only
+ *  some of them is not a cap. */
+const publishMic = (p: LocalParticipant) =>
+  p.setMicrophoneEnabled(
+    true,
+    micCaptureOptions(),
+    // audioPreset, not a bare bitrate: LiveKit takes the ceiling through the
+    // preset, and kbps -> bps because the channel setting is in kbps.
+    channelBitrate ? { audioPreset: { maxBitrate: channelBitrate * 1000 } } : undefined,
+  )
+
 let intentionalLeave = false  // true while WE tear the room down, so the Disconnected
                               // handler doesn't try to reconnect our own hangup
 const RETRY_DELAY_MS = 1600   // pause on the red "No route" flash before retrying
@@ -419,6 +441,7 @@ const cleanup = () => {
   voice.activeName = ''
   voice.voiceServer = null
   preferredVoiceServer = null
+  channelBitrate = null
   voice.participants = []
   voice.localMuted = false
   voice.localDeafened = false
@@ -433,7 +456,7 @@ const cleanup = () => {
 const onPttDown = (e: KeyboardEvent) => {
   if (e.code !== voiceSettings.pttKey || e.repeat) return
   const room = getRoom()
-  if (room && !voice.localDeafened) room.localParticipant.setMicrophoneEnabled(true).catch(() => {})
+  if (room && !voice.localDeafened) publishMic(room.localParticipant).catch(() => {})
 }
 const onPttUp = (e: KeyboardEvent) => {
   if (e.code !== voiceSettings.pttKey) return
@@ -490,7 +513,7 @@ const applyMicChainNow = async () => {
     if (wantRnn) setVoiceSettings({ noiseMode: 'standard' })
     try { await mic.stopProcessor() } catch { /* ignore */ }
     // Re-apply capture constraints so the browser filter actually comes back on.
-    try { await room.localParticipant.setMicrophoneEnabled(true, micCaptureOptions()) } catch { /* ignore */ }
+    try { await publishMic(room.localParticipant) } catch { /* ignore */ }
   }
 }
 
@@ -547,7 +570,8 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     voice.connectingConvId = convId
     voice.activeName = name   // set now so the "Connecting…" strip can label the call
     try {
-      const { token, url, voiceServer } = await getVoiceToken(convId, kind, preferredVoiceServer)
+      const { token, url, voiceServer, bitrate } = await getVoiceToken(convId, kind, preferredVoiceServer)
+      channelBitrate = typeof bitrate === 'number' ? bitrate : null
       if (seq !== connectSeq) return                                  // superseded while fetching token
       voice.connectStage = 'connecting'
       const r = new Room({ adaptiveStream: true, dynacast: true })
@@ -566,7 +590,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       if (voiceSettings.inputMode === 'ptt') {
         bindPtt()
       } else if (canCapture) {
-        try { await r.localParticipant.setMicrophoneEnabled(true, micCaptureOptions()) }
+        try { await publishMic(r.localParticipant) }
         catch (e) { console.warn('[voice] mic unavailable — joining listen-only', e) }
         await applyMicChain()
       }
