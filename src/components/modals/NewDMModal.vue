@@ -42,7 +42,7 @@ const create = () => {
           <h2 class="ndm-title">{{ title || 'New Message' }}</h2>
           <p class="ndm-sub">Group DMs can have up to 10 members.</p>
         </div>
-        <button class="ndm-close" @click="emit('close')">
+        <button class="ndm-close" aria-label="Close" @click="emit('close')">
           <X :size="20" :stroke-width="1.5" />
         </button>
       </div>

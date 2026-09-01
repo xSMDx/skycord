@@ -401,6 +401,20 @@ export const useApi = () => {
   const getMyDMs = () =>
     get<{ dms: ApiDM[] }>('/conversations/dms')
 
+  // ── Logged-in devices ────────────────────────────────────────────────────
+  // Every one of these depends on the refresh cookie to identify which row is
+  // "this device", so they must be sent with credentials like the rest.
+  const listSessions = () =>
+    get<{ sessions: ApiSession[] }>('/auth/sessions')
+
+  /** @returns current: true when the row revoked was the caller's own, in which
+   *  case this client is now holding a token for a dead session. */
+  const revokeSession = (id: string) =>
+    del<{ message: string; current: boolean }>(`/auth/sessions/${id}`)
+
+  const revokeOtherSessions = () =>
+    del<{ message: string; count: number }>('/auth/sessions')
+
   // ── GIFs ─────────────────────────────────────────────────────────────────
   // Our own endpoints, not the provider's — the key stays server-side.
   const searchGifs = (q: string) =>
@@ -410,6 +424,7 @@ export const useApi = () => {
     get<{ gifs: ApiGif[] }>('/gifs/trending')
 
   return {
+    listSessions, revokeSession, revokeOtherSessions,
     searchGifs, trendingGifs, getMyDMs,
     searchUsers, getFriends, getPending,
     sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getUserProfile,
@@ -442,6 +457,24 @@ export interface ApiDM {
   status:        string
   lastMessage:   string
   lastMessageAt: string
+}
+
+/** One signed-in device on Settings → Devices. Note there is no sid: rows are
+ *  addressed by `id`, and the sid never leaves the server. */
+export interface ApiSession {
+  id:         string
+  /** "Chrome on Windows", or "Unknown device" when the User-Agent is unreadable. */
+  label:      string
+  browser:    string
+  os:         string
+  kind:       'desktop' | 'mobile' | 'tablet' | 'unknown'
+  ip:         string
+  /** ISO-3166 alpha-2, uppercase. Null for a private address or an unknown range. */
+  country:    string | null
+  createdAt:  string
+  lastSeenAt: string
+  /** The device this client is on. Cannot be signed out from its own row's button. */
+  current:    boolean
 }
 
 /** Provider-neutral: the server normalises whatever the GIF provider returns. */

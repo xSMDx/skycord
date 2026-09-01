@@ -290,7 +290,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
     </label>
     <div class="vv-toggle-row">
       <div class="vv-toggle-text"><span class="vv-label">Echo Cancellation</span><span class="vv-hint">Cancel echo from your speakers.</span></div>
-      <button class="vv-tog" :class="{ on: voiceSettings.echoCancellation }" @click="setVoiceSettings({ echoCancellation: !voiceSettings.echoCancellation })"><span/></button>
+      <button class="vv-tog" :class="{ on: voiceSettings.echoCancellation }" role="switch" :aria-checked="voiceSettings.echoCancellation" aria-label="Echo cancellation" @click="setVoiceSettings({ echoCancellation: !voiceSettings.echoCancellation })"><span/></button>
     </div>
 
     <div class="vv-divider" />

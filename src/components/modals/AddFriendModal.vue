@@ -56,7 +56,7 @@ const statusColor: Record<string, string> = {
             <h2 class="af-title">Add Friend</h2>
             <p class="af-sub">Search by username to send a friend request.</p>
           </div>
-          <button class="af-close" @click="emit('close')">
+          <button class="af-close" aria-label="Close" @click="emit('close')">
             <X :size="20" :stroke-width="1.5" />
           </button>
         </div>

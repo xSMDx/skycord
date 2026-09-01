@@ -67,7 +67,7 @@ const submit = async () => {
           <h2 class="csm-title">Create a server</h2>
           <p class="csm-sub">Your server is where you and your friends hang out. Make yours and start talking.</p>
         </div>
-        <button class="csm-close" @click="emit('close')">
+        <button class="csm-close" aria-label="Close" @click="emit('close')">
           <X :size="20" :stroke-width="1.5" />
         </button>
       </div>

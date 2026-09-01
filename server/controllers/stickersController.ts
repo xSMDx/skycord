@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import { validateImageUrl } from '../utils/imageUrl'
 import { Sticker } from '../models/Sticker'
 
 // 1MB cap on the raw base64 string (~750KB actual image data after the ~33%
@@ -26,11 +27,14 @@ export const createSticker = async (req: Request, res: Response, next: NextFunct
       if (!image?.data) {
         res.status(400).json({ message: 'Image data is required for an image sticker' }); return
       }
-      if (image.data.length > MAX_IMAGE_DATA_LENGTH) {
-        res.status(413).json({ message: 'Image is too large — please use a smaller image' }); return
-      }
-      if (!image.data.startsWith('data:image/')) {
-        res.status(400).json({ message: 'Image data must be a valid image data URI' }); return
+      // Was a length check plus `startsWith('data:image/')`, which admits
+      // svg+xml. SVG is inert inside <img>, which is where a sticker will
+      // render — but it carries script, and nothing here would flag it the day
+      // one is rendered through <object> or inline instead.
+      const r = validateImageUrl(image.data, MAX_IMAGE_DATA_LENGTH)
+      if (!r.ok) {
+        const status = r.reason === 'That image is too large' ? 413 : 400
+        res.status(status).json({ message: r.reason }); return
       }
     }
 

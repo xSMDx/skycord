@@ -6,7 +6,7 @@ import GroupInviteCard from './GroupInviteCard.vue'
 import ServerInviteCard from './ServerInviteCard.vue'
 import ThemeCard from './ThemeCard.vue'
 import { renderMessage, stripMarkers } from '@/utils/richText'
-import { appearance } from '@/composables/useAppearance'
+import { appearance, THEME_CODE_RE } from '@/composables/useAppearance'
 
 const compact = computed(() => appearance.msgLayout === 'compact')
 
@@ -93,8 +93,9 @@ const inviteCode = computed(() => {
 const JOIN_RE = /https?:\/\/[^/\s]+\/join\/([A-Za-z0-9_-]{6,16})\/?/
 const joinCode = computed(() => JOIN_RE.exec(props.msg.content)?.[1] ?? null)
 
-// Detect a shared theme — inline code (sykord-theme:…) or a /theme/<slug> link.
-const THEME_CODE_RE = /sykord-theme:[A-Za-z0-9_-]+/
+// Detect a shared theme — inline code (skycord-theme:…) or a /theme/<slug> link.
+// The regex is the composable's, so it matches whatever that emits, plus the
+// legacy `sykord-` spelling still sitting in old messages.
 const THEME_LINK_RE = /https?:\/\/[^/\s]+\/theme\/([A-Za-z0-9_-]{6,16})\/?/
 const themeRef = computed<{ code?: string; slug?: string } | null>(() => {
   const code = THEME_CODE_RE.exec(props.msg.content)?.[0]

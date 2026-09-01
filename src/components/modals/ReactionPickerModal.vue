@@ -71,7 +71,7 @@ const select = (emoji: string) => {
         <!-- Header -->
         <div class="rp-header">
           <h3>Pick a Reaction</h3>
-          <button class="rp-close" @click="emit('close')">
+          <button class="rp-close" aria-label="Close" @click="emit('close')">
             <X :size="18" :stroke-width="1.5" />
           </button>
         </div>

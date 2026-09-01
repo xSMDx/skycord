@@ -37,6 +37,39 @@ export const config = {
      *  normal case for a deployment using only the three variables above. */
     serversFile: opt('VOICE_SERVERS_FILE', 'voice-servers.json'),
   },
+  /**
+   * Hosts an avatar, banner or sticker may be linked FROM.
+   *
+   * Empty (the default) means any https host, which preserves today's
+   * behaviour — and leaves the tracking-pixel problem open: an avatar pointing
+   * at a server its owner controls collects the IP and User-Agent of everyone
+   * who views that profile. Set this to your GIF provider's CDN to close it.
+   * Comma-separated; a bare domain also matches its subdomains.
+   */
+  media: {
+    imageHosts: opt('IMAGE_HOSTS', '')
+      .split(',').map(h => h.trim().toLowerCase()).filter(Boolean),
+  },
+
+  /**
+   * Trust Cloudflare's `CF-Connecting-IP` header for the client address shown
+   * on the devices screen.
+   *
+   * ON by default in production because `trust proxy: 1` resolves to the
+   * Cloudflare edge, not the user — every session would show a datacentre.
+   * Turn it OFF if the origin is reachable without going through Cloudflare:
+   * the header is then attacker-controlled and anyone can write whatever
+   * address they like into their own session row.
+   */
+  trustCloudflareIp: opt('TRUST_CF_IP', opt('NODE_ENV', 'development') === 'production' ? 'true' : 'false') === 'true',
+
+  geoip: {
+    /** GEOIP=off skips loading the ~8MB database entirely. */
+    enabled: opt('GEOIP', 'on') !== 'off',
+    /** Override with your own .mmdb; empty means the bundled DB-IP Lite file. */
+    dbPath: opt('GEOIP_DB', ''),
+  },
+
   email: {
     resendApiKey: opt('RESEND_API_KEY', ''),
     /** Must be an address on a domain verified in Resend, or every send is

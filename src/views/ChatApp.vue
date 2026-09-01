@@ -2,7 +2,7 @@
 import {
   ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, User, Paperclip, AtSign, SlidersHorizontal, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch,
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, User, Paperclip, AtSign, SlidersHorizontal, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon,
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
@@ -125,7 +125,7 @@ watch(shellRef, (el, prev) => {
 // ── API ────────────────────────────────────────────────────────────────────
 const api = useApi()
 const {
-  getFriends, getPending, acceptFriendRequest,
+  getFriends, getPending, acceptFriendRequest, declineFriendRequest,
   getDMMessages: fetchDMMessages, sendDMRest,
   createGroup, getMyGroups,
   getGroupMessages: fetchGroupMessages, sendGroupRest,
@@ -926,6 +926,7 @@ const pendingReqs = ref<PendingRequest[]>([])
 const dmsData     = ref<DM[]>([])
 const apiLoading  = ref(false)
 const acceptingId = ref<string | null>(null)
+const decliningId = ref<string | null>(null)
 
 // ── Modals ─────────────────────────────────────────────────────────────────
 const showSettings      = ref(false)
@@ -2850,6 +2851,19 @@ const doSend = async () => {
 }
 
 // ── Accept friend request ──────────────────────────────────────────────────
+// Declining used to be a pure client-side splice — the row vanished and the
+// request was still sitting on the server, so it came back on the next load and
+// the sender never learned anything had happened. `declineFriendRequest` had
+// existed in useApi the whole time and was simply never called.
+const doDecline = async (req: PendingRequest) => {
+  decliningId.value = req._id
+  try {
+    await declineFriendRequest(req._id)
+    pendingReqs.value = pendingReqs.value.filter(r => r._id !== req._id)
+  } catch (e) { console.error('[doDecline]', e) }
+  finally { decliningId.value = null }
+}
+
 const doAccept = async (req: PendingRequest) => {
   acceptingId.value = req._id
   try {
@@ -3685,7 +3699,7 @@ onBeforeUnmount(() => {
               <span v-if="isConvMuted(c.dm.id)" class="dm-muted" v-tip="'Muted'"><BellOff :size="12" :stroke-width="2.25"/></span>
               <span v-if="convHasCall('dm', c.dm.id)" class="dm-call" v-tip="'In a call'"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.dm.unread" class="dm-unread" :class="{ muted: isConvMuted(c.dm.id) }">{{ c.dm.unread }}</span>
-              <button class="dm-x" @click.stop="openConversationMenu($event, c)">
+              <button class="dm-x" aria-label="Conversation options" @click.stop="openConversationMenu($event, c)">
                 <X :size="14" :stroke-width="1.5" />
               </button>
             </div>
@@ -3708,7 +3722,7 @@ onBeforeUnmount(() => {
               <span v-if="isConvMuted(c.group.id)" class="dm-muted" v-tip="'Muted'"><BellOff :size="12" :stroke-width="2.25"/></span>
               <span v-if="convHasCall('group', c.group.id)" class="dm-call" v-tip="'In a call'"><Phone :size="12" :stroke-width="2.25"/></span>
               <span v-if="c.group.unread" class="dm-unread" :class="{ muted: isConvMuted(c.group.id) }">{{ c.group.unread }}</span>
-              <button class="dm-x" @click.stop="openConversationMenu($event, c)">
+              <button class="dm-x" aria-label="Conversation options" @click.stop="openConversationMenu($event, c)">
                 <X :size="14" :stroke-width="1.5" />
               </button>
             </div>
@@ -4002,8 +4016,8 @@ onBeforeUnmount(() => {
               <span v-if="pendingReqs.length" class="pend-badge">{{ pendingReqs.length }}</span>
             </button>
           </div>
-          <button class="add-friend-btn" @click.stop="showAddFriend=true">
-            <UserPlus :size="16" :stroke-width="1.5"/> Add Friend
+          <button class="add-friend-btn" aria-label="Add Friend" @click.stop="showAddFriend=true">
+            <UserPlus :size="16" :stroke-width="1.5"/><span class="afb-label">Add Friend</span>
           </button>
         </div>
 
@@ -4027,8 +4041,8 @@ onBeforeUnmount(() => {
               </div>
               <!-- Empty state -->
               <div v-if="filteredFriends.length===0" class="f-empty">
-                <div class="f-empty-icon">👥</div>
-                <p>No friends yet</p>
+                <div class="f-empty-icon"><UsersRound :size="40" :stroke-width="1.5"/></div>
+                <p>{{ friendSearch ? 'No matches' : friendsTab === 'online' ? 'Nobody is online' : 'No friends yet' }}</p>
                 <span>Click <strong>Add Friend</strong> to find people on Skycord</span>
                 <button class="f-empty-btn" @click.stop="showAddFriend=true">
                   <UserPlus :size="16" :stroke-width="1.5"/> Add Friend
@@ -4062,7 +4076,7 @@ onBeforeUnmount(() => {
             <template v-else>
               <div class="f-section-label">Incoming — {{ pendingReqs.length }}</div>
               <div v-if="pendingReqs.length===0" class="f-empty">
-                <div class="f-empty-icon">📬</div>
+                <div class="f-empty-icon"><Inbox :size="40" :stroke-width="1.5"/></div>
                 <p>No pending requests</p>
               </div>
               <div v-for="req in pendingReqs" :key="req._id" class="f-row"
@@ -4076,11 +4090,11 @@ onBeforeUnmount(() => {
                   <span class="f-sub">Incoming Friend Request</span>
                 </div>
                 <div class="f-actions" @click.stop>
-                  <button class="f-btn accept" :disabled="acceptingId===req._id" @click.stop="doAccept(req)">
+                  <button class="f-btn accept" aria-label="Accept friend request" :disabled="acceptingId===req._id" @click.stop="doAccept(req)">
                     <svg v-if="acceptingId===req._id" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     <Check v-else :size="18" :stroke-width="1.5"/>
                   </button>
-                  <button class="f-btn decline" @click.stop="pendingReqs=pendingReqs.filter(r=>r._id!==req._id)">
+                  <button class="f-btn decline" aria-label="Decline friend request" :disabled="decliningId===req._id" @click.stop="doDecline(req)">
                     <X :size="18" :stroke-width="1.5"/>
                   </button>
                 </div>
@@ -4092,7 +4106,7 @@ onBeforeUnmount(() => {
           <div class="active-now">
             <div class="an-title">Active Now</div>
             <div v-if="!activeNow.length" class="an-empty">
-              <div>👀</div><div>It's quiet for now…</div>
+              <div class="an-empty-icon"><Moon :size="28" :stroke-width="1.5"/></div><div>It's quiet for now…</div>
               <button class="an-add-btn" @click.stop="showAddFriend=true">Add friends</button>
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
@@ -4187,7 +4201,7 @@ onBeforeUnmount(() => {
                 <span v-if="otherUnread" class="m-back-badge">{{ otherUnread > 99 ? '99+' : otherUnread }}</span>
                 <ChevronLeft :size="20" :stroke-width="2.25"/>
               </button>
-              <button v-if="view==='server'" class="icon-btn icon-btn-sidebar" @click.stop="sidebarOpen=!sidebarOpen">
+              <button v-if="view==='server'" class="icon-btn icon-btn-sidebar" :aria-label="sidebarOpen ? 'Hide member list' : 'Show member list'" @click.stop="sidebarOpen=!sidebarOpen">
                 <PanelLeft :size="18" :stroke-width="1.5"/>
               </button>
               <template v-if="view==='dm' && activeDM">
@@ -5169,7 +5183,81 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile textarea,
 .shell.mobile select{font-size:16px}
 .shell.mobile .sb-nav-item{min-height:44px}
-.shell.mobile .f-row{min-height:60px}
+
+/* ── Friends, on a phone ──────────────────────────────────────────────────
+ *
+ * The desktop layout is one header row (back, icon, title, three tabs, an
+ * "Add Friend" button) above a two-column body (list + a 280px "Active Now"
+ * rail). Neither survives 375px, and the failure was not gentle. Measured
+ * before this block existed:
+ *
+ *   - "Add Friend" sat at x=370 on a 375px screen. The page's primary action
+ *     was five pixels of a 115px button.
+ *   - Active Now took its fixed 280px, leaving the friends list 95px. Every
+ *     name computed to 0px wide, and the row actions painted at x=88 —
+ *     outside their own 63px row, on top of the next column.
+ *   - The search field was 63px wide and clipped.
+ *
+ * So the header becomes two rows and the body becomes one column.
+ */
+
+/* Row 1: back, title, add. Row 2: the tabs, full width. The desktop rule
+   fixes height at 48px, which would clip the second row. */
+.shell.mobile .friends-header{height:auto;min-height:48px;flex-wrap:wrap;padding:0 8px 8px;row-gap:2px}
+/* The chevron already says "this is a pushed screen" and the title says which
+   one. A third glyph for the same fact costs 28px of a 375px row. */
+.shell.mobile .fh-icon{display:none}
+.shell.mobile .fh-title{font-size:17px;margin-right:0}
+
+/* A segmented control: three equal thirds across the full width, which is the
+   shape a thumb expects and the only one that fits all three labels. */
+.shell.mobile .fh-tabs{order:3;flex-basis:100%;width:100%;gap:4px}
+.shell.mobile .ftab{flex:1;min-width:0;font-size:14px;border-radius:8px;background:var(--hover)}
+/* --accent-text, not the desktop rule's #8d96f8. DESIGN.md defines that token
+   as "text sitting ON a translucent accent tint", which is exactly this: the
+   inherited colour measures 3.85:1 over the tint and fails AA at 14px, while
+   this measures 6.44:1. (The desktop tab has the same problem at 13px and is
+   left alone here — it is not this change's to fix.) */
+.shell.mobile .ftab.active{background:rgba(var(--accent-rgb),.22);color:var(--accent-text)}
+.shell.mobile .ftab:active{background:var(--hover-strong)}
+
+/* Icon only. The label is hidden rather than the button duplicated, and the
+   button's aria-label carries the name it no longer shows. */
+.shell.mobile .add-friend-btn{order:2;margin-left:auto;width:44px;padding:0;justify-content:center;border-radius:50%}
+.shell.mobile .afb-label{display:none}
+.shell.mobile .add-friend-btn:hover{transform:none}
+.shell.mobile .add-friend-btn:active{background:var(--accent-hover)}
+
+/* One column. */
+.shell.mobile .friends-body{flex-direction:column}
+.shell.mobile .friends-list{padding:12px 8px calc(12px + env(safe-area-inset-bottom))}
+/* Active Now lists the online friends, and the Online tab is already exactly
+   that list — on a phone it is the same people twice, and it was the column
+   winning the space fight. Hidden rather than restyled: there is nothing here
+   for it to add. */
+.shell.mobile .active-now{display:none}
+
+.shell.mobile .f-search{padding:10px 12px;margin-bottom:12px}
+.shell.mobile .f-section-label{padding:0 4px}
+
+/* Rows: a bigger avatar reads better at arm's length, and both actions go to
+   full touch size. 12+40+12+name+96+12 leaves ~200px for the name at 375px,
+   which fits every name tested including the longest. */
+.shell.mobile .f-row{min-height:64px;gap:12px;padding:10px 8px;border-radius:10px}
+.shell.mobile .f-row:hover{background:none}
+.shell.mobile .f-row:active{background:var(--hover)}
+.shell.mobile .f-av{width:40px;height:40px}
+.shell.mobile .f-actions{gap:4px}
+.shell.mobile .f-btn{width:44px;height:44px}
+/* Hover does not exist here; left alone these stick in the hovered look after
+   a tap and the row reads as still selected. */
+.shell.mobile .f-btn:hover{background:rgba(255,255,255,.06);color:var(--text-3);transform:none}
+.shell.mobile .f-btn.accept:hover{background:rgba(35,165,90,.15);color:var(--green);transform:none}
+.shell.mobile .f-btn.decline:hover{background:rgba(237,66,69,.15);color:#ed4245;transform:none}
+.shell.mobile .f-btn:active{background:var(--hover-strong)}
+
+.shell.mobile .f-empty{padding:48px 24px}
+.shell.mobile .f-empty-btn{min-height:44px}
 
 /* Press feedback belongs on pointer-down, and hover doesn't exist on a phone —
    a :hover rule either never fires or sticks after the tap. */
@@ -5240,9 +5328,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-av img{border-radius: 50%}
 .f-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
 .f-info{flex:1;min-width:0}
-.f-name{display:block;font-size:15px;font-weight:600;color: var(--text-strong)}
+/* Truncation, which this never had. `.f-info` is `flex:1;min-width:0`, so when
+   the row is squeezed the name has no way to ellipsise and is crushed to zero
+   width instead — measured at 0px for every name on a 375px screen. */
+.f-name{display:block;font-size:15px;font-weight:600;color: var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .f-sub{display:block;font-size:13px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.f-actions{display:flex;gap: 6px}
+/* flex-shrink:0 — without it the actions are the thing that gives, and they
+   were rendering OUTSIDE their own row (row 63px wide, actions painted at x=88
+   on top of the next column). */
+.f-actions{display:flex;gap: 6px;flex-shrink:0}
 .f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
 .f-btn.accept{background:rgba(35,165,90,.15);color:var(--green)}

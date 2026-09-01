@@ -4,6 +4,10 @@ import { Friendship } from '../models/Friendship'
 import mongoose from 'mongoose'
 import { getIO, isUserOnline } from '../sockets/chatSocket'
 import { effectiveStatus } from '../state/presence'
+import { validateImageUrl } from '../utils/imageUrl'
+import { signRefreshToken, verifyRefreshToken } from '../utils/jwt'
+import { setRefreshCookie, REFRESH_COOKIE } from '../utils/cookie'
+import { revokeOtherSessions } from '../services/sessions'
 
 /*
  * What a third party is allowed to see. This is just effectiveStatus — it used
@@ -27,7 +31,9 @@ export const searchUsers = async (req: Request, res: Response, next: NextFunctio
     // Escape before this reaches $regex. String() already blocks operator
     // injection, but not a catastrophic-backtracking pattern — the query ran
     // unanchored across the whole collection, and /users/search has no rate
-    // limit, so `(a+)+$` was a one-request DoS.
+    // limit, so a catastrophic pattern was a one-request DoS. The route
+    // carries `searchLimit` now as well; this escape is the part that removes
+    // the class rather than merely slowing it down.
     const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
     const users = await User.find({
@@ -213,9 +219,12 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     if (avatar !== undefined) {
       if (avatar === null) allowed.avatar = null
       else {
-        const a = String(avatar)
-        if (a.length > 2_000_000) { res.status(413).json({ message: 'That image is too large' }); return }
-        allowed.avatar = a
+        // Length was the ONLY check here. The scheme is checked now too: this
+        // string is rendered into an <img src> for everyone who views the
+        // profile, and an arbitrary remote host makes it a tracking pixel.
+        const r = validateImageUrl(avatar, 2_000_000)
+        if (!r.ok) { res.status(413).json({ message: r.reason }); return }
+        allowed.avatar = r.value
       }
     }
 
@@ -224,9 +233,9 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     if (banner !== undefined) {
       if (banner === null) allowed.banner = null
       else {
-        const b = String(banner)
-        if (b.length > 4_000_000) { res.status(413).json({ message: 'That banner is too large' }); return }
-        allowed.banner = b
+        const r = validateImageUrl(banner, 4_000_000)
+        if (!r.ok) { res.status(413).json({ message: r.reason }); return }
+        allowed.banner = r.value
       }
     }
 
@@ -380,7 +389,10 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
       res.status(400).json({ message: 'New password must be at least 8 characters' }); return
     }
 
-    const user = await User.findById(userId).select('+password')
+    // +tokenVersion because the change below bumps it. It is `select: false`,
+    // so without asking for it `user.tokenVersion += 1` is `undefined + 1` and
+    // the save fails a cast — loudly, but only at runtime.
+    const user = await User.findById(userId).select('+password +tokenVersion')
     if (!user) { res.status(404).json({ message: 'User not found' }); return }
 
     const passwordOk = await user.comparePassword(currentPassword)
@@ -390,8 +402,33 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     // automatically whenever `password` is modified (see User.ts), so there's
     // no need to call bcrypt directly here.
     user.password = newPassword
+
+    // Sign every OTHER session out. `resetPassword` has always done this and
+    // this path never did, which is backwards: someone changing their password
+    // from settings because they think a session is not theirs was the one case
+    // where it silently did nothing, leaving the intruder a refresh cookie good
+    // for the full 7 days.
+    user.tokenVersion += 1
     await user.save()
 
+    // The caller keeps their own session — they are standing right here and
+    // just proved they know the current password. Re-issuing at the new version
+    // is what separates them from the sessions the bump just killed.
+    //
+    // Which session that is comes from the refresh cookie, not from `req.user`:
+    // this route authenticates with an ACCESS token, which carries no sid. The
+    // cookie is sent on every path, so it is available here.
+    let keepSid: string | null = null
+    try { keepSid = verifyRefreshToken(req.cookies?.[REFRESH_COOKIE] ?? '').sid ?? null } catch { /* none */ }
+
+    setRefreshCookie(res, signRefreshToken(user._id, user.tokenVersion, keepSid ?? undefined))
+
+    // And drop the other devices' rows, so the list they are about to look at
+    // shows what is actually still signed in.
+    await revokeOtherSessions(user._id, keepSid)
+
+    // Other sessions keep working until their ACCESS token expires
+    // (JWT_ACCESS_EXPIRES_IN, 15m by default) — see the note in utils/jwt.ts.
     res.json({ message: 'Password updated' })
   } catch (err) { next(err) }
 }

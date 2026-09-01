@@ -184,7 +184,15 @@ const THEME_FIELDS: (keyof Appearance)[] = [
   'showSendButton', 'custom', 'scheme', 'contrast', 'emojiPack',
   'underlineLinks', 'displayNameStyles', 'msgLayout', 'zoom',
 ]
-const PREFIX = 'sykord-theme:'
+// The repo directory is misspelled "sykord"; the product is not. That typo
+// reached users through the share code, which people paste to each other and
+// see in chat. Emit the correct one and keep reading the old one forever —
+// codes already sitting in message history have to keep working.
+const PREFIX = 'skycord-theme:'
+const LEGACY_PREFIX = 'sykord-theme:'
+/** Both spellings, written out rather than factored — the two differ by a
+ *  transposed letter, and a clever shared-suffix alternation gets it wrong. */
+export const THEME_CODE_RE = /(?:skycord|sykord)-theme:[A-Za-z0-9_-]+/
 
 // Keep only known theme fields from an arbitrary object (shared by code + link).
 export const sanitizeTheme = (obj: any): Partial<Appearance> => {
@@ -208,7 +216,13 @@ export const serializeTheme = (): string => {
 // Returns the themeable subset, or null if the code is malformed/unsupported.
 export const parseTheme = (code: string): Partial<Appearance> | null => {
   try {
-    const body = code.trim().replace(PREFIX, '')
+    // Anchored, and either spelling. The old code stripped the prefix from
+    // ANYWHERE in the string, so a code whose base64 body happened to contain
+    // the literal prefix would be silently mangled.
+    const trimmed = code.trim()
+    const body = trimmed.startsWith(PREFIX) ? trimmed.slice(PREFIX.length)
+      : trimmed.startsWith(LEGACY_PREFIX) ? trimmed.slice(LEGACY_PREFIX.length)
+      : trimmed
     const obj = JSON.parse(b64urlDecode(body))
     if (obj.v !== 1) return null
     return sanitizeTheme(obj)

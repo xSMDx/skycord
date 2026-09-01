@@ -3,6 +3,7 @@ import {
   register, login, refresh, logout, me,
   forgotPassword, resetPassword, resetAvailability,
 } from '../controllers/authController'
+import { listSessions, revokeOne, revokeAllOthers } from '../controllers/sessionsController'
 import { requireAuth } from '../middleware/auth'
 import { make } from '../middleware/rateLimit'
 
@@ -33,5 +34,13 @@ router.post('/reset-password',  strictLimit, resetPassword)
 // renders, revealing nothing about any account.
 router.get( '/reset-available', resetAvailability)
 router.get( '/me',       requireAuth,  me)
+
+// Logged-in devices. Reading is cheap and the page polls nothing, so it rides
+// the shared limiter; revoking is a write and gets the same treatment as the
+// other credential routes — it is the button an attacker would reach for to
+// push a real owner out of their own account.
+router.get(   '/sessions',     requireAuth, listSessions)
+router.delete('/sessions/:id', requireAuth, strictLimit, revokeOne)
+router.delete('/sessions',     requireAuth, strictLimit, revokeAllOthers)
 
 export default router

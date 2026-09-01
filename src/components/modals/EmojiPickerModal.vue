@@ -225,7 +225,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
         :placeholder="activeTab === 'gifs' ? 'Search GIFs…' : activeTab === 'stickers' ? 'Search stickers…' : 'Find the perfect emoji…'"
         autofocus
       />
-      <button v-if="search" class="ps-clear" @click="search = ''">
+      <button v-if="search" class="ps-clear" aria-label="Clear search" @click="search = ''">
         <X :size="12" :stroke-width="2.25" />
       </button>
     </div>

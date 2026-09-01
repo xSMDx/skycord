@@ -75,7 +75,7 @@ const submit = async () => {
           <h2 class="ccm-title">Create Channel</h2>
           <p v-if="categoryName" class="ccm-sub">in {{ categoryName }}</p>
         </div>
-        <button class="ccm-close" @click="emit('close')">
+        <button class="ccm-close" aria-label="Close" @click="emit('close')">
           <X :size="20" :stroke-width="1.5" />
         </button>
       </div>

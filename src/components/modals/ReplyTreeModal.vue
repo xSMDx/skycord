@@ -143,7 +143,7 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
             <button class="rt-zoom-btn" @click="zoomOut" v-tip="'Zoom out'"><ZoomOut :size="16" :stroke-width="1.5" /></button>
             <button class="rt-zoom-btn" @click="zoomReset" v-tip="'Reset zoom'"><Expand :size="14" :stroke-width="1.5" /></button>
             <button class="rt-zoom-btn" @click="zoomIn" v-tip="'Zoom in'"><ZoomIn :size="16" :stroke-width="1.5" /></button>
-            <button class="rt-close" @click="emit('close')"><X :size="18" :stroke-width="1.5" /></button>
+            <button class="rt-close" aria-label="Close" @click="emit('close')"><X :size="18" :stroke-width="1.5" /></button>
           </div>
         </div>
 

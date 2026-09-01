@@ -26,7 +26,7 @@ const emit = defineEmits<{ close: []; done: [] }>()
             <h3 class="efm-title">{{ title }}</h3>
             <p v-if="description" class="efm-desc">{{ description }}</p>
           </div>
-          <button class="efm-x" @click="emit('close')"><X :size="18" :stroke-width="2.25" /></button>
+          <button class="efm-x" aria-label="Close" @click="emit('close')"><X :size="18" :stroke-width="2.25" /></button>
         </div>
 
         <div class="efm-body">

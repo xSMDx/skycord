@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, defineAsyncComponent } from 'vue'
 import {
   X, CircleCheck, ArrowRight, LogOut, ChevronLeft, ChevronRight,
 } from 'lucide-vue-next'
@@ -20,6 +20,9 @@ import SetStatusModal from '@/components/profile/SetStatusModal.vue'
 
 import AnimatedImage from '@/components/ui/AnimatedImage.vue'
 import VoiceVideoSettings from '@/components/voice/VoiceVideoSettings.vue'
+// Async: DevicesPage pulls in the flag stylesheet, which nobody should pay for
+// unless they open this page.
+const DevicesPage = defineAsyncComponent(() => import('@/components/settings/DevicesPage.vue'))
 
 const emit = defineEmits<{ close: [] }>()
 const { user: authUser, logout, authFetch, updateUser } = useAuth()
@@ -405,6 +408,7 @@ const navSections: NavSection[] = [
     items: [
       { id: 'account',         label: 'Account'           },
       { id: 'profile',         label: 'Profile'           },
+      { id: 'devices',         label: 'Devices'           },
       { id: 'content-social',  label: 'Content & Social', soon: true },
       { id: 'data-privacy',    label: 'Data & Privacy', soon: true },
       { id: 'authorized-apps', label: 'Authorized Apps', soon: true },
@@ -499,6 +503,12 @@ const onContentScroll = () => {
 }
 
 const handleLogout = () => { emit('close'); logout() }
+
+// The devices page can revoke the row this client is sitting on. The access
+// token keeps working for up to its own expiry after that, so the app would
+// carry on for fifteen minutes and then fail with no explanation — clear it now
+// and land on the login screen, which is the truth.
+const handleSelfRevoked = () => handleLogout()
 </script>
 
 <template>
@@ -563,7 +573,7 @@ const handleLogout = () => { emit('close'); logout() }
               <X :size="22" :stroke-width="1.5" />
             </button>
           </div>
-          <button v-if="!isMobile" class="sm-close" @click="emit('close')">
+          <button v-if="!isMobile" class="sm-close" aria-label="Close settings" @click="emit('close')">
             <X :size="20" :stroke-width="1.5" />
           </button>
 
@@ -647,15 +657,19 @@ const handleLogout = () => { emit('close'); logout() }
                 <button class="acc-btn" disabled>Enable</button>
               </div>
               <div class="acc-divider" />
-              <div class="acc-row">
+              <!-- This row used to show a hardcoded "1 device" beside an arrow
+                   with no click handler — a count that was never true for anyone
+                   signed in twice, on the one screen where you go to check
+                   exactly that. It is a real link now. -->
+              <button class="acc-row acc-row-link" @click="selectPage('devices')">
                 <div class="acc-row-left">
                   <span class="acc-row-label">Logged-in Devices</span>
-                  <span class="acc-row-value muted">1 device</span>
+                  <span class="acc-row-value muted">See where you're signed in</span>
                 </div>
-                <button class="acc-btn-arrow">
+                <span class="acc-btn-arrow" aria-hidden="true">
                   <ArrowRight :size="16" :stroke-width="1.5" />
-                </button>
-              </div>
+                </span>
+              </button>
             </div>
 
             <!-- Account Standing -->
@@ -867,14 +881,14 @@ const handleLogout = () => { emit('close'); logout() }
                   <span class="acc-row-label">Always underline links</span>
                   <span class="acc-row-value muted">Make links stand out more.</span>
                 </div>
-                <button class="ap-toggle" :class="{ on: appearance.underlineLinks }" @click="setAppearance({ underlineLinks: !appearance.underlineLinks })"><span /></button>
+                <button class="ap-toggle" :class="{ on: appearance.underlineLinks }" role="switch" :aria-checked="appearance.underlineLinks" aria-label="Always underline links" @click="setAppearance({ underlineLinks: !appearance.underlineLinks })"><span /></button>
               </div>
               <div class="acc-row acc-row-sep">
                 <div class="acc-row-left">
                   <span class="acc-row-label">Display Name Styles</span>
                   <span class="acc-row-value muted">Enable custom display-name colors and effects across Skycord.</span>
                 </div>
-                <button class="ap-toggle" :class="{ on: appearance.displayNameStyles }" @click="setAppearance({ displayNameStyles: !appearance.displayNameStyles })"><span /></button>
+                <button class="ap-toggle" :class="{ on: appearance.displayNameStyles }" role="switch" :aria-checked="appearance.displayNameStyles" aria-label="Display name styles" @click="setAppearance({ displayNameStyles: !appearance.displayNameStyles })"><span /></button>
               </div>
             </div>
 
@@ -921,7 +935,7 @@ const handleLogout = () => { emit('close'); logout() }
                   <span class="acc-row-label">Show send button</span>
                   <span class="acc-row-value muted">When off, press Enter to send.</span>
                 </div>
-                <button class="ap-toggle" :class="{ on: appearance.showSendButton }" @click="setAppearance({ showSendButton: !appearance.showSendButton })"><span /></button>
+                <button class="ap-toggle" :class="{ on: appearance.showSendButton }" role="switch" :aria-checked="appearance.showSendButton" aria-label="Show send button" @click="setAppearance({ showSendButton: !appearance.showSendButton })"><span /></button>
               </div>
             </div>
 
@@ -951,7 +965,7 @@ const handleLogout = () => { emit('close'); logout() }
             <h3 class="ap-sub">Load a theme</h3>
             <textarea
               class="ap-share-input" aria-label="Theme code" rows="2" spellcheck="false"
-              placeholder="Paste a sykord-theme:… code here"
+              placeholder="Paste a skycord-theme:… code here"
               v-model="themeCodeInput"
             />
             <p v-if="shareErr" class="ap-share-err">{{ shareErr }}</p>
@@ -960,6 +974,11 @@ const handleLogout = () => { emit('close'); logout() }
               <button class="acc-btn primary" :disabled="!themeCodeInput.trim()" @click="applyThemeCode">Apply</button>
             </div>
             <p class="ap-hint ap-hint-under">Preview applies the theme temporarily — use <strong>Keep</strong> or <strong>Revert</strong> in the banner. Apply saves it right away.</p>
+          </template>
+
+          <!-- ── Devices ── -->
+          <template v-else-if="page === 'devices'">
+            <DevicesPage @signed-out="handleSelfRevoked" />
           </template>
 
           <!-- ── Voice & Video ── -->
@@ -1352,8 +1371,15 @@ img    { display: block; object-fit: cover; }
 .acc-row.soon { opacity: .5; }
 .acc-row.soon .acc-btn { cursor: not-allowed; }
 
-.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out); }
+.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
 .acc-btn-arrow:hover { background: var(--hover); color: white; }
+/* A whole row that navigates. It is a <button> so it is reachable and
+   announced as one control rather than as a div with a clickable arrow inside;
+   the arrow is decorative and inherits the row's hover. */
+.acc-row-link { width: 100%; text-align: left; background: none; border: none; cursor: pointer; font: inherit; transition: background var(--dur-1) var(--ease-out); }
+.acc-row-link:hover { background: var(--hover); }
+.acc-row-link:hover .acc-btn-arrow { color: var(--text-strong); transform: translateX(2px); }
+@media (prefers-reduced-motion: reduce) { .acc-row-link:hover .acc-btn-arrow { transform: none } }
 .acc-divider { height: 1px; background: rgba(255,255,255,.06); margin: 0 20px; }
 .reveal-btn { font-size: 12px; color: var(--accent); font-weight: 600; }
 .reveal-btn:hover { text-decoration: underline; }

@@ -13,7 +13,7 @@ const pinned = props.messages.filter(m => m.pinned)
     <div class="pinned-header">
       <Pin :size="16" :stroke-width="2.25" style="color:#f0a500" />
       <span>Pinned Messages</span>
-      <button class="pinned-close" @click="emit('close')">
+      <button class="pinned-close" aria-label="Close" @click="emit('close')">
         <X :size="16" :stroke-width="1.5" />
       </button>
     </div>

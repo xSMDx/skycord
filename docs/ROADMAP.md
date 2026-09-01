@@ -67,6 +67,25 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 Done and shipped: context menus (v0.6), mobile/PWA rebuild (v0.10), profile picture and banner
 framing, landing page, call telemetry (v0.9), presence fixes (v0.10.1).
 
+**Logged-in Devices (2026-09-01, not previously on this list.)** Settings → Devices lists every
+signed-in session — device name from the User-Agent, IP address with the flag of the country it
+resolves to, last-seen time — with per-device and "all other devices" sign-out. The Account page
+row that used to show a hardcoded "1 device" beside a dead arrow now links to it.
+
+It needed a session store, which did not exist: a session was a stateless refresh JWT and the
+server kept no record of who was signed in from where. Three things fell out of building one:
+
+  - `logout` used to `$inc` `tokenVersion`, revoking **every** refresh token the account had —
+    so signing out on one machine signed you out everywhere. It deletes one session row now.
+  - `changePassword` never bumped `tokenVersion` at all, so it did not sign other devices out.
+    It does now, and deletes their rows; the caller keeps their own session.
+  - Geo is offline (DB-IP Lite, CC BY 4.0, bundled) — no user's address is sent anywhere.
+    `TRUST_CF_IP` matters in production: behind Cloudflare, `trust proxy: 1` resolves to the
+    Cloudflare edge, not the user. See `.env.example`.
+
+Cookies issued before this deploy carry no session id; the first refresh adopts them into a real
+session and swaps the cookie, so nobody is signed out by the upgrade.
+
 Still unscoped, ask when picked up: user customization, user profile rebuild, password reset via
 authenticator (TOTP — new backend and schema, not a UI change).
 
