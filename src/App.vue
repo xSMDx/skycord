@@ -53,6 +53,28 @@ if (pendingJoinCode.value) history.replaceState(null, '', '/')   // clean the UR
 // so fonts/assets have time to settle and the icon animation plays a full cycle.
 const splashDone = ref(false)
 
+/**
+ * Must match --dur-4 in the leave transition below.
+ *
+ * Passed to <transition :duration> so Vue unmounts on a timer instead of
+ * waiting for a `transitionend` that a cancelled or interrupted transition
+ * never sends. A safeguard, not the fix for the case below — Vue registers
+ * that timer INSIDE its `nextFrame` callback, so anything that stops
+ * requestAnimationFrame stops the timer being created in the first place.
+ *
+ * The case below: a browser pauses rAF entirely in a hidden tab. If the splash
+ * finishes while the tab is backgrounded, Vue's leave never starts — the
+ * element keeps `splash-fade-leave-from` and sits there at full opacity, and
+ * this is `position: fixed; inset: 0; z-index: 9999`. Observed repeatedly
+ * while driving the app from an automated browser whose pane was hidden.
+ *
+ * It DOES resolve itself the moment the tab becomes visible and rAF resumes,
+ * so a real person who opens Skycord in a background tab sees it clear when
+ * they switch to it. What makes it harmless in the meantime is
+ * `pointer-events: none` on the leave state, below.
+ */
+const SPLASH_FADE_MS = 340
+
 onMounted(async () => {
   const [,] = await Promise.all([
     initialize(),
@@ -71,7 +93,7 @@ onMounted(async () => {
 
 <template>
   <!-- Splash — shown until both the 3s minimum AND initialize() have resolved -->
-  <transition name="splash-fade">
+  <transition name="splash-fade" :duration="SPLASH_FADE_MS">
     <div v-if="!splashDone" class="splash">
       <!-- Lottie-powered loading animation -->
       <div class="splash-icon">
@@ -150,7 +172,12 @@ onMounted(async () => {
   font-family: var(--font-ui);
 }
 
-/* Fade out when splash is done */
-.splash-fade-leave-active { transition: opacity var(--dur-4) var(--ease-out); }
+/* Fade out when splash is done.
+   pointer-events:none from the first frame of the leave: the app underneath is
+   already mounted and should be usable immediately rather than after the fade,
+   and it means that even if this node somehow outlives its transition it can
+   never block a click. Belt and braces for the bug described on
+   SPLASH_FADE_MS. */
+.splash-fade-leave-active { transition: opacity var(--dur-4) var(--ease-out); pointer-events: none; }
 .splash-fade-leave-to     { opacity: 0; }
 </style>
