@@ -287,7 +287,16 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .day-divider{display:flex;align-items:center;margin: 14px 16px 6px;height:0}
 .day-divider::before,.day-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07)}
 .day-divider span{padding: 0 10px;font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap}
-.msg-pop-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform .22s cubic-bezier(.34,1.56,.64,1); }
+/* The highest-frequency animation in the app — every message that arrives, in
+   every channel, all day. It earns an entrance (it explains where the message
+   came from and stops the list changing under you without warning) but not a
+   personality.
+   Two things changed. The curve was cubic-bezier(.34,1.56,.64,1): the 1.56
+   overshoots, so each message BOUNCED past its resting place and settled back.
+   Charming once, noise by the hundredth, and it is the one animation nobody in
+   a busy channel can look away from. And the fade ran at --dur-3 (240ms), the
+   band for popovers and panels; a message is neither. */
+.msg-pop-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform 140ms var(--ease-out); }
 .msg-pop-enter-from   { opacity: 0; transform: translateY(8px) scale(.97); }
 .msg-no-anim.msg-pop-enter-active { transition:none; }
 .msg-no-anim.msg-pop-enter-from   { opacity: 1; transform: none; }

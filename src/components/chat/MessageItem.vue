@@ -331,9 +331,22 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    width, where hover does not exist, unreachable full stop.
    :focus-within rather than a focusin handler: it is declarative, so it
    cannot desync from the DOM and needs no event to fire. */
-.msg-actions{position:absolute;right:10px;top:-16px;background:var(--bg-panel);border:1px solid rgba(255,255,255,.08);border-radius: 8px;display:none;gap: 1px;padding: 4px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10}
+/* Was display:none -> display:flex. `display` cannot be transitioned, so the
+   toolbar snapped into existence on every message hover — the most repeated
+   hover in the app. Kept in the layout (it is absolutely positioned, so this
+   costs no space) and faded instead.
+   pointer-events:none while hidden so it cannot swallow a click aimed at the
+   message underneath. Keyboard focus ignores pointer-events, so tabbing into
+   it still works and :focus-within still reveals it. */
+.msg-actions{
+  position:absolute;right:10px;top:-16px;background:var(--bg-panel);
+  border:1px solid rgba(255,255,255,.08);border-radius: 8px;
+  display:flex;gap: 1px;padding: 4px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10;
+  opacity:0;pointer-events:none;transform:translateY(2px);
+  transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
 .msg-actions.shown,
-.msg:focus-within .msg-actions{display:flex}
+.msg:focus-within .msg-actions{opacity:1;pointer-events:auto;transform:none}
 .ap{width:28px;height:28px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .ap:hover{background:var(--hover-strong);color:var(--text-1);transform:scale(1.15)}
 .ap:active{transform:scale(.9)}
