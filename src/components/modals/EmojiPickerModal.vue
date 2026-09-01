@@ -444,8 +444,29 @@ img    { display: block; width: 100%; object-fit: cover; }
  * strip, and a 13px search field. 768px is useViewport's MOBILE_MAX.
  */
 @media (max-width: 768px) {
-  /* 360px fixed left 15px of slack on a 375px screen. */
-  .picker { width: calc(100vw - 16px); max-height: 58vh; }
+  /* A sheet: edge to edge, attached to the bottom, square at the bottom
+     because there is no gap under it any more. Taller than the old popover —
+     the point of the shape is that it can afford the room. */
+  .picker {
+    width: 100%;
+    max-height: min(70vh, 560px);
+    border-radius: 14px 14px 0 0;
+    border-bottom: none;
+    /* Clears the home indicator on a gesture-nav phone. */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* Grab handle, drawn rather than added to the markup. It is the one cue that
+     says "sheet" — without it this is just a panel that happens to be at the
+     bottom, and nobody thinks to swipe or tap away. */
+  .picker::before {
+    content: '';
+    flex-shrink: 0;
+    width: 36px; height: 4px;
+    margin: 8px auto 2px;
+    border-radius: 2px;
+    background: var(--text-faint);
+    opacity: .45;
+  }
 
   .ptab { padding: 12px 18px; min-height: 44px; font-size: 14px; }
 

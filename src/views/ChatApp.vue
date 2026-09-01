@@ -3573,9 +3573,18 @@ onBeforeUnmount(() => {
 
     <!-- Emoji picker float (for input box) -->
     <Teleport to="body">
-      <div v-if="showEmojiPicker" class="emoji-float" @click.stop>
-        <EmojiPickerModal :initialTab="emojiPickerTab" @select="handleEmojiSelect" @selectGif="handleGifSelect" @close="showEmojiPicker = false" />
-      </div>
+      <!-- Scrim exists on phones only, where the picker is a bottom sheet. A
+           document-click handler already closes the picker, but a sheet that
+           covers most of the screen needs something to dim behind it and an
+           obvious place to tap. -->
+      <Transition name="pf-scrim">
+        <div v-if="showEmojiPicker" class="emoji-scrim" @click="showEmojiPicker = false" />
+      </Transition>
+      <Transition name="pf">
+        <div v-if="showEmojiPicker" class="emoji-float" @click.stop>
+          <EmojiPickerModal :initialTab="emojiPickerTab" @select="handleEmojiSelect" @selectGif="handleGifSelect" @close="showEmojiPicker = false" />
+        </div>
+      </Transition>
     </Teleport>
 
     <!-- Context menu -->
@@ -5530,8 +5539,47 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-member:hover .mp-name{color:var(--text-1)}
 
 /* Emoji float */
-.emoji-float{position:fixed;bottom:72px;right:20px;z-index:500;animation:pop-up .15s cubic-bezier(.4,0,.2,1)}
-@keyframes pop-up{from{opacity:0;transform:scale(.92) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.emoji-float{position:fixed;bottom:72px;right:20px;z-index:500}
+
+/* A <Transition> rather than the old enter-only `animation: pop-up`, so the
+   picker has a way OUT as well as in — it used to vanish on the frame it was
+   dismissed. Exit runs on --dur-exit, shorter than its entrance. */
+.pf-enter-active{transition:opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
+.pf-leave-active{transition:opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
+/* Scales from the bottom-right, where the buttons that open it live — a
+   popover that grows from the middle of nowhere reads as unrelated to its
+   trigger. .96 rather than 0: nothing real appears from nothing. */
+.emoji-float{transform-origin:bottom right}
+.pf-enter-from,.pf-leave-to{opacity:0;transform:scale(.96) translateY(8px)}
+
+.emoji-scrim{display:none}
+
+/* ── On a phone: a bottom sheet, not a floating popover ────────────────────
+ * A 360px card pinned above the composer is a desktop shape. On a phone it
+ * leaves a strip of dead chat visible down one side, cannot be dismissed by
+ * anything but an exact tap outside it, and fights the keyboard. Sizing the
+ * buttons up (which was the earlier fix) made it hittable without making it
+ * right — the pattern itself was wrong.
+ *
+ * Teleported to <body>, so `.shell.mobile` is not an ancestor and cannot be
+ * the condition here; 768px is useViewport's MOBILE_MAX.
+ */
+@media (max-width: 768px) {
+  .emoji-scrim{
+    display:block; position:fixed; inset:0; z-index:499;
+    background:rgba(0,0,0,.55);
+  }
+  .pf-scrim-enter-active{transition:opacity var(--dur-3) var(--ease-out)}
+  .pf-scrim-leave-active{transition:opacity var(--dur-exit) var(--ease-in)}
+  .pf-scrim-enter-from,.pf-scrim-leave-to{opacity:0}
+
+  .emoji-float{left:0;right:0;bottom:0;transform-origin:bottom center}
+  /* Slides, does not scale. A sheet comes from the edge it is attached to —
+     that is the whole reason a swipe down to dismiss it feels obvious. */
+  .pf-enter-from,.pf-leave-to{opacity:1;transform:translateY(100%)}
+  .pf-enter-active{transition:transform var(--dur-3) var(--ease-out)}
+  .pf-leave-active{transition:transform var(--dur-exit) var(--ease-in)}
+}
 
 /* Spin utility */
 @keyframes spin{to{transform:rotate(360deg)}}
