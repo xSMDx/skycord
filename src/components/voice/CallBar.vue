@@ -6,7 +6,7 @@ import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
 import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
-import { useVoiceMedia, type VideoTrackInfo } from '@/composables/useVoiceMedia'
+import { useVoiceMedia, canScreenShare, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
 import { userPref, setUserPref } from '@/composables/useVoice'
 import { soundDialStart, soundDialStop } from '@/composables/useSocket'
@@ -55,6 +55,8 @@ const emit = defineEmits<{
 
 const { voice, connect, leave, toggleMute, toggleDeafen } = useVoice()
 const { media, toggleCamera, toggleScreenShare } = useVoiceMedia()
+// Phone browsers cannot capture a screen at all — see canScreenShare.
+const shareSupported = canScreenShare()
 
 // Media toggles return a user-facing error message on failure (e.g. camera
 // held by another app) — bubble it up to ChatApp's toast instead of failing
@@ -430,7 +432,14 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="cb-group">
-          <button class="cb-b cb-share" :disabled="!joinedHere" :class="{ on: media.localScreenOn }" v-tip="!joinedHere ? 'Connecting…' : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')" @click="onShare">
+          <button
+            class="cb-b cb-share"
+            :disabled="!joinedHere || !shareSupported"
+            :class="{ on: media.localScreenOn }"
+            v-tip="!shareSupported ? 'Screen sharing needs the desktop app — a phone browser cannot capture its screen'
+                   : !joinedHere ? 'Connecting…'
+                   : (media.localScreenOn ? 'Stop sharing' : 'Share your screen')"
+            @click="onShare">
             <MonitorUp :size="20" :stroke-width="2.25" />
           </button>
           <div class="cb-split" :class="{ menuopen: openMenu === 'more' }">

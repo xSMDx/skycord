@@ -12,6 +12,7 @@ import {
 } from 'livekit-client'
 import { getRoom } from './voiceRoom'
 import { voiceSettings } from './useVoiceSettings'
+import { useViewport } from './useViewport'
 
 export interface VideoTrackInfo {
   participantId: string
@@ -118,7 +119,33 @@ export const toggleCamera = async (): Promise<string | null> => {
   return null   // in-use/unknown: silent by design — see console for the device list tried
 }
 
+/**
+ * Whether this browser can actually capture a screen.
+ *
+ * Feature detection ALONE lies here, and the lie is the whole reason the share
+ * button appeared to do nothing on a phone. iOS Safari has no getDisplayMedia
+ * at all, which detects correctly — but **Android Chrome defines the method and
+ * then always rejects with NotAllowedError**. `toggleScreenShare` treats that
+ * name as "the user dismissed the picker" and deliberately stays silent, which
+ * is right on a desktop and useless on a phone: the button did nothing and said
+ * nothing.
+ *
+ * So: the method must exist AND the device must not be a phone. There is no
+ * capability flag that distinguishes "will really work" from "will pretend" —
+ * a coarse pointer at phone width is the best available proxy, and it errs
+ * toward hiding a button that would have failed anyway.
+ *
+ * Not fixable in a browser. Screen capture from a mobile web page needs the
+ * platform's own APIs (ReplayKit / MediaProjection), i.e. the native apps.
+ */
+export const canScreenShare = (): boolean => {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getDisplayMedia) return false
+  const { isMobile, isCoarse } = useViewport()
+  return !(isMobile.value && isCoarse.value)
+}
+
 export const toggleScreenShare = async (): Promise<string | null> => {
+  if (!canScreenShare()) return 'Screen sharing needs the desktop app — phone browsers cannot capture a screen'
   const room = getRoom(); if (!room) return null
   const next = !room.localParticipant.isScreenShareEnabled
   try {

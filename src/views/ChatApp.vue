@@ -2,7 +2,7 @@
 import {
   ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, User, Paperclip, AtSign, SlidersHorizontal, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon,
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, User, Paperclip, AtSign, SlidersHorizontal, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff,
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
@@ -191,7 +191,7 @@ const {
 } = useSocket()
 
 const { voice, connect: vConnect, leave: vLeave, voiceRoomName } = useVoice()
-const { toggleCamera } = useVoiceMedia()
+const { media, toggleCamera } = useVoiceMedia()
 
 // ── Incoming DM call ─────────────────────────────────────────────────────────
 // Derived from call presence: a DM room (stable per friend-pair id) where the
@@ -1033,10 +1033,51 @@ const showRtcDebug = ref(false)
 // to the media singleton rather than through CallBar's exposed method: the
 // camera can now be started from the voice panel while you're reading a
 // different conversation, where no CallBar is mounted to forward the call.
+/**
+ * Why the preview was opened, which decides what confirming it does.
+ *
+ * 'camera'     — already in a call, just publish the camera (the old path).
+ * 'video-call' — the header's video button: there may be no call yet, so
+ *                confirming has to JOIN first and then publish.
+ */
+const cameraPreviewIntent = ref<'camera' | 'video-call'>('camera')
+
+const openCameraPreview = (intent: 'camera' | 'video-call' = 'camera') => {
+  cameraPreviewIntent.value = intent
+  showCameraPreview.value = true
+}
+
 const onCameraConfirmed = async () => {
   showCameraPreview.value = false
+
+  // Join first when the preview was opened to START a video call. Awaiting the
+  // connect matters: toggleCamera reaches for the room singleton, which does
+  // not exist until the connection resolves.
+  if (cameraPreviewIntent.value === 'video-call' && !callActiveHere.value) {
+    const c = currentCall.value; if (!c) return
+    try { await vConnect(c.id, c.kind, c.name) }
+    catch { showToast('Couldn’t connect to voice'); return }
+    // Nothing to publish to if the connect failed or was cancelled.
+    if (!voice.connected) return
+  }
+
   const err = await toggleCamera()
   if (err) showToast(err)
+}
+
+/**
+ * The header's video button — was a "coming soon" toast.
+ *
+ * Camera already live → turn it off. Hanging up stays with the phone button
+ * next to it; a camera button that ended the call would be a trap.
+ */
+const startVideoCall = async () => {
+  if (callActiveHere.value && media.localCamOn) {
+    const err = await toggleCamera()
+    if (err) showToast(err)
+    return
+  }
+  openCameraPreview('video-call')
 }
 const openSettings = (p: 'account' | 'profile' | 'appearance' | 'voice' = 'account') => {
   settingsPage.value = p
@@ -3731,7 +3772,7 @@ onBeforeUnmount(() => {
         <!-- Voice connected strip + user panel -->
         <VoiceConnectedPanel
           @return-to-call="returnToCall"
-          @preview-camera="showCameraPreview = true"
+          @preview-camera="openCameraPreview('camera')"
           @open-debug="showRtcDebug = true"
           @toast="showToast"
         />
@@ -3962,7 +4003,7 @@ onBeforeUnmount(() => {
         </div>
         <VoiceConnectedPanel
           @return-to-call="returnToCall"
-          @preview-camera="showCameraPreview = true"
+          @preview-camera="openCameraPreview('camera')"
           @open-debug="showRtcDebug = true"
           @toast="showToast"
         />
@@ -4272,8 +4313,12 @@ onBeforeUnmount(() => {
                        wrong for a button that starts a call. -->
                   <component :is="callActiveHere ? PhoneOff : Phone" :size="18" :stroke-width="2.25"/>
                 </button>
-                <button class="icon-btn call-btn video" v-tip="'Start Video Call'" @click.stop="showToast('Video calls are coming soon')">
-                  <Camera :size="18" :stroke-width="2.25"/>
+                <button
+                  class="icon-btn call-btn video"
+                  :class="{ calling: callActiveHere && media.localCamOn }"
+                  v-tip="callActiveHere && media.localCamOn ? 'Turn Camera Off' : 'Start Video Call'"
+                  @click.stop="startVideoCall">
+                  <component :is="callActiveHere && media.localCamOn ? CameraOff : Camera" :size="18" :stroke-width="2.25"/>
                 </button>
               </template>
               <button v-if="view==='group' && activeGroup" class="icon-btn icon-btn-invite" v-tip="'Add friends to DM'" @click.stop="showInviteGroup = true">
@@ -4362,7 +4407,7 @@ onBeforeUnmount(() => {
             @expand="callExpanded = $event"
             @minimize="viewedVoiceId = null"
             @profile="showUserProfile = $event.id"
-            @preview-camera="showCameraPreview = true"
+            @preview-camera="openCameraPreview('camera')"
           />
 
           <!-- Pinned messages panel -->
