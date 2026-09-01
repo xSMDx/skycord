@@ -1022,6 +1022,22 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.15.0', date: 'Sep 1, 2026', time: '06:59 UTC+2', title: 'Everywhere you are signed in',
+    items: [
+      ['add', 'Settings now has a Devices page: every place your account is signed in, what it is — “Chrome on Windows”, “Safari on iOS” — the address it connected from with that country’s flag beside it, and when it was last used. If a row is not you, sign it out from there'],
+      ['add', 'Sign out one device, or all the others at once and keep the one you are holding. The Account page used to have a “Logged-in Devices” row that read “1 device” next to an arrow that did nothing — the number was made up, and it was never true for anyone signed in twice. It goes to the real page now'],
+      ['imp', 'Working out the country happens on your own server, from a database on its disk. Nobody is told your address to draw a flag on it. It is a rough lookup and the page says so — a VPN or a phone network is often put in the wrong country'],
+      ['fix', 'Signing out on one device signed you out on all of them. Close a session on a shared computer and your phone was logged out too, with no way to do one without the other. It signs out the one you are on'],
+      ['fix', 'Changing your password did not sign your other devices out. That is backwards — someone changes their password precisely because they think a session somewhere is not theirs, and that was the one case where nothing happened. Every other device is signed out now, and you keep the one you are using'],
+      ['fix', 'Declining a friend request did nothing at all. The row disappeared and the request was still there when you came back, and the person who sent it never found out. It actually declines it'],
+      ['fix', 'The Friends tab on a phone was broken, not merely cramped. “Add Friend” was five pixels wide at the edge of the screen, the list was squeezed into a quarter of the width with every name invisible, and each row’s buttons were drawn outside the row on top of the column next to it. Rebuilt: one column, the tabs across the full width, names that fit, and everything big enough to hit with a thumb'],
+      ['fix', 'A profile picture, banner or sticker could point anywhere — including at a page of someone’s choosing that quietly records the address and browser of everyone who looks at the profile. Only the size was ever checked. Now the address has to be a real image from a safe source'],
+      ['imp', 'Theme codes you copy and paste now start with “skycord-theme:”. They used to say “sykord” — a spelling mistake in a folder name that had leaked out into the one part of this feature people actually read. Codes with the old spelling keep working, including ones already sitting in your messages'],
+      ['imp', 'Buttons that are only an icon — closing a dialog, showing a password, the toggles in settings — now say what they do to a screen reader. Twenty-two of them said nothing at all'],
+      ['imp', 'Small honesty fixes: the empty pictures in the Friends tab are proper icons rather than emoji, the “no friends” message says which thing is empty, and the two-factor and devices rows no longer pretend to be finished when they are not']
+    ]
+  },
+  {
     v: 'v0.14.1', date: 'Aug 31, 2026', time: '02:40 UTC+2', title: 'One place to put your voice servers',
     items: [
       ['add', 'If you run Skycord yourself and have more than one voice server, you can now offer all of them to everyone on your instance at once. They go in a file next to your other settings, and every server on that instance can point a channel at any of them — instead of each owner adding the same ones by hand, over and over, and again every time a key changes'],
