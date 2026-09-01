@@ -86,6 +86,48 @@ server kept no record of who was signed in from where. Three things fell out of 
 Cookies issued before this deploy carry no session id; the first refresh adopts them into a real
 session and swaps the cookie, so nobody is signed out by the upgrade.
 
+**Noise suppression, beyond RNNoise (researched 2026-09-01, NOT started.)** This existed only as a
+one-line item on the landing page — *"a stronger noise filter for voices, keyboards and fans"* —
+which was indistinguishable from the RNNoise that shipped in **v0.5 (2026-07-19)** and was
+described in that changelog with the same three words. It also conflated two different problems.
+Written down here so it stops being lost.
+
+**The two problems are not the same thing:**
+
+  - **Noise.** RNNoise is band-gain and is strongest on steady sound — fans, hum. It is weakest on
+    clatter, keyboards, and reverberant rooms. This is a solvable gap.
+  - **Other people's voices.** That is speaker separation / voice isolation, a different class of
+    model. **DeepFilterNet does not do it** — it is speech *enhancement*, so it removes non-speech
+    noise and leaves a second talker untouched. Commercially this is what Krisp's voice-isolation
+    variant sells. Nothing here addresses it.
+
+**DeepFilterNet 3 as the candidate for the first problem — viable in principle, unproven in a
+browser.** Dual MIT/Apache-2.0, so unlike `@livekit/krisp-noise-filter` (licensed, LiveKit-Cloud
+only) there is no licence blocking a self-hosted deployment. Native 48kHz, matching the 48kHz
+AudioContext `micChain.ts` already pins for RNNoise. Native RTF 0.19 single-threaded on an
+i5-8250U, ~40ms added latency against RNNoise's ~10ms.
+
+Three things stop it being a dependency today:
+
+  - **Size.** ~17MB of assets in the known browser builds; ONNX Runtime Web alone is ~11.8MB before
+    the model. RNNoise's wasm is 152KB and the whole app bundle is 1.7MB. Lazy-loading on
+    mode-select helps; the first enable still pulls 17MB off a self-hoster's VPS.
+  - **The WASM penalty is unmeasured.** Every published RTF is native. In-browser inference
+    averages ~16.9x slower than native on PC CPU, up to 4x from SIMD width alone (WASM SIMD is
+    128-bit against AVX2's 256-bit). 0.19 x 4 = 0.76 is barely real-time; x16.9 is not real-time at
+    all. Firefox is ~3x slower again for WASM. Nobody publishes a browser RTF.
+  - **It fights the hardware constraint.** Mongo is pinned to 4.4 precisely because 5.0+ needs AVX
+    and pre-2011 CPUs lack it. A 2M-parameter model in WASM SIMD is exactly the workload that dies
+    on those machines.
+
+**Shape if picked up:** a FOURTH `noiseMode`, never a replacement for RNNoise. It runs on the
+sender's machine, one instance, so it does not have to work everywhere. Gate on a spike first —
+measure RTF and CPU on a modern machine and on the oldest one available; under ~0.5 on the old one
+it is a viable opt-in mode, over 1.0 it is modern-hardware-only or a no. If it proves out, vendor
+the WASM build: the one existing LiveKit `TrackProcessor` package, `deepfilternet3-noise-filter`,
+was **archived 2026-02-13** at 18 stars, and an abandoned dependency in a voice app's audio path is
+the same call that kept `ua-parser-js` out.
+
 Still unscoped, ask when picked up: user customization, user profile rebuild, password reset via
 authenticator (TOTP — new backend and schema, not a UI change).
 
