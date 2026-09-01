@@ -120,4 +120,13 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .gp-cell:hover { outline: 2px solid var(--accent); }
 .gp-cell img { width: 100%; height: auto; }
+
+/* Same teleport + scoping trap as EmojiPickerModal — see the note there. */
+@media (max-width: 768px) {
+  .gp-search { min-height: 44px; }
+  /* Under 16px, iOS zooms the page on focus and does not zoom back. */
+  .gp-search input { font-size: 16px; }
+  .gp-cell:hover { outline: none; }
+  .gp-cell:active { outline: 2px solid var(--accent); }
+}
 </style>

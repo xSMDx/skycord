@@ -436,6 +436,7 @@ const PAGE_SUBSECTIONS: Record<string, { id: string; label: string }[]> = {
     { id: 'ap-color',       label: 'Color & Contrast' },
     { id: 'ap-readability', label: 'Text Readability' },
     { id: 'ap-density',     label: 'Visual Density' },
+    { id: 'ap-motion',      label: 'Motion' },
     { id: 'ap-emoji',       label: 'Emoji' },
     { id: 'ap-share',       label: 'Share Theme' },
   ],
@@ -940,6 +941,30 @@ const handleSelfRevoked = () => handleLogout()
             </div>
 
             <!-- ── Emoji ── -->
+            <h2 id="ap-motion" class="acc-section-title">Motion</h2>
+            <div class="acc-card">
+              <div class="acc-row">
+                <div class="acc-row-left">
+                  <span class="acc-row-label">Reduce motion</span>
+                  <span class="acc-row-value muted">
+                    Turn off animations and transitions. Worth trying if the app
+                    feels sluggish on an older machine, or if movement bothers you.
+                  </span>
+                </div>
+                <button
+                  class="ap-toggle" :class="{ on: appearance.reduceMotion }"
+                  role="switch" :aria-checked="appearance.reduceMotion" aria-label="Reduce motion"
+                  @click="setAppearance({ reduceMotion: !appearance.reduceMotion })"
+                ><span /></button>
+              </div>
+            </div>
+            <p class="ap-hint ap-hint-under">
+              Loading spinners keep turning either way — they say something is
+              happening, so stopping them would remove information rather than
+              movement. If your system already asks for reduced motion, that is
+              respected whether this is on or off.
+            </p>
+
             <h2 id="ap-emoji" class="acc-section-title">Emoji</h2>
             <div class="ap-cards">
               <button
@@ -1463,6 +1488,25 @@ img    { display: block; object-fit: cover; }
 }
 .ap-hint-top { margin: -4px 0 10px; }
 .acc-row-sep { border-top: 1px solid var(--border); }
+
+/* ── Touch targets on a phone ──────────────────────────────────────────────
+ * This modal teleports to <body>, so it sits OUTSIDE `.shell` and every
+ * `.shell.mobile …` rule in ChatApp.vue misses it. That is why the settings
+ * pages never got the mobile pass the rest of the app did — not an oversight
+ * in the sweep, a structural gap. `.sm-modal.mobile` is this modal's own
+ * mobile flag and is the correct condition here.
+ * Measured at 375px before this: Edit buttons 36px, Reveal 35x16, the idle
+ * slider 16px tall, accent swatches 40px.
+ */
+.sm-modal.mobile .acc-btn { min-height: 44px; }
+/* Was a bare 12px text link — 16px tall and effectively un-hittable. Padding
+   gives it a target without turning it into a button visually. */
+.sm-modal.mobile .reveal-btn { min-height: 44px; padding: 0 10px; margin: -10px -10px -10px 0; }
+/* A range input's box IS its drag area; padding does nothing. */
+.sm-modal.mobile .pf-idle { height: 44px; }
+.sm-modal.mobile .ap-swatch { width: 44px; height: 44px; }
+.sm-modal.mobile .ap-swatch:hover { transform: none; }
+.sm-modal.mobile .ap-swatch:active { transform: scale(.94); }
 
 /* Sliders — fully theme-driven: unfilled groove = --bg-input, fill + thumb =
    --accent (the --fill % is bound inline per slider). */

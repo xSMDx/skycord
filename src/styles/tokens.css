@@ -259,6 +259,35 @@ html.names-plain { --name-hover: var(--text-strong); }
   --sk-sheen: rgba(255, 255, 255, .11);
 }
 
+/* The in-app switch (Settings -> Appearance -> Motion) sets this attribute.
+   It reuses the SAME lever as the OS preference below rather than adding a
+   second one: every duration in the app already comes from these four tokens,
+   which is what makes one rule able to stop 37 files' worth of animation.
+   A separate mechanism would have to be re-applied to each of them.
+
+   It only ever ADDS reduction. Someone whose OS asks for less motion still
+   gets less motion with this switched off — an app has no business overriding
+   an accessibility setting made at the system level. */
+:root[data-motion="off"] {
+  --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; --dur-exit: 1ms;
+}
+:root[data-motion="off"] *,
+:root[data-motion="off"] *::before,
+:root[data-motion="off"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  scroll-behavior: auto !important;
+}
+/* Spinners encode progress; stopping them removes information rather than
+   motion. Same carve-out as the media query below. */
+:root[data-motion="off"] .spin,
+:root[data-motion="off"] .cb-spin,
+:root[data-motion="off"] .loading-spinner {
+  animation-duration: .8s !important;
+  animation-iteration-count: infinite !important;
+}
+
 /* One backstop for the 37 files that animate without a reduced-motion guard
    of their own, including six infinite animations that otherwise never stop. */
 @media (prefers-reduced-motion: reduce) {

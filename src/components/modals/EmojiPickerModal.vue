@@ -429,4 +429,48 @@ img    { display: block; width: 100%; object-fit: cover; }
 .picker-grid::-webkit-scrollbar { width: 4px; }
 .picker-grid::-webkit-scrollbar-track { background: transparent; }
 .picker-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+/* ── On a phone ────────────────────────────────────────────────────────────
+ *
+ * A media query, not `.shell.mobile`, for a specific reason: this picker is
+ * teleported to <body> inside `.emoji-float`, so it is not a descendant of
+ * `.shell` and an ancestor-based condition matches nothing at all — silently.
+ * Scoping compounds it: a scoped <style> hashes only the LAST selector, so
+ * ChatApp's own mobile pass compiles to `.cat-btn[data-v-chatapp]` and can
+ * never reach a button this component rendered. Between the two, the picker
+ * was invisible to every mobile rule in the app.
+ *
+ * Measured at 375px before this: 70 controls under 44px, a 28x28 category
+ * strip, and a 13px search field. 768px is useViewport's MOBILE_MAX.
+ */
+@media (max-width: 768px) {
+  /* 360px fixed left 15px of slack on a 375px screen. */
+  .picker { width: calc(100vw - 16px); max-height: 58vh; }
+
+  .ptab { padding: 12px 18px; min-height: 44px; font-size: 14px; }
+
+  .picker-search { padding: 10px 12px; min-height: 44px; }
+  /* 16px is not a type choice — iOS zooms the page when a focused input is
+     under 16px and never zooms back out. ChatApp sets this for every input in
+     the shell; the teleport and the scoping between them stopped it landing. */
+  .picker-search input { font-size: 16px; }
+  /* Sits inside a 44px row, so it is reachable without being a target itself. */
+  .ps-clear { width: 32px; height: 32px; }
+
+  /* 44px each, and the strip scrolls — the categories cannot fit across 375px,
+     and shrinking them to fit is what produced 28x28 in the first place. */
+  .picker-cats { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .picker-cats::-webkit-scrollbar { display: none; }
+  .cat-btn { width: 44px; height: 44px; flex-shrink: 0; font-size: 20px; }
+
+  /* 40px, deliberately under the 44px floor. A dense grid of visually distinct
+     targets is where that guideline fights itself: 44px gives seven emoji per
+     row and turns picking one into scrolling. 40px is what the system emoji
+     keyboards these thumbs already use every day. */
+  .emoji-btn { width: 40px; height: 40px; font-size: 24px; }
+  .sticker-btn { width: 56px; height: 56px; }
+  /* Hover does not exist on touch; left alone the scale sticks after a tap. */
+  .emoji-btn:hover { transform: none; }
+  .emoji-btn:active { background: var(--hover-strong); }
+}
 </style>

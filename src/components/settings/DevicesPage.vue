@@ -324,6 +324,9 @@ const signOutOthers = async () => {
 }
 .dv-signout:hover:not(:disabled) { background: rgba(245, 108, 111, .14); border-color: #f56c6f; color: #ff9093; }
 .dv-signout:disabled { opacity: .55; cursor: default; }
+/* 7px of padding gave a 31px button on a phone. Padding alone cannot promise a
+   touch size — the text height decides it. */
+.sm-modal.mobile .dv-signout { min-height: 44px; padding: 7px 16px; }
 
 /* ── Empty and loading ── */
 .dv-empty {
@@ -360,6 +363,11 @@ const signOutOthers = async () => {
 .dv-confirm-yes { background: #c93b3e; color: #fff; }
 .dv-confirm-yes:hover:not(:disabled) { background: #a83133; }
 .dv-confirm-yes:disabled, .dv-confirm-no:disabled { opacity: .55; cursor: default; }
+.sm-modal.mobile .dv-all,
+.sm-modal.mobile .dv-confirm-no,
+.sm-modal.mobile .dv-confirm-yes { min-height: 44px; }
+/* Wraps rather than squeezing the two buttons off the row at 375px. */
+.sm-modal.mobile .dv-footer { flex-wrap: wrap; }
 
 .dv-credit {
   margin-top: 18px;

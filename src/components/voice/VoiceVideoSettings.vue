@@ -344,6 +344,14 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-selchev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 
 .vv-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
+
+/* This component renders inside SettingsModal but carries its own scope hash,
+   so the modal's own mobile rules cannot reach these. `.sm-modal.mobile` is an
+   ancestor selector, which does cross the boundary. */
+.sm-modal.mobile .vv-select { min-height: 44px; font-size: 16px; }
+/* A range input cannot be padded — its box IS the drag area, so the height has
+   to grow. The track stays centred and thin; only the reachable area changes. */
+.sm-modal.mobile .vv-slider { height: 44px; }
 .vv-mictest { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
 .vv-meter { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
 /* Dim until the gate opens, so you can SEE when you're actually transmitting */

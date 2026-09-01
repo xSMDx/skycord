@@ -26,6 +26,7 @@ export interface Appearance {
   displayNameStyles: boolean       // render custom name colors/effects (off = plain)
   msgLayout:      MsgLayout        // Chat Message Display — 'compact' = single-line
   zoom:           number           // interface zoom, 50–200 (%)
+  reduceMotion:   boolean          // stop app animations (see tokens.css [data-motion])
 }
 
 export type EmojiPack = 'native' | 'twemoji' | 'noto'
@@ -37,6 +38,7 @@ const DEFAULTS: Appearance = {
   msgSize: 15, groupSpacing: 17, fontUi: 'gg sans', fontMono: 'Consolas',
   showSendButton: true, custom: {}, scheme: 'off', contrast: 0, emojiPack: 'native',
   underlineLinks: false, displayNameStyles: true, msgLayout: 'cozy', zoom: 100,
+  reduceMotion: false,
 }
 
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
@@ -103,6 +105,11 @@ export const applyAppearance = () => {
   // Density
   if (a.density === 'cozy') delete root.dataset.density
   else root.dataset.density = a.density
+
+  // Motion. Absent rather than "on" when enabled, so the attribute exists only
+  // when it is doing something and the OS preference stays the default path.
+  if (a.reduceMotion) root.dataset.motion = 'off'
+  else delete root.dataset.motion
 
   // Clear any inline surface/text overrides (custom + scheme), then re-apply
   // whichever mode is active. Inline vars win over the [data-theme] stylesheet.
@@ -179,6 +186,10 @@ export const setCustomToken = (key: string, value: string) => {
 }
 
 // ── Theme sharing — serialize the themeable subset to a portable code ───────
+// Deliberately WITHOUT `reduceMotion`. Everything listed here travels inside a
+// shared theme code, and motion is a setting about the person and their machine
+// — not a look. Importing someone's palette must never switch your animations
+// off, or back on.
 const THEME_FIELDS: (keyof Appearance)[] = [
   'theme', 'accent', 'density', 'msgSize', 'groupSpacing', 'fontUi', 'fontMono',
   'showSendButton', 'custom', 'scheme', 'contrast', 'emojiPack',
