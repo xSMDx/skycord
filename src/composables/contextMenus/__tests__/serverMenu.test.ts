@@ -10,6 +10,7 @@ const handlers = () => ({
   leaveServer: vi.fn(),
   deleteServer: vi.fn(),
   voiceServers: vi.fn(),
+  serverSettings: vi.fn(),
   copy: vi.fn(),
 })
 
@@ -80,6 +81,26 @@ describe('buildServerMenu', () => {
     expect(del?.danger).toBe(true)
   })
 
+  it('opens Server Settings, which used to be a disabled stub', () => {
+    // The row existed and did nothing — `disabled: true, onSelect: () => {}`.
+    // Both halves matter: it has to be enabled AND wired.
+    const h = handlers()
+    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
+    const row = items.filter(isAction).find(i => i.label === 'Server Settings')
+    expect(row?.disabled).toBeFalsy()
+    row!.onSelect?.()
+    expect(h.serverSettings).toHaveBeenCalledWith('s1')
+  })
+
+  it('offers Server Settings to a member too, not just the owner', () => {
+    // Members can read the name, description and who else is in here; the
+    // fields are disabled for them server-side and in the dialog.
+    const h = handlers()
+    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', h)
+    const row = items.filter(isAction).find(i => i.label === 'Server Settings')
+    expect(row?.disabled).toBeFalsy()
+  })
+
   it('copies the server id', () => {
     const h = handlers()
     const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
@@ -110,12 +131,10 @@ describe('buildServerMenu', () => {
     expect(row(noisy)?.disabled).toBeFalsy()
   })
 
-  it('shows Server Settings disabled rather than omitting it', () => {
-    // Deliberate: the row says "not yet" where a missing row would say "this
-    // app cannot do that". It gains a handler when the screen exists.
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers())
-    expect(items.filter(isAction).find(i => i.label === 'Server Settings')?.disabled).toBe(true)
-  })
+  // The row used to be deliberately disabled — "not yet" where a missing row
+  // would say "this app cannot do that" — and the test above pinned that. The
+  // screen exists now, so the row is enabled and wired; see the two tests
+  // near 'copies the server id' that pin the replacement behaviour.
 
   it('clears every unread channel of the server it was opened on', () => {
     const h = handlers()

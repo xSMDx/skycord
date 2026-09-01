@@ -31,6 +31,7 @@ export interface ServerMenuHandlers {
   leaveServer:    (serverId: string) => void
   deleteServer:   (serverId: string) => void
   voiceServers:   (serverId: string) => void
+  serverSettings: (serverId: string) => void
   copy:           (text: string, what: string) => void
 }
 
@@ -97,12 +98,11 @@ export const buildServerMenu = (
   }
   // Voice Servers is owner-only and live, sitting where Server Settings
   // eventually will. It is deliberately NOT folded into the disabled Server
-  // Settings row: this is the one server-level setting that exists today, and
-  // hiding a working screen behind a row that says "not yet" would leave the
-  // owner nothing to click.
+  // Server Settings is real now — name, description, visibility, members and
+  // invites. Voice Servers keeps its own row because it is owner-only and was
+  // already a working screen of its own.
   items.push(
-    // Disabled, not missing — see the note at the top of this file.
-    { label: 'Server Settings', icon: Settings, disabled: true, onSelect: () => {} },
+    { label: 'Server Settings', icon: Settings, onSelect: () => h.serverSettings(server.id) },
     ...(isOwner
       ? [{ label: 'Voice Servers', icon: ServerIcon, onSelect: () => h.voiceServers(server.id) }]
       : []),

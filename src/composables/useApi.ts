@@ -262,6 +262,22 @@ export const useApi = () => {
   const setServerPublic = (sid: string, isPublic: boolean) =>
     patch<{ server: WireServer }>(`/servers/${sid}`, { isPublic })
 
+  /**
+   * The general form of the same PATCH. `setServerPublic` above is the narrow
+   * one-field version that existed first; this is what Server Settings needs.
+   * Every field is optional server-side — updateServer only touches the keys
+   * actually present — so sending a partial is the intended use, not a
+   * shortcut.
+   */
+  const updateServerApi = (
+    sid: string,
+    body: Partial<Pick<WireServer, 'name' | 'icon' | 'iconCrop' | 'bannerColor' | 'description' | 'isPublic'>>,
+  ) => patch<{ server: WireServer }>(`/servers/${sid}`, body)
+
+  /** Remove someone from a server. Owner-only, enforced server-side. */
+  const removeServerMember = (sid: string, uid: string) =>
+    del<{ ok: true }>(`/servers/${sid}/members/${uid}`)
+
   const leaveServerApi = (sid: string, uid: string) =>
     del<{ ok: boolean }>(`/servers/${sid}/members/${uid}`)
 
@@ -438,7 +454,7 @@ export const useApi = () => {
     listMyVoiceServers,
     moveVoiceCall,
     listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer,
-    createServerApi, getMyServers, getDiscoverServers, joinPublicServer, setServerPublic, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
+    createServerApi, getMyServers, getDiscoverServers, joinPublicServer, setServerPublic, updateServerApi, removeServerMember, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
     createChannelApi, updateChannelApi, moveChannel, deleteChannelApi,
     createCategoryApi, updateCategoryApi, deleteCategoryApi,
     deleteServerApi, leaveServerApi,

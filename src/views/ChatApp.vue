@@ -27,6 +27,7 @@ import CreateServerModal   from '@/components/modals/CreateServerModal.vue'
 import CreateChannelModal  from '@/components/modals/CreateChannelModal.vue'
 import EditChannelModal    from '@/components/modals/EditChannelModal.vue'
 import VoiceServersModal   from '@/components/modals/VoiceServersModal.vue'
+import ServerSettingsModal from '@/components/modals/ServerSettingsModal.vue'
 import ConfirmModal        from '@/components/modals/ConfirmModal.vue'
 import EditFieldModal      from '@/components/modals/EditFieldModal.vue'
 import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
@@ -2284,6 +2285,7 @@ const serverMenuHandlers = () => ({
   leaveServer:   doLeaveServer,
   deleteServer:  doDeleteServer,
   voiceServers:  () => { showVoiceServers.value = true },
+  serverSettings: (sid: string) => { serverSettingsFor.value = sid },
   copy:          copyText,
 })
 
@@ -2291,6 +2293,9 @@ const serverMenuHandlers = () => ({
 // buildServerMenu omits Voice Servers entirely for a non-owner, and every
 // endpoint the modal calls 403s one server-side.
 const showVoiceServers = ref(false)
+// The server id whose settings are open, or null. Not a boolean + activeServer:
+// the menu can be opened on a server you are not currently viewing.
+const serverSettingsFor = ref<string | null>(null)
 
 const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const s = activeServer.value
@@ -3419,6 +3424,14 @@ onBeforeUnmount(() => {
       :key="activeServer.id"
       :server-id="activeServer.id"
       @close="showVoiceServers = false"
+    />
+
+    <ServerSettingsModal
+      v-if="serverSettingsFor"
+      :key="serverSettingsFor"
+      :server-id="serverSettingsFor"
+      @close="serverSettingsFor = null"
+      @toast="showToast"
     />
 
     <EditChannelModal
