@@ -1023,6 +1023,20 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.15.1', date: 'Sep 1, 2026', time: '11:00 UTC+2', title: 'Calmer, and easier to hit',
+    items: [
+      ['add', 'A Reduce motion switch, under Appearance. Turns off animations and transitions across the app — worth a try if Skycord feels sluggish on an older machine, or if movement bothers you. Loading spinners keep turning either way, because they are telling you something is happening rather than decorating. If your phone or computer already asks for less motion, that is respected whether this is on or off'],
+      ['fix', 'Buttons in Settings and in the emoji, GIF and sticker pickers were too small to hit reliably on a phone — the emoji category strip was 28 pixels, about half what a thumb needs. Everything is a proper size now, and the category strip scrolls sideways instead of squeezing itself to fit'],
+      ['fix', 'Tapping the search box in the emoji or GIF picker on an iPhone zoomed the whole page in and never zoomed back out'],
+      ['imp', 'Messages no longer bounce as they arrive. Each one used to overshoot its place and settle back, which is charming the first time and tiring by the hundredth. It still slides in, just calmly, and quicker than before'],
+      ['imp', 'The little toolbar on a message now fades in instead of snapping into existence, and it no longer sits invisibly in the way of a click'],
+      ['imp', 'Less fidgeting in general. Things used to grow when you pointed at them — the avatar on every message, the buttons beside the message box, the reaction pills. Hovering now just changes colour, and the squeeze happens when you actually press. Reaction pills gained that press feedback, which they never had'],
+      ['fix', 'The emoji and attachment buttons by the message box gave no sign they had been clicked on a computer'],
+      ['fix', 'The loading screen could stay on top of everything after the app had finished loading, if you opened Skycord in a background tab. It cannot block you now'],
+      ['imp', 'The roadmap said we were looking at "a stronger noise filter" — which is what shipped back in July. Rewritten to say what is actually still missing: handling clatter and echoey rooms, and separately, filtering out other people talking near you, which is a harder problem and not solved']
+    ]
+  },
+  {
     v: 'v0.15.0', date: 'Sep 1, 2026', time: '06:59 UTC+2', title: 'Everywhere you are signed in',
     items: [
       ['add', 'Settings now has a Devices page: every place your account is signed in, what it is — “Chrome on Windows”, “Safari on iOS” — the address it connected from with that country’s flag beside it, and when it was last used. If a row is not you, sign it out from there'],
