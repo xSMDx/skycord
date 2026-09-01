@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, defineAsyncComponent } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, defineAsyncComponent } from 'vue'
 import {
   X, CircleCheck, ArrowRight, LogOut, ChevronLeft, ChevronRight,
 } from 'lucide-vue-next'
@@ -503,7 +503,20 @@ const onContentScroll = () => {
   activeSubSection.value = cur
 }
 
-const handleLogout = () => { emit('close'); logout() }
+/**
+ * Settings is mounted with `v-if` by its parent, so emitting `close` straight
+ * from a button destroyed this component on that frame and no leave transition
+ * could ever run — Settings entered over 180ms and then vanished between two
+ * frames. Same pattern ModalBase already documents and solves.
+ *
+ * `requestClose` lowers our own flag, the leave plays, and `@after-leave` is
+ * what finally tells the parent to unmount us. The transition is the clock.
+ */
+const shown = ref(false)
+onMounted(() => { shown.value = true })
+const requestClose = () => { shown.value = false }
+
+const handleLogout = () => { requestClose(); logout() }
 
 // The devices page can revoke the row this client is sitting on. The access
 // token keeps working for up to its own expiry after that, so the app would
@@ -514,7 +527,12 @@ const handleSelfRevoked = () => handleLogout()
 
 <template>
   <Teleport to="body">
-    <div class="sm-overlay" @click.self="emit('close')">
+    <!-- `:duration` is not decoration: without it Vue waits on transitionend,
+         and a transition that never runs (a backgrounded tab pauses rAF) would
+         mean @after-leave never fires and Settings stays mounted forever.
+         Stuck open is a worse failure than an unanimated close. -->
+    <Transition name="sm" appear :duration="{ enter: 240, leave: 140 }" @after-leave="emit('close')">
+    <div v-if="shown" class="sm-overlay" @click.self="requestClose">
       <div class="sm-modal" :class="{ mobile: isMobile, 'm-detail': mobileDetail }">
 
         <!-- Nav sidebar -->
@@ -523,7 +541,7 @@ const handleSelfRevoked = () => handleLogout()
                way out — the content pane's close button is off-screen here. -->
           <div v-if="isMobile" class="sm-mhead">
             <h2 class="sm-mhead-title">Settings</h2>
-            <button class="sm-mhead-btn" aria-label="Close settings" @click="emit('close')">
+            <button class="sm-mhead-btn" aria-label="Close settings" @click="requestClose">
               <X :size="22" :stroke-width="1.5" />
             </button>
           </div>
@@ -570,11 +588,11 @@ const handleSelfRevoked = () => handleLogout()
               <ChevronLeft :size="22" :stroke-width="2.25" />
             </button>
             <h2 class="sm-mhead-title">{{ currentPageLabel }}</h2>
-            <button class="sm-mhead-btn" aria-label="Close settings" @click="emit('close')">
+            <button class="sm-mhead-btn" aria-label="Close settings" @click="requestClose">
               <X :size="22" :stroke-width="1.5" />
             </button>
           </div>
-          <button v-if="!isMobile" class="sm-close" aria-label="Close settings" @click="emit('close')">
+          <button v-if="!isMobile" class="sm-close" aria-label="Close settings" @click="requestClose">
             <X :size="20" :stroke-width="1.5" />
           </button>
 
@@ -1041,6 +1059,7 @@ const handleSelfRevoked = () => handleLogout()
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 
   <!-- ── Field-edit modals — real centered dialogs, not inline rows ───────── -->
@@ -1278,18 +1297,28 @@ img    { display: block; object-fit: cover; }
   background: rgba(0,0,0,.75);
   display: flex; align-items: center; justify-content: center;
   z-index: 1000;
-  animation: f .15s ease;
 }
-@keyframes f { from{opacity:0} to{opacity:1} }
 
 .sm-modal {
   width: min(1100px, 96vw); height: min(800px, 92vh);
   display: flex; overflow: hidden;
   background: var(--bg-raised); border-radius: 12px;
   box-shadow: 0 24px 80px rgba(0,0,0,.7);
-  animation: s .18s cubic-bezier(.4,0,.2,1);
 }
-@keyframes s { from{transform:scale(.95);opacity:0} to{transform:scale(1);opacity:1} }
+
+/* Enter and leave, on house tokens. The old pair were enter-only `animation`
+   keyframes at hardcoded .15s/.18s on Material's curve — so Settings had no
+   exit at all, and its timing belonged to no scale in this app.
+   The modal keeps transform-origin at the centre: it is not anchored to a
+   trigger, so scaling it from one would be a lie about where it came from. */
+.sm-enter-active .sm-modal { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+.sm-leave-active .sm-modal { transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in); }
+.sm-enter-from .sm-modal,
+.sm-leave-to   .sm-modal { opacity: 0; transform: scale(.96); }
+
+.sm-enter-active { transition: opacity var(--dur-3) var(--ease-out); }
+.sm-leave-active { transition: opacity var(--dur-exit) var(--ease-in); }
+.sm-enter-from, .sm-leave-to { opacity: 0; }
 
 /* Nav */
 .sm-nav {
@@ -1307,7 +1336,15 @@ img    { display: block; object-fit: cover; }
   font-size: 16px; color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .sm-nav-item:hover { background: var(--hover); color: var(--text-strong); }
-.sm-nav-item.active { background: rgba(var(--accent-rgb),.2); color: var(--text-strong); }
+/* DESIGN.md's anti-patterns table forbids filling a selected row with the
+   accent — "competes with hover, mentions and primary buttons; the row becomes
+   one more coloured thing in a column of coloured things". --active-bg and
+   --active-ring exist for exactly this and this nav was ignoring them. */
+.sm-nav-item.active {
+  background: var(--active-bg);
+  box-shadow: inset 0 0 0 1px var(--active-ring);
+  color: var(--text-strong);
+}
 .sm-nav-item.danger { color: #ed4245; margin-top: 4px; }
 .sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
 /* Reads as a quiet annotation on the row, not an alert. The row itself dims
@@ -1389,7 +1426,11 @@ img    { display: block; object-fit: cover; }
   padding: 8px 20px; border-radius: 6px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
   background: rgba(255,255,255,.08); white-space: nowrap; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.acc-btn:hover { background: var(--hover-strong); transform: translateY(-1px); }
+/* The lift on hover went the way of the others tonight: hover announces that
+   a thing is interactive, press answers that it heard you. These buttons had
+   the flourish and no press state at all. */
+.acc-btn:hover:not(:disabled) { background: var(--hover-strong); }
+.acc-btn:active:not(:disabled) { transform: scale(.97); }
 .acc-btn:disabled { opacity: .6; cursor: not-allowed; }
 /* Placeholder rows: visibly not ready, rather than looking live and doing
    nothing when clicked. */
@@ -1615,7 +1656,7 @@ img    { display: block; object-fit: cover; }
 /* Highlighting the "current" row is desktop grammar — the two panes are visible
    at once there. In a stack you're either on the list or on the page, so a
    permanently-lit row just looks like a stuck selection. */
-.sm-modal.mobile .sm-nav-item.active { background: transparent; color: var(--text-1); }
+.sm-modal.mobile .sm-nav-item.active { background: transparent; box-shadow: none; color: var(--text-1); }
 .sm-nav-chev { color: var(--text-3); flex-shrink: 0; margin-left: auto; }
 /* Two auto margins on one row split the slack between them, which left the
    badges at a different x on every row. With a badge present the badge owns
