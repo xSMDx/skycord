@@ -256,7 +256,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg.failed .msg-text{color:#f08080}
 .msg-left{width:56px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;padding-top: 4px}
 .msg-av{width:32px;height:32px;border-radius: 50%;overflow:hidden;cursor:pointer;flex-shrink:0;background:var(--bg-panel);transition: transform var(--dur-2) var(--ease-out)}
-.msg:hover .msg-av{transform:scale(1.06)}
+/* Was `.msg:hover .msg-av` — the avatar grew whenever any part of the row was
+   hovered, which is movement about something the pointer is not aiming at. It
+   was also one of four things firing at once on every message hover (row tint,
+   avatar, timestamp, action bar). Scoped to the avatar itself: same affordance,
+   but only when it is the thing you are actually pointing at. */
+.msg-av:hover{transform:scale(1.06)}
 .msg-ts{font-size:10px;color:transparent;line-height:22px;padding-left: 2px;transition: color var(--dur-1) var(--ease-out);white-space:nowrap}
 .msg:hover .msg-ts{color:#4e5058}
 .msg-body{flex:1;min-width:0;padding-top: 4px}
@@ -320,7 +325,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-reactions{display:flex;flex-wrap:wrap;gap: 4px;margin-top: 4px}
 .rp{display:flex;align-items:center;gap: 4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius: 10px;padding: 2px 8px;font-size:14px;cursor:pointer;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .rp span{font-size:12px;font-weight:600;color:var(--text-2)}
-.rp:hover{background:var(--hover-strong);transform:scale(1.08)}
+.rp:hover{background:var(--hover-strong)}
+/* The background change already announces the hover. The scale moved to the
+   press, where feedback is actually needed and where it was missing. */
+.rp:active{transform:scale(.96)}
 .rp.active{background:rgba(var(--accent-rgb),.2);border-color:rgba(var(--accent-rgb),.5)}
 .rp.active span{color:#8d96f8}
 .rp-add{width:24px;height:24px;border-radius: 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
@@ -348,6 +356,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-actions.shown,
 .msg:focus-within .msg-actions{opacity:1;pointer-events:auto;transform:none}
 .ap{width:28px;height:28px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
-.ap:hover{background:var(--hover-strong);color:var(--text-1);transform:scale(1.15)}
+/* 1.15 was the largest hover scale in the app, on a 28px button, in a bar that
+   has just faded in — three pieces of motion stacked on one gesture. The tint
+   and colour change carry the hover; :active below carries the press. */
+.ap:hover{background:var(--hover-strong);color:var(--text-1)}
 .ap:active{transform:scale(.9)}
 </style>

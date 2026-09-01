@@ -558,7 +558,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   color: var(--text-faint); flex-shrink: 0;
   transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.input-attach:hover { color: var(--text-1); transform: rotate(15deg) scale(1.1); }
+.input-attach:hover { color: var(--text-1); transform: rotate(15deg); }
 .input-attach:active { transform: rotate(15deg) scale(.94); }
 
 .msg-input {
@@ -583,7 +583,9 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.input-action-btn:hover { color: var(--text-1); transform: scale(1.12); }
+/* Colour for hover, scale for press. These sit next to the composer and are
+   used constantly; a 12% grow on every pass of the pointer is noise. */
+.input-action-btn:hover { color: var(--text-1); }
 /* These press states existed only inside the phone media query, so on desktop
    clicking emoji, GIF or attach gave no feedback at all — the button looked
    inert until the picker opened. */
