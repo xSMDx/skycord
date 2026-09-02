@@ -1023,6 +1023,21 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.17.0', date: 'Sep 2, 2026', time: '10:40 UTC+2', title: 'Roles, and channels only some people can open',
+    items: [
+      ['add', 'Roles. A server can have them now — a name, a colour, and a set of things holders are allowed to do. They live under Server Settings, they sit in an order, and that order is what decides who can edit whom: you can only manage a role below your own. Everyone already has @everyone, which is the floor the rest sit on'],
+      ['add', 'Private channels. Open the settings for a channel, switch on Private, and pick the roles and people who get in. Everyone else stops seeing it entirely — it is gone from their sidebar, not greyed out, and the server refuses to hand over its messages even to someone who knows its address. If you would rather people could see that it exists and ask for access, there is a switch for that too'],
+      ['add', 'Private voice channels lock joining as well as seeing. A voice channel that is merely hidden is still joinable by anyone who has been in it before, so switching one to private takes away both at once'],
+      ['add', 'Categories carry permissions, and the channels inside follow along. Lock a category and everything under it is locked, with no copying and nothing to keep in step. A single channel can still open itself back up if you want one public room inside a private group'],
+      ['add', 'An Advanced section on every channel and category, for the cases the Private switch cannot express — every permission individually set to allow, deny, or left to inherit from whatever is above it'],
+      ['imp', 'Jobs that used to be owner-only are now permissions you can hand out. Creating and renaming channels, editing the server, managing invites and voice servers, kicking people — all of them can go to a role instead of only to you. Deleting the server stays yours alone, and no permission will ever grant it'],
+      ['imp', 'Administrator grants everything and still does not reach the owner. An administrator cannot kick you, cannot ban you, cannot edit your roles, and cannot delete your server. That is not a setting; it is how the model is built'],
+      ['imp', 'Anyone can create an invite by default now, rather than only the owner. If you would rather they could not, turn Create Invite off for @everyone under Roles'],
+      ['imp', 'Every permission has a plain description saying what it actually lets someone do, and what it looks like when it is switched off. Seven of them are marked Soon — webhooks, slash commands, text-to-speech, nicknames, priority speaker and the audit log describe features Skycord does not have yet, so their switches are disabled rather than quietly doing nothing'],
+      ['fix', 'Server settings pages that were listed but empty now say so on the row itself rather than only once you open them']
+    ]
+  },
+  {
     v: 'v0.16.0', date: 'Sep 2, 2026', time: '03:10 UTC+2', title: 'Eight new looks, and a profile worth building',
     items: [
       ['add', 'Eight new themes under Appearance, borrowed from apps you already know the look of: Spotify, Graphite, Linear, Vercel, Stripe, GitHub, Notion and Stoat. Each one brings its own accent colour so it reads as itself straight away, and you can change that accent afterwards without losing the rest of the theme'],
