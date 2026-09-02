@@ -149,7 +149,7 @@ const onOutside = (e: PointerEvent) => {
   box-shadow: 0 8px 24px rgba(0, 0, 0, .32);
   padding: 6px;
   max-height: 60vh;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 /* Grows out of the edge it is pinned to, so the cascade reads as one surface

@@ -92,7 +92,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .gp-search input { flex: 1; font-size: 14px; color: var(--text-1); background: none; border: none; outline: none; }
 .gp-search input::placeholder { color: var(--text-faint); }
 
-.gp-body { flex: 1; overflow-y: auto; padding: 14px 18px 18px; }
+.gp-body { flex: 1; overflow: hidden auto; padding: 14px 18px 18px; }
 .gp-state { text-align: center; color: var(--text-faint); font-size: 14px; padding: 40px 0; }
 /* The not-configured state carries a joke and a call to action, so it gets room
    rather than the single centred line the other states use. */

@@ -346,7 +346,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
    coming, and hiding tabs means redesigning this header when they land. */
 .cd-tab.soon { color: var(--text-faint); opacity: .55; cursor: default; }
 
-.cd-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 12px 32px; }
+.cd-body { flex: 1; min-height: 0; overflow: hidden auto; padding: 16px 12px 32px; }
 
 /* Rows */
 .cd-row {

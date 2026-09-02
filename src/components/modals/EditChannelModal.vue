@@ -318,7 +318,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   padding: 2px 5px; border-radius: 4px; background: var(--hover); color: var(--text-3);
 }
 
-.ec-body { flex: 1; min-width: 0; padding: 22px 24px; overflow-y: auto; position: relative; }
+.ec-body { flex: 1; min-width: 0; padding: 22px 24px; overflow: hidden auto; position: relative; }
 .ec-close {
   position: absolute; top: 16px; right: 16px;
   width: 30px; height: 30px; border-radius: 50%;

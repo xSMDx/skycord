@@ -226,6 +226,97 @@ html.names-plain { --name-hover: var(--text-strong); }
   --bg-chatbar-focus: #1a1a1d;
 }
 
+/* ── Studio themes ────────────────────────────────────────────────────────
+ * Surfaces borrowed from products whose palettes people already know, so a
+ * theme is recognisable before it is read. Each sets surfaces only — text,
+ * borders and hover states come from the dark :root defaults, which is why
+ * these are eight lines each rather than a fork of the whole palette.
+ *
+ * The matching accent is applied by THEME_OPTS when the card is picked; it
+ * lives there rather than here because accent is a user setting that must
+ * stay changeable afterwards.
+ */
+[data-theme="spotify"] {
+  --bg-floor:  #000000;
+  --bg-deep:   #0a0a0a;
+  --bg-panel:  #121212;
+  --bg-chat:   #121212;
+  --bg-input:  #242424;
+  --bg-raised: #181818;
+  --bg-chatbar:       #242424;
+  --bg-chatbar-focus: #2a2a2a;
+}
+[data-theme="apple"] {
+  --bg-floor:  #161617;
+  --bg-deep:   #1c1c1e;
+  --bg-panel:  #1d1d1f;
+  --bg-chat:   #212123;
+  --bg-input:  #2c2c2e;
+  --bg-raised: #262628;
+  --bg-chatbar:       #2c2c2e;
+  --bg-chatbar-focus: #3a3a3c;
+}
+[data-theme="linear"] {
+  --bg-floor:  #0b0a0f;
+  --bg-deep:   #101014;
+  --bg-panel:  #16161c;
+  --bg-chat:   #1a1a20;
+  --bg-input:  #202027;
+  --bg-raised: #1d1d24;
+  --bg-chatbar:       #202027;
+  --bg-chatbar-focus: #26262e;
+}
+[data-theme="vercel"] {
+  --bg-floor:  #000000;
+  --bg-deep:   #0a0a0a;
+  --bg-panel:  #0f0f0f;
+  --bg-chat:   #000000;
+  --bg-input:  #171717;
+  --bg-raised: #111111;
+  --bg-chatbar:       #171717;
+  --bg-chatbar-focus: #1f1f1f;
+}
+[data-theme="stripe"] {
+  --bg-floor:  #061626;
+  --bg-deep:   #0a2540;
+  --bg-panel:  #0e2d4a;
+  --bg-chat:   #0a2540;
+  --bg-input:  #143a5c;
+  --bg-raised: #10314f;
+  --bg-chatbar:       #143a5c;
+  --bg-chatbar-focus: #1a4568;
+}
+[data-theme="github"] {
+  --bg-floor:  #010409;
+  --bg-deep:   #0d1117;
+  --bg-panel:  #161b22;
+  --bg-chat:   #0d1117;
+  --bg-input:  #21262d;
+  --bg-raised: #161b22;
+  --bg-chatbar:       #21262d;
+  --bg-chatbar-focus: #30363d;
+}
+[data-theme="stoat"] {
+  --bg-floor:  #141416;
+  --bg-deep:   #18181a;
+  --bg-panel:  #202022;
+  --bg-chat:   #1a1a1c;
+  --bg-input:  #2a2a2e;
+  --bg-raised: #242428;
+  --bg-chatbar:       #2a2a2e;
+  --bg-chatbar-focus: #33333a;
+}
+[data-theme="notion"] {
+  --bg-floor:  #151515;
+  --bg-deep:   #1a1a1a;
+  --bg-panel:  #202020;
+  --bg-chat:   #191919;
+  --bg-input:  #2f2f2f;
+  --bg-raised: #252525;
+  --bg-chatbar:       #2b2b2b;
+  --bg-chatbar-focus: #333333;
+}
+
 /* ── Density ─────────────────────────────────────────────────────────────── */
 /* UI Density scales row padding across chat + lists (--row-pad-y) and message
  * vertical padding (--msg-pad-y). Default (cozy) keeps the current look. */

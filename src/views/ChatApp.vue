@@ -54,7 +54,9 @@ import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
-import { appearance }        from '@/composables/useAppearance'
+import { appearance, setAppearance } from '@/composables/useAppearance'
+import { THEME_OPTS, STUDIO_OPTS, ALL_PRESETS, type ThemeOpt } from '@/composables/themePresets'
+import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/useSavedThemes'
 import { useVoice, isConnectedVoiceRoom, userPref, setUserPref } from '@/composables/useVoice'
 import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
@@ -2639,6 +2641,27 @@ const openFriends = () => {
    that an owner did not deliberately list — see `isPublic` in the Server
    model. Fetched on open rather than cached: it changes when other people
    publish, not when this client does anything. */
+/**
+ * Discover has two directories: servers on this instance, and themes.
+ *
+ * The theme list is the same data Settings shows — imported rather than
+ * repeated, so a palette added in one place cannot go missing in the other.
+ */
+const discoverTab = ref<'servers' | 'themes'>('servers')
+
+/** Studio presets carry their accent; the built-ins leave it alone. */
+const pickPreset = (t: ThemeOpt) =>
+  setAppearance(t.accent ? { theme: t.id, accent: t.accent } : { theme: t.id })
+
+/** A saved theme's swatch shows the surface and accent it would restore. */
+const savedSwatch = (t: SavedTheme) => {
+  const opt = ALL_PRESETS.find(o => o.id === t.theme.theme)
+  return {
+    background: opt?.preview.background || '#313338',
+    boxShadow: `inset 0 -7px 0 ${t.theme.accent || 'var(--accent)'}`,
+  }
+}
+
 const discoverServers = ref<WireServer[]>([])
 const discoverLoading = ref(false)
 const discoverError   = ref('')
@@ -4194,9 +4217,24 @@ onBeforeUnmount(() => {
           </button>
           <Compass :size="20" :stroke-width="1.5" class="fh-icon"/>
           <span class="fh-title">Discover</span>
+          <!-- Discover holds two directories, not one. Tabs rather than a
+               second rail: there are two of them, and a rail for two items
+               costs more room than it earns. -->
+          <nav class="dsc-tabs" aria-label="Discover sections">
+            <button
+              class="dsc-tab" :class="{ on: discoverTab === 'servers' }"
+              :aria-current="discoverTab === 'servers' ? 'page' : undefined"
+              @click="discoverTab = 'servers'"
+            >Servers</button>
+            <button
+              class="dsc-tab" :class="{ on: discoverTab === 'themes' }"
+              :aria-current="discoverTab === 'themes' ? 'page' : undefined"
+              @click="discoverTab = 'themes'"
+            >Themes</button>
+          </nav>
         </div>
 
-        <div class="dsc-body">
+        <div v-if="discoverTab === 'servers'" class="dsc-body">
           <div class="dsc-hero">
             <h1 class="dsc-h1">Find a place to talk</h1>
             <p class="dsc-sub">Servers on this instance whose owners chose to list them publicly.</p>
@@ -4217,13 +4255,14 @@ onBeforeUnmount(() => {
           <div v-else-if="!discoverServers.length && !discoverError" class="dsc-empty">
             <Compass :size="40" :stroke-width="1.25" class="dsc-empty-ic"/>
             <p class="dsc-empty-t">Nothing listed yet</p>
-            <!-- Names the real reason rather than implying the user missed a
-                 setting: there is no way to publish a server yet. The toggle
-                 lands with Server Settings; the endpoint behind it already
-                 exists and is tested. -->
+            <!-- Names the one page that is missing rather than the whole
+                 surface. Server Settings exists now; Access — where a server
+                 would be published — does not. The endpoint behind it is
+                 already written and tested, so this is a UI gap, not a
+                 capability the server lacks. -->
             <p class="dsc-empty-s">
-              Listing a server here needs Server Settings, which isn’t built yet.
-              Once it is, owners will be able to publish a server and it’ll show up.
+              Publishing a server happens under Server Settings → Access, which
+              isn’t built yet. Once it is, owners can list a server here.
             </p>
           </div>
 
@@ -4241,6 +4280,57 @@ onBeforeUnmount(() => {
               </div>
             </article>
           </div>
+        </div>
+
+        <!-- Themes. Applying one is instant and reversible, so a card IS the
+             apply button — a gallery where every tile needs a second click to
+             do the obvious thing is a gallery you stop browsing. -->
+        <div v-else class="dsc-body">
+          <div class="dsc-hero">
+            <h1 class="dsc-h1">Make it yours</h1>
+            <p class="dsc-sub">Pick a look. Everything here applies straight away, and nothing is permanent.</p>
+          </div>
+
+          <h2 class="dsc-sec">Default themes</h2>
+          <div class="dsc-themes">
+            <button
+              v-for="t in THEME_OPTS" :key="t.id"
+              class="dsc-theme" :class="{ on: appearance.theme === t.id }"
+              @click="pickPreset(t)"
+            >
+              <span class="dsc-theme-sw" :style="t.preview" />
+              <span class="dsc-theme-name">{{ t.label }}</span>
+            </button>
+          </div>
+
+          <h2 class="dsc-sec">Studio</h2>
+          <p class="dsc-secsub">Palettes borrowed from apps you already know. Each brings its own accent.</p>
+          <div class="dsc-themes">
+            <button
+              v-for="t in STUDIO_OPTS" :key="t.id"
+              class="dsc-theme" :class="{ on: appearance.theme === t.id }"
+              @click="pickPreset(t)"
+            >
+              <span class="dsc-theme-sw" :style="t.preview" />
+              <span class="dsc-theme-name">{{ t.label }}</span>
+            </button>
+          </div>
+
+          <h2 class="dsc-sec">Your themes</h2>
+          <div v-if="savedThemes.length" class="dsc-themes">
+            <button
+              v-for="t in savedThemes" :key="t.id"
+              class="dsc-theme"
+              @click="applySavedTheme(t)"
+            >
+              <span class="dsc-theme-sw" :style="savedSwatch(t)" />
+              <span class="dsc-theme-name">{{ t.name }}</span>
+            </button>
+          </div>
+          <p v-else class="dsc-secsub">
+            Nothing saved yet — build a look in Settings → Appearance and save it
+            under a name of your own.
+          </p>
         </div>
       </div>
 
@@ -4593,7 +4683,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell{display:flex;height:100%;overflow:hidden}
 
 /* ── Rail ──────────────────────────────────────────────────────────────── */
-.rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding: 10px 0;gap: 2px;overflow-y:auto}
+.rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding: 10px 0;gap: 2px;overflow: hidden auto}
 /* No scrollbar on the rail. It still scrolls — it just doesn't draw a track.
    The global 4px bar costs real width inside a 68px strip, and it lands right
    against the 44px icons, so with enough servers it reads as a stripe down the
@@ -4606,7 +4696,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    rail and can stay in, like Friends, which is the view it borrows its header
    from. */
 .dsc{display:flex;flex-direction:column;min-height:0}
-.dsc-body{flex:1;overflow-y:auto;padding: 24px 24px 40px}
+.dsc-body{flex:1;overflow: hidden auto;padding: 24px 24px 40px}
 .dsc-hero{margin-bottom: 24px}
 .dsc-h1{margin:0;font-size:24px;font-weight:700;color:var(--text-strong)}
 .dsc-sub{margin: 6px 0 0;font-size:14px;color:var(--text-2);max-width:60ch}
@@ -4779,7 +4869,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    whole ring rather than a crescent. */
 .sb-hvoice-av.speaking{z-index:1;box-shadow:0 0 0 2px var(--bg-raised),0 0 0 3.5px var(--green)}
 .sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
-.sb-body{flex:1;overflow-y:auto;padding: 8px 0}
+.sb-body{flex:1;overflow: hidden auto;padding: 8px 0}
 
 .dm-item{display:flex;align-items:center;gap: 10px;padding: 6px 10px;margin: 0 6px;border-radius: 6px;cursor:pointer;transition: background var(--dur-1) var(--ease-out);position:relative}
 .dm-item:hover{background:var(--hover)}
@@ -5376,7 +5466,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
-.friends-list{flex:1;overflow-y:auto;padding: 16px}
+.friends-list{flex:1;overflow: hidden auto;padding: 16px}
 .f-loading{display:flex;align-items:center;gap: 10px;padding: 20px;color:var(--text-faint);font-size:14px}
 .f-search{display:flex;align-items:center;gap: 8px;background:rgba(0,0,0,.25);border-radius: 6px;padding: 8px 12px;margin-bottom: 16px}
 .f-search input{flex:1;font-size:14px;color:var(--text-1)}
@@ -5412,7 +5502,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}
 
 /* Active Now */
-.active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding: 16px;overflow-y:auto}
+.active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding: 16px;overflow: hidden auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
 .an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:white;font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
@@ -5535,7 +5625,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
 .mp-search input::placeholder{color:var(--text-faint)}
-.mp-list{flex:1;overflow-y:auto;padding: 4px 6px}
+.mp-list{flex:1;overflow: hidden auto;padding: 4px 6px}
 .mp-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding: 6px 8px 4px}
 /* Sections read as sections when there is air between them — but only from
    the second one on, or the list starts with a hole under the search box. */
@@ -5667,4 +5757,44 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .cm .qr:hover { background: var(--hover-strong); transform: scale(1.28); }
 .cm .qr-more  { color: var(--text-3); font-size: 16px; }
 .cm .qr-more:hover { color: var(--text-1); }
+
+/* ── Discover: section tabs + theme gallery ── */
+.dsc-tabs { display: flex; gap: 4px; margin-left: 18px; }
+.dsc-tab {
+  padding: 6px 14px; border-radius: 7px; font-size: 14px; font-weight: 500;
+  color: var(--text-3); background: none; border: none; cursor: pointer; font-family: inherit;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dsc-tab:hover { background: var(--hover); color: var(--text-strong); }
+}
+.dsc-tab:active { transform: scale(.97); }
+/* Neutral fill plus a hairline ring — the same "you are here" the nav rails
+   use. An accent fill is forbidden by DESIGN.md's anti-patterns table. */
+.dsc-tab.on {
+  background: var(--active-bg);
+  box-shadow: inset 0 0 0 1px var(--active-ring);
+  color: var(--text-strong);
+}
+
+.dsc-sec { font-size: 13px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+           color: var(--text-3); margin: 28px 0 8px; }
+.dsc-secsub { font-size: 13px; color: var(--text-3); line-height: 1.5; margin: 0 0 14px; max-width: 62ch; }
+.dsc-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.dsc-theme {
+  display: flex; flex-direction: column; gap: 9px; padding: 10px;
+  border-radius: 10px; background: var(--bg-panel); border: 1px solid transparent;
+  cursor: pointer; font-family: inherit; text-align: left;
+  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dsc-theme:hover { background: var(--hover-strong); }
+}
+.dsc-theme:active { transform: scale(.97); }
+.dsc-theme.on { border-color: var(--accent); }
+.dsc-theme-sw { height: 76px; border-radius: 7px; border: 1px solid rgba(255,255,255,.07); }
+.dsc-theme-name { font-size: 14px; font-weight: 500; color: var(--text-1);
+                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

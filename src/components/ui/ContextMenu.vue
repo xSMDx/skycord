@@ -13,6 +13,7 @@ import { Check, ChevronRight, ChevronLeft } from 'lucide-vue-next'
 import { useViewport } from '@/composables/useViewport'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 import { menu, menuItems as items, closeMenu, isSeparator, isSlider, isAction, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
+import { applyClickOrigin } from '@/composables/useClickOrigin'
 
 const el   = ref<HTMLElement | null>(null)
 const subEl = ref<HTMLElement | null>(null)
@@ -249,6 +250,18 @@ onBeforeUnmount(() => {
   window.removeEventListener('scroll', onDismiss, true)
   document.removeEventListener('pointerdown', onDocPointerDown, true)
 })
+
+/**
+ * Grow out of the click that summoned the menu.
+ *
+ * originFor clamps into the menu's own box, which matters here: the menu flips
+ * when it would leave the viewport, and an unclamped origin on a flipped menu
+ * swings it in from off-screen instead of opening it.
+ */
+const onBeforeEnter = (el: Element) => {
+  const panel = el as HTMLElement
+  if (!panel.classList.contains('sheet')) applyClickOrigin(panel)
+}
 </script>
 
 <template>
@@ -258,7 +271,7 @@ onBeforeUnmount(() => {
     <Transition name="cm-scrim">
       <div v-if="menu.open && isMobile" class="cm-scrim" @click="closeMenu" @contextmenu.prevent />
     </Transition>
-    <Transition name="cm" :duration="{ enter: 120, leave: 140 }">
+    <Transition name="cm" :duration="{ enter: 120, leave: 140 }" @before-enter="onBeforeEnter">
     <div
       v-if="menu.open"
       ref="el"
@@ -333,7 +346,7 @@ onBeforeUnmount(() => {
 
     <!-- Submenu flyout. A sibling of the parent menu, not a child, so it can't
          be clipped by the parent's rounded corners or overflow. -->
-    <Transition name="cm" :duration="{ enter: 120, leave: 140 }">
+    <Transition name="cm" :duration="{ enter: 120, leave: 140 }" @before-enter="onBeforeEnter">
     <div
       v-if="sub && !isMobile"
       ref="subEl"
@@ -417,7 +430,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   border: none; border-top: 1px solid rgba(255,255,255,.08);
   border-radius: 16px 16px 0 0;
   padding: 0 0 max(8px, env(safe-area-inset-bottom));
-  max-height: 75vh; overflow-y: auto;
+  max-height: 75vh; overflow: hidden auto;
   animation: cm-sheet-up .22s cubic-bezier(.2,.8,.3,1);
   /* No transition while a finger is on it: the drag IS the position, and
      easing it would put the sheet behind the thumb. */

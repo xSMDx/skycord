@@ -568,7 +568,14 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
      few pixels of descender gap under it inside the flex row. */
   display: block;
   resize: none;
-  overflow-y: auto;
+  /* Both axes, deliberately. Naming only overflow-y leaves overflow-x
+     computing to `auto` — the spec promotes `visible` to `auto` whenever the
+     other axis is not visible — so a single sub-pixel of horizontal overflow
+     drew a 4px bar across the bottom of the composer, using the global
+     ::-webkit-scrollbar height and its visible thumb. It reads as a stray
+     slider sitting in the chat bar. The text wraps (word-break below), so
+     there is never anything to reach sideways. */
+  overflow: hidden auto;
   max-height: 200px;
   line-height: 1.375;
   /* Long unbroken strings must wrap rather than force the row wider. */
@@ -625,6 +632,13 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   .input-action-btn,
   .send-btn { width: 44px; height: 44px; flex-shrink: 0; }
   .input-actions { gap: 0; flex-shrink: 0; }
+
+  /* GIF comes off the composer on a phone, and its 44px goes to the input
+     (.msg-input is flex:1, so the space is handed over without a layout
+     change). Nothing is lost: this button and the emoji button open the SAME
+     picker — it only preselects the GIFs tab — so GIFs stay one tap away via
+     emoji, on a row that has room for four 44px targets instead of five. */
+  .btn-gif { display: none; }
 
   /* iOS zooms the page when a focused field is under 16px and never zooms
      back. This is a platform constraint, not a type choice. */

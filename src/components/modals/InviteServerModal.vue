@@ -230,7 +230,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-list-label { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-2); }
 .is-empty { font-size: 13px; color: var(--text-3); padding: 8px 0; }
 
-.is-rows { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
+.is-rows { display: flex; flex-direction: column; max-height: 220px; overflow: hidden auto; }
 .is-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 8px 0; border-bottom: 1px solid var(--divider);

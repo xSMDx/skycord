@@ -67,7 +67,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .pinned-close:hover { background: var(--hover); color: white; }
 
-.pinned-body { flex: 1; overflow-y: auto; padding: 8px; }
+.pinned-body { flex: 1; overflow: hidden auto; padding: 8px; }
 .pinned-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 32px 20px; gap: 12px;

@@ -159,7 +159,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .rp-cat-btn.active { background: rgba(var(--accent-rgb),.25); }
 
 .rp-grid-wrap {
-  flex: 1; overflow-y: auto; padding: 8px 8px 12px;
+  flex: 1; overflow: hidden auto; padding: 8px 8px 12px;
 }
 .rp-section { margin-bottom: 12px; }
 .rp-section-label {

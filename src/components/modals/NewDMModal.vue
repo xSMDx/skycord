@@ -121,7 +121,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-search input { flex: 1; font-size: 14px; color: var(--text-1); background: none; border: none; outline: none; }
 .ndm-search input::placeholder { color: var(--text-faint); }
 
-.ndm-list { flex: 1; overflow-y: auto; padding: 8px 8px; max-height: 320px; margin-top: 8px; }
+.ndm-list { flex: 1; overflow: hidden auto; padding: 8px 8px; max-height: 320px; margin-top: 8px; }
 .ndm-item {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 12px; border-radius: 8px; cursor: pointer;

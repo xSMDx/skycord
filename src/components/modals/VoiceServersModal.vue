@@ -201,7 +201,7 @@ const remove = async (row: WireVoiceServer) => {
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 
-.vs { padding: 20px 22px; max-height: 80vh; overflow-y: auto; }
+.vs { padding: 20px 22px; max-height: 80vh; overflow: hidden auto; }
 .vs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .vs-title { font-size: 18px; font-weight: 700; color: var(--text-strong); }
 .vs-close {

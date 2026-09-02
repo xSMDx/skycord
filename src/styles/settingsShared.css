@@ -1,0 +1,159 @@
+/*
+ * Settings form primitives, shared by BOTH settings surfaces.
+ *
+ * A real stylesheet rather than scoped blocks, because this surface is about
+ * ten pages and each one is its own component. A scoped <style> only hashes
+ * the last selector, so a shared `.st-input` written in the shell can never
+ * reach an input a child rendered — the same wall that made DevicesPage
+ * re-declare `.acc-card` and ServerSettingsModal re-declare EditChannelModal's
+ * chrome. Two duplications is a coincidence; ten would be a decision.
+ *
+ * Imported by both shells. Named for neither, because it belongs to neither:
+ * user settings and server settings are the same kind of surface and drifting
+ * apart is exactly what makes two screens read as two products.
+ *
+ * `st-` for "settings". Namespaced away from `.acc-*` (user settings) and
+ * `.ec-*` (channel settings) on purpose — one day those should collapse into
+ * this, but renaming two working surfaces is not this change.
+ */
+
+/* ── Page ──────────────────────────────────────────────────────────────── */
+.st-page-title {
+  font-size: 20px; font-weight: 700; color: var(--text-strong);
+  margin-bottom: 6px;
+}
+.st-page-sub {
+  font-size: 14px; line-height: 1.5; color: var(--text-3);
+  margin-bottom: 26px; max-width: 62ch;
+}
+
+/* More space above than below: the rule that makes a heading belong to what
+   follows it rather than float between two blocks. */
+.st-section {
+  font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--text-2);
+  margin: 32px 0 10px;
+  /* The Appearance sub-nav scrolls to these; without the offset the heading
+     lands flush against the top edge with no air above it. */
+  scroll-margin-top: 12px;
+}
+.st-hr { height: 1px; background: var(--divider); border: 0; margin: 26px 0; }
+
+/* ── Fields ────────────────────────────────────────────────────────────── */
+.st-label {
+  display: block; margin-bottom: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--text-2);
+}
+.st-hint { font-size: 13px; line-height: 1.5; color: var(--text-3); margin: -4px 0 10px; max-width: 62ch; }
+
+.st-input {
+  width: 100%; padding: 10px 12px;
+  background: var(--bg-input);
+  /* Transparent, not absent: a border that appears on focus shifts the layout
+     by a pixel, which reads as the field flinching. */
+  border: 1px solid transparent; border-radius: var(--edge-md, 6px);
+  font-size: 15px; color: var(--text-1); font-family: inherit;
+  outline: none;
+  transition: border-color var(--dur-2) var(--ease-out);
+}
+.st-input:focus { border-color: var(--accent); }
+.st-input:disabled { opacity: .55; cursor: not-allowed; }
+.st-input::placeholder { color: var(--text-faint); }
+.st-area { resize: vertical; min-height: 84px; line-height: 1.5; }
+.st-count { font-size: 11px; color: var(--text-faint); text-align: right; margin-top: 6px; }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.st-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 16px; border-radius: var(--edge-md, 6px);
+  font-size: 14px; font-weight: 600; color: var(--text-1);
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+/* Hover carries colour, press carries scale — the rule the rest of the app
+   follows. No lift on hover. */
+.st-btn:hover:not(:disabled) { background: var(--hover); }
+.st-btn:active:not(:disabled) { transform: scale(.97); }
+.st-btn:disabled { opacity: .5; cursor: default; }
+
+.st-btn.st-btn--primary { background: var(--accent); color: var(--text-on-accent); }
+.st-btn.st-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+.st-btn.st-btn--danger { color: #f0716f; }
+.st-btn.st-btn--danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
+.st-btn.st-btn--danger-solid { background: #ed4245; color: #fff; }
+.st-btn.st-btn--danger-solid:hover:not(:disabled) { background: #c93b3e; }
+.st-btn.st-btn--outline { border: 1px solid var(--border); }
+.st-btn.st-btn--sm { padding: 6px 12px; font-size: 13px; }
+
+.st-actions { display: flex; gap: 10px; align-items: center; }
+
+/* ── Toggle ────────────────────────────────────────────────────────────── */
+.st-toggle {
+  width: 42px; height: 24px; border-radius: 12px; flex-shrink: 0;
+  background: rgba(128,132,142,.5); position: relative; border: none; cursor: pointer;
+  transition: background var(--dur-2) var(--ease-out);
+}
+.st-toggle.on { background: var(--accent); }
+.st-toggle:disabled { opacity: .5; cursor: not-allowed; }
+.st-toggle span {
+  position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+  border-radius: 50%; background: #fff;
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.st-toggle.on span { transform: translateX(18px); }
+
+/* ── Row (label + control) ─────────────────────────────────────────────── */
+.st-row { display: flex; align-items: center; gap: 18px; padding: 14px 0; }
+.st-row + .st-row { border-top: 1px solid var(--divider); }
+.st-row-text { flex: 1; min-width: 0; }
+.st-row-title { display: block; font-size: 15px; font-weight: 600; color: var(--text-1); }
+.st-row-sub { display: block; font-size: 13px; color: var(--text-3); margin-top: 3px; line-height: 1.45; }
+
+/* ── Field row: label over value, action on the right ──────────────────── */
+/* The shape Account and Profile are built from — "USERNAME / devicetest /
+   [Edit]". Lives here rather than in one component so both surfaces read the
+   same and a third one does not invent a fourth variant. */
+.st-card { background: var(--bg-panel); border-radius: 10px; overflow: hidden; }
+.st-field {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 16px 20px;
+}
+.st-field + .st-field { border-top: 1px solid var(--divider); }
+.st-field-left { flex: 1; min-width: 0; }
+.st-field-label {
+  display: block; margin-bottom: 5px;
+  font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--text-3);
+}
+.st-field-value {
+  font-size: 16px; color: var(--text-1);
+  display: flex; align-items: center; gap: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.st-field-value.muted { color: var(--text-3); }
+
+/* ── "Not built yet" ───────────────────────────────────────────────────── */
+/* Shown rather than hidden: a marker that says "not yet" reads as a plan,
+   a missing row reads as something the app cannot do. */
+.st-tbd {
+  font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--text-3); background: var(--hover);
+  padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+}
+.st-placeholder {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center;
+  padding: 56px 24px; border: 1px dashed var(--border); border-radius: 10px;
+  color: var(--text-3);
+}
+.st-placeholder-title { font-size: 15px; font-weight: 600; color: var(--text-2); }
+.st-placeholder-sub { font-size: 13px; line-height: 1.55; max-width: 46ch; }
+
+@media (max-width: 768px) {
+  .st-input { font-size: 16px; }   /* under 16px, iOS zooms the page on focus */
+  .st-btn { min-height: 44px; }
+  .st-toggle { width: 48px; height: 28px; }
+  .st-toggle span { width: 22px; height: 22px; }
+  .st-toggle.on span { transform: translateX(20px); }
+}

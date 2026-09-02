@@ -6,7 +6,11 @@
 import { reactive } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
 
-export type Theme   = 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
+export type Theme =
+  | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
+  // Studio themes — surfaces defined in tokens.css, accent in THEME_OPTS.
+  | 'spotify' | 'apple' | 'linear' | 'vercel' | 'stripe' | 'github' | 'notion'
+  | 'stoat'
 export type Density = 'cozy' | 'compact' | 'roomy'
 
 export interface Appearance {
@@ -190,7 +194,7 @@ export const setCustomToken = (key: string, value: string) => {
 // shared theme code, and motion is a setting about the person and their machine
 // — not a look. Importing someone's palette must never switch your animations
 // off, or back on.
-const THEME_FIELDS: (keyof Appearance)[] = [
+export const THEME_FIELDS: (keyof Appearance)[] = [
   'theme', 'accent', 'density', 'msgSize', 'groupSpacing', 'fontUi', 'fontMono',
   'showSendButton', 'custom', 'scheme', 'contrast', 'emojiPack',
   'underlineLinks', 'displayNameStyles', 'msgLayout', 'zoom',

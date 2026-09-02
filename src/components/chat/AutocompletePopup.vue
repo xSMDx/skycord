@@ -43,7 +43,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
   color: var(--text-2); padding: 10px 14px 6px;
 }
-.ac-list { max-height: 280px; overflow-y: auto; padding: 0 6px 6px; }
+.ac-list { max-height: 280px; overflow: hidden auto; padding: 0 6px 6px; }
 .ac-item {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   padding: 8px 8px; border-radius: 6px; transition: background var(--dur-1) var(--ease-out);

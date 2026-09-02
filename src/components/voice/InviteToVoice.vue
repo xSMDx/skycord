@@ -222,7 +222,7 @@ const doCopy = async () => {
   padding: 8px 10px; border-radius: 6px; background: rgba(0,0,0,.28); color: var(--text-3);
 }
 .iv-search input { flex: 1; font-size: 13.5px; color: var(--text-1); background: none; border: none; outline: none; }
-.iv-list { flex: 1; overflow-y: auto; padding: 0 8px; min-height: 90px; }
+.iv-list { flex: 1; overflow: hidden auto; padding: 0 8px; min-height: 90px; }
 .iv-row.modal { padding: 6px 8px; cursor: default; }
 .iv-row.modal:hover { background: var(--hover); }
 .iv-row.modal .iv-av { width: 30px; height: 30px; }

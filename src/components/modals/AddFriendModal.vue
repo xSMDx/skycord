@@ -158,7 +158,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-err { font-size: 12px; color: #f08080; margin-top: 6px; padding-left: 2px; }
 
 .af-results {
-  max-height: 320px; overflow-y: auto;
+  max-height: 320px; overflow: hidden auto;
   padding: 8px 8px; margin-top: 8px;
 }
 .af-user {

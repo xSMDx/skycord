@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, defineAsyncComponent } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import {
   X, CircleCheck, ArrowRight, LogOut, ChevronLeft, ChevronRight,
 } from 'lucide-vue-next'
@@ -7,7 +7,7 @@ import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
-import { useAppearance, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Theme, type Density } from '@/composables/useAppearance'
+import { useAppearance, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
@@ -20,6 +20,14 @@ import SetStatusModal from '@/components/profile/SetStatusModal.vue'
 
 import AnimatedImage from '@/components/ui/AnimatedImage.vue'
 import VoiceVideoSettings from '@/components/voice/VoiceVideoSettings.vue'
+// Shared with Server Settings — one vocabulary for both, so they cannot drift.
+import '@/styles/settingsShared.css'
+import { applyClickOrigin, lastClickOrigin } from '@/composables/useClickOrigin'
+import {
+  savedThemes, saveCurrentTheme, applySavedTheme, renameSavedTheme, deleteSavedTheme,
+  MAX_NAME, type SavedTheme,
+} from '@/composables/useSavedThemes'
+import { THEME_OPTS, STUDIO_OPTS, type ThemeOpt } from '@/composables/themePresets'
 // Async: DevicesPage pulls in the flag stylesheet, which nobody should pay for
 // unless they open this page.
 const DevicesPage = defineAsyncComponent(() => import('@/components/settings/DevicesPage.vue'))
@@ -65,14 +73,34 @@ const previewThemeCode = () => { const t = loadedTheme(); if (t) previewTheme(t)
 const applyThemeCode   = () => { const t = loadedTheme(); if (t) setAppearance(t) }
 const UI_FONT_KEYS   = Object.keys(UI_FONTS)
 const MONO_FONT_KEYS = Object.keys(MONO_FONTS)
-const THEME_OPTS: { id: Theme; label: string; preview: Record<string, string> }[] = [
-  { id: 'default',   label: 'Dark',      preview: { background: '#313338' } },
-  { id: 'midnight',  label: 'Midnight',  preview: { background: '#1a1b1f' } },
-  { id: 'amoled',    label: 'AMOLED',    preview: { background: '#000000' } },
-  { id: 'light',     label: 'Light',     preview: { background: '#ffffff' } },
-  { id: 'light-dim', label: 'Light Dim', preview: { background: '#eceef0' } },
-  { id: 'custom',    label: 'Custom',    preview: { background: 'conic-gradient(from 180deg, #ff5f6d, #ffc371, #5865f2, #ff5f6d)' } },
-]
+
+
+const newThemeName = ref('')
+const savedFlash = ref(false)
+const doSaveTheme = () => {
+  if (!saveCurrentTheme(newThemeName.value)) return
+  newThemeName.value = ''
+  savedFlash.value = true
+  setTimeout(() => { savedFlash.value = false }, 1400)
+}
+const startRename = (t: SavedTheme) => {
+  // eslint-disable-next-line no-alert -- the app has no inline-rename control
+  // yet, and a prompt is honest about that rather than shipping a half one.
+  const next = window.prompt('Rename theme', t.name)
+  if (next !== null) renameSavedTheme(t.id, next)
+}
+/** The saved swatch shows the surface and accent that entry would restore —
+ *  the two things that actually change when it is applied. */
+const savedPreview = (t: SavedTheme) => {
+  const opt = [...THEME_OPTS, ...STUDIO_OPTS].find(o => o.id === t.theme.theme)
+  const surface = (opt?.preview.background) || '#313338'
+  return { background: surface, boxShadow: `inset 0 -7px 0 ${t.theme.accent || 'var(--accent)'}` }
+}
+
+/** A theme card. Studio entries bring their accent with them. */
+const pickTheme = (t: ThemeOpt) => {
+  setAppearance(t.accent ? { theme: t.id, accent: t.accent } : { theme: t.id })
+}
 const SCHEME_OPTS: { id: SchemeName; label: string }[] = [
   { id: 'off',        label: 'Off' },
   { id: 'tonalSpot',  label: 'Tonal Spot' },
@@ -265,7 +293,7 @@ const showBannerPicker = ref(false)
 // serves both rather than two near-identical copies.
 type ImgTarget = 'avatar' | 'banner'
 const imageTarget = ref<ImgTarget>('avatar')
-const avatarPicker = ref<null | 'menu' | 'change' | 'edit' | 'gif'>(null)
+const avatarPicker = ref<null | 'change' | 'edit' | 'gif'>(null)
 const avatarUploadSrc = ref('')
 
 const openImagePicker = (target: ImgTarget) => {
@@ -474,15 +502,50 @@ const currentPageLabel = computed(() => {
   return 'Settings'
 })
 
+/*
+ * Room beneath the last section.
+ *
+ * A section can only be scrolled to the top of the pane when there is a pane's
+ * worth of content beneath it. The last few never had that, so the arithmetic
+ * the scroll-spy runs — select this section once `offsetTop - 24 <= scrollTop`
+ * — could never come true for them: the largest scrollTop reachable is
+ * `scrollHeight - clientHeight`, which for a trailing section is short of its
+ * own offsetTop. Scrolling all the way down left the sub-nav highlighted two or
+ * three items above the bottom, and clicking one of those items scrolled as far
+ * as it could and then had its highlight taken back by the next scroll event.
+ *
+ * Measured rather than a blanket 60vh: the real shortfall is usually 200-400px,
+ * and a fixed value is dead scroll on every page that did not need it.
+ */
+const tailH = ref(0)
+const measureTail = () => {
+  const c = contentEl.value
+  const ids = PAGE_SUBSECTIONS[page.value]
+  if (!c || !ids?.length) { tailH.value = 0; return }
+  const last = document.getElementById(ids[ids.length - 1].id)
+  if (!last) { tailH.value = 0; return }
+  // scrollHeight still counts the tail we set last time, so take it back out
+  // before working out what the tail should be — otherwise this feeds itself.
+  const below = (c.scrollHeight - tailH.value) - last.offsetTop
+  // -16 rather than -24 leaves the spy's threshold a few pixels of slack so a
+  // sub-pixel scrollHeight cannot land exactly on the boundary and miss.
+  tailH.value = Math.max(0, c.clientHeight - below - 16)
+}
+
 const selectPage = (id: string) => {
   page.value = id
   activeSubSection.value = PAGE_SUBSECTIONS[id]?.[0]?.id || ''
   contentEl.value?.scrollTo({ top: 0 })
   if (isMobile.value) mobileDetail.value = true
+  nextTick(measureTail)
 }
 
 const scrollToSection = async (id: string) => {
   activeSubSection.value = id
+  await nextTick()
+  // Re-measure first: the tail decides whether this section can actually reach
+  // the top, and the page may have grown since it was last measured.
+  measureTail()
   await nextTick()
   const el = document.getElementById(id)
   if (el && contentEl.value) {
@@ -513,7 +576,64 @@ const onContentScroll = () => {
  * what finally tells the parent to unmount us. The transition is the clock.
  */
 const shown = ref(false)
-onMounted(() => { shown.value = true })
+/*
+ * The colour picker opens at the pointer. Both triggers — the card's banner and
+ * the swatch in the field row — route through here so neither is privileged.
+ *
+ * Clamped to the viewport because nothing else will: a fixed panel summoned
+ * from a control near the right edge would otherwise hang off the screen.
+ */
+/** First guess at the panel's size, used only for the frame before it exists.
+ *  The real size replaces it in onPopEnter, so these need to be close, not
+ *  right — ColorPicker is 240px wide inside 14px of padding. */
+const POP_W = 268
+const POP_H = 300
+const EDGE = 12
+const bannerPopPos = ref({ x: 0, y: 0 })
+
+/** Keep a box of `w`×`h` fully on screen with a margin. */
+const clampToViewport = (x: number, y: number, w: number, h: number) => ({
+  x: Math.max(EDGE, Math.min(x, window.innerWidth  - w - EDGE)),
+  y: Math.max(EDGE, Math.min(y, window.innerHeight - h - EDGE)),
+})
+
+const openBannerPicker = () => {
+  const c = lastClickOrigin()
+  const x = (c?.x ?? window.innerWidth  / 2) + 8
+  const y = (c?.y ?? window.innerHeight / 2) + 8
+  bannerPopPos.value = clampToViewport(x, y, POP_W, POP_H)
+  showBannerPicker.value = true
+}
+
+/**
+ * Re-clamp against the panel's real size, then set the growth origin.
+ *
+ * @before-enter runs with the element in the DOM but before the transition
+ * starts, so measuring here corrects the estimate above without a visible
+ * jump. That matters more than it sounds: the constants are a guess at another
+ * component's height, and a guess that drifts when ColorPicker gains a row
+ * would put the panel off the bottom of the screen with nothing to catch it.
+ */
+const onPopEnter = (el: Element) => {
+  const panel = (el as HTMLElement).querySelector<HTMLElement>('.pf-pop-panel')
+  if (!panel) return
+  const r = panel.getBoundingClientRect()
+  if (r.width && r.height) {
+    const fixed = clampToViewport(r.left, r.top, r.width, r.height)
+    if (fixed.x !== r.left || fixed.y !== r.top) bannerPopPos.value = fixed
+    panel.style.left = `${fixed.x}px`
+    panel.style.top  = `${fixed.y}px`
+  }
+  // After positioning, so the origin is measured against where it landed.
+  applyClickOrigin(panel)
+}
+
+onMounted(() => {
+  shown.value = true
+  nextTick(measureTail)
+  window.addEventListener('resize', measureTail)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', measureTail))
 const requestClose = () => { shown.value = false }
 
 const handleLogout = () => { requestClose(); logout() }
@@ -561,15 +681,25 @@ const handleSelfRevoked = () => handleLogout()
                 <ChevronRight v-if="isMobile" class="sm-nav-chev" :size="14" :stroke-width="2.25" />
               </button>
 
-              <!-- In-page sub-nav — shown while that page is selected. A
-                   continuous rail runs down the left; the active item lights up. -->
-              <div v-if="PAGE_SUBSECTIONS[item.id] && page === item.id" class="sm-subnav">
-                <button
-                  v-for="sub in PAGE_SUBSECTIONS[item.id]" :key="sub.id"
-                  class="sm-nav-subitem"
-                  :class="{ active: activeSubSection === sub.id }"
-                  @click="scrollToSection(sub.id)"
-                >{{ sub.label }}</button>
+              <!-- In-page sub-nav — the sections of the page you are already on.
+                   Always rendered so opening and closing it can be a CSS height
+                   transition; `inert` keeps the collapsed copy out of the tab
+                   order, which a plain height:0 would not. -->
+              <div
+                v-if="PAGE_SUBSECTIONS[item.id]"
+                class="sm-subnav-wrap"
+                :class="{ open: page === item.id }"
+                :inert="page === item.id ? undefined : true"
+                :aria-hidden="page === item.id ? undefined : 'true'"
+              >
+                <div class="sm-subnav">
+                  <button
+                    v-for="sub in PAGE_SUBSECTIONS[item.id]" :key="sub.id"
+                    class="sm-nav-subitem"
+                    :class="{ active: activeSubSection === sub.id }"
+                    @click="scrollToSection(sub.id)"
+                  >{{ sub.label }}</button>
+                </div>
               </div>
             </template>
           </div>
@@ -593,7 +723,8 @@ const handleSelfRevoked = () => handleLogout()
             </button>
           </div>
           <button v-if="!isMobile" class="sm-close" aria-label="Close settings" @click="requestClose">
-            <X :size="20" :stroke-width="1.5" />
+            <span class="sm-close-x"><X :size="18" :stroke-width="2" /></span>
+            <span class="sm-close-esc">ESC</span>
           </button>
 
           <!-- ── Account page ── -->
@@ -603,33 +734,31 @@ const handleSelfRevoked = () => handleLogout()
             <div v-if="saveMsg" class="acc-save-msg">{{ saveMsg }}</div>
 
             <!-- Account Info -->
-            <h2 id="acc-info" class="acc-section-title">Account Info</h2>
-            <div class="acc-card">
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Username</span>
-                  <span class="acc-row-value">{{ authUser?.username || '—' }}</span>
+            <h2 id="acc-info" class="st-section">Account Info</h2>
+            <div class="st-card">
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Username</span>
+                  <span class="st-field-value">{{ authUser?.username || '—' }}</span>
                 </div>
-                <button class="acc-btn" @click="openModal('username', authUser?.username||'')">Edit</button>
+                <button class="st-btn" @click="openModal('username', authUser?.username||'')">Edit</button>
               </div>
-              <div class="acc-divider" />
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Email</span>
-                  <span class="acc-row-value muted">
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Email</span>
+                  <span class="st-field-value muted">
                     {{ emailRevealed ? (authUser?.email || '—') : '••••••••@••••.com' }}
                     <button class="reveal-btn" @click="emailRevealed = !emailRevealed">{{ emailRevealed ? 'Hide' : 'Reveal' }}</button>
                   </span>
                 </div>
-                <button class="acc-btn" @click="openModal('email', authUser?.email||'')">Edit</button>
+                <button class="st-btn" @click="openModal('email', authUser?.email||'')">Edit</button>
               </div>
-              <div class="acc-divider" />
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Display Name</span>
-                  <span class="acc-row-value">{{ authUser?.displayName || '—' }}</span>
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Display Name</span>
+                  <span class="st-field-value">{{ authUser?.displayName || '—' }}</span>
                 </div>
-                <button class="acc-btn" @click="openModal('displayName', authUser?.displayName||'')">Edit</button>
+                <button class="st-btn" @click="openModal('displayName', authUser?.displayName||'')">Edit</button>
               </div>
             </div>
 
@@ -638,12 +767,12 @@ const handleSelfRevoked = () => handleLogout()
                  avatar, banner, display name, the live card beside it. How
                  long your own inactivity takes to register is a behaviour of
                  the account, not part of that picture. -->
-            <h2 id="acc-presence" class="acc-section-title">Presence</h2>
-            <div class="acc-card">
-              <div class="acc-row acc-row-idle">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Go idle after</span>
-                  <span class="acc-row-value muted">Only while your status is Online — Do Not Disturb
+            <h2 id="acc-presence" class="st-section">Presence</h2>
+            <div class="st-card">
+              <div class="st-field st-field-idle">
+                <div class="st-field-left">
+                  <span class="st-field-label">Go idle after</span>
+                  <span class="st-field-value muted">Only while your status is Online — Do Not Disturb
                     and Invisible stay as you set them.</span>
                 </div>
                 <div class="acc-idlerow">
@@ -658,42 +787,40 @@ const handleSelfRevoked = () => handleLogout()
             </div>
 
             <!-- Password & Security -->
-            <h2 id="acc-password" class="acc-section-title">Password &amp; Security</h2>
-            <div class="acc-card">
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Password</span>
-                  <span class="acc-row-value muted">••••••••••••</span>
+            <h2 id="acc-password" class="st-section">Password &amp; Security</h2>
+            <div class="st-card">
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Password</span>
+                  <span class="st-field-value muted">••••••••••••</span>
                 </div>
-                <button class="acc-btn" @click="openModal('password')">Edit</button>
+                <button class="st-btn" @click="openModal('password')">Edit</button>
               </div>
-              <div class="acc-divider" />
-              <div class="acc-row soon" v-tip="'Not available yet'">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Two-Factor Authentication</span>
-                  <span class="acc-row-value muted">Coming soon</span>
+              <div class="st-field soon" v-tip="'Not available yet'">
+                <div class="st-field-left">
+                  <span class="st-field-label">Two-Factor Authentication</span>
+                  <span class="st-field-value muted">Coming soon</span>
                 </div>
-                <button class="acc-btn" disabled>Enable</button>
+                <button class="st-btn" disabled>Enable</button>
               </div>
-              <div class="acc-divider" />
               <!-- This row used to show a hardcoded "1 device" beside an arrow
                    with no click handler — a count that was never true for anyone
                    signed in twice, on the one screen where you go to check
                    exactly that. It is a real link now. -->
-              <button class="acc-row acc-row-link" @click="selectPage('devices')">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Logged-in Devices</span>
-                  <span class="acc-row-value muted">See where you're signed in</span>
+              <button class="st-field st-field-link" @click="selectPage('devices')">
+                <div class="st-field-left">
+                  <span class="st-field-label">Logged-in Devices</span>
+                  <span class="st-field-value muted">See where you're signed in</span>
                 </div>
-                <span class="acc-btn-arrow" aria-hidden="true">
+                <span class="st-field-arrow" aria-hidden="true">
                   <ArrowRight :size="16" :stroke-width="1.5" />
                 </span>
               </button>
             </div>
 
             <!-- Account Standing -->
-            <h2 id="acc-standing" class="acc-section-title">Account Standing</h2>
-            <div class="acc-card">
+            <h2 id="acc-standing" class="st-section">Account Standing</h2>
+            <div class="st-card">
               <div class="acc-standing">
                 <CircleCheck :size="24" :stroke-width="2.25" style="color:#23a55a; flex-shrink:0" />
                 <div style="flex:1">
@@ -708,72 +835,24 @@ const handleSelfRevoked = () => handleLogout()
 
           <!-- ── Profile ── -->
           <template v-else-if="page === 'profile'">
-            <h2 class="acc-section-title">Profile</h2>
+            <h2 class="st-section">Profile</h2>
             <p class="pf-sub">Changes save as you make them and show on your card straight away.</p>
 
             <div v-if="saveMsg" class="acc-save-msg">{{ saveMsg }}</div>
             <div v-if="profileErr" class="pf-err">{{ profileErr }}</div>
 
-            <div class="pf-grid">
-              <!-- controls -->
-              <div class="pf-rail">
-                <div class="pf-field">
-                  <span class="acc-row-label">Avatar</span>
-                  <div class="pf-avrow">
-                    <Avatar :src="avatarFor(authUser?.username||'you', authUser?.avatar)"
-                            :size="56" class="pf-av" :crop="(authUser as any)?.avatarCrop" />
-                    <div class="pf-avbtns">
-                      <button class="acc-btn" @click="openImagePicker('avatar')">Change</button>
-                      <button class="acc-btn pf-danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove</button>
-                    </div>
-                  </div>
-                </div>
+            <!--
+              The card is the thing being edited and everything beside it writes
+              here, so it is the biggest element on the page rather than a
+              thumbnail beneath a form. Sticky, because a preview you have to
+              scroll back up to check is a preview you stop looking at.
 
-                <div class="pf-field">
-                  <span class="acc-row-label">Banner</span>
-                  <div class="pf-bnwrap">
-                    <button
-                      class="pf-bnbox" :style="{ background: authUser?.banner ? '#1e1f22' : (bannerColor || '#1e1f22') }"
-                      aria-label="Pick banner colour" @click="showBannerPicker = !showBannerPicker"
-                    >
-                      <AnimatedImage v-if="authUser?.banner" :src="authUser.banner" class="pf-bnimg"
-                                     :crop="(authUser as any).bannerCrop" />
-                    </button>
-                    <div v-if="showBannerPicker" class="pf-pop">
-                      <div class="pf-pop-backdrop" @click="showBannerPicker = false" />
-                      <div class="pf-pop-panel">
-                        <ColorPicker :model-value="bannerColor" @update:model-value="onBannerColor" />
-                      </div>
-                    </div>
-                  </div>
-                  <div class="pf-avbtns pf-bnbtns">
-                    <button class="acc-btn" @click="openImagePicker('banner')">Image / GIF</button>
-                    <button class="acc-btn pf-danger" :disabled="!authUser?.banner" @click="removeBanner">Remove</button>
-                  </div>
-                  <!-- The colour is still live underneath, so say so rather than
-                       leaving the swatch looking like it did nothing. -->
-                  <div class="pf-hex">
-                    {{ authUser?.banner ? `Image · ${bannerColor || 'default'} if removed` : (bannerColor || 'Default') }}
-                  </div>
-                </div>
-
-                <div class="pf-field">
-                  <span class="acc-row-label">Custom status</span>
-                  <div class="pf-statusrow">
-                    <span class="pf-statustext" :class="{ muted: !authUser?.customStatus?.text }">
-                      {{ authUser?.customStatus?.text || 'None set' }}
-                    </span>
-                    <div class="pf-avbtns">
-                      <button class="acc-btn" @click="showStatusModal = true">Set</button>
-                      <button class="acc-btn pf-danger" :disabled="!authUser?.customStatus?.text" @click="clearStatus">Clear</button>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              <!-- live card -->
-              <div class="pf-cardcol">
+              Identity used to be split in half — avatar, banner and status in a
+              rail, display name and about me stranded under the card — which is
+              what made the page read as two unrelated columns. One list now.
+            -->
+            <div class="pf-stage">
+              <aside class="pf-stagecard">
                 <ProfileCard
                   editable
                   :username="authUser?.username || 'you'"
@@ -788,21 +867,71 @@ const handleSelfRevoked = () => handleLogout()
                   :status="authUser?.status"
                   :custom-status="authUser?.customStatus"
                   :member-since="authUser?.createdAt"
-                  @edit-banner="showBannerPicker = true"
-                  @edit-avatar="avatarPicker = 'menu'"
+                  @edit-banner="openBannerPicker"
+                  @edit-avatar="avatarPicker = 'change'"
                   @edit-status="showStatusModal = true"
                 />
+                <p class="pf-stagenote">This is how you look to everyone else.</p>
+              </aside>
 
-                <div class="pf-fields">
-                  <div class="pf-field">
-                    <span class="acc-row-label">Display name</span>
-                    <div class="pf-inline">
-                      <span class="acc-row-value">{{ authUser?.displayName || '—' }}</span>
-                      <button class="acc-btn" @click="openModal('displayName', authUser?.displayName||'')">Edit</button>
+              <div class="pf-controls">
+                <div class="st-card">
+
+                  <div class="st-field">
+                    <div class="st-field-left">
+                      <span class="st-field-label">Avatar</span>
+                      <span class="st-field-value muted">Square, at least 128×128.</span>
+                    </div>
+                    <div class="pf-ctl">
+                      <Avatar :src="avatarFor(authUser?.username||'you', authUser?.avatar)"
+                              :size="40" class="pf-av" :crop="(authUser as any)?.avatarCrop" />
+                      <button class="st-btn" @click="openImagePicker('avatar')">Change</button>
+                      <button class="st-btn pf-danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove</button>
                     </div>
                   </div>
-                  <div class="pf-field">
-                    <span class="acc-row-label">About me</span>
+
+                  <div class="st-field">
+                    <div class="st-field-left">
+                      <span class="st-field-label">Banner</span>
+                      <!-- The colour stays live under an image, so say what
+                           removing the image would fall back to. -->
+                      <span class="st-field-value muted">
+                        {{ authUser?.banner ? `Image · ${bannerColor || 'default'} if removed` : (bannerColor || 'Default') }}
+                      </span>
+                    </div>
+                    <div class="pf-ctl">
+                      <div class="pf-bnwrap">
+                        <button
+                          class="pf-bnbox" :style="{ background: authUser?.banner ? '#1e1f22' : (bannerColor || '#1e1f22') }"
+                          aria-label="Pick banner colour"
+                          @click="showBannerPicker ? (showBannerPicker = false) : openBannerPicker()"
+                        >
+                          <AnimatedImage v-if="authUser?.banner" :src="authUser.banner" class="pf-bnimg"
+                                         :crop="(authUser as any).bannerCrop" />
+                        </button>
+                      </div>
+                      <button class="st-btn" @click="openImagePicker('banner')">Image / GIF</button>
+                      <button class="st-btn pf-danger" :disabled="!authUser?.banner" @click="removeBanner">Remove</button>
+                    </div>
+                  </div>
+
+                  <div class="st-field">
+                    <div class="st-field-left">
+                      <span class="st-field-label">Display name</span>
+                      <span class="st-field-value">{{ authUser?.displayName || '—' }}</span>
+                    </div>
+                    <div class="pf-ctl">
+                      <button class="st-btn" @click="openModal('displayName', authUser?.displayName||'')">Edit</button>
+                    </div>
+                  </div>
+
+                  <!-- Stacked: a textarea in a right-hand control slot is either
+                       too narrow to write in or wide enough to break the row. -->
+                  <div class="st-field pf-stack">
+                    <div class="st-field-left">
+                      <span class="st-field-label">About me</span>
+                      <span class="st-field-value muted">Shows on your card, under your name.</span>
+                    </div>
                     <textarea
                       class="pf-textarea" maxlength="190" rows="3"
                       placeholder="Describe yourself like a game character"
@@ -810,6 +939,20 @@ const handleSelfRevoked = () => handleLogout()
                     />
                     <div class="pf-count">{{ bioValue.length }} / 190</div>
                   </div>
+
+                  <div class="st-field">
+                    <div class="st-field-left">
+                      <span class="st-field-label">Custom status</span>
+                      <span class="st-field-value" :class="{ muted: !authUser?.customStatus?.text }">
+                        {{ authUser?.customStatus?.text || 'None set' }}
+                      </span>
+                    </div>
+                    <div class="pf-ctl">
+                      <button class="st-btn" @click="showStatusModal = true">Set</button>
+                      <button class="st-btn pf-danger" :disabled="!authUser?.customStatus?.text" @click="clearStatus">Clear</button>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             </div>
@@ -817,37 +960,74 @@ const handleSelfRevoked = () => handleLogout()
 
           <!-- ── Appearance ── -->
           <template v-else-if="page === 'appearance'">
-            <!-- Live sample preview — reflects size, spacing, density + compact layout -->
-            <div class="ap-preview" :class="{ 'prev-compact': appearance.msgLayout === 'compact' }" :style="{ fontFamily: 'var(--font-ui)' }">
-              <div class="ap-prev-msg">
-                <span class="ap-prev-ts">1:06 PM</span>
-                <div class="ap-prev-av" :style="{ background: appearance.accent }">S</div>
-                <div class="ap-prev-main">
-                  <span class="ap-prev-head"><span class="ap-prev-name">SMD</span><span class="ap-prev-time">Today at 1:06 PM</span></span>
-                  <span class="ap-prev-text" :style="{ fontSize: appearance.msgSize + 'px' }">Sphinx of black quartz, judge my vow</span>
-                </div>
-              </div>
-              <div class="ap-prev-msg" :style="{ marginTop: appearance.groupSpacing + 'px' }">
-                <span class="ap-prev-ts">1:06 PM</span>
-                <div class="ap-prev-av ap-prev-av2">M</div>
-                <div class="ap-prev-main">
-                  <span class="ap-prev-head"><span class="ap-prev-name">MysticPixie</span><span class="ap-prev-time">Today at 1:06 PM</span></span>
-                  <span class="ap-prev-text" :style="{ fontSize: appearance.msgSize + 'px' }">The quick brown fox jumped over the lazy dog · <code :style="{ fontFamily: 'var(--font-mono)' }">code()</code></span>
-                </div>
-              </div>
-            </div>
+            <!--
+              Two columns. The preview used to sit at the top of the flow and
+              scrolled away after the first section, so eight of the nine
+              sections adjusted something you could no longer see. It is now a
+              sticky column: every control on the left writes to it live.
 
+              .ap-controls must NOT be positioned — the scroll-spy reads each
+              heading's offsetTop against .sm-content, and an intervening
+              offsetParent would rebase every one of them.
+            -->
+            <div class="ap-stage">
+              <div class="ap-controls">
             <!-- ── Theme ── -->
-            <h2 id="ap-theme" class="acc-section-title">Theme</h2>
+            <h2 id="ap-theme" class="st-section">Theme</h2>
             <div class="ap-cards">
               <button
                 v-for="t in THEME_OPTS" :key="t.id"
                 class="ap-card" :class="{ active: appearance.theme === t.id }"
-                @click="setAppearance({ theme: t.id })"
+                @click="pickTheme(t)"
               >
                 <span class="ap-card-preview" :style="t.preview" /><span class="ap-card-name">{{ t.label }}</span>
               </button>
             </div>
+
+            <h3 class="ap-sub">Studio</h3>
+            <p class="ap-hint ap-hint-top">
+              Palettes borrowed from apps you already know. Each brings its own
+              accent — change it afterwards and the surfaces stay.
+            </p>
+            <div class="ap-cards">
+              <button
+                v-for="t in STUDIO_OPTS" :key="t.id"
+                class="ap-card" :class="{ active: appearance.theme === t.id }"
+                @click="pickTheme(t)"
+              >
+                <span class="ap-card-preview" :style="t.preview" /><span class="ap-card-name">{{ t.label }}</span>
+              </button>
+            </div>
+
+            <h3 class="ap-sub">Your themes</h3>
+            <p class="ap-hint ap-hint-top">
+              Save the look you have built under a name of your own. Stored on
+              this device — to move one to another machine, or to someone else,
+              use the share code under Share Theme.
+            </p>
+            <div class="ap-save">
+              <input
+                class="ap-name-input" aria-label="Name this theme"
+                v-model="newThemeName" :maxlength="MAX_NAME"
+                placeholder="Name this theme"
+                @keydown.enter="doSaveTheme"
+              />
+              <button class="st-btn st-btn--primary" :disabled="!newThemeName.trim()" @click="doSaveTheme">
+                {{ savedFlash ? 'Saved' : 'Save current' }}
+              </button>
+            </div>
+
+            <div v-if="savedThemes.length" class="ap-saved">
+              <div v-for="t in savedThemes" :key="t.id" class="ap-saved-row">
+                <button class="ap-saved-main" @click="applySavedTheme(t)">
+                  <span class="ap-saved-chip" :style="savedPreview(t)" />
+                  <span class="ap-saved-name">{{ t.name }}</span>
+                </button>
+                <button class="st-btn st-btn--sm" @click="startRename(t)">Rename</button>
+                <button class="st-btn st-btn--sm pf-danger" @click="deleteSavedTheme(t.id)">Delete</button>
+              </div>
+            </div>
+            <p v-else class="ap-hint ap-hint-under">Nothing saved yet.</p>
 
             <h3 class="ap-sub">Accent Color</h3>
             <div class="ap-swatches">
@@ -875,7 +1055,7 @@ const handleSelfRevoked = () => handleLogout()
             </div>
 
             <!-- ── Color & Contrast ── -->
-            <h2 id="ap-color" class="acc-section-title">Color &amp; Contrast</h2>
+            <h2 id="ap-color" class="st-section">Color &amp; Contrast</h2>
             <div class="ap-cards">
               <button
                 v-for="s in SCHEME_OPTS" :key="s.id"
@@ -890,22 +1070,22 @@ const handleSelfRevoked = () => handleLogout()
             </template>
 
             <!-- ── Text Readability ── -->
-            <h2 id="ap-readability" class="acc-section-title">Text Readability</h2>
+            <h2 id="ap-readability" class="st-section">Text Readability</h2>
             <h3 class="ap-sub">Text size in chat — {{ appearance.msgSize }}px</h3>
             <input class="ap-slider" aria-label="Message font size" type="range" min="13" max="20" step="1" :value="appearance.msgSize" :style="{ '--fill': fillPct(appearance.msgSize, 13, 20) }" @input="setAppearance({ msgSize: +($event.target as HTMLInputElement).value })" />
 
-            <div class="acc-card">
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Always underline links</span>
-                  <span class="acc-row-value muted">Make links stand out more.</span>
+            <div class="st-card">
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Always underline links</span>
+                  <span class="st-field-value muted">Make links stand out more.</span>
                 </div>
                 <button class="ap-toggle" :class="{ on: appearance.underlineLinks }" role="switch" :aria-checked="appearance.underlineLinks" aria-label="Always underline links" @click="setAppearance({ underlineLinks: !appearance.underlineLinks })"><span /></button>
               </div>
-              <div class="acc-row acc-row-sep">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Display Name Styles</span>
-                  <span class="acc-row-value muted">Enable custom display-name colors and effects across Skycord.</span>
+              <div class="st-field st-field-sep">
+                <div class="st-field-left">
+                  <span class="st-field-label">Display Name Styles</span>
+                  <span class="st-field-value muted">Enable custom display-name colors and effects across Skycord.</span>
                 </div>
                 <button class="ap-toggle" :class="{ on: appearance.displayNameStyles }" role="switch" :aria-checked="appearance.displayNameStyles" aria-label="Display name styles" @click="setAppearance({ displayNameStyles: !appearance.displayNameStyles })"><span /></button>
               </div>
@@ -922,7 +1102,7 @@ const handleSelfRevoked = () => handleLogout()
             </div>
 
             <!-- ── Visual Density ── -->
-            <h2 id="ap-density" class="acc-section-title">Visual Density</h2>
+            <h2 id="ap-density" class="st-section">Visual Density</h2>
             <h3 class="ap-sub">UI Density</h3>
             <p class="ap-hint ap-hint-top">Adjust how tightly messages and rows are packed.</p>
             <div class="ap-cards">
@@ -948,23 +1128,23 @@ const handleSelfRevoked = () => handleLogout()
               <div class="ap-ticks ap-ticks-zoom"><span v-for="z in ZOOM_STEPS" :key="z" :class="{ on: ZOOM_STEPS[zoomIdx] === z }">{{ z }}</span></div>
             </div>
 
-            <div class="acc-card">
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Show send button</span>
-                  <span class="acc-row-value muted">When off, press Enter to send.</span>
+            <div class="st-card">
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Show send button</span>
+                  <span class="st-field-value muted">When off, press Enter to send.</span>
                 </div>
                 <button class="ap-toggle" :class="{ on: appearance.showSendButton }" role="switch" :aria-checked="appearance.showSendButton" aria-label="Show send button" @click="setAppearance({ showSendButton: !appearance.showSendButton })"><span /></button>
               </div>
             </div>
 
             <!-- ── Emoji ── -->
-            <h2 id="ap-motion" class="acc-section-title">Motion</h2>
-            <div class="acc-card">
-              <div class="acc-row">
-                <div class="acc-row-left">
-                  <span class="acc-row-label">Reduce motion</span>
-                  <span class="acc-row-value muted">
+            <h2 id="ap-motion" class="st-section">Motion</h2>
+            <div class="st-card">
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Reduce motion</span>
+                  <span class="st-field-value muted">
                     Turn off animations and transitions. Worth trying if the app
                     feels sluggish on an older machine, or if movement bothers you.
                   </span>
@@ -983,7 +1163,7 @@ const handleSelfRevoked = () => handleLogout()
               respected whether this is on or off.
             </p>
 
-            <h2 id="ap-emoji" class="acc-section-title">Emoji</h2>
+            <h2 id="ap-emoji" class="st-section">Emoji</h2>
             <div class="ap-cards">
               <button
                 v-for="e in EMOJI_OPTS" :key="e.id"
@@ -997,12 +1177,12 @@ const handleSelfRevoked = () => handleLogout()
             </div>
 
             <!-- ── Share Theme ── -->
-            <h2 id="ap-share" class="acc-section-title">Share Theme</h2>
+            <h2 id="ap-share" class="st-section">Share Theme</h2>
             <p class="ap-hint ap-hint-top">Copy your current look as a code or a link and send it to anyone — they can preview it before keeping it.</p>
             <div class="ap-share">
               <input class="ap-name-input" aria-label="Theme name" v-model="themeName" placeholder="Theme name (optional)" maxlength="60" />
-              <button class="acc-btn primary" @click="copyThemeCode">{{ copyFlash ? 'Copied!' : 'Copy theme code' }}</button>
-              <button class="acc-btn" :disabled="linkBusy" @click="createShareLink">{{ linkFlash ? 'Link copied!' : linkBusy ? '…' : 'Create share link' }}</button>
+              <button class="st-btn st-btn--primary" @click="copyThemeCode">{{ copyFlash ? 'Copied!' : 'Copy theme code' }}</button>
+              <button class="st-btn" :disabled="linkBusy" @click="createShareLink">{{ linkFlash ? 'Link copied!' : linkBusy ? '…' : 'Create share link' }}</button>
             </div>
 
             <h3 class="ap-sub">Load a theme</h3>
@@ -1013,10 +1193,35 @@ const handleSelfRevoked = () => handleLogout()
             />
             <p v-if="shareErr" class="ap-share-err">{{ shareErr }}</p>
             <div class="ap-share">
-              <button class="acc-btn" :disabled="!themeCodeInput.trim()" @click="previewThemeCode">Preview</button>
-              <button class="acc-btn primary" :disabled="!themeCodeInput.trim()" @click="applyThemeCode">Apply</button>
+              <button class="st-btn" :disabled="!themeCodeInput.trim()" @click="previewThemeCode">Preview</button>
+              <button class="st-btn st-btn--primary" :disabled="!themeCodeInput.trim()" @click="applyThemeCode">Apply</button>
             </div>
             <p class="ap-hint ap-hint-under">Preview applies the theme temporarily — use <strong>Keep</strong> or <strong>Revert</strong> in the banner. Apply saves it right away.</p>
+              </div>
+
+              <aside class="ap-previewcol">
+                <!-- Live sample preview — reflects size, spacing, density + compact layout -->
+                <div class="ap-preview" :class="{ 'prev-compact': appearance.msgLayout === 'compact' }" :style="{ fontFamily: 'var(--font-ui)' }">
+                  <div class="ap-prev-msg">
+                    <span class="ap-prev-ts">1:06 PM</span>
+                    <div class="ap-prev-av" :style="{ background: appearance.accent }">S</div>
+                    <div class="ap-prev-main">
+                      <span class="ap-prev-head"><span class="ap-prev-name">SMD</span><span class="ap-prev-time">Today at 1:06 PM</span></span>
+                      <span class="ap-prev-text" :style="{ fontSize: appearance.msgSize + 'px' }">Sphinx of black quartz, judge my vow</span>
+                    </div>
+                  </div>
+                  <div class="ap-prev-msg" :style="{ marginTop: appearance.groupSpacing + 'px' }">
+                    <span class="ap-prev-ts">1:06 PM</span>
+                    <div class="ap-prev-av ap-prev-av2">M</div>
+                    <div class="ap-prev-main">
+                      <span class="ap-prev-head"><span class="ap-prev-name">MysticPixie</span><span class="ap-prev-time">Today at 1:06 PM</span></span>
+                      <span class="ap-prev-text" :style="{ fontSize: appearance.msgSize + 'px' }">The quick brown fox jumped over the lazy dog · <code :style="{ fontFamily: 'var(--font-mono)' }">code()</code></span>
+                    </div>
+                  </div>
+                </div>
+                <p class="ap-prevnote">Every control writes here as you change it.</p>
+              </aside>
+            </div>
           </template>
 
           <!-- ── Devices ── -->
@@ -1056,6 +1261,11 @@ const handleSelfRevoked = () => handleLogout()
               <p>This section is under construction.<br>Check back soon!</p>
             </div>
           </template>
+
+          <!-- See measureTail(): lets the last section reach the top of the
+               pane so the sub-nav can actually select it. 0 on pages without
+               a sub-nav. -->
+          <div v-if="tailH" class="sm-content-tail" :style="{ height: tailH + 'px' }" aria-hidden="true" />
         </div>
       </div>
     </div>
@@ -1141,13 +1351,19 @@ const handleSelfRevoked = () => handleLogout()
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
   </EditFieldModal>
 
-  <!-- Avatar options, anchored over the card's avatar -->
-  <div v-if="avatarPicker === 'menu'" class="pf-menu-backdrop" @click="avatarPicker = null">
-    <div class="pf-menu" @click.stop>
-      <button @click="avatarPicker = 'change'">Change avatar</button>
-      <button class="danger" :disabled="!authUser?.avatar" @click="removeAvatar">Remove avatar</button>
+  <!--
+    Banner colour, positioned at the click rather than at one of its two
+    triggers. Fixed, not absolute: it is summoned from the card AND from the
+    field row, and an absolute panel can only ever be right for one of them.
+  -->
+  <Transition name="pf-pop" @before-enter="onPopEnter">
+    <div v-if="showBannerPicker" class="pf-pop">
+      <div class="pf-pop-backdrop" @click="showBannerPicker = false" />
+      <div class="pf-pop-panel" :style="{ left: bannerPopPos.x + 'px', top: bannerPopPos.y + 'px' }">
+        <ColorPicker :model-value="bannerColor" @update:model-value="onBannerColor" />
+      </div>
     </div>
-  </div>
+  </Transition>
 
   <!-- Avatar sub-flow: pick source → crop, or pick a GIF. Same chain the group
        icon uses, so both stay consistent. -->
@@ -1190,7 +1406,6 @@ const handleSelfRevoked = () => handleLogout()
 </template>
 
 <style scoped>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img    { display: block; object-fit: cover; }
 
@@ -1219,23 +1434,38 @@ img    { display: block; object-fit: cover; }
   padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 13px;
   background: rgba(237,66,69,.14); border: 1px solid rgba(237,66,69,.32); color: #f0716f;
 }
-.pf-grid { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
-.pf-rail { width: 240px; flex: none; display: flex; flex-direction: column; gap: 22px; }
-.pf-cardcol { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 18px; }
-.pf-field { display: flex; flex-direction: column; }
-.pf-field .acc-row-label { margin-bottom: 8px; }
+/*
+ * Profile — the card is the stage.
+ *
+ * Was a 240px rail beside a 340px field column: under 700px of content in a
+ * pane that is around 1130px wide, which is why the page read as small. Both
+ * columns now size off the pane.
+ */
+.pf-stage { display: flex; gap: 32px; align-items: flex-start; }
+.pf-stagecard {
+  width: 380px; flex: none;
+  /* Sticky: the field list is longer than the card, and a preview you have to
+     scroll back up to check is one you stop looking at. */
+  position: sticky; top: 0;
+}
+.pf-stagenote { font-size: 12px; color: var(--text-faint); text-align: center; margin-top: 12px; }
+.pf-controls { flex: 1; min-width: 0; }
+/* Control cluster on the right of a field row. Wraps rather than overflowing
+   when the pane narrows — Banner carries a swatch and two buttons. */
+.pf-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pf-ctl .pf-bnwrap { width: 92px; }
+.pf-stack { flex-direction: column; align-items: stretch; gap: 10px; }
+.pf-stack .st-field-left { margin-bottom: 2px; }
 
-.pf-avrow { display: flex; align-items: center; gap: 12px; }
 .pf-av { flex: none; }   /* size and shape come from Avatar, which also clips */
-.pf-avbtns { display: flex; gap: 8px; flex-wrap: wrap; }
-/* The idle control now sits in an .acc-row on the Account page, which is a
+/* The idle control now sits in an .st-field on the Account page, which is a
    space-between flex row: the slider needs its own width there rather than
    the flex:1 it had while it owned a full-width Profile field. */
 .acc-idlerow { display: flex; align-items: center; gap: 12px; flex-shrink: 0; width: 240px; }
 /* On a phone a 240px slider plus the label cannot share a row inside a 375px
    screen, so the row stacks and the slider takes the full width instead. */
-.sm-modal.mobile .acc-row-idle { flex-wrap: wrap; }
-.sm-modal.mobile .acc-row-idle .acc-idlerow { width: 100%; }
+.sm-modal.mobile .st-field-idle { flex-wrap: wrap; }
+.sm-modal.mobile .st-field-idle .acc-idlerow { width: 100%; }
 .pf-idle { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
 .pf-idleval { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-1); min-width: 52px; text-align: right; }
 .pf-danger { color: #f0716f; background: none; }
@@ -1252,23 +1482,22 @@ img    { display: block; object-fit: cover; }
 .pf-bnbox:hover { filter: brightness(1.25); }
 .pf-bnbox { position: relative; overflow: hidden; padding: 0; }
 .pf-bnimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.pf-bnbtns { margin-top: 8px; }
-.pf-hex { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 8px; }
 /* The backdrop is a sibling of the panel, not a wrapper — a full-screen layer
    ABOVE the panel would swallow the very clicks the picker needs. */
 .pf-pop-backdrop { position: fixed; inset: 0; z-index: 40; }
+/* Same 120ms grow as the menus. Opening a colour picker is occasional, so it
+   earns an animation; it is short because the picker is what you came for. */
+.pf-pop-enter-active .pf-pop-panel { transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+.pf-pop-leave-active .pf-pop-panel { transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in); }
+.pf-pop-enter-from .pf-pop-panel,
+.pf-pop-leave-to   .pf-pop-panel { opacity: 0; transform: scale(.94); }
 .pf-pop-panel {
-  position: absolute; top: calc(100% + 8px); left: 0; z-index: 41;
+  position: fixed; z-index: 41;
   background: var(--bg-floor); border-radius: 8px; padding: 14px;
   box-shadow: 0 14px 40px rgba(0,0,0,.65);
 }
 
-.pf-statusrow { display: flex; flex-direction: column; gap: 10px; }
-.pf-statustext { font-size: 14px; color: var(--text-1); word-break: break-word; }
-.pf-statustext.muted { color: var(--text-3); }
 
-.pf-fields { width: 340px; max-width: 100%; display: flex; flex-direction: column; gap: 18px; }
-.pf-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .pf-textarea {
   width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
   border-radius: 6px; padding: 10px 12px; color: var(--text-1);
@@ -1277,33 +1506,24 @@ img    { display: block; object-fit: cover; }
 .pf-textarea:focus { outline: none; border-color: var(--accent); }
 .pf-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 6px; font-variant-numeric: tabular-nums; }
 
-.pf-menu-backdrop { position: fixed; inset: 0; z-index: 1400; }
-.pf-menu {
-  position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%);
-  background: var(--bg-floor); border-radius: 6px; padding: 6px; min-width: 210px;
-  box-shadow: 0 12px 34px rgba(0,0,0,.6);
-}
-.pf-menu button {
-  display: block; width: 100%; text-align: left; padding: 8px 12px;
-  border-radius: 4px; font-size: 14px; color: var(--text-2);
-}
-.pf-menu button:hover:not(:disabled) { background: var(--accent); color: #fff; }
-.pf-menu button.danger { color: #f0716f; }
-.pf-menu button.danger:hover:not(:disabled) { background: #ed4245; color: #fff; }
-.pf-menu button:disabled { opacity: .4; cursor: not-allowed; }
 
+/* Full-bleed rather than a dimmed card. Settings is not a dialog you glance
+   at over the app — it is a place you go, and it was already 96vw x 92vh, so
+   the 4% ring of blurred chat was decoration that only made the edges busier.
+   Server Settings is built this way and these two are the same kind of
+   surface; two settings screens with different chrome read as two products. */
 .sm-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,.75);
-  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-raised);
+  display: flex;
   z-index: 1000;
 }
 
 .sm-modal {
-  width: min(1100px, 96vw); height: min(800px, 92vh);
+  width: 100%; height: 100%;
   display: flex; overflow: hidden;
-  background: var(--bg-raised); border-radius: 12px;
-  box-shadow: 0 24px 80px rgba(0,0,0,.7);
+  background: var(--bg-raised);
+  position: relative;
 }
 
 /* Enter and leave, on house tokens. The old pair were enter-only `animation`
@@ -1321,9 +1541,13 @@ img    { display: block; object-fit: cover; }
 .sm-enter-from, .sm-leave-to { opacity: 0; }
 
 /* Nav */
+/* Same geometry as Server Settings: a 268px rail whose inner column is
+   right-aligned, so the nav hugs the content instead of floating in a wide
+   gutter. The two surfaces now line up when you switch between them. */
 .sm-nav {
   width: 268px; flex-shrink: 0; background: var(--bg-floor);
-  padding: 24px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
+  padding: 60px 12px 40px 38px;
+  display: flex; flex-direction: column; gap: 2px; overflow: hidden auto;
 }
 .sm-nav-section { margin-bottom: 10px; }
 .sm-nav-label {
@@ -1360,35 +1584,82 @@ img    { display: block; object-fit: cover; }
 .sm-nav-item.active .sm-soon { background: rgba(255, 255, 255, .16); }
 .sm-nav-divider { height: 1px; background: rgba(255,255,255,.07); margin: 8px 10px; }
 
-/* In-page sub-nav — a continuous vertical rail (like Discord) with the active
-   item drawing a bright segment over it. */
+/*
+ * In-page sub-nav — the sections of the page you are already on.
+ *
+ * This used to be a vertical rail with the active item drawing a hard white
+ * segment over it, which put TWO selection idioms in one column: a neutral
+ * fill + hairline ring for pages, a bright bar for sections. Reading down the
+ * nav they looked like unrelated controls. It is now the same idiom as
+ * .sm-nav-item one step down — same fill, same ring, smaller and inset — so
+ * the column has one way of saying "this is the one you are on".
+ *
+ * The rail itself is gone. It was a permanent line carrying no state; the
+ * indent already says these belong to the row above.
+ */
+.sm-subnav-wrap {
+  /* 0fr → 1fr is the height transition that does not need a measured pixel
+     height. Without it the Log Out row below jumps the moment a page with
+     sub-sections is selected. */
+  display: grid; grid-template-rows: 0fr; opacity: 0;
+  transition: grid-template-rows var(--dur-2) var(--ease-out),
+              opacity var(--dur-2) var(--ease-out);
+}
+.sm-subnav-wrap.open { grid-template-rows: 1fr; opacity: 1; }
 .sm-subnav {
-  display: flex; flex-direction: column;
-  margin: 2px 0 6px 22px; padding-left: 2px;
-  border-left: 2px solid var(--border);
+  overflow: hidden;               /* required, or 0fr cannot clip the content */
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 3px 0 6px 12px;
 }
 .sm-nav-subitem {
   display: block; width: 100%; text-align: left;
-  padding: 8px 12px 8px 14px; border-radius: 0 6px 6px 0;
-  font-size: 14.5px; color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
-  /* Active indicator sits ON the subnav rail via a real border (margin pulls it
-     over the container's border-left) — no absolutely-positioned pseudo that
-     can detach or mis-size against the rail. */
-  border-left: 2px solid transparent; margin-left: -2px;
+  padding: 7px 10px; border-radius: 6px;
+  font-size: 13.5px; font-weight: 500; color: var(--text-3);
+  /* Weight is deliberately NOT part of the active state. The scroll-spy
+     retargets this on almost every scroll frame, and a weight change re-lays
+     out the label under a cursor that is aiming at it. Colour and fill carry
+     it instead — both are free to animate. */
+  transition: background var(--dur-1) var(--ease-out),
+              color var(--dur-1) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
 }
-.sm-nav-subitem:hover { color: var(--text-1); background: var(--hover); }
-.sm-nav-subitem.active { color: var(--text-strong); border-left-color: var(--text-strong); }
+/* Touch devices fire :hover on tap and leave it stuck there afterwards. */
+@media (hover: hover) and (pointer: fine) {
+  .sm-nav-subitem:hover { color: var(--text-1); background: var(--hover); }
+}
+.sm-nav-subitem:active { transform: scale(.985); }
+.sm-nav-subitem.active {
+  background: var(--active-bg);
+  box-shadow: inset 0 0 0 1px var(--active-ring);
+  color: var(--text-strong);
+}
 
 /* Content */
+/* The right padding is a gutter for the close button, which floats over this
+   area — without it the X lands on whatever sits top-right of a page. */
 .sm-content {
-  flex: 1; padding: 40px 52px 40px 44px; overflow-y: auto; position: relative;
+  flex: 1; padding: 60px 104px 80px 40px; overflow: hidden auto; position: relative;
 }
+/* A circled X with ESC beneath it — the key that already closes this, said out
+   loud. It was a bare 20px glyph in the corner, which is the one control on the
+   screen people hunt for. */
 .sm-close {
-  position: absolute; top: 16px; right: 16px;
-  display: flex; align-items: center; gap: 6px; color: var(--text-3);
+  position: absolute; top: 60px; right: 40px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  color: var(--text-3); background: none; border: none; cursor: pointer;
   transition: color var(--dur-1) var(--ease-out);
+  z-index: 2;
 }
+.sm-close-x {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid currentColor;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.sm-close-esc { font-size: 11px; font-weight: 700; letter-spacing: .4px; }
 .sm-close:hover { color: var(--text-strong); }
+.sm-close:hover .sm-close-x { background: var(--hover); }
+.sm-close:active .sm-close-x { transform: scale(.94); }
 
 /* Account page */
 .acc-banner {
@@ -1411,42 +1682,23 @@ img    { display: block; object-fit: cover; }
 .acc-tag      { font-size: 13px; color: var(--text-3); }
 .acc-save-msg { padding: 10px 14px; background: rgba(35,165,90,.15); border: 1px solid rgba(35,165,90,.3); border-radius: 8px; color: #23a55a; font-size: 13px; margin-bottom: 14px; }
 
-.acc-section-title {
-  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--text-3); margin-bottom: 10px; margin-top: 28px;
-  scroll-margin-top: 12px;
-}
-.acc-card { background: var(--bg-panel); border-radius: 10px; overflow: hidden; }
-.acc-row { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; gap: 18px; }
-.acc-row-left { flex: 1; min-width: 0; }
-.acc-row-label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); margin-bottom: 6px; }
-.acc-row-value { font-size: 16px; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
-.acc-row-value.muted { color: var(--text-3); }
-.acc-btn {
-  padding: 8px 20px; border-radius: 6px; font-size: 14.5px; font-weight: 600; color: var(--text-strong);
-  background: rgba(255,255,255,.08); white-space: nowrap; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
-}
 /* The lift on hover went the way of the others tonight: hover announces that
    a thing is interactive, press answers that it heard you. These buttons had
    the flourish and no press state at all. */
-.acc-btn:hover:not(:disabled) { background: var(--hover-strong); }
-.acc-btn:active:not(:disabled) { transform: scale(.97); }
-.acc-btn:disabled { opacity: .6; cursor: not-allowed; }
 /* Placeholder rows: visibly not ready, rather than looking live and doing
    nothing when clicked. */
-.acc-row.soon { opacity: .5; }
-.acc-row.soon .acc-btn { cursor: not-allowed; }
+.st-field.soon { opacity: .5; }
+.st-field.soon .st-btn { cursor: not-allowed; }
 
-.acc-btn-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
-.acc-btn-arrow:hover { background: var(--hover); color: white; }
+.st-field-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+.st-field-arrow:hover { background: var(--hover); color: white; }
 /* A whole row that navigates. It is a <button> so it is reachable and
    announced as one control rather than as a div with a clickable arrow inside;
    the arrow is decorative and inherits the row's hover. */
-.acc-row-link { width: 100%; text-align: left; background: none; border: none; cursor: pointer; font: inherit; transition: background var(--dur-1) var(--ease-out); }
-.acc-row-link:hover { background: var(--hover); }
-.acc-row-link:hover .acc-btn-arrow { color: var(--text-strong); transform: translateX(2px); }
-@media (prefers-reduced-motion: reduce) { .acc-row-link:hover .acc-btn-arrow { transform: none } }
-.acc-divider { height: 1px; background: rgba(255,255,255,.06); margin: 0 20px; }
+.st-field-link { width: 100%; text-align: left; background: none; border: none; cursor: pointer; font: inherit; transition: background var(--dur-1) var(--ease-out); }
+.st-field-link:hover { background: var(--hover); }
+.st-field-link:hover .st-field-arrow { color: var(--text-strong); transform: translateX(2px); }
+@media (prefers-reduced-motion: reduce) { .st-field-link:hover .st-field-arrow { transform: none } }
 .reveal-btn { font-size: 12px; color: var(--accent); font-weight: 600; }
 .reveal-btn:hover { text-decoration: underline; }
 .acc-standing { display: flex; align-items: center; gap: 14px; padding: 16px 20px; }
@@ -1461,7 +1713,10 @@ img    { display: block; object-fit: cover; }
   display: flex; align-items: center; justify-content: center;
   border: 2px solid transparent; transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
-.ap-swatch:hover { transform: scale(1.08); }
+@media (hover: hover) and (pointer: fine) {
+  .ap-swatch:hover { transform: scale(1.08); }
+}
+.ap-swatch:active { transform: scale(.94); }
 .ap-swatch.active { border-color: var(--text-strong); }
 .ap-custom {
   position: relative; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
@@ -1474,6 +1729,20 @@ img    { display: block; object-fit: cover; }
 .ap-custom.active { border-color: var(--text-strong); }
 .ap-custom-ico { opacity: .92; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); pointer-events: none; }
 .ap-custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+/*
+ * Appearance — controls left, live preview right.
+ *
+ * The preview was a block at the top of the flow that scrolled away after the
+ * first section, so eight of the nine sections adjusted something you could no
+ * longer see. Sticky column instead.
+ */
+.ap-stage { display: flex; gap: 36px; align-items: flex-start; }
+/* No position here — the scroll-spy measures each heading's offsetTop against
+   .sm-content, and making this an offsetParent would rebase all of them. */
+.ap-controls { flex: 1; min-width: 0; }
+.ap-previewcol { width: 380px; flex: none; position: sticky; top: 0; }
+.ap-prevnote { font-size: 12px; color: var(--text-faint); text-align: center; margin-top: 12px; }
+
 .ap-cards { display: flex; gap: 12px; flex-wrap: wrap; }
 .ap-card {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -1491,7 +1760,7 @@ img    { display: block; object-fit: cover; }
 .ap-emoji-native { font-size: 30px; line-height: 32px; }
 
 /* Live preview pane */
-.ap-preview { background: var(--bg-chat); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+.ap-preview { background: var(--bg-chat); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
 .ap-prev-msg { display: flex; gap: 12px; padding: var(--row-pad-y, 2px) 0; }
 .ap-prev-ts { display: none; font-size: 11px; color: var(--text-faint); min-width: 52px; text-align: right; line-height: 1.5; }
 .ap-prev-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
@@ -1528,7 +1797,7 @@ img    { display: block; object-fit: cover; }
   margin: 22px 0 8px;
 }
 .ap-hint-top { margin: -4px 0 10px; }
-.acc-row-sep { border-top: 1px solid var(--border); }
+.st-field-sep { border-top: 1px solid var(--border); }
 
 /* ── Touch targets on a phone ──────────────────────────────────────────────
  * This modal teleports to <body>, so it sits OUTSIDE `.shell` and every
@@ -1539,7 +1808,7 @@ img    { display: block; object-fit: cover; }
  * Measured at 375px before this: Edit buttons 36px, Reveal 35x16, the idle
  * slider 16px tall, accent swatches 40px.
  */
-.sm-modal.mobile .acc-btn { min-height: 44px; }
+.sm-modal.mobile .st-btn { min-height: 44px; }
 /* Was a bare 12px text link — 16px tall and effectively un-hittable. Padding
    gives it a target without turning it into a button visually. */
 .sm-modal.mobile .reveal-btn { min-height: 44px; padding: 0 10px; margin: -10px -10px -10px 0; }
@@ -1553,7 +1822,7 @@ img    { display: block; object-fit: cover; }
    --accent (the --fill % is bound inline per slider). */
 .ap-slider {
   -webkit-appearance: none; appearance: none;
-  width: 100%; max-width: 420px; height: 6px; border-radius: 999px; cursor: pointer;
+  width: 100%; max-width: 560px; height: 6px; border-radius: 999px; cursor: pointer;
   margin: 4px 0 16px;
   background:
     linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat,
@@ -1570,7 +1839,7 @@ img    { display: block; object-fit: cover; }
   width: 16px; height: 16px; border-radius: 50%;
   background: var(--accent); border: 2px solid var(--bg-panel);
 }
-.ap-stepwrap { max-width: 420px; margin-bottom: 16px; }
+.ap-stepwrap { max-width: 560px; margin-bottom: 16px; }
 .ap-stepwrap .ap-slider { margin-bottom: 0; }
 .ap-ticks { display: flex; justify-content: space-between; margin-top: 6px; }
 .ap-ticks span { font-size: 10px; color: var(--text-faint); transition: color var(--dur-1) var(--ease-out); }
@@ -1578,15 +1847,13 @@ img    { display: block; object-fit: cover; }
 .ap-ticks-zoom span { font-size: 9px; }
 
 /* Share theme */
-.acc-btn.primary { background: var(--accent); color: var(--text-on-accent); }
-.acc-btn.primary:hover { background: var(--accent-hover); }
 .ap-share { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 /* The other .ap-hint-top uses sit directly under a HEADING, where a negative
    top margin correctly tightens them to it. This one sits under a BUTTON ROW,
    where that same rule crushed the text against the buttons. */
 .ap-hint-under { margin: 12px 0 4px; }
 .ap-share-input {
-  width: 100%; max-width: 520px; resize: vertical; min-height: 46px;
+  width: 100%; max-width: 680px; resize: vertical; min-height: 46px;
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
   padding: 10px 12px; color: var(--text-1); font-family: var(--font-mono); font-size: 12.5px;
   word-break: break-all;
@@ -1666,7 +1933,7 @@ img    { display: block; object-fit: cover; }
 .sm-modal.mobile .sm-nav-divider { margin: 8px 0; }
 /* The in-page sub-nav duplicates headings that are already in the scrolling
    page; on a narrow screen it's a second nav competing with the first. */
-.sm-modal.mobile .sm-subnav { display: none; }
+.sm-modal.mobile .sm-subnav-wrap { display: none; }
 
 /* Sticky header on both panes, with the top safe-area inset baked in. */
 .sm-mhead {
@@ -1707,4 +1974,58 @@ img    { display: block; object-fit: cover; }
 .sm-content::-webkit-scrollbar, .sm-nav::-webkit-scrollbar { width: 4px; }
 .sm-content::-webkit-scrollbar-track, .sm-nav::-webkit-scrollbar-track { background: transparent; }
 .sm-content::-webkit-scrollbar-thumb, .sm-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+
+/* ── Profile / Appearance stages: press feedback and stacking ── */
+
+/* These are pressed constantly and acknowledged nothing. */
+.ap-card:active,
+.pf-bnbox:active { transform: scale(.97); }
+.ap-card { transition: border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+.pf-bnbox:active { transition: transform var(--dur-1) var(--ease-out); }
+
+/* The banner swatch is the one control whose whole job is showing a colour, so
+   the colour is the one thing here that animates — it is being chosen, and the
+   change should read as a change rather than a cut. */
+.pf-bnbox { transition: background var(--dur-2) var(--ease-out), filter var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .pf-bnbox:hover { filter: brightness(1.25); }
+}
+
+/*
+ * Below this the pane is too narrow for a column plus a 380px preview without
+ * squeezing the controls back to where they started. Preview goes on top
+ * rather than to the bottom — it is the thing being watched.
+ */
+@media (max-width: 1180px) {
+  .pf-stage, .ap-stage { flex-direction: column-reverse; gap: 24px; }
+  .pf-stagecard, .ap-previewcol { width: 100%; position: static; }
+  .pf-stagecard { max-width: 420px; }
+  .ap-previewcol { max-width: 560px; }
+}
+
+/* Phone: one column, and sticky would eat half the screen. */
+.sm-modal.mobile .pf-stage,
+.sm-modal.mobile .ap-stage { flex-direction: column; gap: 20px; }
+.sm-modal.mobile .pf-stagecard,
+.sm-modal.mobile .ap-previewcol { width: 100%; max-width: none; position: static; }
+.sm-modal.mobile .pf-ctl { justify-content: flex-start; }
+.sm-modal.mobile .pf-stage .st-field { flex-wrap: wrap; gap: 10px; }
+
+
+/* ── Saved themes ── */
+.ap-save { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.ap-saved { display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
+.ap-saved-row { display: flex; align-items: center; gap: 8px; }
+.ap-saved-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; border-radius: 8px; background: var(--bg-panel);
+  color: var(--text-1); font-size: 14px; text-align: left;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ap-saved-main:hover { background: var(--hover-strong); }
+}
+.ap-saved-main:active { transform: scale(.99); }
+.ap-saved-chip { width: 44px; height: 28px; border-radius: 5px; flex: none; border: 1px solid rgba(255,255,255,.07); }
+.ap-saved-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

@@ -170,7 +170,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .spin { animation: rot .7s linear infinite; }
 @keyframes rot { to{transform:rotate(360deg)} }
 
-.qs-results { padding: 8px 0 4px; max-height: 320px; overflow-y: auto; }
+.qs-results { padding: 8px 0 4px; max-height: 320px; overflow: hidden auto; }
 .qs-section-label {
   font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
   color: var(--text-3); padding: 6px 16px 4px;

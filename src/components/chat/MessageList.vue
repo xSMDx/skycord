@@ -250,7 +250,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 /* min-height:0 — without it the flex child refuses to shrink and the scroller
    never actually scrolls. */
 .ml-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
-.ml{flex:1;overflow-y:auto;padding: 8px 0 0;display:flex;flex-direction:column}
+.ml{flex:1;overflow: hidden auto;padding: 8px 0 0;display:flex;flex-direction:column}
 .ml-jump{
   position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:5;
   display:flex;align-items:center;gap: 8px;

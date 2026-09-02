@@ -15,6 +15,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Monitor, Smartphone, Tablet, HelpCircle, ShieldCheck } from 'lucide-vue-next'
 import { useApi, type ApiSession } from '@/composables/useApi'
 import CountryFlag from './CountryFlag.vue'
+import '@/styles/settingsShared.css'
 
 const { listSessions, revokeSession, revokeOtherSessions } = useApi()
 
@@ -107,7 +108,7 @@ const signOutOthers = async () => {
 </script>
 
 <template>
-  <h2 class="acc-section-title">Logged-in Devices</h2>
+  <h2 class="st-section">Logged-in Devices</h2>
   <p class="dv-hint">
     Everywhere your account is currently signed in. If you don't recognise a
     device, sign it out and then change your password.
@@ -117,7 +118,7 @@ const signOutOthers = async () => {
 
   <!-- Skeleton rather than a spinner: the list has a known shape, so the page
        can hold its final height and not jump when the data lands. -->
-  <div v-if="loading" class="acc-card" aria-busy="true">
+  <div v-if="loading" class="st-card" aria-busy="true">
     <div v-for="n in 2" :key="n" class="dv-row">
       <div class="dv-icon dv-skel" />
       <div class="dv-main">
@@ -131,7 +132,7 @@ const signOutOthers = async () => {
        list. Without it the page said "Could not load your devices" and "no
        devices are signed in" one under the other — the second of which is a
        claim the page has no basis for. -->
-  <div v-else-if="!sessions.length && !error" class="acc-card dv-empty">
+  <div v-else-if="!sessions.length && !error" class="st-card dv-empty">
     <ShieldCheck :size="20" :stroke-width="1.5" />
     <!-- Not "no OTHER devices": an empty list means this one is missing too,
          which happens on a cookie issued before sessions existed and not yet
@@ -140,7 +141,7 @@ const signOutOthers = async () => {
     <span>No signed-in devices to show. Sign in again and this one will appear here.</span>
   </div>
 
-  <div v-else class="acc-card">
+  <div v-else class="st-card">
     <div
       v-for="(s, i) in ordered" :key="s.id"
       class="dv-row" :class="{ current: s.current }"
@@ -201,27 +202,11 @@ const signOutOthers = async () => {
 </template>
 
 <style scoped>
-/*
- * `.acc-section-title` and `.acc-card` are the settings shell's own classes,
- * repeated here rather than inherited. SettingsModal's <style> is scoped, so
- * its rules carry that component's data-v hash and never match elements this
- * component renders — the markup looked right and painted nothing: no panel,
- * no radius, and the heading falling back to a bare 24px h2.
- *
- * Same names on purpose. A parallel `dv-card` vocabulary would hide that this
- * is the same pattern; these values must track SettingsModal's if either moves.
- */
-.acc-section-title {
-  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--text-3); margin: 0 0 10px;
-}
-.acc-card {
-  background: var(--bg-panel); border-radius: 10px; overflow: hidden;
-  /* Queried below. The settings modal's width does not track the viewport —
-     it has its own nav column and its own breakpoints — so a viewport media
-     query would fire at the wrong moment in both directions. */
-  container-type: inline-size;
-}
+/* The card is a container for the query below. The settings modal's width does
+   not track the viewport — it has its own nav column and its own breakpoints —
+   so a viewport media query would fire at the wrong moment in both directions.
+   Everything else about the card now comes from settingsShared.css. */
+.st-card { container-type: inline-size; }
 
 .dv-hint { font-size: 13px; line-height: 1.5; color: var(--text-3); margin: 0 0 14px; max-width: 62ch; }
 

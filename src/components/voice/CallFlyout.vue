@@ -105,7 +105,7 @@ onBeforeUnmount(() => {
 /* No backdrop element — see onDocPointerDown. */
 .fly {
   position: fixed; z-index: 8001;
-  min-width: 236px; max-height: 62vh; overflow-y: auto;
+  min-width: 236px; max-height: 62vh; overflow: hidden auto;
   background: var(--bg-floor); border: 1px solid rgba(255,255,255,.1);
   border-radius: 8px; padding: 6px;
   box-shadow: 0 8px 32px rgba(0,0,0,.85);

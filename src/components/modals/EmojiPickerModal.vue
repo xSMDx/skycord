@@ -376,7 +376,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 }
 .cat-btn:hover, .cat-btn.active { background: var(--hover-strong); opacity: 1; }
 
-.picker-grid { flex: 1; overflow-y: auto; padding: 8px; }
+.picker-grid { flex: 1; overflow: hidden auto; padding: 8px; }
 .cat-section  { margin-bottom: 12px; }
 .cat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); margin-bottom: 6px; padding: 0 4px; }
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 1px; }

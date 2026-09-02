@@ -193,7 +193,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .ig-hint { padding: 8px 20px 0; font-size: 12px; color: var(--text-3); }
 
-.ig-list { padding: 8px 12px; max-height: 280px; overflow-y: auto; margin-top: 4px; }
+.ig-list { padding: 8px 12px; max-height: 280px; overflow: hidden auto; margin-top: 4px; }
 .ig-item {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 8px; border-radius: 6px; cursor: pointer; transition: background var(--dur-1) var(--ease-out);

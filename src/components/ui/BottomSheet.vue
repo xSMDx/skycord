@@ -147,7 +147,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .bs-body {
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: 1; min-height: 0; overflow: hidden auto;
   padding: 0 12px 12px;
   touch-action: pan-y;              /* scrolling works inside */
   overscroll-behavior: contain;     /* and doesn't bleed to the page behind */

@@ -230,7 +230,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-act:active { transform: scale(.97); }
 
 /* Body */
-.dbg-body { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 24px 24px; }
+.dbg-body { flex: 1; min-width: 0; overflow: hidden auto; padding: 20px 24px 24px; }
 .dbg-h { font-size: 14px; color: var(--text-1); margin: 0 0 16px; font-weight: 600; }
 .dbg-h span { color: var(--text-faint); font-weight: 400; font-size: 12px; }
 .dbg-err {

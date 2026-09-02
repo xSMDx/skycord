@@ -14,6 +14,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide } from 'vue'
 import { useViewport } from '@/composables/useViewport'
 import { useSheetDrag } from '@/composables/useSheetDrag'
+import { applyClickOrigin } from '@/composables/useClickOrigin'
 
 const props = defineProps<{
   title?: string
@@ -134,6 +135,18 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (restoreTo && document.contains(restoreTo)) restoreTo.focus()
 })
+
+/**
+ * Grow out of whatever was clicked.
+ *
+ * The dialog is a fresh element every open, so the origin is set per-open
+ * rather than in the stylesheet. Sheets are exempt — they rise from the bottom
+ * edge, and a point origin would fight that.
+ */
+const onBeforeEnter = (el: Element) => {
+  const modal = (el as HTMLElement).querySelector<HTMLElement>('.modal')
+  if (modal && !modal.classList.contains('sheet')) applyClickOrigin(modal)
+}
 </script>
 
 <template>
@@ -143,7 +156,10 @@ onBeforeUnmount(() => {
          -- a no-op property change, a hidden tab that is not compositing --
          would mean @after-leave never runs and the modal stays mounted
          forever. Stuck open is a worse failure than no animation. -->
-    <Transition name="mb" appear :duration="{ enter: 200, leave: 150 }" @after-leave="emit('close')">
+    <Transition
+      name="mb" appear :duration="{ enter: 200, leave: 150 }"
+      @before-enter="onBeforeEnter" @after-leave="emit('close')"
+    >
     <div
       v-if="shown"
       class="overlay"
@@ -196,7 +212,7 @@ onBeforeUnmount(() => {
 .mb-leave-active .modal { transition:
   transform var(--dur-exit) var(--ease-in), opacity var(--dur-exit) var(--ease-in); }
 .mb-enter-from .modal,
-.mb-leave-to   .modal   { opacity: 0; transform: translateY(8px) scale(.98); }
+.mb-leave-to   .modal   { opacity: 0; transform: translateY(4px) scale(.95); }
 
 /* The sheet keeps its own path: straight down, no scale. */
 .mb-enter-from .modal.sheet,

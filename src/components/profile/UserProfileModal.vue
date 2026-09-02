@@ -311,7 +311,7 @@ img { display: block; object-fit: cover; }
 .up-empty p { font-size: 15px; color: var(--text-2); }
 .up-empty span { font-size: 13px; }
 
-.up-mutuals { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.up-mutuals { display: flex; flex-direction: column; gap: 2px; overflow: hidden auto; }
 .up-mutual {
   display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
   padding: 8px 12px; border-radius: 8px;
