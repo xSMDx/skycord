@@ -15,6 +15,7 @@ import { Server } from '../models/Server'
 import { loadServer, requireOwner } from './serversController'
 import { seal, hint } from '../utils/secretBox'
 import { instanceVoiceServers, isInstanceVoiceId } from '../config/instanceVoice'
+import { requirePerm } from '../utils/access'
 
 /** Never includes apiSecret. The field is `select: false` as a second line of
  *  defence, but the shape is the first. */
@@ -117,7 +118,7 @@ export const listMyVoiceServers = async (req: Request, res: Response, next: Next
 export const createVoiceServer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageServer', res)) return
 
     const name      = String(req.body?.name ?? '').trim()
     const apiKey    = String(req.body?.apiKey ?? '').trim()
@@ -154,7 +155,7 @@ export const createVoiceServer = async (req: Request, res: Response, next: NextF
 export const updateVoiceServer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageServer', res)) return
 
     const { vid } = req.params
     // File-managed, so the app is not the place to change it. Refused with a
@@ -204,7 +205,7 @@ export const updateVoiceServer = async (req: Request, res: Response, next: NextF
 export const deleteVoiceServer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageServer', res)) return
 
     const { vid } = req.params
     // File-managed, so the app is not the place to change it. Refused with a

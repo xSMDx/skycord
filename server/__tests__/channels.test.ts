@@ -66,7 +66,7 @@ describe('POST /servers/:sid/channels', () => {
     const res = await app().post(`/servers/${server.id}/channels`)
       .set(auth(b)).send({ name: 'x', type: 'text' })
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage channels/i)
   })
 })
 
@@ -89,7 +89,7 @@ describe('PATCH /servers/:sid/channels/:cid', () => {
     const res = await app().patch(`/servers/${server.id}/channels/${text.id}`)
       .set(auth(b)).send({ name: 'renamed' })
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage channels/i)
   })
 
   // loadChannel is the authorisation boundary shared by every channel
@@ -155,7 +155,7 @@ describe('DELETE /servers/:sid/channels/:cid', () => {
       .set(auth(a)).send({ name: 'second', type: 'text' })).body.channel
     const res = await app().delete(`/servers/${server.id}/channels/${extra.id}`).set(auth(b))
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage channels/i)
   })
 
   it('serializes two concurrent deletes of the last two text channels: exactly one wins', async () => {

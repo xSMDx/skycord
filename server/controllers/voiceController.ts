@@ -12,6 +12,9 @@ import {
   getCallVoiceServer, fixCallVoiceServer, setCallVoiceServer, announceCallVoiceServer,
   callOccupancy, isInCall,
 } from '../sockets/chatSocket'
+import { Category } from '../models/Category'
+import { loadAccess, channelBits, has } from '../utils/access'
+import { parseOverwrites } from '../permissions'
 
 // A LiveKit room name for a conversation. DMs use the stable sorted-pair id so
 // both participants land in the same room; groups use the group id; server
@@ -70,7 +73,7 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       // exact same 403 whether the channel is text or voice and can never
       // use this endpoint to learn which one it is.
       if (!mongoose.isValidObjectId(conversationId)) { res.status(400).json({ message: 'Invalid channel' }); return }
-      const channel = await Channel.findById(conversationId).select('server type voiceServer userLimit bitrate').lean()
+      const channel = await Channel.findById(conversationId).select('server type voiceServer userLimit bitrate category overwrites').lean()
       if (!channel) { res.status(404).json({ message: 'Channel not found' }); return }
       chosenChannel = channel
       const server = await Server.findById(channel.server).select('members').lean()
@@ -83,6 +86,35 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       }
       if (channel.type !== 'voice') {
         res.status(400).json({ message: 'That is not a voice channel' }); return
+      }
+
+      /*
+       * Connect, resolved through the category and the channel.
+       *
+       * This is the only door — LiveKit admits anyone holding a token, so a
+       * check that lives in the UI is not a check. A locked voice channel that
+       * merely does not appear in the sidebar is still joinable by anyone who
+       * knows its id, which is why "private" writes Connect as well as
+       * ViewChannels and why both are re-tested here rather than trusted.
+       *
+       * 404 when they may not even see it, so this cannot be used to discover
+       * that a private channel exists; 403 when they can see it but may not
+       * join.
+       */
+      const full = await Server.findById(channel.server)
+      if (!full) { res.status(404).json({ message: 'Server not found' }); return }
+      const access = await loadAccess(full, userId)
+      const cat = channel.category ? await Category.findById(channel.category) : null
+      const bits = channelBits(
+        access,
+        parseOverwrites(cat?.overwrites),
+        parseOverwrites((channel as any).overwrites),
+      )
+      if (!has(bits, 'ViewChannels')) {
+        res.status(404).json({ message: 'Channel not found' }); return
+      }
+      if (!has(bits, 'Connect')) {
+        res.status(403).json({ message: 'You cannot join this voice channel' }); return
       }
     } else {
       if (conversationId === userId) { res.status(400).json({ message: 'Invalid DM' }); return }

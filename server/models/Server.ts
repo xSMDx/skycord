@@ -17,6 +17,20 @@ export interface IServer extends Document {
   description: string | null
   owner:       Types.ObjectId
   members:     Types.ObjectId[]
+  /**
+   * Which roles each member holds. A SIDE-CAR, deliberately: `members` is read
+   * in 54 places across six files, and reshaping it into member documents
+   * would have been one migration touching every server path at once.
+   *
+   * The cost is real and is accepted knowingly — membership lives in
+   * `members` and roles live here, so join and leave must write BOTH. Use
+   * addMember/removeMember in serversController rather than pushing to either
+   * array directly, and see the tests that hold the two in step.
+   *
+   * @everyone is never listed. Every member holds it by definition, so storing
+   * it would be a fact that can go stale.
+   */
+  memberRoles: { user: Types.ObjectId; roles: Types.ObjectId[] }[]
   isPublic:    boolean
   createdAt:   Date
   updatedAt:   Date
@@ -33,6 +47,15 @@ const ServerSchema = new Schema<IServer>(
     description: { type: String, default: null, maxlength: 300 },
     owner:       { type: Schema.Types.ObjectId, ref: 'User', required: true },
     members:     [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    // _id: false — these are a lookup keyed by user, not entities of their own.
+    memberRoles: {
+      type: [{
+        user:  { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        roles: [{ type: Schema.Types.ObjectId, ref: 'Role' }],
+      }],
+      default: [],
+      _id: false,
+    },
     // Opt-in, and false is the only safe default. Discover lists servers by
     // this flag alone -- listing anything the owner has not deliberately
     // published would expose every private friend-group server on the

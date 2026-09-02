@@ -6,6 +6,8 @@ import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } 
 import { createApp } from '../app'
 import { Server } from '../models/Server'
 import { ServerInvite } from '../models/ServerInvite'
+import { Role } from '../models/Role'
+import { PERMISSIONS } from '../permissions'
 
 // There is no join endpoint that a test could use here without itself
 // depending on the behaviour under test (POST /invites/:code), so tests
@@ -66,13 +68,37 @@ describe('POST /servers/:sid/invites', () => {
     expect(res.body.message).toMatch(/not a member/i)
   })
 
-  it('403s a non-owner member', async () => {
+  /*
+   * Creating an invite is no longer owner-only.
+   *
+   * CreateInvite is part of the default @everyone set, so an ordinary member
+   * can invite unless a server takes that away — Discord's default and what
+   * most people expect. This replaced an owner-only check when roles landed,
+   * so the change is deliberate rather than a regression.
+   */
+  it('lets an ordinary member invite, because @everyone may by default', async () => {
     const a = await register(), b = await register()
     const s = await mkServer(a)
     await joinAsMember(s.id, b.id)
     const res = await app().post(`/servers/${s.id}/invites`).set(auth(b)).send({ expiry: '24h' })
+    expect(res.status).toBe(201)
+  })
+
+  it('403s once @everyone loses Create Invite', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    await joinAsMember(s.id, b.id)
+    // Materialise @everyone, then strip the permission from it.
+    await app().get(`/servers/${s.id}/roles`).set(auth(a))
+    const everyone = await Role.findOne({ server: s.id, isEveryone: true })
+    await Role.updateOne(
+      { _id: everyone!._id },
+      { $set: { permissions: (BigInt(everyone!.permissions) & ~PERMISSIONS.CreateInvite).toString() } },
+    )
+
+    const res = await app().post(`/servers/${s.id}/invites`).set(auth(b)).send({ expiry: '24h' })
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/create invite/i)
   })
 })
 
@@ -111,7 +137,7 @@ describe('POST /invites/:code', () => {
     expect(res.status).toBe(200)
     expect(res.body.categories.map((c: any) => c.name)).toEqual(['First', 'Second'])
     // Same shape getServer sends — shapeCategory, not a raw document.
-    expect(Object.keys(res.body.categories[0]).sort()).toEqual(['id', 'name', 'position', 'server'])
+    expect(Object.keys(res.body.categories[0]).sort()).toEqual(['id', 'name', 'overwrites', 'position', 'server'])
     expect(res.body.categories[0].server).toBe(s.id)
   })
 
@@ -261,7 +287,7 @@ describe('DELETE /servers/:sid/invites/:code', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().delete(`/servers/${s.id}/invites/${inv.code}`).set(auth(b))
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage server/i)
   })
 })
 
@@ -283,6 +309,6 @@ describe('GET /servers/:sid/invites', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().get(`/servers/${s.id}/invites`).set(auth(b))
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage server/i)
   })
 })

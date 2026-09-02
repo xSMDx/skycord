@@ -14,6 +14,9 @@ import {
 } from '../controllers/categoriesController'
 import { createInvite, listInvites, revokeInvite } from '../controllers/invitesController'
 import {
+  listRoles, createRole, updateRole, deleteRole, setMemberRoles,
+} from '../controllers/rolesController'
+import {
   listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer,
 } from '../controllers/voiceServersController'
 
@@ -48,6 +51,18 @@ router.delete('/:sid/channels/:cid',   deleteChannel)
 router.post('/:sid/categories',        writeLimit,  createCategory)
 router.patch('/:sid/categories/:cid',  writeLimit,  updateCategory)
 router.delete('/:sid/categories/:cid',              deleteCategory)
+
+// Roles. Unlike the routes above these are not owner-gated — the controller
+// authorises on ManageRoles plus role position, which is the first thing in
+// this codebase to use the permission model rather than an ownership check.
+router.get('/:sid/roles',                           listRoles)
+router.post('/:sid/roles',            writeLimit,   createRole)
+router.patch('/:sid/roles/:rid',      writeLimit,   updateRole)
+router.delete('/:sid/roles/:rid',                   deleteRole)
+// PUT, not PATCH: the body is the member's complete role set, so sending it
+// twice lands the same state. A PATCH would imply a delta and invite races
+// between two moderators editing the same member.
+router.put('/:sid/members/:uid/roles', writeLimit,  setMemberRoles)
 
 router.get('/:sid/channels/:cid/messages',              getChannelMessages)
 router.post('/:sid/channels/:cid/messages', writeLimit, sendChannelMessage)

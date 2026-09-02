@@ -9,6 +9,8 @@ import { Message } from '../models/Message'
 import { User } from '../models/User'
 import { resolveMessages } from './messagesController'
 import { getIO, rememberChannelServer, forgetChannelServer } from '../sockets/chatSocket'
+import { loadAccess, channelBits, has, requirePerm, requireBits, validateOverwrites } from '../utils/access'
+import { parseOverwrites } from '../permissions'
 
 /**
  * Serializes callbacks per server id, within this process only. Guards every
@@ -53,9 +55,23 @@ export function withServerLock<T>(serverId: string, fn: () => Promise<T>): Promi
 }
 
 /**
- * Resolve a channel and prove the caller may touch it. The channel must belong
- * to the server in the path — otherwise a member of any server could address a
- * channel in any other by id.
+ * Resolve a channel, prove it belongs to the server in the path, and decide
+ * whether the caller may see it at all.
+ *
+ * The server check is not incidental: without it a member of any server could
+ * address a channel in any other by id.
+ *
+ * The single gate for every channel operation — fetching messages, sending
+ * one, editing and deleting all pass through here — so ViewChannels is
+ * enforced once rather than remembered at four call sites.
+ *
+ * A denied channel answers **404, not 403**. 403 confirms the channel exists,
+ * which for a private channel leaks the very thing it was made private to
+ * hide: that there is a #incidents in this server at all. The same reason the
+ * id-not-found and wrong-server branches above already answer 404.
+ *
+ * The resolved bitfield is returned so callers can ask further questions —
+ * SendMessages, Connect — without re-running the queries.
  */
 export const loadChannel = async (req: Request, res: Response) => {
   const server = await loadServer(req, res)
@@ -66,7 +82,19 @@ export const loadChannel = async (req: Request, res: Response) => {
   if (!channel || channel.server.toString() !== server._id.toString()) {
     res.status(404).json({ message: 'Channel not found' }); return null
   }
-  return { server, channel }
+
+  const access = await loadAccess(server, req.user!.sub)
+  const category = channel.category ? await Category.findById(channel.category) : null
+  const bits = channelBits(
+    access,
+    parseOverwrites(category?.overwrites),
+    parseOverwrites(channel.overwrites),
+  )
+  if (!has(bits, 'ViewChannels')) {
+    res.status(404).json({ message: 'Channel not found' }); return null
+  }
+
+  return { server, channel, access, bits }
 }
 
 /**
@@ -106,7 +134,7 @@ const CATEGORY_REJECTED = 'That category does not belong to this server'
 export const createChannel = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageChannels', res)) return
 
     const name = String(req.body.name ?? '').trim()
     const type = req.body.type === 'voice' ? 'voice' : req.body.type === 'text' ? 'text' : null
@@ -170,7 +198,6 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
 export const updateChannel = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const found = await loadChannel(req, res); if (!found) return
-    if (!requireOwner(found.server, req.user!.sub, res)) return
 
     // Per-field, in the shape updateServer already uses, so a channel can be
     // moved between categories without also being renamed. A body that names
@@ -179,12 +206,42 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     // 200 and a broadcast.
     const wantsName     = req.body.name !== undefined
     const wantsCategory = req.body.category !== undefined
+    const wantsPerms    = req.body.overwrites !== undefined || req.body.hideWhenDenied !== undefined
     // The Overview form submits whichever fields it shows, so the "nothing to
     // change" guard has to count these too or saving only a topic 400s.
     const OVERVIEW = ['topic', 'slowmode', 'userLimit', 'bitrate', 'voiceServer'] as const
     const wantsOverview = OVERVIEW.some(k => req.body[k] !== undefined)
-    if (!wantsName && !wantsCategory && !wantsOverview) {
+    if (!wantsName && !wantsCategory && !wantsOverview && !wantsPerms) {
       res.status(400).json({ message: 'Give the channel a name' }); return
+    }
+
+    /*
+     * Two different powers, checked against what the body actually changes.
+     *
+     * Manage Channels covers the name, the category and the overview fields.
+     * Manage Roles covers who may see the channel. Demanding both for a
+     * permissions-only edit — which is what an unconditional Manage Channels
+     * gate did — would mean nobody could be trusted with the Permissions tab
+     * without also being handed the ability to rename and delete the channel.
+     */
+    if (wantsName || wantsCategory || wantsOverview) {
+      if (!requireBits(found.bits, 'ManageChannels', res)) return
+    }
+
+    /*
+     * Permission edits need Manage Roles, not Manage Channels.
+     *
+     * Renaming a channel and deciding who may see it are different powers.
+     * Someone trusted to tidy the channel list is not thereby trusted to
+     * unlock #incidents, and the reference splits them the same way.
+     */
+    let overwrites: Awaited<ReturnType<typeof validateOverwrites>> = null
+    if (wantsPerms) {
+      if (!requireBits(found.bits, 'ManageRoles', res)) return
+      if (req.body.overwrites !== undefined) {
+        overwrites = await validateOverwrites(req.body.overwrites, found.server, found.access, res)
+        if (!overwrites) return
+      }
     }
 
     // Validate everything before writing anything: a blank name arriving
@@ -265,6 +322,10 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
       // Applied here, inside the same save, so a channel move and a settings
       // change submitted together are one write rather than two.
       Object.assign(found.channel, overview)
+      if (overwrites !== null) found.channel.overwrites = overwrites
+      if (req.body.hideWhenDenied !== undefined) {
+        found.channel.hideWhenDenied = !!req.body.hideWhenDenied
+      }
       await found.channel.save()
       return { ok: true }
     }
@@ -284,7 +345,9 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
 export const deleteChannel = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const found = await loadChannel(req, res); if (!found) return
-    if (!requireOwner(found.server, req.user!.sub, res)) return
+    // Channel-scoped, not server-scoped: an overwrite can grant Manage
+    // Channels for this channel alone.
+    if (!requireBits(found.bits, 'ManageChannels', res)) return
 
     const serverId = found.server._id.toString()
     await withServerLock(serverId, async () => {
@@ -350,6 +413,13 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
     // A voice channel is one thing. Text-in-voice is deliberately out of scope.
     if (found.channel.type !== 'text') {
       res.status(400).json({ message: 'You cannot post messages in a voice channel' }); return
+    }
+
+    // 403 here, not 404: loadChannel already proved they may SEE the channel,
+    // so its existence is not a secret from them. A read-only channel should
+    // say it is read-only rather than pretend to have vanished.
+    if (!has(found.bits, 'SendMessages')) {
+      res.status(403).json({ message: 'You cannot send messages in this channel' }); return
     }
 
     const { content, replyToIds } = req.body as { content?: string; replyToIds?: string[] }

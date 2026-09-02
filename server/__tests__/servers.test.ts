@@ -99,7 +99,7 @@ describe('PATCH /servers/:sid', () => {
     await joinAsMember(s.id, b.id)
     const res = await app().patch(`/servers/${s.id}`).set(auth(b)).send({ name: 'x' })
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage server/i)
   })
 
   it('rejects an oversized icon with a friendly 400', async () => {
@@ -176,7 +176,7 @@ describe('DELETE /servers/:sid/members/:uid', () => {
     const s = await mkServer(u)
     const res = await app().delete(`/servers/${s.id}/members/${u.id}`).set(auth(u))
     expect(res.status).toBe(400)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/cannot leave their own server/i)
   })
 
   it('403s a non-owner member trying to kick a third member', async () => {
@@ -186,7 +186,7 @@ describe('DELETE /servers/:sid/members/:uid', () => {
     await joinAsMember(s.id, c.id)
     const res = await app().delete(`/servers/${s.id}/members/${c.id}`).set(auth(b))
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/cannot remove that member/i)
   })
 
   it('200s when removing a member with a malformed uid, idempotent for non-existent ids', async () => {

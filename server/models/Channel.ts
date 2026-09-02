@@ -6,6 +6,21 @@ import mongoose, { Document, Schema, Types } from 'mongoose'
  */
 export type ChannelType = 'text' | 'voice'
 
+/**
+ * One allow/deny pair aimed at a role or a member.
+ *
+ * Lives on both Channel and Category with the same shape on purpose:
+ * resolveChannel walks them as interchangeable layers, outermost first, and a
+ * divergence between the two would show up as a permission that behaves
+ * differently depending on where it was set.
+ */
+export interface IOverwrite {
+  id:    Types.ObjectId
+  type:  'role' | 'member'
+  allow: string
+  deny:  string
+}
+
 export interface IChannel extends Document {
   _id:      Types.ObjectId
   server:   Types.ObjectId
@@ -49,6 +64,24 @@ export interface IChannel extends Document {
    *  nothing needs migrating. */
   voiceServer: string | null
 
+  /**
+   * Per-role and per-member allow/deny for THIS channel.
+   *
+   * Empty is the default and means "follow whatever is above me" — for a
+   * channel that is its category, for a category the server-wide roles. That
+   * is what the reference calls "synced", expressed as an absence rather than
+   * as copied data that can drift out of step.
+   */
+  overwrites: IOverwrite[]
+
+  /**
+   * When someone lacks View channel: hide the channel outright (default), or
+   * show it locked. Hidden leaks less and is what the reference does; visible
+   * lets people see what exists and ask for access. Per channel, because both
+   * are legitimate and the right answer depends on the channel.
+   */
+  hideWhenDenied: boolean
+
   createdAt: Date
   updatedAt: Date
 }
@@ -83,6 +116,19 @@ const ChannelSchema = new Schema<IChannel>(
     // the default" rather than as an error. Same tolerance `category` has.
     // Not a ref: the value may name an instance server, which has no document.
     voiceServer: { type: String, default: null, maxlength: 80 },
+    // _id: false — an overwrite is a row in a lookup, not an entity.
+    overwrites: {
+      type: [{
+        id:    { type: Schema.Types.ObjectId, required: true },
+        type:  { type: String, enum: ['role', 'member'], required: true },
+        // Decimal strings: BSON has no BigInt, and the bitfield passes 2^53.
+        allow: { type: String, default: '0' },
+        deny:  { type: String, default: '0' },
+      }],
+      default: [],
+      _id: false,
+    },
+    hideWhenDenied: { type: Boolean, default: true },
   },
   { timestamps: true, versionKey: false }
 )

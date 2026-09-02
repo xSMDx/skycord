@@ -51,7 +51,7 @@ describe('POST /servers/:sid/categories', () => {
     })
     expect(typeof res.body.category.id).toBe('string')
     // The wire shape is exactly these four keys — no _id, no timestamps.
-    expect(Object.keys(res.body.category).sort()).toEqual(['id', 'name', 'position', 'server'])
+    expect(Object.keys(res.body.category).sort()).toEqual(['id', 'name', 'overwrites', 'position', 'server'])
   })
 
   it('trims the name', async () => {
@@ -152,7 +152,7 @@ describe('POST /servers/:sid/categories', () => {
     await joinAsMember(server.id, b.id)
     const res = await app().post(`/servers/${server.id}/categories`).set(auth(b)).send({ name: 'x' })
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage channels/i)
   })
 
   // loadServer is the shared authorisation boundary: a stranger is refused
@@ -165,7 +165,7 @@ describe('POST /servers/:sid/categories', () => {
     const res = await app().post(`/servers/${server.id}/categories`).set(auth(b)).send({ name: 'x' })
     expect(res.status).toBe(403)
     expect(res.body.message).toMatch(/not a member/i)
-    expect(res.body.message).not.toMatch(/owner/i)
+    expect(res.body.message).not.toMatch(/manage channels/i)
   })
 
   it('404s an unknown server id', async () => {
@@ -223,7 +223,7 @@ describe('PATCH /servers/:sid/categories/:cid', () => {
     const res = await app().patch(`/servers/${server.id}/categories/${cat.id}`)
       .set(auth(b)).send({ name: 'Renamed' })
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage channels/i)
     expect((await Category.findById(cat.id))!.name).toBe('Keep')
   })
 
@@ -411,7 +411,7 @@ describe('DELETE /servers/:sid/categories/:cid', () => {
     const cat = await mkCategory(a, server.id, 'Keep')
     const res = await app().delete(`/servers/${server.id}/categories/${cat.id}`).set(auth(b))
     expect(res.status).toBe(403)
-    expect(res.body.message).toMatch(/owner/i)
+    expect(res.body.message).toMatch(/manage channels/i)
     expect(await Category.findById(cat.id)).not.toBeNull()
   })
 

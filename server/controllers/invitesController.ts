@@ -9,6 +9,7 @@ import { generateInviteCode } from '../utils/inviteCode'
 import { loadServer, requireOwner, shapeServer, shapeChannel, shapeCategory, emitToServer } from './serversController'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
+import { requirePerm } from '../utils/access'
 
 const DAY = 24 * 60 * 60 * 1000
 const expiryFor = (v: unknown): Date | null =>
@@ -67,7 +68,7 @@ const shapeInvite = (i: any, inviter?: any, channel: { id: string; name: string 
 export const createInvite = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'CreateInvite', res)) return
 
     // base64url of 6 bytes; retry on the vanishingly rare collision.
     let code = generateInviteCode()
@@ -91,7 +92,7 @@ export const createInvite = async (req: Request, res: Response, next: NextFuncti
 export const listInvites = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageServer', res)) return
 
     const invites = await ServerInvite.find({ server: server._id }).sort({ createdAt: -1 }).lean()
     const users = await User.find({ _id: { $in: invites.map(i => i.createdBy) } })
@@ -104,7 +105,7 @@ export const listInvites = async (req: Request, res: Response, next: NextFunctio
 export const revokeInvite = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageServer', res)) return
     await ServerInvite.deleteOne({ server: server._id, code: req.params.code })
     res.json({ ok: true })
   } catch (err) { next(err) }
@@ -257,7 +258,7 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
 
     res.json({
       server:     shapeServer(server),
-      channels:   channels.map(shapeChannel),
+      channels:   channels.map(c => shapeChannel(c)),
       categories: categories.map(shapeCategory),
       joined,
       // Returned for an already-member too: there is no join to perform, but

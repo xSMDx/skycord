@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose'
+import type { IOverwrite } from './Channel'
 
 /**
  * A named group of channels inside a server.
@@ -26,6 +27,16 @@ export interface ICategory extends Document {
   name:     string
   /** Order within the server. Assigned by appending; no reorder UI yet. */
   position: number
+
+  /**
+   * Per-role and per-member allow/deny for THIS category.
+   *
+   * Empty is the default and means "follow whatever is above me" — for a
+   * channel that is its category, for a category the server-wide roles. That
+   * is what the reference calls "synced", expressed as an absence rather than
+   * as copied data that can drift out of step.
+   */
+  overwrites: IOverwrite[]
   createdAt: Date
   updatedAt: Date
 }
@@ -35,6 +46,18 @@ const CategorySchema = new Schema<ICategory>(
     server:   { type: Schema.Types.ObjectId, ref: 'Server', required: true },
     name:     { type: String, required: true, maxlength: 100 },
     position: { type: Number, default: 0 },
+    // _id: false — an overwrite is a row in a lookup, not an entity.
+    overwrites: {
+      type: [{
+        id:    { type: Schema.Types.ObjectId, required: true },
+        type:  { type: String, enum: ['role', 'member'], required: true },
+        // Decimal strings: BSON has no BigInt, and the bitfield passes 2^53.
+        allow: { type: String, default: '0' },
+        deny:  { type: String, default: '0' },
+      }],
+      default: [],
+      _id: false,
+    },
   },
   { timestamps: true, versionKey: false }
 )

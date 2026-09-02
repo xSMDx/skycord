@@ -8,6 +8,8 @@ import { VoiceServer } from '../models/VoiceServer'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
+import { loadAccess, channelBits, categoryOverwriteMap, has, requirePerm } from '../utils/access'
+import { parseOverwrites, canActOnMember } from '../permissions'
 
 /** Discover is a directory, not a feed: one page, no pagination yet. */
 const DISCOVER_LIMIT = 50
@@ -26,7 +28,12 @@ export const shapeServer = (s: any) => ({
   createdAt:   s.createdAt,
 })
 
-export const shapeChannel = (c: any) => ({
+/**
+ * @param locked The caller may not View this channel, but it is shown anyway
+ *   because the channel opted out of hiding. Always present so the client
+ *   never has to distinguish "not locked" from "an older payload".
+ */
+export const shapeChannel = (c: any, locked = false) => ({
   id:       c._id.toString(),
   server:   c.server.toString(),
   name:     c.name,
@@ -53,6 +60,11 @@ export const shapeChannel = (c: any) => ({
   // first server anyone opens. Pinned by categoryModel.test.ts and by the
   // legacy-row case in categories.test.ts.
   category: c.category ? c.category.toString() : null,
+  locked,
+  hideWhenDenied: c.hideWhenDenied ?? true,
+  // Empty for a locked stub: someone who cannot see the channel has no
+  // business reading which roles can.
+  overwrites: locked ? [] : shapeOverwrites(c.overwrites),
 })
 
 /**
@@ -61,11 +73,21 @@ export const shapeChannel = (c: any) => ({
  * and categoriesController do not have to import each other — the same reason
  * shapeChannel lives here and not in channelsController.
  */
+/** Wire form of an overwrite: ids as strings, bits as decimal strings. */
+export const shapeOverwrites = (raw: any[] | undefined) =>
+  (raw ?? []).map(o => ({
+    id:    o.id.toString(),
+    type:  o.type as 'role' | 'member',
+    allow: String(o.allow ?? '0'),
+    deny:  String(o.deny ?? '0'),
+  }))
+
 export const shapeCategory = (c: any) => ({
   id:       c._id.toString(),
   server:   c.server.toString(),
   name:     c.name,
   position: c.position,
+  overwrites: shapeOverwrites(c.overwrites),
 })
 
 /**
@@ -130,7 +152,7 @@ export const createServer = async (req: Request, res: Response, next: NextFuncti
       io.in(`user:${userId}`).socketsJoin(rooms)
     }
 
-    res.status(201).json({ server: shapeServer(server), channels: channels.map(shapeChannel) })
+    res.status(201).json({ server: shapeServer(server), channels: channels.map(c => shapeChannel(c)) })
   } catch (err) { next(err) }
 }
 
@@ -229,7 +251,7 @@ export const joinPublicServer = async (req: Request, res: Response, next: NextFu
       if (rooms.length) getIO()?.in(`user:${userId}`).socketsJoin(rooms)
     }
 
-    res.json({ server: shapeServer(fresh), channels: channels.map(shapeChannel), joined: !already })
+    res.json({ server: shapeServer(fresh), channels: channels.map(c => shapeChannel(c)), joined: !already })
   } catch (err) { next(err) }
 }
 
@@ -240,9 +262,39 @@ export const getServer = async (req: Request, res: Response, next: NextFunction)
     // Sorted the same way channels are, so the client renders the sidebar in
     // the order the owner built it without sorting anything itself.
     const categories = await Category.find({ server: server._id }).sort({ position: 1 }).lean()
+
+    /*
+     * Filter the sidebar to what this member may actually see.
+     *
+     * Server-side, and this is the whole point: hiding a channel in the client
+     * is decoration, since the payload that drew it also contained everything
+     * needed to open it. A channel denied here never reaches the browser.
+     *
+     * Access is loaded ONCE and the overwrite map built ONCE — resolution
+     * itself is pure, so a server with fifty channels stays two queries rather
+     * than fifty.
+     */
+    const access = await loadAccess(server, req.user!.sub)
+    const catOverwrites = await categoryOverwriteMap(categories as never)
+
+    const visible: ReturnType<typeof shapeChannel>[] = []
+    for (const c of channels) {
+      const bits = channelBits(
+        access,
+        catOverwrites.get(c.category?.toString() ?? '') ?? [],
+        parseOverwrites(c.overwrites),
+      )
+      const canView = has(bits, 'ViewChannels')
+      // hideWhenDenied === false is the opt-in "show it locked" case. The stub
+      // carries the name and nothing else; messages and voice tokens are
+      // refused separately, so a visible lock cannot be talked through.
+      if (!canView && c.hideWhenDenied !== false) continue
+      visible.push(shapeChannel(c, !canView))
+    }
+
     res.json({
       server:     shapeServer(server),
-      channels:   channels.map(shapeChannel),
+      channels:   visible,
       categories: categories.map(shapeCategory),
     })
   } catch (err) { next(err) }
@@ -251,7 +303,7 @@ export const getServer = async (req: Request, res: Response, next: NextFunction)
 export const updateServer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageServer', res)) return
 
     const { name, icon, iconCrop, bannerColor, description, isPublic } = req.body
     if (name !== undefined) {
@@ -291,6 +343,17 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
 export const deleteServer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
+    /*
+     * The ONE check that stays owner-only, and deliberately so.
+     *
+     * Every other requireOwner in this codebase became a permission check, but
+     * there is no permission that should mean "destroy this server and
+     * everyone's history in it". Routing it through one would hand it to
+     * Administrator, which grants every bit — so an admin could delete the
+     * server out from under the person who owns it. That is precisely what the
+     * owner short-circuit in resolve() exists to prevent, and it would be odd
+     * to defend the owner from being kicked and not from being deleted.
+     */
     if (!requireOwner(server, req.user!.sub, res)) return
 
     // Gathered before anything is deleted: emitToServer reads the member
@@ -372,7 +435,32 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     if (target === server.owner.toString()) {
       res.status(400).json({ message: 'The owner cannot leave their own server' }); return
     }
-    if (!isSelf && !requireOwner(server, me, res)) return
+    /*
+     * Kicking is the one check that is not a flat permission.
+     *
+     * KickMembers alone is not enough — a moderator must also outrank the
+     * person they are removing, or two peers can remove each other and the tie
+     * goes to whoever clicks first. canActOnMember applies both, and refuses
+     * the owner outright before either: an administrator holds every bit, so
+     * only an explicit ownership test stops one kicking the person whose
+     * server it is. (The owner is already rejected above with a clearer 400;
+     * this is the second lock on the same door.)
+     *
+     * Leaving is always allowed — isSelf skips all of it.
+     */
+    if (!isSelf) {
+      if (!Types.ObjectId.isValid(target)) { res.json({ ok: true }); return }
+      const actor = await loadAccess(server, me)
+      const victim = await loadAccess(server, target)
+      const allowed = canActOnMember(
+        { isOwner: actor.isOwner, highestPosition: actor.highestPosition, bits: actor.base },
+        { isOwner: victim.isOwner, highestPosition: victim.highestPosition },
+        'KickMembers',
+      )
+      if (!allowed) {
+        res.status(403).json({ message: 'You cannot remove that member' }); return
+      }
+    }
 
     // Guard against malformed ids that Mongoose would try to cast, throwing
     // a CastError. This keeps the endpoint idempotent: a non-castable id
@@ -393,9 +481,16 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     // membership check into the filter (the same trick joinViaInvite uses
     // for its `$ne` condition) means a non-match skips the write entirely,
     // so modifiedCount stays a trustworthy signal.
+    // Both arrays in ONE $pull, which is what makes the memberRoles side-car
+    // safe. Membership and roles are stored separately, so the obvious risk is
+    // a leaver whose role assignments survive them — orphaned rows that
+    // silently hand the roles back if that account ever rejoins. A single
+    // atomic update has no window in which one succeeded and the other did
+    // not. Joining needs no counterpart: a member with no entry here has no
+    // roles, which is exactly true of someone who just arrived.
     const upd = await Server.updateOne(
       { _id: server._id, members: target },
-      { $pull: { members: target } }
+      { $pull: { members: target, memberRoles: { user: target } } }
     )
     // Only announce a departure when the $pull actually removed someone — a
     // target who was never a member, or one a racing request already

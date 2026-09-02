@@ -211,3 +211,120 @@ export const canActOnMember = (
   if (!has(actor.bits, perm)) return false
   return actor.highestPosition > target.highestPosition
 }
+
+// ── Channel overwrites ─────────────────────────────────────────────────────
+
+/**
+ * One allow/deny pair aimed at a role or a single member, attached to a
+ * category or a channel.
+ *
+ * Stored with `allow`/`deny` as decimal strings for the same reason role
+ * permissions are — BSON has no BigInt. `parseOverwrites` converts on the way
+ * in so nothing downstream has to remember.
+ */
+export interface Overwrite {
+  id: string
+  type: 'role' | 'member'
+  allow: bigint
+  deny: bigint
+}
+
+export interface StoredOverwrite {
+  id: { toString(): string }
+  type: 'role' | 'member'
+  allow: string
+  deny: string
+}
+
+/** Stored shape -> working shape. Unreadable bits read as zero, never as a
+ *  grant, matching parseBits. */
+export const parseOverwrites = (raw: StoredOverwrite[] | null | undefined): Overwrite[] =>
+  (raw ?? []).map(o => ({
+    id: o.id.toString(),
+    type: o.type,
+    allow: parseBits(o.allow),
+    deny: parseBits(o.deny),
+  }))
+
+export interface ChannelResolveInput {
+  isOwner: boolean
+  /** The member, for member-specific overwrites. */
+  userId: string
+  /** @everyone's role id. Its overwrite is applied before any other. */
+  everyoneRoleId: string
+  /** Role ids the member holds. @everyone is implicit and not listed. */
+  roleIds: string[]
+  /** Base bits: @everyone's permissions plus each role the member holds. */
+  roleBits: bigint[]
+  /**
+   * Overwrite layers, OUTERMOST FIRST — normally [category, channel]. A
+   * channel with no category passes one layer; a channel with no overwrites of
+   * its own passes an empty array and simply follows its category, which is
+   * what "synced" means here.
+   */
+  layers: Overwrite[][]
+}
+
+/**
+ * A member's effective permissions in one channel.
+ *
+ * Two short-circuits, both before any overwrite is read:
+ *
+ *   1. The owner has everything. Not "the owner has Administrator" — they are
+ *      above the role system, so no overwrite can take anything from them.
+ *   2. Administrator in the BASE permissions grants everything and bypasses
+ *      overwrites entirely. This is why a channel cannot be hidden from an
+ *      admin by denying @everyone.
+ *
+ * Then each layer applies, outermost first, in this order:
+ *
+ *   @everyone's overwrite  ->  the member's roles  ->  the member themselves
+ *
+ * with deny applied before allow at every step. Two properties are easy to get
+ * wrong and are load-bearing:
+ *
+ *   - **Role overwrites ACCUMULATE.** Every matching role's denies are OR'd
+ *     together and every allow is OR'd together, then applied once. They are
+ *     NOT walked in position order, so role rank has no effect on channel
+ *     permissions. Rank decides who may EDIT a role, nothing else. Applying
+ *     them sequentially would make the answer depend on role order, which is
+ *     both wrong and unstable as roles are reordered.
+ *   - **Later layers win.** A channel allow beats a category deny, because the
+ *     channel layer runs second. That is what makes "one open channel inside a
+ *     locked category" expressible.
+ */
+export const resolveChannel = (input: ChannelResolveInput): bigint => {
+  const { isOwner, userId, everyoneRoleId, roleIds, roleBits, layers } = input
+
+  if (isOwner) return ALL_PERMISSIONS
+  const base = resolve({ isOwner: false, roleBits })
+  if (base === ALL_PERMISSIONS) return ALL_PERMISSIONS   // Administrator
+
+  const held = new Set(roleIds)
+  let perms = base
+
+  for (const layer of layers) {
+    if (!layer?.length) continue
+
+    const everyone = layer.find(o => o.type === 'role' && o.id === everyoneRoleId)
+    if (everyone) perms = (perms & ~everyone.deny) | everyone.allow
+
+    let allow = 0n
+    let deny = 0n
+    for (const o of layer) {
+      if (o.type !== 'role' || o.id === everyoneRoleId || !held.has(o.id)) continue
+      allow |= o.allow
+      deny |= o.deny
+    }
+    perms = (perms & ~deny) | allow
+
+    const mine = layer.find(o => o.type === 'member' && o.id === userId)
+    if (mine) perms = (perms & ~mine.deny) | mine.allow
+  }
+
+  return perms
+}
+
+/** Convenience for the common question. */
+export const canInChannel = (input: ChannelResolveInput, perm: PermissionName): boolean =>
+  has(resolveChannel(input), perm)

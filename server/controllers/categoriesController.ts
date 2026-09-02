@@ -4,6 +4,7 @@ import { Category, MAX_CATEGORIES } from '../models/Category'
 import { Channel } from '../models/Channel'
 import { loadServer, requireOwner, shapeCategory, emitToServer } from './serversController'
 import { withServerLock } from './channelsController'
+import { requirePerm, loadAccess, validateOverwrites } from '../utils/access'
 
 /**
  * Resolve a category and prove the caller may touch it. Mirrors loadChannel
@@ -30,7 +31,7 @@ export const loadCategory = async (req: Request, res: Response) => {
 export const createCategory = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const server = await loadServer(req, res); if (!server) return
-    if (!requireOwner(server, req.user!.sub, res)) return
+    if (!await requirePerm(server, req.user!.sub, 'ManageChannels', res)) return
 
     const name = String(req.body.name ?? '').trim()
     if (!name || name.length > 100) { res.status(400).json({ message: 'Give the category a name' }); return }
@@ -70,10 +71,31 @@ export const createCategory = async (req: Request, res: Response, next: NextFunc
 export const updateCategory = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const found = await loadCategory(req, res); if (!found) return
-    if (!requireOwner(found.server, req.user!.sub, res)) return
+    if (!await requirePerm(found.server, req.user!.sub, 'ManageChannels', res)) return
 
+    /*
+     * Permissions on a category reach every channel inside it that has not
+     * overridden them — live inheritance, so this is the one edit here with
+     * blast radius. Manage Roles, like the channel equivalent.
+     */
+    let overwrites: Awaited<ReturnType<typeof validateOverwrites>> = null
+    if (req.body.overwrites !== undefined) {
+      if (!await requirePerm(found.server, req.user!.sub, 'ManageRoles', res)) return
+      const actor = await loadAccess(found.server, req.user!.sub)
+      overwrites = await validateOverwrites(req.body.overwrites, found.server, actor, res)
+      if (!overwrites) return
+    }
+
+    // A permissions-only edit sends no name, so the rename validation has to
+    // be skipped rather than 400 on the absence.
+    const wantsName = req.body.name !== undefined
     const name = String(req.body.name ?? '').trim()
-    if (!name || name.length > 100) { res.status(400).json({ message: 'Give the category a name' }); return }
+    if (wantsName && (!name || name.length > 100)) {
+      res.status(400).json({ message: 'Give the category a name' }); return
+    }
+    if (!wantsName && overwrites === null) {
+      res.status(400).json({ message: 'Give the category a name' }); return
+    }
 
     // Rename only. `position` is assigned by appending and there is no reorder
     // UI yet; accepting one from the body would let a client write a position
@@ -103,7 +125,8 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
     const fresh = await withServerLock(serverId, async () => {
       const current = await Category.findOne({ _id: found.category._id, server: found.server._id })
       if (!current) return null
-      current.name = name
+      if (wantsName) current.name = name
+      if (overwrites !== null) current.overwrites = overwrites
       await current.save()
       return current
     })
@@ -120,7 +143,7 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
 export const deleteCategory = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const found = await loadCategory(req, res); if (!found) return
-    if (!requireOwner(found.server, req.user!.sub, res)) return
+    if (!await requirePerm(found.server, req.user!.sub, 'ManageChannels', res)) return
 
     const { server, category } = found
 
