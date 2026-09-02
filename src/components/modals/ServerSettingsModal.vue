@@ -19,6 +19,7 @@ import { useApi, type WireServer } from '@/composables/useApi'
 import { useAuth } from '@/composables/useAuth'
 import { useViewport } from '@/composables/useViewport'
 import ServerProfilePage from '../settings/server/ServerProfilePage.vue'
+import RolesPage from '../settings/server/RolesPage.vue'
 import '@/styles/settingsShared.css'
 
 const props = defineProps<{ serverId: string }>()
@@ -53,7 +54,7 @@ const NAV: { label?: string; items: { id: string; label: string; ready: boolean 
   ] },
   { label: 'People', items: [
     { id: 'members', label: 'Members', ready: false },
-    { id: 'roles',   label: 'Roles',   ready: false },
+    { id: 'roles',   label: 'Roles',   ready: true },
     { id: 'invites', label: 'Invites', ready: false },
   ] },
   { label: 'Moderation', items: [
@@ -143,6 +144,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 v-if="page === 'profile' && server"
                 key="profile"
                 :server="server"
+                :is-owner="isOwner"
+                @toast="m => emit('toast', m)"
+              />
+              <RolesPage
+                v-else-if="page === 'roles'"
+                key="roles"
+                :server-id="serverId"
                 :is-owner="isOwner"
                 @toast="m => emit('toast', m)"
               />

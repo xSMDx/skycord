@@ -128,6 +128,11 @@ export interface Channel {
   userLimit?: number
   bitrate?:   number
   voiceServer?: string | null
+  /** Per-role and per-member allow/deny on THIS channel. Empty means "follow
+   *  my category" — the absence IS what the reference calls synced. */
+  overwrites?: import('@/composables/useApi').WireOverwrite[]
+  /** Whether a member who cannot View it sees nothing, or a locked row. */
+  hideWhenDenied?: boolean
   unread?:  number
   locked?:  boolean
 }
@@ -137,6 +142,9 @@ export interface Category {
   serverId:  string
   name:      string
   position?: number
+  /** Per-role and per-member allow/deny. Reaches every channel filed under
+   *  this category that has not overridden it — inheritance is live. */
+  overwrites?: import('@/composables/useApi').WireOverwrite[]
 }
  
 export interface EmojiData {

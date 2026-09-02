@@ -58,6 +58,15 @@ export const useApi = () => {
     return res.json()
   }
 
+  const put = async <T>(path: string, body?: unknown): Promise<T> => {
+    const res = await fetch(path, {
+      method: 'PUT', headers: headers(), credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    if (!res.ok) return failure(res)
+    return res.json()
+  }
+
   const del = async <T>(path: string): Promise<T> => {
     const res = await fetch(path, { method: 'DELETE', headers: headers(), credentials: 'include' })
     if (!res.ok) return failure(res)
@@ -208,6 +217,11 @@ export const useApi = () => {
       // slider cannot produce a 400 — only a blank name can.
       topic?: string | null; slowmode?: number; userLimit?: number; bitrate?: number
       voiceServer?: string | null
+      // Permissions. Sent alone by the Permissions tab — the server checks
+      // Manage Roles for these and Manage Channels for everything above, so a
+      // body mixing the two needs both.
+      overwrites?: WireOverwrite[]
+      hideWhenDenied?: boolean
     },
   ) =>
     patch<{ channel: WireChannel }>(`/servers/${sid}/channels/${cid}`, body)
@@ -229,10 +243,30 @@ export const useApi = () => {
   // every other DELETE in this file. Routes are mounted in
   // server/routes/servers.ts — there is deliberately no GET, since
   // getServerDetail already returns categories alongside channels.
+  // ── Roles ────────────────────────────────────────────────────────────────
+  // Unlike categories these are NOT owner-gated: the server authorises on
+  // ManageRoles plus role position, so a 403 here is a real answer about the
+  // caller's rank rather than "you are not the owner".
+  const listRolesApi = (sid: string) =>
+    get<{ roles: WireRole[] }>(`/servers/${sid}/roles`)
+
+  const createRoleApi = (sid: string, body: Partial<WireRole>) =>
+    post<{ role: WireRole }>(`/servers/${sid}/roles`, body)
+
+  const updateRoleApi = (sid: string, rid: string, body: Partial<WireRole>) =>
+    patch<{ role: WireRole }>(`/servers/${sid}/roles/${rid}`, body)
+
+  const deleteRoleApi = (sid: string, rid: string) =>
+    del<{ ok: true }>(`/servers/${sid}/roles/${rid}`)
+
+  /** The member's WHOLE role set — sending it twice lands the same state. */
+  const setMemberRolesApi = (sid: string, uid: string, roles: string[]) =>
+    put<{ ok: true; roles: string[] }>(`/servers/${sid}/members/${uid}/roles`, { roles })
+
   const createCategoryApi = (sid: string, name: string) =>
     post<{ category: WireCategory }>(`/servers/${sid}/categories`, { name })
 
-  const updateCategoryApi = (sid: string, cid: string, body: { name?: string }) =>
+  const updateCategoryApi = (sid: string, cid: string, body: { name?: string; overwrites?: WireOverwrite[] }) =>
     patch<{ category: WireCategory }>(`/servers/${sid}/categories/${cid}`, body)
 
   const deleteCategoryApi = (sid: string, cid: string) =>
@@ -454,6 +488,7 @@ export const useApi = () => {
     listMyVoiceServers,
     moveVoiceCall,
     listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer,
+    listRolesApi, createRoleApi, updateRoleApi, deleteRoleApi, setMemberRolesApi,
     createServerApi, getMyServers, getDiscoverServers, joinPublicServer, setServerPublic, updateServerApi, removeServerMember, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
     createChannelApi, updateChannelApi, moveChannel, deleteChannelApi,
     createCategoryApi, updateCategoryApi, deleteCategoryApi,
@@ -575,6 +610,14 @@ export interface WireChannel {
   bitrate:   number
   /** A registered voice server id, or null to follow the server default. */
   voiceServer: string | null
+  /** The caller cannot View this channel but it is shown anyway, because the
+   *  channel opted out of hiding. Denied channels that hide simply never
+   *  arrive, so this is only ever true for the visible-locked case. */
+  locked?: boolean
+  hideWhenDenied?: boolean
+  /** Empty on a locked stub — the access list is not shown to someone who
+   *  cannot see the channel. */
+  overwrites?: WireOverwrite[]
 }
 
 /**
@@ -583,11 +626,37 @@ export interface WireChannel {
  * so getServer (serversController) and categoriesController don't have to
  * import each other.
  */
+/** Exactly `shapeRole` in server/controllers/rolesController.ts. */
+export interface WireRole {
+  id:       string
+  name:     string
+  color:    string | null
+  position: number
+  /** Decimal string, not a number: the bitfield exceeds 2^53 and JSON has no
+   *  BigInt. Parse with BigInt(), never with Number(). */
+  permissions: string
+  hoist:       boolean
+  mentionable: boolean
+  isEveryone:  boolean
+}
+
+/**
+ * One allow/deny pair on a channel or category. Bits are decimal STRINGS —
+ * the field exceeds 2^53, so parse with BigInt and never with Number.
+ */
+export interface WireOverwrite {
+  id:    string
+  type:  'role' | 'member'
+  allow: string
+  deny:  string
+}
+
 export interface WireCategory {
   id:       string
   server:   string
   name:     string
   position: number
+  overwrites?: WireOverwrite[]
 }
 
 /** Exactly `getServerMembers` in server/controllers/serversController.ts:226. */

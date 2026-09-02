@@ -10,7 +10,7 @@ import { useViewport }                      from '@/composables/useViewport'
 import { useMobileNav }                     from '@/composables/useMobileNav'
 import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
 import { useMessages }                      from '@/composables/useMessages'
-import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel, type WireServer } from '@/composables/useApi'
+import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel, type WireServer , type WireCategory } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
@@ -82,6 +82,7 @@ import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPre
 import { stripMarkers } from '@/utils/richText'
 
 import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
+import EditCategoryModal from '@/components/modals/EditCategoryModal.vue'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -2541,35 +2542,26 @@ const submitCreateCategory = async () => {
   }
 }
 
-const renameCategoryTarget = ref<MenuCategory | null>(null)
-const renameCategoryVal    = ref('')
-const renameCategoryBusy   = ref(false)
-const renameCategoryErr    = ref('')
+/*
+ * Opens the full settings modal, not a rename box.
+ *
+ * The menu item still says Edit, and Overview still renames — but a category
+ * now also decides who can see every channel under it, and that does not
+ * belong behind a single text field.
+ */
+const editCategoryTarget = ref<Category | null>(null)
 const openRenameCategory = (c: MenuCategory) => {
-  renameCategoryTarget.value = c
-  renameCategoryVal.value    = c.name
-  renameCategoryErr.value    = ''
+  // The menu row is a light shape; the stored one carries the overwrites the
+  // Permissions tab reads.
+  editCategoryTarget.value =
+    activeCategories.value.find(x => x.id === c.id)
+    ?? { id: c.id, serverId: activeServer.value?.id ?? '', name: c.name, overwrites: [] }
 }
-const submitRenameCategory = async () => {
-  const target = renameCategoryTarget.value
-  if (!target) return
-  // Not run through formatChannelName: a category is not a channel and the
-  // server stores its name verbatim (updateCategory only trims), so
-  // slugifying "Text Channels" into "text-channels" here would be this
-  // client inventing a rule the server does not have.
-  const n = renameCategoryVal.value.trim()
-  if (!n || renameCategoryBusy.value) return
-  renameCategoryBusy.value = true
-  renameCategoryErr.value  = ''
-  try {
-    const { category } = await api.updateCategoryApi(target.serverId, target.id, { name: n })
-    upsertCategory(category)
-    if (renameCategoryTarget.value === target) renameCategoryTarget.value = null
-  } catch (e: any) {
-    if (renameCategoryTarget.value === target) renameCategoryErr.value = e?.message || 'Could not rename that category'
-  } finally {
-    renameCategoryBusy.value = false
-  }
+const onCategorySaved = (cat: WireCategory) => {
+  // Straight through the same path a socket update takes, so the sidebar and
+  // this modal cannot disagree about the name.
+  upsertCategory(cat)
+  editCategoryTarget.value = activeCategories.value.find(x => x.id === cat.id) ?? null
 }
 
 /**
@@ -2724,7 +2716,7 @@ const openServer = async (srv: Server) => {
   // write into the server you just left or sit there describing a category
   // that isn't on screen any more.
   createCategoryServer.value = null
-  renameCategoryTarget.value = null
+  editCategoryTarget.value = null
   try {
     // enterServer is useServers' openServer: sets activeServerId, fetches the
     // channel list the first time, and picks the landing channel.
@@ -3499,22 +3491,14 @@ onBeforeUnmount(() => {
       </div>
       <p v-if="createCategoryErr" class="efm-err">{{ createCategoryErr }}</p>
     </EditFieldModal>
-    <EditFieldModal
-      v-if="renameCategoryTarget"
-      title="Edit Category"
-      :saving="renameCategoryBusy"
-      done-label="Save"
-      :done-disabled="!renameCategoryVal.trim()"
-      @close="renameCategoryTarget = null"
-      @done="submitRenameCategory"
-    >
-      <div>
-        <label class="efm-field-label">Category Name</label>
-        <input class="efm-input" v-model="renameCategoryVal" maxlength="100"
-          autofocus @keydown.enter="submitRenameCategory" />
-      </div>
-      <p v-if="renameCategoryErr" class="efm-err">{{ renameCategoryErr }}</p>
-    </EditFieldModal>
+    <EditCategoryModal
+      v-if="editCategoryTarget && activeServer"
+      :key="editCategoryTarget.id"
+      :server-id="activeServer.id"
+      :category="editCategoryTarget"
+      @saved="onCategorySaved"
+      @close="editCategoryTarget = null"
+    />
     <InviteServerModal v-if="showInvite && activeServer"
       :key="activeServer.id"
       :server-id="activeServer.id"

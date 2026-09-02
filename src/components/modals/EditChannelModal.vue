@@ -2,17 +2,21 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { X, Hash, Volume2 } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
-import { useApi, type WireInvite, type WireVoiceServer } from '@/composables/useApi'
+import {
+  useApi,
+  type WireInvite, type WireVoiceServer, type WireRole, type WireMember, type WireOverwrite,
+} from '@/composables/useApi'
 import { useServers } from '@/composables/useServers'
 import { formatChannelName } from '@/utils/channelName'
 import type { Channel } from '@/types'
+import PermissionsTab from '@/components/settings/PermissionsTab.vue'
 
 /** The sidebar's Channel, not WireChannel — that is what the call site has,
  *  and its Overview fields are optional, so everything below defaults. */
 const props = defineProps<{ serverId: string; channel: Channel }>()
 const emit  = defineEmits<{ close: [] }>()
 
-const { updateChannelApi, listServerInvites, listVoiceServers } = useApi()
+const { updateChannelApi, listServerInvites, listVoiceServers, listRolesApi, getServerMembers } = useApi()
 const { upsertChannel } = useServers()
 
 const isVoice = computed(() => props.channel.type === 'voice')
@@ -29,12 +33,53 @@ const isVoice = computed(() => props.channel.type === 'voice')
  */
 const TABS = [
   { id: 'overview',     label: 'Overview',     ready: true  },
-  { id: 'permissions',  label: 'Permissions',  ready: false },
+  { id: 'permissions',  label: 'Permissions',  ready: true  },
   { id: 'invites',      label: 'Invites',      ready: true  },
   { id: 'integrations', label: 'Integrations', ready: false },
 ] as const
 type TabId = typeof TABS[number]['id']
 const tab = ref<TabId>('overview')
+
+// ── Permissions tab ───────────────────────────────────────────────────────
+const permRoles = ref<WireRole[]>([])
+const permMembers = ref<WireMember[]>([])
+const permLoaded = ref(false)
+const permSaving = ref(false)
+const permError = ref('')
+/** The channel's own overwrites, kept here so a save updates them in place. */
+const permOverwrites = ref<WireOverwrite[]>(props.channel.overwrites ?? [])
+const permHide = ref(props.channel.hideWhenDenied ?? true)
+
+watch(tab, async t => {
+  if (t !== 'permissions' || permLoaded.value) return
+  try {
+    const [{ roles }, { members }] = await Promise.all([
+      listRolesApi(props.serverId),
+      getServerMembers(props.serverId),
+    ])
+    permRoles.value = roles
+    permMembers.value = members
+    permLoaded.value = true
+  } catch (e: any) {
+    permError.value = e?.message || 'Could not load roles'
+  }
+})
+
+const savePerms = async (payload: { overwrites: WireOverwrite[]; hideWhenDenied?: boolean }) => {
+  permSaving.value = true
+  permError.value = ''
+  try {
+    const { channel } = await updateChannelApi(props.serverId, props.channel.id, payload)
+    // Reflect what the SERVER stored, not what was sent: it masks unknown bits
+    // and could legitimately return something narrower than the request.
+    permOverwrites.value = channel.overwrites ?? []
+    permHide.value = channel.hideWhenDenied ?? true
+  } catch (e: any) {
+    permError.value = e?.message || 'Could not save permissions'
+  } finally {
+    permSaving.value = false
+  }
+}
 
 // ── Overview form ─────────────────────────────────────────────────────────
 // Seeded from the channel and compared against it, so Save is only live when
@@ -256,6 +301,23 @@ const expiry = (iso: string | null) => {
               {{ saving ? 'Saving…' : 'Save changes' }}
             </button>
           </div>
+        </template>
+
+        <!-- ── PERMISSIONS ──────────────────────────────────────────── -->
+        <template v-else-if="tab === 'permissions'">
+          <p v-if="permError" class="ec-error">{{ permError }}</p>
+          <p v-if="!permLoaded && !permError" class="ec-empty">Loading…</p>
+          <PermissionsTab
+            v-else-if="permLoaded"
+            kind="channel"
+            :channel-type="channel.type"
+            :overwrites="permOverwrites"
+            :hide-when-denied="permHide"
+            :roles="permRoles"
+            :members="permMembers"
+            :saving="permSaving"
+            @save="savePerms"
+          />
         </template>
 
         <!-- ── INVITES ──────────────────────────────────────────────── -->

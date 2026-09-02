@@ -139,6 +139,8 @@ const toClientChannel = (w: WireChannel): Channel => ({
   userLimit: w.userLimit ?? 0,
   bitrate:   w.bitrate ?? 64,
   voiceServer: w.voiceServer ?? null,
+  overwrites: w.overwrites ?? [],
+  hideWhenDenied: w.hideWhenDenied ?? true,
 })
 
 const toClientCategory = (w: WireCategory): Category => ({
@@ -146,6 +148,7 @@ const toClientCategory = (w: WireCategory): Category => ({
   serverId: w.server,
   name:     w.name,
   position: w.position,
+  overwrites: w.overwrites ?? [],
 })
 
 /**
