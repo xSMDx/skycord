@@ -1355,15 +1355,25 @@ const handleSelfRevoked = () => handleLogout()
     Banner colour, positioned at the click rather than at one of its two
     triggers. Fixed, not absolute: it is summoned from the card AND from the
     field row, and an absolute panel can only ever be right for one of them.
+
+    Teleported, and this is load-bearing rather than tidiness. This markup sits
+    OUTSIDE the modal's own <Teleport>, so as a plain fixed element it painted
+    underneath .sm-overlay (z-index 1000) — present in the DOM, invisible on
+    screen, with its backdrop behind the modal too, so clicking the banner
+    looked like it did nothing at all. To body, and above the modal it belongs
+    to. It stayed visible before this only because it was absolute INSIDE the
+    modal, sharing its stacking context.
   -->
-  <Transition name="pf-pop" @before-enter="onPopEnter">
-    <div v-if="showBannerPicker" class="pf-pop">
-      <div class="pf-pop-backdrop" @click="showBannerPicker = false" />
-      <div class="pf-pop-panel" :style="{ left: bannerPopPos.x + 'px', top: bannerPopPos.y + 'px' }">
-        <ColorPicker :model-value="bannerColor" @update:model-value="onBannerColor" />
+  <Teleport to="body">
+    <Transition name="pf-pop" @before-enter="onPopEnter">
+      <div v-if="showBannerPicker" class="pf-pop">
+        <div class="pf-pop-backdrop" @click="showBannerPicker = false" />
+        <div class="pf-pop-panel" :style="{ left: bannerPopPos.x + 'px', top: bannerPopPos.y + 'px' }">
+          <ColorPicker :model-value="bannerColor" @update:model-value="onBannerColor" />
+        </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 
   <!-- Avatar sub-flow: pick source → crop, or pick a GIF. Same chain the group
        icon uses, so both stay consistent. -->
@@ -1484,7 +1494,7 @@ img    { display: block; object-fit: cover; }
 .pf-bnimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 /* The backdrop is a sibling of the panel, not a wrapper — a full-screen layer
    ABOVE the panel would swallow the very clicks the picker needs. */
-.pf-pop-backdrop { position: fixed; inset: 0; z-index: 40; }
+.pf-pop-backdrop { position: fixed; inset: 0; z-index: 1400; }
 /* Same 120ms grow as the menus. Opening a colour picker is occasional, so it
    earns an animation; it is short because the picker is what you came for. */
 .pf-pop-enter-active .pf-pop-panel { transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
@@ -1492,7 +1502,7 @@ img    { display: block; object-fit: cover; }
 .pf-pop-enter-from .pf-pop-panel,
 .pf-pop-leave-to   .pf-pop-panel { opacity: 0; transform: scale(.94); }
 .pf-pop-panel {
-  position: fixed; z-index: 41;
+  position: fixed; z-index: 1401;
   background: var(--bg-floor); border-radius: 8px; padding: 14px;
   box-shadow: 0 14px 40px rgba(0,0,0,.65);
 }
