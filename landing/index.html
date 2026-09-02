@@ -1015,13 +1015,30 @@ const ROADMAP = [
       'Custom emoji uploads',
       'Soundboard for calls',
       'Activity status like "Listening to Spotify"',
-      'More themes and customization options'
+      'Themes that follow you between devices, and browsing ones other people made'
     ]
   }
 ];
 
 // Changelog data
 const RELEASES = [
+  {
+    v: 'v0.16.0', date: 'Sep 2, 2026', time: '03:10 UTC+2', title: 'Eight new looks, and a profile worth building',
+    items: [
+      ['add', 'Eight new themes under Appearance, borrowed from apps you already know the look of: Spotify, Graphite, Linear, Vercel, Stripe, GitHub, Notion and Stoat. Each one brings its own accent colour so it reads as itself straight away, and you can change that accent afterwards without losing the rest of the theme'],
+      ['add', 'Save a look you have built, under a name of your own, in Appearance. Saved themes live on the device you saved them on for now — to move one to another computer, or send it to someone else, the share code further down that page already does exactly that'],
+      ['add', 'Discover has two tabs now: Servers, and Themes. The Themes tab is a gallery of everything above plus anything you have saved. Click one and it applies immediately — nothing to confirm, and nothing you cannot undo by clicking another'],
+      ['imp', 'Your profile is built around your card now. The card used to be a small preview beside a narrow column, with your display name and about-me stranded underneath it while your avatar, banner and status sat in a separate column entirely — two halves of the same thing, pretending to be unrelated. The card is large, it stays put while you scroll, and every control sits in one list beside it, writing to it as you go'],
+      ['imp', 'Appearance keeps its preview on screen while you work. It used to sit at the top of the page and scroll away after the first section, which meant eight of the nine things you could change were changing something you could no longer see'],
+      ['imp', 'Menus and dialogs now open out of the thing you clicked, the way they do on a Mac, rather than appearing from the middle of the screen with no connection to what you pressed'],
+      ['fix', 'The banner colour picker opened in the wrong place. Clicking the banner on your card opened it far away, down beside a different control — because it was pinned to that control rather than to your click. It now opens where you clicked, whichever of the two ways you get to it'],
+      ['fix', 'Tapping your avatar on the profile card opened a two-item menu just to reach the thing you had already asked for. It goes straight to the picker'],
+      ['fix', 'A thin grey bar sat across the message box on a phone, looking like a scrollbar for something that could never scroll. It was never real — there was nothing to reach sideways'],
+      ['fix', 'The GIF button is gone from the message box on a phone, and the space goes to the box you type in. Nothing is lost: the emoji button opens the same picker, already on its GIF tab, so a GIF is still one tap away on a row that now fits four comfortable targets instead of five cramped ones'],
+      ['fix', 'The section list in Settings could not reach its own bottom. Scrolling all the way down left the highlight two or three items short, and clicking one of those scrolled as far as it could and then quietly moved the highlight back to where it had been'],
+      ['imp', 'The roadmap listed "more themes and customization options" as something being looked at. Most of that shipped here, so it now says what is genuinely still missing: themes that follow you between devices, and somewhere to browse ones other people have made']
+    ]
+  },
   {
     v: 'v0.15.2', date: 'Sep 1, 2026', time: '11:38 UTC+2', title: 'Video calls, and a picker that fits your thumb',
     items: [
