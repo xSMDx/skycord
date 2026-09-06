@@ -775,6 +775,71 @@ describe('useServers', () => {
     expect(api.getServerDetail).toHaveBeenCalledWith('s9')
   })
 
+  /*
+   * The rail double-click race.
+   *
+   * Two fast clicks on two UNCACHED servers each await a fetch, and nothing
+   * orders those responses. Before the sequence guard, the FIRST click's tail
+   * ran last and called selectLanding for its own server — leaving
+   * activeChannelId pointing into server A while activeServerId said B, so the
+   * sidebar showed one server and the message pane another server's channel.
+   *
+   * Reproduced by resolving the two fetches out of order, which is the whole
+   * of the bug; a test that awaited them in order could never see it.
+   */
+  it('a slow first click cannot plant its channel under a later one', async () => {
+    let resolveA!: (v: unknown) => void
+    const aPending = new Promise(r => { resolveA = r })
+
+    api.getServerDetail.mockImplementation(async (sid: string) => {
+      if (sid === 'sA') {
+        await aPending
+        return { server: wireServer('sA'), channels: [wireChannel('ca', 'sA', 'a-general', 'text', 0)], categories: [] }
+      }
+      return { server: wireServer('sB'), channels: [wireChannel('cb', 'sB', 'b-general', 'text', 0)], categories: [] }
+    })
+
+    const first  = s.openServer('sA')   // starts, then hangs on aPending
+    const second = s.openServer('sB')   // starts and finishes
+    await second
+    expect(s.activeServerId.value).toBe('sB')
+    expect(s.activeChannelId.value).toBe('cb')
+
+    // Now let the earlier, superseded fetch finish.
+    resolveA({})
+    await first
+
+    // Its data is still folded in — the fetch was not wasted — but it must not
+    // have touched what the user is looking at.
+    expect(s.channelsByServer.value['sA']?.map(c => c.id)).toEqual(['ca'])
+    expect(s.activeServerId.value).toBe('sB')
+    expect(s.activeChannelId.value).toBe('cb')
+  })
+
+  it('a superseded fetch does not clear the spinner of the one still running', async () => {
+    let resolveB!: (v: unknown) => void
+    const bPending = new Promise(r => { resolveB = r })
+
+    api.getServerDetail.mockImplementation(async (sid: string) => {
+      if (sid === 'sB') {
+        await bPending
+        return { server: wireServer('sB'), channels: [], categories: [] }
+      }
+      return { server: wireServer('sA'), channels: [], categories: [] }
+    })
+
+    const first  = s.openServer('sA')
+    const second = s.openServer('sB')
+    await first
+    // sA finished, but sB is the current attempt and is still loading. A
+    // spinner cleared here would show an empty sidebar as if it were loaded.
+    expect(s.loadingServerDetail.value).toBe(true)
+
+    resolveB({})
+    await second
+    expect(s.loadingServerDetail.value).toBe(false)
+  })
+
   // ── server members ───────────────────────────────────────────────────────
 
   it('members land per server and do not leak between servers', async () => {

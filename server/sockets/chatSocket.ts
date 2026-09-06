@@ -7,6 +7,9 @@ import { Conversation } from '../models/Conversation'
 import { Friendship } from '../models/Friendship'
 import { Server } from '../models/Server'
 import { Channel } from '../models/Channel'
+import { Category } from '../models/Category'
+import { loadAccess, channelBits } from '../utils/access'
+import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
 import { dmConvId, canDM } from '../controllers/messagesController'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
@@ -265,6 +268,54 @@ const canAccessMessage = async (msg: { conversationId: string; kind: string }, u
   // membership is simply being one of them.
   return msg.conversationId.split('_').includes(userId)
 }
+
+/**
+ * Effective channel permissions for the conversation a message lives in.
+ *
+ * `canAccessMessage` above answers "may you see this at all", which for a
+ * channel is server membership. That is not enough for the actions that go
+ * beyond reading: reacting, pinning and deleting somebody else's message are
+ * each their own permission, and each can be granted or denied by a channel
+ * overwrite.
+ *
+ * Returns null for a DM or a group, which have no overwrites and no roles —
+ * callers read null as "not a channel, so channel permissions do not apply"
+ * rather than as a denial.
+ *
+ * Four queries, and deliberately not cached: a permission read from a stale
+ * cache is a permission that keeps working after it was taken away. Reactions
+ * are the hottest caller and are still a human clicking a button.
+ */
+const channelPermsFor = async (
+  msg: { conversationId: string; kind: string }, userId: string,
+): Promise<bigint | null> => {
+  if (msg.kind !== 'channel') return null
+  const channel = await Channel.findById(msg.conversationId)
+    .select('server category overwrites').lean()
+  if (!channel) return null
+  const server = await Server.findById(channel.server)
+  if (!server) return null
+  const access = await loadAccess(server, userId)
+  const cat = (channel as any).category
+    ? await Category.findById((channel as any).category).select('overwrites').lean()
+    : null
+  return channelBits(
+    access,
+    parseOverwrites((cat as any)?.overwrites),
+    parseOverwrites((channel as any).overwrites),
+  )
+}
+
+/**
+ * Whether a channel action is allowed, for a handler that may also be serving
+ * a DM or a group.
+ *
+ * `null` bits mean the message is not in a channel, and every one of these
+ * permissions is a guild concept — nobody administers a DM, so nothing there
+ * is denied on these grounds.
+ */
+const allowsInChannel = (bits: bigint | null, perm: PermissionName): boolean =>
+  bits === null || hasPerm(bits, perm)
 
 /**
  * May this user actually be added to this call's occupancy?
@@ -541,7 +592,30 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       try {
         const msg = await Message.findById(data.messageId)
         if (!msg)                              { ack?.({ ok: false, error: 'Not found' });   return }
-        if (msg.authorId.toString() !== userId){ ack?.({ ok: false, error: 'Not allowed' }); return }
+        /*
+         * Your own message, always. Somebody else's needs Manage Messages, and
+         * only in a channel — the other half of that permission's description
+         * and, until now, the half that did not exist: deleting another
+         * person's message was impossible for everyone including the owner, so
+         * a channel could not actually be moderated.
+         *
+         * Note this is DELETE only. `message:edit` above keeps the flat author
+         * check and must keep it: putting words in someone's mouth is not
+         * moderation, and no permission should buy it.
+         */
+        if (msg.authorId.toString() !== userId) {
+          // Access first, so a stranger naming a random id cannot tell an
+          // existing message apart from a missing one — both answer the same.
+          if (!await canAccessMessage(msg, userId)) {
+            ack?.({ ok: false, error: 'Not allowed' }); return
+          }
+          const bits = await channelPermsFor(msg, userId)
+          // null means a DM or group. No moderator exists there, so somebody
+          // else's message is simply not yours to delete.
+          if (bits === null || !hasPerm(bits, 'ManageMessages')) {
+            ack?.({ ok: false, error: 'Not allowed' }); return
+          }
+        }
 
         const partner = getPartner(msg.conversationId, userId)
         const isGroup = msg.kind === 'group'
@@ -569,6 +643,16 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         if (!msg) { ack?.({ ok: false, error: 'Not found' }); return }
         if (!await canAccessMessage(msg, userId)) {
           ack?.({ ok: false, error: 'Not allowed' }); return
+        }
+        /*
+         * Pinning was open to everyone who could see the channel — any member
+         * could pin or unpin anything, including unpinning what a moderator had
+         * pinned. In a DM or a group it stays open, deliberately: there is no
+         * moderator there and a pin is a shared bookmark between the people in
+         * the conversation.
+         */
+        if (!allowsInChannel(await channelPermsFor(msg, userId), 'ManageMessages')) {
+          ack?.({ ok: false, error: 'You need Manage Messages to pin here' }); return
         }
 
         msg.pinned = data.pinned
@@ -612,6 +696,23 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         }
 
         const existing  = msg.reactions.find(r => r.emoji === emoji)
+
+        /*
+         * AddReactions gates STARTING a reaction, not joining one.
+         *
+         * That asymmetry is the permission's actual meaning and it is what the
+         * settings copy promises: clicking a reaction somebody else already put
+         * there needs nothing. Removing your own never needs anything either —
+         * a permission that could trap your reaction on a message would be a
+         * strange thing to hand anyone.
+         */
+        const startingNew = !existing
+        if (startingNew) {
+          const bits = await channelPermsFor(msg, userId)
+          if (!allowsInChannel(bits, 'AddReactions')) {
+            ack?.({ ok: false, error: 'You cannot add new reactions here' }); return
+          }
+        }
 
         if (existing) {
           const hasReacted = existing.userIds.some(id => id.toString() === userId)

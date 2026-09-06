@@ -190,16 +190,33 @@ state, voice occupant menus).
 
 ### Known defects, unscheduled
 
-- Deleting a channel orphans its `Message` documents server-side.
-- Group reactions are unverified — un-gating `handleReact` in 3a fixed groups incidentally,
-  and no test covers a group reaction.
-- Non-owner paths across 3b are unit-tested only, never exercised in a browser.
-- Rail double-click race: two fast clicks on two uncached servers can leave
-  `activeChannelId` from server A while `activeServerId` is B.
-- `role="button"` on `.ch-item` wrapping a real `<button>` is ARIA
-  children-presentational; the correct shape is a plain row with the label inside the
-  button and `.ch-more` as its sibling.
-- `withServerLock` is per-process, valid only while the API is one pm2 process.
+Reviewed 2026-09-06. Three were already fixed or already covered and the entries had
+gone stale — checked before touching anything, which is the only reason the other
+three got the attention.
+
+- ✅ **Deleting a channel orphans its `Message` documents.** Already cascaded; what was
+  missing was a TEST, so the cascade was one careless refactor from silently going away
+  — the same way this endpoint's `ManageChannels` gate nearly did. Three tests now: the
+  messages go, other channels' messages stay, and the `kind: 'channel'` half of the
+  filter keeps it out of DMs.
+- ✅ **Group reactions unverified.** `groupReactions.test.ts`, 6 tests. Stale entry.
+- ✅ **Rail double-click race** (2026-09-06). Real, and reproduced: `openServer` set
+  `activeServerId` then awaited, so with two uncached servers the FIRST click's tail ran
+  last and called `selectLanding` for its own server — leaving `activeChannelId` in A
+  while `activeServerId` said B. Fixed with the sequence guard `useVoice` uses for a
+  superseded join. Two tests resolve the fetches out of order; both fail without it.
+- ✅ **`role="button"` on `.ch-item`.** Fixed on the text row, the voice row and the
+  category header: the row is a plain container and the label is a real `<button>`, with
+  `.ch-more` as its sibling. Also removed the hand-rolled `.self` Enter/Space handlers,
+  which a real button gives for free, and moved the press veil back onto the row via
+  `:has()` — the global veil matches every `<button>`, so it would otherwise have painted
+  a square rectangle across the label inside a rounded row.
+- ⬜ **Non-owner paths across 3b are unit-tested only, never exercised in a browser.**
+  Not fixable from here; it needs a human at a keyboard. Same standing gap as the whole
+  v0.17.0 UI.
+- ⬜ **`withServerLock` is per-process**, valid only while the API is one pm2 process.
+  Documented at the definition. A real fix is a distributed lock, which is not worth
+  taking on before there is a second process to need it.
 
 ### Before anything ships
 
@@ -266,6 +283,43 @@ Run these rather than eyeballing it:
 - Never render a status from a fetched copy; route it through `livePresence(id, fetched)`.
 
 ---
+
+## The permission honesty gap — closed 2026-09-06
+
+v0.17.0 shipped 31 toggles, **15 of which nothing on the server ever read**. Denying
+"Speak" looked like it worked and the person kept talking. Nothing caught it: the copy
+tests check the words, the parity tests check the bits, and neither asked whether any
+code consults the bit.
+
+Every one is now either enforced or honestly labelled. **Nothing is left `unenforced`.**
+
+| State | Count | Meaning |
+|---|---|---|
+| enforced | 18 | the switch works |
+| `soon` | 12 | the FEATURE does not exist — granting it does nothing |
+| `advisory` | 1 | `UseVoiceActivity` — wired and honoured by every stock client, but LiveKit has no push-to-talk concept, so a modified client can ignore it |
+| `unenforced` | **0** | — |
+
+Still `soon`, and each needs its own feature first: ManageEmojis, ViewAuditLog,
+ManageWebhooks, ChangeNickname, ManageNicknames, BanMembers, EmbedLinks, AttachFiles,
+UseExternalEmojis, SendTTSMessages, UseSlashCommands, PrioritySpeaker.
+
+`permissionMeta.test.ts` reads the server tree and fails in BOTH directions — an
+unflagged permission nobody enforces, and a flagged one somebody has since enforced —
+so the flags cannot rot as those features land. It also refuses `advisory` as a nicer
+word for unenforced: a permission the server never reads cannot claim it.
+
+Two things worth knowing about how the last four were done:
+
+- **`MentionEveryone` needed a stored field.** The client used to regex message content
+  and highlight on a match, which made the permission unenforceable by construction.
+  The server now decides once at send time and stores `mentionsEveryone`. The text is
+  never edited — stripping somebody's words to enforce a permission is a worse trade
+  than letting the word appear without lighting the channel up.
+- **`ManageMessages` gained a capability it had always described.** Deleting somebody
+  else's message did not exist for anyone, owner included, so a channel could not be
+  moderated. It never covers EDITING another person's message, at any level, and there
+  is a test pinning that: putting words in a person's mouth is not moderation.
 
 ## Known debts, unscheduled
 

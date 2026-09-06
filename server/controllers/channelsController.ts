@@ -389,6 +389,22 @@ export const deleteChannel = async (req: Request, res: Response, next: NextFunct
 export const getChannelMessages = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const found = await loadChannel(req, res); if (!found) return
+
+    /*
+     * Read Message History.
+     *
+     * An empty list rather than a 403, because that IS the permission: the copy
+     * says "a channel looks empty until somebody posts again", and that is only
+     * true if the channel still opens. Refusing the request would make it
+     * indistinguishable from a broken one, and would take away the composer of
+     * somebody who can still perfectly well send.
+     *
+     * Live messages arriving over the socket are a separate path and are not
+     * suppressed — which is exactly the promised behaviour: nothing before you
+     * arrived, everything after.
+     */
+    if (!has(found.bits, 'ReadMessageHistory')) { res.json({ messages: [] }); return }
+
     const before = req.query.before as string | undefined
     const limit  = Math.min(Number(req.query.limit) || 50, 100)
 
@@ -487,6 +503,20 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
 
     const channelId = found.channel._id.toString()
+    /*
+     * Whether this `@everyone` is a real mention, decided once, here.
+     *
+     * The text is left exactly as typed — stripping it would edit somebody's
+     * words to enforce a permission, which is a worse trade than letting the
+     * word appear without lighting up the channel. What the permission controls
+     * is the NOTIFICATION, and this flag is what carries that.
+     *
+     * The pattern matches the client's old inline regex so the visible
+     * behaviour is unchanged for anyone who does hold the bit.
+     */
+    const mentionsEveryone = /@(everyone|here)\b/.test(content)
+      && has(found.bits, 'MentionEveryone')
+
     const msg = await Message.create({
       conversationId:   channelId,
       kind:             'channel',
@@ -495,6 +525,7 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       authorAvatar:     sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:          content.trim(),
+      mentionsEveryone,
       // Persist only the ids that survived the channel-scoped validation
       // above (replyTo.map), never the raw request-body ids. Storing `ids`
       // here let a client name a message from an unrelated channel or a DM
@@ -517,6 +548,7 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       content:          msg.content,
       reactions:        [],
       pinned:           false,
+      mentionsEveryone,
       edited:           false,
       replyTo,
       createdAt:        msg.createdAt.toISOString(),

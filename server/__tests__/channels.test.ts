@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } from './helpers'
 import { Server } from '../models/Server'
+import { Message } from '../models/Message'
 
 beforeAll(connectDb)
 afterAll(disconnectDb)
@@ -129,6 +130,71 @@ describe('DELETE /servers/:sid/channels/:cid', () => {
     expect(after).toHaveLength(2)
     // The seeded text channel survives.
     expect(channels.find((c: any) => c.type === 'text')).toBeTruthy()
+  })
+
+  /*
+   * The cascade.
+   *
+   * Messages are addressed by conversationId, which for a channel IS the
+   * channel id — so once the channel is gone nothing can ever reach them
+   * again. Left behind they are unreachable AND permanent, growing the
+   * collection by every message of every channel anyone ever deletes.
+   *
+   * The delete already does this; nothing asserted it, which is the same shape
+   * as the ManageChannels gate on this very endpoint, which a careless edit
+   * removed and only an existing test caught. A silent cascade with no test is
+   * one refactor away from being a silent leak.
+   */
+  it('deletes the messages of the channel it deletes', async () => {
+    const u = await register()
+    const { server, channels } = await mkServer(u)
+    const extra = (await app().post(`/servers/${server.id}/channels`)
+      .set(auth(u)).send({ name: 'doomed', type: 'text' })).body.channel
+
+    for (const content of ['one', 'two', 'three']) {
+      await app().post(`/servers/${server.id}/channels/${extra.id}/messages`)
+        .set(auth(u)).send({ content })
+    }
+    expect(await Message.countDocuments({ conversationId: extra.id })).toBe(3)
+
+    await app().delete(`/servers/${server.id}/channels/${extra.id}`).set(auth(u))
+    expect(await Message.countDocuments({ conversationId: extra.id })).toBe(0)
+  })
+
+  it('leaves other channels’ messages alone', async () => {
+    // The cascade is keyed on the deleted channel's id. A filter that matched
+    // by server, or one that forgot the id entirely, would empty the whole
+    // server and pass the test above.
+    const u = await register()
+    const { server, channels } = await mkServer(u)
+    const keep = channels.find((c: any) => c.type === 'text')
+    const doomed = (await app().post(`/servers/${server.id}/channels`)
+      .set(auth(u)).send({ name: 'doomed', type: 'text' })).body.channel
+
+    await app().post(`/servers/${server.id}/channels/${keep.id}/messages`)
+      .set(auth(u)).send({ content: 'survivor' })
+    await app().post(`/servers/${server.id}/channels/${doomed.id}/messages`)
+      .set(auth(u)).send({ content: 'goner' })
+
+    await app().delete(`/servers/${server.id}/channels/${doomed.id}`).set(auth(u))
+    expect(await Message.countDocuments({ conversationId: keep.id })).toBe(1)
+    expect(await Message.countDocuments({ conversationId: doomed.id })).toBe(0)
+  })
+
+  it('does not touch a DM that happens to be in the collection', async () => {
+    // `kind: 'channel'` is part of the filter. Without it a conversationId
+    // collision — however unlikely — would reach into someone's DMs.
+    const u = await register()
+    const { server } = await mkServer(u)
+    const doomed = (await app().post(`/servers/${server.id}/channels`)
+      .set(auth(u)).send({ name: 'doomed', type: 'text' })).body.channel
+
+    await Message.create({
+      conversationId: doomed.id, kind: 'dm', authorId: u.id,
+      authorName: u.username, content: 'not a channel message',
+    })
+    await app().delete(`/servers/${server.id}/channels/${doomed.id}`).set(auth(u))
+    expect(await Message.countDocuments({ conversationId: doomed.id, kind: 'dm' })).toBe(1)
   })
 
   it('deletes the only voice channel happily', async () => {
