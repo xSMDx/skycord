@@ -4104,32 +4104,40 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- One group per category, uncategorised first and deliberately
-               headerless (see `sidebarGroups`). The rows are the markup they
-               have always been, moved inside the loop unchanged: `role="button"`
-               + `tabindex="0"` so a channel is reachable without a mouse, and
-               `.self` on BOTH key handlers so Enter/Space on the nested
-               `.ch-more` button activates that button instead of being swallowed
-               by the row underneath it. -->
+               headerless (see `sidebarGroups`).
+               Every row here is a plain container holding TWO real buttons —
+               the label and `.ch-more` — rather than a div with role="button"
+               wrapping one. The old shape was ARIA children-presentational: a
+               role="button" element hides its descendants from the
+               accessibility tree, so `.ch-more` was announced as nothing at
+               all and one row reported one control where there are two. Real
+               buttons also bring Enter/Space for free, which is why the
+               hand-rolled `.self` key handlers are gone. -->
           <div v-for="group in sidebarGroups" :key="group.key" class="ch-group"
             :class="{ 'drop-target': dragChannelId && dropCategory === (group.category?.id ?? null) }"
             @dragover.stop="onChannelDragOver($event, group.category?.id ?? null)"
             @drop.stop="onChannelDrop($event, group.category?.id ?? null)">
-            <!-- Headerless for the uncategorised group. Same activation contract
-                 as the row below it — a header you can only fold with a mouse is
-                 a header a keyboard user cannot get past — and `.self` again so
-                 Enter on the `+` creates a channel rather than also folding the
-                 category out from under it. -->
-            <div v-if="group.category" class="ch-group-label" role="button" tabindex="0"
-              @click="toggleGroup(group)"
-              @keydown.self.enter.prevent="toggleGroup(group)"
-              @keydown.self.space.prevent="toggleGroup(group)"
+            <!-- Headerless for the uncategorised group. Same shape as the rows
+                 below it: the fold is a real button, so a header is reachable
+                 without a mouse and the `+` beside it stays its own control
+                 rather than being swallowed by the header's activation. -->
+            <div v-if="group.category" class="ch-group-label"
               @contextmenu.prevent.stop="openCategoryMenu($event, group.category)">
-              <span>{{ group.category.name }}</span>
-              <!-- Chevron AFTER the name, so the label starts flush with the
-                   channel names below it instead of being indented past a
-                   glyph. `span { flex: 1 }` does the pushing; the chevron then
-                   sits with the row's other controls at the right edge. -->
-              <ChevronRight class="ch-group-chev" :class="{ open: !group.collapsed }" :size="10" :stroke-width="2.25"/>
+              <!-- The fold control is the label itself, for the same reason as
+                   the channel rows: role="button" on this div made the `+` and
+                   `More` buttons inside it presentational, so neither reached a
+                   screen reader. `aria-expanded` says which way it will go,
+                   which the chevron only conveys visually. -->
+              <button class="ch-group-toggle" type="button"
+                :aria-expanded="!group.collapsed"
+                @click="toggleGroup(group)">
+                <span>{{ group.category.name }}</span>
+                <!-- Chevron AFTER the name, so the label starts flush with the
+                     channel names below it instead of being indented past a
+                     glyph. `span { flex: 1 }` does the pushing; the chevron then
+                     sits with the row's other controls at the right edge. -->
+                <ChevronRight class="ch-group-chev" :class="{ open: !group.collapsed }" :size="10" :stroke-width="2.25"/>
+              </button>
               <button v-if="isServerOwner" class="ch-add-btn" v-tip="'Create Channel'"
                 @click.stop="openCreateChannel(group.category.id)"><Plus :size="14" :stroke-width="1.5"/></button>
               <!-- Shown to everyone, not just the owner: a non-owner's menu is
@@ -4147,20 +4155,32 @@ onBeforeUnmount(() => {
             <div v-if="dragChannelId && dropBeforeId === ch.id" class="ch-drop-line" aria-hidden="true" />
             <div
               class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id], dragging: dragChannelId===ch.id }"
-              role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
-              :aria-current="activeChannelId===ch.id && !voiceStageOpen ? 'page' : undefined"
               :draggable="canManageChannels"
               @dragstart="onChannelDragStart($event, ch)"
               @dragend="endChannelDrag"
               @dragover="onChannelRowDragOver($event, ch, group.category?.id ?? null)"
-              @keydown.self.enter.prevent="selectChannel(ch)"
-              @keydown.self.space.prevent="selectChannel(ch)"
-              @click="selectChannel(ch)"
               @contextmenu.prevent.stop="openChannelMenu($event, ch)">
-              <Hash class="ch-icon" :size="16" :stroke-width="1.5"/>
-              <span class="ch-name">{{ ch.name }}</span>
-              <span v-if="unreadChannels[ch.id]" class="ch-unread">{{ unreadChannels[ch.id] }}</span>
-              <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
+              <!-- The row is a plain container and the LABEL is the button.
+                   It used to be the other way round — role="button" on the row
+                   with a real <button> nested inside — which is ARIA
+                   children-presentational: the nested button stops being
+                   exposed at all, so a screen reader announced one control
+                   where there are two and "More" was unreachable. -->
+              <button
+                class="ch-open" type="button"
+                :tabindex="rowFolded(group, ch) ? -1 : 0"
+                :aria-current="activeChannelId===ch.id && !voiceStageOpen ? 'page' : undefined"
+                @click="selectChannel(ch)">
+                <Hash class="ch-icon" :size="16" :stroke-width="1.5"/>
+                <span class="ch-name">{{ ch.name }}</span>
+              </button>
+              <!-- Outside the button: a count is a description of the row, not
+                   part of the name of the control that opens it. -->
+              <span v-if="unreadChannels[ch.id]" class="ch-unread"
+                :aria-label="`${unreadChannels[ch.id]} unread`">{{ unreadChannels[ch.id] }}</span>
+              <button class="ch-more" type="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+                @click.stop="openChannelMenu($event, ch)" v-tip="'More'"
+                :aria-label="`More options for ${ch.name}`">
                 <Ellipsis :size="14" :stroke-width="1.5"/>
               </button>
             </div>
@@ -4186,19 +4206,24 @@ onBeforeUnmount(() => {
               <div class="ch-fold-in">
               <div v-if="dragChannelId && dropBeforeId === ch.id" class="ch-drop-line" aria-hidden="true" />
               <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id, dragging: dragChannelId===ch.id }"
-                role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
-                :aria-current="liveVoiceChannel?.id === ch.id ? 'true' : undefined"
                 :draggable="canManageChannels"
                 @dragstart="onChannelDragStart($event, ch)"
                 @dragend="endChannelDrag"
                 @dragover="onChannelRowDragOver($event, ch, group.category?.id ?? null)"
-                @click="joinVoiceChannel(ch)"
-                @keydown.self.enter.prevent="joinVoiceChannel(ch)"
-                @keydown.self.space.prevent="joinVoiceChannel(ch)"
                 @contextmenu.prevent.stop="openChannelMenu($event, ch)">
-                <Volume2 class="ch-icon" :class="{ occupied: voiceOccupants(ch.id).length > 0 }" :size="16" :stroke-width="1.5"/>
-                <span class="ch-name">{{ ch.name }}</span>
-                <button class="ch-more" @click.stop="openChannelMenu($event, ch)" v-tip="'More'">
+                <!-- Same shape as the text row above: the label is the button,
+                     `.ch-more` is its sibling. See the comment there. -->
+                <button
+                  class="ch-open" type="button"
+                  :tabindex="rowFolded(group, ch) ? -1 : 0"
+                  :aria-current="liveVoiceChannel?.id === ch.id ? 'true' : undefined"
+                  @click="joinVoiceChannel(ch)">
+                  <Volume2 class="ch-icon" :class="{ occupied: voiceOccupants(ch.id).length > 0 }" :size="16" :stroke-width="1.5"/>
+                  <span class="ch-name">{{ ch.name }}</span>
+                </button>
+                <button class="ch-more" type="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
+                  @click.stop="openChannelMenu($event, ch)" v-tip="'More'"
+                  :aria-label="`More options for ${ch.name}`">
                   <Ellipsis :size="14" :stroke-width="1.5"/>
                 </button>
               </div>
@@ -5174,6 +5199,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-group{padding: 0 6px;margin-bottom: 4px}
 .ch-group-label{display:flex;align-items:center;gap: 4px;padding: 6px 6px;border-radius: 4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition: color var(--dur-2) var(--ease-out);white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
+/* The fold control, now a real button inside the label. Transparent and
+   flexed to fill, the same trick as .ch-open on a channel row — the label
+   keeps every visual rule and this only has to carry the click. */
+.ch-group-toggle{
+  display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;
+  background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;
+  letter-spacing:inherit;text-transform:inherit;text-align:left;cursor:pointer;
+}
+.ch-group-toggle:focus{outline:none}
+.ch-group-toggle:focus-visible{outline:2px solid var(--active-ring);outline-offset:2px;border-radius:4px}
 /* The name takes only the width it needs, so the chevron sits directly after
    it — `SERVER STAT ⌄`, the way the reference does it. With `flex: 1` here the
    span absorbed all the free space and threw the chevron out to the right
@@ -5243,6 +5278,32 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
 .ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), padding-left var(--dur-1) var(--ease-out);white-space:nowrap}
+/* The label, now a real button rather than the row pretending to be one.
+   Everything visual still belongs to .ch-item — this only has to disappear:
+   no chrome of its own, inheriting colour so the row's hover and active rules
+   keep reaching the text, and flexed to fill so the whole row stays clickable
+   rather than only the words. `min-width:0` lets the name ellipsize instead of
+   forcing the row wider than the sidebar. */
+.ch-open{
+  display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0;
+  background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;
+  text-align:left;cursor:pointer;
+}
+/* The row already draws a focus treatment; two rings inside each other is
+   noise. Keyboard focus still lands here — this styles it, it does not
+   remove it (see :focus-visible below). */
+.ch-open:focus{outline:none}
+.ch-open:focus-visible{outline:2px solid var(--active-ring);outline-offset:2px;border-radius:4px}
+/* Press feedback belongs to the ROW, not to the label.
+   The global veil in style.css matches every real <button>, and .ch-open is
+   one now — so a press would paint an unrounded rectangle across the label
+   only, stopping short of `.ch-more` and squaring off inside a row with a
+   6px radius. Same failure the server rail hit, and the same fix: opt the
+   inner control out and put the veil where the shape is.
+   `:has()` degrades to no press feedback if unsupported, never to a break. */
+.ch-open:active, .ch-group-toggle:active { box-shadow: none }
+.ch-item:has(.ch-open:active){ box-shadow: inset 0 0 0 100vmax var(--press-veil) }
+.ch-group-label:has(.ch-group-toggle:active){ box-shadow: inset 0 0 0 100vmax var(--press-veil) }
 .ch-item:hover{background:var(--hover);color:var(--text-2);padding-left: 12px}
 .ch-item.active{color:var(--text-strong);background:var(--active-bg);outline:1px solid var(--active-ring);outline-offset:-1px}
 /* Hover still has somewhere to go on a selected row: without this the

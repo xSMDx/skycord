@@ -44,6 +44,8 @@ const membersByServer    = ref<Record<string, ServerMember[]>>({})
 const myAccessByServer = ref<Record<string, WireMyAccess>>({})
 /** Who is server-muted or server-deafened, per server. Almost always empty. */
 const voiceRestrictionsByServer = ref<Record<string, WireVoiceRestriction[]>>({})
+/** Bumped per openServer call, so a superseded fetch's tail can bail. */
+let openSeq = 0
 const activeServerId     = ref<string | null>(null)
 const activeChannelId    = ref<string | null>(null)
 /**
@@ -678,14 +680,34 @@ export const useServers = () => {
   const loadingServerDetail = ref(false)
 
   const openServer = async (sid: string) => {
+    /*
+     * Which click owns the view.
+     *
+     * Two fast clicks on two UNCACHED servers each await a fetch, and nothing
+     * says those resolve in the order they were made. The first click's tail
+     * would then run last and call selectLanding for ITS server, leaving
+     * activeChannelId pointing into server A while activeServerId is B — a
+     * sidebar showing one server and a message pane showing another's channel.
+     *
+     * Same guard useVoice uses for a superseded join, and for the same reason:
+     * an async tail must check whether it is still the current attempt before
+     * writing anything the user can see.
+     */
+    const seq = ++openSeq
     activeServerId.value = sid
     if (!channelsByServer.value[sid] || !categoriesByServer.value[sid]) {
       loadingServerDetail.value = true
       // finally, not a trailing assignment: a failed fetch must not leave the
       // sidebar showing placeholders for a list that is never coming.
+      // Guarded, so a superseded fetch cannot clear the spinner belonging to
+      // the one still running.
       try { await loadServerDetail(sid) }
-      finally { loadingServerDetail.value = false }
+      finally { if (seq === openSeq) loadingServerDetail.value = false }
     }
+    // Superseded. The later click has already set activeServerId and will call
+    // selectLanding itself; the fetched data is still folded in above, so this
+    // costs nothing but the write nobody wants.
+    if (seq !== openSeq) return
     selectLanding(sid)
   }
 
