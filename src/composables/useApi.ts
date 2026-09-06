@@ -614,6 +614,15 @@ export interface ApiMessage {
   content:      string
   reactions:    { emoji: string; userIds: string[] }[]
   pinned:       boolean
+  /**
+   * Whether this message's `@everyone` is a real mention, as the SERVER decided
+   * at send time from the author's permission.
+   *
+   * Optional because a message written before the field existed has none, and
+   * absent must read as false — not as "unknown, so look at the text", which is
+   * the behaviour this replaced.
+   */
+  mentionsEveryone?: boolean
   edited:       boolean
   createdAt:    string
   replyTo?:     { id: string; author: string; content: string }[] | null

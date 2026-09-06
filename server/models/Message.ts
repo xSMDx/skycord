@@ -16,6 +16,20 @@ export interface IMessage extends Document {
   systemType: SystemType | null
   reactions:  { emoji: string; userIds: Types.ObjectId[] }[]
   pinned:     boolean
+  /**
+   * Whether this message's `@everyone` is a real mention.
+   *
+   * Decided by the SERVER at send time, from the author's Mention @everyone
+   * permission, and stored — because the alternative is what the client used to
+   * do: regex the content and highlight on a match. That made the permission
+   * unenforceable by construction. Anyone could type the word and every client
+   * would light the row up, and re-deciding it on read would also mean an old
+   * message changing meaning whenever a role was edited.
+   *
+   * False on every message written before this existed, which is correct:
+   * nothing was enforcing it, so nothing should retroactively claim it was.
+   */
+  mentionsEveryone: boolean
   edited:     boolean
   replyTo:    Types.ObjectId | null   // legacy single parent (read-only back-compat)
   replyToIds: Types.ObjectId[]        // new: a reply can target multiple messages
@@ -35,6 +49,7 @@ const MessageSchema = new Schema<IMessage>(
     systemType:     { type: String, enum: ['rename','icon','add','join','leave','call'], default: null },
     reactions:      [{ emoji: String, userIds: [{ type: Schema.Types.ObjectId, ref: 'User' }] }],
     pinned:         { type: Boolean, default: false },
+    mentionsEveryone: { type: Boolean, default: false },
     edited:         { type: Boolean, default: false },
     replyTo:        { type: Schema.Types.ObjectId, ref: 'Message', default: null },
     replyToIds:     [{ type: Schema.Types.ObjectId, ref: 'Message' }],

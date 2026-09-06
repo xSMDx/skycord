@@ -110,8 +110,18 @@ const displayContent = computed(() =>
   themeRef.value?.code ? props.msg.content.replace(THEME_CODE_RE, '').trim() : props.msg.content,
 )
 
-// @everyone pings highlight the whole message row (Discord-style gold rail + tint).
-const hasEveryone = computed(() => /@everyone\b/.test(props.msg.content || ''))
+/*
+ * @everyone pings highlight the whole message row (Discord-style gold rail + tint).
+ *
+ * Read off the message, NOT matched against its text. Regexing the content here
+ * is what made Mention @everyone unenforceable: anybody could type the word and
+ * every client would light the row up regardless of permission. The server now
+ * decides once at send time and stores the answer — see `mentionsEveryone` on
+ * the Message model for why it is stored rather than re-derived on read.
+ *
+ * Absent (a message older than the field) reads as false.
+ */
+const hasEveryone = computed(() => !!(props.msg as { mentionsEveryone?: boolean }).mentionsEveryone)
 
 // Hold-to-view-tree gesture on the reply pill (Telegram-style long-press).
 // Short tap → jump to the original message. Hold past the threshold → open the full chain.

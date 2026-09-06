@@ -147,7 +147,6 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   AddReactions: {
     label: 'Add reactions',
     desc: 'Put a new emoji reaction on a message. Clicking a reaction that is already there to join it needs no permission at all.',
-    unenforced: true,
   },
   UseExternalEmojis: {
     label: 'Use external emoji',
@@ -156,18 +155,15 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   },
   MentionEveryone: {
     label: 'Mention @everyone',
-    desc: 'Use @everyone and @here to notify a whole channel at once, and ping any role even when that role has mentions switched off.',
-    unenforced: true,
+    desc: 'Use @everyone and @here to notify a whole channel at once. Without it the words still appear in their message — nobody edits what somebody typed — but the message does not light the channel up.',
   },
   ManageMessages: {
     label: 'Manage messages',
-    desc: 'Pin and unpin messages in a channel, and delete messages written by anyone. Today pinning is open to everyone in the channel, and deleting somebody else’s message is not built at all — an author can only delete their own.',
-    unenforced: true,
+    desc: 'Pin and unpin messages in a channel, and delete messages written by anyone. Deleting their own needs nothing. It never allows EDITING someone else’s message — putting words in a person’s mouth is not moderation.',
   },
   ReadMessageHistory: {
     label: 'Read message history',
     desc: 'See messages posted before they opened the channel. Without it a channel looks empty until somebody posts again.',
-    unenforced: true,
   },
   SendTTSMessages: {
     label: 'Send text-to-speech',
