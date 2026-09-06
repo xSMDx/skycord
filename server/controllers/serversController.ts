@@ -5,11 +5,12 @@ import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { ServerInvite } from '../models/ServerInvite'
 import { VoiceServer } from '../models/VoiceServer'
+import { Role } from '../models/Role'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { loadAccess, channelBits, categoryOverwriteMap, has, requirePerm } from '../utils/access'
-import { parseOverwrites, canActOnMember } from '../permissions'
+import { parseOverwrites, canActOnMember, serializeBits } from '../permissions'
 
 /** Discover is a directory, not a feed: one page, no pagination yet. */
 const DISCOVER_LIMIT = 50
@@ -296,6 +297,36 @@ export const getServer = async (req: Request, res: Response, next: NextFunction)
       server:     shapeServer(server),
       channels:   visible,
       categories: categories.map(shapeCategory),
+      /*
+       * What the CALLER may do here, resolved server-side.
+       *
+       * The client had no way to answer this before, which is why every
+       * moderation row had to be either always shown or always hidden. Sending
+       * the resolved answer rather than the raw material — roles, assignments,
+       * positions — keeps one implementation of the resolution rules instead of
+       * a second one in TypeScript that can disagree with this one.
+       *
+       * It gates presentation ONLY. Every endpoint re-checks, because a value
+       * that arrives over the wire is a claim about what the UI should draw,
+       * never a permission.
+       *
+       * `highestPosition` rides along because half the rules are comparisons
+       * against the target's position, not flat bit tests — a moderator with
+       * MuteMembers still may not touch a peer.
+       */
+      me: {
+        isOwner:         access.isOwner,
+        permissions:     serializeBits(access.base),
+        highestPosition: access.highestPosition,
+      },
+      /*
+       * Who is under a voice restriction, so the sidebar can badge them and the
+       * occupant menu can render its rows as toggles. Only members actually
+       * restricted appear, which is almost always none of them.
+       */
+      voiceRestrictions: (server.memberVoice ?? []).map((v: any) => ({
+        userId: v.user.toString(), mute: !!v.mute, deafen: !!v.deafen,
+      })),
     })
   } catch (err) { next(err) }
 }
@@ -408,6 +439,29 @@ export const getServerMembers = async (req: Request, res: Response, next: NextFu
     const server = await loadServer(req, res); if (!server) return
     const users = await User.find({ _id: { $in: server.members } })
       .select('username displayName discriminator avatar avatarCrop status statusUntil').lean()
+
+    /*
+     * Each member's highest role position, for the client's presentation gates.
+     *
+     * Built from ONE roles query and the memberRoles side-car rather than
+     * calling loadAccess per member: that helper hits the database twice each
+     * time, so a hundred-member server would open two hundred round trips to
+     * render a list.
+     *
+     * -1 for someone holding nothing, matching ServerAccess.highestPosition —
+     * @everyone sits at 0 and the comparisons are strictly greater-than, so a
+     * member with no roles must not come out equal to the role everybody has.
+     */
+    const roles = await Role.find({ server: server._id }).select('position').lean()
+    const positionOf = new Map(roles.map(r => [r._id.toString(), r.position]))
+    const highestOf = new Map<string, number>()
+    for (const entry of (server.memberRoles ?? []) as any[]) {
+      const held = (entry.roles ?? [])
+        .map((r: any) => positionOf.get(r.toString()))
+        .filter((p: number | undefined): p is number => p !== undefined)
+      if (held.length) highestOf.set(entry.user.toString(), Math.max(...held))
+    }
+
     res.json({
       members: users.map((u: any) => ({
         id:          u._id.toString(),
@@ -419,6 +473,7 @@ export const getServerMembers = async (req: Request, res: Response, next: NextFu
         // user's chosen status, not whether they are reachable.
         status:      effectiveStatus(u.status, u._id.toString(), u.statusUntil),
         isOwner:     server.owner.toString() === u._id.toString(),
+        highestPosition: highestOf.get(u._id.toString()) ?? -1,
       })),
     })
   } catch (err) { next(err) }
@@ -481,16 +536,17 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
     // membership check into the filter (the same trick joinViaInvite uses
     // for its `$ne` condition) means a non-match skips the write entirely,
     // so modifiedCount stays a trustworthy signal.
-    // Both arrays in ONE $pull, which is what makes the memberRoles side-car
-    // safe. Membership and roles are stored separately, so the obvious risk is
-    // a leaver whose role assignments survive them — orphaned rows that
-    // silently hand the roles back if that account ever rejoins. A single
-    // atomic update has no window in which one succeeded and the other did
-    // not. Joining needs no counterpart: a member with no entry here has no
-    // roles, which is exactly true of someone who just arrived.
+    // All THREE arrays in ONE $pull, which is what makes the side-cars safe.
+    // Membership, roles and voice restrictions are stored separately, so the
+    // obvious risk is a leaver whose rows survive them — orphans that silently
+    // hand the roles back, or re-impose a server mute, if that account ever
+    // rejoins. A single atomic update has no window in which one succeeded and
+    // another did not. Joining needs no counterpart: a member with no entry in
+    // either side-car holds no roles and is under no restriction, which is
+    // exactly true of someone who just arrived.
     const upd = await Server.updateOne(
       { _id: server._id, members: target },
-      { $pull: { members: target, memberRoles: { user: target } } }
+      { $pull: { members: target, memberRoles: { user: target }, memberVoice: { user: target } } }
     )
     // Only announce a departure when the $pull actually removed someone — a
     // target who was never a member, or one a racing request already

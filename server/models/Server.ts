@@ -31,6 +31,25 @@ export interface IServer extends Document {
    * it would be a fact that can go stale.
    */
   memberRoles: { user: Types.ObjectId; roles: Types.ObjectId[] }[]
+  /**
+   * Server mute and server deafen, imposed by a moderator.
+   *
+   * A second side-car for the same reason as the first, and stored here rather
+   * than beside the live call state in chatSocket because the two are different
+   * KINDS of fact. `VoiceMemberState` is what a member is doing — self-reported,
+   * per-room, gone when they leave. This is what has been done TO them: it
+   * outlives the call, the disconnect and the reconnect, and only a moderator
+   * lifting it ends it. Keeping it in memory would mean a restart quietly
+   * un-muted everyone who had been silenced.
+   *
+   * Guild-wide, not per-channel — matching the name people already use for it.
+   * Someone muted here is muted in every voice channel of this server.
+   *
+   * Absent entry means neither flag. Rows are written only when something is
+   * imposed and pruned when both flags come off, so this array stays the size of
+   * the moderation actually in force rather than the membership.
+   */
+  memberVoice: { user: Types.ObjectId; mute: boolean; deafen: boolean }[]
   isPublic:    boolean
   createdAt:   Date
   updatedAt:   Date
@@ -52,6 +71,15 @@ const ServerSchema = new Schema<IServer>(
       type: [{
         user:  { type: Schema.Types.ObjectId, ref: 'User', required: true },
         roles: [{ type: Schema.Types.ObjectId, ref: 'Role' }],
+      }],
+      default: [],
+      _id: false,
+    },
+    memberVoice: {
+      type: [{
+        user:   { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        mute:   { type: Boolean, default: false },
+        deafen: { type: Boolean, default: false },
       }],
       default: [],
       _id: false,

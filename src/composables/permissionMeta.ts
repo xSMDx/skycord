@@ -18,10 +18,30 @@
  * unable to unmute — it says that too, because a permission you have never
  * turned off is one whose effect you have never seen.
  *
- * `soon` marks a permission whose FEATURE does not exist in Skycord yet. The
- * flag list is modelled on Discord's so the vocabulary is familiar from day
- * one, but seven of them currently grant nothing. Saying so on the row is the
- * difference between a plan and a lie.
+ * The flag list is modelled on Discord's so the vocabulary is familiar from day
+ * one. That borrowing has a cost: a row can exist here long before the thing it
+ * governs does. Two different kinds of gap, and they are NOT the same lie:
+ *
+ *   `soon`       — the FEATURE does not exist. Granting it does nothing because
+ *                  there is nothing to grant. Custom emoji, bans, attachments.
+ *   `unenforced` — the feature WORKS and this switch does not gate it. Denying
+ *                  it does nothing, which is the dangerous half: a moderator
+ *                  ticks "no Speak" and the person speaks anyway.
+ *   `advisory`   — the switch IS wired and every stock client honours it, but
+ *                  it cannot be enforced from the server, so a modified client
+ *                  can ignore it. Use it for moderation, not for security.
+ *
+ * The first two disable the toggle, because a control that cannot change the
+ * outcome should not accept input. They carry different words because "Soon" on
+ * Speak would imply speaking is coming — speaking has worked since v0.5.
+ *
+ * `advisory` does NOT disable anything: it works. It is labelled because the
+ * difference between "denied" and "denied unless they try" is exactly the thing
+ * an admin needs to know before relying on it, and it is invisible otherwise.
+ *
+ * A flag comes OFF the moment enforcement lands. `permissionMeta.test.ts` fails
+ * in both directions: flag something the server checks, or check nothing while
+ * unflagged, and the build stops.
  */
 
 /** Mirrors the keys of PERMISSIONS in server/permissions.ts. */
@@ -44,6 +64,10 @@ export interface PermissionMeta {
   danger?: boolean
   /** The feature behind it is not built yet, so granting it does nothing. */
   soon?: boolean
+  /** The feature works, but nothing checks this bit — so denying it does nothing. */
+  unenforced?: boolean
+  /** Wired and honoured by every stock client, but not enforceable server-side. */
+  advisory?: boolean
 }
 
 export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
@@ -63,6 +87,7 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   ManageEmojis: {
     label: 'Manage emoji and stickers',
     desc: 'Upload custom emoji and stickers for this server, rename them, and delete them.',
+    soon: true,
   },
   ViewAuditLog: {
     label: 'View audit log',
@@ -101,6 +126,7 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   BanMembers: {
     label: 'Ban members',
     desc: 'Remove someone and block their account from rejoining until the ban is lifted. Only works on members whose highest role sits below theirs.',
+    soon: true,
   },
 
   // ── Text ──
@@ -111,30 +137,37 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   EmbedLinks: {
     label: 'Embed links',
     desc: 'Links they post unfurl into a preview card with the page title and image. Without it the link stays plain text.',
+    soon: true,
   },
   AttachFiles: {
     label: 'Attach files',
     desc: 'Upload images, video, audio and other files into a message.',
+    soon: true,
   },
   AddReactions: {
     label: 'Add reactions',
     desc: 'Put a new emoji reaction on a message. Clicking a reaction that is already there to join it needs no permission at all.',
+    unenforced: true,
   },
   UseExternalEmojis: {
     label: 'Use external emoji',
     desc: 'Use custom emoji belonging to other servers they are a member of, not only this one.',
+    soon: true,
   },
   MentionEveryone: {
     label: 'Mention @everyone',
     desc: 'Use @everyone and @here to notify a whole channel at once, and ping any role even when that role has mentions switched off.',
+    unenforced: true,
   },
   ManageMessages: {
     label: 'Manage messages',
-    desc: 'Delete messages written by anyone, and pin or unpin messages in a channel. Deleting their own needs nothing.',
+    desc: 'Pin and unpin messages in a channel, and delete messages written by anyone. Today pinning is open to everyone in the channel, and deleting somebody else’s message is not built at all — an author can only delete their own.',
+    unenforced: true,
   },
   ReadMessageHistory: {
     label: 'Read message history',
     desc: 'See messages posted before they opened the channel. Without it a channel looks empty until somebody posts again.',
+    unenforced: true,
   },
   SendTTSMessages: {
     label: 'Send text-to-speech',
@@ -158,11 +191,12 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   },
   Video: {
     label: 'Video',
-    desc: 'Turn on a camera or share a screen during a call.',
+    desc: 'Turn on a camera or share a screen during a call. Without it they can still watch everyone else.',
   },
   UseVoiceActivity: {
     label: 'Use voice activity',
-    desc: 'Transmit simply by talking. Without it they must hold push-to-talk to be heard, which is a way to keep a noisy channel usable.',
+    desc: 'Transmit simply by talking. Without it they must hold push-to-talk to be heard, which is a way to keep a noisy channel usable. The app enforces this, not the media server, so treat it as a way to keep a channel tidy rather than as a way to silence somebody — use Server Mute for that.',
+    advisory: true,
   },
   PrioritySpeaker: {
     label: 'Priority speaker',
@@ -179,7 +213,7 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   },
   MoveMembers: {
     label: 'Move members',
-    desc: 'Move another member into a different voice channel, or disconnect them from voice entirely.',
+    desc: 'Disconnect another member from voice. They stay in the server and can rejoin straight away, so it ends a situation without ending a membership. Moving somebody into a different channel is not built yet.',
   },
 
   // ── Advanced ──
@@ -203,6 +237,54 @@ export const PERMISSION_UI_GROUPS: { label: string; perms: PermissionName[] }[] 
   { label: 'Advanced',
     perms: ['Administrator'] },
 ]
+
+/** A decimal bitfield off the wire. Unreadable input reads as no permissions —
+ *  never as a throw, and never as a grant. */
+export const parseWireBits = (raw: string | null | undefined): bigint => {
+  try { return BigInt(String(raw ?? '0')) } catch { return 0n }
+}
+
+/**
+ * Whether this viewer may aim `perm` at that member — the presentation mirror
+ * of `canActOnMember` in server/permissions.ts.
+ *
+ * A mirror is a liability: two copies of an authorisation rule drift, and the
+ * drifting one is always the copy nobody re-reads. It is here anyway because
+ * the alternative is worse — without it every moderation row is either always
+ * shown (and 403s for most people who click it) or always hidden (and unusable
+ * by the moderators it exists for).
+ *
+ * What keeps it honest is that it decides nothing. The server runs the real
+ * check on every request and does not consult this. If the two disagree the
+ * symptom is a row that should not have been drawn, refusing when used —
+ * never an action that should have been refused going through.
+ *
+ * The rules, in the order they settle it:
+ *   1. The owner is untouchable, including by an administrator holding
+ *      every bit. Ownership is not a permission and cannot be out-ranked.
+ *   2. The owner may do anything to anyone else.
+ *   3. Otherwise you need the bit AND a strictly higher role than theirs.
+ *      Equal does not pass: two peers must not be able to silence each other.
+ *
+ * Administrator is deliberately NOT special-cased here, which looks like an
+ * omission and is not. The server expands it to every bit in `resolve()` before
+ * the payload is built, so an administrator's `permissions` string already has
+ * the bit being tested. Adding an explicit check made this mirror MORE
+ * permissive than the original — caught by the parity test, which runs both on
+ * the same inputs.
+ */
+export const canActOnMemberUI = (
+  actor: { isOwner: boolean; permissions: string; highestPosition: number } | null,
+  target: { isOwner: boolean; highestPosition?: number },
+  perm: PermissionName,
+): boolean => {
+  if (!actor) return false
+  if (target.isOwner) return false
+  if (actor.isOwner) return true
+  const bit = PERMISSION_BIT[perm]
+  if ((parseWireBits(actor.permissions) & bit) !== bit) return false
+  return actor.highestPosition > (target.highestPosition ?? -1)
+}
 
 /** Role colours. Deliberately the set people arriving already recognise. */
 export const ROLE_COLORS = [

@@ -16,6 +16,7 @@ import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
+import { canActOnMemberUI } from '@/composables/permissionMeta'
 import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
 import SettingsModal       from '@/components/modals/SettingsModal.vue'
@@ -172,6 +173,8 @@ const {
   loadingServerDetail,
   upsertMember, removeMember,
   loadServers, loadServerMembers, openServer: enterServer, moveChannel,
+  myAccessIn, canInServer, voiceRestrictionOf, applyVoiceRestriction,
+  reorderChannels,
 } = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -1388,13 +1391,25 @@ const toggleGroup = (g: SidebarGroup) => {
  */
 const dragChannelId = ref<string | null>(null)
 const dropCategory  = ref<string | null>(null)
+/**
+ * Where in the destination list the row would land — the id it should sit
+ * BEFORE, or null for the end of that list.
+ *
+ * An id rather than an index, because the list can be re-sorted between the
+ * dragover that set it and the drop that reads it: an index would then name a
+ * different row, and the channel would land somewhere nobody pointed at.
+ */
+const dropBeforeId = ref<string | null>(null)
+
+/** May this viewer rearrange the sidebar here? */
+const canManageChannels = computed(() => canInServer(activeServerId.value, 'ManageChannels'))
 
 const onChannelDragStart = (e: DragEvent, ch: Channel) => {
-  // Owners only — `updateChannel` is requireOwner server-side, so a
-  // non-owner's drag could only ever end in a 403. The rows carry
-  // `draggable="false"` for them as well; this is the second half of the same
-  // fence, not a substitute for it.
-  if (!isServerOwner.value) { e.preventDefault(); return }
+  // ManageChannels, not ownership. This used to read `isServerOwner` because
+  // channel edits were owner-only; they are a permission now, and leaving the
+  // fence on ownership would deny the drag to every moderator who can rename
+  // the very same channel from its context menu.
+  if (!canManageChannels.value) { e.preventDefault(); return }
   dragChannelId.value = ch.id
   // Start lit on the group it is already in, so the indicator says something
   // true from the first frame rather than flashing "uncategorised" until the
@@ -1406,7 +1421,46 @@ const onChannelDragStart = (e: DragEvent, ch: Channel) => {
   }
 }
 
-const endChannelDrag = () => { dragChannelId.value = null }
+const endChannelDrag = () => { dragChannelId.value = null; dropBeforeId.value = null }
+
+/**
+ * Dragging over a ROW rather than over the group as a whole.
+ *
+ * The half of the row the pointer is in decides whether the dragged channel
+ * lands before or after it — the convention every list-reordering UI uses, and
+ * the reason a drop near a boundary feels predictable instead of arbitrary.
+ * Stops propagation so the group handler underneath does not immediately
+ * overwrite the insertion point with "somewhere in this category".
+ */
+const onChannelRowDragOver = (e: DragEvent, row: Channel, group: string | null) => {
+  const draggedId = dragChannelId.value
+  if (!draggedId) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropCategory.value = group
+
+  // Text and voice are separate lists that never interleave, so a text channel
+  // held over a voice row has no insertion point there. Falling through would
+  // draw a line in a list the drop cannot use, and the drop would then append
+  // somewhere else — a marker that lies about where the row will land.
+  const dragged = channelsByServer.value[activeServerId.value ?? '']?.find(c => c.id === draggedId)
+  if (!dragged || dragged.type !== row.type) { dropBeforeId.value = null; return }
+
+  // A row cannot be dropped relative to itself; leaving the previous marker up
+  // would draw an insertion line the drop would then ignore.
+  if (row.id === draggedId) { dropBeforeId.value = null; return }
+  const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  dropBeforeId.value = (e.clientY - box.top) < box.height / 2 ? row.id : nextRowIdAfter(row, group)
+}
+
+/** The row following `row` in its own bucket, or null when it is the last. */
+const nextRowIdAfter = (row: Channel, group: string | null): string | null => {
+  const bucket = (channelsByServer.value[activeServerId.value ?? ''] ?? [])
+    .filter(c => (c.category ?? null) === group && c.type === row.type)
+  const i = bucket.findIndex(c => c.id === row.id)
+  return i >= 0 && i + 1 < bucket.length ? bucket[i + 1].id : null
+}
 
 /** `category` is the group under the pointer — `null` for "outside every
  *  category", which `.sb-body` supplies for anything not over a group. */
@@ -1425,17 +1479,49 @@ const onChannelDrop = async (e: DragEvent, category: string | null) => {
   if (!cid) return
   e.preventDefault()
   const sid = activeServerId.value
+  const before = dropBeforeId.value
   // Cleared before the request, not after: the row is going to move
   // optimistically anyway, and leaving the drag state up would keep a drop
   // strip and a lit group on screen until the server answered.
   endChannelDrag()
-  if (!sid || !isServerOwner.value) return
+  if (!sid || !canManageChannels.value) return
+
+  const channel = channelsByServer.value[sid]?.find(c => c.id === cid)
+  if (!channel) return
+  const movedCategory = (channel.category ?? null) !== category
+
   try {
-    await moveChannel(sid, cid, category)
+    /*
+     * Category first, order second, and they are two requests on purpose.
+     *
+     * The reorder endpoint validates the destination list against the channels
+     * that are actually IN it, so it can only place the dragged channel once
+     * the move has put it there. Doing them the other way round would send an
+     * order naming a channel the destination does not yet contain, and the
+     * server would rightly refuse it as stale.
+     */
+    if (movedCategory) await moveChannel(sid, cid, category)
+
+    // No insertion point means the drop landed on the group's empty space
+    // rather than on a row. A cross-category move already appends, so there is
+    // nothing left to say; within one category it means "leave it alone".
+    if (before === null && !movedCategory) return
+
+    const bucket = (channelsByServer.value[sid] ?? [])
+      .filter(c => (c.category ?? null) === category && c.type === channel.type)
+      .map(c => c.id)
+    const without = bucket.filter(id => id !== cid)
+    const at = before === null ? without.length : without.indexOf(before)
+    // The marker named a row that has since gone. Appending is the honest
+    // fallback — it is where a drop with no target lands anyway.
+    const index = at === -1 ? without.length : at
+    await reorderChannels(sid, category, channel.type as 'text' | 'voice', [
+      ...without.slice(0, index), cid, ...without.slice(index),
+    ])
   } catch (err: any) {
     console.error('[onChannelDrop]', err)
-    // moveChannel has already put the channel back where it was; this is the
-    // only thing that says why. Same message source as the context menu's
+    // moveChannel and reorderChannels each roll their own change back; this is
+    // the only thing that says why. Same message source as the context menu's
     // Move to Category, so "That category does not belong to this server"
     // reads identically however the move was started.
     showToast(err?.message || 'Couldn’t move that channel')
@@ -2031,6 +2117,45 @@ const setupSocket = () => {
   socketOn('onCategoryDeleted', (p: any) => removeCategory(p.serverId, p.categoryId))
 
   socketOn('onServerUpdated', (p: any) => upsertServer(p.server))
+
+  // The reordered rows are upserted rather than the order being replayed from
+  // the id list: upsertChannel re-sorts by position, so folding in the server's
+  // own numbers puts every client on exactly the values it stored — including
+  // the client that just dragged, whose optimistic guess is corrected here if
+  // it differed.
+  socketOn('onChannelsReordered', (p: any) => {
+    for (const w of p.channels ?? []) upsertChannel(w)
+  })
+  socketOn('onCategoriesReordered', (p: any) => {
+    for (const w of p.categories ?? []) upsertCategory(w)
+  })
+
+  // Fanned to every member, not just the person restricted: the sidebar badges
+  // a muted occupant for everyone, and the occupant menu reads the same state
+  // to decide whether its row says mute or unmute.
+  socketOn('onVoiceModeration', (p: any) => {
+    applyVoiceRestriction(p.serverId, p.userId, !!p.mute, !!p.deafen)
+    if (p.userId === authUser.value?.id) {
+      // Being told about yourself is the case that needs saying out loud: the
+      // microphone button is about to stop working and nothing else explains it.
+      if (p.mute || p.deafen) {
+        showToast(p.deafen ? 'You were server deafened' : 'You were server muted')
+      } else {
+        showToast('A moderator lifted your restriction')
+      }
+    }
+  })
+
+  socketOn('onVoiceDisconnected', (p: any) => {
+    // Only the person removed has a call to tear down. Everyone else's view is
+    // corrected by the occupancy broadcast the server already sent.
+    if (p.userId !== authUser.value?.id) return
+    if (liveVoiceChannel.value?.id === p.channelId) {
+      void vLeave()
+      showToast('You were disconnected from voice')
+    }
+  })
+
   socketOn('onServerDeleted', (p: any) => {
     const wasHere = activeServerId.value === p.serverId
     removeServer(p.serverId)
@@ -2167,6 +2292,9 @@ const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string
     toggleMute:   onToggleMute,
     toggleDeafen: onToggleDeafen,
     openVoiceSettings: () => openSettings('voice'),
+    setServerMute:   (t: MenuUser, next: boolean) => moderateVoice(channelId, t, { mute: next }),
+    setServerDeafen: (t: MenuUser, next: boolean) => moderateVoice(channelId, t, { deafen: next }),
+    disconnectFromVoice: (t: MenuUser) => disconnectFromVoice(channelId, t),
   }
   if (isMe) {
     openMenu(e, () => voiceSelfMenu(u, {
@@ -2178,6 +2306,11 @@ const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string
   }
   openMenu(e, () => {
     const pref = userPref(o.id)
+    // The server this channel belongs to — moderation is a guild power, and
+    // the occupant list can be showing a channel from a server other than the
+    // one currently open (the rail hover preview does exactly that).
+    const sid = serverOfChannel(channelId)
+    const mod = sid ? voiceModerationFor(sid, o.id) : null
     return voiceOccupantMenu(u, {
       channelId,
       volume: pref.volume, muted: pref.muted, videoOff: pref.videoOff,
@@ -2186,8 +2319,84 @@ const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string
       // while you share a room; from a channel you are merely looking at
       // there is nothing behind them.
       inCallWithThem: liveVoiceChannel.value?.id === channelId,
+      ...(mod ?? {}),
     }, handlers)
   })
+}
+
+/**
+ * What this viewer may do TO that member in that server, plus what is already
+ * imposed on them.
+ *
+ * Returns the five fields the occupant menu reads, or null when the server's
+ * detail has not been fetched — which reads as no powers, so an unfetched
+ * server hides the rows rather than offering ones that would 403.
+ */
+/** The server a voice channel belongs to, across every fetched server. */
+const serverOfChannel = (channelId: string): string | undefined =>
+  Object.keys(channelsByServer.value).find(
+    s => (channelsByServer.value[s] ?? []).some(c => c.id === channelId))
+
+/**
+ * Impose or lift a voice restriction.
+ *
+ * Not optimistic, unlike pin and mute elsewhere in this file. Those are the
+ * viewer's own preferences and are theirs to be wrong about for a frame; this
+ * is a claim about somebody ELSE being silenced, and showing it as done before
+ * the server agrees is the one direction that must not be guessed. The server's
+ * broadcast is what updates every client including this one.
+ */
+const moderateVoice = async (
+  channelId: string,
+  target: { id: string; name?: string },
+  change: { mute?: boolean; deafen?: boolean },
+) => {
+  const sid = serverOfChannel(channelId)
+  if (!sid) return
+  try {
+    const res = await api.setMemberVoiceApi(sid, target.id, change)
+    applyVoiceRestriction(sid, target.id, res.mute, res.deafen)
+    const what = change.mute !== undefined ? 'muted' : 'deafened'
+    const on = change.mute ?? change.deafen
+    // 'absent' is a success: they are not in a call, and the restriction is
+    // waiting in the token they will be handed when they join one.
+    showToast(
+      on ? `Server ${what} ${target.name ?? 'that member'}`
+         : `Lifted the server ${what === 'muted' ? 'mute' : 'deafen'}`,
+    )
+  } catch (e: any) {
+    showToast(e?.message || 'Could not change that')
+  }
+}
+
+const disconnectFromVoice = async (channelId: string, target: { id: string; name?: string }) => {
+  const sid = serverOfChannel(channelId)
+  if (!sid) return
+  try {
+    await api.disconnectMemberVoice(sid, target.id)
+    showToast(`Disconnected ${target.name ?? 'that member'}`)
+  } catch (e: any) {
+    showToast(e?.message || 'Could not disconnect them')
+  }
+}
+
+const voiceModerationFor = (sid: string, uid: string) => {
+  const me = myAccessIn(sid)
+  if (!me) return null
+  const target = (membersByServer.value[sid] ?? []).find(m => m.id === uid)
+  // Someone in a voice channel whose member row has not loaded. Treated as
+  // unrankable rather than as rank -1: assuming they are junior would draw
+  // moderation rows over somebody who might outrank the viewer.
+  if (!target) return null
+  const t = { isOwner: target.isOwner, highestPosition: target.highestPosition }
+  const { mute, deafen } = voiceRestrictionOf(sid, uid)
+  return {
+    serverMuted: mute,
+    serverDeafened: deafen,
+    canServerMute:   canActOnMemberUI(me, t, 'MuteMembers'),
+    canServerDeafen: canActOnMemberUI(me, t, 'DeafenMembers'),
+    canDisconnect:   canActOnMemberUI(me, t, 'MoveMembers'),
+  }
 }
 
 const copyText = (text: string, what: string) => {
@@ -3932,13 +4141,18 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="ch in group.text" :key="ch.id" class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
             <div class="ch-fold-in">
+            <!-- The insertion line. A sibling rather than a border on the row so
+                 it sits BETWEEN two rows visually, and so showing it never
+                 changes their height and nudges the list under the pointer. -->
+            <div v-if="dragChannelId && dropBeforeId === ch.id" class="ch-drop-line" aria-hidden="true" />
             <div
               class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id], dragging: dragChannelId===ch.id }"
               role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
               :aria-current="activeChannelId===ch.id && !voiceStageOpen ? 'page' : undefined"
-              :draggable="isServerOwner"
+              :draggable="canManageChannels"
               @dragstart="onChannelDragStart($event, ch)"
               @dragend="endChannelDrag"
+              @dragover="onChannelRowDragOver($event, ch, group.category?.id ?? null)"
               @keydown.self.enter.prevent="selectChannel(ch)"
               @keydown.self.space.prevent="selectChannel(ch)"
               @click="selectChannel(ch)"
@@ -3970,12 +4184,14 @@ onBeforeUnmount(() => {
             <template v-for="ch in group.voice" :key="ch.id">
               <div class="ch-fold" :class="{ folded: rowFolded(group, ch) }">
               <div class="ch-fold-in">
+              <div v-if="dragChannelId && dropBeforeId === ch.id" class="ch-drop-line" aria-hidden="true" />
               <div class="ch-item voice" :class="{ active: liveVoiceChannel?.id === ch.id, dragging: dragChannelId===ch.id }"
                 role="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
                 :aria-current="liveVoiceChannel?.id === ch.id ? 'true' : undefined"
-                :draggable="isServerOwner"
+                :draggable="canManageChannels"
                 @dragstart="onChannelDragStart($event, ch)"
                 @dragend="endChannelDrag"
+                @dragover="onChannelRowDragOver($event, ch, group.category?.id ?? null)"
                 @click="joinVoiceChannel(ch)"
                 @keydown.self.enter.prevent="joinVoiceChannel(ch)"
                 @keydown.self.space.prevent="joinVoiceChannel(ch)"
@@ -5008,6 +5224,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (prefers-reduced-motion: reduce){ .skip-link{transition:none} }
 
 .ch-item.dragging{opacity:.4}
+/* The insertion point. Zero height with a visible border so it marks the gap
+   between two rows without adding one — a line that pushed the list down would
+   move the row under the pointer mid-drag. */
+.ch-drop-line{
+  height:0;margin:0 4px;
+  border-top:2px solid var(--accent, #5865f2);border-radius:2px;
+  /* Pointer-transparent, or it would sit between the pointer and the row whose
+     dragover set it, and the marker would flicker as the cursor crossed it. */
+  pointer-events:none;
+}
 
 @media (prefers-reduced-motion: reduce){
   .ch-fold{transition:none}

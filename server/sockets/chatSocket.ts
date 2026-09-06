@@ -90,6 +90,27 @@ export const callOccupancy = (room: string): number => activeCalls.get(room)?.si
 export const isInCall = (room: string, userId: string): boolean =>
   activeCalls.get(room)?.has(userId) ?? false
 
+/**
+ * The voice CHANNEL room this user is sitting in, or null.
+ *
+ * Voice moderation needs it because a moderator acts on a person, not on a
+ * room: "mute them" carries no channel, and the answer is wherever they
+ * currently are. Restricted to `voice:` rooms deliberately — a server mute is a
+ * guild power and must not reach into somebody's DM call, which belongs to no
+ * server and to no moderator.
+ *
+ * One room per user by construction: `call:join` adds to whichever room is
+ * being joined and `leaveCall` removes it, and a client can only hold one voice
+ * connection at a time. The scan is over rooms rather than users because
+ * `activeCalls` is keyed that way, and a server has at most a handful live.
+ */
+export const voiceRoomOfUser = (userId: string): string | null => {
+  for (const [room, members] of activeCalls) {
+    if (room.startsWith('voice:') && members.has(userId)) return room
+  }
+  return null
+}
+
 /** Fix the choice for a room, if it is not fixed already. Returns what the
  *  room is now on, which is NOT necessarily what was passed. */
 export const fixCallVoiceServer = (room: string, id: string | null): string | null => {
@@ -146,6 +167,66 @@ export const forgetChannelServer = (channelId: string): void => {
   channelServer.delete(channelId)
 }
 export const getIO = (): IOServer | null => _io
+
+/**
+ * Fan a room's occupancy and per-member state out to whoever should see it.
+ *
+ * Hoisted out of the connection handler so voice MODERATION can reach it: a
+ * moderator disconnecting somebody has to correct everyone's occupancy, and
+ * they act from an HTTP request that has no socket of its own. The handler
+ * delegates here rather than keeping a second copy — two implementations of
+ * this fan-out would drift, and the symptom would be one surface showing a
+ * person in a channel they had left.
+ */
+export const broadcastCallState = (room: string): void => {
+  const io = _io
+  if (!io) return
+  const userIds = [...(activeCalls.get(room) ?? [])]
+  // serverId only means anything for a voice room, and only when we know
+  // it — see channelServer. The client uses it to attribute occupancy to
+  // a server whose channel list it has not fetched.
+  const serverId = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
+  const states = statesFor(room)
+  const payload = { room, userIds, ...(serverId ? { serverId } : {}), ...(states ? { states } : {}) }
+  if (room.startsWith('voice:')) {
+    // Occupancy is server-wide news: everyone should see who is sitting in
+    // a voice channel without being in it. Every member joined the socket
+    // room `chan:<id>` for this channel at connect, so it is exactly the
+    // right audience — note that is the SOCKET room, deliberately named
+    // differently from this LiveKit room.
+    io.to(`chan:${room.slice(6)}`).emit('call:state', payload)
+  } else if (room.startsWith('group:')) {
+    io.to(room).emit('call:state', payload)
+  } else {
+    // DM last, because this branch PARSES the room name and would happily
+    // produce nonsense from any prefix it does not recognise.
+    const [a, b] = room.slice(3).split('_')
+    io.to(`user:${a}`).to(`user:${b}`).emit('call:state', payload)
+  }
+}
+
+/**
+ * Remove somebody from a call from OUTSIDE their own socket.
+ *
+ * The ordinary path is `call:leave`, which only ever deletes the caller's own
+ * id. This is the moderated path, and it has to exist separately: LiveKit
+ * having evicted a participant does not tell this process anything, so without
+ * it the person would sit in every sidebar as a ghost occupant until their
+ * socket happened to disconnect.
+ */
+export const dropFromCall = (room: string, userId: string): boolean => {
+  const set = activeCalls.get(room)
+  if (!set || !set.has(userId)) return false
+  set.delete(userId)
+  const st = voiceStates.get(room)
+  if (st) { st.delete(userId); if (st.size === 0) voiceStates.delete(room) }
+  if (set.size === 0) {
+    activeCalls.delete(room); callStartedAt.delete(room); voiceStates.delete(room)
+    callVoiceServer.delete(room)
+  }
+  broadcastCallState(room)
+  return true
+}
 
 // Helper: get partner ID from a DM conversationId
 const getPartner = (convId: string, myId: string) =>
@@ -713,30 +794,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     const joinedCallRooms = new Set<string>()
 
-    const broadcastCall = (room: string) => {
-      const userIds = [...(activeCalls.get(room) ?? [])]
-      // serverId only means anything for a voice room, and only when we know
-      // it — see channelServer. The client uses it to attribute occupancy to
-      // a server whose channel list it has not fetched.
-      const serverId = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
-      const states = statesFor(room)
-      const payload = { room, userIds, ...(serverId ? { serverId } : {}), ...(states ? { states } : {}) }
-      if (room.startsWith('voice:')) {
-        // Occupancy is server-wide news: everyone should see who is sitting in
-        // a voice channel without being in it. Every member joined the socket
-        // room `chan:<id>` for this channel at connect, so it is exactly the
-        // right audience — note that is the SOCKET room, deliberately named
-        // differently from this LiveKit room.
-        io.to(`chan:${room.slice(6)}`).emit('call:state', payload)
-      } else if (room.startsWith('group:')) {
-        io.to(room).emit('call:state', payload)
-      } else {
-        // DM last, because this branch PARSES the room name and would happily
-        // produce nonsense from any prefix it does not recognise.
-        const [a, b] = room.slice(3).split('_')
-        io.to(`user:${a}`).to(`user:${b}`).emit('call:state', payload)
-      }
-    }
+    // Delegates to the module-level implementation, which voice moderation also
+    // calls — see broadcastCallState.
+    const broadcastCall = (room: string) => broadcastCallState(room)
 
     // Never called for a channel — the parameter type is the guard, and the one
     // call site narrows `kind` before reaching here. A voice channel has no

@@ -15,6 +15,11 @@ import {
 import { Category } from '../models/Category'
 import { loadAccess, channelBits, has } from '../utils/access'
 import { parseOverwrites } from '../permissions'
+import { voiceRestrictionFor } from './voiceModerationController'
+import {
+  publishGrantFor, UNRESTRICTED_PERMITS, NO_RESTRICTION,
+} from '../utils/voiceModeration'
+import { TrackSource } from 'livekit-server-sdk'
 
 // A LiveKit room name for a conversation. DMs use the stable sorted-pair id so
 // both participants land in the same room; groups use the group id; server
@@ -45,6 +50,8 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       userLimit?: number
       bitrate?: number
     } | null = null
+    /** The channel's resolved bits, or null for a DM/group that has no channel. */
+    let channelBitsForUser: bigint | null = null
     const userId = req.user!.sub
     const { conversationId, kind, voiceServerId } = req.body as {
       conversationId?: string; kind?: 'dm' | 'group' | 'channel'
@@ -110,6 +117,10 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
         parseOverwrites(cat?.overwrites),
         parseOverwrites((channel as any).overwrites),
       )
+      // Kept for the publish grant below. Resolving a second time there would
+      // be three more queries and, worse, a second chance to resolve it
+      // differently from the check that just admitted them.
+      channelBitsForUser = bits
       if (!has(bits, 'ViewChannels')) {
         res.status(404).json({ message: 'Channel not found' }); return
       }
@@ -180,8 +191,48 @@ let voice
     // on the instance config alone would break exactly that case.
     if (!voice) { res.status(503).json({ message: 'Voice is not configured on this server' }); return }
 
+    /*
+     * Server mute and server deafen, baked into the grant.
+     *
+     * THIS is what makes them real. LiveKit honours the grants in the token and
+     * nothing else, so a mute that lives only in the database is a mute the
+     * client can shrug off by reconnecting. Applied to channels only: the
+     * restriction is a guild power and a DM belongs to no guild.
+     *
+     * Read from the server document rather than passed in, because the person
+     * being restricted is the one asking for the token and must not be able to
+     * influence the answer.
+     */
+    let restriction = NO_RESTRICTION
+    if (chosenChannel) {
+      const guild = await Server.findById(chosenChannel.server).select('memberVoice').lean()
+      restriction = voiceRestrictionFor(guild ?? { memberVoice: [] }, userId)
+    }
+
+    /*
+     * Speak and Video, resolved through the same channel bits Connect used.
+     *
+     * A DM or group has no channel and therefore no overwrites, so both are
+     * granted: there is nobody with the authority to have taken them away.
+     *
+     * Voice activity is NOT here, and cannot be — see `advisory` in
+     * permissionMeta. LiveKit has no notion of "must hold a key to transmit",
+     * so it is sent to the client below and honoured there.
+     */
+    const permits = channelBitsForUser
+      ? { speak: has(channelBitsForUser, 'Speak'), video: has(channelBitsForUser, 'Video') }
+      : UNRESTRICTED_PERMITS
+    const grant = publishGrantFor(permits, restriction)
+
     const at = new AccessToken(voice.apiKey, voice.apiSecret, { identity: userId, name })
-    at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true })
+    at.addGrant({
+      roomJoin: true, room,
+      canPublish: grant.canPublish,
+      canSubscribe: grant.canSubscribe,
+      // Only when narrowed. An empty list would supersede canPublish and
+      // forbid everything — see PublishGrant.
+      ...(grant.sources ? { canPublishSources: grant.sources } : {}),
+    })
     const token = await at.toJwt()
 
     // `voiceServer` is named so the client can SAY where the call is. Whoever
@@ -194,6 +245,31 @@ let voice
       // 32 is a channel where nobody sends 64. Absent for DMs and groups,
       // which have no channel to carry a setting.
       ...(chosenChannel ? { bitrate: chosenChannel.bitrate ?? 64 } : {}),
+      // Told, not inferred. Without this the client shows a working unmute
+      // button over a token that forbids publishing, and the person presses it,
+      // sees themselves unmuted, and cannot understand why nobody replies.
+      ...(restriction.mute || restriction.deafen
+        ? { serverMute: restriction.mute, serverDeafen: restriction.deafen }
+        : {}),
+      /*
+       * What the client may offer. Sent for the same reason as the two above:
+       * every one of these is already enforced in the token, so this changes
+       * nothing about what is POSSIBLE — it changes whether the person is shown
+       * a button that silently fails.
+       *
+       * `voiceActivity` is the exception and the only one that is not enforced
+       * anywhere else. LiveKit has no concept of push-to-talk, so a client that
+       * ignores this transmits openly. It is a real permission with a real
+       * effect on every stock client, and a modified one can bypass it — which
+       * is why the settings UI marks it advisory rather than enforced.
+       */
+      ...(chosenChannel ? {
+        mayPublishAudio: grant.canPublish
+          && (grant.sources === undefined || grant.sources.includes(TrackSource.MICROPHONE)),
+        mayPublishVideo: grant.canPublish
+          && (grant.sources === undefined || grant.sources.includes(TrackSource.CAMERA)),
+        voiceActivity: channelBitsForUser === null || has(channelBitsForUser, 'UseVoiceActivity'),
+      } : {}),
     })
   } catch (err) { next(err) }
 }
