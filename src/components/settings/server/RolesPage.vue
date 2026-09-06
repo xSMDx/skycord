@@ -358,17 +358,22 @@ const effectivelyOn = (p: PermissionName) =>
                   <span class="st-field-label" :class="{ danger: PERMISSION_META[p].danger }">
                     {{ PERMISSION_META[p].label }}
                     <!-- The flag list is modelled on Discord's so the vocabulary
-                         is familiar from day one, but seven of these have no
-                         feature behind them yet. Granting one does nothing, and
-                         the row is the only place that can say so. -->
+                         is familiar from day one, but a row can outrun the thing
+                         it governs in two different ways. "Soon" means no feature
+                         exists. "Not enforced" means the feature works and this
+                         bit does not gate it — the worse of the two, because it
+                         is the one that looks like it took effect. -->
                     <span v-if="PERMISSION_META[p].soon" class="rl-soon">Soon</span>
+                    <span v-else-if="PERMISSION_META[p].unenforced" class="rl-soon rl-unenf">Not enforced</span>
+                    <!-- Advisory works, so it is labelled but never disabled. -->
+                    <span v-else-if="PERMISSION_META[p].advisory" class="rl-soon rl-advis">App-enforced</span>
                   </span>
                   <span class="st-field-value muted">{{ PERMISSION_META[p].desc }}</span>
                 </div>
                 <button
                   class="st-toggle"
                   :class="{ on: effectivelyOn(p), implied: isAdmin && p !== 'Administrator' }"
-                  :disabled="PERMISSION_META[p].soon"
+                  :disabled="PERMISSION_META[p].soon || PERMISSION_META[p].unenforced"
                   role="switch" :aria-checked="effectivelyOn(p)" :aria-label="PERMISSION_META[p].label"
                   @click="toggle(p)"
                 ><span /></button>
@@ -496,6 +501,10 @@ const effectivelyOn = (p: PermissionName) =>
   padding: 2px 6px; border-radius: 4px;
   background: var(--hover-strong); color: var(--text-3);
 }
+/* Warmer than "Soon": this one is a live gap, not a roadmap note. */
+.rl-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
+/* Cool, not warm — this one is a caveat on something that works, not a gap. */
+.rl-advis { background: color-mix(in srgb, #5865f2 20%, transparent); color: #8b95f8; }
 .st-field-label.danger { color: #f0716f; }
 
 .rl-admin {

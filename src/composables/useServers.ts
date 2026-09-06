@@ -10,10 +10,14 @@
  */
 import { ref, computed } from 'vue'
 import type { Server, Channel, Category } from '@/types'
-import type { WireServer, WireChannel, WireCategory, WireMember } from './useApi'
+import type {
+  WireServer, WireChannel, WireCategory, WireMember,
+  WireMyAccess, WireVoiceRestriction,
+} from './useApi'
 import { useApi } from './useApi'
 import { colorForUsername } from './useAvatar'
 import { livePresence } from './usePresence'
+import { PERMISSION_BIT, parseWireBits, type PermissionName } from './permissionMeta'
 import { activeCalls, voiceRoomServers } from './useSocket'
 
 const servers            = ref<Server[]>([])
@@ -28,6 +32,18 @@ const categoriesByServer = ref<Record<string, Category[]>>({})
  * nothing to rename or reshape between the wire and the UI.
  */
 const membersByServer    = ref<Record<string, ServerMember[]>>({})
+/**
+ * What THIS user may do in each server, as the server resolved it.
+ *
+ * Presentation only. It decides whether a moderation row is drawn, never
+ * whether an action succeeds — the endpoints check again, and would refuse a
+ * client that had edited this in memory. Absent means "not fetched yet", which
+ * reads as no powers, so a surface that gates on it degrades to hiding rather
+ * than to offering something that 403s.
+ */
+const myAccessByServer = ref<Record<string, WireMyAccess>>({})
+/** Who is server-muted or server-deafened, per server. Almost always empty. */
+const voiceRestrictionsByServer = ref<Record<string, WireVoiceRestriction[]>>({})
 const activeServerId     = ref<string | null>(null)
 const activeChannelId    = ref<string | null>(null)
 /**
@@ -170,6 +186,14 @@ export interface ServerMember {
    */
   status:      string
   isOwner:     boolean
+  /**
+   * Their highest role position, or -1 when they hold none.
+   *
+   * -1 and not 0, matching ServerAccess.highestPosition on the server:
+   * @everyone sits at 0 and the rank comparisons are strictly greater-than, so
+   * somebody with no roles must not come out equal to the role everyone has.
+   */
+  highestPosition: number
 }
 
 const toClientMember = (w: WireMember): ServerMember => ({
@@ -180,6 +204,9 @@ const toClientMember = (w: WireMember): ServerMember => ({
   avatarCrop:  w.avatarCrop ?? null,
   status:      w.status,
   isOwner:     w.isOwner,
+  // A payload from a server predating this field leaves everyone unranked,
+  // which is the safe reading: no moderation row is drawn over an unknown rank.
+  highestPosition: w.highestPosition ?? -1,
 })
 
 const byPosition = (a: Channel, b: Channel) => (a.position ?? 0) - (b.position ?? 0)
@@ -200,6 +227,8 @@ export const resetServers = () => {
   channelsByServer.value   = {}
   categoriesByServer.value = {}
   membersByServer.value    = {}
+  myAccessByServer.value   = {}
+  voiceRestrictionsByServer.value = {}
   activeServerId.value     = null
   activeChannelId.value    = null
   viewedVoiceId.value      = null
@@ -276,10 +305,17 @@ export const useServers = () => {
    * omitted: data already known to be good should not be thrown away by a
    * payload that simply says nothing about it.
    */
-  const receiveDetail = (w: WireServer, chans: WireChannel[], cats?: WireCategory[]) => {
+  const receiveDetail = (
+    w: WireServer, chans: WireChannel[], cats?: WireCategory[],
+    me?: WireMyAccess, restrictions?: WireVoiceRestriction[],
+  ) => {
     upsertServer(w)
     channelsByServer.value[w.id] = chans.map(toClientChannel).sort(byPosition)
     if (cats) categoriesByServer.value[w.id] = cats.map(toClientCategory).sort(byCategoryPosition)
+    // Same absent-vs-empty rule as `cats` above, for the same reason: an older
+    // payload that says nothing must not be recorded as "you may do nothing".
+    if (me) myAccessByServer.value[w.id] = me
+    if (restrictions) voiceRestrictionsByServer.value[w.id] = restrictions
   }
 
   const upsertChannel = (w: WireChannel) => {
@@ -436,9 +472,91 @@ export const useServers = () => {
     membersByServer.value[sid] = members.map(toClientMember)
   }
 
+  /** What has been imposed on one member, or neither flag. */
+  const voiceRestrictionOf = (sid: string, uid: string): { mute: boolean; deafen: boolean } => {
+    const row = (voiceRestrictionsByServer.value[sid] ?? []).find(r => r.userId === uid)
+    return { mute: !!row?.mute, deafen: !!row?.deafen }
+  }
+
+  /**
+   * Record a restriction locally.
+   *
+   * Called from the socket handler and from the optimistic write, so the two
+   * cannot disagree about the shape. A member with neither flag is REMOVED
+   * rather than stored as false — `voiceRestrictionsByServer` is a list of what
+   * is in force, and a row of two falses would make "is anyone restricted here"
+   * answer yes.
+   */
+  const applyVoiceRestriction = (sid: string, uid: string, mute: boolean, deafen: boolean) => {
+    const list = (voiceRestrictionsByServer.value[sid] ?? []).filter(r => r.userId !== uid)
+    if (mute || deafen) list.push({ userId: uid, mute, deafen })
+    voiceRestrictionsByServer.value = { ...voiceRestrictionsByServer.value, [sid]: list }
+  }
+
+  /** The caller's own resolved access, or null when it has not been fetched. */
+  const myAccessIn = (sid: string): WireMyAccess | null => myAccessByServer.value[sid] ?? null
+
+  /**
+   * Whether this viewer holds a server-level permission here.
+   *
+   * Presentation only, like everything else read off `myAccessIn` — the
+   * endpoints check again. Unfetched reads as no, so a surface gating on it
+   * hides rather than offering something that would be refused.
+   *
+   * No hierarchy here on purpose: this answers "may you do this at all", not
+   * "may you do this TO that person", which is canActOnMemberUI's job.
+   */
+  const canInServer = (sid: string | null, perm: PermissionName): boolean => {
+    if (!sid) return false
+    const me = myAccessIn(sid)
+    if (!me) return false
+    if (me.isOwner) return true
+    const bit = PERMISSION_BIT[perm]
+    return (parseWireBits(me.permissions) & bit) === bit
+  }
+
+  /**
+   * Apply an order to one bucket, locally.
+   *
+   * Rewrites `position` on the channels named, using the slots they already
+   * occupy — the same rule the server applies, so the optimistic result and the
+   * broadcast that follows agree instead of visibly disagreeing for a frame.
+   * See `slotsFor` in reorderController.
+   */
+  const applyChannelOrder = (sid: string, orderedIds: string[]) => {
+    const list = channelsByServer.value[sid]
+    if (!list) return
+    const rows = orderedIds
+      .map(id => list.find(c => c.id === id))
+      .filter((c): c is Channel => !!c)
+    if (rows.length !== orderedIds.length) return
+    const slots = rows.map(c => c.position ?? 0).sort((a, b) => a - b)
+    for (let i = 1; i < slots.length; i++) {
+      if (slots[i] <= slots[i - 1]) slots[i] = slots[i - 1] + 1
+    }
+    rows.forEach((c, i) => { c.position = slots[i] })
+    channelsByServer.value[sid] = [...list].sort(byPosition)
+  }
+
+  /** As above, for the category list. */
+  const applyCategoryOrder = (sid: string, orderedIds: string[]) => {
+    const list = categoriesByServer.value[sid]
+    if (!list) return
+    const rows = orderedIds
+      .map(id => list.find(c => c.id === id))
+      .filter((c): c is Category => !!c)
+    if (rows.length !== orderedIds.length) return
+    const slots = rows.map(c => c.position ?? 0).sort((a, b) => a - b)
+    for (let i = 1; i < slots.length; i++) {
+      if (slots[i] <= slots[i - 1]) slots[i] = slots[i - 1] + 1
+    }
+    rows.forEach((c, i) => { c.position = slots[i] })
+    categoriesByServer.value[sid] = [...list].sort(byCategoryPosition)
+  }
+
   const loadServerDetail = async (sid: string) => {
-    const { server, channels, categories } = await api.getServerDetail(sid)
-    receiveDetail(server, channels, categories)
+    const { server, channels, categories, me, voiceRestrictions } = await api.getServerDetail(sid)
+    receiveDetail(server, channels, categories, me, voiceRestrictions)
   }
 
   /**
@@ -452,12 +570,12 @@ export const useServers = () => {
    * message (see `doMoveChannel` in ChatApp.vue), and the sidebar is never
    * left showing a move the server refused.
    *
-   * Ordering is untouched. `position` is assigned on create and never
-   * updated anywhere in this codebase, so a channel keeps its number when it
-   * changes category; `upsertChannel`'s re-sort therefore drops it back into
-   * position order inside its new group rather than at the end of it.
-   * Reordering *within* a category would need a `position` write path that
-   * does not exist, and is deliberately not attempted here.
+   * Ordering is untouched HERE, deliberately: this changes which group a
+   * channel is in and nothing else, so it keeps its number across the move and
+   * `upsertChannel`'s re-sort drops it into position order inside its new
+   * group. Placing it at a chosen spot is `reorderChannels` below, and a drag
+   * that does both calls them in that order — see `onChannelDrop` in
+   * ChatApp.vue for why the move has to land first.
    *
    * The channel is looked up again after the await rather than held across
    * it: `removeChannel` and `receiveDetail` both replace the array outright,
@@ -484,6 +602,49 @@ export const useServers = () => {
     } catch (e) {
       const still = channelsByServer.value[sid]?.find(c => c.id === cid)
       if (still) still.category = previous
+      throw e
+    }
+  }
+
+  /**
+   * Order a bucket, optimistically.
+   *
+   * Same bargain as moveChannel: a drag that visibly snaps back reads as
+   * broken, so the local order is rewritten first and restored if the server
+   * refuses. The rollback captures the ids in their PREVIOUS order rather than
+   * a reference to the array, because the array is replaced wholesale on every
+   * refetch and holding one would restore something nothing renders.
+   */
+  const reorderChannels = async (
+    sid: string, category: string | null, type: 'text' | 'voice', orderedIds: string[],
+  ) => {
+    const before = (channelsByServer.value[sid] ?? [])
+      .filter(c => (c.category ?? null) === category && c.type === type)
+      .map(c => c.id)
+    // Nothing to say. Dropping a row back where it started is common enough
+    // that it should not cost a request.
+    if (before.length === orderedIds.length && before.every((id, i) => id === orderedIds[i])) return
+
+    applyChannelOrder(sid, orderedIds)
+    try {
+      const { channels } = await api.reorderChannelsApi(sid, category, type, orderedIds)
+      for (const w of channels) upsertChannel(w)
+    } catch (e) {
+      applyChannelOrder(sid, before)
+      throw e
+    }
+  }
+
+  const reorderCategories = async (sid: string, orderedIds: string[]) => {
+    const before = (categoriesByServer.value[sid] ?? []).map(c => c.id)
+    if (before.length === orderedIds.length && before.every((id, i) => id === orderedIds[i])) return
+
+    applyCategoryOrder(sid, orderedIds)
+    try {
+      const { categories } = await api.reorderCategoriesApi(sid, orderedIds)
+      for (const w of categories) upsertCategory(w)
+    } catch (e) {
+      applyCategoryOrder(sid, before)
       throw e
     }
   }
@@ -694,6 +855,8 @@ export const useServers = () => {
     markUnread, clearUnread, serverUnread, selectLanding, openChannel, viewVoiceChannel,
     loadingServerDetail,
     loadServers, loadServerDetail, loadServerMembers, openServer, moveChannel,
+    myAccessIn, canInServer, voiceRestrictionOf, applyVoiceRestriction,
+    applyChannelOrder, applyCategoryOrder, reorderChannels, reorderCategories,
   }
 }
 

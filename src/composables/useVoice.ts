@@ -20,7 +20,11 @@ import {
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
-import { voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded } from './useVoiceSettings'
+import {
+  voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded,
+  effectiveInputMode,
+} from './useVoiceSettings'
+import { permits, setPermits, resetPermits } from './voicePermits'
 import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia, media } from './useVoiceMedia'
 import { resetRtcStats } from './useRtcStats'
 
@@ -58,6 +62,16 @@ interface VoiceState {
   // are really on. null while not in a call, or on an instance with no
   // registered servers.
   voiceServer:  { id: string; name: string } | null
+  /*
+   * Imposed by a moderator, as opposed to merely never permitted.
+   *
+   * What this channel ALLOWS lives in `voicePermits`, not here — one fact, one
+   * home. These two are a different fact: not "you cannot", but "somebody
+   * decided you may not", which needs different words in front of the person
+   * and is worth surfacing even when the capability was absent anyway.
+   */
+  serverMuted:   boolean
+  serverDeafened: boolean
 }
 
 export const voice = reactive<VoiceState>({
@@ -65,6 +79,7 @@ export const voice = reactive<VoiceState>({
   connecting: false, connectStage: null, connectAttempt: 0, connectingConvId: null, connected: false,
   localMuted: false, localDeafened: false, participants: [],
   ping: null, quality: 'unknown', micBlocked: false, voiceServer: null,
+  serverMuted: false, serverDeafened: false,
 })
 
 const audioEls = new Map<string, HTMLAudioElement>()   // trackSid -> <audio>
@@ -90,14 +105,20 @@ let channelBitrate: number | null = null
 /** Publish the mic within the channel's ceiling. Every place that turns the
  *  microphone on goes through here — there are four, and a cap applied at only
  *  some of them is not a cap. */
-const publishMic = (p: LocalParticipant) =>
-  p.setMicrophoneEnabled(
+const publishMic = (p: LocalParticipant) => {
+  // The one place that can refuse for everyone. The token would reject the
+  // publish anyway, but the rejection is asynchronous and arrives after the UI
+  // has already drawn an open microphone — so it is caught here instead, at
+  // the choke point the comment above promises.
+  if (!permits.audio) return Promise.resolve(undefined)
+  return p.setMicrophoneEnabled(
     true,
     micCaptureOptions(),
     // audioPreset, not a bare bitrate: LiveKit takes the ceiling through the
     // preset, and kbps -> bps because the channel setting is in kbps.
     channelBitrate ? { audioPreset: { maxBitrate: channelBitrate * 1000 } } : undefined,
   )
+}
 
 let intentionalLeave = false  // true while WE tear the room down, so the Disconnected
                               // handler doesn't try to reconnect our own hangup
@@ -423,6 +444,12 @@ const cleanup = () => {
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
   if (failTimer)  { clearTimeout(failTimer);  failTimer = null }
+  // Back to unrestricted, or a channel that forbade video would keep the camera
+  // button dead in the next call — including in a DM, where nobody has the
+  // authority to have forbidden anything.
+  resetPermits()
+  voice.serverMuted = false
+  voice.serverDeafened = false
   intentionalLeave = false
   stopLocalLevel()
   stopMedia()
@@ -525,8 +552,12 @@ const applyMicChain = (): Promise<void> => {
 // Every one of these takes effect immediately mid-call — no rejoin. Sensitivity
 // and volume in particular were previously wired only into the mic test, so
 // moving them did nothing to what the other side actually heard.
+// `voiceActivityAllowed` is in here for the same reason: it changes the mode the
+// chain runs in, so a moderator's overwrite has to reach the gate without
+// waiting for a rejoin.
 watch(() => [voiceSettings.noiseMode, voiceSettings.sensitivity,
-             voiceSettings.inputVolume, voiceSettings.inputMode],
+             voiceSettings.inputVolume, voiceSettings.inputMode,
+             permits.voiceActivity],
       () => { void applyMicChain() })
 
 // Module-scoped (not inside useVoice) so wireRoom's Disconnected handler can
@@ -570,8 +601,22 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     voice.connectingConvId = convId
     voice.activeName = name   // set now so the "Connecting…" strip can label the call
     try {
-      const { token, url, voiceServer, bitrate } = await getVoiceToken(convId, kind, preferredVoiceServer)
+      const {
+        token, url, voiceServer, bitrate,
+        mayPublishAudio, mayPublishVideo, voiceActivity, serverMute, serverDeafen,
+      } = await getVoiceToken(convId, kind, preferredVoiceServer)
       channelBitrate = typeof bitrate === 'number' ? bitrate : null
+      // `?? true` throughout: a DM carries none of these, and neither does a
+      // response from a server predating them. Absent means unrestricted, and
+      // the token is the thing that actually decides — reading absence as a
+      // denial would grey out working buttons for everyone on an older build.
+      voice.serverMuted    = serverMute ?? false
+      voice.serverDeafened = serverDeafen ?? false
+      setPermits({
+        audio:         mayPublishAudio ?? true,
+        video:         mayPublishVideo ?? true,
+        voiceActivity: voiceActivity ?? true,
+      })
       if (seq !== connectSeq) return                                  // superseded while fetching token
       voice.connectStage = 'connecting'
       const r = new Room({ adaptiveStream: true, dynacast: true })
@@ -587,7 +632,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       // (which orphaned the room → reconnect loop), join LISTEN-ONLY so the user
       // can still hear the call, flagged so the UI can nudge them to use HTTPS.
       const canCapture = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
-      if (voiceSettings.inputMode === 'ptt') {
+      if (effectiveInputMode() === 'ptt') {
         bindPtt()
       } else if (canCapture) {
         try { await publishMic(r.localParticipant) }
@@ -604,7 +649,10 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       voice.activeName = name
       voice.micBlocked = !canCapture
       voice.voiceServer = voiceServer ?? null
-      voice.localMuted = voiceSettings.inputMode === 'ptt' || !canCapture
+      // Also muted when the channel forbids publishing at all: arriving with an
+      // open-microphone icon over a token that refuses audio is the exact lie
+      // publishMic exists to prevent.
+      voice.localMuted = effectiveInputMode() === 'ptt' || !canCapture || !permits.audio
       syncParticipants()
       emitCallJoin(convId, kind)
       soundCallJoin()
@@ -653,6 +701,16 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
   const toggleMute = () => {
     const room = getRoom()
     if (!room) return
+    /*
+     * Refuse the unmute rather than let it appear to work.
+     *
+     * The token already forbids publishing, so `setMicrophoneEnabled(true)`
+     * would be rejected by the media server — but `localMuted` would already
+     * have flipped, leaving an open-microphone icon over a microphone that is
+     * not open. Someone would then talk into it. Staying muted is the honest
+     * state, and the callers below surface why.
+     */
+    if (voice.localMuted && !permits.audio) return
     voice.localMuted = !voice.localMuted
     voice.localMuted ? soundMute() : soundUnmute()
     room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions()).catch(() => {})
@@ -671,7 +729,10 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
       audioEls.forEach(el => (el.muted = true))
     } else {
-      voice.localMuted = muteBeforeDeafen
+      // Undeafening restores what you had before — unless the token forbids
+      // publishing, in which case "what you had before" is not available and
+      // staying muted is the only truthful outcome.
+      voice.localMuted = muteBeforeDeafen || !permits.audio
       room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions()).catch(() => {})
       // Not a blanket unmute: someone you muted individually must STAY muted
       // when you undeafen, or undeafening silently undoes those choices.

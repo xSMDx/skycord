@@ -19,6 +19,8 @@ import {
 import {
   listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer,
 } from '../controllers/voiceServersController'
+import { setMemberVoice, disconnectMember } from '../controllers/voiceModerationController'
+import { reorderChannels, reorderCategories } from '../controllers/reorderController'
 
 const router = Router()
 router.use(requireAuth)
@@ -38,8 +40,22 @@ router.delete('/:sid',                 deleteServer)
 router.get('/:sid/members',            getServerMembers)
 router.delete('/:sid/members/:uid',    removeMember)
 
+// Voice moderation. Authorised on MuteMembers / DeafenMembers / MoveMembers
+// plus role position, the same shape the roles routes below use — not owner
+// gated. writeLimit'd because each one reaches a media server, so a loop here
+// costs more than a database round trip.
+router.patch('/:sid/members/:uid/voice',            writeLimit, setMemberVoice)
+router.post('/:sid/members/:uid/voice/disconnect',  writeLimit, disconnectMember)
+
 // Channel writes create/rename records, same class as the server/friend writes
 // above — DELETE stays unlimited to match deleteServer/removeMember/removeFriend.
+// BEFORE '/:sid/channels/:cid' — Express matches in declaration order, so a
+// literal segment registered after a parameterised one at the same depth is
+// unreachable. Registered as PUT because the body is the whole order, not a
+// patch to it.
+router.put('/:sid/channels/order',     writeLimit,  reorderChannels)
+router.put('/:sid/categories/order',   writeLimit,  reorderCategories)
+
 router.post('/:sid/channels',          writeLimit,  createChannel)
 router.patch('/:sid/channels/:cid',    writeLimit,  updateChannel)
 router.delete('/:sid/channels/:cid',   deleteChannel)

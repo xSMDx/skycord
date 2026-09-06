@@ -175,7 +175,37 @@ export const useApi = () => {
     post<{ server: WireServer; channels: WireChannel[]; joined: boolean }>(`/servers/${sid}/join`, {})
 
   const getServerDetail = (sid: string) =>
-    get<{ server: WireServer; channels: WireChannel[]; categories: WireCategory[] }>(`/servers/${sid}`)
+    get<{
+      server: WireServer; channels: WireChannel[]; categories: WireCategory[]
+      /** What the CALLER may do here, resolved server-side. Presentation only —
+       *  every endpoint re-checks, so this can never grant anything. */
+      me?: WireMyAccess
+      voiceRestrictions?: WireVoiceRestriction[]
+    }>(`/servers/${sid}`)
+
+  /**
+   * Order one bucket of the sidebar — a (category, type) pair.
+   *
+   * `order` is the COMPLETE list of ids in that bucket. The server refuses a
+   * partial one with 409 rather than guessing, so a stale client is told to
+   * refetch instead of quietly applying an order to the wrong set.
+   */
+  const reorderChannelsApi = (
+    sid: string, category: string | null, type: 'text' | 'voice', order: string[],
+  ) =>
+    put<{ channels: WireChannel[] }>(`/servers/${sid}/channels/order`, { category, type, order })
+
+  const reorderCategoriesApi = (sid: string, order: string[]) =>
+    put<{ categories: WireCategory[] }>(`/servers/${sid}/categories/order`, { order })
+
+  /** Server mute / server deafen. Omit a field to leave it alone. */
+  const setMemberVoiceApi = (sid: string, uid: string, body: { mute?: boolean; deafen?: boolean }) =>
+    patch<{ userId: string; mute: boolean; deafen: boolean; live: string }>(
+      `/servers/${sid}/members/${uid}/voice`, body,
+    )
+
+  const disconnectMemberVoice = (sid: string, uid: string) =>
+    post<{ userId: string; live: string }>(`/servers/${sid}/members/${uid}/voice/disconnect`, {})
 
   // Exactly `getServerMembers` in server/controllers/serversController.ts:226.
   // `status` there is `effectiveStatus(u.status, u._id)` — computed server-side,
@@ -431,6 +461,22 @@ export const useApi = () => {
       voiceServer: { id: string; name: string }
       /** kbps. Channels only — DMs and groups have no channel to carry it. */
       bitrate?: number
+      /*
+       * What the grant in `token` already allows. Channels only, and absent
+       * means unrestricted — a DM has no channel whose permissions could take
+       * anything away.
+       *
+       * These exist so the UI stops offering a control the token forbids; they
+       * are not the enforcement. The one exception is `voiceActivity`, which
+       * has no server-side counterpart at all: LiveKit cannot express
+       * push-to-talk, so this client honouring it IS the mechanism.
+       */
+      mayPublishAudio?: boolean
+      mayPublishVideo?: boolean
+      voiceActivity?:   boolean
+      /** Imposed by a moderator, rather than never granted. */
+      serverMute?:   boolean
+      serverDeafen?: boolean
     }>('/voice/token', { conversationId, kind, voiceServerId: voiceServerId || undefined })
 
   /** Every voice server the caller could be routed to, across all their servers. */
@@ -490,6 +536,8 @@ export const useApi = () => {
     listVoiceServers, createVoiceServer, updateVoiceServer, deleteVoiceServer,
     listRolesApi, createRoleApi, updateRoleApi, deleteRoleApi, setMemberRolesApi,
     createServerApi, getMyServers, getDiscoverServers, joinPublicServer, setServerPublic, updateServerApi, removeServerMember, getServerDetail, getServerMembers, getChannelMessagesApi, sendChannelRest,
+    setMemberVoiceApi, disconnectMemberVoice,
+    reorderChannelsApi, reorderCategoriesApi,
     createChannelApi, updateChannelApi, moveChannel, deleteChannelApi,
     createCategoryApi, updateCategoryApi, deleteCategoryApi,
     deleteServerApi, leaveServerApi,
@@ -670,6 +718,31 @@ export interface WireMember {
    *  comment on getServerMembers above. */
   status:      string
   isOwner:     boolean
+  /** Their highest role position, or -1 when they hold none. Needed because
+   *  half the moderation rules are rank comparisons, not flat bit tests.
+   *  Optional so a payload from a server predating this still parses. */
+  highestPosition?: number
+}
+
+/**
+ * The caller's own resolved access in one server.
+ *
+ * Sent by the server rather than worked out here, so the resolution rules have
+ * one implementation. It decides what the UI DRAWS and nothing else — every
+ * endpoint re-checks, because a value that arrived over the wire is a claim.
+ */
+export interface WireMyAccess {
+  isOwner:         boolean
+  /** Decimal string, like every other permission bitfield on the wire. */
+  permissions:     string
+  highestPosition: number
+}
+
+/** A member under server mute and/or server deafen. */
+export interface WireVoiceRestriction {
+  userId: string
+  mute:   boolean
+  deafen: boolean
 }
 
 /** Exactly `shapeInvite` in server/controllers/invitesController.ts:15. */

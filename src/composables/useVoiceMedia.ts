@@ -12,6 +12,7 @@ import {
 } from 'livekit-client'
 import { getRoom } from './voiceRoom'
 import { voiceSettings } from './useVoiceSettings'
+import { permits } from './voicePermits'
 import { useViewport } from './useViewport'
 
 export interface VideoTrackInfo {
@@ -67,6 +68,12 @@ const unregisterLocalVideo = (source: 'camera' | 'screen') => {
 export const toggleCamera = async (): Promise<string | null> => {
   const room = getRoom(); if (!room) return null
   const next = !room.localParticipant.isCameraEnabled
+
+  // Turning it OFF is always allowed — a permission that could trap a camera on
+  // would be worse than one that never let it start. Only the ON path is gated.
+  if (next && !permits.video) {
+    return 'You do not have permission to share video in this channel'
+  }
 
   if (!next) {
     try {
@@ -148,6 +155,10 @@ export const toggleScreenShare = async (): Promise<string | null> => {
   if (!canScreenShare()) return 'Screen sharing needs the desktop app — phone browsers cannot capture a screen'
   const room = getRoom(); if (!room) return null
   const next = !room.localParticipant.isScreenShareEnabled
+  // Same gate and the same asymmetry as the camera: stopping is never refused.
+  if (next && !permits.video) {
+    return 'You do not have permission to share your screen in this channel'
+  }
   try {
     await room.localParticipant.setScreenShareEnabled(next, {
       audio: voiceSettings.screenAudio,

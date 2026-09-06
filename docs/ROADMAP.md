@@ -143,28 +143,45 @@ Merged: servers/channels API, channel messaging, 3a client slice, 3b operable se
 drag between categories, timed statuses, Invite to Voice, cascading menus, voice member
 state, voice occupant menus).
 
-### Next slices (no longer blocking a deploy — see Standing directives)
+### Shipped since this section was written
 
-- **Server Settings** — a real screen. Nothing exists: no component, no route. The user has
-  named it next more than once, and three other items are queued behind it.
-- **Roles and permissions** — no role field anywhere in the model. Everything is
-  owner-vs-member today, which is why invites and channel CRUD are owner-only and why the
-  moderation rows below cannot be built.
+- ✅ **Server Settings** — shipped v0.16.0 (2026-09-05). Full-screen surface, Profile and
+  Appearance rebuilt, themes.
+- ✅ **Roles and permissions** — shipped v0.17.0 (2026-09-05). 31-bit model, roles with
+  position-based hierarchy, channel and category overwrites, live category inheritance,
+  enforcement at five points.
+- ✅ **Moderation in voice — mute, deafen, disconnect** (2026-09-06). `Server.memberVoice`
+  side-car, `PATCH /servers/:sid/members/:uid/voice`, `POST …/voice/disconnect`. Enforced in
+  TWO places and both are needed: the LiveKit token grant (`canPublish`/`canSubscribe`,
+  minted per join — the guaranteed half, since LiveKit honours the token and nothing else),
+  and `RoomServiceClient` against the live room (the immediate half, best-effort, falling
+  back to eviction so a failure becomes a reconnect rather than a mute that did not happen).
+  Deafen implies no publishing; the flags stay separate in storage so lifting one does not
+  lift the other. `getServer` now returns `me` (the caller's resolved permissions and rank)
+  and `voiceRestrictions`, which is what finally lets the client gate a moderation row.
+- ✅ **Server mute** — the same work. The rail's "Muted" line can now be shown truthfully.
 
-### Queued behind those
+### Still queued
 
-- **Moderation in voice** — Server Mute, Server Deafen, Disconnect, Kick. They act on
-  someone else's client and need the permissions model. Deliberately parked with kick/ban.
-- **Server mute** — no field, no endpoint. The rail label's reference shows a "Muted" line
-  that cannot be shown truthfully until this exists.
+- **Move a member between voice channels.** `RoomServiceClient.moveParticipant` exists in the
+  SDK, so this is cheap — it was left out only to keep the slice honest. `MoveMembers`
+  currently means disconnect alone, and its description says so.
+- **Kick and ban.** Kick exists and is enforced on `KickMembers`; there is no ban model at
+  all, which is why `BanMembers` is badged "Soon".
 - **Notification settings, Hide Muted Channels, Privacy Settings, per-server profile** —
   all absent from the server menu for the same reason: nothing behind them.
 
 ### Independent of settings
 
-- **Reordering *within* a category.** `position` is assigned on create
-  (channelsController, categoriesController) and never updated — there is no write path.
-  Moving *between* categories now works and is not this.
+- ✅ **Reordering within a category** (2026-09-06). `PUT /servers/:sid/channels/order` and
+  `…/categories/order`. The request carries the WHOLE ordered list of a bucket, not
+  "move X to index 3": an index describes a list the client can no longer see, and a
+  create or delete landing mid-drag would make it name the wrong row. A list that does
+  not match the bucket's membership is refused with 409 rather than half-applied.
+  Positions are permuted among the slots the bucket already holds, so ordering one
+  category cannot disturb another — they share one number line per (server, type).
+  Categories got the same endpoint: being able to order channels but not the groups
+  holding them would have been a strange half.
 - **Text chat under the voice stage** — the Stoat-style layout the user liked. Deferred
   deliberately: it reverses the spec's "text inside voice channels is out of scope" and
   needs a conversationId, history and a composer per voice channel.

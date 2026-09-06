@@ -171,6 +171,14 @@ const _h: Record<string, CB<any>> = {
   onServerDeleted:      ((_p: any) => {}) as CB<any>,
   onServerMemberJoined: ((_p: any) => {}) as CB<any>,
   onServerMemberLeft:   ((_p: any) => {}) as CB<any>,
+  /** A bucket of the sidebar was put in a new order. */
+  onChannelsReordered:   ((_p: any) => {}) as CB<any>,
+  onCategoriesReordered: ((_p: any) => {}) as CB<any>,
+  /** Somebody was server-muted or server-deafened, or had it lifted. */
+  onVoiceModeration:    ((_p: any) => {}) as CB<any>,
+  /** A moderator pulled somebody out of voice. Sent to the whole server, so
+   *  every client corrects its occupancy and the target tears its call down. */
+  onVoiceDisconnected:  ((_p: any) => {}) as CB<any>,
 }
 
 // ── Sounds ────────────────────────────────────────────────────────────────
@@ -377,6 +385,10 @@ export const useSocket = () => {
     _socket.on('server:deleted',      (p: any) => _h.onServerDeleted(p))
     _socket.on('server:memberJoined', (p: any) => _h.onServerMemberJoined(p))
     _socket.on('server:memberLeft',   (p: any) => _h.onServerMemberLeft(p))
+    _socket.on('channels:reordered',   (p: any) => _h.onChannelsReordered(p))
+    _socket.on('categories:reordered', (p: any) => _h.onCategoriesReordered(p))
+    _socket.on('server:voiceModeration', (p: any) => _h.onVoiceModeration(p))
+    _socket.on('voice:disconnected',     (p: any) => _h.onVoiceDisconnected(p))
 
     // @everyone ping — distinct notification sound + a toast in the UI
     _socket.on('mention:everyone', (p: any) => { soundNotification(); _h.onMentionEveryone(p) })

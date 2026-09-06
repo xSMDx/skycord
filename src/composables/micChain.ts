@@ -16,7 +16,7 @@
 import { Track } from 'livekit-client'
 import type { TrackProcessor, AudioProcessorOptions } from 'livekit-client'
 import { createRnnoiseNode } from './rnnoiseProcessor'
-import { voiceSettings, gateThreshold } from './useVoiceSettings'
+import { voiceSettings, gateThreshold, effectiveInputMode } from './useVoiceSettings'
 
 // Lives in /public, so it ships to dist untouched and is fetchable by URL —
 // which is the only thing addModule() accepts. Absolute because the app is
@@ -47,7 +47,7 @@ export const createMicChainProcessor = (usesRnnoise: boolean): MicChainProcessor
     // step the gain and click.
     p.get('threshold')?.setTargetAtTime(gateThreshold(), at, 0.01)
     p.get('volume')?.setTargetAtTime(voiceSettings.inputVolume / 100, at, 0.02)
-    p.get('bypass')?.setTargetAtTime(voiceSettings.inputMode === 'ptt' ? 1 : 0, at, 0.001)
+    p.get('bypass')?.setTargetAtTime(effectiveInputMode() === 'ptt' ? 1 : 0, at, 0.001)
   }
 
   const teardown = async () => {

@@ -174,6 +174,17 @@ watch(advanced, on => {
   if (on && !target.value && everyone.value) target.value = everyone.value.id
 })
 
+/**
+ * A permission nothing acts on. Its three buttons would persist a real overwrite
+ * that changes no behaviour — worse than an absent control, because the saved
+ * state then reads back as a rule somebody is relying on.
+ *
+ * Existing overwrites are still SHOWN, so a rule written before the flag went on
+ * stays visible and removable once enforcement lands.
+ */
+const inert = (p: PermissionName) =>
+  !!(PERMISSION_META[p].soon || PERMISSION_META[p].unenforced)
+
 type Tri = 'deny' | 'neutral' | 'allow'
 const stateOf = (p: PermissionName): Tri => {
   const row = targetRow.value
@@ -339,7 +350,15 @@ const submit = () => emit('save', {
           <div class="st-card">
             <div v-for="p in g.perms" :key="p" class="st-field">
               <div class="st-field-left">
-                <span class="st-field-label">{{ PERMISSION_META[p].label }}</span>
+                <span class="st-field-label">
+                  {{ PERMISSION_META[p].label }}
+                  <!-- Same two gaps the Roles page marks. A channel overwrite is
+                       the likelier place to be fooled by them: denying Speak on
+                       one channel reads as a targeted, surgical act. -->
+                  <span v-if="PERMISSION_META[p].soon" class="pm-flag">Soon</span>
+                  <span v-else-if="PERMISSION_META[p].unenforced" class="pm-flag pm-unenf">Not enforced</span>
+                  <span v-else-if="PERMISSION_META[p].advisory" class="pm-flag pm-advis">App-enforced</span>
+                </span>
                 <span class="st-field-value muted">{{ PERMISSION_META[p].desc }}</span>
               </div>
               <!-- Three states, not a switch: neutral is "inherit whatever is
@@ -347,16 +366,19 @@ const submit = () => emit('save', {
               <div class="pm-tri" role="radiogroup" :aria-label="PERMISSION_META[p].label">
                 <button
                   class="pm-tri-btn deny" :class="{ on: stateOf(p) === 'deny' }"
+                  :disabled="inert(p)"
                   role="radio" :aria-checked="stateOf(p) === 'deny'" aria-label="Deny"
                   @click="setTri(p, 'deny')"
                 >✕</button>
                 <button
                   class="pm-tri-btn neutral" :class="{ on: stateOf(p) === 'neutral' }"
+                  :disabled="inert(p)"
                   role="radio" :aria-checked="stateOf(p) === 'neutral'" aria-label="Inherit"
                   @click="setTri(p, 'neutral')"
                 >╱</button>
                 <button
                   class="pm-tri-btn allow" :class="{ on: stateOf(p) === 'allow' }"
+                  :disabled="inert(p)"
                   role="radio" :aria-checked="stateOf(p) === 'allow'" aria-label="Allow"
                   @click="setTri(p, 'allow')"
                 >✓</button>
@@ -468,7 +490,17 @@ const submit = () => emit('save', {
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
               transform var(--dur-1) var(--ease-out);
 }
-.pm-tri-btn:active { transform: scale(.94); }
+.pm-tri-btn:active:not(:disabled) { transform: scale(.94); }
+.pm-tri-btn:disabled { opacity: .4; cursor: default; }
+
+.pm-flag {
+  display: inline-block; margin-left: 8px; vertical-align: 1px;
+  font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px;
+  background: var(--hover-strong); color: var(--text-3);
+}
+.pm-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
+.pm-advis { background: color-mix(in srgb, #5865f2 20%, transparent); color: #8b95f8; }
 /* Colour only lands on the SELECTED state: three lit buttons per row, times
    thirty rows, is a wall of red and green with no signal in it. */
 .pm-tri-btn.deny.on    { background: #ed4245; color: #fff; }

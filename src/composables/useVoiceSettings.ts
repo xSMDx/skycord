@@ -4,6 +4,7 @@
  * from useAppearance — these are device/IO concerns, not theming.
  */
 import { reactive } from 'vue'
+import { permits } from './voicePermits'
 
 export type InputMode = 'voice' | 'ptt'
 
@@ -34,6 +35,18 @@ export interface VoiceSettings {
   // everybody in it.
   defaultVoiceServer: string
 }
+
+/**
+ * The mode actually in force, as opposed to the one the person chose.
+ *
+ * The saved preference is never rewritten. Forcing push-to-talk by writing
+ * `inputMode: 'ptt'` into settings would follow them out of the channel and
+ * into every DM afterwards — a permission in one room silently reconfiguring
+ * their whole client. So the preference stays theirs and this is what the
+ * capture path reads.
+ */
+export const effectiveInputMode = (): InputMode =>
+  permits.voiceActivity ? voiceSettings.inputMode : 'ptt'
 
 const KEY = 'sykord_voice'
 const DEFAULTS: VoiceSettings = {
