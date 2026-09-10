@@ -487,6 +487,16 @@
     background: linear-gradient(135deg, rgba(224,227,255,.08) 0%, var(--floor) 100%);
     border-left: 4px solid var(--sage);
   }
+  /* Shipped. Recedes rather than announcing itself — the palette is one accent
+     on black by choice, so there is no green to reach for and a finished thing
+     should sit quieter than the ones still being argued about. It stays on the
+     page instead of vanishing: a roadmap that silently deletes what it
+     delivered reads as a roadmap that never promised it. */
+  .roadmap-card.shipped {
+    border-color: rgba(224,227,255,.18);
+    background: linear-gradient(135deg, rgba(224,227,255,.03) 0%, var(--floor) 100%);
+    border-left: 4px solid rgba(224,227,255,.3);
+  }
   .roadmap-card .status {
     display: inline-flex;
     align-items: center;
@@ -507,6 +517,10 @@
   }
   .roadmap-card.idea .status {
     background: rgba(224,227,255,.16);
+    color: var(--faint);
+  }
+  .roadmap-card.shipped .status {
+    background: rgba(224,227,255,.08);
     color: var(--faint);
   }
   .roadmap-card h3 {
@@ -550,6 +564,9 @@
   }
   .roadmap-card.idea li::before {
     background: var(--sage);
+  }
+  .roadmap-card.shipped li::before {
+    background: rgba(224,227,255,.3);
   }
   .expand-icon {
     position: absolute;
@@ -936,8 +953,13 @@ const ROADMAP = [
     stage: 'now', label: 'Building now', title: 'Channels & servers',
     items: [
       'Servers with text and voice channels, categories, and invite links — live now',
-      'Roles and permissions',
-      'Server settings'
+      'Roles and permissions, and channels only some people can open — live now',
+      'Server settings, with a page for the server, its roles, and each channel — live now',
+      'Server Mute, Server Deafen and Disconnect for someone in a voice channel — live now',
+      'Dragging channels and categories into whatever order you want — live now',
+      'Moving somebody into a different voice channel, rather than only disconnecting them',
+      'Bans. Kicking works today; a ban that stops someone coming back does not exist yet',
+      'Per-server notification settings, hiding muted channels, and a per-server profile'
     ]
   },
   {
@@ -946,8 +968,8 @@ const ROADMAP = [
     // finished slice is described as done.
     stage: 'now', label: 'Building now', title: 'Phone layout',
     items: [
-      'Servers and channels on a phone — the server rail sits beside the channel list',
-      'Everything you tap is thumb-sized, and the buttons that used to need a hover are just there',
+      'Servers and channels on a phone — the server rail sits beside the channel list — live now',
+      'Everything you tap is thumb-sized, and the buttons that used to need a hover are just there — live now',
       'Voice on a phone: the call screen, its controls, and who is in the room',
       'Making channels and sending invites from your phone'
     ]
@@ -959,14 +981,6 @@ const ROADMAP = [
       'One command instead: the app, the database, and the voice server together',
       'Sensible defaults, so the secure setup is the one you get without reading anything',
       'Updates that are one command too, not a list of steps to remember'
-    ]
-  },
-  {
-    stage: 'next', label: 'Next up', title: 'Choose your voice server',
-    items: [
-      'Run more than one voice server and let people pick the closest one',
-      'Or let it choose for you, on whichever answers fastest',
-      'Sitting far from the box should not mean sounding like it'
     ]
   },
   {
@@ -1017,11 +1031,45 @@ const ROADMAP = [
       'Activity status like "Listening to Spotify"',
       'Themes that follow you between devices, and browsing ones other people made'
     ]
+  },
+  {
+    // Last, because it is history rather than plan — and kept rather than
+    // deleted: a roadmap that quietly removes what it delivered reads as one
+    // that never promised it.
+    //
+    // Shipped in v0.14.0/v0.14.1, and shipped DIFFERENTLY from what this card
+    // used to say. The old wording survived four releases past delivery, still
+    // sitting under "Next up" and still promising an auto-pick that was
+    // deliberately dropped.
+    stage: 'shipped', label: 'Live now', title: 'Choose your voice server',
+    items: [
+      'Run more than one voice server, so people far from the box do not sound like it',
+      'A voice channel can be pinned to one of them, and everyone in that channel lands on the same one — otherwise nobody hears anybody',
+      'For direct calls you pick your own default, and anyone in the call can move it somewhere else mid-conversation',
+      'Every server carries its own credentials, encrypted where they are stored, so one leak cannot reach the others',
+      'It does not silently pick the fastest one for you. That was the original plan and it was dropped: guessing wrong splits a call in half, and the app now names the server you actually landed on instead'
+    ]
   }
 ];
 
 // Changelog data
 const RELEASES = [
+  {
+    v: 'v0.18.0', date: 'Sep 10, 2026', time: '18:15 UTC+2', title: 'Moderation in voice, and switches that mean it',
+    items: [
+      ['add', 'Server Mute, Server Deafen and Disconnect. Right-click somebody sitting in a voice channel and, if you have the permission and outrank them, you can silence them for the whole room, cut them off from hearing it, or drop them out of the call. A mute sticks until somebody lifts it — leaving and coming back does not clear it, and neither does restarting the app. Disconnecting is not a punishment that lasts: they can walk straight back in, which is the point of having it separate from kicking'],
+      ['add', 'Drag your channels into whatever order you like, inside a category or out of one, and drag the categories themselves into order too. Until now a sidebar could only ever be in the order things were created in, because nothing could write an order back'],
+      ['imp', 'Speak and Video are real permissions now. Take Speak away in a channel and people can join and listen but cannot transmit — they arrive muted with no way to unmute. Take Video away and the camera and screen-share buttons stop being offered rather than failing when pressed. Both are enforced by the voice server itself, so they hold whatever the app is asked to do'],
+      ['imp', 'Use Voice Activity forces push-to-talk on the people who do not have it — a way to keep a noisy channel usable. It is marked App-enforced in the permission list, and that label is doing real work: unlike the others, this one is honoured by the app rather than by the voice server, so treat it as tidying rather than as silencing somebody. Server Mute is the one that silences'],
+      ['add', 'Read Message History, Mention @everyone, Add Reactions and Manage Messages all do something now. Without Read Message History a channel opens empty and fills up from the moment you arrive — you can still post. Without Mention @everyone the words still appear exactly as typed, because nobody should have their message edited to enforce a setting, but the channel does not light up. Without Add Reactions you cannot start a new reaction, though you can always join one somebody else started, and you can always take your own back'],
+      ['add', 'Manage Messages covers pinning and deleting other people’s messages. Pinning used to be open to every member, including unpinning what a moderator had pinned. Deleting somebody else’s message could not be done by anyone at all, owner included, which meant a channel could not really be moderated. It can now — and it still never lets anyone EDIT what another person wrote, which is not moderation and never will be'],
+      ['fix', 'Fifteen permission switches were doing nothing. The last release said seven were waiting on features that did not exist yet; the truth was that fifteen more were switches you could set, that read as working, and that changed no behaviour whatsoever. Turning off Speak did not stop anyone speaking. All fifteen are either enforced as of this release or labelled honestly, and there is now an automated check that fails if a switch is ever added without one or the other'],
+      ['imp', 'The permission list says which kind of gap each unfinished switch has. Soon means the feature itself does not exist yet, so there is nothing to grant — twelve of them, including bans, attachments, custom emoji and the audit log. That is up from the seven claimed last time, which was an undercount rather than a regression'],
+      ['fix', 'Clicking two servers quickly could leave you looking at one server’s channel list with another server’s conversation open beside it, if the second one finished loading first'],
+      ['fix', 'Channel rows were announced to screen readers as a single control when they are two — the channel itself and the menu beside it — which left that menu unreachable without a mouse. The same was true of category headers and the buttons on them'],
+      ['imp', 'Rearranging channels only needs Manage Channels now, rather than being the server owner’s alone. Anyone who could already rename a channel from its menu could not drag that same channel, which made no sense from either side']
+    ]
+  },
   {
     v: 'v0.17.0', date: 'Sep 2, 2026', time: '10:40 UTC+2', title: 'Roles, and channels only some people can open',
     items: [
