@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
+  resolve: {
+    // The app's own alias (vite.config.ts). Without it, any module under test
+    // that imports through `@/` fails to resolve before an assertion runs.
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   test: {
     // The API is the unit under test; jsdom would only slow this down.
     environment: 'node',

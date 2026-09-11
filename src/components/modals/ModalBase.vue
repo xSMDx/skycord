@@ -49,6 +49,9 @@ const shown = ref(false)
 onMounted(() => { shown.value = true })
 const requestClose = () => { shown.value = false }
 provide('modalClose', requestClose)
+// The modal that renders this shell cannot inject what the shell provides —
+// it is the shell's parent, not its child — so it gets the same thing by ref.
+defineExpose({ requestClose })
 
 const { isMobile } = useViewport()
 const sheet = ref<HTMLElement | null>(null)

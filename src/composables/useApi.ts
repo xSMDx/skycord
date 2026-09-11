@@ -116,10 +116,19 @@ export const useApi = () => {
       `/users/me/conversations/${encodeURIComponent(convId)}`, body)
 
   // ── Messages ─────────────────────────────────────────────────────────────
-  const getDMMessages = (partnerId: string, before?: string) =>
-    get<{ messages: ApiMessage[] }>(
-      `/messages/dm/${partnerId}${before ? `?before=${before}` : ''}`
-    )
+  /**
+   * One page of a conversation's history. At most one cursor; with none, the
+   * newest page. Cursors are message ids — see server/utils/historyWindow.ts.
+   */
+  const historyQuery = (c: HistoryCursor = {}) => {
+    const p = new URLSearchParams()
+    for (const [k, v] of Object.entries(c)) if (v != null && v !== '') p.set(k, String(v))
+    const s = p.toString()
+    return s ? `?${s}` : ''
+  }
+
+  const getDMMessages = (partnerId: string, cursor: HistoryCursor = {}) =>
+    get<HistoryPage>(`/messages/dm/${partnerId}${historyQuery(cursor)}`)
 
   const sendDMRest = (partnerId: string, content: string, authorName: string, authorAvatar: string, replyToIds: string[] = []) =>
     post<{ message: ApiMessage }>(`/messages/dm/${partnerId}`, { content, authorName, authorAvatar, replyToIds })
@@ -131,10 +140,8 @@ export const useApi = () => {
   const getMyGroups = () =>
     get<{ groups: any[] }>('/conversations/groups')
 
-  const getGroupMessages = (groupId: string, before?: string) =>
-    get<{ messages: ApiMessage[] }>(
-      `/conversations/groups/${groupId}/messages${before ? `?before=${before}` : ''}`
-    )
+  const getGroupMessages = (groupId: string, cursor: HistoryCursor = {}) =>
+    get<HistoryPage>(`/conversations/groups/${groupId}/messages${historyQuery(cursor)}`)
 
   const sendGroupRest = (groupId: string, content: string, authorName: string, replyToIds: string[] = []) =>
     post<{ message: ApiMessage }>(`/conversations/groups/${groupId}/messages`, { content, authorName, replyToIds })
@@ -160,8 +167,13 @@ export const useApi = () => {
     post<{ group: any }>(`/conversations/groups/${groupId}/members`, { memberIds })
 
   // ── Servers & channels ───────────────────────────────────────────────────
+  // The same detail GET /servers/:sid returns, so the client can enter a
+  // server it has just made without a second request.
   const createServerApi = (name: string) =>
-    post<{ server: WireServer; channels: WireChannel[] }>('/servers', { name })
+    post<{
+      server: WireServer; channels: WireChannel[]; categories: WireCategory[]
+      me: WireMyAccess; voiceRestrictions: WireVoiceRestriction[]
+    }>('/servers', { name })
 
   const getMyServers = () =>
     get<{ servers: WireServer[] }>('/servers')
@@ -215,10 +227,16 @@ export const useApi = () => {
   const getServerMembers = (sid: string) =>
     get<{ members: WireMember[] }>(`/servers/${sid}/members`)
 
-  const getChannelMessagesApi = (sid: string, cid: string, before?: string) =>
-    get<{ messages: ApiMessage[] }>(
-      `/servers/${sid}/channels/${cid}/messages${before ? `?before=${before}` : ''}`
-    )
+  const getChannelMessagesApi = (sid: string, cid: string, cursor: HistoryCursor = {}) =>
+    get<HistoryPage>(`/servers/${sid}/channels/${cid}/messages${historyQuery(cursor)}`)
+
+  /** Search one scope. The params come from searchQuery.toSearchParams. */
+  const searchMessagesApi = (scope: SearchScope, params: URLSearchParams) => {
+    const base = scope.kind === 'server' ? `/servers/${scope.id}/search`
+      : scope.kind === 'group' ? `/conversations/groups/${scope.id}/search`
+      : `/messages/dm/${scope.id}/search`
+    return get<SearchResponse>(`${base}?${params.toString()}`)
+  }
 
   const sendChannelRest = (sid: string, cid: string, content: string, replyToIds: string[] = []) =>
     post<{ message: ApiMessage }>(
@@ -291,7 +309,7 @@ export const useApi = () => {
 
   /** The member's WHOLE role set — sending it twice lands the same state. */
   const setMemberRolesApi = (sid: string, uid: string, roles: string[]) =>
-    put<{ ok: true; roles: string[] }>(`/servers/${sid}/members/${uid}/roles`, { roles })
+    put<{ ok: true; roles: string[]; highestPosition: number }>(`/servers/${sid}/members/${uid}/roles`, { roles })
 
   const createCategoryApi = (sid: string, name: string) =>
     post<{ category: WireCategory }>(`/servers/${sid}/categories`, { name })
@@ -434,6 +452,7 @@ export const useApi = () => {
   const joinServerInvite = (code: string) =>
     post<{
       server: WireServer; channels: WireChannel[]; categories: WireCategory[]; joined: boolean
+      me: WireMyAccess; voiceRestrictions: WireVoiceRestriction[]
       // Returned for an already-member too (joined: false) — there is no join
       // to perform, but the destination is the point of the link.
       channel: { id: string; name: string } | null
@@ -543,6 +562,7 @@ export const useApi = () => {
     deleteServerApi, leaveServerApi,
     createServerInvite, listServerInvites, revokeServerInvite,
     getServerInvite, joinServerInvite,
+    searchMessagesApi,
   }
 }
 
@@ -601,6 +621,18 @@ export interface PendingRequest {
   requester: ApiUser
   createdAt: string
 }
+
+/** Which page of history to fetch. Message ids, never dates. */
+export interface HistoryCursor { before?: string; after?: string; around?: string; limit?: number }
+
+/** A page of history, and where it sits: is there more above, more below. */
+export interface HistoryPage { messages: ApiMessage[]; hasOlder: boolean; hasNewer: boolean }
+
+/** What a search covers: a whole server, or one group or DM. */
+export interface SearchScope { kind: 'server' | 'group' | 'dm'; id: string }
+
+/** A page of search results. `channelId` is set for server searches. */
+export interface SearchResponse { results: (ApiMessage & { channelId?: string })[]; total: number; hasMore: boolean }
 
 export interface ApiMessage {
   id?:          string
@@ -731,6 +763,10 @@ export interface WireMember {
    *  half the moderation rules are rank comparisons, not flat bit tests.
    *  Optional so a payload from a server predating this still parses. */
   highestPosition?: number
+  /** Ids of the roles they hold, @everyone excluded — every member holds it,
+   *  so listing it would be a fact that can only go stale. Only roles that
+   *  still exist; the server filters out ids whose role was deleted. */
+  roles?: string[]
 }
 
 /**

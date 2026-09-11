@@ -31,19 +31,14 @@ const submit = async () => {
   busy.value  = true
   error.value = ''
   try {
-    const { server, channels } = await createServerApi(n)
-    // Fold it into state here rather than refetching: the 201 already carries
-    // the server and its two default channels, so the caller can enter it
-    // without a second round trip.
-    //
-    // The explicit `[]` is load-bearing. receiveDetail no longer defaults its
-    // third argument, precisely so that a caller with nothing to say about
-    // categories leaves the bucket absent and `openServer` repairs it. Here
-    // there is something to say: POST /servers creates the categories
-    // collection empty, so a server this new provably has none — and saying so
-    // is what keeps `onServerCreated`'s "enters without a second request"
-    // promise true.
-    receiveDetail(server, channels, [])
+    const { server, channels, categories, me, voiceRestrictions } = await createServerApi(n)
+    // Fold it into state here rather than refetching: the 201 is the same
+    // detail GET /servers/:sid sends, so the caller can enter the server
+    // without a second round trip. Every part of it is load-bearing —
+    // `categories` is the server's own empty list for a server this new, a
+    // fact rather than a default; and without `me` the creator's own access
+    // reads as unknown, which every permission gate treats as "no".
+    receiveDetail(server, channels, categories, me, voiceRestrictions)
     if (gone) return
     emit('created', server.id)
     emit('close')

@@ -5,6 +5,7 @@ import { Channel } from '../models/Channel'
 import { loadServer, requireOwner, shapeCategory, emitToServer } from './serversController'
 import { withServerLock } from './channelsController'
 import { requirePerm, loadAccess, validateOverwrites } from '../utils/access'
+import { refreshChannelAccess } from '../sockets/visibility'
 
 /**
  * Resolve a category and prove the caller may touch it. Mirrors loadChannel
@@ -136,6 +137,9 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
     emitToServer(found.server, 'category:updated', {
       serverId, category: shaped,
     })
+    // Every channel inside that has not overridden them inherits these, so
+    // who sees those channels may just have changed.
+    if (overwrites !== null) await refreshChannelAccess(found.server._id)
     res.json({ category: shaped })
   } catch (err) { next(err) }
 }
@@ -184,6 +188,8 @@ export const deleteCategory = async (req: Request, res: Response, next: NextFunc
       serverId,
       categoryId: category._id.toString(),
     })
+    // Its channels have just lost the overwrites they were inheriting.
+    await refreshChannelAccess(server._id)
     res.json({ ok: true })
   } catch (err) { next(err) }
 }

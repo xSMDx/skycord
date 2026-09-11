@@ -179,6 +179,11 @@ const _h: Record<string, CB<any>> = {
   /** A moderator pulled somebody out of voice. Sent to the whole server, so
    *  every client corrects its occupancy and the target tears its call down. */
   onVoiceDisconnected:  ((_p: any) => {}) as CB<any>,
+  /** Somebody's roles changed. The server has emitted this since roles
+   *  shipped; until now nothing on the client listened for it. */
+  onMemberRoles:        ((_p: any) => {}) as CB<any>,
+  /** Who may see or do what in a server changed for this user: refetch it. */
+  onServerAccessChanged: ((_p: any) => {}) as CB<any>,
 }
 
 // ── Sounds ────────────────────────────────────────────────────────────────
@@ -389,6 +394,8 @@ export const useSocket = () => {
     _socket.on('categories:reordered', (p: any) => _h.onCategoriesReordered(p))
     _socket.on('server:voiceModeration', (p: any) => _h.onVoiceModeration(p))
     _socket.on('voice:disconnected',     (p: any) => _h.onVoiceDisconnected(p))
+    _socket.on('member:roles',           (p: any) => _h.onMemberRoles(p))
+    _socket.on('server:accessChanged',   (p: any) => _h.onServerAccessChanged(p))
 
     // @everyone ping — distinct notification sound + a toast in the UI
     _socket.on('mention:everyone', (p: any) => { soundNotification(); _h.onMentionEveryone(p) })

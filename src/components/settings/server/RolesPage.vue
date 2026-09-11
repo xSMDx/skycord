@@ -15,22 +15,35 @@
  * That is enforced in resolve()/canActOnMember() on the server; here it is
  * said in the copy and shown in the hierarchy, so nobody has to discover it.
  */
-import { ref, computed, onMounted } from 'vue'
-import { Plus, Search, Trash2, ShieldAlert, Crown } from 'lucide-vue-next'
+import { ref, computed, onMounted, watch } from 'vue'
+import { Plus, Search, Trash2, ShieldAlert, Crown, X, UserPlus } from 'lucide-vue-next'
 import {
   PERMISSION_META, PERMISSION_UI_GROUPS, ROLE_COLORS,
-  namesToBits, bitsToNames,
+  namesToBits, bitsToNames, canActOnMemberUI, canManageRoleUI,
   type PermissionName,
 } from '@/composables/permissionMeta'
 import { useApi, type WireRole } from '@/composables/useApi'
+import { useServers, type ServerMember } from '@/composables/useServers'
+import Avatar from '@/components/ui/Avatar.vue'
+import { avatarFor } from '@/composables/useAvatar'
 import '@/styles/settingsShared.css'
 
 const props = defineProps<{ serverId: string; isOwner: boolean }>()
 const emit = defineEmits<{ toast: [msg: string] }>()
-const { listRolesApi, createRoleApi, updateRoleApi, deleteRoleApi } = useApi()
+const { listRolesApi, createRoleApi, updateRoleApi, deleteRoleApi, setMemberRolesApi } = useApi()
+/*
+ * Members come from the shared store rather than a fetch of this page's own.
+ * One copy means the `member:roles` socket event keeps this tab live for free,
+ * and an assignment made here reaches every other surface that reads a rank —
+ * the voice moderation rows among them.
+ */
+const { membersByServer, loadServerMembers, myAccessIn, applyMemberRoles } = useServers()
 
 interface Role {
   id: string
+  /** Higher outranks lower; @everyone is 0. Decides who may manage the role,
+   *  and what rank holding it gives a member. */
+  position: number
   name: string
   color: string | null          // null = "no colour", inherits default text
   hoist: boolean                // show members separately in the sidebar
@@ -46,6 +59,7 @@ const roles = ref<Role[]>([])
 /** Wire shape -> the names the UI edits in. */
 const fromWire = (r: WireRole): Role => ({
   id: r.id,
+  position: r.position,
   name: r.name,
   color: r.color,
   hoist: r.hoist,
@@ -74,6 +88,13 @@ onMounted(async () => {
     emit('toast', e?.message || 'Could not load roles')
   } finally {
     loading.value = false
+  }
+  // Separate from the roles fetch so a member-list failure cannot blank the
+  // page: Display and Permissions do not need it. Skipped when the store
+  // already holds the list, which it usually does — the server panel loads it.
+  if (!membersByServer.value[props.serverId]) {
+    try { await loadServerMembers(props.serverId) }
+    catch (e: any) { emit('toast', e?.message || 'Could not load members') }
   }
 })
 
@@ -171,6 +192,120 @@ const toggle = (p: PermissionName) => {
 const isAdmin = computed(() => !!selected.value?.perms.has('Administrator'))
 const effectivelyOn = (p: PermissionName) =>
   isAdmin.value || !!selected.value?.perms.has(p)
+
+// ── Members ───────────────────────────────────────────────────────────────
+const members = computed<ServerMember[]>(() => membersByServer.value[props.serverId] ?? [])
+const membersLoaded = computed(() => !!membersByServer.value[props.serverId])
+const me = computed(() => myAccessIn(props.serverId))
+
+/** Holders per role id, counted once rather than once per row. */
+const holderCounts = computed(() => {
+  const counts = new Map<string, number>()
+  for (const m of members.value) for (const id of m.roles) counts.set(id, (counts.get(id) ?? 0) + 1)
+  return counts
+})
+/** @everyone is held by every member by definition, so its count is the roster. */
+const countFor = (r: Role) => (r.base ? members.value.length : holderCounts.value.get(r.id) ?? 0)
+
+const nameOf = (m: ServerMember) => m.displayName || m.username
+const matches = (m: ServerMember, q: string) =>
+  !q || nameOf(m).toLowerCase().includes(q) || m.username.toLowerCase().includes(q)
+const byName = (a: ServerMember, b: ServerMember) => nameOf(a).localeCompare(nameOf(b))
+
+const memberQuery = ref('')
+const picking = ref(false)
+const pickQuery = ref('')
+// A picker left open across a role switch would offer the next role's
+// candidates under a heading the person never read.
+watch(selectedId, () => { picking.value = false; pickQuery.value = ''; memberQuery.value = '' })
+
+/** May the viewer hand this role out, or take it away, at all? */
+const canManageSelected = computed(() =>
+  !!selected.value && !selected.value.base && canManageRoleUI(me.value, selected.value.position))
+
+/**
+ * May the viewer change THAT member's roles? Mirrors setMemberRoles.
+ *
+ * The owner may edit anyone, themselves included. Anyone else needs Manage
+ * Roles, must outrank the member, and never reaches the owner — which is
+ * exactly canActOnMemberUI, already parity-tested against the server. The owner
+ * editing their own roles is the one case it refuses and the server allows,
+ * hence the `isOwner ||`.
+ */
+const canEditMember = (m: ServerMember) =>
+  !!me.value && (me.value.isOwner || canActOnMemberUI(me.value, m, 'ManageRoles'))
+
+const holders = computed(() => {
+  const r = selected.value
+  if (!r || r.base) return []
+  const q = memberQuery.value.trim().toLowerCase()
+  return members.value.filter(m => m.roles.includes(r.id) && matches(m, q)).sort(byName)
+})
+
+/** Picker rows shown at once. Past this it is a list to scroll, not a choice. */
+const PICK_LIMIT = 50
+const eligible = computed(() => {
+  const r = selected.value
+  if (!r || r.base || !canManageSelected.value) return []
+  return members.value.filter(m => !m.roles.includes(r.id) && canEditMember(m))
+})
+const pickMatches = computed(() => {
+  const q = pickQuery.value.trim().toLowerCase()
+  return eligible.value.filter(m => matches(m, q)).sort(byName)
+})
+const candidates = computed(() => pickMatches.value.slice(0, PICK_LIMIT))
+/** Matches cut by the cap — said out loud rather than silently dropped. */
+const hiddenCandidates = computed(() => Math.max(0, pickMatches.value.length - PICK_LIMIT))
+
+/** The rank a set of roles gives, from the positions this page already holds. */
+const rankOf = (ids: string[]) => {
+  const ps = ids
+    .map(id => roles.value.find(r => r.id === id)?.position)
+    .filter((p): p is number => p !== undefined)
+  return ps.length ? Math.max(...ps) : -1
+}
+
+/** Member ids with a write in flight — a second click must not race the first. */
+const busy = ref(new Set<string>())
+
+/*
+ * One write, optimistic.
+ *
+ * The row moves as the click lands and the server's answer corrects it — the
+ * same bargain as every other edit on this page. The rollback restores what was
+ * captured BEFORE, rather than re-deriving it from a store the optimistic write
+ * has already changed.
+ *
+ * `next` is the member's FULL role list, because setMemberRoles replaces rather
+ * than merges. It is built from their live roles, which the socket keeps
+ * current, so two moderators colliding on one member have a one-round-trip
+ * window rather than an unbounded one.
+ */
+const writeRoles = async (m: ServerMember, next: string[]) => {
+  if (busy.value.has(m.id)) return
+  const before = [...m.roles]
+  const beforeRank = m.highestPosition
+  busy.value = new Set(busy.value).add(m.id)
+  applyMemberRoles(props.serverId, m.id, next, rankOf(next))
+  try {
+    const res = await setMemberRolesApi(props.serverId, m.id, next)
+    applyMemberRoles(props.serverId, m.id, res.roles, res.highestPosition)
+  } catch (e: any) {
+    applyMemberRoles(props.serverId, m.id, before, beforeRank)
+    emit('toast', e?.message || 'That change did not save')
+  } finally {
+    const s = new Set(busy.value); s.delete(m.id); busy.value = s
+  }
+}
+
+const addToRole = (m: ServerMember) => {
+  const r = selected.value
+  if (r && !m.roles.includes(r.id)) void writeRoles(m, [...m.roles, r.id])
+}
+const removeFromRole = (m: ServerMember) => {
+  const r = selected.value
+  if (r) void writeRoles(m, m.roles.filter(id => id !== r.id))
+}
 </script>
 
 <template>
@@ -215,8 +350,9 @@ const effectivelyOn = (p: PermissionName) =>
               <span class="rl-grip rl-grip-fixed" aria-hidden="true" />
               <span class="rl-dot" :style="{ background: r.color || 'var(--text-faint)' }" />
               <span class="rl-role-name" :style="{ color: r.color || undefined }">{{ r.name }}</span>
-              <!-- Member counts need a member model; a 0 would read as fact. -->
-              <span class="rl-role-count">—</span>
+              <!-- A dash until the member list arrives: a 0 shown before then
+                   would read as a fact rather than as "not loaded yet". -->
+              <span class="rl-role-count">{{ membersLoaded ? countFor(r) : '—' }}</span>
             </button>
           </li>
         </ul>
@@ -247,7 +383,7 @@ const effectivelyOn = (p: PermissionName) =>
             Permissions <span class="rl-tabnum">{{ isAdmin ? 'all' : grantedCount }}</span>
           </button>
           <button class="rl-tab" :class="{ on: tab === 'members' }" @click="tab = 'members'">
-            Members <span class="st-tbd">TBD</span>
+            Members <span class="rl-tabnum">{{ membersLoaded ? countFor(selected) : '—' }}</span>
           </button>
         </nav>
 
@@ -388,14 +524,103 @@ const effectivelyOn = (p: PermissionName) =>
 
         <!-- ── Members ── -->
         <div v-else class="rl-pane">
-          <div class="st-placeholder">
-            <span class="st-placeholder-title">Manage members — not built yet</span>
-            <span class="st-placeholder-sub">
-              Assigning a role needs a member list and a per-member role model,
-              neither of which exists on the server. Listed rather than hidden,
-              so the plan is visible.
-            </span>
-          </div>
+          <!-- @everyone: nothing to list and nothing to change. Kept rather than
+               hidden, so the empty tab explains itself instead of looking broken. -->
+          <p v-if="selected.base" class="rl-tbd rl-mem-note">
+            Every member of the server holds @everyone automatically{{ membersLoaded
+              ? ` — ${members.length} ${members.length === 1 ? 'person' : 'people'} right now` : '' }}.
+            It cannot be given or taken away, which is what makes it the floor every
+            other role sits on.
+          </p>
+
+          <template v-else>
+            <!-- Said, not just shown by a missing button: otherwise the absence
+                 reads as a bug rather than as the hierarchy doing its job. -->
+            <p v-if="!canManageSelected" class="rl-tbd rl-mem-note">
+              This role sits at or above your own highest role, so you can see who
+              holds it but cannot change that.
+            </p>
+
+            <div class="rl-mem-head">
+              <div class="rl-search rl-mem-search">
+                <Search :size="15" :stroke-width="2" class="rl-search-ic" />
+                <input
+                  v-model="memberQuery" class="st-input rl-search-in"
+                  placeholder="Search members" :aria-label="`Search members with ${selected.name}`"
+                />
+              </div>
+              <button
+                v-if="canManageSelected"
+                class="st-btn st-btn--primary st-btn--sm" type="button"
+                :aria-expanded="picking" @click="picking = !picking"
+              >
+                <UserPlus :size="14" :stroke-width="2.25" /> Add members
+              </button>
+            </div>
+
+            <!-- Inline, the same shape as the Private-channel access list: no
+                 second modal stacked on the settings one. It stays open after an
+                 add, since giving a role to several people is the common case. -->
+            <div v-if="picking && canManageSelected" class="rl-picker">
+              <div class="rl-search rl-pick-search">
+                <Search :size="15" :stroke-width="2" class="rl-search-ic" />
+                <input
+                  v-model="pickQuery" class="st-input rl-search-in"
+                  placeholder="Find someone to add" aria-label="Find a member to add to this role"
+                />
+              </div>
+              <ul class="rl-cands">
+                <li v-for="m in candidates" :key="m.id">
+                  <button class="rl-cand" type="button" :disabled="busy.has(m.id)" @click="addToRole(m)">
+                    <Avatar :src="avatarFor(m.username, m.avatar)" :crop="m.avatarCrop" :size="24" :alt="nameOf(m)" />
+                    <span class="rl-cand-name">{{ nameOf(m) }}</span>
+                    <span class="rl-cand-user">{{ m.username }}</span>
+                    <Plus :size="14" :stroke-width="2.25" class="rl-cand-add" />
+                  </button>
+                </li>
+                <li v-if="!candidates.length" class="rl-empty">
+                  <template v-if="pickQuery.trim()">Nobody matches “{{ pickQuery.trim() }}”.</template>
+                  <template v-else>
+                    Nobody left to add. Members whose highest role is at or above
+                    yours are not listed — their roles are not yours to change.
+                  </template>
+                </li>
+                <li v-if="hiddenCandidates" class="rl-empty">
+                  {{ hiddenCandidates }} more — keep typing to narrow it down.
+                </li>
+              </ul>
+            </div>
+
+            <div v-if="!membersLoaded" class="st-hint">Loading members…</div>
+            <ul v-else-if="holders.length" class="rl-members">
+              <li v-for="m in holders" :key="m.id" class="rl-member">
+                <Avatar :src="avatarFor(m.username, m.avatar)" :crop="m.avatarCrop" :size="32" :alt="nameOf(m)" />
+                <div class="rl-member-names">
+                  <span class="rl-member-name">
+                    <span class="rl-member-name-text">{{ nameOf(m) }}</span>
+                    <Crown v-if="m.isOwner" :size="13" :stroke-width="2.25" class="rl-member-crown" aria-label="Server owner" />
+                  </span>
+                  <span class="rl-member-user">{{ m.username }}</span>
+                </div>
+                <button
+                  v-if="canManageSelected && canEditMember(m)"
+                  class="rl-member-x" type="button"
+                  :disabled="busy.has(m.id)"
+                  :title="`Remove from ${selected.name}`"
+                  :aria-label="`Remove ${nameOf(m)} from ${selected.name}`"
+                  @click="removeFromRole(m)"
+                >
+                  <X :size="15" :stroke-width="2.25" />
+                </button>
+              </li>
+            </ul>
+            <p v-else class="st-hint">
+              <template v-if="memberQuery.trim()">Nobody with this role matches “{{ memberQuery.trim() }}”.</template>
+              <template v-else>
+                Nobody holds {{ selected.name }} yet.<template v-if="canManageSelected"> Use Add members to give it to someone.</template>
+              </template>
+            </p>
+          </template>
         </div>
       </section>
     </div>
@@ -495,6 +720,58 @@ const effectivelyOn = (p: PermissionName) =>
 .rl-search { position: relative; margin-bottom: 18px; max-width: 420px; }
 .rl-search-ic { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
 .rl-search-in { padding-left: 34px; }
+
+/* ── Members ── */
+.rl-mem-note { margin-bottom: 16px; }
+.rl-mem-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.rl-mem-search { flex: 1; margin-bottom: 0; }
+
+.rl-picker { background: var(--bg-input); border-radius: 8px; padding: 10px; margin-bottom: 16px; }
+.rl-pick-search { max-width: none; margin-bottom: 8px; }
+.rl-cands { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.rl-cand {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 6px 8px; border: 0; border-radius: 6px; background: none;
+  color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.rl-cand:hover:not(:disabled) { background: var(--hover); color: var(--text-strong); }
+.rl-cand:disabled { opacity: .5; cursor: default; }
+.rl-cand-name { font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-cand-user { font-size: 12px; color: var(--text-faint); margin-right: auto; white-space: nowrap; }
+/* The + only confirms what the row does once you are on it; permanently lit, a
+   column of fifty identical glyphs is noise. */
+.rl-cand-add { color: var(--text-faint); flex: none; opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
+.rl-cand:hover .rl-cand-add, .rl-cand:focus-visible .rl-cand-add { opacity: 1; }
+.rl-empty { padding: 8px; font-size: 13px; color: var(--text-3); line-height: 1.45; }
+
+.rl-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rl-member {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px; border-radius: 8px;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.rl-member:hover { background: var(--hover); }
+.rl-member-names { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.rl-member-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; color: var(--text-strong); }
+.rl-member-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-member-user { font-size: 12px; color: var(--text-faint); }
+.rl-member-crown { color: #f0b132; flex: none; }
+.rl-member-x {
+  display: grid; place-items: center; width: 28px; height: 28px; flex: none;
+  border: 0; border-radius: 6px; background: none; color: var(--text-faint); cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
+              background var(--dur-1) var(--ease-out);
+}
+.rl-member:hover .rl-member-x, .rl-member-x:focus-visible { opacity: 1; }
+.rl-member-x:hover:not(:disabled) { color: #f0716f; background: color-mix(in srgb, #ed4245 14%, transparent); }
+.rl-member-x:disabled { cursor: default; opacity: .4; }
+/* Hover does not exist on a touch screen, so a control revealed on hover is a
+   control that cannot be found there. Always shown when there is no hover. */
+@media (hover: none) {
+  .rl-member-x, .rl-cand-add { opacity: 1; }
+}
 .rl-soon {
   display: inline-block; margin-left: 8px; vertical-align: 1px;
   font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;

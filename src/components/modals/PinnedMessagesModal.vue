@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { X, Pin } from 'lucide-vue-next'
 import type { Message } from '@/types'
 
 const props = defineProps<{ messages: Message[] }>()
-const emit  = defineEmits<{ close: [] }>()
+const emit  = defineEmits<{ close: []; jump: [dbId: string] }>()
 
-const pinned = props.messages.filter(m => m.pinned)
+// Computed, not filtered once at setup: pinning or unpinning while the panel
+// is open has to show here, and a one-off copy never changed again.
+const pinned = computed(() => props.messages.filter(m => m.pinned))
 </script>
 
 <template>
@@ -30,7 +33,10 @@ const pinned = props.messages.filter(m => m.pinned)
         </div>
       </template>
       <template v-else>
-        <div v-for="m in pinned" :key="m.id" class="pinned-msg">
+        <!-- A button: the row always looked clickable and did nothing. It now
+             jumps the chat to the message, the same jump a reply quote uses. -->
+        <button v-for="m in pinned" :key="m.id" type="button" class="pinned-msg"
+          :disabled="!m.dbId" @click="m.dbId && emit('jump', m.dbId)">
           <div class="pm-avatar"><Avatar :src="m.avatar" :alt="m.author" :crop="(m as any).avatarCrop" /></div>
           <div class="pm-body">
             <div class="pm-meta">
@@ -39,7 +45,7 @@ const pinned = props.messages.filter(m => m.pinned)
             </div>
             <p class="pm-content">{{ m.content }}</p>
           </div>
-        </div>
+        </button>
       </template>
     </div>
   </div>
@@ -77,9 +83,10 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .pinned-tip { font-size: 13px; color: var(--text-3); line-height: 1.5; }
 
 .pinned-msg {
-  display: flex; gap: 10px; padding: 10px; border-radius: 8px;
+  display: flex; gap: 10px; padding: 10px; border-radius: 8px; width: 100%; text-align: left;
   transition: background var(--dur-1) var(--ease-out); cursor: pointer;
 }
+.pinned-msg:disabled { cursor: default; }
 .pinned-msg:hover { background: var(--hover); }
 .pm-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
 .pm-body { flex: 1; min-width: 0; }

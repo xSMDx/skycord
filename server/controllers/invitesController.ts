@@ -6,7 +6,10 @@ import { Category } from '../models/Category'
 import { ServerInvite } from '../models/ServerInvite'
 import { User } from '../models/User'
 import { generateInviteCode } from '../utils/inviteCode'
-import { loadServer, requireOwner, shapeServer, shapeChannel, shapeCategory, emitToServer } from './serversController'
+import {
+  loadServer, requireOwner, shapeServer, shapeChannel, shapeCategory, emitToServer,
+  serverDetailFor, joinChannelRooms,
+} from './serversController'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { requirePerm } from '../utils/access'
@@ -233,37 +236,30 @@ export const joinViaInvite = async (req: Request, res: Response, next: NextFunct
       }
     }
 
-    const channels = await Channel.find({ server: server._id }).sort({ type: 1, position: 1 }).lean()
-    // Fetched and sorted exactly as getServer does, because this response is
-    // the ONLY detail payload a joining member gets: the client folds it in
-    // with the same `receiveDetail` that consumes GET /servers/:sid, and then
-    // caches it. Omitting categories here does not merely delay them — it
-    // writes an authoritative empty list the client has no reason to ever
-    // refetch, so every channel renders flat, with no headers, until a full
-    // page reload. (Client-side, `openServer` now also refuses to treat a
-    // categories-less cache as populated; both halves of that belt-and-braces
-    // are deliberate.)
-    const categories = await Category.find({ server: server._id }).sort({ position: 1 }).lean()
+    // This response is the ONLY detail payload a joining member gets: the
+    // client folds it in with the same `receiveDetail` that consumes
+    // GET /servers/:sid and caches it, so it is built by the same function.
+    // Anything missing here stays missing until a reload — categories once
+    // were, and every channel rendered flat; `me` was, and the joiner had no
+    // permissions on the client. It also carries only the channels this
+    // member may see, where it used to carry every one.
+    const { body, viewable } = await serverDetailFor(server, userId)
 
     // A member who joins while already connected must start RECEIVING this
     // server's channels immediately, not only after a reconnect — their
     // sockets joined rooms once, at connect time, before this membership
-    // existed. Gated on `joined` (true only for a genuine new join here),
-    // never for the idempotent "already a member" / lost-the-race branches
-    // above, whose sockets are already correctly in these rooms already.
-    if (joined) {
-      const rooms = channels.map(c => `chan:${c._id.toString()}`)
-      if (rooms.length) getIO()?.in(`user:${userId}`).socketsJoin(rooms)
-    }
+    // existed. Only the rooms of channels they may see. Gated on `joined`
+    // (true only for a genuine new join here), never for the idempotent
+    // "already a member" / lost-the-race branches above, whose sockets are
+    // already in the right rooms.
+    if (joined) joinChannelRooms(userId, viewable)
 
     res.json({
-      server:     shapeServer(server),
-      channels:   channels.map(c => shapeChannel(c)),
-      categories: categories.map(shapeCategory),
+      ...body,
       joined,
       // Returned for an already-member too: there is no join to perform, but
       // the destination is the whole point of the link.
-      channel:    await inviteChannel((invite as any).channel),
+      channel: await inviteChannel((invite as any).channel),
     })
   } catch (err) { next(err) }
 }

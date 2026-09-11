@@ -83,11 +83,6 @@ const query = ref('')
 const inputEl = ref<HTMLInputElement | null>(null)
 const shell = ref<HTMLElement | null>(null)
 
-const openSearch = async () => {
-  searching.value = true
-  await nextTick()
-  inputEl.value?.focus()
-}
 const closeSearch = () => { searching.value = false; query.value = '' }
 
 /**
@@ -120,7 +115,9 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
       <!-- The field and the filter travel together: the filter only means
            anything while there's a query to filter. -->
       <div class="cd-searchwrap">
-        <div class="cd-searchfield" @click="openSearch">
+        <!-- Hands off to the real search screen rather than expanding a
+             field of its own that searched nothing. -->
+        <div class="cd-searchfield" @click="emit('search')">
           <Search class="cd-search-ico" :size="20" :stroke-width="2" />
           <input
             v-show="searching"

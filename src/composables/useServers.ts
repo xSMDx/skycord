@@ -196,6 +196,8 @@ export interface ServerMember {
    * somebody with no roles must not come out equal to the role everyone has.
    */
   highestPosition: number
+  /** Role ids they hold, @everyone excluded. Kept live by `member:roles`. */
+  roles: string[]
 }
 
 const toClientMember = (w: WireMember): ServerMember => ({
@@ -209,6 +211,9 @@ const toClientMember = (w: WireMember): ServerMember => ({
   // A payload from a server predating this field leaves everyone unranked,
   // which is the safe reading: no moderation row is drawn over an unknown rank.
   highestPosition: w.highestPosition ?? -1,
+  // Absent on an older payload, which reads as "holds nothing" — the same
+  // conservative reading as the rank above.
+  roles: w.roles ?? [],
 })
 
 const byPosition = (a: Channel, b: Channel) => (a.position ?? 0) - (b.position ?? 0)
@@ -400,6 +405,22 @@ export const useServers = () => {
   const removeMember = (sid: string, uid: string) => {
     const list = membersByServer.value[sid]
     if (list) membersByServer.value[sid] = list.filter(m => m.id !== uid)
+  }
+
+  /**
+   * Record a member's roles and the rank they imply.
+   *
+   * One mutator for the socket event, the optimistic write and its rollback,
+   * so the three cannot disagree about the shape. Rank is written alongside
+   * rather than recomputed here because this store does not hold role
+   * positions — the server sends it with the roles for exactly that reason.
+   * A member this client has not loaded is left alone rather than invented.
+   */
+  const applyMemberRoles = (sid: string, uid: string, roles: string[], highestPosition: number) => {
+    const m = membersByServer.value[sid]?.find(x => x.id === uid)
+    if (!m) return
+    m.roles = [...roles]
+    m.highestPosition = highestPosition
   }
 
   /** Fold/unfold a category in the sidebar. A view concern only — it never
@@ -695,7 +716,11 @@ export const useServers = () => {
      */
     const seq = ++openSeq
     activeServerId.value = sid
-    if (!channelsByServer.value[sid] || !categoriesByServer.value[sid]) {
+    // The viewer's own access is the third part of "loaded". The create and
+    // invite-join payloads once filled both buckets and omitted it, and every
+    // permission gate reads unknown access as "no" — so the person who had just
+    // made a server could do nothing in it, and no refetch ever came.
+    if (!channelsByServer.value[sid] || !categoriesByServer.value[sid] || !myAccessByServer.value[sid]) {
       loadingServerDetail.value = true
       // finally, not a trailing assignment: a failed fetch must not leave the
       // sidebar showing placeholders for a list that is never coming.
@@ -709,6 +734,29 @@ export const useServers = () => {
     // costs nothing but the write nobody wants.
     if (seq !== openSeq) return
     selectLanding(sid)
+  }
+
+  /**
+   * The server says this viewer's access here changed: a channel locked or
+   * opened, a role granted or taken. Refetch the detail, which the server
+   * filters, rather than working out locally what moved — that would be a
+   * second copy of the resolution rules.
+   *
+   * Only for a server already loaded; one never opened holds nothing stale.
+   * Whatever was on screen and is no longer visible is left behind: the text
+   * channel lands somewhere visible, a voice stage closes, and an unread count
+   * for a channel that has gone is dropped.
+   */
+  const refreshServerAccess = async (sid: string) => {
+    const before = channelsByServer.value[sid]
+    if (!before) return
+    const had = new Set(before.map(c => c.id))
+    await loadServerDetail(sid)
+    const now = new Set((channelsByServer.value[sid] ?? []).map(c => c.id))
+    const gone = (id: string | null): id is string => !!id && had.has(id) && !now.has(id)
+    for (const id of had) if (gone(id)) delete unreadChannels.value[id]
+    if (gone(viewedVoiceId.value)) viewedVoiceId.value = null
+    if (gone(activeChannelId.value)) selectLanding(sid)
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────
@@ -876,9 +924,10 @@ export const useServers = () => {
     upsertMember, removeMember,
     markUnread, clearUnread, serverUnread, selectLanding, openChannel, viewVoiceChannel,
     loadingServerDetail,
-    loadServers, loadServerDetail, loadServerMembers, openServer, moveChannel,
+    loadServers, loadServerDetail, loadServerMembers, openServer, refreshServerAccess, moveChannel,
     myAccessIn, canInServer, voiceRestrictionOf, applyVoiceRestriction,
     applyChannelOrder, applyCategoryOrder, reorderChannels, reorderCategories,
+    applyMemberRoles,
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { buildServerMenu } from '../serverMenu'
+import { buildServerMenu, buildSidebarMenu, type ServerMenuAccess } from '../serverMenu'
 import { isAction, isSeparator, type MenuItem } from '../../useContextMenu'
 
 const handlers = () => ({
@@ -17,152 +17,143 @@ const handlers = () => ({
 const labels = (items: MenuItem[]) =>
   items.filter(isAction).map(i => i.label)
 
-describe('buildServerMenu', () => {
-  it('offers Invite People, Create Channel and Create Category to the owner', () => {
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
-    expect(l).toContain('Invite to Server')
-    expect(l).toContain('Create Channel')
-    expect(l).toContain('Create Category')
-  })
+/** The owner holds every permission. */
+const ALL: ServerMenuAccess = { invite: true, manageChannels: true, manageServer: true }
+/** An ordinary member under the default @everyone, which may invite. */
+const MEMBER: ServerMenuAccess = { invite: true, manageChannels: false, manageServer: false }
+/** A member whose server has taken Create Invite away from @everyone. */
+const NOTHING: ServerMenuAccess = { invite: false, manageChannels: false, manageServer: false }
 
-  it('offers an owner exactly its row set', () => {
-    // The owner half of the pin the non-owner case below already carries: an
-    // exhaustive list, so a row added to the isOwner branch has to be
-    // acknowledged here rather than slipping in unnoticed — and so a row that
-    // should have been owner-gated but was appended to the shared tail shows
-    // up as a diff in BOTH tests.
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
-    expect(l).toEqual([
+const mine   = { id: 's1', name: 'HQ', owner: 'me' }
+const theirs = { id: 's1', name: 'HQ', owner: 'someone' }
+
+describe('buildServerMenu', () => {
+  it('offers the owner exactly its row set', () => {
+    // Exhaustive, so a row added anywhere has to be acknowledged here.
+    expect(labels(buildServerMenu(mine, 'me', handlers(), ALL))).toEqual([
       'Mark As Read', 'Invite to Server', 'Create Channel', 'Create Category',
       'Server Settings', 'Voice Servers', 'Delete Server', 'Copy Server ID',
     ])
   })
 
+  it('offers an ordinary member Invite to Server, since @everyone may invite by default', () => {
+    // Create Invite has been in the default @everyone set since roles landed;
+    // the menu kept the row owner-only long after the server stopped asking.
+    expect(labels(buildServerMenu(theirs, 'me', handlers(), MEMBER))).toEqual([
+      'Mark As Read', 'Invite to Server', 'Server Settings', 'Leave Server', 'Copy Server ID',
+    ])
+  })
+
+  it('offers a member granted nothing only the rows that need nothing', () => {
+    expect(labels(buildServerMenu(theirs, 'me', handlers(), NOTHING))).toEqual([
+      'Mark As Read', 'Server Settings', 'Leave Server', 'Copy Server ID',
+    ])
+  })
+
+  it('offers Create Channel and Create Category to a member with Manage Channels', () => {
+    // A server with no categories has no header to right-click, so this row
+    // is the only way to make the first one — a moderator must have it.
+    const l = labels(buildServerMenu(theirs, 'me', handlers(), { ...MEMBER, manageChannels: true }))
+    expect(l).toContain('Create Channel')
+    expect(l).toContain('Create Category')
+  })
+
+  it('offers Voice Servers to whoever holds Manage Server', () => {
+    const l = labels(buildServerMenu(theirs, 'me', handlers(), { ...MEMBER, manageServer: true }))
+    expect(l).toContain('Voice Servers')
+    expect(labels(buildServerMenu(theirs, 'me', handlers(), MEMBER))).not.toContain('Voice Servers')
+  })
+
   it('offers the owner Delete Server, never Leave Server', () => {
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
+    const l = labels(buildServerMenu(mine, 'me', handlers(), ALL))
     expect(l).toContain('Delete Server')
     expect(l).not.toContain('Leave Server')
   })
 
-  it('offers a non-owner Leave Server, never Delete Server', () => {
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
+  it('never offers Delete Server to anyone else, even one holding every permission', () => {
+    // An administrator holds every bit. Deleting the server stays the owner's.
+    const l = labels(buildServerMenu(theirs, 'me', handlers(), ALL))
     expect(l).toContain('Leave Server')
     expect(l).not.toContain('Delete Server')
   })
 
-  it('hides Create Channel and Create Category from a non-owner', () => {
-    // The server 403s a non-owner creating a channel, and createCategory is
-    // requireOwner too (server/controllers/categoriesController.ts), so
-    // offering either row would produce a modal that can only fail.
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
-    expect(l).not.toContain('Create Channel')
-    expect(l).not.toContain('Create Category')
-  })
-
   it('hands Create Category the server id', () => {
     const h = handlers()
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
-    items.filter(isAction).find(i => i.label === 'Create Category')!.onSelect?.()
+    buildServerMenu(mine, 'me', h, ALL).filter(isAction)
+      .find(i => i.label === 'Create Category')!.onSelect?.()
     expect(h.createCategory).toHaveBeenCalledWith('s1')
   })
 
-  it('offers a non-owner only Copy Server ID and Leave Server', () => {
-    // Every invite endpoint (create/list/revoke) is owner-only server-side,
-    // same as channel creation, so a non-owner's menu must pin down to
-    // exactly this row set — not just individually lack Invite People —
-    // so a future owner-only row that forgets to gate on isOwner fails here.
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
-    expect(l).toEqual(['Mark As Read', 'Server Settings', 'Leave Server', 'Copy Server ID'])
-  })
-
   it('marks the destructive row danger', () => {
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers())
-    const del = items.filter(isAction).find(i => i.label === 'Delete Server')
+    const del = buildServerMenu(mine, 'me', handlers(), ALL).filter(isAction)
+      .find(i => i.label === 'Delete Server')
     expect(del?.danger).toBe(true)
   })
 
-  it('opens Server Settings, which used to be a disabled stub', () => {
-    // The row existed and did nothing — `disabled: true, onSelect: () => {}`.
-    // Both halves matter: it has to be enabled AND wired.
+  it('opens Server Settings, for a member as well as the owner', () => {
+    // Members can read the name, description and who else is in here; the
+    // fields are disabled for them server-side and in the dialog.
     const h = handlers()
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
-    const row = items.filter(isAction).find(i => i.label === 'Server Settings')
+    const row = buildServerMenu(theirs, 'me', h, NOTHING).filter(isAction)
+      .find(i => i.label === 'Server Settings')
     expect(row?.disabled).toBeFalsy()
     row!.onSelect?.()
     expect(h.serverSettings).toHaveBeenCalledWith('s1')
   })
 
-  it('offers Server Settings to a member too, not just the owner', () => {
-    // Members can read the name, description and who else is in here; the
-    // fields are disabled for them server-side and in the dialog.
-    const h = handlers()
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', h)
-    const row = items.filter(isAction).find(i => i.label === 'Server Settings')
-    expect(row?.disabled).toBeFalsy()
-  })
-
   it('copies the server id', () => {
     const h = handlers()
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
-    items.filter(isAction).find(i => i.label === 'Copy Server ID')!.onSelect?.()
+    buildServerMenu(mine, 'me', h, ALL).filter(isAction)
+      .find(i => i.label === 'Copy Server ID')!.onSelect?.()
     expect(h.copy).toHaveBeenCalledWith('s1', 'Server ID')
   })
 
-  it('separates the destructive row from the rest', () => {
-    // A separator anywhere in the list isn't what the name claims — it must
-    // sit immediately before the destructive row, in both the owner (Delete
-    // Server) and non-owner (Leave Server) cases.
-    const owner = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers())
-    const ownerDelIdx = owner.findIndex(i => isAction(i) && i.label === 'Delete Server')
-    expect(ownerDelIdx).toBeGreaterThan(0)
-    expect(isSeparator(owner[ownerDelIdx - 1])).toBe(true)
-
-    const member = buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers())
-    const memberLeaveIdx = member.findIndex(i => isAction(i) && i.label === 'Leave Server')
-    expect(memberLeaveIdx).toBeGreaterThan(0)
-    expect(isSeparator(member[memberLeaveIdx - 1])).toBe(true)
+  it('separates the destructive row from the rest, for owner and member alike', () => {
+    for (const [server, can, label] of [[mine, ALL, 'Delete Server'], [theirs, NOTHING, 'Leave Server']] as const) {
+      const items = buildServerMenu(server, 'me', handlers(), can)
+      const idx = items.findIndex(i => isAction(i) && i.label === label)
+      expect(idx).toBeGreaterThan(0)
+      expect(isSeparator(items[idx - 1])).toBe(true)
+    }
   })
+
+  it('never leaves two separators touching when there are no add rows', () => {
+    const items = buildServerMenu(theirs, 'me', handlers(), NOTHING)
+    items.forEach((it, i) => {
+      if (i > 0) expect(isSeparator(it) && isSeparator(items[i - 1])).toBe(false)
+    })
+  })
+
   it('disables Mark As Read when nothing is unread', () => {
     // A live row that clears nothing is a small lie about the server's state.
-    const quiet = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers(), false)
-    const noisy = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers(), true)
     const row = (items: MenuItem[]) => items.filter(isAction).find(i => i.label === 'Mark As Read')
-    expect(row(quiet)?.disabled).toBe(true)
-    expect(row(noisy)?.disabled).toBeFalsy()
+    expect(row(buildServerMenu(mine, 'me', handlers(), ALL, false))?.disabled).toBe(true)
+    expect(row(buildServerMenu(mine, 'me', handlers(), ALL, true))?.disabled).toBeFalsy()
   })
-
-  // The row used to be deliberately disabled — "not yet" where a missing row
-  // would say "this app cannot do that" — and the test above pinned that. The
-  // screen exists now, so the row is enabled and wired; see the two tests
-  // near 'copies the server id' that pin the replacement behaviour.
 
   it('clears every unread channel of the server it was opened on', () => {
     const h = handlers()
-    const items = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h, true)
-    items.filter(isAction).find(i => i.label === 'Mark As Read')!.onSelect?.()
+    buildServerMenu(mine, 'me', h, ALL, true).filter(isAction)
+      .find(i => i.label === 'Mark As Read')!.onSelect?.()
     expect(h.markRead).toHaveBeenCalledWith('s1')
   })
 
+  it('calls Voice Servers through with the server id', () => {
+    const h = handlers()
+    buildServerMenu(mine, 'me', h, ALL).filter(isAction)
+      .find(i => i.label === 'Voice Servers')!.onSelect?.()
+    expect(h.voiceServers).toHaveBeenCalledWith('s1')
+  })
 })
 
-describe('buildServerMenu — voice servers', () => {
-  it('offers Voice Servers to the owner', () => {
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', handlers()))
-    expect(l).toContain('Voice Servers')
+describe('buildSidebarMenu', () => {
+  it('offers exactly the add rows the viewer may use', () => {
+    expect(labels(buildSidebarMenu(theirs, handlers(), { ...MEMBER, manageChannels: true })))
+      .toEqual(['Invite to Server', 'Create Channel', 'Create Category'])
+    expect(labels(buildSidebarMenu(theirs, handlers(), MEMBER))).toEqual(['Invite to Server'])
   })
 
-  it('does not offer it to a member', () => {
-    // Every endpoint behind this modal is owner-only server-side, so a member
-    // clicking the row could only ever get a 403 screen.
-    const l = labels(buildServerMenu({ id: 's1', name: 'HQ', owner: 'someone' }, 'me', handlers()))
-    expect(l).not.toContain('Voice Servers')
-  })
-
-  it('calls through with the server id', () => {
-    const h = handlers()
-    const row = buildServerMenu({ id: 's1', name: 'HQ', owner: 'me' }, 'me', h)
-      .filter(isAction).find(i => i.label === 'Voice Servers')!
-    row.onSelect?.()
-    expect(h.voiceServers).toHaveBeenCalledWith('s1')
+  it('is empty for someone who may add nothing, so no menu opens at all', () => {
+    expect(buildSidebarMenu(theirs, handlers(), NOTHING)).toEqual([])
   })
 })

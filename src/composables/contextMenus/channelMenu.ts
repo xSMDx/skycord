@@ -1,10 +1,12 @@
 /**
  * The menu behind a channel row in the sidebar (right-click or hover ⋯).
  *
- * Rows are gated on ownership rather than shown-and-disabled, same reasoning
- * as serverMenu: createChannel/updateChannel/deleteChannel all 403 a
- * non-owner server-side, so a non-owner's menu offers nothing that can only
- * ever fail — just the harmless Copy Channel ID.
+ * Rows are gated on Manage Channels rather than shown-and-disabled, same
+ * reasoning as serverMenu: createChannel/updateChannel/deleteChannel all 403
+ * anyone without it, so their menu offers nothing that can only ever fail —
+ * just the harmless Copy Channel ID. It was ownership until the server moved
+ * these endpoints onto the permission; the menu lagged behind, and a moderator
+ * could drag a channel they could not rename.
  */
 import { Pencil, FolderInput, Copy, Trash2 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
@@ -68,11 +70,12 @@ const buildMoveSubmenu = (
 
 export const buildChannelMenu = (
   channel: MenuChannel,
-  isOwner: boolean,
+  /** The viewer holds Manage Channels here (the owner always does). */
+  canManage: boolean,
   h: ChannelMenuHandlers,
   categories: MoveTargetCategory[] = [],
 ): MenuItem[] => {
-  if (!isOwner) {
+  if (!canManage) {
     return [
       { label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(channel.id, 'Channel ID') },
     ]

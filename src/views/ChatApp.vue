@@ -2,16 +2,22 @@
 import {
   ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, User, Paperclip, AtSign, SlidersHorizontal, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff,
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff,
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
 import { useViewport }                      from '@/composables/useViewport'
 import { useMobileNav }                     from '@/composables/useMobileNav'
 import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
-import { useMessages }                      from '@/composables/useMessages'
-import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel, type WireServer , type WireCategory } from '@/composables/useApi'
+import { useMessages, type ConvKind }       from '@/composables/useMessages'
+import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel, type WireServer , type WireCategory, type HistoryCursor, type HistoryPage, type SearchScope } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
+import { useSearch, type SearchHit } from '@/composables/useSearch'
+import type { SuggestMember, SuggestChannel } from '@/composables/searchSuggest'
+import SearchField        from '@/components/search/SearchField.vue'
+import SearchFiltersModal from '@/components/search/SearchFiltersModal.vue'
+import SearchResultsPanel from '@/components/search/SearchResultsPanel.vue'
+import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
@@ -36,6 +42,7 @@ import NewDMModal          from '@/components/modals/NewDMModal.vue'
 import EditGroupModal      from '@/components/modals/EditGroupModal.vue'
 import InviteGroupModal    from '@/components/modals/InviteGroupModal.vue'
 import InviteServerModal   from '@/components/modals/InviteServerModal.vue'
+import { placeBefore, nudge } from '@/composables/sidebarOrder'
 import ModalBase           from '@/components/modals/ModalBase.vue'
 
 import MessageList   from '@/components/chat/MessageList.vue'
@@ -146,6 +153,7 @@ const {
   sendDM, sendGroup,
   toggleDMReaction, toggleChannelReaction,
   deleteMessage, editMessage,
+  windowOf, setWindow, prependOlder, appendNewer, holdIfAway,
 } = useMessages()
 
 // ── Servers & channels ───────────────────────────────────────────────────
@@ -173,8 +181,9 @@ const {
   loadingServerDetail,
   upsertMember, removeMember,
   loadServers, loadServerMembers, openServer: enterServer, moveChannel,
-  myAccessIn, canInServer, voiceRestrictionOf, applyVoiceRestriction,
-  reorderChannels,
+  myAccessIn, canInServer, voiceRestrictionOf, applyVoiceRestriction, refreshServerAccess,
+  reorderCategories,
+  reorderChannels, applyMemberRoles,
 } = useServers()
 
 // ── Socket ─────────────────────────────────────────────────────────────────
@@ -300,18 +309,88 @@ const showEditGroup = ref(false)
 const showInviteGroup = ref(false)
 const groupsData    = ref<Group[]>([])
 
-// Header search (placeholder — expands an input + shows a Filters popup)
-const searchOpen    = ref(false)
-const searchFocused = ref(false)
-const searchQuery   = ref('')
-const searchInputEl = ref<HTMLInputElement | null>(null)
-const openSearch = async () => { searchOpen.value = true; await nextTick(); searchInputEl.value?.focus() }
-const onSearchBlur = () => {
-  // Delay collapse so a click on a filter row registers first.
-  setTimeout(() => {
-    searchFocused.value = false
-    if (!searchQuery.value.trim()) searchOpen.value = false
-  }, 150)
+// ── Search ──────────────────────────────────────────────────────────────────
+// A permanent field in the header on desktop, a screen of its own on a phone,
+// and the results in the right-hand column. The search itself lives in
+// useSearch; this keeps its scope in step with the conversation and opens
+// what it finds.
+const { open: searchResultsOpen, setScope: setSearchScope, close: closeSearch } = useSearch()
+const showSearchFilters = ref(false)
+const showSearchScreen  = ref(false)
+/** The result opened last, marked in the panel so you can see where you were. */
+const openedResultId    = ref<string | null>(null)
+
+/** What a search here covers: the whole server, or this one DM or group. */
+const searchScope = computed<SearchScope | null>(() =>
+  view.value === 'server' && activeServerId.value ? { kind: 'server', id: activeServerId.value }
+  : view.value === 'dm' && activeDM.value         ? { kind: 'dm', id: activeDM.value.id }
+  : view.value === 'group' && activeGroup.value   ? { kind: 'group', id: activeGroup.value.id }
+  : null)
+watch(searchScope, (s, was) => {
+  // Switching channels inside one server keeps the results; anything else drops them.
+  if (was !== undefined && s?.kind === was?.kind && s?.id === was?.id) return
+  setSearchScope(s)
+  openedResultId.value = null
+}, { immediate: true })
+
+const searchPanelShown = computed(() => searchResultsOpen.value && !isMobile.value)
+
+const searchPlaceholder = computed(() =>
+  view.value === 'server' ? `Search ${activeServer.value?.name ?? ''}`.trim()
+  : view.value === 'dm' && activeDM.value ? `Search @${activeDM.value.name}`
+  : view.value === 'group' && activeGroup.value ? `Search ${groupDisplayName(activeGroup.value)}`
+  : 'Search')
+
+type SearchPerson = {
+  id: string; username: string; displayName?: string | null
+  avatar?: string | null; avatarCrop?: SuggestMember['crop']
+}
+const toSuggest = (m: SearchPerson): SuggestMember => ({
+  id: m.id, name: m.displayName || m.username, username: m.username,
+  avatar: m.avatar || avatarFor(m.username), crop: m.avatarCrop ?? null,
+})
+/** Who from: and mentions: can name — the people in this server or conversation. */
+const searchMembers = computed<SuggestMember[]>(() => {
+  if (view.value === 'server') return [...activeMembers.value.online, ...activeMembers.value.offline].map(toSuggest)
+  if (view.value === 'group' && activeGroup.value) return activeGroup.value.members.map(toSuggest)
+  if (view.value === 'dm' && activeDM.value) {
+    const dm = activeDM.value, me = authUser.value
+    return [
+      { id: dm.id, name: dm.name, username: '', avatar: dm.avatar, crop: dm.avatarCrop ?? null },
+      ...(me ? [{ id: me.id, name: me.displayName || me.username, username: me.username, avatar: myAvatar.value, crop: null }] : []),
+    ]
+  }
+  return []
+})
+
+/** Text channels in sidebar order: the only ones a search can look in. */
+const searchChannels = computed<SuggestChannel[]>(() =>
+  view.value === 'server' ? groupedChannels.value.flatMap(g => g.text).map(c => ({ id: c.id, name: c.name })) : [])
+
+/**
+ * Open a result: go to its channel when it is elsewhere in the server — the
+ * same move as clicking that channel in the sidebar — then jump to it, which
+ * loads the history around it when it is not loaded.
+ */
+const openSearchResult = async (hit: SearchHit) => {
+  const dbId = String(hit.message._id ?? hit.message.id ?? '')
+  if (!dbId) return
+  openedResultId.value = dbId
+  showSearchScreen.value = false
+  if (hit.channelId && (hit.channelId !== activeChannelId.value || voiceStageOpen.value)) {
+    const ch = channelsByServer.value[activeServerId.value ?? '']?.find(c => c.id === hit.channelId)
+    if (!ch) { showToast('That channel is no longer here'); return }
+    await selectChannel(ch)
+    await nextTick()
+  }
+  await jumpToMessage(dbId)
+}
+
+/** The member list and the results share a column: asking for the members brings them back. */
+const membersShown = computed(() => membersOpen.value && !searchPanelShown.value)
+const toggleMembers = () => {
+  if (searchPanelShown.value) { closeSearch(); membersOpen.value = true; return }
+  membersOpen.value = !membersOpen.value
 }
 
 // Lightweight toast (e.g. @everyone pings)
@@ -925,6 +1004,10 @@ const newMessage    = ref('')
 const friendsTab    = ref<'online' | 'all' | 'pending'>('online')
 const friendSearch  = ref('')
 const loadingMsgs   = ref(false)
+/** An older page is in flight (MessageList asked from the top of the list). */
+const loadingOlder  = ref(false)
+/** A newer page is in flight, for a window that is back in history. */
+const loadingNewer  = ref(false)
 const sendingMsg    = ref(false)
 
 // ── Real API data ──────────────────────────────────────────────────────────
@@ -1238,8 +1321,6 @@ const otherUnread = computed(() => {
 // ── Conversation details ────────────────────────────────────────────────────
 /** Which details screen is open on a phone, and which of its tabs. */
 const showDetails = ref(false)
-/** Open the details screen with its search field already expanded. */
-const detailsSearching = ref(false)
 const detailsTab  = ref<'members' | 'media' | 'pins' | 'links' | 'files'>('members')
 
 /**
@@ -1248,19 +1329,13 @@ const detailsTab  = ref<'members' | 'media' | 'pins' | 'links' | 'files'>('membe
  * keeps the old behaviour: a DM opens the profile, a group opens its editor.
  */
 /**
- * The header's search icon. On a phone the expanding field has nowhere to go —
- * the row is a back button, a two-line title and three actions — so it opens
- * the details screen, where search owns the whole header. Desktop keeps the
- * in-place expansion it has room for.
+ * The header's search icon, which only a phone shows. The row there is a back
+ * button, a two-line title and three actions, so search gets a screen of its
+ * own; desktop has the field itself in the header.
  */
 const onSearchTap = () => {
-  if (isMobile.value && (view.value === 'dm' || view.value === 'group')) {
-    detailsTab.value = 'members'
-    detailsSearching.value = true
-    showDetails.value = true
-    return
-  }
-  openSearch()
+  showDetails.value = false
+  showSearchScreen.value = true
 }
 
 const openConversationDetails = () => {
@@ -1405,7 +1480,7 @@ const dropBeforeId = ref<string | null>(null)
 const canManageChannels = computed(() => canInServer(activeServerId.value, 'ManageChannels'))
 
 const onChannelDragStart = (e: DragEvent, ch: Channel) => {
-  // ManageChannels, not ownership. This used to read `isServerOwner` because
+  // ManageChannels, not ownership. This used to be an ownership check because
   // channel edits were owner-only; they are a permission now, and leaving the
   // fence on ownership would deny the drag to every moderator who can rename
   // the very same channel from its context menu.
@@ -1510,14 +1585,9 @@ const onChannelDrop = async (e: DragEvent, category: string | null) => {
     const bucket = (channelsByServer.value[sid] ?? [])
       .filter(c => (c.category ?? null) === category && c.type === channel.type)
       .map(c => c.id)
-    const without = bucket.filter(id => id !== cid)
-    const at = before === null ? without.length : without.indexOf(before)
-    // The marker named a row that has since gone. Appending is the honest
-    // fallback — it is where a drop with no target lands anyway.
-    const index = at === -1 ? without.length : at
-    await reorderChannels(sid, category, channel.type as 'text' | 'voice', [
-      ...without.slice(0, index), cid, ...without.slice(index),
-    ])
+    // placeBefore appends when the marker names a row that has since gone —
+    // where a drop with no target lands anyway.
+    await reorderChannels(sid, category, channel.type as 'text' | 'voice', placeBefore(bucket, cid, before))
   } catch (err: any) {
     console.error('[onChannelDrop]', err)
     // moveChannel and reorderChannels each roll their own change back; this is
@@ -1525,6 +1595,111 @@ const onChannelDrop = async (e: DragEvent, category: string | null) => {
     // Move to Category, so "That category does not belong to this server"
     // reads identically however the move was started.
     showToast(err?.message || 'Couldn’t move that channel')
+  }
+}
+
+/**
+ * Dragging a category header to reorder the categories.
+ *
+ * The same platform drag channels use (see dragChannelId). "Above or below
+ * this one" is the half of the category's group the pointer is over, so a
+ * drop low on a tall category puts the dragged one after it.
+ *
+ * Nothing reflows while one is held. Folding every category to its header,
+ * the way Discord does, was tried and measured: with the list reflowing under
+ * a held drag, Chromium ended it without ever firing `drop`, so the drop line
+ * showed and letting go did nothing. A still list is also simply a better
+ * target — nothing moves out from under the pointer.
+ *
+ * `categoryDropBefore` is the category it would land above, `null` for after
+ * the last one, and `undefined` while there is nowhere useful to drop — over
+ * its own slot, say, where the order would not change and no line is drawn.
+ * An id rather than an index for the same reason as dropBeforeId.
+ */
+const dragCategoryId     = ref<string | null>(null)
+const categoryDropBefore = ref<string | null | undefined>(undefined)
+
+/** The active server's categories in sidebar order — activeCategories is already position-sorted. */
+const categoryIds = () => activeCategories.value.map(c => c.id)
+
+const onCategoryDragStart = (e: DragEvent, category: Category) => {
+  if (!canManageChannels.value) { e.preventDefault(); return }
+  dragCategoryId.value = category.id
+  categoryDropBefore.value = undefined
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    // Firefox starts no drag without a payload. Never read back, for the
+    // reason given at dragChannelId.
+    e.dataTransfer.setData('text/plain', category.id)
+  }
+}
+
+const endCategoryDrag = () => { dragCategoryId.value = null; categoryDropBefore.value = undefined }
+
+/** Where the drop would land, or undefined when it would change nothing. */
+const usefulCategoryDrop = (before: string | null): string | null | undefined => {
+  const ids = categoryIds()
+  const next = placeBefore(ids, dragCategoryId.value!, before)
+  return next.some((id, i) => id !== ids[i]) ? before : undefined
+}
+
+const onCategoryDragOver = (e: DragEvent, group: SidebarGroup) => {
+  if (!dragCategoryId.value) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  const ids = categoryIds()
+  let before: string | null
+  // The headerless group always renders above every category, so anything
+  // dropped on it goes first.
+  if (!group.category) before = ids[0] ?? null
+  else {
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const i = ids.indexOf(group.category.id)
+    before = (e.clientY - box.top) < box.height / 2 ? group.category.id : (ids[i + 1] ?? null)
+  }
+  categoryDropBefore.value = usefulCategoryDrop(before)
+}
+
+/**
+ * The sidebar body, outside every group: the end of the list, but only below
+ * the last group. The gaps between groups reach here too, and treating those
+ * as "the end" would flash the marker to the bottom as the pointer crossed
+ * from one header to the next — so there the last answer is kept.
+ */
+const onCategoryDragOverBody = (e: DragEvent) => {
+  if (!dragCategoryId.value) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  const groups = (e.currentTarget as HTMLElement).querySelectorAll('.ch-group')
+  const last = groups[groups.length - 1] as HTMLElement | undefined
+  if (last && e.clientY < last.getBoundingClientRect().bottom) return
+  categoryDropBefore.value = usefulCategoryDrop(null)
+}
+
+const onCategoryDrop = async (e: DragEvent) => {
+  const moved = dragCategoryId.value
+  if (!moved) return
+  e.preventDefault()
+  const before = categoryDropBefore.value
+  // Cleared before the request: the order changes optimistically anyway.
+  endCategoryDrag()
+  const sid = activeServerId.value
+  if (!sid || before === undefined || !canManageChannels.value) return
+  await saveCategoryOrder(sid, placeBefore(categoryIds(), moved, before))
+}
+
+/** The category menu's Move Up / Move Down — the keyboard and touch path. */
+const moveCategoryBy = (category: { id: string }, dir: -1 | 1) => {
+  const sid = activeServerId.value
+  if (sid) saveCategoryOrder(sid, nudge(categoryIds(), category.id, dir))
+}
+
+const saveCategoryOrder = async (sid: string, order: string[]) => {
+  try { await reorderCategories(sid, order) }
+  catch (err: any) {
+    console.error('[reorderCategories]', err)
+    // reorderCategories has already put the old order back; this says why.
+    showToast(err?.message || 'Couldn’t move that category')
   }
 }
 
@@ -1678,7 +1853,8 @@ const loadDMHistory = async (partnerId: string) => {
   try {
     const data = await fetchDMMessages(partnerId)
     const msgs: Message[] = data.messages.map((m: ApiMessage) => toClientMessage(m, authUser.value?.id))
-    initDM(partnerId, msgs)  // always overwrite from DB
+    // Always overwrite from DB — and this is the newest page, so the window is live.
+    setWindow('dm', partnerId, msgs, { hasOlder: !!data.hasOlder, hasNewer: false })
     // Resolve any reply previews that came back unresolved from REST
     await resolveReplyPreviews(partnerId)
   } catch (e) {
@@ -1723,7 +1899,7 @@ const loadGroupHistory = async (groupId: string) => {
   try {
     const data = await fetchGroupMessages(groupId)
     const msgs: Message[] = data.messages.map((m: ApiMessage) => toClientMessage(m, authUser.value?.id))
-    initGroup(groupId, msgs)
+    setWindow('group', groupId, msgs, { hasOlder: !!data.hasOlder, hasNewer: false })
   } catch (e) {
     console.error('[loadGroupHistory]', e)
     initGroup(groupId, [])
@@ -1744,7 +1920,8 @@ const loadChannelHistory = async (channelId: string) => {
   loadingMsgs.value = true
   try {
     const data = await getChannelMessagesApi(sid, channelId)
-    initChannel(channelId, data.messages.map(m => toClientMessage(m, authUser.value?.id)))
+    setWindow('channel', channelId, data.messages.map(m => toClientMessage(m, authUser.value?.id)),
+      { hasOlder: !!data.hasOlder, hasNewer: false })
   } catch (e) {
     console.error('[loadChannelHistory]', e)
     initChannel(channelId, [])
@@ -1753,6 +1930,63 @@ const loadChannelHistory = async (channelId: string) => {
     await nextTick()
     msgListRef.value?.scrollToBottom()
   }
+}
+
+/** The conversation on screen, as the message store and the history API name it. */
+const activeConv = computed<{ kind: ConvKind; id: string } | null>(() => {
+  if (view.value === 'dm'     && activeDM.value)        return { kind: 'dm',      id: activeDM.value.id }
+  if (view.value === 'group'  && activeGroup.value)     return { kind: 'group',   id: activeGroup.value.id }
+  if (view.value === 'server' && activeChannelId.value) return { kind: 'channel', id: activeChannelId.value }
+  return null
+})
+/** Where the on-screen window sits in its history — MessageList's edges and bar. */
+const activeWindow = computed(() =>
+  activeConv.value ? windowOf(activeConv.value.kind, activeConv.value.id) : null)
+const sameConv = (c: { kind: ConvKind; id: string }) =>
+  activeConv.value?.kind === c.kind && activeConv.value.id === c.id
+
+const fetchHistory = (c: { kind: ConvKind; id: string }, cursor: HistoryCursor): Promise<HistoryPage> =>
+  c.kind === 'dm'      ? fetchDMMessages(c.id, cursor)
+  : c.kind === 'group' ? fetchGroupMessages(c.id, cursor)
+  : getChannelMessagesApi(activeServerId.value!, c.id, cursor)
+const toClient = (p: HistoryPage) => p.messages.map(m => toClientMessage(m, authUser.value?.id))
+
+/** The next older page, above what is on screen. MessageList asks near the top. */
+const loadOlderMessages = async () => {
+  const c = activeConv.value
+  if (!c || loadingOlder.value || !windowOf(c.kind, c.id).hasOlder) return
+  const first = getMsgList().find(m => m.dbId)
+  if (!first?.dbId) return
+  loadingOlder.value = true
+  try {
+    const page = await fetchHistory(c, { before: first.dbId })
+    // The view may have moved on while the page was in flight.
+    if (sameConv(c)) prependOlder(c.kind, c.id, toClient(page), page.hasOlder)
+  } catch (e) { console.error('[loadOlderMessages]', e) }
+  finally { loadingOlder.value = false }
+}
+
+/** The next newer page, below a window that is back in history. */
+const loadNewerMessages = async () => {
+  const c = activeConv.value
+  if (!c || loadingNewer.value || windowOf(c.kind, c.id).live) return
+  const last = [...getMsgList()].reverse().find(m => m.dbId)
+  if (!last?.dbId) return
+  loadingNewer.value = true
+  try {
+    const page = await fetchHistory(c, { after: last.dbId })
+    if (sameConv(c)) appendNewer(c.kind, c.id, toClient(page), page.hasNewer)
+  } catch (e) { console.error('[loadNewerMessages]', e) }
+  finally { loadingNewer.value = false }
+}
+
+/** Back to the newest messages: reload the conversation as if just opened. */
+const jumpToPresent = async () => {
+  const c = activeConv.value
+  if (!c) return
+  if (c.kind === 'dm') await loadDMHistory(c.id)
+  else if (c.kind === 'group') await loadGroupHistory(c.id)
+  else await loadChannelHistory(c.id)
 }
 
 const openGroup = async (group: Group) => {
@@ -1952,7 +2186,9 @@ const setupSocket = () => {
 
     const msg: Message = toClientMessage(payload, authUser.value?.id)
 
-    pushDMMessage(partnerId, msg)
+    // Back in history, a live message is counted for the bar, not appended
+    // below messages it does not follow.
+    if (!holdIfAway('dm', partnerId)) pushDMMessage(partnerId, msg)
 
     // Update sidebar
     const dm = dmsData.value.find(d => d.id === partnerId)
@@ -2038,7 +2274,7 @@ const setupSocket = () => {
     // (e.g. our own optimistic message that got stamped via the send ack), skip.
     if (payload._id && getGroupMsgs(groupId).some(m => (m as any).dbId === payload._id)) return
     const msg: Message = toClientMessage(payload, authUser.value?.id)
-    pushGroupMessage(groupId, msg)
+    if (!holdIfAway('group', groupId)) pushGroupMessage(groupId, msg)
     const g = groupsData.value.find(x => x.id === groupId)
     if (g) {
       g.lastMsg = payload.content
@@ -2053,7 +2289,7 @@ const setupSocket = () => {
     // Reconnect can replay, and our own send already stamped its dbId from the
     // 201 response. Either way, having the id means we have the message.
     if (payload._id && getChannelMessages(channelId).some(m => m.dbId === payload._id)) return
-    pushChannelMessage(channelId, toClientMessage(payload, authUser.value?.id))
+    if (!holdIfAway('channel', channelId)) pushChannelMessage(channelId, toClientMessage(payload, authUser.value?.id))
     // The stage hides the text pane without touching activeChannelId (see
     // `viewedVoiceId`'s declaration in useServers), so a channel sitting
     // underneath the stage must NOT count as "looking" — otherwise messages
@@ -2128,6 +2364,38 @@ const setupSocket = () => {
   })
   socketOn('onCategoriesReordered', (p: any) => {
     for (const w of p.categories ?? []) upsertCategory(w)
+  })
+
+  // Somebody's roles changed. The server has emitted this since roles shipped
+  // and nothing listened, so an assignment made in one tab reached no other —
+  // including the voice moderation rows, which gate on the rank this carries.
+  socketOn('onMemberRoles', (p: any) => {
+    applyMemberRoles(p.serverId, p.userId, p.roles ?? [], p.highestPosition ?? -1)
+  })
+
+  // Who may see or do what here changed for this user — a channel locked or
+  // opened, a role granted or taken. The server has already moved this
+  // socket's rooms; this redraws the sidebar and every permission gate from a
+  // fresh detail. Coalesced per server: a role's permissions save toggle by
+  // toggle, and each save sends one of these.
+  const accessRefresh = new Map<string, ReturnType<typeof setTimeout>>()
+  socketOn('onServerAccessChanged', (p: any) => {
+    const sid: string | undefined = p?.serverId
+    if (!sid) return
+    clearTimeout(accessRefresh.get(sid))
+    accessRefresh.set(sid, setTimeout(async () => {
+      accessRefresh.delete(sid)
+      const before = activeChannelId.value
+      try { await refreshServerAccess(sid) }
+      catch (e) { console.error('[onServerAccessChanged]', e); return }
+      // The channel on screen is no longer theirs to see, and the store has
+      // landed them on one that is. Same recovery as a deleted channel.
+      if (view.value === 'server' && activeServerId.value === sid
+          && activeChannelId.value && activeChannelId.value !== before) {
+        setActiveChannel(activeChannelId.value)
+        loadChannelHistory(activeChannelId.value)
+      }
+    }, 150))
   })
 
   // Fanned to every member, not just the person restricted: the sidebar badges
@@ -2473,13 +2741,13 @@ const openConversationMenu = (e: MouseEvent, c: any) => {
  * chevron for the thing you do most in a young server.
  *
  * Rows come from the same builder the header menu uses, so the two can never
- * drift apart. A non-owner gets an empty list and no menu at all: an empty
- * box that appears and does nothing is worse than nothing appearing.
+ * drift apart. Someone who may add nothing gets an empty list and no menu at
+ * all: an empty box that appears and does nothing is worse than nothing.
  */
 const openSidebarMenu = (e: MouseEvent) => {
   const s = activeServer.value
   if (!s) return
-  const items = buildSidebarMenu(s, authUser.value?.id, serverMenuHandlers())
+  const items = buildSidebarMenu(s, serverMenuHandlers(), serverMenuAccess(s.id))
   if (!items.length) return
   openMenu(e, items)
 }
@@ -2501,9 +2769,17 @@ const serverMenuHandlers = () => ({
   copy:          copyText,
 })
 
-// Owner-only, and gated on the row that opens it rather than re-checked here:
-// buildServerMenu omits Voice Servers entirely for a non-owner, and every
-// endpoint the modal calls 403s one server-side.
+/** What the server menus may offer here — each row's own permission, which
+ *  the owner holds every one of. */
+const serverMenuAccess = (sid: string) => ({
+  invite:         canInServer(sid, 'CreateInvite'),
+  manageChannels: canInServer(sid, 'ManageChannels'),
+  manageServer:   canInServer(sid, 'ManageServer'),
+})
+
+// Manage Server, and gated on the row that opens it rather than re-checked
+// here: buildServerMenu omits Voice Servers for anyone without it, and every
+// endpoint the modal writes through 403s them server-side.
 const showVoiceServers = ref(false)
 // The server id whose settings are open, or null. Not a boolean + activeServer:
 // the menu can be opened on a server you are not currently viewing.
@@ -2519,7 +2795,7 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const hasUnread = serverChannelIds.some(id => !!unreadChannels.value[id])
 
   // Same handlers the sidebar-background menu uses — see serverMenuHandlers.
-  const items = buildServerMenu(s, authUser.value?.id, serverMenuHandlers(), hasUnread)
+  const items = buildServerMenu(s, authUser.value?.id, serverMenuHandlers(), serverMenuAccess(s.id), hasUnread)
   if (e instanceof MouseEvent) { openMenu(e, items); return }
   // A keyboard activation carries no pointer position — anchor the menu to
   // the header itself rather than guessing at coordinates.
@@ -2532,10 +2808,10 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   }, items)
 }
 
-// createChannel/updateChannel/deleteChannel all 403 a non-owner server-side
-// (requireOwner), so the `+` on every category header and every row action
-// beyond Copy Channel ID must be gated on this, same as buildServerMenu's own
-// isOwner check above.
+// Ownership gates one thing in this file: the slowmode exemption below, which
+// the API grants the owner alone. Channel and category management is Manage
+// Channels (`canManageChannels`), pinned there by
+// views/__tests__/chatAppGates.test.ts.
 const isServerOwner = computed(() =>
   !!activeServer.value && activeServer.value.owner === authUser.value?.id)
 
@@ -2578,7 +2854,7 @@ const openChannelMenu = (e: MouseEvent, ch: Channel) => {
     // us: after a move, `upsertChannel` replaces the object in the list, and
     // the stale one would keep the check mark on the old category.
     channelsByServer.value[ch.serverId]?.find(c => c.id === ch.id) ?? ch,
-    isServerOwner.value,
+    canManageChannels.value,
     {
       rename: openRenameChannel,
       remove: doDeleteChannel,
@@ -2589,9 +2865,9 @@ const openChannelMenu = (e: MouseEvent, ch: Channel) => {
   ))
 }
 
-// Move a channel between categories (or out of all of them). Owner-only, like
-// every other category mutation — updateChannel is `requireOwner` server-side,
-// which is why the row only exists behind `isServerOwner` above.
+// Move a channel between categories (or out of all of them). Manage Channels,
+// like every other channel and category mutation — the row only exists for a
+// viewer who holds it (see openChannelMenu above).
 const doMoveChannel = async (ch: MenuChannel, categoryId: string | null) => {
   try {
     // `category` alone, no `name`: updateChannel takes the two fields
@@ -2692,19 +2968,23 @@ const doDeleteChannel = (ch: MenuChannel) => {
 }
 
 // ── Categories ─────────────────────────────────────────────────────────────
-// createCategory/updateCategory/deleteCategory are all requireOwner
-// (server/controllers/categoriesController.ts), which is why every entry point
-// below is gated on isServerOwner — buildCategoryMenu does it for the menu,
+// createCategory/updateCategory/deleteCategory all need Manage Channels
+// (server/controllers/categoriesController.ts), so every entry point below is
+// gated on it — buildCategoryMenu for the menu, the header's `+`, and
 // buildServerMenu for Create Category.
 const openCategoryMenu = (e: MouseEvent, category: Category) => {
-  openMenu(e, buildCategoryMenu(category, isServerOwner.value, {
+  const ids = categoryIds()
+  const i = ids.indexOf(category.id)
+  openMenu(e, buildCategoryMenu(category, canManageChannels.value, {
     // The header's `+` and this row are the same action; both name the
     // category so the channel lands in the group the user pointed at.
     createChannel: (c) => openCreateChannel(c.id),
     rename:        openRenameCategory,
     remove:        doDeleteCategory,
     copy:          copyText,
-  }))
+    moveUp:        (c) => moveCategoryBy(c, -1),
+    moveDown:      (c) => moveCategoryBy(c, 1),
+  }, { first: i <= 0, last: i === -1 || i === ids.length - 1 }))
 }
 
 // Create and rename both reuse EditFieldModal, exactly as channel rename does
@@ -2988,6 +3268,11 @@ const onServerCreated = async (serverId: string) => {
 const doSend = async () => {
   const text = newMessage.value.trim()
   if (!text || sendingMsg.value) return
+
+  // A sent message goes on the newest end, which is not what is on screen while
+  // you are back in history — so go there first, then send.
+  const here = activeConv.value
+  if (here && !windowOf(here.kind, here.id).live) await jumpToPresent()
 
   const name   = authUser.value?.displayName || authUser.value?.username || 'You'
   const userId = authUser.value?.id || 'me'
@@ -3355,15 +3640,26 @@ const openReplyTree = (msg: Message) => {
 }
 const closeReplyTree = () => { showReplyTree.value = false; replyTreeData.value = null }
 
-// Scroll to and briefly highlight a message by its dbId, if currently loaded
-const jumpToMessage = (dbId: string) => {
-  const list = getMsgList()
-  const target = list.find(m => (m as any).dbId === dbId)
-  if (!target) return
-  const el = document.querySelector(`[data-msg-id="${target.id}"]`)
-  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  el?.classList.add('msg-flash')
-  setTimeout(() => el?.classList.remove('msg-flash'), 1200)
+/**
+ * Scroll to and briefly highlight a message by its dbId, loading the history
+ * around it first when it is not in the window. It used to give up silently
+ * on anything not already loaded, which was every reply quote older than the
+ * newest fifty messages. The one entry point for reply quotes, pinned
+ * messages, and search results once they have switched to the channel.
+ */
+const jumpToMessage = async (dbId: string) => {
+  if (await msgListRef.value?.revealMessage(dbId)) return
+  const c = activeConv.value
+  if (!c) return
+  try {
+    const page = await fetchHistory(c, { around: dbId })
+    if (!sameConv(c)) return
+    setWindow(c.kind, c.id, toClient(page), page)
+  } catch (e: any) {
+    showToast(e?.message || 'Couldn’t find that message')
+    return
+  }
+  await msgListRef.value?.revealMessage(dbId)
 }
 
 // ── Emoji picker for input box (float, unchanged) ──────────────────────────
@@ -3609,13 +3905,21 @@ onBeforeUnmount(() => {
       :max-members="view === 'group' ? 10 : undefined"
       :owner-id="activeGroup?.owner"
       v-model:tab="detailsTab"
-      :start-searching="detailsSearching"
-      @close="showDetails = false; detailsSearching = false"
+      @close="showDetails = false"
       @add-members="showInviteGroup = true"
       @open-member="id => { showDetails = false; showUserProfile = id }"
       @open-settings="showEditGroup = true"
-      @search="showDetails = false; openSearch()"
+      @search="onSearchTap"
       @mute="showDetails = false"
+    />
+    <SearchFiltersModal
+      v-if="showSearchFilters" :members="searchMembers" :channels="searchChannels"
+      @close="showSearchFilters = false"
+    />
+    <SearchScreen
+      v-if="showSearchScreen && isMobile && searchScope" :placeholder="searchPlaceholder"
+      :members="searchMembers" :channels="searchChannels" :active-id="openedResultId"
+      @close="showSearchScreen = false" @open="openSearchResult" @more-filters="showSearchFilters = true"
     />
 
     <ProfilePopout
@@ -3712,7 +4016,7 @@ onBeforeUnmount(() => {
       :key="activeServer.id"
       :server-id="activeServer.id"
       :server-name="activeServer.name"
-      :is-owner="activeServer.owner === authUser?.id"
+      :can-manage="canInServer(activeServer.id, 'ManageServer')"
       @close="showInvite = false" />
     <!-- A directly-opened /join/<code> link — same card the message-embedded
          version renders, in a modal shell since there's no message here to
@@ -4087,7 +4391,8 @@ onBeforeUnmount(() => {
         <!-- Right-click anywhere the channel rows are not. Rows and category
              headers stop propagation on their own contextmenu, so this only
              ever fires on empty space. -->
-        <div class="sb-body" @contextmenu.prevent="openSidebarMenu($event)">
+        <div class="sb-body" @contextmenu.prevent="openSidebarMenu($event)"
+          @dragover="onCategoryDragOverBody" @drop="onCategoryDrop">
           <!-- The sidebar rendered nothing at all while a server's channel
                list was in flight, so opening an uncached server looked like an
                empty server. Shaped like a category with channels under it, at
@@ -4115,13 +4420,22 @@ onBeforeUnmount(() => {
                hand-rolled `.self` key handlers are gone. -->
           <div v-for="group in sidebarGroups" :key="group.key" class="ch-group"
             :class="{ 'drop-target': dragChannelId && dropCategory === (group.category?.id ?? null) }"
-            @dragover.stop="onChannelDragOver($event, group.category?.id ?? null)"
-            @drop.stop="onChannelDrop($event, group.category?.id ?? null)">
+            @dragover.stop="onChannelDragOver($event, group.category?.id ?? null); onCategoryDragOver($event, group)"
+            @drop.stop="onChannelDrop($event, group.category?.id ?? null); onCategoryDrop($event)">
+            <!-- Where a dragged category would land: above this one. -->
+            <div v-if="group.category && dragCategoryId && categoryDropBefore === group.category.id"
+              class="ch-drop-line cat" aria-hidden="true" />
             <!-- Headerless for the uncategorised group. Same shape as the rows
                  below it: the fold is a real button, so a header is reachable
                  without a mouse and the `+` beside it stays its own control
-                 rather than being swallowed by the header's activation. -->
+                 rather than being swallowed by the header's activation.
+                 Draggable for anyone who may reorder; Move Up / Move Down in
+                 its menu are the keyboard and touch way to do the same. -->
             <div v-if="group.category" class="ch-group-label"
+              :class="{ dragging: dragCategoryId === group.category.id }"
+              :draggable="canManageChannels"
+              @dragstart="onCategoryDragStart($event, group.category)"
+              @dragend="endCategoryDrag"
               @contextmenu.prevent.stop="openCategoryMenu($event, group.category)">
               <!-- The fold control is the label itself, for the same reason as
                    the channel rows: role="button" on this div made the `+` and
@@ -4138,7 +4452,7 @@ onBeforeUnmount(() => {
                      sits with the row's other controls at the right edge. -->
                 <ChevronRight class="ch-group-chev" :class="{ open: !group.collapsed }" :size="10" :stroke-width="2.25"/>
               </button>
-              <button v-if="isServerOwner" class="ch-add-btn" v-tip="'Create Channel'"
+              <button v-if="canManageChannels" class="ch-add-btn" v-tip="'Create Channel'"
                 @click.stop="openCreateChannel(group.category.id)"><Plus :size="14" :stroke-width="1.5"/></button>
               <!-- Shown to everyone, not just the owner: a non-owner's menu is
                    Copy Category ID, which is a real (and only here) action.
@@ -4270,6 +4584,8 @@ onBeforeUnmount(() => {
               </div>
             </template>
           </div>
+          <!-- A dragged category held below the last one lands at the end. -->
+          <div v-if="dragCategoryId && categoryDropBefore === null" class="ch-drop-line cat" aria-hidden="true" />
         </div>
         <VoiceConnectedPanel
           @return-to-call="returnToCall"
@@ -4637,8 +4953,14 @@ onBeforeUnmount(() => {
                   <span class="ch-ident-row">
                     <h2 class="chat-title">{{ activeChannel?.name }}</h2>
                   </span>
-                  <div class="ch-topic-sep"/>
-                  <span class="ch-topic">Discuss anything on Skycord</span>
+                  <!-- The channel's own topic, from Edit Channel, and nothing
+                       when it has none: a placeholder here read as the topic
+                       of every channel in every server. One line, ellipsised;
+                       the tip carries the whole of it. -->
+                  <template v-if="activeChannel?.topic">
+                    <div class="ch-topic-sep"/>
+                    <span class="ch-topic" v-tip:bottom="activeChannel.topic">{{ activeChannel.topic }}</span>
+                  </template>
                 </div>
               </template>
             </div>
@@ -4665,52 +4987,20 @@ onBeforeUnmount(() => {
                    .members-panel` already hides the panel, so the toggle would
                    be a button with no visible outcome — the same reason the
                    CallBar's hide-chat control is suppressed for a channel. -->
-              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersOpen }" v-tip="membersOpen ? 'Hide Member List' : 'Show Member List'" @click.stop="membersOpen=!membersOpen">
+              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersShown }" v-tip="membersShown ? 'Hide Member List' : 'Show Member List'" @click.stop="toggleMembers">
                 <Users :size="18" :stroke-width="1.5"/>
               </button>
 
-              <!-- Expanding search + filters popup (placeholder) -->
-              <div class="ch-search" :class="{ open: searchOpen }" @click.stop>
-                <button v-if="!searchOpen" class="icon-btn icon-btn-search" v-tip="'Search'" @click.stop="onSearchTap">
-                  <Search :size="18" :stroke-width="1.5"/>
-                </button>
-                <Transition name="search-box">
-                  <div v-if="searchOpen" class="ch-search-box">
-                    <input
-                      ref="searchInputEl"
-                      v-model="searchQuery"
-                      class="ch-search-input"
-                      type="text"
-                      aria-label="Search this conversation"
-                      placeholder="Search"
-                      @focus="searchFocused = true"
-                      @blur="onSearchBlur"
-                    />
-                    <Search class="ch-search-ico" :size="16" :stroke-width="1.5"/>
-                    <Transition name="filters-pop">
-                      <div v-if="searchFocused" class="ch-filters" @mousedown.prevent>
-                        <div class="ch-filters-label">Filters</div>
-                        <button class="ch-filter-row">
-                          <User :size="18" :stroke-width="1.5"/>
-                          <div class="cf-text"><span class="cf-title">From a specific user</span><span class="cf-sub">from: <em>user</em></span></div>
-                        </button>
-                        <button class="ch-filter-row">
-                          <Paperclip :size="18" :stroke-width="1.5"/>
-                          <div class="cf-text"><span class="cf-title">Includes a specific type of data</span><span class="cf-sub">has: <em>link, embed or file</em></span></div>
-                        </button>
-                        <button class="ch-filter-row">
-                          <AtSign :size="18" :stroke-width="1.5"/>
-                          <div class="cf-text"><span class="cf-title">Mentions a specific user</span><span class="cf-sub">mentions: <em>user</em></span></div>
-                        </button>
-                        <button class="ch-filter-row">
-                          <SlidersHorizontal :size="18" :stroke-width="1.5"/>
-                          <div class="cf-text"><span class="cf-title">More filters</span><span class="cf-sub">dates, author type, and more</span></div>
-                        </button>
-                      </div>
-                    </Transition>
-                  </div>
-                </Transition>
-              </div>
+              <!-- Search: a permanent field on desktop, the reference's layout;
+                   on a phone an icon that opens a search screen of its own. -->
+              <SearchField
+                v-if="!isMobile && searchScope"
+                :placeholder="searchPlaceholder" :members="searchMembers" :channels="searchChannels"
+                @more-filters="showSearchFilters = true"
+              />
+              <button v-else-if="searchScope" class="icon-btn icon-btn-search" v-tip="'Search'" @click.stop="onSearchTap">
+                <Search :size="18" :stroke-width="1.5"/>
+              </button>
             </div>
           </div>
 
@@ -4749,7 +5039,8 @@ onBeforeUnmount(() => {
 
           <!-- Pinned messages panel -->
           <div v-if="showPinned" class="pinned-sidebar" @click.stop>
-            <PinnedMessagesModal :messages="currentMessages" @close="showPinned=false"/>
+            <PinnedMessagesModal :messages="currentMessages" @close="showPinned=false"
+              @jump="(id: string) => { showPinned = false; jumpToMessage(id) }"/>
           </div>
 
           <!-- Message list (modular component) -->
@@ -4763,6 +5054,14 @@ onBeforeUnmount(() => {
             :dmPartner="activeDM ? { name: activeDM.name, avatar: activeDM.avatar } : undefined"
             :group="view==='group' && activeGroup ? { name: groupDisplayName(activeGroup), avatar: activeGroup.avatar } : undefined"
             :loadingMsgs="loadingMsgs"
+            :hasOlder="activeWindow?.hasOlder ?? false"
+            :live="activeWindow?.live ?? true"
+            :awayCount="activeWindow?.awayCount ?? 0"
+            :loadingOlder="loadingOlder"
+            :loadingNewer="loadingNewer"
+            @loadOlder="loadOlderMessages"
+            @loadNewer="loadNewerMessages"
+            @jumpToPresent="jumpToPresent"
             @react="handleReact"
             @openEmoji="openReactionPickerById"
             @edit="handleEditSave"
@@ -4805,7 +5104,13 @@ onBeforeUnmount(() => {
              pretend to, except the groups and the count now come from
              activeMembers (grouped by livePresence, never the fetched
              snapshot) instead of an empty literal. -->
-        <aside v-if="view==='server'" class="members-panel" :class="{ closed: !membersOpen }">
+        <!-- Search results take the member list's column while they are open. -->
+        <SearchResultsPanel
+          v-if="searchPanelShown" class="search-panel"
+          :channels="searchChannels" :active-id="openedResultId"
+          @open="openSearchResult" @close="closeSearch()"
+        />
+        <aside v-if="view==='server' && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="14" :stroke-width="1.5"/>
@@ -4848,7 +5153,7 @@ onBeforeUnmount(() => {
         </aside>
 
         <!-- Members sidebar (group DM) -->
-        <aside v-if="view==='group' && activeGroup" class="members-panel" :class="{ closed: !membersOpen }">
+        <aside v-if="view==='group' && activeGroup && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeGroup.memberCount }}</span></h3></div>
           <div class="mp-list">
             <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
@@ -5153,38 +5458,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
 
-/* Header search — collapses to an icon, expands to an input with a Filters popup */
-.ch-search{position:relative;display:flex;align-items:center}
-.ch-search-box{position:relative;display:flex;align-items:center}
-/* open + close animation for the search box */
-.search-box-enter-active{transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
-.search-box-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
-.search-box-enter-from,.search-box-leave-to{opacity:0;transform:translateX(14px)}
-/* open + close animation for the filters popup */
-.filters-pop-enter-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
-.filters-pop-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
-.filters-pop-enter-from,.filters-pop-leave-to{opacity:0;transform:translateY(-4px)}
-.ch-search-input{
-  width:220px;height:30px;padding: 0 30px 0 10px;border-radius: 6px;
-  background:var(--bg-input);border:1px solid transparent;color:var(--text-1);font-size:13px;outline:none;
-  transition: border-color var(--dur-2) var(--ease-out);
-}
-.ch-search-input:focus{border-color:var(--accent)}
-.ch-search-input::placeholder{color:var(--text-faint)}
-.ch-search-ico{position:absolute;right:9px;color:var(--text-3);pointer-events:none}
-.ch-filters{
-  position:absolute;top:38px;right:0;width:300px;z-index:200;
-  background:var(--bg-floor);border:1px solid rgba(0,0,0,.4);border-radius: 8px;
-  padding: 8px;box-shadow:0 8px 24px rgba(0,0,0,.5);
-}
-@keyframes ch-filters-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-.ch-filters-label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);padding: 6px 8px}
-.ch-filter-row{display:flex;align-items:center;gap: 12px;width:100%;text-align:left;padding: 8px;border-radius: 6px;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
-.ch-filter-row:hover{background:var(--hover);color: var(--text-strong)}
-.cf-text{display:flex;flex-direction:column;gap: 1px;min-width:0}
-.cf-title{font-size:13.5px;font-weight:600;color:var(--text-2)}
-.cf-sub{font-size:12px;color:var(--text-faint)}
-.cf-sub em{color:#8d96f8;font-style:normal;background:rgba(var(--accent-rgb),.14);padding: 0 4px;border-radius: 4px}
+/* Search results hide with the member list when a call takes the pane. */
+.chat.call-expanded ~ .search-panel{display:none}
 
 /* Group member panel — owner tag + invite button */
 .mp-owner{font-size:11px;color:var(--text-3)}
@@ -5217,8 +5492,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    min-width:0 + ellipsis because a flex item will not shrink below its content
    otherwise, and a long category name would push the chevron off the row. */
 .ch-group-label span{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
-/* Adjacent sibling, not :first-of-type — the + is owner-only, so the first
-   button here is + for an owner and ⋯ for everyone else. This pushes whichever
+/* Adjacent sibling, not :first-of-type — the + needs Manage Channels, so the
+   first button here is + for someone who holds it and ⋯ for everyone else. This pushes whichever
    one comes first, and the rest follow it. */
 .ch-group-chev + .ch-add-btn{margin-left:auto}
 /* Right when folded, down when open — the chevron is the only thing that says
@@ -5259,6 +5534,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (prefers-reduced-motion: reduce){ .skip-link{transition:none} }
 
 .ch-item.dragging{opacity:.4}
+/* A category header held mid-drag reads the same as a held channel row. */
+.ch-group-label.dragging{opacity:.4}
+/* Above a header rather than between two rows, so it takes a little air. */
+.ch-drop-line.cat{margin:2px 4px 4px}
 /* The insertion point. Zero height with a visible border so it marks the gap
    between two rows without adding one — a line that pushed the list down would
    move the row under the pointer mid-drag. */
@@ -5859,6 +6138,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .chat:has(.callbar.has-video) .ml-wrap { flex: 1 1 auto; min-height: 0; }
 .chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px 0 12px}
 .chat-header-left,.chat-header-right{display:flex;align-items:center;gap: 4px}
+/* The search field, the one shrinkable thing here, gives up width before the channel name does. */
+.chat-header-right{min-width:0}
 .ch-ident{display:contents}
 .ch-ident-row{display:contents}
 .ch-chev,.ch-topic-dot,.m-back-badge{display:none}

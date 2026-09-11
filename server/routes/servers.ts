@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth'
-import { uploadLimit, writeLimit } from '../middleware/rateLimit'
+import { uploadLimit, writeLimit, searchLimit } from '../middleware/rateLimit'
 import {
   createServer, getMyServers, getServer, updateServer, deleteServer,
   getDiscoverServers, joinPublicServer,
@@ -21,6 +21,7 @@ import {
 } from '../controllers/voiceServersController'
 import { setMemberVoice, disconnectMember } from '../controllers/voiceModerationController'
 import { reorderChannels, reorderCategories } from '../controllers/reorderController'
+import { searchServerMessages } from '../controllers/searchController'
 
 const router = Router()
 router.use(requireAuth)
@@ -38,6 +39,8 @@ router.get('/:sid',                    getServer)
 router.patch('/:sid',                  uploadLimit, updateServer)
 router.delete('/:sid',                 deleteServer)
 router.get('/:sid/members',            getServerMembers)
+// Search reads every channel the member may, so it is limited like user search.
+router.get('/:sid/search',             searchLimit, searchServerMessages)
 router.delete('/:sid/members/:uid',    removeMember)
 
 // Voice moderation. Authorised on MuteMembers / DeafenMembers / MoveMembers

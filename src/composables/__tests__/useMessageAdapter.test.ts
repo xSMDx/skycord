@@ -58,4 +58,16 @@ describe('toClientMessage', () => {
   it('derives timestamp from createdAt', () => {
     expect(toClientMessage(base).timestamp).toBe(Date.parse('2026-08-19T10:30:00.000Z'))
   })
+
+  it('carries the server’s @everyone verdict through to the message', () => {
+    // MessageItem lights the row off this flag, which the server decides once
+    // at send time. The adapter builds each message from a fixed list of
+    // fields, and leaving this one off the list took the highlight off every
+    // @everyone message in the app.
+    expect(toClientMessage({ ...base, mentionsEveryone: true }).mentionsEveryone).toBe(true)
+  })
+
+  it('reads a message older than the flag as not mentioning everyone', () => {
+    expect(toClientMessage(base).mentionsEveryone).toBe(false)
+  })
 })

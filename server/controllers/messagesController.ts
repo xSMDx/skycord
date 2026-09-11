@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { Message } from '../models/Message'
 import { User } from '../models/User'
 import mongoose from 'mongoose'
+import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 
 // Make a stable conversation ID from two user IDs (sorted so A↔B = B↔A)
 export const dmConvId = (a: string, b: string) =>
@@ -118,23 +119,16 @@ export const getDMMessages = async (req: Request, res: Response, next: NextFunct
   try {
     const userId = req.user!.sub
     const { partnerId } = req.params
-    const before  = req.query.before as string | undefined
-    const limit   = Math.min(Number(req.query.limit) || 50, 100)
-
     const convId = dmConvId(userId, partnerId)
     // Include 'system' (call logs like "X started a call" / "Call ended") the
     // same way group history does — they were being written but never loaded,
     // so DM call logs vanished on refresh.
-    const filter: any = { conversationId: convId, kind: { $in: ['dm', 'system'] } }
-    if (before) filter.createdAt = { $lt: new Date(before) }
-
-    const messages = await Message.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean()
-
-    const resolved = await resolveMessages(messages, convId)
-    res.json({ messages: resolved.reverse() })
+    const win = await loadHistoryWindow(
+      { conversationId: convId, kind: { $in: ['dm', 'system'] } }, req.query as HistoryQuery,
+    )
+    if (!win.ok) { res.status(win.status).json({ message: win.message }); return }
+    const resolved = await resolveMessages(win.messages, convId)
+    res.json({ messages: resolved, hasOlder: win.hasOlder, hasNewer: win.hasNewer })
   } catch (err) { next(err) }
 }
 

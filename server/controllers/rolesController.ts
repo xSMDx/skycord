@@ -7,6 +7,7 @@ import {
   DEFAULT_EVERYONE, ALL_PERMISSIONS,
   parseBits, serializeBits, resolve, has, canManageRole,
 } from '../permissions'
+import { refreshChannelAccess } from '../sockets/visibility'
 
 /**
  * Roles: the first thing in this codebase to authorise on something other than
@@ -185,6 +186,9 @@ export const updateRole = async (req: Request, res: Response, next: NextFunction
 
     await role.save()
     emitToServer(server, 'role:updated', { serverId: server._id.toString(), role: shapeRole(role) })
+    // A role's bits reach every channel through resolution — View Channels
+    // most of all — so who sees what may just have changed.
+    if (req.body.permissions !== undefined) await refreshChannelAccess(server._id)
     res.json({ role: shapeRole(role) })
   } catch (e) { next(e) }
 }
@@ -216,6 +220,8 @@ export const deleteRole = async (req: Request, res: Response, next: NextFunction
     )
 
     emitToServer(server, 'role:deleted', { serverId: server._id.toString(), roleId: rid })
+    // Whatever it granted, and any overwrite naming it, stopped applying.
+    await refreshChannelAccess(server._id)
     res.json({ ok: true })
   } catch (e) { next(e) }
 }
@@ -284,11 +290,27 @@ export const setMemberRoles = async (req: Request, res: Response, next: NextFunc
       )
     }
 
+    /*
+     * Their new rank travels with their new roles.
+     *
+     * Every client gates moderation rows on a member's highest position, and a
+     * role change is exactly what moves it. Sending only the ids would leave
+     * each client holding a rank that no longer matches the roles beside it —
+     * showing a Server Mute row over somebody just promoted above the viewer —
+     * until the member list happened to be refetched. -1 for nobody, matching
+     * ServerAccess.highestPosition.
+     */
+    const highestPosition = roles.length ? Math.max(...roles.map(r => r.position)) : -1
     emitToServer(server, 'member:roles', {
       serverId: server._id.toString(),
       userId: uid,
       roles: ids.map(i => i.toString()),
+      highestPosition,
     })
-    res.json({ ok: true, roles: ids.map(i => i.toString()) })
+    // Only this member's view can have moved. The refetch this triggers is also
+    // how their own client learns its new permissions — `member:roles` carries
+    // role ids and a rank, not the bits those roles resolve to.
+    await refreshChannelAccess(server._id, { only: [uid] })
+    res.json({ ok: true, roles: ids.map(i => i.toString()), highestPosition })
   } catch (e) { next(e) }
 }

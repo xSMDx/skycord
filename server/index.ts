@@ -4,6 +4,7 @@ import { connectDB }    from './config/database'
 import { createApp }    from './app'
 import { initSocket }   from './sockets/chatSocket'
 import { loadInstanceVoiceServers, setInstanceVoiceServers } from './config/instanceVoice'
+import { backfillSearchFields } from './utils/searchBackfill'
 
 const start = async () => {
   try { config } catch (err) {
@@ -30,6 +31,13 @@ const start = async () => {
     console.error('❌ MongoDB failed:', err)
     process.exit(1)
   }
+
+  // Search fields for messages written before search existed. Not awaited:
+  // the server comes up at once, and old links and mentions become searchable
+  // a few seconds later on the first boot. Harmless on every boot after.
+  backfillSearchFields()
+    .then(n => { if (n) console.log(`✓ Search fields filled on ${n} message(s)`) })
+    .catch(err => console.error('❌ Search backfill failed:', err))
 
   const app        = createApp()
   const httpServer = createServer(app)

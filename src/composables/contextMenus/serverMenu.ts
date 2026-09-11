@@ -9,19 +9,31 @@
  * of it has any implementation to reach: there is no server-level mute, no
  * notification model, and no per-server profile.
  *
- * Server Settings is the one exception, shown disabled. It is next on the
- * roadmap and the user asked for that treatment explicitly elsewhere in this
- * menu family: a row that says "not yet" reads as a plan, while a missing row
- * reads as a thing the app cannot do.
- *
- * Rows that need ownership are gated rather than disabled, because the server
- * 403s a non-owner on invites, channel creation and deletion — a row that can
- * only ever fail is worse than no row.
+ * Rows that need a permission are gated rather than disabled, because the
+ * server refuses anyone without it — a row that can only ever fail is worse
+ * than no row. Each follows the permission its endpoint checks, not
+ * ownership: inviting is Create Invite (which @everyone holds by default),
+ * channels and categories are Manage Channels, voice servers Manage Server.
+ * These were owner-only here long after the server stopped requiring it.
+ * Deleting the server is the one thing still the owner's alone.
  */
 import { Check, UserPlus, Plus, FolderPlus, Copy, Trash2, LogOut, Settings, Server as ServerIcon } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 
 export interface MenuServer { id: string; name: string; owner?: string }
+
+/**
+ * What the viewer may do here, resolved from their permissions — the owner
+ * holds every one. Presentation only: each endpoint checks again.
+ */
+export interface ServerMenuAccess {
+  /** Create Invite. */
+  invite:         boolean
+  /** Manage Channels: create channels and categories. */
+  manageChannels: boolean
+  /** Manage Server: the voice servers this server registers. */
+  manageServer:   boolean
+}
 
 export interface ServerMenuHandlers {
   markRead:       (serverId: string) => void
@@ -36,24 +48,26 @@ export interface ServerMenuHandlers {
 }
 
 /**
- * The three rows that add something to a server.
+ * The rows that add something to a server, as many as the viewer may use.
  *
  * Shared by the header chevron menu and the empty-sidebar menu rather than
  * written twice. Two menus offering the same actions under different labels
  * or in a different order is the drift that put two context menus in this
  * app in the first place.
- *
- * Owner-gated rather than disabled: the server 403s a non-owner on invites
- * and channel creation, and a row that can only ever fail is worse than no
- * row.
  */
-export const buildAddRows = (serverId: string, h: ServerMenuHandlers): MenuItem[] => [
-  { label: 'Invite to Server', icon: UserPlus, onSelect: () => h.invitePeople(serverId) },
-  { label: 'Create Channel', icon: Plus, onSelect: () => h.createChannel(serverId) },
-  // Sits beside Create Channel rather than only on a category header,
-  // because a server with no categories yet has no header to right-click —
-  // this is the only way to make the first one.
-  { label: 'Create Category', icon: FolderPlus, onSelect: () => h.createCategory(serverId) },
+export const buildAddRows = (serverId: string, h: ServerMenuHandlers, can: ServerMenuAccess): MenuItem[] => [
+  ...(can.invite
+    ? [{ label: 'Invite to Server', icon: UserPlus, onSelect: () => h.invitePeople(serverId) } as MenuItem]
+    : []),
+  ...(can.manageChannels
+    ? [
+        { label: 'Create Channel', icon: Plus, onSelect: () => h.createChannel(serverId) } as MenuItem,
+        // Sits beside Create Channel rather than only on a category header,
+        // because a server with no categories yet has no header to
+        // right-click — this is the only way to make the first one.
+        { label: 'Create Category', icon: FolderPlus, onSelect: () => h.createCategory(serverId) } as MenuItem,
+      ]
+    : []),
 ]
 
 /**
@@ -65,46 +79,43 @@ export const buildAddRows = (serverId: string, h: ServerMenuHandlers): MenuItem[
  * duplicating Mark As Read / Leave / Delete here would make two menus that
  * have to be kept in step forever.
  *
- * Empty for a non-owner, and the caller opens nothing rather than an empty
- * box. Hide Muted Channels, which the reference shows at the top, is absent
- * for the same reason it is absent from the header menu: there is no
- * server-level mute to hide anything by.
+ * Empty for someone who may add nothing, and the caller then opens nothing
+ * rather than an empty box. Hide Muted Channels, which the reference shows at
+ * the top, is absent for the same reason it is absent from the header menu:
+ * there is no server-level mute to hide anything by.
  */
 export const buildSidebarMenu = (
   server: MenuServer,
-  myId: string | undefined,
   h: ServerMenuHandlers,
-): MenuItem[] =>
-  (!!myId && server.owner === myId) ? buildAddRows(server.id, h) : []
+  can: ServerMenuAccess,
+): MenuItem[] => buildAddRows(server.id, h, can)
 
 export const buildServerMenu = (
   server: MenuServer,
   myId: string | undefined,
   h: ServerMenuHandlers,
+  can: ServerMenuAccess,
   /** Whether anything in this server is actually unread — Mark As Read is
    *  pointless otherwise, and a live row that does nothing is a small lie. */
   hasUnread = false,
 ): MenuItem[] => {
-  // TODO(3c): invites and channel creation should become a per-role
-  // permission rather than being owner-only, once a permissions model
-  // exists. Until then this mirrors the server's owner-only enforcement.
   const isOwner = !!myId && server.owner === myId
   const items: MenuItem[] = [
     { label: 'Mark As Read', icon: Check, disabled: !hasUnread, onSelect: () => h.markRead(server.id) },
     { sep: true },
   ]
-  if (isOwner) {
-    items.push(...buildAddRows(server.id, h), { sep: true })
-  }
-  // Voice Servers is owner-only and live, sitting where Server Settings
-  // eventually will. It is deliberately NOT folded into the disabled Server
-  // Server Settings is real now — name, description, visibility, members and
-  // invites. Voice Servers keeps its own row because it is owner-only and was
-  // already a working screen of its own.
+  // Only when there is something to add: a separator under nothing would
+  // leave two touching.
+  const add = buildAddRows(server.id, h, can)
+  if (add.length) items.push(...add, { sep: true })
+  // Server Settings is open to every member — they can read the name,
+  // description and who else is in here, with the fields disabled for them.
+  // Voice Servers keeps its own row because it was a working screen of its
+  // own before settings existed.
   items.push(
     { label: 'Server Settings', icon: Settings, onSelect: () => h.serverSettings(server.id) },
-    ...(isOwner
-      ? [{ label: 'Voice Servers', icon: ServerIcon, onSelect: () => h.voiceServers(server.id) }]
+    ...(can.manageServer
+      ? [{ label: 'Voice Servers', icon: ServerIcon, onSelect: () => h.voiceServers(server.id) } as MenuItem]
       : []),
     { sep: true },
     isOwner

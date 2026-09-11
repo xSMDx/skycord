@@ -5,6 +5,7 @@ import { Category } from '../models/Category'
 import { loadServer, shapeChannel, shapeCategory, emitToServer } from './serversController'
 import { withServerLock } from './channelsController'
 import { requirePerm } from '../utils/access'
+import { emitChannelsReordered } from '../sockets/visibility'
 
 /**
  * Putting channels and categories in a chosen order.
@@ -150,7 +151,7 @@ export const reorderChannels = async (req: Request, res: Response, next: NextFun
       for (const { row, position } of ordered.map((row, i) => ({ row, position: slots[i] }))) {
         row.position = position
       }
-      return { kind: 'ok', channels: ordered.map(c => shapeChannel(c)) } as const
+      return { kind: 'ok', rows: ordered, channels: ordered.map(c => shapeChannel(c)) } as const
     })
 
     if (updated.kind === 'answered') return
@@ -158,11 +159,9 @@ export const reorderChannels = async (req: Request, res: Response, next: NextFun
       res.status(404).json({ message: 'Category not found' }); return
     }
 
-    emitToServer(server, 'channels:reordered', {
-      serverId: server._id.toString(),
-      category: categoryId, type,
-      channels: updated.channels,
-    })
+    // Member by member: a bucket can hold a channel some of them may not see,
+    // and the whole list would put it in their sidebar.
+    await emitChannelsReordered(server._id, { category: categoryId, type }, updated.rows)
     res.json({ channels: updated.channels })
   } catch (err) { next(err) }
 }

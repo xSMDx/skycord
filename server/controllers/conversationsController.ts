@@ -8,6 +8,7 @@ import { Friendship } from '../models/Friendship'
 import { resolveMessages } from './messagesController'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
+import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 
 // Shape a group doc into what the client's conversation list expects. The
 // client renders a fallback name from member display names when `name` is
@@ -219,8 +220,6 @@ export const getGroupMessages = async (req: Request, res: Response, next: NextFu
   try {
     const userId = req.user!.sub
     const { groupId } = req.params
-    const before = req.query.before as string | undefined
-    const limit  = Math.min(Number(req.query.limit) || 50, 100)
 
     if (!mongoose.isValidObjectId(groupId)) { res.status(400).json({ message: 'Invalid group' }); return }
 
@@ -231,16 +230,12 @@ export const getGroupMessages = async (req: Request, res: Response, next: NextFu
       res.status(403).json({ message: 'You are not a member of this group' }); return
     }
 
-    const filter: any = { conversationId: groupId, kind: { $in: ['group', 'system'] } }
-    if (before) filter.createdAt = { $lt: new Date(before) }
-
-    const messages = await Message.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean()
-
-    const resolved = await resolveMessages(messages, groupId)
-    res.json({ messages: resolved.reverse() })
+    const win = await loadHistoryWindow(
+      { conversationId: groupId, kind: { $in: ['group', 'system'] } }, req.query as HistoryQuery,
+    )
+    if (!win.ok) { res.status(win.status).json({ message: win.message }); return }
+    const resolved = await resolveMessages(win.messages, groupId)
+    res.json({ messages: resolved, hasOlder: win.hasOlder, hasNewer: win.hasNewer })
   } catch (err) { next(err) }
 }
 

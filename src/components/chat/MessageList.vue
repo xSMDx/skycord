@@ -15,7 +15,7 @@ const SK_GROUPS = [
   { k: 3, name: 88,  lines: ['55%'] },
 ] as const
 
-const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string | null }; group?: { name: string; avatar?: string | null }; loadingMsgs: boolean }>()
+const props = defineProps<{ messages: Message[]; myId: string; typers: string[]; channelName: string; isDM: boolean; dmPartner?: { name: string; avatar: string | null }; group?: { name: string; avatar?: string | null }; loadingMsgs: boolean; hasOlder?: boolean; live?: boolean; awayCount?: number; loadingOlder?: boolean; loadingNewer?: boolean }>()
 const emit  = defineEmits<{
   react:         [msgId: number, emoji: string]
   openEmoji:     [msgId: number]
@@ -27,6 +27,9 @@ const emit  = defineEmits<{
   jumpToMessage: [dbId: string]
   groupJoined:   [group: any]
   serverJoined:  [server: any, channel: { id: string; name: string } | null]
+  loadOlder:     []
+  loadNewer:     []
+  jumpToPresent: []
 }>()
 
 // Named rather than inline in the template: an object type written into a
@@ -107,12 +110,40 @@ const distanceFromBottom = () => {
   return n.scrollHeight - n.scrollTop - n.clientHeight
 }
 
+/** Within this of the top, the next older page is asked for. */
+const NEAR_TOP_PX = 300
+
+/**
+ * Distance from the bottom captured when an older page was asked for, so the
+ * rows already on screen stay put when it lands above them. Without it the
+ * browser keeps scrollTop, the new rows push everything down, and you are
+ * thrown a page further back than you were reading.
+ */
+let anchorFromBottom: number | null = null
+
 const onScroll = () => {
   const wasAtBottom = atBottom.value
   atBottom.value = distanceFromBottom() <= NEAR_BOTTOM_PX
   // Scrolling back down to the bottom clears the badge — you've seen them.
   if (atBottom.value && !wasAtBottom) missed.value = 0
+  const n = el.value
+  if (n && n.scrollTop <= NEAR_TOP_PX && props.hasOlder && !props.loadingOlder && anchorFromBottom === null) {
+    anchorFromBottom = n.scrollHeight - n.scrollTop
+    emit('loadOlder')
+  }
+  if (atBottom.value && props.live === false && !props.loadingNewer) emit('loadNewer')
 }
+
+// An older page has landed above: restore the reading position.
+watch(() => props.messages[0]?.id, async () => {
+  if (anchorFromBottom === null) return
+  await nextTick()
+  const n = el.value
+  if (n) n.scrollTop = n.scrollHeight - anchorFromBottom
+  anchorFromBottom = null
+})
+// The request finished without anything landing (an error, or nothing older).
+watch(() => props.loadingOlder, loading => { if (!loading) anchorFromBottom = null })
 
 /**
  * Jump to the newest message.
@@ -135,19 +166,45 @@ const scrollToBottom = async () => {
   missed.value = 0
 }
 
-watch(() => props.messages.length, async (len, prev) => {
-  const grew = len > (prev ?? 0)
-  if (atBottom.value) { await scrollToBottom(); return }
-  // Held in place. Count what arrived so the pill can say how much.
-  if (grew) missed.value += len - (prev ?? 0)
-})
+/**
+ * Follow new messages only at the bottom of a LIVE window, and count only what
+ * arrives at the bottom. An older page prepended above, or a newer page
+ * appended to a window back in history, is not news.
+ */
+watch(
+  () => [props.messages.length, props.messages[props.messages.length - 1]?.id] as const,
+  async ([len, lastId], [prevLen, prevLastId]) => {
+    if (lastId === prevLastId) return
+    if (props.live === false) return
+    if (atBottom.value) { await scrollToBottom(); return }
+    // Held in place. Count what arrived so the pill can say how much.
+    if (len > (prevLen ?? 0)) missed.value += len - (prevLen ?? 0)
+  },
+)
 
-// Switching conversation should always land at the newest message.
-watch(() => props.channelName, () => { missed.value = 0; void scrollToBottom() })
+// Switching conversation lands at the newest message — unless the switch was a
+// jump into history, which reveals its own target instead.
+watch(() => props.channelName, () => { missed.value = 0; if (props.live !== false) void scrollToBottom() })
 
 const startEdit = (msg: Message) => { editingId.value = msg.id; editingText.value = msg.content }
 const startEditExternal = (msg: Message) => startEdit(msg)
-defineExpose({ scrollToBottom, startEditExternal })
+
+/**
+ * Scroll a loaded message into the middle of the view and flash it. Returns
+ * false when it is not in the list, so the caller can load around it first.
+ */
+const revealMessage = async (dbId: string): Promise<boolean> => {
+  const target = props.messages.find(m => m.dbId === dbId)
+  if (!target) return false
+  await nextTick()
+  const node = el.value?.querySelector<HTMLElement>(`[data-msg-id="${target.id}"]`)
+  if (!node) return false
+  node.scrollIntoView({ block: 'center' })
+  node.classList.add('msg-flash')
+  setTimeout(() => node.classList.remove('msg-flash'), 1200)
+  return true
+}
+defineExpose({ scrollToBottom, startEditExternal, revealMessage })
 
 const saveEdit  = () => {
   if (editingId.value === null || !editingText.value.trim()) return
@@ -162,7 +219,10 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
        away with it. The scroller keeps its own class and ref. -->
   <div class="ml-wrap">
   <div class="ml" ref="el" @scroll.passive="onScroll">
-    <div v-if="!loadingMsgs" class="welcome">
+    <div v-if="loadingOlder" class="ml-older" role="status">Loading older messages…</div>
+    <!-- Only at the real beginning. Above a window that starts partway back it
+         would announce "the very beginning" over messages that are not. -->
+    <div v-if="!loadingMsgs && !hasOlder" class="welcome">
       <template v-if="isDM && dmPartner">
         <div class="dm-av"><Avatar :src="dmPartner.avatar ?? ''" :alt="dmPartner.name" :crop="(dmPartner as any).avatarCrop" /></div>
         <h3>{{ dmPartner.name }}</h3>
@@ -237,7 +297,17 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
   </div>
 
     <Transition name="jump">
-      <button v-if="!atBottom" class="ml-jump" @click="scrollToBottom()">
+      <!-- Back in history, the way home is a reload of the present, not a
+           scroll — the newest messages are not in the list at all. -->
+      <div v-if="live === false" class="ml-away" role="status">
+        <span class="ml-away-text">
+          You're viewing older messages<template v-if="awayCount"> · {{ awayCount }} new</template>
+        </span>
+        <button class="ml-away-btn" @click="emit('jumpToPresent')">
+          Jump to present <ChevronDown :size="14" :stroke-width="2.25" />
+        </button>
+      </div>
+      <button v-else-if="!atBottom" class="ml-jump" @click="scrollToBottom()">
         <span v-if="missed">{{ missed }} new message{{ missed === 1 ? '' : 's' }}</span>
         <span v-else>Jump to present</span>
         <ChevronDown :size="14" :stroke-width="2.25" />
@@ -251,6 +321,22 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
    never actually scrolls. */
 .ml-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
 .ml{flex:1;overflow: hidden auto;padding: 8px 0 0;display:flex;flex-direction:column}
+.ml-older{padding: 10px 16px;font-size:13px;color:var(--text-3);text-align:center}
+/* A bar, not a pill: while you are back in history it stays for as long as you
+   are there, so it sits across the foot of the list instead of floating. */
+.ml-away{
+  position:absolute;left:16px;right:16px;bottom:10px;z-index:5;
+  display:flex;align-items:center;justify-content:space-between;gap: 12px;
+  padding: 8px 8px 8px 14px;border-radius: 8px;
+  background:var(--bg-floor);box-shadow:0 4px 16px rgba(0,0,0,.45);
+  font-size:13px;color:var(--text-1);
+}
+.ml-away-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ml-away-btn{
+  display:flex;align-items:center;gap: 6px;flex:none;
+  padding: 6px 12px;border-radius: 6px;border:none;cursor:pointer;
+  background:var(--accent);color:var(--text-on-accent);font:inherit;font-weight:600;
+}
 .ml-jump{
   position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:5;
   display:flex;align-items:center;gap: 8px;
