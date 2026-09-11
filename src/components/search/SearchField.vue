@@ -320,14 +320,15 @@ defineExpose({ focus: () => input.value?.focus(), popupOpen })
 </template>
 
 <style scoped>
-.sf { position: relative; font-family: var(--font-ui); }
+/* Allowed to give up width in a crowded header, so its clear button never ends up under the results panel. */
+.sf { position: relative; min-width: 0; font-family: var(--font-ui); }
 
 /* ── The field ───────────────────────────────────────────────────────────
    Grows when it is in use, as the reference's does: at rest it only has to
    say "search is here", and the header has other things to hold. */
 .sf-box {
   display: flex; align-items: center; gap: 2px;
-  width: 200px; height: 30px; padding: 0 7px 0 3px;
+  width: 200px; max-width: 100%; height: 30px; padding: 0 7px 0 3px;
   background: var(--bg-input); border: 1px solid transparent; border-radius: var(--edge-md);
   cursor: text;
   transition: border-color var(--dur-2) var(--ease-out), width var(--dur-3) var(--ease-out);

@@ -20,6 +20,8 @@ const total   = ref(0)
 const hasMore = ref(false)
 const loading = ref(false)
 const error   = ref('')
+/** Whether the same search could succeed if tried again — not when the search itself was refused. */
+const retryable = ref(false)
 const open    = ref(false)
 let page = 1
 /** Bumped per request, so a slower answer to a replaced search is dropped. */
@@ -43,7 +45,15 @@ export const useSearch = () => {
       page = n
       open.value = true
     } catch (e: any) {
-      if (mine === seq) error.value = e?.message || 'Search failed'
+      if (mine !== seq) return
+      error.value = e?.message || 'Search failed'
+      const status = typeof e?.status === 'number' ? e.status : 0
+      retryable.value = !(status >= 400 && status < 500) || status === 429
+      // A refused or failed search still answers: the panel opens with the
+      // reason, instead of Enter seeming to do nothing. A failed next page
+      // keeps what is already shown.
+      if (!append) { results.value = []; total.value = 0; hasMore.value = false }
+      open.value = true
     } finally {
       if (mine === seq) loading.value = false
     }
@@ -73,5 +83,5 @@ export const useSearch = () => {
     close()
   }
 
-  return { scope, query, sort, results, total, hasMore, loading, error, open, setScope, run, loadMore, setSort, close }
+  return { scope, query, sort, results, total, hasMore, loading, error, retryable, open, setScope, run, loadMore, setSort, close }
 }

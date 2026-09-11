@@ -6138,6 +6138,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .chat:has(.callbar.has-video) .ml-wrap { flex: 1 1 auto; min-height: 0; }
 .chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px 0 12px}
 .chat-header-left,.chat-header-right{display:flex;align-items:center;gap: 4px}
+/* The search field, the one shrinkable thing here, gives up width before the channel name does. */
+.chat-header-right{min-width:0}
 .ch-ident{display:contents}
 .ch-ident-row{display:contents}
 .ch-chev,.ch-topic-dot,.m-back-badge{display:none}

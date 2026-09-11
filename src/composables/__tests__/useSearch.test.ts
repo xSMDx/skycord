@@ -61,6 +61,37 @@ describe('useSearch', () => {
     expect(s.error.value).toBe('Too many searches — wait a moment')
   })
 
+  it('opens the panel with the reason when the server refuses a search, and offers no retry', async () => {
+    api.searchMessagesApi.mockResolvedValueOnce(page(['earlier']))
+    await s.run()
+    api.searchMessagesApi.mockRejectedValueOnce({ message: 'Add a word to look for, not only ones to leave out', status: 400 })
+    await s.run()
+    expect(s.open.value).toBe(true)
+    expect(s.error.value).toBe('Add a word to look for, not only ones to leave out')
+    expect(s.results.value).toEqual([])
+    expect(s.total.value).toBe(0)
+    expect(s.retryable.value).toBe(false)
+  })
+
+  it('offers a retry when the failure was not the search’s fault', async () => {
+    api.searchMessagesApi.mockRejectedValueOnce({ message: 'Server error', status: 500 })
+    await s.run()
+    expect(s.retryable.value).toBe(true)
+    api.searchMessagesApi.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    await s.run()
+    expect(s.retryable.value).toBe(true)
+  })
+
+  it('keeps the results it has when the next page fails', async () => {
+    api.searchMessagesApi.mockResolvedValueOnce(page(['one'], { hasMore: true }))
+    await s.run()
+    api.searchMessagesApi.mockRejectedValueOnce({ message: 'Server error', status: 500 })
+    await s.loadMore()
+    expect(s.results.value.map(r => r.message.content)).toEqual(['one'])
+    expect(s.error.value).toBe('Server error')
+    expect(s.open.value).toBe(true)
+  })
+
   it('reruns when the sort changes, and forgets results when the scope changes', async () => {
     api.searchMessagesApi.mockResolvedValue(page(['a']))
     await s.run()

@@ -23,7 +23,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ open: [hit: SearchHit]; close: [] }>()
 
-const { results, total, hasMore, loading, error, sort, query, setSort, loadMore, run } = useSearch()
+const { results, total, hasMore, loading, error, retryable, sort, query, setSort, loadMore, run } = useSearch()
 
 const body = ref<HTMLElement | null>(null)
 const channelName = computed(() => new Map(props.channels.map(c => [c.id, c.name])))
@@ -31,6 +31,7 @@ const terms = computed(() => highlightTerms(query.value.text))
 
 const countLabel = computed(() => {
   if (loading.value && !results.value.length) return 'Searching…'
+  if (error.value && !results.value.length) return 'Search'
   const n = total.value >= 1000 ? '1,000+' : total.value.toLocaleString()
   return `${n} ${total.value === 1 ? 'Result' : 'Results'}`
 })
@@ -84,9 +85,9 @@ watch(() => results.value[0], () => body.value?.scrollTo({ top: 0 }))
         </div>
       </div>
 
-      <div v-else-if="error" class="srp-note">
+      <div v-else-if="error && !results.length" class="srp-note" role="alert">
         <p>{{ error }}</p>
-        <button type="button" class="srp-more" @click="run()">Try again</button>
+        <button v-if="retryable" type="button" class="srp-more" @click="run()">Try again</button>
       </div>
 
       <p v-else-if="!results.length" class="srp-note">
@@ -121,6 +122,7 @@ watch(() => results.value[0], () => body.value?.scrollTo({ top: 0 }))
         </li>
       </ol>
 
+      <p v-if="error && results.length" class="srp-note srp-note-inline" role="alert">{{ error }}</p>
       <button v-if="hasMore && results.length" type="button" class="srp-more" :disabled="loading" @click="loadMore()">
         {{ loading ? 'Loading…' : 'Load more' }}
       </button>
@@ -231,6 +233,7 @@ watch(() => results.value[0], () => body.value?.scrollTo({ top: 0 }))
 
 .srp-note { margin: 0; padding: 16px 6px; font-size: 13px; line-height: 1.5; color: var(--text-3); }
 .srp-note p { margin: 0 0 10px; }
+.srp-note-inline { padding: 12px 6px 0; }
 .srp-more {
   display: block; width: 100%; margin-top: 12px; padding: 9px 16px;
   border: none; border-radius: var(--edge-md); cursor: pointer;
