@@ -1055,6 +1055,24 @@ const ROADMAP = [
 // Changelog data
 const RELEASES = [
   {
+    v: 'v0.19.0', date: 'Sep 11, 2026', time: '21:40 UTC+2', title: 'Search, and scrolling all the way back',
+    items: [
+      ['add', 'Search. The box at the top right of a server searches all of it; in a direct message or a group it searches that conversation. Type words, put a phrase in quotes to keep it together, or put a minus in front of a word to leave it out. Words match whole and ignore case and accents, so 10 finds #10 but not #110, and cafe finds Café'],
+      ['add', 'Filters, the ones you would expect: from: a person, in: a channel, has: a link, an image, a video or an embed, and mentions: a person. Type the word and its colon and the box suggests who or what you mean. More filters adds dates — before, after or on a day, by your own clock — and whether a message is pinned. Files, sounds, polls, stickers and forwards are listed and marked Soon, and so is author type, because none of those exist in Skycord yet'],
+      ['add', 'Results open beside the chat, newest first or most relevant first, with the words you searched for marked. Pick one and the chat goes to it — into another channel if that is where it was posted, and as far back as it was written, not only as far as happened to be loaded. Your last few searches in each place are kept on your device and nowhere else'],
+      ['imp', 'Search only ever looks where you can read. A private channel you cannot open, or a channel whose history is hidden from you, never turns up in your results'],
+      ['add', 'On a phone, search is a screen of its own. The header there has no room for a box worth typing into, so the magnifier opens one that does'],
+      ['add', 'Scroll back through the whole of a channel. It used to show its newest fifty messages and nothing before them, so a reply to anything older had nothing to jump to. Older messages now load as you scroll up, all the way to the first one, and a reply quote, a pinned message or a search result takes you to its message however old it is. When you are that far back, a bar says so, counts what has arrived since, and takes you back to the present in one click'],
+      ['fix', 'Messages posted in a private channel were still sent to the devices of members who could not open it, and somebody joining a server through an invite saw its private channels listed until they reloaded. Who sees a channel is now decided by one rule everywhere — the channel list, what the server hands over, and what arrives live — and a change to roles or channel permissions takes effect straight away, without a reload'],
+      ['add', 'The Members tab on a role does its job. Since roles arrived it has been a placeholder; now it lists who holds the role, with a box to filter them, and Add members offers everyone you are allowed to give it to. Taking a role away is one click, the role list shows real counts instead of a dash, and all of it updates live when somebody else changes a role'],
+      ['imp', 'Menus follow permissions rather than ownership. The server menu, the channel and category menus and the plus for a new channel now appear for whoever holds Manage Channels or Manage Server. The permissions already allowed those things; the menus had not caught up'],
+      ['fix', 'Dragging a category to a new place did nothing: it lifted, showed where it would land, and went back. It moves now — and categories also have Move Up and Move Down in their menu, for a keyboard, or a trackpad where a long drag is fiddly'],
+      ['fix', 'The channel header showed the same line, “Discuss anything on Skycord”, for every channel. It shows the channel’s own topic now, with the full text on hover when it is long'],
+      ['fix', 'The permissions page stacks its columns in a narrow window instead of squeezing them past the edge, and keyboard focus no longer vanishes when its save bar goes away'],
+      ['fix', 'Tooltips no longer replace the names screen readers use for buttons that already had one']
+    ]
+  },
+  {
     v: 'v0.18.0', date: 'Sep 10, 2026', time: '18:15 UTC+2', title: 'Moderation in voice, and switches that mean it',
     items: [
       ['add', 'Server Mute, Server Deafen and Disconnect. Right-click somebody sitting in a voice channel and, if you have the permission and outrank them, you can silence them for the whole room, cut them off from hearing it, or drop them out of the call. A mute sticks until somebody lifts it — leaving and coming back does not clear it, and neither does restarting the app. Disconnecting is not a punishment that lasts: they can walk straight back in, which is the point of having it separate from kicking'],
