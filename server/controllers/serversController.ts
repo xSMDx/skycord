@@ -9,7 +9,7 @@ import { Role } from '../models/Role'
 import { User } from '../models/User'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
-import { loadAccess, channelBits, categoryOverwriteMap, has, requirePerm } from '../utils/access'
+import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf, has, requirePerm } from '../utils/access'
 import { parseOverwrites, canActOnMember, serializeBits } from '../permissions'
 
 /** Discover is a directory, not a feed: one page, no pagination yet. */
@@ -135,10 +135,17 @@ export const createServer = async (req: Request, res: Response, next: NextFuncti
 
     const server = await Server.create({ name, owner: userId, members: [userId] })
     // A new server is never an empty screen.
-    const channels = await Channel.insertMany([
+    await Channel.insertMany([
       { server: server._id, name: 'general', type: 'text',  position: 0 },
       { server: server._id, name: 'General', type: 'voice', position: 0 },
     ])
+
+    // The same detail GET /servers/:sid sends. The client enters the new
+    // server on this 201 without refetching, so anything missing here stays
+    // missing: without `me`, the creator's own access read as unknown and
+    // every permission-gated control was hidden from the person who owns the
+    // server until they reloaded.
+    const { body, viewable } = await serverDetailFor(server, userId)
 
     // The creator's own sockets have to join these rooms now. Sockets join
     // chan: rooms at connect time (chatSocket) and neither of these channels
@@ -147,13 +154,9 @@ export const createServer = async (req: Request, res: Response, next: NextFuncti
     // pins — until they reload. It is the same join createChannel and
     // joinViaInvite already do; only createServer was missing it, which hid
     // the gap behind the reload every other path happens to involve.
-    const io = getIO()
-    if (io) {
-      const rooms = channels.map(c => `chan:${c._id.toString()}`)
-      io.in(`user:${userId}`).socketsJoin(rooms)
-    }
+    joinChannelRooms(userId, viewable)
 
-    res.status(201).json({ server: shapeServer(server), channels: channels.map(c => shapeChannel(c)) })
+    res.status(201).json(body)
   } catch (err) { next(err) }
 }
 
@@ -240,62 +243,73 @@ export const joinPublicServer = async (req: Request, res: Response, next: NextFu
       }
     }
 
-    const channels = await Channel.find({ server: fresh._id }).sort({ type: 1, position: 1 }).lean()
+    // Built by serverDetailFor, like every payload a client enters a server on.
+    const { body, viewable } = await serverDetailFor(fresh, userId)
 
     // Same reason invite acceptance does this: sockets join `chan:` rooms once,
     // at connect time, and this membership did not exist then. Without it the
     // person who just joined is the one member who receives nothing from the
-    // server until they reconnect. Gated on an actual join, never on the
-    // idempotent already-a-member path whose sockets are already in the rooms.
-    if (!already) {
-      const rooms = channels.map(c => `chan:${c._id.toString()}`)
-      if (rooms.length) getIO()?.in(`user:${userId}`).socketsJoin(rooms)
-    }
+    // server until they reconnect. Only the rooms of channels they may see.
+    // Gated on an actual join, never on the idempotent already-a-member path
+    // whose sockets are already in the rooms.
+    if (!already) joinChannelRooms(userId, viewable)
 
-    res.json({ server: shapeServer(fresh), channels: channels.map(c => shapeChannel(c)), joined: !already })
+    res.json({ ...body, joined: !already })
   } catch (err) { next(err) }
 }
 
-export const getServer = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const server = await loadServer(req, res); if (!server) return
-    const channels = await Channel.find({ server: server._id }).sort({ type: 1, position: 1 }).lean()
-    // Sorted the same way channels are, so the client renders the sidebar in
-    // the order the owner built it without sorting anything itself.
-    const categories = await Category.find({ server: server._id }).sort({ position: 1 }).lean()
+/**
+ * A server as one member sees it: the channels they may see, every category,
+ * what they may do there, and who is under a voice restriction.
+ *
+ * One function for every response that hands a client a server to enter —
+ * GET /servers/:sid, create, invite join and Discover join — because the
+ * client folds all of them in with the same `receiveDetail` and caches the
+ * result. They were four copies and had drifted: the joins sent every
+ * channel, private ones included, and only the GET said what the caller may
+ * do, so someone who had just created or joined a server had no permissions
+ * on the client until they reloaded.
+ *
+ * `viewable` is not sent. It is the channel rooms this member's sockets
+ * belong in, for the paths that have to join them.
+ */
+export const serverDetailFor = async (server: any, userId: string) => {
+  // Sorted the way the sidebar draws, so the client renders the order the
+  // owner built without sorting anything itself.
+  const [channels, categories, access] = await Promise.all([
+    Channel.find({ server: server._id }).sort({ type: 1, position: 1 }).lean(),
+    Category.find({ server: server._id }).sort({ position: 1 }).lean(),
+    loadAccess(server, userId),
+  ])
 
-    /*
-     * Filter the sidebar to what this member may actually see.
-     *
-     * Server-side, and this is the whole point: hiding a channel in the client
-     * is decoration, since the payload that drew it also contained everything
-     * needed to open it. A channel denied here never reaches the browser.
-     *
-     * Access is loaded ONCE and the overwrite map built ONCE — resolution
-     * itself is pure, so a server with fifty channels stays two queries rather
-     * than fifty.
-     */
-    const access = await loadAccess(server, req.user!.sub)
-    const catOverwrites = await categoryOverwriteMap(categories as never)
+  /*
+   * Filter to what this member may actually see.
+   *
+   * Server-side, and this is the whole point: hiding a channel in the client
+   * is decoration, since the payload that drew it also contained everything
+   * needed to open it. A channel denied here never reaches the browser.
+   *
+   * Access is loaded ONCE and the overwrite map built ONCE — resolution
+   * itself is pure, so a server with fifty channels stays three queries
+   * rather than fifty.
+   */
+  const catOverwrites = await categoryOverwriteMap(categories as never)
+  const shown: ReturnType<typeof shapeChannel>[] = []
+  const viewable: string[] = []
+  for (const c of channels) {
+    // A locked stub carries the name and nothing else; messages and voice
+    // tokens are refused separately, so a visible lock cannot be talked through.
+    const view = channelViewOf(access, c, catOverwrites)
+    if (view === 'none') continue
+    shown.push(shapeChannel(c, view === 'locked'))
+    if (view === 'full') viewable.push(c._id.toString())
+  }
 
-    const visible: ReturnType<typeof shapeChannel>[] = []
-    for (const c of channels) {
-      const bits = channelBits(
-        access,
-        catOverwrites.get(c.category?.toString() ?? '') ?? [],
-        parseOverwrites(c.overwrites),
-      )
-      const canView = has(bits, 'ViewChannels')
-      // hideWhenDenied === false is the opt-in "show it locked" case. The stub
-      // carries the name and nothing else; messages and voice tokens are
-      // refused separately, so a visible lock cannot be talked through.
-      if (!canView && c.hideWhenDenied !== false) continue
-      visible.push(shapeChannel(c, !canView))
-    }
-
-    res.json({
+  return {
+    viewable,
+    body: {
       server:     shapeServer(server),
-      channels:   visible,
+      channels:   shown,
       categories: categories.map(shapeCategory),
       /*
        * What the CALLER may do here, resolved server-side.
@@ -327,7 +341,25 @@ export const getServer = async (req: Request, res: Response, next: NextFunction)
       voiceRestrictions: (server.memberVoice ?? []).map((v: any) => ({
         userId: v.user.toString(), mute: !!v.mute, deafen: !!v.deafen,
       })),
-    })
+    },
+  }
+}
+
+/**
+ * Put one member's sockets in these channels' rooms.
+ *
+ * For the paths that create a membership while its sockets are already
+ * connected: sockets join `chan:` rooms at connect time, and this membership
+ * did not exist then. A no-op for an empty list, never "every room".
+ */
+export const joinChannelRooms = (userId: string, channelIds: string[]): void => {
+  if (channelIds.length) getIO()?.in(`user:${userId}`).socketsJoin(channelIds.map(id => `chan:${id}`))
+}
+
+export const getServer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const server = await loadServer(req, res); if (!server) return
+    res.json((await serverDetailFor(server, req.user!.sub)).body)
   } catch (err) { next(err) }
 }
 
@@ -455,10 +487,21 @@ export const getServerMembers = async (req: Request, res: Response, next: NextFu
     const roles = await Role.find({ server: server._id }).select('position').lean()
     const positionOf = new Map(roles.map(r => [r._id.toString(), r.position]))
     const highestOf = new Map<string, number>()
+    /*
+     * Which roles each member holds — what the Roles page lists under Members.
+     *
+     * Filtered through `positionOf`, i.e. to roles that still EXIST. Deleting a
+     * role does not rewrite every member's side-car entry, so a stored id can
+     * outlive its role; sending it would put a phantom into the client that no
+     * role row could ever explain.
+     */
+    const rolesOf = new Map<string, string[]>()
     for (const entry of (server.memberRoles ?? []) as any[]) {
-      const held = (entry.roles ?? [])
-        .map((r: any) => positionOf.get(r.toString()))
-        .filter((p: number | undefined): p is number => p !== undefined)
+      const live = (entry.roles ?? [])
+        .map((r: any) => r.toString())
+        .filter((id: string) => positionOf.has(id))
+      rolesOf.set(entry.user.toString(), live)
+      const held = live.map((id: string) => positionOf.get(id)!)
       if (held.length) highestOf.set(entry.user.toString(), Math.max(...held))
     }
 
@@ -474,6 +517,7 @@ export const getServerMembers = async (req: Request, res: Response, next: NextFu
         status:      effectiveStatus(u.status, u._id.toString(), u.statusUntil),
         isOwner:     server.owner.toString() === u._id.toString(),
         highestPosition: highestOf.get(u._id.toString()) ?? -1,
+        roles:       rolesOf.get(u._id.toString()) ?? [],
       })),
     })
   } catch (err) { next(err) }

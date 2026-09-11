@@ -8,20 +8,25 @@
  * Also mirrors the text into `aria-label` when the element has no accessible
  * name of its own. Removing `title` would otherwise strip the only label an
  * icon-only button had, which trades a cosmetic win for a screen-reader
- * regression.
+ * regression. It only ever keeps updating a label it wrote itself: an author's
+ * own `aria-label` is the more specific of the two.
  */
 import type { Directive, DirectiveBinding } from 'vue'
 import { showTip, hideTip, tip, type TipPlacement } from '@/composables/useTooltip'
 
 interface TipEl extends HTMLElement {
-  __tip?: { text: string; placement: TipPlacement; cleanup: () => void }
+  __tip?: {
+    text: string; placement: TipPlacement; cleanup: () => void
+    /** The `aria-label` is ours — written because the element had no name. */
+    ownsLabel: boolean
+  }
 }
 
 const textOf = (b: DirectiveBinding) => (b.value == null ? '' : String(b.value))
 const placeOf = (b: DirectiveBinding) => ((b.arg as TipPlacement) || 'top')
 
 const bind = (el: TipEl, binding: DirectiveBinding) => {
-  const state = { text: textOf(binding), placement: placeOf(binding), cleanup: () => {} }
+  const state = { text: textOf(binding), placement: placeOf(binding), cleanup: () => {}, ownsLabel: false }
 
   const enter = () => showTip(el, state.text, state.placement)
   const leave = () => hideTip()
@@ -48,6 +53,7 @@ const bind = (el: TipEl, binding: DirectiveBinding) => {
   if (el.hasAttribute('title')) el.removeAttribute('title')
   if (!el.getAttribute('aria-label') && !el.textContent?.trim() && state.text) {
     el.setAttribute('aria-label', state.text)
+    state.ownsLabel = true
   }
 }
 
@@ -61,7 +67,11 @@ export const vTip: Directive = {
     // Keep a visible tooltip in step with a label that just changed — the
     // mute button relabels itself on click while the pointer is still on it.
     if (tip.open && tip.text && s.text && tip.x === el.getBoundingClientRect().left) tip.text = s.text
-    if (!el.textContent?.trim() && s.text) el.setAttribute('aria-label', s.text)
+    // Only a label this directive wrote. Every channel row's ⋯ is labelled
+    // "More options for <name>" beside a tooltip that says "More", and
+    // rewriting unconditionally replaced the specific name with the generic
+    // one on the first re-render.
+    if (s.ownsLabel && s.text) el.setAttribute('aria-label', s.text)
   },
   unmounted(el: TipEl) {
     el.__tip?.cleanup()

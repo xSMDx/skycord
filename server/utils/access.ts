@@ -60,16 +60,53 @@ export const ensureEveryone = async (serverId: Types.ObjectId) => {
   }
 }
 
-export const loadAccess = async (server: any, userId: string): Promise<ServerAccess> => {
-  const isOwner = server.owner.toString() === userId
-  const everyone = await ensureEveryone(server._id)
+/** Just enough of a role to resolve with. Hydrated and lean rows both fit. */
+interface HeldRole { _id: Types.ObjectId; permissions: string; position: number }
 
+export const loadAccess = async (server: any, userId: string): Promise<ServerAccess> => {
+  const everyone = await ensureEveryone(server._id)
   const entry = (server.memberRoles ?? []).find((m: any) => m.user.toString() === userId)
   const heldIds: Types.ObjectId[] = entry?.roles ?? []
   const held = heldIds.length
     ? await Role.find({ _id: { $in: heldIds }, server: server._id })
     : []
+  return accessFromHeld(server, userId, everyone, held)
+}
 
+/**
+ * Access for every member of a server, in two queries rather than two per
+ * member.
+ *
+ * For fan-outs: a broadcast that has to decide, member by member, who may see
+ * a channel. loadAccess in a loop would be a round trip per member per event.
+ * `server` must carry `owner` and `memberRoles`, and must be fresh — a stale
+ * document answers for the roles people held when it was read.
+ */
+export const loadMemberAccess = async (server: any): Promise<(userId: string) => ServerAccess> => {
+  const everyone = await ensureEveryone(server._id)
+  const roles = await Role.find({ server: server._id }).lean()
+  const byId = new Map(roles.map(r => [r._id.toString(), r as unknown as HeldRole]))
+  const heldBy = new Map<string, HeldRole[]>()
+  for (const entry of server.memberRoles ?? []) {
+    heldBy.set(
+      entry.user.toString(),
+      (entry.roles ?? []).map((id: any) => byId.get(id.toString())).filter(Boolean) as HeldRole[],
+    )
+  }
+  return (userId: string) => accessFromHeld(server, userId, everyone, heldBy.get(userId) ?? [])
+}
+
+/**
+ * The resolution itself, from roles already in hand.
+ *
+ * Shared by loadAccess (one member, roles fetched by id) and loadMemberAccess
+ * (every member, roles fetched once), so the two cannot give different answers
+ * about the same person.
+ */
+const accessFromHeld = (
+  server: any, userId: string, everyone: HeldRole, held: HeldRole[],
+): ServerAccess => {
+  const isOwner = server.owner.toString() === userId
   const roleBits = [parseBits(everyone.permissions), ...held.map(r => parseBits(r.permissions))]
   return {
     isOwner,
@@ -111,6 +148,39 @@ export const categoryOverwriteMap = async (
   const map = new Map<string, Overwrite[]>()
   for (const c of categories) map.set(c._id.toString(), parseOverwrites(c.overwrites))
   return map
+}
+
+/** A channel as far as visibility is concerned. Lean rows and documents both fit. */
+export interface VisibleChannelLike {
+  category?: unknown
+  overwrites?: unknown
+  hideWhenDenied?: boolean | null
+}
+
+/**
+ * How one channel appears to one member: in full, as a locked stub, or not at
+ * all.
+ *
+ * The single rule every path that hands a channel to a client goes through —
+ * the server detail, the join responses, the socket rooms and the live channel
+ * events — so the sidebar a member draws from REST and the one kept current
+ * over the socket cannot disagree. A channel that opted out of hiding
+ * (`hideWhenDenied: false`) is shown locked; anything else denied View is
+ * absent. Only `'full'` belongs in the channel's socket room: a locked stub
+ * shows a name, never a message.
+ */
+export const channelViewOf = (
+  access: ServerAccess,
+  channel: VisibleChannelLike,
+  categoryOverwrites: Map<string, Overwrite[]>,
+): 'full' | 'locked' | 'none' => {
+  const bits = channelBits(
+    access,
+    categoryOverwrites.get(channel.category ? String(channel.category) : '') ?? [],
+    parseOverwrites(channel.overwrites as StoredOverwrite[] | undefined),
+  )
+  if (hasPerm(bits, 'ViewChannels')) return 'full'
+  return channel.hideWhenDenied === false ? 'locked' : 'none'
 }
 
 /** Re-exported so callers need one import, not two. */

@@ -39,6 +39,9 @@ export interface Message {
   // means it's not a reply.
   replyTo?:    { id: string; author: string; content: string }[]
   dbId?:       string
+  /** Whether this message pings everyone. The server's verdict, stored at send
+   *  time; the client never works it out from the text. */
+  mentionsEveryone?: boolean
 }
  
 export interface DM {

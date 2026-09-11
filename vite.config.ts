@@ -1,6 +1,20 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+
+/**
+ * Point the browser's HMR socket at the port the dev server actually listens on.
+ *
+ * `hmr.clientPort` was hardcoded to 5173, so a dev server on any other port —
+ * which Windows forces whenever WinNAT reserves 5173 — left the client retrying
+ * a dead socket once a second, and hot reload off. A `config` hook sees CLI
+ * flags already merged in, so `--port 4173` lands here, and a default launch
+ * keeps exactly the 5173 it had.
+ */
+const hmrFollowsPort = (): Plugin => ({
+  name: 'skycord:hmr-follows-port',
+  config: c => ({ server: { hmr: { clientPort: c.server?.port ?? 5173 } } }),
+})
 
 export default defineConfig(({ mode }) => {
   // Dev proxy target for the API server. Reads API_PORT from .env so moving the
@@ -14,7 +28,7 @@ export default defineConfig(({ mode }) => {
   const api = `http://127.0.0.1:${env.API_PORT || '3001'}`
 
   return {
-    plugins: [vue()],
+    plugins: [vue(), hmrFollowsPort()],
     resolve: {
       alias: { '@': resolve(__dirname, 'src') }
     },
@@ -24,11 +38,8 @@ export default defineConfig(({ mode }) => {
       // Hosts Vite will answer to. Localhost/IP access is always allowed; this
       // list adds the public domain the VPS is served under (nginx → :5173).
       allowedHosts: ['app.skycord.xyz', 'localhost'],
-      // ── Fix: tell Vite HMR to use the server's actual public IP ──────────
-      hmr: {
-        // Uses the client's own host for the WS connection — works with any IP
-        clientPort: 5173,
-      },
+      // HMR connects to the page's own host, on the dev server's port — see
+      // hmrFollowsPort above, which sets `hmr.clientPort` from `--port`.
       proxy: {
         '/auth':          { target: api, changeOrigin: true },
         '/users':         { target: api, changeOrigin: true },

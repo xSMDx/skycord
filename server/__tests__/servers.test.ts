@@ -29,6 +29,22 @@ describe('POST /servers', () => {
     expect(names).toEqual(['text:general', 'voice:General'])
   })
 
+  /**
+   * The 201 is the only detail payload a creator gets before entering the
+   * server — the client folds it in and does not refetch. Without `me` the
+   * owner's own access read as unknown, which every permission gate treats as
+   * "no", so the person who had just made the server could not drag a channel
+   * or add a member to a role until they reloaded.
+   */
+  it('says what the creator may do there, so the client need not ask', async () => {
+    const u = await register()
+    const res = await app().post('/servers').set(auth(u)).send({ name: 'EA' })
+    expect(res.body.me).toMatchObject({ isOwner: true, highestPosition: -1 })
+    expect(typeof res.body.me.permissions).toBe('string')
+    expect(res.body.categories).toEqual([])
+    expect(res.body.voiceRestrictions).toEqual([])
+  })
+
   it('rejects an empty name', async () => {
     const u = await register()
     const res = await app().post('/servers').set(auth(u)).send({ name: '   ' })

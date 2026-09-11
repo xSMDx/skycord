@@ -214,10 +214,26 @@ const submit = () => emit('save', {
   overwrites: rows.value,
   ...(props.kind === 'channel' ? { hideWhenDenied: hidden.value } : {}),
 })
+
+/**
+ * Keep focus in the dialog when the save bar goes.
+ *
+ * Save and Reset both live on the bar and both end with it unmounting, so the
+ * button that had focus leaves the page — Chrome drops it to <body> even
+ * sooner, the moment Save disables itself. ModalBase handles Escape and Tab
+ * on the dialog element, so from <body> the keyboard stopped reaching the
+ * dialog at all until someone clicked back in. The tab's own root takes it
+ * instead: inside the dialog, and next to what was just saved.
+ */
+const root = ref<HTMLElement | null>(null)
+const onBarLeave = (el: Element) => {
+  const a = document.activeElement
+  if (!a || a === document.body || el.contains(a)) root.value?.focus({ preventScroll: true })
+}
 </script>
 
 <template>
-  <div class="pm">
+  <div ref="root" class="pm" tabindex="-1">
     <h2 class="st-page-title">{{ kind === 'channel' ? 'Channel' : 'Category' }} permissions</h2>
     <p class="st-page-sub">Decide who can do what in this {{ noun }}.</p>
 
@@ -391,7 +407,7 @@ const submit = () => emit('save', {
 
     <!-- Explicit save: a half-built access list applied live locks people out
          for however long it takes to finish typing. -->
-    <Transition name="pm-bar">
+    <Transition name="pm-bar" @before-leave="onBarLeave">
       <div v-if="dirty" class="pm-bar">
         <span class="pm-bar-text">You have unsaved permission changes.</span>
         <button class="st-btn" :disabled="saving" @click="reset">Reset</button>
@@ -404,7 +420,20 @@ const submit = () => emit('save', {
 </template>
 
 <style scoped>
-.pm { padding-bottom: 72px; }   /* room for the save bar */
+/* Room for the save bar. A size container, because this tab lives in a 740px
+   dialog: a viewport breakpoint cannot see how narrow it actually is. */
+.pm { padding-bottom: 72px; container-type: inline-size; }
+/* Focus lands here when the save bar leaves (see onBarLeave). It is a place
+   to keep the keyboard, not a control, so it draws no ring. */
+.pm:focus { outline: none; }
+
+/* Every field value in this tab is a sentence explaining a permission, not a
+   value. The shared rule is one line with an ellipsis, which suits "Off" or a
+   username — here it cut each explanation to twenty-odd characters. */
+.pm .st-field-value {
+  display: block; white-space: normal; overflow: visible; text-overflow: clip;
+  font-size: 13px; line-height: 1.45;
+}
 
 /* ── The private card ── */
 .pm-card { background: var(--bg-panel); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
@@ -520,8 +549,11 @@ const submit = () => emit('save', {
 }
 .pm-bar-enter-from, .pm-bar-leave-to { opacity: 0; transform: translateY(8px); }
 
-@media (max-width: 900px) {
-  .pm-adv { flex-direction: column; }
+/* The roles and members list goes above the grid rather than beside it once
+   the tab is too narrow for both. Side by side in the channel dialog, it left
+   each permission's description a column about 130px wide. */
+@container (max-width: 680px) {
+  .pm-adv { flex-direction: column; gap: 14px; }
   .pm-adv-list { width: 100%; position: static; flex-direction: row; flex-wrap: wrap; }
 }
 </style>

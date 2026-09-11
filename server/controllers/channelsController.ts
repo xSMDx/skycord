@@ -11,6 +11,8 @@ import { resolveMessages } from './messagesController'
 import { getIO, rememberChannelServer, forgetChannelServer } from '../sockets/chatSocket'
 import { loadAccess, channelBits, has, requirePerm, requireBits, validateOverwrites } from '../utils/access'
 import { parseOverwrites } from '../permissions'
+import { emitChannelEvent, refreshChannelAccess } from '../sockets/visibility'
+import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 
 /**
  * Serializes callbacks per server id, within this process only. Guards every
@@ -168,29 +170,23 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
 
     const channel = result.channel
     const shaped = shapeChannel(channel)
-    emitToServer(server, 'channel:created', { serverId, channel: shaped })
-
-    // Members with the app open must also start RECEIVING the new channel, not
-    // merely see it appear. Their sockets joined rooms at connect time, and
-    // this channel did not exist then. One socketsJoin call against the union
-    // of every member's personal room, rather than an awaited fetchSockets()
-    // round trip per member followed by a join loop.
 
     // Remember which server it belongs to before anyone can be in it: the
     // map is filled at connect time from the channels that existed then, and
     // this one did not. Without it the first call:state for this channel
     // would arrive with no serverId and the rail could not attribute it.
     rememberChannelServer(channel._id.toString(), server._id.toString())
-    const io = getIO()
-    // Guarded on a non-empty member list: Socket.IO treats io.in([]) as "every
-    // connected socket", not "nobody" — an empty array here would silently
-    // join every user in the process to this channel's room. Unreachable
-    // today (the owner is always a member), but structurally safe rather
-    // than incidentally safe.
-    if (io && server.members.length) {
-      const room = `chan:${channel._id.toString()}`
-      io.in(server.members.map(m => `user:${m.toString()}`)).socketsJoin(room)
-    }
+
+    // Announced member by member, to those who may see it. A channel created
+    // inside a private category is as private as the category, and
+    // announcing it to the whole server put its name in every sidebar.
+    await emitChannelEvent(server._id, 'channel:created', channel)
+
+    // Members with the app open must also start RECEIVING the new channel,
+    // not merely see it appear: their sockets joined rooms at connect time,
+    // and this channel did not exist then. Only those who may see it.
+    // Nobody's permissions changed, so nobody is told to refetch.
+    await refreshChannelAccess(server._id, { announce: false })
     res.status(201).json({ channel: shaped })
   } catch (err) { next(err) }
 }
@@ -335,9 +331,11 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
       : await applyUpdate()
     if ('error' in result) { res.status(400).json({ message: result.error }); return }
 
-    emitToServer(found.server, 'channel:updated', {
-      serverId: found.server._id.toString(), channel: shapeChannel(found.channel),
-    })
+    await emitChannelEvent(found.server._id, 'channel:updated', found.channel)
+    // Who may see this channel can just have changed — its own overwrites, or
+    // the category whose overwrites it now inherits. Rooms follow, and every
+    // member is told to refetch, so a sidebar drops it or gains it.
+    if (wantsPerms || wantsCategory) await refreshChannelAccess(found.server._id)
     res.json({ channel: shapeChannel(found.channel) })
   } catch (err) { next(err) }
 }
@@ -403,21 +401,15 @@ export const getChannelMessages = async (req: Request, res: Response, next: Next
      * suppressed — which is exactly the promised behaviour: nothing before you
      * arrived, everything after.
      */
-    if (!has(found.bits, 'ReadMessageHistory')) { res.json({ messages: [] }); return }
+    if (!has(found.bits, 'ReadMessageHistory')) {
+      res.json({ messages: [], hasOlder: false, hasNewer: false }); return
+    }
 
-    const before = req.query.before as string | undefined
-    const limit  = Math.min(Number(req.query.limit) || 50, 100)
-
-    const filter: any = { conversationId: found.channel._id.toString() }
-    if (before) filter.createdAt = { $lt: new Date(before) }
-
-    const raw = await Message.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean()
-
-    const resolved = await resolveMessages(raw, found.channel._id.toString())
-    res.json({ messages: resolved.reverse() })
+    const channelId = found.channel._id.toString()
+    const win = await loadHistoryWindow({ conversationId: channelId }, req.query as HistoryQuery)
+    if (!win.ok) { res.status(win.status).json({ message: win.message }); return }
+    const resolved = await resolveMessages(win.messages, channelId)
+    res.json({ messages: resolved, hasOlder: win.hasOlder, hasNewer: win.hasNewer })
   } catch (err) { next(err) }
 }
 

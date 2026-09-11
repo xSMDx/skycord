@@ -282,6 +282,28 @@ export const canActOnMemberUI = (
   return actor.highestPosition > (target.highestPosition ?? -1)
 }
 
+/**
+ * Whether this viewer may manage a role at `rolePosition` — the presentation
+ * mirror of `canManageRole` in server/permissions.ts, and held to it by the
+ * same parity test as canActOnMemberUI.
+ *
+ * Owner always; otherwise Manage Roles AND a strictly higher position. Equal
+ * does not pass, for the same reason as everywhere else: two peers must not be
+ * able to rewrite each other's roles.
+ *
+ * Decides presentation only. `setMemberRoles` runs the real check.
+ */
+export const canManageRoleUI = (
+  actor: { isOwner: boolean; permissions: string; highestPosition: number } | null,
+  rolePosition: number,
+): boolean => {
+  if (!actor) return false
+  if (actor.isOwner) return true
+  const bit = PERMISSION_BIT.ManageRoles
+  if ((parseWireBits(actor.permissions) & bit) !== bit) return false
+  return actor.highestPosition > rolePosition
+}
+
 /** Role colours. Deliberately the set people arriving already recognise. */
 export const ROLE_COLORS = [
   '#99aab5', '#1abc9c', '#2ecc71', '#3498db', '#9b59b6',

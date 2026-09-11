@@ -141,6 +141,30 @@ describe('POST /invites/:code', () => {
     expect(res.body.categories[0].server).toBe(s.id)
   })
 
+  /**
+   * Same payload, same rule as GET /servers/:sid: the joiner is told what they
+   * may do, and is sent only the channels they may see. The join sent every
+   * channel and no access, so a new member's sidebar listed private channels
+   * and every permission-gated control was hidden until a reload.
+   */
+  it('says what the joiner may do and sends only the channels they may see', async () => {
+    const a = await register(), b = await register()
+    const s = await mkServer(a)
+    const secret = await mkChannel(a, s.id, { name: 'secret' })
+    await app().get(`/servers/${s.id}/roles`).set(auth(a))
+    const everyone = await Role.findOne({ server: s.id, isEveryone: true })
+    await app().patch(`/servers/${s.id}/channels/${secret.id}`).set(auth(a)).send({
+      overwrites: [{ id: everyone!._id.toString(), type: 'role', allow: '0', deny: PERMISSIONS.ViewChannels.toString() }],
+    })
+    const inv = await mkInvite(a, s.id)
+
+    const res = await app().post(`/invites/${inv.code}`).set(auth(b))
+    expect(res.status).toBe(200)
+    expect(res.body.me).toMatchObject({ isOwner: false, highestPosition: -1 })
+    expect(res.body.channels.map((c: any) => c.id)).not.toContain(secret.id)
+    expect(res.body.voiceRestrictions).toEqual([])
+  })
+
   it('returns categories the joiner can actually group the returned channels by', async () => {
     // The payload has to be self-sufficient: every non-null `channel.category`
     // must resolve inside the `categories` array of the very same response, or

@@ -5,7 +5,7 @@ import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
 import type { WireInvite } from '@/composables/useApi'
 
-const props = defineProps<{ serverId: string; serverName: string; isOwner: boolean }>()
+const props = defineProps<{ serverId: string; serverName: string; canManage: boolean }>()
 const emit  = defineEmits<{ close: [] }>()
 
 const { createServerInvite, listServerInvites, revokeServerInvite } = useApi()
@@ -25,7 +25,7 @@ const expiry  = ref<'24h' | '7d' | 'never'>('24h')
 const linkFor = (code: string) => `${location.origin}/join/${code}`
 
 const load = async () => {
-  if (!props.isOwner) return   // listing is owner-only server-side (403 otherwise)
+  if (!props.canManage) return   // listing needs Manage Server (403 otherwise)
   loading.value = true
   try { invites.value = (await listServerInvites(props.serverId)).invites }
   catch (e: any) { error.value = e?.message || 'Could not load invites' }
@@ -124,7 +124,7 @@ onMounted(load)
             {{ copied ? 'Copied!' : 'Copy' }}
           </button>
         </div>
-        <template v-else-if="isOwner">
+        <template v-else-if="canManage">
           <div class="is-expiry-row">
             <button
               class="is-expiry-btn" :class="{ active: expiry === '24h' }"
@@ -150,7 +150,7 @@ onMounted(load)
       </div>
 
       <!-- Existing invites (owner only — listing 403s for anyone else) -->
-      <div v-if="isOwner" class="is-list">
+      <div v-if="canManage" class="is-list">
         <span class="is-list-label">Active invite links</span>
         <p v-if="loading" class="is-empty">Loading…</p>
         <p v-else-if="invites.length === 0" class="is-empty">No active invites</p>

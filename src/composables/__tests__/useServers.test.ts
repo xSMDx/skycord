@@ -52,6 +52,9 @@ const wireChannel = (id: string, server: string, name: string, type: 'text' | 'v
 const wireCategory = (id: string, server: string, name: string, position = 0): WireCategory =>
   ({ id, server, name, position })
 
+/** An ordinary member's resolved access: nothing granted, no role. */
+const MEMBER_ACCESS = { isOwner: false, permissions: '0', highestPosition: -1 }
+
 const wireMember = (id: string, overrides: Partial<WireMember> = {}): WireMember => ({
   id, username: id, displayName: id, avatar: null, avatarCrop: null,
   status: 'online', isOwner: false, ...overrides,
@@ -318,8 +321,8 @@ describe('useServers', () => {
     // Both buckets populated (categories explicitly `[]`) so openServer takes
     // the cached path rather than the fetch path — the fetch itself is
     // covered elsewhere and isn't what this test is about.
-    s.receiveDetail(wireServer('s1'), [wireChannel('v1', 's1', 'Lounge',  'voice', 0)], [])
-    s.receiveDetail(wireServer('s2'), [wireChannel('c1', 's2', 'general', 'text',  0)], [])
+    s.receiveDetail(wireServer('s1'), [wireChannel('v1', 's1', 'Lounge',  'voice', 0)], [], MEMBER_ACCESS)
+    s.receiveDetail(wireServer('s2'), [wireChannel('c1', 's2', 'general', 'text',  0)], [], MEMBER_ACCESS)
     s.activeServerId.value = 's1'
     s.viewVoiceChannel('v1')
     await s.openServer('s2')
@@ -750,11 +753,12 @@ describe('useServers', () => {
     expect(s.groupedChannels.value.map(g => g.category?.id ?? null)).toEqual([null, 'cat1'])
   })
 
-  it('openServer makes no request when both buckets are already populated', async () => {
+  it('openServer makes no request when the detail is fully cached', async () => {
     s.receiveDetail(
       wireServer('s1'),
       [wireChannel('c1', 's1', 'general', 'text', 0)],
       [wireCategory('cat1', 's1', 'Chat', 0)],
+      MEMBER_ACCESS,
     )
     await s.openServer('s1')
     expect(api.getServerDetail).not.toHaveBeenCalled()
@@ -762,9 +766,81 @@ describe('useServers', () => {
   })
 
   it('openServer makes no request for a server known to have no categories', async () => {
-    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)], [])
+    s.receiveDetail(wireServer('s1'), [wireChannel('c1', 's1', 'general', 'text', 0)], [], MEMBER_ACCESS)
     await s.openServer('s1')
     expect(api.getServerDetail).not.toHaveBeenCalled()
+  })
+
+  it('openServer refetches when the viewer’s own access was never received', async () => {
+    // The create and invite-join payloads carried channels and categories but
+    // no `me`. Every permission gate reads unknown access as "no", so the
+    // person who had just made a server could not drag a channel or add a
+    // member to a role — and with both buckets full, nothing ever refetched.
+    api.getServerDetail.mockResolvedValue({
+      server: wireServer('sx'), channels: [wireChannel('cx', 'sx', 'general', 'text', 0)], categories: [],
+      me: { isOwner: true, permissions: '0', highestPosition: -1 },
+    })
+    s.receiveDetail(wireServer('sx'), [wireChannel('cx', 'sx', 'general', 'text', 0)], [])
+
+    await s.openServer('sx')
+
+    expect(api.getServerDetail).toHaveBeenCalledWith('sx')
+    expect(s.canInServer('sx', 'ManageChannels')).toBe(true)
+  })
+
+  describe('refreshServerAccess', () => {
+    // Unique ids: `me` lands in module state this suite's reset does not
+    // clear, and a stray one on a shared id would change what openServer does.
+    const detail = (ids: string[]) => ({
+      server:     wireServer('sr'),
+      channels:   ids.map((id, i) => wireChannel(id, 'sr', id, id.startsWith('v') ? 'voice' as const : 'text' as const, i)),
+      categories: [],
+      me:         MEMBER_ACCESS,
+    })
+    const load = (ids: string[]) => {
+      const d = detail(ids)
+      s.receiveDetail(d.server, d.channels, d.categories, d.me)
+    }
+
+    it('refetches a server whose detail is loaded, so a channel it may no longer see goes', async () => {
+      load(['general', 'secret'])
+      api.getServerDetail.mockResolvedValue(detail(['general']))
+      await s.refreshServerAccess('sr')
+      expect(api.getServerDetail).toHaveBeenCalledWith('sr')
+      expect(s.channelsByServer.value['sr'].map(c => c.id)).toEqual(['general'])
+    })
+
+    it('leaves a server it never loaded alone — nothing there is stale', async () => {
+      await s.refreshServerAccess('never-opened')
+      expect(api.getServerDetail).not.toHaveBeenCalled()
+    })
+
+    it('moves someone off the channel on screen when they can no longer see it', async () => {
+      load(['general', 'secret'])
+      s.activeServerId.value = 'sr'
+      s.openChannel('secret')
+      api.getServerDetail.mockResolvedValue(detail(['general']))
+      await s.refreshServerAccess('sr')
+      expect(s.activeChannelId.value).toBe('general')
+    })
+
+    it('leaves someone where they are when their channel survived', async () => {
+      load(['general', 'secret'])
+      s.activeServerId.value = 'sr'
+      s.openChannel('secret')
+      api.getServerDetail.mockResolvedValue(detail(['general', 'secret']))
+      await s.refreshServerAccess('sr')
+      expect(s.activeChannelId.value).toBe('secret')
+    })
+
+    it('closes a voice stage for a channel they can no longer see', async () => {
+      load(['general', 'vstage'])
+      s.activeServerId.value = 'sr'
+      s.viewVoiceChannel('vstage')
+      api.getServerDetail.mockResolvedValue(detail(['general']))
+      await s.refreshServerAccess('sr')
+      expect(s.viewedVoiceId.value).toBeNull()
+    })
   })
 
   it('openServer fetches a server it has never seen', async () => {
@@ -841,6 +917,37 @@ describe('useServers', () => {
   })
 
   // ── server members ───────────────────────────────────────────────────────
+
+  it('a member carries the roles they hold', async () => {
+    api.getServerMembers.mockResolvedValueOnce({
+      members: [wireMember('u1', { roles: ['r1', 'r2'], highestPosition: 4 })],
+    })
+    await s.loadServerMembers('s1')
+    expect(s.membersByServer.value['s1'][0]).toMatchObject({ roles: ['r1', 'r2'], highestPosition: 4 })
+  })
+
+  it('reads a member from an older payload as holding nothing', async () => {
+    // No `roles` field at all. Absent must read as none, the same conservative
+    // reading the rank gets — never as "unknown, so assume something".
+    api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1')] })
+    await s.loadServerMembers('s1')
+    expect(s.membersByServer.value['s1'][0].roles).toEqual([])
+  })
+
+  it('applyMemberRoles moves roles and rank together, in place', async () => {
+    api.getServerMembers.mockResolvedValueOnce({
+      members: [wireMember('u1', { roles: ['r1'], highestPosition: 2 })],
+    })
+    await s.loadServerMembers('s1')
+    s.applyMemberRoles('s1', 'u1', ['r1', 'r2'], 7)
+    expect(s.membersByServer.value['s1'][0]).toMatchObject({ roles: ['r1', 'r2'], highestPosition: 7 })
+  })
+
+  it('applyMemberRoles leaves a member it never loaded alone', () => {
+    // Inventing a row would half-populate a list the client has not fetched.
+    s.applyMemberRoles('never-loaded', 'u9', ['r1'], 3)
+    expect(s.membersByServer.value['never-loaded']).toBeUndefined()
+  })
 
   it('members land per server and do not leak between servers', async () => {
     api.getServerMembers.mockResolvedValueOnce({ members: [wireMember('u1'), wireMember('u2')] })

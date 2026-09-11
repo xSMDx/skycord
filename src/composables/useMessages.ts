@@ -5,6 +5,30 @@ const dmMessages     = ref<Record<string, Message[]>>({})
 const serverMessages = ref<Record<string, Message[]>>({})
 const groupMessages  = ref<Record<string, Message[]>>({})
 
+/** Which conversation a window belongs to — the store keeps three lists. */
+export type ConvKind = 'dm' | 'group' | 'channel'
+
+/**
+ * Where a conversation's loaded messages sit in its history.
+ *
+ * Before this, every list was "the newest 50" and nothing else could be
+ * loaded, so nothing needed saying. Now a list can be any stretch of history:
+ * one reached by scrolling up, or one loaded around a message someone jumped
+ * to, which is not the present and must not have live messages appended to it.
+ */
+export interface HistoryWindowMeta {
+  /** There is history above the first loaded message. */
+  hasOlder: boolean
+  /** The window reaches the newest message, so live arrivals append to it. */
+  live: boolean
+  /** Messages that arrived while the window was not live — counted, not shown. */
+  awayCount: number
+}
+
+const windowMeta = ref<Record<string, HistoryWindowMeta>>({})
+const metaKey = (kind: ConvKind, id: string) => `${kind}:${id}`
+const FRESH: HistoryWindowMeta = Object.freeze({ hasOlder: false, live: true, awayCount: 0 })
+
 const makeId  = () => Date.now() + Math.floor(Math.random() * 1000)
 const fmtTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
@@ -12,6 +36,7 @@ export const useMessages = () => {
   // Always overwrite when seeding from DB
   const initDM = (id: string, seed: Message[] = []) => {
     dmMessages.value[id] = seed
+    delete windowMeta.value[metaKey('dm', id)]
   }
   /**
    * Overwrites, like initDM and initGroup. The old guard (`if (!…)`) dated from
@@ -21,14 +46,69 @@ export const useMessages = () => {
    */
   const initChannel = (id: string, seed: Message[] = []) => {
     serverMessages.value[id] = seed
+    delete windowMeta.value[metaKey('channel', id)]
   }
   const initGroup = (id: string, seed: Message[] = []) => {
     groupMessages.value[id] = seed
+    delete windowMeta.value[metaKey('group', id)]
   }
 
   const getDMMessages      = (id: string) => dmMessages.value[id]     ?? []
   const getChannelMessages = (id: string) => serverMessages.value[id] ?? []
   const getGroupMessages   = (id: string) => groupMessages.value[id]  ?? []
+
+  const listFor = (kind: ConvKind) =>
+    kind === 'dm' ? dmMessages : kind === 'group' ? groupMessages : serverMessages
+
+  /** The window's position; a conversation never paged reads as live and complete. */
+  const windowOf = (kind: ConvKind, id: string): HistoryWindowMeta =>
+    windowMeta.value[metaKey(kind, id)] ?? { ...FRESH }
+
+  /** Replace a conversation's window: a first load (live) or a jump (usually not). */
+  const setWindow = (
+    kind: ConvKind, id: string, msgs: Message[], page: { hasOlder: boolean; hasNewer: boolean },
+  ) => {
+    listFor(kind).value[id] = msgs
+    windowMeta.value[metaKey(kind, id)] = { hasOlder: page.hasOlder, live: !page.hasNewer, awayCount: 0 }
+  }
+
+  /**
+   * Keyed on dbId, like pushChannelMessage: a page boundary can overlap a
+   * message that arrived live after the window was loaded.
+   */
+  const withoutKnown = (list: Message[], incoming: Message[]) => {
+    const known = new Set(list.map(m => m.dbId).filter(Boolean))
+    return incoming.filter(m => !m.dbId || !known.has(m.dbId))
+  }
+
+  /** An older page, above the window. */
+  const prependOlder = (kind: ConvKind, id: string, msgs: Message[], hasOlder: boolean) => {
+    const list = listFor(kind).value[id] ?? []
+    listFor(kind).value[id] = [...withoutKnown(list, msgs), ...list]
+    windowMeta.value[metaKey(kind, id)] = { ...windowOf(kind, id), hasOlder }
+  }
+
+  /** A newer page, below the window. Reaching the end makes it live again. */
+  const appendNewer = (kind: ConvKind, id: string, msgs: Message[], hasNewer: boolean) => {
+    const list = listFor(kind).value[id] ?? []
+    listFor(kind).value[id] = [...list, ...withoutKnown(list, msgs)]
+    const was = windowOf(kind, id)
+    windowMeta.value[metaKey(kind, id)] = {
+      ...was, live: !hasNewer, awayCount: hasNewer ? was.awayCount : 0,
+    }
+  }
+
+  /**
+   * A live arrival for a conversation whose window is back in history: counted
+   * for the "Jump to present" bar rather than appended below messages it does
+   * not follow. Returns whether it was held.
+   */
+  const holdIfAway = (kind: ConvKind, id: string): boolean => {
+    const m = windowMeta.value[metaKey(kind, id)]
+    if (!m || m.live) return false
+    m.awayCount += 1
+    return true
+  }
 
   // Push a single message (optimistic or from socket)
   const pushDMMessage = (dmId: string, msg: Message) => {
@@ -140,5 +220,6 @@ const sendDM = (
     sendDM, sendGroup,
     toggleDMReaction, toggleChannelReaction,
     pinMessage, deleteMessage, editMessage,
+    windowMeta, windowOf, setWindow, prependOlder, appendNewer, holdIfAway,
   }
 }

@@ -5,6 +5,8 @@ import {
   addGroupMembers, updateGroup, leaveGroup, createGroupInvite, getInvite, joinViaInvite,
   getMyDMs,
 } from '../controllers/conversationsController'
+import { searchGroupMessages } from '../controllers/searchController'
+import { searchLimit } from '../middleware/rateLimit'
 
 const router = Router()
 router.use(requireAuth)
@@ -15,6 +17,7 @@ router.post('/groups',                 createGroup)
 router.get('/groups',                  getMyConversations)
 router.patch('/groups/:groupId',        updateGroup)
 router.get('/groups/:groupId/messages',  getGroupMessages)
+router.get('/groups/:groupId/search',    searchLimit, searchGroupMessages)
 router.post('/groups/:groupId/messages', sendGroupMessage)
 router.get('/groups/:groupId/members',   getGroupMembers)
 router.post('/groups/:groupId/members', addGroupMembers)

@@ -8,7 +8,7 @@ import { Friendship } from '../models/Friendship'
 import { Server } from '../models/Server'
 import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
-import { loadAccess, channelBits } from '../utils/access'
+import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf } from '../utils/access'
 import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
 import { dmConvId, canDM } from '../controllers/messagesController'
 import * as presence from '../state/presence'
@@ -1132,11 +1132,16 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       myGroups = await Conversation.find({ members: userId }).select('_id').lean()
       myGroups.forEach(g => socket.join(`group:${g._id.toString()}`))
 
-      // One room per channel, not per server: a member receives only the
-      // channels they can see, which is the shape per-channel permissions
-      // will need in a later cycle. `members` is selected alongside `_id` so
-      // the presence announce below can reuse this same query instead of
-      // running Server.find({ members: userId }) a second time.
+      // One room per channel, not per server, so a member receives only the
+      // channels they can see. That was the stated intent here from the start
+      // and the join below never applied it: every member joined every
+      // channel's room, so a private channel's messages reached the whole
+      // server. It now asks `channelViewOf`, the rule GET /servers/:sid uses;
+      // later changes to who sees what are applied by refreshChannelAccess.
+      // `members` is selected alongside `_id` so the presence announce below
+      // can reuse this same query instead of running Server.find({ members:
+      // userId }) a second time; `owner` and `memberRoles` because access is
+      // resolved from them.
       //
       // The ids are kept in `myChannelIds` rather than thrown away after the
       // joins, because the call catch-up below needs exactly the same rule: a
@@ -1144,17 +1149,29 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // Reusing this set keeps the catch-up and the live broadcast agreeing by
       // construction, and costs no extra query.
       const myChannelIds = new Set<string>()
-      const myServers = await Server.find({ members: userId }).select('_id members').lean()
+      const myServers = await Server.find({ members: userId }).select('_id members owner memberRoles').lean()
       if (myServers.length) {
+        const serverIds = myServers.map(s => s._id)
         // `server` is selected alongside `_id` so this same query can fill the
-        // channel -> server map the voice-occupancy payload needs. One field,
-        // no extra round trip.
-        const myChannels = await Channel.find({ server: { $in: myServers.map(s => s._id) } })
-          .select('_id server').lean()
+        // channel -> server map the voice-occupancy payload needs.
+        const [myChannels, myCategories, accessList] = await Promise.all([
+          Channel.find({ server: { $in: serverIds } })
+            .select('_id server category overwrites hideWhenDenied').lean(),
+          Category.find({ server: { $in: serverIds } }).select('_id overwrites').lean(),
+          Promise.all(myServers.map(s => loadAccess(s, userId))),
+        ])
+        const accessIn = new Map(myServers.map((s, i) => [s._id.toString(), accessList[i]]))
+        // Category ids are unique across servers, so one map serves them all.
+        const catOverwrites = await categoryOverwriteMap(myCategories as never)
         myChannels.forEach(c => {
           const id = c._id.toString()
+          const sid = c.server.toString()
+          // Remembered whether or not this member may see it: the map answers
+          // "which server is this channel in", not "may you".
+          rememberChannelServer(id, sid)
+          const access = accessIn.get(sid)
+          if (!access || channelViewOf(access, c, catOverwrites) !== 'full') return
           myChannelIds.add(id)
-          rememberChannelServer(id, c.server.toString())
           socket.join(`chan:${id}`)
         })
       }

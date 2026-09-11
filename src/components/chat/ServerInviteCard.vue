@@ -87,12 +87,11 @@ const join = async () => {
     // `joined: false` means "you were already a member" — still success, not
     // an error, so it gets the same "Joined" state as a fresh join.
     //
-    // Categories are passed explicitly. receiveDetail's third parameter
-    // defaults to `[]`, and that default writes an authoritative "this server
-    // has no categories" into the cache — indistinguishable, to every later
-    // reader, from a server that genuinely has none. The joining member's
-    // sidebar then renders every channel flat until a page reload.
-    receiveDetail(res.server, res.channels, res.categories)
+    // Everything the response carries, passed through: it is the only detail
+    // payload a joiner gets before entering. Leaving categories out once
+    // rendered every channel flat; leaving `me` out hid every
+    // permission-gated control from the new member until a reload.
+    receiveDetail(res.server, res.channels, res.categories, res.me, res.voiceRestrictions)
     state.value = 'joined'
     // The join response is the authority on the destination, not the preview:
     // the channel can be deleted between the two.

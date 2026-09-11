@@ -121,7 +121,7 @@ const displayContent = computed(() =>
  *
  * Absent (a message older than the field) reads as false.
  */
-const hasEveryone = computed(() => !!(props.msg as { mentionsEveryone?: boolean }).mentionsEveryone)
+const hasEveryone = computed(() => !!props.msg.mentionsEveryone)
 
 // Hold-to-view-tree gesture on the reply pill (Telegram-style long-press).
 // Short tap → jump to the original message. Hold past the threshold → open the full chain.
@@ -306,7 +306,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-text.jumbo{font-size:42px;line-height:1.25}
 .msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding: 0 4px;border-radius: 4px;cursor:pointer;font-weight:500}
 .msg-text :deep(.emoji){width:1.35em;height:1.35em;vertical-align:-.28em;margin: 0 .02em;object-fit:contain;display:inline-block}
-.msg-text :deep(.msg-link){color:#00a8fc;text-decoration:var(--link-decoration, none);word-break:break-all}
+.msg-text :deep(.msg-link){color:var(--text-link);text-decoration:var(--link-decoration, none);word-break:break-all}
 .msg-text :deep(.msg-link):hover{text-decoration:underline}
 
 /* Compact message display — single line: [time] Author text */

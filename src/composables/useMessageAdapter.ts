@@ -47,5 +47,8 @@ export const toClientMessage = (m: WireMessage, myId?: string): Message => {
     pinned:  !!m.pinned,
     edited:  !!m.edited,
     replyTo: Array.isArray(m.replyTo) && m.replyTo.length ? m.replyTo : undefined,
+    // Decided by the server at send time, never re-derived from the text here
+    // — see `hasEveryone` in MessageItem. Absent on older messages: false.
+    mentionsEveryone: !!m.mentionsEveryone,
   }
 }

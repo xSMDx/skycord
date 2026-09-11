@@ -46,6 +46,7 @@
 
   /* Readability toggles (flipped by html classes below) */
   --link-decoration: none;     /* "Always underline links" off */
+  --text-link:       #00a8fc;  /* links inside messages — the chat's blue, named so search results match it */
   --name-hover:      #8d96f8;  /* display-name hover tint when name styles on */
 
   /* Mentions & time tokens — theme-aware so they stay legible in every theme.
