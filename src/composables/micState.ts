@@ -39,6 +39,30 @@ export const micFailureReason = (err: unknown): MicState => {
 export const micIsLive = (s: MicState): boolean => s === 'live'
 
 /**
+ * What `voice.mic` should become once a `setMicrophoneEnabled` call resolves.
+ *
+ * Resolving only means the request round-tripped — it is not evidence that a
+ * device the browser had refused, lost or handed to another app came back.
+ * Post-deafen in particular the call is a disable-direction request (or a
+ * no-op), so it resolves every time regardless of what the microphone is
+ * actually doing. Collapsing that resolution straight to 'muted'/'live'
+ * overwrote a specific failure with a generic one and made the notice
+ * explaining it disappear, even though nothing about the device had changed.
+ * A real failure can only be cleared by a fresh publish attempt succeeding,
+ * never as a side effect of an unrelated toggle settling.
+ */
+export const micAfterToggle = (previous: MicState, muted: boolean): MicState => {
+  switch (previous) {
+    case 'denied':
+    case 'missing':
+    case 'busy':
+    case 'insecure':
+    case 'forbidden': return previous
+    default:          return muted ? 'muted' : 'live'
+  }
+}
+
+/**
  * What to show the person in the call. Written for a member who was invited to
  * somebody else's server: it says what happened and what they can do, and
  * never names HTTPS, certificates or a script to run. The host-facing detail

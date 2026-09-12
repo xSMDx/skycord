@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { micFailureReason, micIsLive, micNotice } from '../micState'
+import { micFailureReason, micIsLive, micNotice, micAfterToggle } from '../micState'
 
 // getUserMedia reports why it failed through DOMException.name, and the four
 // causes need four different sentences: the recovery is different for each and
@@ -61,5 +61,32 @@ describe('micNotice', () => {
   it('distinguishes the four failures', () => {
     const all = (['denied', 'missing', 'busy', 'insecure', 'forbidden'] as const).map(s => micNotice(s))
     expect(new Set(all).size).toBe(all.length)
+  })
+})
+
+// A resolved setMicrophoneEnabled() call is a network round-trip completing,
+// not proof that a refused device started working again. toggleMute and the
+// undeafen branch of toggleDeafen both resolve unconditionally after a
+// deafen (it's a disable-direction call, or a no-op) regardless of whether
+// the mic the person joined with actually works — so the state from before
+// the toggle must win over a generic live/muted guess.
+describe('micAfterToggle', () => {
+  it('lets a real failure survive an unmute attempt', () => {
+    for (const s of ['denied', 'missing', 'busy', 'insecure', 'forbidden'] as const) {
+      expect(micAfterToggle(s, false)).toBe(s)
+    }
+  })
+
+  it('lets a real failure survive a mute (or re-mute) too', () => {
+    for (const s of ['denied', 'missing', 'busy', 'insecure', 'forbidden'] as const) {
+      expect(micAfterToggle(s, true)).toBe(s)
+    }
+  })
+
+  it('maps to muted/live normally when there was no failure to protect', () => {
+    expect(micAfterToggle('live', false)).toBe('live')
+    expect(micAfterToggle('live', true)).toBe('muted')
+    expect(micAfterToggle('muted', false)).toBe('live')
+    expect(micAfterToggle('muted', true)).toBe('muted')
   })
 })

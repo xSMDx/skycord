@@ -11,7 +11,7 @@ import {
   type LocalParticipant,
 } from 'livekit-client'
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
-import { micFailureReason, micIsLive, type MicState } from './micState'
+import { micFailureReason, micIsLive, micAfterToggle, type MicState } from './micState'
 import { holdPresence } from './usePresence'
 import { useAuth } from './useAuth'
 import { useApi } from './useApi'
@@ -736,10 +736,11 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
      * state, and the callers below surface why.
      */
     if (voice.localMuted && !permits.audio) return
+    const micBefore = voice.mic
     voice.localMuted = !voice.localMuted
     voice.localMuted ? soundMute() : soundUnmute()
     room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions())
-      .then(() => { voice.mic = voice.localMuted ? 'muted' : 'live' })
+      .then(() => { voice.mic = micAfterToggle(micBefore, voice.localMuted) })
       .catch(e => {
         // The unmute did not take. Say so rather than drawing an open
         // microphone over a device that refused.
@@ -764,9 +765,10 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       // Undeafening restores what you had before — unless the token forbids
       // publishing, in which case "what you had before" is not available and
       // staying muted is the only truthful outcome.
+      const micBefore = voice.mic
       voice.localMuted = muteBeforeDeafen || !permits.audio
       room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions())
-        .then(() => { voice.mic = voice.localMuted ? 'muted' : 'live' })
+        .then(() => { voice.mic = micAfterToggle(micBefore, voice.localMuted) })
         .catch(e => { voice.mic = micFailureReason(e); voice.localMuted = true })
       // Not a blanket unmute: someone you muted individually must STAY muted
       // when you undeafen, or undeafening silently undoes those choices.
