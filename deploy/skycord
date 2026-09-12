@@ -116,7 +116,10 @@ health_json() {
     "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>r.text()).then(t=>console.log(t)).catch(()=>process.exit(1))" 2>/dev/null
 }
 
-health_field() { printf '%s' "$1" | grep -o "\"$2\"[ ]*:[ ]*\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
+# The || true matters: grep exits non-zero when the field is not there, which
+# is the ordinary answer for an app that is not up yet, and under pipefail that
+# status would travel to the caller.
+health_field() { printf '%s' "$1" | grep -o "\"$2\"[ ]*:[ ]*\"[^\"]*\"" | head -1 | cut -d'"' -f4 || true; }
 
 wait_healthy() {
   local want="$1" waited=0 json version db
@@ -161,9 +164,12 @@ mongo_in_stack() { compose ps --services 2>/dev/null | grep -qx mongo; }
 prune_backups() {
   local prefix="$1" keep="$2" old
   # shellcheck disable=SC2012 # ls -t sorts by time; these names are ours
+  # Nothing of this kind yet is not a failure. ls exits non-zero when the glob
+  # matches nothing and, under pipefail, that became the exit status of the
+  # command that had just written its first backup successfully.
   ls -1t "$SKYCORD_DIR/backups/$prefix"*.gz 2>/dev/null | tail -n "+$((keep + 1))" | while read -r old; do
     rm -f "$old"
-  done
+  done || true
 }
 
 do_backup() {

@@ -93,6 +93,7 @@ is "reads the version" "$(health_field '{"status":"ok","version":"v0.19.1","db":
 is "reads the database" "$(health_field '{"status":"ok","version":"v0.19.1","db":"up"}' db)" "up"
 is "reads a down database" "$(health_field '{"status":"degraded","version":"v1","db":"down"}' db)" "down"
 is "says nothing for an empty answer" "$(health_field '' version)" ""
+yes_ "and does not fail doing it" health_field '' version
 
 echo "backup pruning"
 mkdir -p "$SKYCORD_DIR/backups"
@@ -104,6 +105,9 @@ prune_backups nightly 3
 is "keeps the newest nightly backups" "$(count "$SKYCORD_DIR"/backups/nightly-*.gz)" "3"
 is "leaves pre-update backups alone"  "$(count "$SKYCORD_DIR"/backups/pre-update-*.gz)" "5"
 has "keeps the most recent one" <(ls -1 "$SKYCORD_DIR"/backups/nightly-*.gz) "nightly-20260905"
+# A fresh install has no nightly backups, and the first manual one must not
+# report failure because there was nothing to prune.
+yes_ "succeeds when there is nothing of that kind" prune_backups nosuch 3
 prune_backups pre-update 2
 is "prunes pre-update separately" "$(count "$SKYCORD_DIR"/backups/pre-update-*.gz)" "2"
 
