@@ -11,6 +11,7 @@ import {
   type LocalParticipant,
 } from 'livekit-client'
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
+import { micFailureReason, micIsLive, micAfterToggle, type MicState } from './micState'
 import { holdPresence } from './usePresence'
 import { useAuth } from './useAuth'
 import { useApi } from './useApi'
@@ -55,7 +56,11 @@ interface VoiceState {
   participants: VoiceParticipant[]
   ping:         number | null      // round-trip ms, null until first sample
   quality:      VoiceQuality       // LiveKit connection quality
-  micBlocked:   boolean            // joined listen-only (no mic — needs HTTPS/localhost)
+  // What the microphone is actually doing. Replaces a `micBlocked` boolean that
+  // was derived from whether the browser HAS getUserMedia, not from whether
+  // publishing worked — so a refused or absent microphone read as connected
+  // and unmuted, and the member talked into nothing.
+  mic:          MicState
   // Where this call actually landed, as the SERVER resolved it — not what
   // was asked for. A request can fall back (the entry was deleted, the
   // channel points at another guild), and the UI must name the room people
@@ -78,7 +83,7 @@ export const voice = reactive<VoiceState>({
   activeConvId: null, activeKind: null, activeName: '',
   connecting: false, connectStage: null, connectAttempt: 0, connectingConvId: null, connected: false,
   localMuted: false, localDeafened: false, participants: [],
-  ping: null, quality: 'unknown', micBlocked: false, voiceServer: null,
+  ping: null, quality: 'unknown', mic: 'muted', voiceServer: null,
   serverMuted: false, serverDeafened: false,
 })
 
@@ -474,7 +479,7 @@ const cleanup = () => {
   voice.localDeafened = false
   voice.ping = null
   voice.quality = 'unknown'
-  voice.micBlocked = false
+  voice.mic = 'muted'
   // Graphs and counters belong to one call; the next one starts empty.
   resetRtcStats()
 }
@@ -629,14 +634,34 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       setRoom(r)
       // Mic capture needs a secure context (HTTPS or localhost); over plain
       // http on an IP, navigator.mediaDevices is undefined. Rather than throw
-      // (which orphaned the room → reconnect loop), join LISTEN-ONLY so the user
-      // can still hear the call, flagged so the UI can nudge them to use HTTPS.
+      // (which orphaned the room → reconnect loop), join LISTEN-ONLY so the
+      // user can still hear the call — voice.mic below records which of the
+      // possible reasons applies, instead of collapsing every failure into
+      // one boolean.
       const canCapture = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
       if (effectiveInputMode() === 'ptt') {
         bindPtt()
-      } else if (canCapture) {
-        try { await publishMic(r.localParticipant) }
-        catch (e) { console.warn('[voice] mic unavailable — joining listen-only', e) }
+        voice.mic = 'muted'
+      } else if (!canCapture) {
+        // No getUserMedia at all: the page is not on a secure origin. This is
+        // the one failure that is the host's to fix, not the member's.
+        voice.mic = 'insecure'
+      } else if (!permits.audio) {
+        voice.mic = 'forbidden'
+      } else {
+        try {
+          await publishMic(r.localParticipant)
+          voice.mic = 'live'
+        } catch (e) {
+          // Still a listen-only join — throwing here orphaned the room and
+          // caused a reconnect loop. What changes is that the failure now
+          // reaches the UI instead of a console nobody has open.
+          voice.mic = micFailureReason(e)
+          console.warn('[voice] mic unavailable — joining listen-only', e)
+        }
+        // Outside the try, exactly where it was. Moving it inside would skip
+        // the chain on a failed publish, which is a behaviour change this
+        // slice has no reason to make.
         await applyMicChain()
       }
       voice.connected = true
@@ -647,12 +672,12 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       voice.activeConvId = convId
       voice.activeKind = kind
       voice.activeName = name
-      voice.micBlocked = !canCapture
       voice.voiceServer = voiceServer ?? null
-      // Also muted when the channel forbids publishing at all: arriving with an
-      // open-microphone icon over a token that refuses audio is the exact lie
-      // publishMic exists to prevent.
-      voice.localMuted = effectiveInputMode() === 'ptt' || !canCapture || !permits.audio
+      // Muted whenever the mic isn't actually live — denied, missing, busy,
+      // insecure or forbidden all collapse to the same UI state here. Arriving
+      // with an open-microphone icon over a mic that never published is the
+      // exact lie publishMic exists to prevent.
+      voice.localMuted = effectiveInputMode() === 'ptt' || !micIsLive(voice.mic)
       syncParticipants()
       emitCallJoin(convId, kind)
       soundCallJoin()
@@ -711,9 +736,17 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
      * state, and the callers below surface why.
      */
     if (voice.localMuted && !permits.audio) return
+    const micBefore = voice.mic
     voice.localMuted = !voice.localMuted
     voice.localMuted ? soundMute() : soundUnmute()
-    room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions()).catch(() => {})
+    room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions())
+      .then(() => { voice.mic = micAfterToggle(micBefore, voice.localMuted) })
+      .catch(e => {
+        // The unmute did not take. Say so rather than drawing an open
+        // microphone over a device that refused.
+        voice.mic = micFailureReason(e)
+        voice.localMuted = true
+      })
     if (!voice.localMuted && voice.localDeafened) voice.localDeafened = false
     syncParticipants()
   }
@@ -732,8 +765,11 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       // Undeafening restores what you had before — unless the token forbids
       // publishing, in which case "what you had before" is not available and
       // staying muted is the only truthful outcome.
+      const micBefore = voice.mic
       voice.localMuted = muteBeforeDeafen || !permits.audio
-      room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions()).catch(() => {})
+      room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions())
+        .then(() => { voice.mic = micAfterToggle(micBefore, voice.localMuted) })
+        .catch(e => { voice.mic = micFailureReason(e); voice.localMuted = true })
       // Not a blanket unmute: someone you muted individually must STAY muted
       // when you undeafen, or undeafening silently undoes those choices.
       audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
