@@ -43,6 +43,20 @@ describe('onAccentText', () => {
     }
   })
 
+  it('resolves the gap between black\'s crossover and ink\'s own', () => {
+    // 0.179 is where WHITE and pure black cross over — it is not where WHITE
+    // and INK (#0e0f11, luminance 0.00476) cross over; that true crossover is
+    // ~0.1898. #767676 has luminance ~0.181, which sits inside that gap: a
+    // threshold borrowed from black picks INK here at ~4.2:1 even though
+    // WHITE was sitting right there at ~4.54:1. None of the shipped presets
+    // land in this gap, which is why they never caught it.
+    const hex = '#767676'
+    const chosen = onAccentText(hex)
+    const other = chosen === WHITE ? INK : WHITE
+    expect(ratio(chosen, hex)).toBeGreaterThanOrEqual(ratio(other, hex))
+    expect(ratio(chosen, hex)).toBeGreaterThanOrEqual(4.5)
+  })
+
   it('survives a malformed value rather than throwing', () => {
     // Custom accents come from a colour input and from restored settings.
     expect([INK, WHITE]).toContain(onAccentText('not-a-colour'))

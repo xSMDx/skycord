@@ -7,6 +7,15 @@
  * be any colour the user types, the only answer that cannot rot is to measure
  * it. Material-You already derived this correctly from its own palette; this is
  * the same idea for every other path.
+ *
+ * The pick is made by computing the WCAG contrast ratio of the accent against
+ * each candidate and keeping the higher one — not by comparing the accent's
+ * luminance to a fixed crossover point. A crossover point is only valid for
+ * the exact pair of colours it was derived from; this function pairs WHITE
+ * with INK, not with pure black, so a threshold borrowed from black silently
+ * mis-ranks any accent whose luminance falls between the two. Measuring both
+ * ratios directly makes no assumption about what INK or WHITE are, so it
+ * stays correct even if either one changes.
  */
 const INK = '#0e0f11'
 const WHITE = '#ffffff'
@@ -23,6 +32,12 @@ const luminance = (hex: string): number => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
+const contrast = (aHex: string, bHex: string): number => {
+  const a = luminance(aHex)
+  const b = luminance(bHex)
+  const [hi, lo] = a > b ? [a, b] : [b, a]
+  return (hi + 0.05) / (lo + 0.05)
+}
+
 export const onAccentText = (accentHex: string): string =>
-  // 0.179 is where white and black cross over for contrast against a colour.
-  luminance(accentHex) > 0.179 ? INK : WHITE
+  contrast(INK, accentHex) >= contrast(WHITE, accentHex) ? INK : WHITE
