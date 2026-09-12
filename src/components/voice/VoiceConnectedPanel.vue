@@ -10,6 +10,7 @@ import { voiceSettings } from '@/composables/useVoiceSettings'
 import Sparkline from '@/components/ui/Sparkline.vue'
 import { rtc, retainRtcStats, releaseRtcStats, avgPing, outLossPct } from '@/composables/useRtcStats'
 import { useApi, type WireMyVoiceServer } from '@/composables/useApi'
+import { micNotice } from '@/composables/micState'
 
 // Persistent "Voice Connected" strip above the user panel — stays put while you
 // browse other chats, so the call survives navigation. Mute/deafen live in the
@@ -222,7 +223,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="vcp-meta">
         <span class="vcp-status" :style="{ color: q.color }">{{ q.label }}</span>
-        <span v-if="voice.micBlocked && voice.connected" class="vcp-name vcp-warn">Listen-only · mic needs HTTPS</span>
+        <span v-if="micNotice(voice.mic) && voice.connected" class="vcp-name vcp-warn">{{ micNotice(voice.mic) }}</span>
         <span v-else class="vcp-name">{{ voice.connecting ? voice.activeName : `${pingText} · ${voice.activeName}` }}</span>
       </div>
       <button class="vcp-leave" v-tip="voice.connecting ? 'Cancel' : 'Disconnect'" @click.stop="leave"><PhoneOff :size="18" :stroke-width="2.25" /></button>
