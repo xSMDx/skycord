@@ -11,7 +11,8 @@ permissions:
   packages: write   # push the image
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/skycord
+  # Built per job by lowercasing the owner — see the note in "Version tags".
+  IMAGE_NAME: skycord
 
 jobs:
   check:
@@ -75,10 +76,15 @@ jobs:
       - name: Version tags
         id: tags
         run: |
+          # xSMDx/skycord is a valid repository and an invalid image name:
+          # Docker requires lowercase. Workflow expressions have no function
+          # for that, so the name is assembled here and passed on.
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ env.IMAGE_NAME }}"
           V="${GITHUB_REF_NAME}"
           MINOR="${V%.*}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "list=${{ env.IMAGE }}:$V,${{ env.IMAGE }}:$MINOR" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "list=$IMAGE:$V,$IMAGE:$MINOR" >> "$GITHUB_OUTPUT"
       - name: Build for x86-64 and ARM64
         uses: docker/build-push-action@v6
         with:
@@ -98,7 +104,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Rehearse
-        run: bash deploy/tests/rehearsal.sh "${{ env.IMAGE }}" "${GITHUB_REF_NAME}"
+        run: |
+          bash deploy/tests/rehearsal.sh \
+            "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ env.IMAGE_NAME }}" "${GITHUB_REF_NAME}"
 
   publish:
     name: Publish the release
@@ -114,8 +122,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Move latest
         run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ env.IMAGE_NAME }}"
           docker buildx imagetools create \
-            --tag "${{ env.IMAGE }}:latest" "${{ env.IMAGE }}:${GITHUB_REF_NAME}"
+            --tag "$IMAGE:latest" "$IMAGE:${GITHUB_REF_NAME}"
       - name: Gather the assets a server downloads
         run: |
           mkdir -p out
