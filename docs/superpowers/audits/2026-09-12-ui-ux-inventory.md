@@ -1,8 +1,9 @@
 # UI/UX audit — ranked inventory
 
-Roadmap item 2, step 1: scope only. **Nothing here has been fixed.** The next
-step is triage — you decide what is a flaw and what is deliberate, and several
-of these are very likely deliberate.
+Roadmap item 2, step 1: scope only when this was written. Finding 1 has
+since been fixed, on branch `ui-audit-01-voice-truthfulness`. The next step
+is triage — you decide what is a flaw and what is deliberate, and several of
+these are very likely deliberate.
 
 **Method:** dual-track. An independent design review read the code and judged
 the product without seeing any measurements; a mechanical pass measured
@@ -40,6 +41,13 @@ load-bearing ones were verified line by line before being written down here.
 
 ### 1. "Voice Connected" is asserted over a microphone that is not publishing
 
+**Fixed** on branch `ui-audit-01-voice-truthfulness` — plan:
+[`2026-09-12-ui-audit-01-voice-truthfulness.md`](../plans/2026-09-12-ui-audit-01-voice-truthfulness.md).
+Everything below is the **former** state, kept as the record of what was
+wrong. It is replaced by `voice.mic: MicState`, set from what `publishMic`
+actually returned instead of the capability probe, with a per-cause,
+member-facing notice in place of a blanket "Voice Connected."
+
 `src/composables/useVoice.ts:634-655`
 
 ```js
@@ -75,6 +83,12 @@ A fix has to keep the listen-only join — throwing here orphaned the room and
 caused a reconnect loop — and has to stay truthful about which of the three
 causes happened, because the recovery differs for each. It must not blame HTTPS
 at a member who does not own the server.
+
+**Verified live:** mic **denied** — join succeeded into a real LiveKit room,
+the notice was shown, and the microphone drew muted in all three places;
+granting permission mid-call was verified to clear the notice. **Not
+verified:** the `missing` and `busy` causes — they need real device
+manipulation the test machine could not script.
 
 ---
 

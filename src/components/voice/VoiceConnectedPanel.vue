@@ -223,7 +223,11 @@ onBeforeUnmount(() => {
       </div>
       <div class="vcp-meta">
         <span class="vcp-status" :style="{ color: q.color }">{{ q.label }}</span>
-        <span v-if="micNotice(voice.mic) && voice.connected" class="vcp-name vcp-warn">{{ micNotice(voice.mic) }}</span>
+        <!-- title recovers the notice text .vcp-name's ellipsis truncates at
+             narrow widths — not DESIGN.md's "add a tooltip to explain a
+             setting" anti-pattern; there is nothing to explain here, only
+             text the layout already elided. -->
+        <span v-if="micNotice(voice.mic) && voice.connected" class="vcp-name vcp-warn" :title="micNotice(voice.mic) ?? undefined">{{ micNotice(voice.mic) }}</span>
         <span v-else class="vcp-name">{{ voice.connecting ? voice.activeName : `${pingText} · ${voice.activeName}` }}</span>
       </div>
       <button class="vcp-leave" v-tip="voice.connecting ? 'Cancel' : 'Disconnect'" @click.stop="leave"><PhoneOff :size="18" :stroke-width="2.25" /></button>
