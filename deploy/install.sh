@@ -131,7 +131,7 @@ if [ "$PROXY" = "bundled" ] && [ -z "$ASSUME_YES" ]; then
     say "Let's Encrypt cannot verify through Cloudflare's forced-HTTPS redirect."
     TLS_CERT="$(ask 'Path to the certificate .pem: ')"
     TLS_KEY="$(ask 'Path to the private .key: ')"
-    [ -f "$TLS_CERT" ] && [ -f "$TLS_KEY" ] || die "could not read those certificate files"
+    { [ -f "$TLS_CERT" ] && [ -f "$TLS_KEY" ]; } || die "could not read those certificate files"
   fi
 fi
 
@@ -149,7 +149,12 @@ fi
 # ── Secrets ──────────────────────────────────────────────────────────────────
 rand() { openssl rand -hex "$1" 2>/dev/null || head -c "$1" /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 
-from_env() { [ -n "$FROM_ENV" ] && sed -n "s/^$1=//p" "$FROM_ENV" | head -1 || true; }
+from_env() {
+  [ -n "$FROM_ENV" ] || return 0
+  # head closes the pipe, which can leave sed killed by SIGPIPE; under
+  # pipefail that would fail the caller, so the value is all we report.
+  sed -n "s/^$1=//p" "$FROM_ENV" | head -1 || true
+}
 
 if [ -n "$FROM_ENV" ]; then
   [ -f "$FROM_ENV" ] || die "cannot read $FROM_ENV"

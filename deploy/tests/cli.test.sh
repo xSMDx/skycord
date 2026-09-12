@@ -15,7 +15,7 @@ yes_() { if "${@:2}"; then ok "$1"; else bad "$1" "expected success"; fi; }
 no_()  { if "${@:2}"; then bad "$1" "expected failure"; else ok "$1"; fi; }
 has()  { if grep -q "$3" "$2"; then ok "$1"; else bad "$1" "missing: $3"; fi; }
 hasnt(){ if grep -q "$3" "$2"; then bad "$1" "should not contain: $3"; else ok "$1"; fi; }
-# shellcheck disable=SC2329 # called indirectly, by yes_/no_
+# shellcheck disable=SC2317,SC2329 # called indirectly, by yes_/no_
 quiet(){ "$@" >/dev/null 2>&1; }
 # Counting through a glob rather than counting lines of ls output.
 count(){ printf '%s' "$#"; }

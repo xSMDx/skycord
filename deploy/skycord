@@ -29,7 +29,12 @@ need_install() { [ -f "$SKYCORD_DIR/.env" ] || die "no install found in $SKYCORD
 compose() { ( cd "$SKYCORD_DIR" && docker compose "$@" ); }
 
 # ── .env, read and written in place ──────────────────────────────────────────
-env_get() { [ -f "$SKYCORD_DIR/.env" ] && sed -n "s/^$1=//p" "$SKYCORD_DIR/.env" | head -1 || true; }
+env_get() {
+  [ -f "$SKYCORD_DIR/.env" ] || return 0
+  # head closes the pipe, which can leave sed killed by SIGPIPE; under
+  # pipefail that would fail the caller, so the value is all we report.
+  sed -n "s/^$1=//p" "$SKYCORD_DIR/.env" | head -1 || true
+}
 
 env_set() {
   local key="$1" value="$2" file="$SKYCORD_DIR/.env" tmp

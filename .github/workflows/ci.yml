@@ -30,6 +30,12 @@ jobs:
       TEST_MONGO_URI: mongodb://127.0.0.1:27017/sykord_test
       JWT_ACCESS_SECRET: ci-access-secret-not-a-real-one
       JWT_REFRESH_SECRET: ci-refresh-secret-not-a-real-one
+      # Voice endpoints answer 503 when these are empty, which is right, and
+      # eleven failing tests here. Nothing connects to LiveKit; the tests only
+      # mint tokens, which is local signing.
+      LIVEKIT_URL: ws://127.0.0.1:7880
+      LIVEKIT_API_KEY: ci-livekit-key
+      LIVEKIT_API_SECRET: ci-livekit-secret-not-a-real-one
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,9 +60,11 @@ jobs:
       - name: Script tests
         run: bash deploy/tests/cli.test.sh
       - name: ShellCheck
+        # Pinned, and the same image a developer runs: apt's version differs
+        # between runner images and flags different things.
         run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
-          shellcheck deploy/install.sh deploy/skycord deploy/mongo-init.sh deploy/tests/*.sh
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 \
+            deploy/install.sh deploy/skycord deploy/mongo-init.sh deploy/tests/*.sh
 
   image:
     name: Image builds
