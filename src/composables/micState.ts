@@ -41,24 +41,34 @@ export const micIsLive = (s: MicState): boolean => s === 'live'
 /**
  * What `voice.mic` should become once a `setMicrophoneEnabled` call resolves.
  *
- * Resolving only means the request round-tripped — it is not evidence that a
- * device the browser had refused, lost or handed to another app came back.
- * Post-deafen in particular the call is a disable-direction request (or a
- * no-op), so it resolves every time regardless of what the microphone is
- * actually doing. Collapsing that resolution straight to 'muted'/'live'
- * overwrote a specific failure with a generic one and made the notice
- * explaining it disappear, even though nothing about the device had changed.
- * A real failure can only be cleared by a fresh publish attempt succeeding,
+ * Both call sites invoke `setMicrophoneEnabled(!voice.localMuted, …)`, so the
+ * `muted` argument says which direction just resolved:
+ *
+ * - `muted === false` means an ENABLE resolved — the browser was just asked
+ *   to publish the microphone, and it did. That is direct, fresh evidence
+ *   that whatever had refused, lost or handed away the device no longer
+ *   applies, so the result is 'live' no matter what `previous` was. This is
+ *   what lets a mid-call permission grant clear the notice: deny on join,
+ *   grant later, unmute, and the resolved enable proves it now.
+ * - `muted === true` means a DISABLE resolved, or the call was a no-op
+ *   (post-deafen while still muted resolves the same way). Turning
+ *   publishing off succeeds regardless of whether the device is available,
+ *   so it is not evidence of anything — a previous failure was never
+ *   retested and must survive it, rather than being overwritten with a
+ *   generic 'muted'.
+ *
+ * A real failure is therefore cleared by a fresh publish attempt succeeding,
  * never as a side effect of an unrelated toggle settling.
  */
 export const micAfterToggle = (previous: MicState, muted: boolean): MicState => {
+  if (!muted) return 'live'
   switch (previous) {
     case 'denied':
     case 'missing':
     case 'busy':
     case 'insecure':
     case 'forbidden': return previous
-    default:          return muted ? 'muted' : 'live'
+    default:          return 'muted'
   }
 }
 

@@ -64,29 +64,36 @@ describe('micNotice', () => {
   })
 })
 
-// A resolved setMicrophoneEnabled() call is a network round-trip completing,
-// not proof that a refused device started working again. toggleMute and the
-// undeafen branch of toggleDeafen both resolve unconditionally after a
-// deafen (it's a disable-direction call, or a no-op) regardless of whether
-// the mic the person joined with actually works — so the state from before
-// the toggle must win over a generic live/muted guess.
+// Both call sites invoke setMicrophoneEnabled(!voice.localMuted, …), so the
+// `muted` argument says which direction just resolved. An ENABLE resolving
+// (muted === false) is real evidence the browser is publishing again, so it
+// always wins, even over a previous failure. A DISABLE resolving (muted ===
+// true) — including the no-op undeafen-while-still-muted case — proves
+// nothing about the device either way, so a previous failure must survive
+// it instead of being papered over with a generic 'muted'.
 describe('micAfterToggle', () => {
-  it('lets a real failure survive an unmute attempt', () => {
-    for (const s of ['denied', 'missing', 'busy', 'insecure', 'forbidden'] as const) {
-      expect(micAfterToggle(s, false)).toBe(s)
+  it('reports live once an enable resolves, regardless of the prior state', () => {
+    for (const s of ['live', 'muted', 'denied', 'missing', 'busy', 'insecure', 'forbidden'] as const) {
+      expect(micAfterToggle(s, false)).toBe('live')
     }
   })
 
-  it('lets a real failure survive a mute (or re-mute) too', () => {
+  it('a granted permission clears the microphone notice', () => {
+    // Join with the mic denied, grant the browser prompt mid-call, then
+    // unmute: setMicrophoneEnabled(true, …) genuinely resolves, and that
+    // resolved enable is proof the device works now — not just a toggle
+    // settling. The stale 'denied' must not survive it.
+    expect(micAfterToggle('denied', false)).toBe('live')
+  })
+
+  it('lets a real failure survive a disable, since resolving one proves nothing about the device', () => {
     for (const s of ['denied', 'missing', 'busy', 'insecure', 'forbidden'] as const) {
       expect(micAfterToggle(s, true)).toBe(s)
     }
   })
 
-  it('maps to muted/live normally when there was no failure to protect', () => {
-    expect(micAfterToggle('live', false)).toBe('live')
+  it('maps a disable to muted when there was no failure to protect', () => {
     expect(micAfterToggle('live', true)).toBe('muted')
-    expect(micAfterToggle('muted', false)).toBe('live')
     expect(micAfterToggle('muted', true)).toBe('muted')
   })
 })
