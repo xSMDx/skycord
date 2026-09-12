@@ -54,9 +54,11 @@ stack exec -T skycord \
   || fail "/health did not report $VERSION with a reachable database"
 
 say "Register an account and send a message"
+# The password has to satisfy server/utils/validators.ts, whose set of special
+# characters does not include a hyphen.
 stack exec -T skycord node -e "
 const base = 'http://127.0.0.1:3001'
-const body = { username: 'rehearsal', email: 'rehearsal@example.com', password: 'Rehearsal-123', displayName: 'Rehearsal' }
+const body = { username: 'rehearsal', email: 'rehearsal@example.com', password: 'Rehearsal!123', displayName: 'Rehearsal' }
 const jar = []
 const keep = r => { const c = r.headers.getSetCookie?.() ?? []; jar.push(...c.map(v => v.split(';')[0])) }
 const post = async (path, data) => {
