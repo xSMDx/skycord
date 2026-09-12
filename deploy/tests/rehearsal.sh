@@ -59,16 +59,21 @@ say "Register an account and send a message"
 stack exec -T skycord node -e "
 const base = 'http://127.0.0.1:3001'
 const body = { username: 'rehearsal', email: 'rehearsal@example.com', password: 'Rehearsal!123', displayName: 'Rehearsal' }
-const jar = []
-const keep = r => { const c = r.headers.getSetCookie?.() ?? []; jar.push(...c.map(v => v.split(';')[0])) }
+// The API answers with an access token in the body and keeps only the refresh
+// token in a cookie, so a cookie jar authenticates nothing. This is what
+// server/__tests__/helpers.ts does.
+let token = ''
 const post = async (path, data) => {
-  const r = await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json', cookie: jar.join('; ') }, body: JSON.stringify(data) })
-  keep(r)
+  const headers = { 'content-type': 'application/json' }
+  if (token) headers.authorization = 'Bearer ' + token
+  const r = await fetch(base + path, { method: 'POST', headers, body: JSON.stringify(data) })
   if (!r.ok) { console.error(path, r.status, await r.text()); process.exit(1) }
   return r.json()
 }
 ;(async () => {
-  await post('/auth/register', body)
+  const account = await post('/auth/register', body)
+  token = account.accessToken
+  if (!token) { console.error('register returned no accessToken'); process.exit(1) }
   const server = await post('/servers', { name: 'Rehearsal' })
   const channel = server.channels.find(c => c.type === 'text')
   await post('/servers/' + server.server.id + '/channels/' + channel.id + '/messages', { content: 'rehearsal message' })
