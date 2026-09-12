@@ -18,6 +18,11 @@ BROKEN="v999.0.1"    # an image that cannot start
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 say()  { printf '\n=== %s\n' "$*"; }
+# Compose, the way the skycord command runs it: as root, from the install
+# directory, whose .env names the compose files. That directory is 0700, so
+# neither the cd nor a glob inside it works as the runner user.
+stack() { sudo sh -c 'cd "$1" || exit 1; shift; exec docker compose "$@"' sh "$DIR" "$@"; }
+in_dir() { sudo sh -c "$1"; }
 fail() {
   printf '\nREHEARSAL FAILED: %s\n' "$*" >&2
   timeout 30 sudo skycord logs --tail 50 skycord 2>/dev/null || true
@@ -44,12 +49,12 @@ sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" bash "$ROOT/deploy/install.sh
 sudo skycord status || fail "status does not work"
 
 say "The app answers, and the API is the API"
-sudo docker compose --project-directory "$DIR" exec -T skycord \
+stack exec -T skycord \
   node -e "fetch('http://127.0.0.1:3001/health').then(r=>r.json()).then(h=>{ if (h.version!=='$VERSION'||h.db!=='up') { console.error(h); process.exit(1) } })" \
   || fail "/health did not report $VERSION with a reachable database"
 
 say "Register an account and send a message"
-sudo docker compose --project-directory "$DIR" exec -T skycord node -e "
+stack exec -T skycord node -e "
 const base = 'http://127.0.0.1:3001'
 const body = { username: 'rehearsal', email: 'rehearsal@example.com', password: 'Rehearsal-123', displayName: 'Rehearsal' }
 const jar = []
@@ -87,12 +92,12 @@ sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" SKYCORD_HEALTH_TIMEOUT=45 \
   skycord update "$BROKEN" --yes && fail "a broken build was accepted as healthy"
 
 sudo skycord version | grep -q "$NEXT" || fail "did not go back to $NEXT"
-sudo docker compose --project-directory "$DIR" exec -T skycord \
+stack exec -T skycord \
   node -e "fetch('http://127.0.0.1:3001/health').then(r=>r.json()).then(h=>{ if (h.db!=='up') process.exit(1) })" \
   || fail "the working version did not come back healthy"
 
 say "The message written before all of this is still there"
-sudo docker compose --project-directory "$DIR" exec -T mongo \
+stack exec -T mongo \
   mongo --quiet -u "$(sudo sed -n 's/^MONGO_ROOT_USER=//p' "$DIR/.env")" \
         -p "$(sudo sed -n 's/^MONGO_ROOT_PASSWORD=//p' "$DIR/.env")" \
         --authenticationDatabase admin skycord \
@@ -101,7 +106,8 @@ sudo docker compose --project-directory "$DIR" exec -T mongo \
 
 say "Backup and restore"
 sudo skycord backup rehearsal || fail "backup failed"
-LATEST="$(sudo ls -1t "$DIR"/backups/rehearsal-*.gz | head -1)"
+LATEST="$(in_dir "ls -1t $DIR/backups/rehearsal-*.gz | head -1")"
+[ -n "$LATEST" ] || fail "the backup was not written"
 printf 'restore\n' | sudo skycord restore "$LATEST" || fail "restore failed"
 
 say "Rehearsal passed"

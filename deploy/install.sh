@@ -324,12 +324,18 @@ fi
 if [ "$PROXY" = "bundled" ]; then
   say "Waiting for the certificate..."
   for _ in $(seq 1 30); do
-    curl -fsS "https://$DOMAIN/health" >/dev/null 2>&1 && break
+    curl -fsSk "https://$DOMAIN/health" >/dev/null 2>&1 && break
     sleep 4
   done
   if curl -fsS "https://$DOMAIN/health" >/dev/null 2>&1; then
     say ""
     say "  https://$DOMAIN is up."
+  elif curl -fsSk "https://$DOMAIN/health" >/dev/null 2>&1; then
+    # Expected for a Cloudflare origin certificate, and for localhost, where
+    # Caddy signs with its own authority. Neither is a fault.
+    say ""
+    say "  https://$DOMAIN is up, behind a certificate this machine does not"
+    say "  trust itself. A browser is the thing to believe here."
   else
     say ""
     warn "https://$DOMAIN did not answer yet. The usual causes, in order:"
