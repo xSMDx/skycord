@@ -103,6 +103,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The image is private until someone makes it public, and every first
+      # release starts that way. The installer runs under sudo, so it is
+      # root that has to be signed in, not the runner user.
+      - name: Sign in to the registry as root, who runs the installer
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" |
+            sudo docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Rehearse
         run: |
           bash deploy/tests/rehearsal.sh \
