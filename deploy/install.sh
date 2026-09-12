@@ -303,8 +303,12 @@ systemctl enable --now skycord-backup.timer 2>/dev/null || warn "could not enabl
 # ── Start ────────────────────────────────────────────────────────────────────
 say "Starting..."
 apply_templates
-( cd "$SKYCORD_DIR" && docker compose pull -q 2>/dev/null || docker compose pull )
-( cd "$SKYCORD_DIR" && docker compose up -d )
+(
+  cd "$SKYCORD_DIR" || die "cannot enter $SKYCORD_DIR"
+  # Quietly first; if that fails, again loudly, so the reason is on screen.
+  docker compose pull -q 2>/dev/null || docker compose pull
+  docker compose up -d
+)
 
 if wait_healthy "$VERSION"; then
   say "Skycord is running."

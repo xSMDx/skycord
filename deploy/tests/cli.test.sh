@@ -15,7 +15,10 @@ yes_() { if "${@:2}"; then ok "$1"; else bad "$1" "expected success"; fi; }
 no_()  { if "${@:2}"; then bad "$1" "expected failure"; else ok "$1"; fi; }
 has()  { if grep -q "$3" "$2"; then ok "$1"; else bad "$1" "missing: $3"; fi; }
 hasnt(){ if grep -q "$3" "$2"; then bad "$1" "should not contain: $3"; else ok "$1"; fi; }
+# shellcheck disable=SC2329 # called indirectly, by yes_/no_
 quiet(){ "$@" >/dev/null 2>&1; }
+# Counting through a glob rather than counting lines of ls output.
+count(){ printf '%s' "$#"; }
 skip() { printf '  skip %s\n' "$1"; }
 # Windows and some network filesystems do not keep Unix permissions; the check
 # below is about a server, so it runs where permissions mean something.
@@ -98,11 +101,11 @@ for i in 1 2 3 4 5; do
   touch -d "2026-09-0$i 05:00" "$SKYCORD_DIR/backups/pre-update-v0.19.$i-2026090$i-050000.gz"
 done
 prune_backups nightly 3
-is "keeps the newest nightly backups" "$(ls -1 "$SKYCORD_DIR"/backups/nightly-*.gz | wc -l | tr -d ' ')" "3"
-is "leaves pre-update backups alone"  "$(ls -1 "$SKYCORD_DIR"/backups/pre-update-*.gz | wc -l | tr -d ' ')" "5"
+is "keeps the newest nightly backups" "$(count "$SKYCORD_DIR"/backups/nightly-*.gz)" "3"
+is "leaves pre-update backups alone"  "$(count "$SKYCORD_DIR"/backups/pre-update-*.gz)" "5"
 has "keeps the most recent one" <(ls -1 "$SKYCORD_DIR"/backups/nightly-*.gz) "nightly-20260905"
 prune_backups pre-update 2
-is "prunes pre-update separately" "$(ls -1 "$SKYCORD_DIR"/backups/pre-update-*.gz | wc -l | tr -d ' ')" "2"
+is "prunes pre-update separately" "$(count "$SKYCORD_DIR"/backups/pre-update-*.gz)" "2"
 
 echo "installer flags"
 # The installer cannot be run here — it wants root, Linux and Docker — but its

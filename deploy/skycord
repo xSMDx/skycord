@@ -155,6 +155,7 @@ mongo_in_stack() { compose ps --services 2>/dev/null | grep -qx mongo; }
 # backup taken moments before an update.
 prune_backups() {
   local prefix="$1" keep="$2" old
+  # shellcheck disable=SC2012 # ls -t sorts by time; these names are ours
   ls -1t "$SKYCORD_DIR/backups/$prefix"*.gz 2>/dev/null | tail -n "+$((keep + 1))" | while read -r old; do
     rm -f "$old"
   done
@@ -165,6 +166,7 @@ do_backup() {
   mkdir -p "$SKYCORD_DIR/backups"
   dest="$SKYCORD_DIR/backups/$label-$(date +%Y%m%d-%H%M%S).gz"
   if mongo_in_stack; then
+    # shellcheck disable=SC2016 # expanded inside the container, deliberately
     compose exec -T mongo sh -c \
       'mongodump --quiet --archive --gzip --db=skycord -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' \
       > "$dest" || true
@@ -284,6 +286,7 @@ cmd_restore() {
   [ "$answer" = "restore" ] || { say "Nothing changed."; return 0; }
   compose stop skycord
   if mongo_in_stack; then
+    # shellcheck disable=SC2016 # expanded inside the container, deliberately
     compose exec -T mongo sh -c \
       'mongorestore --quiet --archive --gzip --drop -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' \
       < "$file"
@@ -303,6 +306,7 @@ cmd_status() {
   json="$(health_json || true)"
   say "Version:   $current"
   say "Health:    $(health_field "$json" status) (database $(health_field "$json" db))"
+  # shellcheck disable=SC2012 # as above: newest first, by time
   last="$(ls -1t "$SKYCORD_DIR"/backups/*.gz 2>/dev/null | head -1 || true)"
   say "Backup:    ${last:-none yet}"
   df -h "$SKYCORD_DIR" | tail -1 | awk '{ print "Disk:      " $4 " free" }'
