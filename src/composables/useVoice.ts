@@ -738,7 +738,14 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     if (voice.localMuted && !permits.audio) return
     voice.localMuted = !voice.localMuted
     voice.localMuted ? soundMute() : soundUnmute()
-    room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions()).catch(() => {})
+    room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions())
+      .then(() => { voice.mic = voice.localMuted ? 'muted' : 'live' })
+      .catch(e => {
+        // The unmute did not take. Say so rather than drawing an open
+        // microphone over a device that refused.
+        voice.mic = micFailureReason(e)
+        voice.localMuted = true
+      })
     if (!voice.localMuted && voice.localDeafened) voice.localDeafened = false
     syncParticipants()
   }
@@ -758,7 +765,9 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       // publishing, in which case "what you had before" is not available and
       // staying muted is the only truthful outcome.
       voice.localMuted = muteBeforeDeafen || !permits.audio
-      room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions()).catch(() => {})
+      room.localParticipant.setMicrophoneEnabled(!voice.localMuted, micCaptureOptions())
+        .then(() => { voice.mic = voice.localMuted ? 'muted' : 'live' })
+        .catch(e => { voice.mic = micFailureReason(e); voice.localMuted = true })
       // Not a blanket unmute: someone you muted individually must STAY muted
       // when you undeafen, or undeafening silently undoes those choices.
       audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
