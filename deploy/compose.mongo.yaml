@@ -1,0 +1,45 @@
+# MongoDB, when the stack runs its own. Leave this file out of COMPOSE_FILE and
+# point MONGO_URI at a database you already have.
+#
+# It publishes no port: only the stack's own network reaches it. That is what
+# keeps a self-hosted database off the internet, and it does not depend on the
+# admin's firewall — Docker writes its rules ahead of ufw's, which is how
+# published databases end up exposed while ufw reports the port as denied.
+services:
+  mongo:
+    # 4.4 deliberately, and never bumped by an update: 5.0 and later need AVX,
+    # which pre-2011 and some ARM processors lack. Running on old hardware is a
+    # goal of this project.
+    image: mongo:4.4
+    restart: unless-stopped
+    command: ["--auth", "--bind_ip_all"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: skycord
+      SKYCORD_DB_USER: ${MONGO_APP_USER}
+      SKYCORD_DB_PASSWORD: ${MONGO_APP_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+      # Runs once, on an empty data directory.
+      - ./mongo-init.sh:/docker-entrypoint-initdb.d/10-skycord-user.sh:ro
+    healthcheck:
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # The app waits for a database that answers, so a reboot cannot start it
+  # against a Mongo that is still coming up.
+  skycord:
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

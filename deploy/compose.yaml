@@ -1,0 +1,47 @@
+# The Skycord stack.
+#
+# The installer renders this into /opt/skycord and `skycord update` re-applies
+# it from each release, keeping your .env. COMPOSE_FILE in .env decides which
+# pieces run here: leave one out and point its settings at a service you
+# already run.
+#
+# This base file holds only the app. Nothing publishes a port; whatever serves
+# the internet (Caddy here, or your own web server) is the single way in.
+name: skycord
+
+services:
+  skycord:
+    image: ghcr.io/xsmdx/skycord:${SKYCORD_VERSION:?run the installer, or set SKYCORD_VERSION}
+    restart: unless-stopped
+    # Listed one by one rather than env_file, so the container never receives
+    # the database's root password or anything else it has no business seeing.
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      BIND_HOST: 0.0.0.0
+      MONGO_URI: ${MONGO_URI}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN}
+      APP_URL: ${APP_URL:-}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      LIVEKIT_ADMIN_URL: ${LIVEKIT_ADMIN_URL:-}
+      KLIPY_API_KEY: ${KLIPY_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      TRUST_CF_IP: ${TRUST_CF_IP:-false}
+      GEOIP: ${GEOIP:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

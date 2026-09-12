@@ -1,0 +1,22 @@
+# Rendered by the installer. Edit /opt/skycord/Caddyfile if you must, but an
+# update re-renders it from this template with your settings — put changes in
+# .env where they survive.
+{
+	email {{EMAIL}}
+}
+
+{{DOMAIN}} {
+	encode zstd gzip
+{{TLS}}
+{{RTC}}
+	# The app, its API and socket.io: one process, one port, so nothing here
+	# has to know which paths belong to which.
+	handle {
+		reverse_proxy skycord:3001
+	}
+
+	# No security headers here, on purpose: the app sends its own, and a second
+	# set arrives as a second value of the same header rather than replacing
+	# the first. Browsers were receiving both DENY and SAMEORIGIN for framing,
+	# and two different HSTS lifetimes. See server/app.ts.
+}

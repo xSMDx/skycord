@@ -1,0 +1,12 @@
+# Everything external: the app joins the host's network instead of the stack's.
+#
+# This is for a machine that already runs its database, its voice server and
+# its web server on loopback — skycord.xyz is exactly that. The container then
+# sees what a plain process on the host sees (127.0.0.1:27017, 127.0.0.1:7880)
+# and listens only on 127.0.0.1, for the web server in front of it.
+services:
+  skycord:
+    network_mode: host
+    environment:
+      BIND_HOST: 127.0.0.1
+      PORT: ${PORT:-3001}

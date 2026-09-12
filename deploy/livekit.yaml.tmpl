@@ -1,0 +1,18 @@
+# Rendered by the installer from your .env. Voice media goes straight to this
+# server; only signalling passes through Caddy.
+port: 7880
+
+rtc:
+  # One UDP port for all media rather than a range of thousands: fewer firewall
+  # rules, and on a home server two port forwards instead of a nightmare.
+  udp_port: {{UDP_PORT}}
+  tcp_port: 7881
+  # Discovers the address to advertise. Without it LiveKit offers a private
+  # container address and calls connect with no audio.
+  use_external_ip: true
+
+keys:
+  {{LIVEKIT_API_KEY}}: {{LIVEKIT_API_SECRET}}
+
+logging:
+  level: info

@@ -1,0 +1,7 @@
+# For a machine that already runs a web server. Caddy stays out of the stack
+# and the app listens on loopback for nginx (or whatever you use) to forward
+# to. Nothing is published to the internet from here.
+services:
+  skycord:
+    ports:
+      - "127.0.0.1:${PORT:-3001}:3001"

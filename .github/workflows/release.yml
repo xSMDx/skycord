@@ -1,0 +1,127 @@
+# A release is a version tag. This builds it, rehearses an install and an
+# update against the built image, and only then publishes anything.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write   # create the release
+  packages: write   # push the image
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/skycord
+
+jobs:
+  check:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:4.4
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongo --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_MONGO_URI: mongodb://127.0.0.1:27017/sykord_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx vitest run src/
+      - run: npx vitest run server/
+      - name: Script tests
+        run: bash deploy/tests/cli.test.sh
+      - name: ShellCheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck deploy/install.sh deploy/skycord deploy/mongo-init.sh deploy/tests/cli.test.sh
+
+  build:
+    name: Build and push the image
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Version tags
+        id: tags
+        run: |
+          V="${GITHUB_REF_NAME}"
+          MINOR="${V%.*}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "list=${{ env.IMAGE }}:$V,${{ env.IMAGE }}:$MINOR" >> "$GITHUB_OUTPUT"
+      - name: Build for x86-64 and ARM64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.tags.outputs.list }}
+          build-args: SKYCORD_VERSION=${{ steps.tags.outputs.version }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  rehearse:
+    name: Install, update and roll back for real
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rehearse
+        run: bash deploy/tests/rehearsal.sh "${{ env.IMAGE }}" "${GITHUB_REF_NAME}"
+
+  publish:
+    name: Publish the release
+    needs: rehearse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Move latest
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ env.IMAGE }}:latest" "${{ env.IMAGE }}:${GITHUB_REF_NAME}"
+      - name: Gather the assets a server downloads
+        run: |
+          mkdir -p out
+          cp deploy/compose*.yaml deploy/mongo-init.sh deploy/Caddyfile.tmpl \
+             deploy/livekit.yaml.tmpl deploy/skycord deploy/install.sh out/
+          cp deploy/systemd/* out/
+          printf '%s\n' "${GITHUB_REF_NAME}" > out/VERSION
+          cd out && sha256sum ./* > SHA256SUMS
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
+          body: |
+            Install:
+
+                curl -fsSL https://skycord.xyz/install.sh | sudo bash
+
+            Update an existing server:
+
+                sudo skycord update
+
+            The changelog for this release is on https://skycord.xyz (Changelog tab).

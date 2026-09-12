@@ -1,287 +1,194 @@
 # Installing Skycord
 
-From a clean server to a running instance. For domains, TLS and Cloudflare, see
-[networking.md](./networking.md) — do this first, that second.
-
----
-
-## Requirements
-
-| | | |
-|---|---|---|
-| **Node.js** | 22 or newer | Node 18 is end-of-life; the toolchain refuses it |
-| **MongoDB** | 4.4 or newer | 4.4 is the *floor*, not a ceiling — see below |
-| **A reverse proxy** | nginx or Caddy | Not optional; the API binds to localhost |
-| **LiveKit** | optional | Only needed for voice and video |
-
-**Why MongoDB 4.4 is called out.** MongoDB 5.0+ requires AVX, a CPU instruction
-set that pre-2011 processors lack. Running well on old hardware is a goal of
-this project, so 4.4 is supported deliberately. If your CPU is modern, use
-whatever version you like — nothing here depends on 4.4 specifically.
-
-Check before you install, if you are on old hardware:
+One command on a fresh Linux server, and you have a running instance on HTTPS.
 
 ```bash
-grep -o avx /proc/cpuinfo | head -1
+curl -fsSL https://skycord.xyz/install.sh | sudo bash
 ```
 
-Nothing printed means AVX is absent, and MongoDB 5.0+ will install and then
-crash on start with an illegal-instruction error that does not explain itself.
+It asks for the address people will use and an email for certificate notices.
+Everything else it works out or generates.
 
-**Docker is a fine way to run it**, and is what the reference deployment uses —
-it makes the 4.4 pin explicit and keeps the version off the host:
+Prefer to read it first? That is the point of it being one short script:
 
 ```bash
-docker run -d --name mongodb \
-  --restart unless-stopped \
-  -p 127.0.0.1:27017:27017 \
-  -v mongodata:/data/db \
-  mongo:4.4
+curl -fsSL https://skycord.xyz/install.sh -o install.sh
+less install.sh
+sudo bash install.sh
 ```
 
-Two details in there are load-bearing:
+Each release also publishes the checksum of that file, on
+[the releases page](https://github.com/xSMDx/skycord/releases).
 
-- **`-p 127.0.0.1:27017:27017`**, not `-p 27017:27017`. The short form binds to
-  every interface, and Docker writes its own iptables rules — so a container
-  published that way is reachable from the internet *even with ufw denying the
-  port*. This is the most common way a self-hosted database ends up exposed.
-- **`--restart unless-stopped`**. Without it the container does not come back
-  after a reboot. The API starts fine, the process manager reports it healthy,
-  and every request fails against a database that is not running.
+## What you need
 
-Verify both:
+| | |
+|---|---|
+| **A server** | Linux on x86-64 or ARM64, about 1 GB of memory and 5 GB of disk |
+| **A domain** | one address, e.g. `chat.example.com`, pointing at the server |
+| **Two ports open** | 80 and 443, plus `7882/udp` and `7881/tcp` for voice |
+| **Docker** | installed for you if it is missing |
+
+Nothing else: no Node, no database, no web server to configure.
+
+**Point the address at the server first.** The certificate is issued by
+answering a challenge on port 80, so the name has to resolve before the
+installer can finish. If it does not yet, the installer says so and you can run
+`sudo skycord apply` once DNS has caught up.
+
+## What it sets up
+
+- **Skycord**, serving the app and its API on one port.
+- **MongoDB 4.4**, with a password, reachable only by Skycord. Version 4.4
+  deliberately: 5.0 and later need AVX, which older and some ARM processors
+  lack.
+- **LiveKit** for voice and video, using a single UDP port instead of a range.
+- **Caddy**, which gets and renews the HTTPS certificate on its own.
+
+It all lives in `/opt/skycord`: your settings and secrets in `.env`, the
+configuration beside it, and backups underneath. The database and the
+certificates live in Docker volumes, and survive updates and reinstalls.
+
+## Everyday commands
 
 ```bash
-ss -tlnp | grep 27017     # must say 127.0.0.1:27017, never 0.0.0.0:27017
-docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' mongodb
-systemctl is-enabled docker
+sudo skycord status      # version, health, disk, last backup, updates available
+sudo skycord update      # update, with a backup and automatic rollback
+sudo skycord logs        # follow what it is doing
+sudo skycord config      # change settings, then apply them
+sudo skycord backup      # back up the database now
 ```
-
-## Install
-
-```bash
-git clone https://github.com/xSMDx/sykord.git
-cd sykord
-npm ci
-cp .env.example .env
-```
-
-Now edit `.env` — the next section covers every value — then:
-
-```bash
-npm run build
-npm start
-```
-
-`npm run build` produces two things:
-
-- `dist/` — the static client, which your reverse proxy serves
-- `dist/server/` — the compiled API, which `npm start` runs on `PORT`
-
-Copy `dist/` to your web root. This step is manual and is the single most
-common cause of "I deployed and nothing changed":
-
-```bash
-sudo cp -r dist/* /var/www/app.example.com/
-```
-
-## Keeping it running
-
-```bash
-npm i -g pm2
-pm2 start dist/server/index.js --name skycord
-pm2 save
-pm2 startup      # prints a command to run — survives reboots
-```
-
-`pm2 save` is the part people skip, and it is what restores your process list
-after a reboot.
-
-## Environment variables
-
-All of them are annotated in [`.env.example`](../../.env.example). These are the
-ones that need a decision.
-
-### Required
-
-**`NODE_ENV=production`** — leave it. It is not a logging switch: auth cookies
-get `Secure` and `SameSite=Strict` only when it reads exactly `production`. The
-server refuses to start in development mode when it is reachable beyond
-localhost, so getting this wrong fails at boot rather than silently serving
-session cookies that anything on the network can read.
-
-**`MONGO_URI`** — e.g. `mongodb://localhost:27017/skycord`. Keep MongoDB bound
-to localhost; see networking.md §7.
-
-**`JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`** — two *different* high-entropy
-values. Generate each:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-```
-
-Changing these logs everyone out, which is also how you force a logout if a
-secret leaks.
-
-**`CLIENT_ORIGIN` / `COOKIE_DOMAIN`** — your real domain in production
-(`https://app.example.com` and `example.com`). These are what the boot guard
-inspects.
-
-### Optional — API keys
-
-Skycord works without either of these. Both are free, and the app degrades
-honestly rather than breaking when they are absent.
-
-#### GIFs — KLIPY
-
-Powers the GIF picker in the composer and the emoji picker's GIF tab.
-
-1. Request a key at **<https://klipy.com/developers>**
-2. Put it in `.env`:
-
-```
-KLIPY_API_KEY=your_key_here
-```
-
-3. Restart the server.
-
-**If you skip this**, the GIF picker shows *"GIFs aren't set up on this server"*
-and names the variable to add. It does not show an error, and it does not tell
-anyone to try again — because retrying will never help. Every other feature is
-unaffected.
-
-The key is deliberately server-side only. KLIPY puts the key in the URL *path*,
-so any browser-side call would ship it in the bundle for anyone to read. All GIF
-requests are proxied through `/gifs`, and rate-limited — each call spends your
-quota, so that limit is protecting your account as much as your server.
-
-#### Voice and video — LiveKit
-
-```
-LIVEKIT_URL=wss://livekit.example.com
-LIVEKIT_API_KEY=...
-LIVEKIT_API_SECRET=...
-```
-
-`LIVEKIT_URL` is sent to the **browser**, so it must be publicly reachable — not
-`localhost`, not a private IP. Setup and the UDP requirements are in
-[networking.md §6](./networking.md#6-voice-and-video-livekit).
-
-**If you skip this**, text, servers, channels, DMs and everything else work
-normally. Calls will not connect.
-
-## First run
-
-1. Open your domain and **register** — the first account is a normal account;
-   there is no admin tier yet.
-2. Create a server. It comes with `#general` and a `General` voice channel.
-3. Invite people from the server menu.
-
-There is no seeding step and no admin console. If you need to change something
-at the data level, it is a normal MongoDB database.
 
 ## Updating
 
 ```bash
-cd ~/sykord
-git pull
-npm ci
-npm run build
-sudo cp -r dist/* /var/www/app.example.com/
-pm2 restart skycord
+sudo skycord update
 ```
 
-Then confirm the browser is actually getting the new build — the bundle name is
-content-hashed, so it changes on every real deploy:
+It backs up the database, downloads the new version while the old one keeps
+serving, switches over, and checks the new version is running and can reach its
+database. If it cannot, it puts the previous version back on its own and shows
+you why it failed.
+
+The database is deliberately **not** restored when that happens: a release only
+ever adds to it, so the previous version runs fine on the newer data, and
+restoring would throw away everything written since the backup.
+
+To update by itself every night:
 
 ```bash
-curl -s https://app.example.com/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
+sudo skycord auto-update on
 ```
-
-If it has not changed, the copy did not happen or Cloudflare is serving a cached
-`index.html` ([networking.md §5](./networking.md#5-cloudflare)).
 
 ## Backups
 
-Nothing in Skycord backs itself up. Everything — accounts, servers, every
-message — is in that one database, and a container that fails to come back takes
-all of it.
-
-A script rather than a bare cron line, because a cron line that silently stops
-working looks exactly like one that is working:
+A backup runs nightly at 04:00 and the last 14 are kept, in
+`/opt/skycord/backups`. Every update takes one first, and the last five of
+those are kept separately, so a run of updates cannot push out your nightly
+history.
 
 ```bash
-sudo tee /usr/local/bin/skycord-backup.sh >/dev/null <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-DEST=/var/backups/skycord
-KEEP_DAYS=14
-STAMP=$(date +%F-%H%M)
-mkdir -p "$DEST"
-
-# --archive to a single file, so one backup is one artefact to copy off the box.
-# Change `docker exec mongodb` to a plain `mongodump` if Mongo is not in Docker.
-docker exec mongodb mongodump --db=skycord --archive --gzip > "$DEST/skycord-$STAMP.gz"
-
-# A zero-length archive means mongodump failed but the redirect still made a
-# file — the failure mode that leaves you with a directory full of nothing.
-if [ ! -s "$DEST/skycord-$STAMP.gz" ]; then
-  echo "skycord-backup: EMPTY ARCHIVE, dump failed" >&2
-  rm -f "$DEST/skycord-$STAMP.gz"
-  exit 1
-fi
-
-find "$DEST" -name 'skycord-*.gz' -mtime +$KEEP_DAYS -delete
-echo "skycord-backup: ok $(du -h "$DEST/skycord-$STAMP.gz" | cut -f1)"
-EOF
-sudo chmod +x /usr/local/bin/skycord-backup.sh
+sudo skycord backup                                   # one now
+sudo skycord restore /opt/skycord/backups/FILE.gz     # put one back
 ```
 
-Run it once by hand before trusting it:
+**Copy them off the machine.** A backup on the same disk survives a mistake but
+not a dead server. `rsync` or `rclone` on the same schedule is enough.
+
+## Using pieces you already run
+
+Each part can be replaced by something already on the machine:
 
 ```bash
-sudo /usr/local/bin/skycord-backup.sh && ls -lh /var/backups/skycord
+# You already run a web server: Skycord listens on 127.0.0.1:3001 instead,
+# and the installer prints the block to paste into it.
+sudo bash install.sh --proxy external
+
+# You already run MongoDB, or LiveKit.
+sudo bash install.sh --mongo-uri mongodb://user:pass@localhost:27017/skycord
+sudo bash install.sh --livekit-url wss://livekit.example.com \
+                     --livekit-key APIxxx --livekit-secret ...
+
+# No voice at all.
+sudo bash install.sh --no-voice
 ```
 
-Then daily at 04:00:
+If ports 80 or 443 are already busy, the installer notices and switches to
+`--proxy external` by itself rather than failing.
+
+## Moving an existing install onto this
+
+Already running Skycord the manual way? Keep your secrets, and everyone stays
+signed in:
 
 ```bash
-sudo crontab -l 2>/dev/null | { cat; echo "0 4 * * * /usr/local/bin/skycord-backup.sh >> /var/log/skycord-backup.log 2>&1"; } | sudo crontab -
+sudo bash install.sh --from-env /path/to/your/.env --proxy external
 ```
 
-**Restore** — test this at least once, on a throwaway database. A backup you
-have never restored is a hypothesis:
+If that machine also runs the database and LiveKit itself, keep those too and
+move only the app:
 
 ```bash
-docker exec -i mongodb mongorestore --archive --gzip --drop < /var/backups/skycord/skycord-2026-08-30-0400.gz
+sudo bash install.sh --from-env /path/to/your/.env \
+                     --proxy external --host-network \
+                     --mongo-external --voice-external
 ```
 
-`--drop` replaces existing collections. Without it you get a merge, which is
-rarely what you want when recovering.
+`--mongo-external` and `--voice-external` say "I already run this" and read the
+address, the key and the secret out of the `.env` you pointed at, so nothing
+sensitive goes on the command line. `--host-network` puts the app on the
+machine’s own network, where `127.0.0.1` means what it says.
 
-**Copy them off the machine.** A backup on the same disk as the database
-survives a mistake but not a dead server. `rsync` to another host, or an
-`rclone` target, on the same schedule.
+Your current `.env` supplies the JWT secrets and the encryption key, so
+existing sessions and stored voice-server credentials keep working. Point your
+web server at `127.0.0.1:3001`, forwarding everything — the app serves its own
+files now, so the old rule about listing each API path in the proxy is gone.
 
-## Development
+**Remove any security headers your web server adds.** The app sends its own
+(`Strict-Transport-Security`, `X-Frame-Options`, `Referrer-Policy`,
+`X-Content-Type-Options`, `Permissions-Policy`), and a second set arrives as a
+second value rather than replacing the first, which is how browsers end up with
+two contradictory framing rules.
+
+## Behind Cloudflare
+
+Set SSL/TLS to **Full (strict)** and give the installer a Cloudflare Origin
+Certificate when it asks. Let's Encrypt cannot complete its check through
+Cloudflare's forced-HTTPS redirect, which is why the installer asks rather than
+guessing.
+
+Also turn **WebSockets** on, or live updates fall back to polling and
+everything feels broken rather than being broken.
+
+## Voice
+
+Media goes straight to your server, not through Cloudflare, which cannot carry
+UDP. Two ports must reach the machine:
+
+```
+7882/udp    the audio and video itself
+7881/tcp    the fallback for networks that block UDP
+```
+
+On a home server that is two port forwards on the router. If ufw is running,
+the installer offers to open them; it never touches your SSH rules.
+
+## Removing it
 
 ```bash
-npm ci
-cp .env.example .env     # set NODE_ENV=development for local work
-npm run dev              # client :5173, API :3001
-npm test                 # 429 tests, needs a reachable MongoDB
-npm run typecheck        # client + server
+cd /opt/skycord && sudo docker compose down -v    # -v also deletes the database
+sudo rm -rf /opt/skycord /usr/local/bin/skycord
+sudo systemctl disable --now skycord-backup.timer skycord-update.timer
 ```
 
-Development mode is allowed only while every origin is loopback. The moment
-`CLIENT_ORIGIN` or `COOKIE_DOMAIN` points somewhere public, the server refuses
-to start unless `NODE_ENV=production`.
-
----
+Take a backup and copy it somewhere else first if you might want the data back.
 
 ## See also
 
-- [networking.md](./networking.md) — domain, TLS, reverse proxy, Cloudflare, firewall
-- [`.env.example`](../../.env.example) — every variable, annotated
-- [ROADMAP.md](../ROADMAP.md) — what is coming, and what is not built yet
+- **[networking.md](./networking.md)** — DNS, Cloudflare, firewalls, and what
+  to check when calls connect with no sound.
+- **[email.md](./email.md)** — password reset through Resend. Optional.
+- **[manual-install.md](./manual-install.md)** — the same thing without Docker:
+  Node, MongoDB, a web server and a process manager, installed by hand.
+- **[../RELEASING.md](../RELEASING.md)** — how releases are made, if you are
+  working on Skycord rather than running it.

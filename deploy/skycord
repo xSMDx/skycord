@@ -1,0 +1,377 @@
+#!/usr/bin/env bash
+# skycord — everyday control of a Skycord server.
+#
+# Everything is one docker compose project in /opt/skycord: the app, and
+# whichever of the database, voice server and web server this machine runs
+# rather than borrows. Every command is safe to run twice, because the moment
+# you need one is often the moment something stopped half way.
+#
+# Testable by design: sourcing this file defines the functions and runs
+# nothing, which is how deploy/tests/cli.test.sh exercises the logic.
+set -euo pipefail
+
+SKYCORD_DIR="${SKYCORD_DIR:-/opt/skycord}"
+SKYCORD_REPO="${SKYCORD_REPO:-xSMDx/skycord}"
+SKYCORD_CLI_VERSION="0.1.0"
+HEALTH_TIMEOUT="${SKYCORD_HEALTH_TIMEOUT:-90}"
+KEEP_NIGHTLY="${SKYCORD_KEEP_NIGHTLY:-14}"
+KEEP_UPDATE="${SKYCORD_KEEP_UPDATE:-5}"
+
+ASSETS="compose.yaml compose.mongo.yaml compose.external-proxy.yaml compose.livekit.yaml compose.caddy.yaml compose.host.yaml mongo-init.sh Caddyfile.tmpl livekit.yaml.tmpl skycord VERSION"
+
+die()  { echo "skycord: $*" >&2; exit 1; }
+say()  { echo "$*"; }
+warn() { echo "skycord: $*" >&2; }
+
+need_root()    { [ "$(id -u)" = "0" ] || die "needs root: try sudo"; }
+need_install() { [ -f "$SKYCORD_DIR/.env" ] || die "no install found in $SKYCORD_DIR — run the installer first"; }
+
+compose() { ( cd "$SKYCORD_DIR" && docker compose "$@" ); }
+
+# ── .env, read and written in place ──────────────────────────────────────────
+env_get() { [ -f "$SKYCORD_DIR/.env" ] && sed -n "s/^$1=//p" "$SKYCORD_DIR/.env" | head -1 || true; }
+
+env_set() {
+  local key="$1" value="$2" file="$SKYCORD_DIR/.env" tmp
+  if grep -q "^$key=" "$file" 2>/dev/null; then
+    # Written beside the original and moved into place: the file keeps its
+    # permissions, and a failure never leaves a half-written .env.
+    tmp="$(mktemp "$file.XXXX")"
+    sed "s|^$key=.*|$key=$value|" "$file" > "$tmp"
+    chmod 600 "$tmp"
+    mv "$tmp" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
+# ── versions ─────────────────────────────────────────────────────────────────
+# Compared in version order rather than string order, so v0.9.0 is correctly
+# older than v0.10.0.
+ver_max() { printf '%s\n%s\n' "${1#v}" "${2#v}" | sort -V | tail -1; }
+ver_gt()  { [ "$1" != "$2" ] && [ "$(ver_max "$1" "$2")" = "${1#v}" ]; }
+
+# The newest release that is not a pre-release. Parsed without jq, because a
+# server should not need one installed in order to update.
+resolve_latest() {
+  local json
+  json="$(curl -fsSL "https://api.github.com/repos/$SKYCORD_REPO/releases/latest" 2>/dev/null)" || return 1
+  printf '%s' "$json" | grep -o '"tag_name"[ ]*:[ ]*"[^"]*"' | head -1 | cut -d'"' -f4
+}
+
+# ── templates ────────────────────────────────────────────────────────────────
+# Only two files need rendering. The compose files read .env themselves, so
+# they are copied exactly as the release shipped them.
+render() {
+  local src="$1" dest="$2" domain email udp key secret tls rtc
+  domain="$(env_get DOMAIN)"
+  email="$(env_get ACME_EMAIL)"
+  udp="$(env_get LIVEKIT_UDP_PORT)"; udp="${udp:-7882}"
+  key="$(env_get LIVEKIT_API_KEY)"
+  secret="$(env_get LIVEKIT_API_SECRET)"
+
+  tls=""
+  if [ -n "$(env_get TLS_CERT_FILE)" ]; then
+    tls=$'\ttls /etc/skycord-tls/origin.pem /etc/skycord-tls/origin.key'
+  fi
+  rtc=""
+  case "$(env_get COMPOSE_FILE)" in
+    *compose.livekit.yaml*) rtc=$'\thandle /rtc* {\n\t\treverse_proxy livekit:7880\n\t}' ;;
+  esac
+
+  awk -v domain="$domain" -v email="$email" -v udp="$udp" -v key="$key" \
+      -v secret="$secret" -v tls="$tls" -v rtc="$rtc" '
+    {
+      gsub(/\{\{DOMAIN\}\}/, domain)
+      gsub(/\{\{EMAIL\}\}/, email)
+      gsub(/\{\{UDP_PORT\}\}/, udp)
+      gsub(/\{\{LIVEKIT_API_KEY\}\}/, key)
+      gsub(/\{\{LIVEKIT_API_SECRET\}\}/, secret)
+      if ($0 == "{{TLS}}") { if (tls != "") print tls; next }
+      if ($0 == "{{RTC}}") { if (rtc != "") print rtc; next }
+      print
+    }
+  ' "$src" > "$dest"
+}
+
+apply_templates() {
+  local from="$SKYCORD_DIR/templates"
+  cp "$from"/compose*.yaml "$SKYCORD_DIR/"
+  cp "$from/mongo-init.sh" "$SKYCORD_DIR/"
+  chmod +x "$SKYCORD_DIR/mongo-init.sh"
+  render "$from/Caddyfile.tmpl"    "$SKYCORD_DIR/Caddyfile"
+  render "$from/livekit.yaml.tmpl" "$SKYCORD_DIR/livekit.yaml"
+}
+
+# ── health ───────────────────────────────────────────────────────────────────
+# Asked inside the container, so it works whether or not anything is published
+# on the host, and reports what the running build says about itself.
+health_json() {
+  compose exec -T skycord node -e \
+    "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>r.text()).then(t=>console.log(t)).catch(()=>process.exit(1))" 2>/dev/null
+}
+
+health_field() { printf '%s' "$1" | grep -o "\"$2\"[ ]*:[ ]*\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
+
+wait_healthy() {
+  local want="$1" waited=0 json version db
+  while [ "$waited" -lt "$HEALTH_TIMEOUT" ]; do
+    json="$(health_json || true)"
+    version="$(health_field "$json" version)"
+    db="$(health_field "$json" db)"
+    if [ "$db" = "up" ] && { [ -z "$want" ] || [ "$version" = "$want" ]; }; then return 0; fi
+    sleep 3
+    waited=$((waited + 3))
+  done
+  return 1
+}
+
+# ── releases ─────────────────────────────────────────────────────────────────
+fetch_release() {
+  local version="$1" dest="$2" asset
+  local base="https://github.com/$SKYCORD_REPO/releases/download/$version"
+  mkdir -p "$dest"
+  # Used by the release rehearsal, and handy when developing: take the files
+  # from a directory instead of from a release.
+  if [ -n "${SKYCORD_LOCAL_FILES:-}" ]; then
+    cp -r "${SKYCORD_LOCAL_FILES}"/. "$dest/"
+    printf '%s\n' "$version" > "$dest/VERSION"
+    return 0
+  fi
+  for asset in $ASSETS SHA256SUMS; do
+    curl -fsSL "$base/$asset" -o "$dest/$asset" || die "could not download $asset for $version"
+  done
+  # Integrity rather than authenticity: this catches a truncated download,
+  # which would otherwise land as a half-written compose file.
+  ( cd "$dest" && sha256sum -c --quiet --ignore-missing SHA256SUMS ) \
+    || die "checksums do not match for $version — refusing to use these files"
+}
+
+# ── backups ──────────────────────────────────────────────────────────────────
+mongo_in_stack() { compose ps --services 2>/dev/null | grep -qx mongo; }
+
+# Nightly and pre-update backups are pruned separately, so a run of updates
+# cannot push out the nightly history, and nightly pruning cannot delete the
+# backup taken moments before an update.
+prune_backups() {
+  local prefix="$1" keep="$2" old
+  ls -1t "$SKYCORD_DIR/backups/$prefix"*.gz 2>/dev/null | tail -n "+$((keep + 1))" | while read -r old; do
+    rm -f "$old"
+  done
+}
+
+do_backup() {
+  local label="${1:-manual}" dest
+  mkdir -p "$SKYCORD_DIR/backups"
+  dest="$SKYCORD_DIR/backups/$label-$(date +%Y%m%d-%H%M%S).gz"
+  if mongo_in_stack; then
+    compose exec -T mongo sh -c \
+      'mongodump --quiet --archive --gzip --db=skycord -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' \
+      > "$dest" || true
+  elif command -v mongodump >/dev/null 2>&1; then
+    mongodump --quiet --archive --gzip --uri="$(env_get MONGO_URI)" > "$dest" || true
+  else
+    rm -f "$dest"
+    warn "no way to back up an external database from here — mongodump is not installed"
+    return 2
+  fi
+  # An empty archive means mongodump failed while the redirect still created a
+  # file: the failure that leaves you with a directory full of nothing.
+  [ -s "$dest" ] || { rm -f "$dest"; die "the backup came out empty — stopping here"; }
+  say "Backed up to $dest"
+}
+
+# ── commands ─────────────────────────────────────────────────────────────────
+cmd_apply() {
+  need_root; need_install
+  apply_templates
+  compose pull
+  compose up -d --remove-orphans
+}
+
+cmd_update() {
+  need_root; need_install
+  local target="" assume_yes="" allow_down="" current
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -y|--yes)          assume_yes=1 ;;
+      --allow-downgrade) allow_down=1 ;;
+      v[0-9]*)           target="$1" ;;
+      *)                 die "unknown option: $1" ;;
+    esac
+    shift
+  done
+
+  current="$(env_get SKYCORD_VERSION)"
+  if [ -z "$target" ]; then
+    target="$(resolve_latest)" || die "could not reach GitHub to find the newest release"
+  fi
+  [ -n "$target" ] || die "could not work out which version to install"
+
+  if [ "$target" = "$current" ]; then say "Already on $current."; return 0; fi
+  if [ -z "$allow_down" ] && ver_gt "$current" "$target"; then
+    die "$target is older than $current. Use 'skycord rollback', or repeat with --allow-downgrade"
+  fi
+
+  say "Updating $current -> $target"
+  say "Release notes: https://github.com/$SKYCORD_REPO/releases/tag/$target"
+  if [ -z "$assume_yes" ]; then
+    printf 'Continue? [y/N] '
+    local answer; read -r answer
+    case "$answer" in y|Y|yes) ;; *) say "Nothing changed."; return 0 ;; esac
+  fi
+
+  do_backup "pre-update-$current" || warn "continuing without a backup"
+  prune_backups "pre-update" "$KEEP_UPDATE"
+
+  rm -rf "$SKYCORD_DIR/templates.next"
+  fetch_release "$target" "$SKYCORD_DIR/templates.next"
+
+  rm -rf "$SKYCORD_DIR/templates.prev"
+  cp -r "$SKYCORD_DIR/templates" "$SKYCORD_DIR/templates.prev"
+  printf '%s\n' "$current" > "$SKYCORD_DIR/templates.prev/VERSION"
+  rm -rf "$SKYCORD_DIR/templates"
+  mv "$SKYCORD_DIR/templates.next" "$SKYCORD_DIR/templates"
+
+  env_set SKYCORD_VERSION "$target"
+  apply_templates
+  # Pulled first, so the running version keeps serving while the new one
+  # downloads. Only then is anything replaced.
+  compose pull skycord || warn "could not pull $target — using a local copy if there is one"
+  compose up -d --remove-orphans
+
+  if wait_healthy "$target"; then
+    install -m 0755 "$SKYCORD_DIR/templates/skycord" /usr/local/bin/skycord
+    say "Now on $target."
+    return 0
+  fi
+
+  warn "$target did not come up healthy — going back to $current"
+  compose logs --tail 50 skycord || true
+  rm -rf "$SKYCORD_DIR/templates"
+  mv "$SKYCORD_DIR/templates.prev" "$SKYCORD_DIR/templates"
+  env_set SKYCORD_VERSION "$current"
+  apply_templates
+  compose up -d --remove-orphans
+  # The database is deliberately left alone: releases only ever add to it, so
+  # the old version runs on the newer data, and restoring would throw away
+  # everything written since the backup.
+  wait_healthy "$current" || die "$current did not come back either — check 'skycord logs'"
+  die "stayed on $current. The backup is in $SKYCORD_DIR/backups if you need it"
+}
+
+cmd_rollback() {
+  need_root; need_install
+  [ -f "$SKYCORD_DIR/templates.prev/VERSION" ] || die "no previous version recorded"
+  local prev; prev="$(cat "$SKYCORD_DIR/templates.prev/VERSION")"
+  [ -n "$prev" ] || die "the previous version is not recorded — use: skycord update <version> --allow-downgrade"
+  cmd_update "$prev" --yes --allow-downgrade
+}
+
+cmd_backup() {
+  need_root; need_install
+  do_backup "${1:-manual}"
+  prune_backups "nightly" "$KEEP_NIGHTLY"
+}
+
+cmd_restore() {
+  need_root; need_install
+  local file="${1:-}" answer
+  [ -f "$file" ] || die "usage: skycord restore <file.gz>"
+  say "This replaces the current database with $file."
+  printf 'Type restore to confirm: '
+  read -r answer
+  [ "$answer" = "restore" ] || { say "Nothing changed."; return 0; }
+  compose stop skycord
+  if mongo_in_stack; then
+    compose exec -T mongo sh -c \
+      'mongorestore --quiet --archive --gzip --drop -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' \
+      < "$file"
+  else
+    command -v mongorestore >/dev/null 2>&1 || die "mongorestore is not installed"
+    mongorestore --quiet --archive --gzip --drop --uri="$(env_get MONGO_URI)" < "$file"
+  fi
+  compose start skycord
+  wait_healthy "" || warn "restored, but the app has not reported healthy yet"
+  say "Restored."
+}
+
+cmd_status() {
+  need_install
+  local current latest json last
+  current="$(env_get SKYCORD_VERSION)"
+  json="$(health_json || true)"
+  say "Version:   $current"
+  say "Health:    $(health_field "$json" status) (database $(health_field "$json" db))"
+  last="$(ls -1t "$SKYCORD_DIR"/backups/*.gz 2>/dev/null | head -1 || true)"
+  say "Backup:    ${last:-none yet}"
+  df -h "$SKYCORD_DIR" | tail -1 | awk '{ print "Disk:      " $4 " free" }'
+  latest="$(resolve_latest 2>/dev/null || true)"
+  if [ -n "$latest" ] && ver_gt "$latest" "$current"; then
+    say "Available: $latest — run: sudo skycord update"
+  fi
+  compose ps 2>/dev/null || true
+}
+
+cmd_logs() {
+  need_install
+  local service="${1:-}"
+  if [ -n "$service" ]; then compose logs --tail 100 -f "$service"; else compose logs --tail 100 -f; fi
+}
+
+cmd_config() {
+  need_root; need_install
+  "${EDITOR:-nano}" "$SKYCORD_DIR/.env"
+  apply_templates
+  compose up -d --remove-orphans
+  say "Applied."
+}
+
+cmd_autoupdate() {
+  need_root
+  case "${1:-}" in
+    on)  systemctl enable --now skycord-update.timer;  say "Nightly updates on." ;;
+    off) systemctl disable --now skycord-update.timer; say "Nightly updates off." ;;
+    *)   systemctl is-enabled skycord-update.timer 2>/dev/null || echo disabled ;;
+  esac
+}
+
+usage() {
+  cat <<'USAGE'
+skycord — control a Skycord server
+
+  skycord status                 version, health, disk, last backup, updates
+  skycord update [version] [-y]  update, with a backup and automatic rollback
+  skycord rollback               go back to the previous version
+  skycord backup                 back up the database now
+  skycord restore <file.gz>      replace the database from a backup
+  skycord logs [service]         follow the logs
+  skycord config                 edit settings, then apply them
+  skycord auto-update on|off     nightly updates (off by default)
+  skycord apply                  re-apply the configuration
+  skycord version                this script's version
+USAGE
+}
+
+main() {
+  local cmd="${1:-status}"
+  shift || true
+  case "$cmd" in
+    status)         cmd_status "$@" ;;
+    update)         cmd_update "$@" ;;
+    rollback)       cmd_rollback "$@" ;;
+    backup)         cmd_backup "$@" ;;
+    restore)        cmd_restore "$@" ;;
+    logs)           cmd_logs "$@" ;;
+    config)         cmd_config "$@" ;;
+    auto-update)    cmd_autoupdate "$@" ;;
+    apply)          cmd_apply "$@" ;;
+    version)        say "skycord $SKYCORD_CLI_VERSION (install $(env_get SKYCORD_VERSION))" ;;
+    help|-h|--help) usage ;;
+    *)              usage; exit 1 ;;
+  esac
+}
+
+# Sourcing this file defines the functions and runs nothing, which is how the
+# tests exercise it.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi

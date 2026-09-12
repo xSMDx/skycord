@@ -6,6 +6,13 @@ This is written from the setup that actually runs
 [app.skycord.xyz](https://app.skycord.xyz) — not from a template. Where a choice
 was made for a reason, the reason is here.
 
+> **The one-command install already does most of this.** It sets up the reverse
+> proxy and the certificate (sections 3 and 4) and prints the ports voice needs.
+> What is still yours: DNS (section 2), Cloudflare's settings (section 5), the
+> firewall (section 7), and section 9 when something does not work. Sections 3
+> and 4 are what you want if you run your own web server, with
+> `install.sh --proxy external`.
+
 > **Before anything else:** `NODE_ENV=production` in your `.env`. Auth cookies
 > only get `Secure` and `SameSite=Strict` when it reads exactly that. The server
 > refuses to boot in development mode on a non-localhost origin, so a mistake

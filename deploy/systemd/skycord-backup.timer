@@ -1,0 +1,11 @@
+[Unit]
+Description=Skycord nightly database backup
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+# Runs after a reboot if the machine was off at four in the morning, rather
+# than silently skipping that night.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -4,9 +4,11 @@ Running your own instance — your hardware, your database, nobody in the middle
 
 ## Guides
 
-**[Installing](./installing.md)** — requirements, first-time setup, every
-environment variable, the optional API keys, updating, and running it under a
-process manager.
+**[Installing](./installing.md)** — the one command, what it asks, what it sets
+up, updating, backups, and using pieces you already run.
+
+**[Installing by hand](./manual-install.md)** — the same thing without Docker:
+Node, MongoDB, a web server and a process manager, wired up yourself.
 
 **[Email & password reset](./email.md)** — Resend setup, domain verification,
 and how the reset flow behaves. Optional; the app runs fine without it.
@@ -16,10 +18,11 @@ pick how far to go — localhost-only, public with TLS, or fully hardened — th
 covers DNS, reverse proxy, TLS, Cloudflare, the UDP requirements for voice,
 firewall rules, and the mistakes that make a working install look broken.
 
-Read Installing first, then Networking. Email is independent — set it up whenever
-you want password reset to work. You can get a working instance on
-localhost from Installing alone; Networking is what puts it on the internet
-safely.
+Read Installing first. The one command covers the domain, the certificate and
+the proxy, so Networking is then background rather than homework — worth
+reading for DNS, Cloudflare, firewalls, and what to check when calls connect
+with no sound. Email is independent: set it up whenever you want password reset
+to work.
 
 ## Before you start
 
@@ -33,9 +36,10 @@ mistake here stops the instance instead of quietly weakening it.
 
 **Some things are not built yet**, and they will affect you:
 
-- **No roles or permissions.** Every server is owner-vs-member. No moderators,
-  no per-channel permissions, no bans.
-- **No Server Settings UI.** Server-level configuration is not reachable yet.
+- **No bans.** Kicking works; a ban that stops somebody coming back does not
+  exist yet.
+- **No admin tier.** The first account registered is an ordinary account.
+  Anything instance-wide happens in the database or not at all.
 - **No end-to-end encryption.** Designed in detail, not built. Messages are
   stored as plaintext in your database. Do not treat this as a private-messaging
   tool.
