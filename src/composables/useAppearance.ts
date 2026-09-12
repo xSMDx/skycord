@@ -5,6 +5,7 @@
  */
 import { reactive } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
+import { onAccentText } from './onAccent'
 
 export type Theme =
   | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
@@ -38,7 +39,7 @@ export type MsgLayout = 'cozy' | 'compact'
 
 const KEY = 'sykord_appearance'
 const DEFAULTS: Appearance = {
-  theme: 'default', accent: '#5865f2', density: 'cozy',
+  theme: 'default', accent: 'auto', density: 'cozy',
   msgSize: 15, groupSpacing: 17, fontUi: 'gg sans', fontMono: 'Consolas',
   showSendButton: true, custom: {}, scheme: 'off', contrast: 0, emojiPack: 'native',
   underlineLinks: false, displayNameStyles: true, msgLayout: 'cozy', zoom: 100,
@@ -46,11 +47,11 @@ const DEFAULTS: Appearance = {
 }
 
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
-  { name: 'Blurple', hex: '#5865f2' }, { name: 'Green', hex: '#23a55a' },
-  { name: 'Teal', hex: '#1abc9c' },    { name: 'Blue', hex: '#3498db' },
-  { name: 'Pink', hex: '#eb459e' },    { name: 'Red', hex: '#ed4245' },
-  { name: 'Orange', hex: '#e67e22' },  { name: 'Yellow', hex: '#f0b232' },
-  { name: 'Purple', hex: '#9b59b6' },
+  { name: 'Sky', hex: '#38b6f1' },      { name: 'Blurple', hex: '#5865f2' },
+  { name: 'Green', hex: '#23a55a' },    { name: 'Teal', hex: '#1abc9c' },
+  { name: 'Blue', hex: '#3498db' },     { name: 'Pink', hex: '#eb459e' },
+  { name: 'Red', hex: '#ed4245' },      { name: 'Orange', hex: '#e67e22' },
+  { name: 'Yellow', hex: '#f0b232' },   { name: 'Purple', hex: '#9b59b6' },
 ]
 
 export const UI_FONTS: Record<string, string> = {
@@ -92,6 +93,17 @@ const shade = (hex: string, p: number) => {
 }
 const rgbTriple = (hex: string) => { const { r, g, b } = parseHex(hex); return `${r}, ${g}, ${b}` }
 
+// Material-You needs a concrete hex to seed its palette even when the user's
+// accent is 'auto' — there is no stylesheet to fall back on inside a JS call,
+// unlike the CSS custom properties below, which 'auto' can just leave unset.
+// These match the Sky values in tokens.css (:root and the light-theme
+// override) verbatim, so the seed agrees with what an explicit accent would
+// paint on each theme family.
+const SKY_DARK = '#38b6f1'
+const SKY_LIGHT = '#0a75af'
+const resolvedAccent = (a: Appearance, isDark: boolean): string =>
+  a.accent === 'auto' ? (isDark ? SKY_DARK : SKY_LIGHT) : a.accent
+
 const load = (): Partial<Appearance> => {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
 }
@@ -124,7 +136,7 @@ export const applyAppearance = () => {
   if (a.scheme !== 'off') {
     // Material-You: generate the full surface/text palette from the accent seed.
     const isDark = !(a.theme === 'light' || a.theme === 'light-dim')
-    const tokens = buildSchemeTokens(a.accent, a.scheme, isDark, a.contrast)
+    const tokens = buildSchemeTokens(resolvedAccent(a, isDark), a.scheme, isDark, a.contrast)
     for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v)
   } else if (a.theme === 'custom') {
     for (const [k, v] of Object.entries(a.custom)) if (v) root.style.setProperty(k, v)
@@ -147,15 +159,22 @@ export const applyAppearance = () => {
     }
   }
 
-  // Accent (always)
-  root.style.setProperty('--accent', a.accent)
-  root.style.setProperty('--accent-hover', shade(a.accent, -0.12))
-  // Text sitting ON an accent tint in a LIGHT theme. -12% is not enough: on
-  // light-dim's mid-tone panel the tinted row composites to #d4d8f0, where
-  // accent-hover measures 4.02:1 against 14px body text. -28% clears 4.5 on
-  // both light themes with room to spare.
-  root.style.setProperty('--accent-deep', shade(a.accent, -0.28))
-  root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
+  // 'auto' means "whatever this theme says": clearing the inline values lets
+  // tokens.css decide, which is how the light themes get the deeper Sky. An
+  // explicit accent is the user's choice and applies in every theme.
+  if (a.accent === 'auto') {
+    for (const p of ['--accent', '--accent-hover', '--accent-deep', '--accent-rgb', '--text-on-accent']) {
+      root.style.removeProperty(p)
+    }
+  } else {
+    root.style.setProperty('--accent', a.accent)
+    root.style.setProperty('--accent-hover', shade(a.accent, -0.12))
+    // -12% is not enough for accent text on a light theme: accent-hover
+    // measures 4.02:1 against 14px body text. -28% clears 4.5.
+    root.style.setProperty('--accent-deep', shade(a.accent, -0.28))
+    root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
+    root.style.setProperty('--text-on-accent', onAccentText(a.accent))
+  }
 
   // Sizing + fonts
   root.style.setProperty('--msg-font-size', `${a.msgSize}px`)
