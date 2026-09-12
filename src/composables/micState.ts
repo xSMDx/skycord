@@ -34,3 +34,24 @@ export const micFailureReason = (err: unknown): MicState => {
     default:                     return 'denied'
   }
 }
+
+/** Publishing, and only publishing. Everything else is silence of some kind. */
+export const micIsLive = (s: MicState): boolean => s === 'live'
+
+/**
+ * What to show the person in the call. Written for a member who was invited to
+ * somebody else's server: it says what happened and what they can do, and
+ * never names HTTPS, certificates or a script to run. The host-facing detail
+ * belongs where a host would look, not over a member's microphone.
+ */
+export const micNotice = (s: MicState): string | null => {
+  switch (s) {
+    case 'live':
+    case 'muted':     return null
+    case 'denied':    return 'No microphone access — allow it in your browser to talk'
+    case 'missing':   return 'No microphone found — plug one in to talk'
+    case 'busy':      return 'Your microphone is in use by another app'
+    case 'insecure':  return 'Listening only — this server cannot take your microphone'
+    case 'forbidden': return 'Listening only — you cannot speak in this channel'
+  }
+}
