@@ -54,7 +54,7 @@ certificates live in Docker volumes, and survive updates and reinstalls.
 ```bash
 sudo skycord status      # version, health, disk, last backup, updates available
 sudo skycord update      # update, with a backup and automatic rollback
-sudo skycord logs        # follow what it is doing
+sudo skycord logs -f     # follow what it is doing
 sudo skycord config      # change settings, then apply them
 sudo skycord backup      # back up the database now
 ```

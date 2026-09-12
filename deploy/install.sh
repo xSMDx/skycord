@@ -383,7 +383,7 @@ Installed $VERSION in $SKYCORD_DIR
   sudo skycord status      version, health, backups, updates
   sudo skycord update      update, with a backup and automatic rollback
   sudo skycord config      change settings
-  sudo skycord logs        watch what it is doing
+  sudo skycord logs -f     watch what it is doing
 
 Open https://$DOMAIN and register. The first account is an ordinary account:
 there is no admin tier yet.

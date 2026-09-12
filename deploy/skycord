@@ -324,8 +324,19 @@ cmd_status() {
 
 cmd_logs() {
   need_install
-  local service="${1:-}"
-  if [ -n "$service" ]; then compose logs --tail 100 -f "$service"; else compose logs --tail 100 -f; fi
+  local service="" follow="" tail="100"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -f|--follow) follow="-f"; shift ;;
+      --tail)      tail="$2"; shift 2 ;;
+      -*)          die "unknown option: $1" ;;
+      *)           service="$1"; shift ;;
+    esac
+  done
+  # Prints and stops, like docker compose logs. Following is -f, because a
+  # script asking for diagnostics has to get them back.
+  if [ -n "$service" ]; then compose logs --tail "$tail" $follow "$service"
+  else compose logs --tail "$tail" $follow; fi
 }
 
 cmd_config() {
@@ -354,7 +365,8 @@ skycord — control a Skycord server
   skycord rollback               go back to the previous version
   skycord backup                 back up the database now
   skycord restore <file.gz>      replace the database from a backup
-  skycord logs [service]         follow the logs
+  skycord logs [-f] [--tail N] [service]
+                                 the logs; -f to keep following them
   skycord config                 edit settings, then apply them
   skycord auto-update on|off     nightly updates (off by default)
   skycord apply                  re-apply the configuration

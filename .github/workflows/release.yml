@@ -18,6 +18,7 @@ jobs:
   check:
     name: Typecheck and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       mongo:
         image: mongo:4.4
@@ -64,6 +65,7 @@ jobs:
     name: Build and push the image
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -101,6 +103,7 @@ jobs:
     name: Install, update and roll back for real
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       # The image is private until someone makes it public, and every first
@@ -119,6 +122,7 @@ jobs:
     name: Publish the release
     needs: rehearse
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

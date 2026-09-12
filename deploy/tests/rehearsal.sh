@@ -18,7 +18,11 @@ BROKEN="v999.0.1"    # an image that cannot start
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 say()  { printf '\n=== %s\n' "$*"; }
-fail() { printf '\nREHEARSAL FAILED: %s\n' "$*" >&2; sudo skycord logs skycord --tail 50 2>/dev/null || true; exit 1; }
+fail() {
+  printf '\nREHEARSAL FAILED: %s\n' "$*" >&2
+  timeout 30 sudo skycord logs --tail 50 skycord 2>/dev/null || true
+  exit 1
+}
 
 # Everything comes from the working tree: the release these files describe does
 # not exist yet, which is the whole point of rehearsing before publishing.
@@ -66,14 +70,18 @@ const post = async (path, data) => {
 " || fail "could not register, make a server and post a message"
 
 say "Update to a build offered as newer"
-sudo docker tag "$IMAGE:$VERSION" "$IMAGE:$NEXT"
+# The version is baked into the image, so a plain re-tag would still report
+# the old one and the update would rightly refuse to believe it had landed.
+CTX="$(mktemp -d)"
+printf 'FROM %s:%s\nENV SKYCORD_VERSION=%s\n' "$IMAGE" "$VERSION" "$NEXT" > "$CTX/Dockerfile"
+sudo docker build -q -t "$IMAGE:$NEXT" "$CTX" >/dev/null
 sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" skycord update "$NEXT" --yes \
   || fail "the update did not finish"
 sudo skycord version | grep -q "$NEXT" || fail "the update did not record $NEXT"
 
 say "Update to a broken build, which must roll itself back"
-printf 'FROM busybox\nCMD ["false"]\n' > /tmp/broken.Dockerfile
-sudo docker build -f /tmp/broken.Dockerfile -t "$IMAGE:$BROKEN" /tmp >/dev/null
+printf 'FROM busybox\nCMD ["false"]\n' > "$CTX/Dockerfile"
+sudo docker build -q -t "$IMAGE:$BROKEN" "$CTX" >/dev/null
 # The update is expected to fail: it should put the working version back.
 sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" SKYCORD_HEALTH_TIMEOUT=45 \
   skycord update "$BROKEN" --yes && fail "a broken build was accepted as healthy"

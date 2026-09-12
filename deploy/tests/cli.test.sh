@@ -123,6 +123,22 @@ yes_ "accepts the flags the cutover uses" \
 no_  "rejects an option it does not know" \
   quiet bash "$ROOT/deploy/install.sh" --mongo-externals --help
 
+echo "logs arguments"
+# skycord logs used to follow the log always, so a script that asked for
+# diagnostics never got its shell back. These stubs stand in for an install.
+# shellcheck disable=SC2329 # a stub, reached through the sourced cmd_logs
+need_install() { :; }
+# shellcheck disable=SC2329 # a stub, reached through the sourced cmd_logs
+compose() { printf '%s
+' "compose $*"; }
+# shellcheck disable=SC2329 # called indirectly, by no_
+logs_rejects() { ( cmd_logs --nope ) >/dev/null 2>&1; }
+is  "does not follow by default" "$(cmd_logs)" "compose logs --tail 100"
+is  "takes a service name"       "$(cmd_logs skycord)" "compose logs --tail 100 skycord"
+is  "-f follows"                 "$(cmd_logs -f skycord)" "compose logs --tail 100 -f skycord"
+is  "--tail sets how much"       "$(cmd_logs --tail 50 skycord)" "compose logs --tail 50 skycord"
+no_ "rejects an unknown flag"    logs_rejects
+
 echo ""
 if [ "$FAILED" = "0" ]; then echo "all good"; else echo "FAILURES"; fi
 exit "$FAILED"
