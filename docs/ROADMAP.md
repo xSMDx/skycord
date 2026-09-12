@@ -54,13 +54,18 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 
 ## Queue
 
+**Order changed 2026-09-11:** the one-command install and update comes first,
+then the UI/UX audit, then the Windows desktop app as v0.20.0 with
+multi-instance split out to v0.21, then the phone app, then E2EE.
+
 | # | Item | State |
 |---|------|-------|
-| 1 | **Channels** | in progress — see below |
+| 1 | ~~**Channels**~~ | ✅ shipped, through v0.19.0 — servers, categories, roles and permissions, voice, moderation, search and message history |
 | 2 | **UI/UX audit and polish (whole app)** | queued, scoped below |
-| 3 | One-command install | Docker Compose: app + Mongo + LiveKit + proxy. Manual path is documented in `docs/self-hosting/` |
+| 3 | **One-command install and update** | **in progress**, and moved ahead of the audit on 2026-09-11 at the user's request. Compose stack (app + Mongo 4.4 + LiveKit + Caddy), `install.sh`, and a `skycord` command whose update backs up, health-checks and rolls itself back. Spec: `docs/superpowers/specs/2026-09-11-one-command-install-design.md` |
 | 4 | ~~**Multi-LiveKit (voice server picker)**~~ | ✅ **DONE — v0.14.0 (2026-08-30) and v0.14.1 (2026-08-31).** Shipped differently from the line this row used to carry, and deliberately: it assumed *"same API key/secret across servers, so a list of URLs — not a credential set each"*. Every server carries **its own** credentials instead, encrypted at rest via `secretBox`, because one shared key means one leak exposes every box. Two tiers: a guild owner registers servers for their own server, and an instance admin lists servers for the whole build in `voice-servers.json` (ids prefixed `instance:`, read-only in the app, secrets never reaching Mongo or a browser). Resolution is channel override → guild default → instance default → the `LIVEKIT_URL` trio. No lowest-ping auto — a per-channel pin and a per-user default for DMs, plus anyone in a DM/group call being able to move it live |
-| 5 | Electron desktop shell + auto-update | carries **multi-instance**: add another instance's address and switch between them, TeamSpeak-style. Blocks E2EE |
+| 5 | **Windows desktop app — v0.20.0** | Electron shell, installer, auto-update, tray, notifications, push-to-talk that works unfocused, its own screen-share picker, invite links that open the app |
+| 5b | Multi-instance — v0.21 | add another instance's address and switch between them, TeamSpeak-style. Split out of the desktop release because it changes how signing in works across instances. Blocks E2EE |
 | 6 | Native phone app | push notifications, and the same instance list as desktop. Blocks E2EE |
 | 7 | E2EE (DMs only) | designed, not built — `docs/superpowers/specs/2026-08-30-e2ee-revision.md`. **After both apps**, not by preference: delete-on-delivery makes the device the only copy, and a browser tab that "clear site data" wipes is the wrong home for it. Write the protocol spec first — see that doc |
 

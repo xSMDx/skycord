@@ -26,6 +26,7 @@
  */
 import { RoomServiceClient, TrackType, TrackSource } from 'livekit-server-sdk'
 import type { ResolvedVoice } from './resolveVoiceServer'
+import { config } from '../config/env'
 
 /**
  * RoomServiceClient speaks HTTP, while the URL we store is the one clients use
@@ -135,8 +136,21 @@ const permissionFor = (g: PublishGrant) => ({
   agent:             false,
 })
 
+/**
+ * Where to reach a voice server's admin API.
+ *
+ * The instance's own server — the only one with no database row — can be
+ * reached inside the deployment, which in the container stack is
+ * http://livekit:7880. That avoids leaving the machine and coming back through
+ * the public address: wasteful in a container, and it fails outright behind a
+ * router without NAT loopback. A server somebody registered lives elsewhere, so
+ * only its own URL can be right.
+ */
+export const adminUrlFor = (voice: ResolvedVoice, internal = config.livekit.adminUrl): string =>
+  voice.id === null && internal ? internal : adminUrl(voice.url)
+
 const clientFor = (voice: ResolvedVoice) =>
-  new RoomServiceClient(adminUrl(voice.url), voice.apiKey, voice.apiSecret)
+  new RoomServiceClient(adminUrlFor(voice), voice.apiKey, voice.apiSecret)
 
 /**
  * What happened, so the caller can be honest with the moderator rather than

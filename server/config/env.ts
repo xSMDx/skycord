@@ -12,6 +12,14 @@ export const config = {
   port:    parseInt(opt('PORT', '3001'), 10),
   nodeEnv: opt('NODE_ENV', 'development'),
   isProd:  opt('NODE_ENV', 'development') === 'production',
+  /** The release this build is. Baked into the image; 'dev' anywhere else. Reported by /health. */
+  version: opt('SKYCORD_VERSION', 'dev'),
+  /**
+   * Where the built client lives when this process serves it, as it does in the
+   * container. Empty means the API only, which is what a deployment with a web
+   * server in front of it wants.
+   */
+  clientDir: opt('CLIENT_DIR', ''),
   mongo: {
     uri: req('MONGO_URI'),
   },
@@ -30,6 +38,10 @@ export const config = {
   },
   livekit: {
     url:       opt('LIVEKIT_URL', ''),
+    /** How this server reaches its OWN LiveKit's admin API — inside the stack,
+     *  http://livekit:7880. Without it the public URL is used, which leaves the
+     *  machine and comes back, and fails behind a router with no NAT loopback. */
+    adminUrl:  opt('LIVEKIT_ADMIN_URL', ''),
     apiKey:    opt('LIVEKIT_API_KEY', ''),
     apiSecret: opt('LIVEKIT_API_SECRET', ''),
     /** Instance-wide voice servers, offered to every guild on this build. See

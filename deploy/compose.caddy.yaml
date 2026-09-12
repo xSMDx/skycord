@@ -1,0 +1,33 @@
+# Caddy: the only thing listening on the internet, and the only piece that
+# needs to know your address. It obtains and renews the certificate itself.
+#
+# Leave it out (--proxy external) when the machine already runs a web server;
+# the app then listens on 127.0.0.1 for it instead.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      # HTTP/3.
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here: keep this volume and a reinstall does not ask
+      # Let's Encrypt for a new one.
+      - caddy-data:/data
+      - caddy-config:/config
+      # Only used when you bring your own certificate, e.g. Cloudflare's.
+      - ./tls:/etc/skycord-tls:ro
+    depends_on:
+      - skycord
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -3,6 +3,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import morgan from 'morgan'
+import mongoose from 'mongoose'
 import { config } from './config/env'
 import authRoutes     from './routes/auth'
 import usersRoutes    from './routes/users'
@@ -16,6 +17,8 @@ import serversRoutes  from './routes/servers'
 import invitesRoutes  from './routes/invites'
 import { errorHandler, notFound } from './middleware/errorHandler'
 import { apiLimit } from './middleware/rateLimit'
+import { healthBody, healthStatus } from './utils/health'
+import { mountClient } from './utils/serveClient'
 
 export const createApp = () => {
   const app = express()
@@ -30,7 +33,42 @@ export const createApp = () => {
 
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    /**
+     * No content policy, deliberately — and this is the release where that
+     * became a decision rather than an accident.
+     *
+     * Until now a web server delivered the page, and this header only rode on
+     * API responses, where a policy does nothing at all. The app serves its
+     * own pages in the container, so helmet's default would suddenly apply to
+     * the document: its img-src of 'self' blocks every avatar hosted
+     * elsewhere, and its connect-src of 'self' blocks the websocket to a voice
+     * server on another address. Both fail silently in the browser.
+     *
+     * A policy this app can genuinely keep — fonts, blob and data media,
+     * websockets to whichever LiveKit an instance uses — is its own piece of
+     * work, with a browser to test it in, not a line added here.
+     */
+    contentSecurityPolicy: false,
+    // Two years, which is what the self-hosting guide tells people to set.
+    // helmet's own default is 180 days.
+    hsts: { maxAge: 63072000, includeSubDomains: true },
+    // Nobody frames this app; helmet's default only forbids other origins.
+    frameguard: { action: 'deny' },
   }))
+
+  /**
+   * The one header helmet has no setting for. The app never asks for any of
+   * these, and denying them means a compromised script cannot either.
+   *
+   * It lives here rather than in the proxy so every deployment gets it: the
+   * container behind Caddy, a server behind nginx, and development. Two owners
+   * would mean two values of the same header arriving together, which is how a
+   * DENY and a SAMEORIGIN cancel each other out.
+   */
+  app.use((_req, res, next) => {
+    res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()')
+    next()
+  })
 
   app.use(cors({
     origin:      config.cors.clientOrigin,
@@ -56,7 +94,12 @@ export const createApp = () => {
 
   if (!config.isProd) app.use(morgan('dev'))
 
-  app.get('/health', (_, res) => res.json({ status: 'ok', ts: new Date().toISOString() }))
+  // More than "the process is listening": an update decides whether the new
+  // version came up from the version and the database state reported here.
+  app.get('/health', (_, res) => {
+    const ready = mongoose.connection.readyState
+    res.status(healthStatus(ready)).json(healthBody(ready, config.version))
+  })
 
   // /auth keeps its own tighter limiters and is deliberately outside this one —
   // a login attempt shouldn't consume the same budget as reading messages.
@@ -76,6 +119,10 @@ export const createApp = () => {
   app.use('/gifs',          gifsRoutes)
   app.use('/servers',       serversRoutes)
   app.use('/invites',       invitesRoutes)
+
+  // The container serves the client from this process. Every other deployment
+  // leaves CLIENT_DIR unset and keeps its own web server in front.
+  if (config.clientDir) mountClient(app, config.clientDir)
 
   app.use(notFound)
   app.use(errorHandler)

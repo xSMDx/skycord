@@ -56,22 +56,20 @@ private place for a group that already trusts each other, it does that well.
 
 ## Install
 
+One command on a fresh Linux server:
+
+```bash
+curl -fsSL https://skycord.xyz/install.sh | sudo bash
+```
+
+It asks for the address people will use and an email for certificate notices,
+then sets up the app, MongoDB, LiveKit and a web server with HTTPS. Later,
+updating is `sudo skycord update`: it backs up first, and puts the old version
+back by itself if the new one does not come up.
+
 Full walkthrough: **[docs/self-hosting/installing.md](./docs/self-hosting/installing.md)**.
-The short version:
-
-```bash
-git clone https://github.com/xSMDx/sykord.git
-cd sykord
-npm ci
-cp .env.example .env
-```
-
-Then edit `.env` (see below), and:
-
-```bash
-npm run build
-npm start
-```
+Without Docker — Node, MongoDB and a web server by hand:
+**[docs/self-hosting/manual-install.md](./docs/self-hosting/manual-install.md)**.
 
 `npm run build` produces two things: a static client in `dist/`, which your
 reverse proxy serves, and the compiled server in `dist/server/`, which

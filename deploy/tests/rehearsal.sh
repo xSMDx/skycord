@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# The release rehearsal: a real install, a real update, and an update to a
+# deliberately broken build that must roll itself back — all against the image
+# that was just built, on a throwaway machine.
+#
+# This is what stands between a bad release and every server's `skycord update`.
+# It runs in CI after the image is pushed and before `latest` moves.
+#
+#   bash deploy/tests/rehearsal.sh ghcr.io/xsmdx/skycord v0.19.1
+set -euo pipefail
+
+IMAGE="${1:?usage: rehearsal.sh <image> <version>}"
+VERSION="${2:?usage: rehearsal.sh <image> <version>}"
+
+DIR="${SKYCORD_DIR:-/opt/skycord}"
+NEXT="v999.0.0"      # the same image, offered as if it were newer
+BROKEN="v999.0.1"    # an image that cannot start
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+
+say()  { printf '\n=== %s\n' "$*"; }
+fail() { printf '\nREHEARSAL FAILED: %s\n' "$*" >&2; sudo skycord logs skycord --tail 50 2>/dev/null || true; exit 1; }
+
+# Everything comes from the working tree: the release these files describe does
+# not exist yet, which is the whole point of rehearsing before publishing.
+export SKYCORD_LOCAL_FILES="$ROOT/deploy/_bundle"
+rm -rf "$SKYCORD_LOCAL_FILES"
+mkdir -p "$SKYCORD_LOCAL_FILES"
+cp "$ROOT"/deploy/compose*.yaml "$ROOT"/deploy/mongo-init.sh "$ROOT"/deploy/Caddyfile.tmpl \
+   "$ROOT"/deploy/livekit.yaml.tmpl "$ROOT"/deploy/skycord "$ROOT"/deploy/install.sh "$SKYCORD_LOCAL_FILES/"
+cp "$ROOT"/deploy/systemd/* "$SKYCORD_LOCAL_FILES/"
+( cd "$SKYCORD_LOCAL_FILES" && sha256sum ./* > SHA256SUMS )
+
+say "Install"
+# localhost, so Caddy issues its own certificate instead of asking Let's
+# Encrypt for one it could never get on a runner.
+sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" bash "$ROOT/deploy/install.sh" \
+  --domain localhost --email ci@example.com --version "$VERSION" --yes \
+  || fail "the installer did not finish"
+
+sudo skycord status || fail "status does not work"
+
+say "The app answers, and the API is the API"
+sudo docker compose --project-directory "$DIR" exec -T skycord \
+  node -e "fetch('http://127.0.0.1:3001/health').then(r=>r.json()).then(h=>{ if (h.version!=='$VERSION'||h.db!=='up') { console.error(h); process.exit(1) } })" \
+  || fail "/health did not report $VERSION with a reachable database"
+
+say "Register an account and send a message"
+sudo docker compose --project-directory "$DIR" exec -T skycord node -e "
+const base = 'http://127.0.0.1:3001'
+const body = { username: 'rehearsal', email: 'rehearsal@example.com', password: 'Rehearsal-123', displayName: 'Rehearsal' }
+const jar = []
+const keep = r => { const c = r.headers.getSetCookie?.() ?? []; jar.push(...c.map(v => v.split(';')[0])) }
+const post = async (path, data) => {
+  const r = await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json', cookie: jar.join('; ') }, body: JSON.stringify(data) })
+  keep(r)
+  if (!r.ok) { console.error(path, r.status, await r.text()); process.exit(1) }
+  return r.json()
+}
+;(async () => {
+  await post('/auth/register', body)
+  const server = await post('/servers', { name: 'Rehearsal' })
+  const channel = server.channels.find(c => c.type === 'text')
+  await post('/servers/' + server.server.id + '/channels/' + channel.id + '/messages', { content: 'rehearsal message' })
+  console.log('ok')
+})()
+" || fail "could not register, make a server and post a message"
+
+say "Update to a build offered as newer"
+sudo docker tag "$IMAGE:$VERSION" "$IMAGE:$NEXT"
+sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" skycord update "$NEXT" --yes \
+  || fail "the update did not finish"
+sudo skycord version | grep -q "$NEXT" || fail "the update did not record $NEXT"
+
+say "Update to a broken build, which must roll itself back"
+printf 'FROM busybox\nCMD ["false"]\n' > /tmp/broken.Dockerfile
+sudo docker build -f /tmp/broken.Dockerfile -t "$IMAGE:$BROKEN" /tmp >/dev/null
+# The update is expected to fail: it should put the working version back.
+sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" SKYCORD_HEALTH_TIMEOUT=45 \
+  skycord update "$BROKEN" --yes && fail "a broken build was accepted as healthy"
+
+sudo skycord version | grep -q "$NEXT" || fail "did not go back to $NEXT"
+sudo docker compose --project-directory "$DIR" exec -T skycord \
+  node -e "fetch('http://127.0.0.1:3001/health').then(r=>r.json()).then(h=>{ if (h.db!=='up') process.exit(1) })" \
+  || fail "the working version did not come back healthy"
+
+say "The message written before all of this is still there"
+sudo docker compose --project-directory "$DIR" exec -T mongo \
+  mongo --quiet -u "$(sudo sed -n 's/^MONGO_ROOT_USER=//p' "$DIR/.env")" \
+        -p "$(sudo sed -n 's/^MONGO_ROOT_PASSWORD=//p' "$DIR/.env")" \
+        --authenticationDatabase admin skycord \
+        --eval 'quit(db.messages.countDocuments({ content: "rehearsal message" }) === 1 ? 0 : 1)' \
+  || fail "the message did not survive the update and rollback"
+
+say "Backup and restore"
+sudo skycord backup rehearsal || fail "backup failed"
+LATEST="$(sudo ls -1t "$DIR"/backups/rehearsal-*.gz | head -1)"
+printf 'restore\n' | sudo skycord restore "$LATEST" || fail "restore failed"
+
+say "Rehearsal passed"

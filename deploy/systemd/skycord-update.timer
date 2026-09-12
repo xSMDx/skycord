@@ -1,0 +1,10 @@
+[Unit]
+Description=Skycord automatic update (off unless you turn it on)
+
+[Timer]
+# Half an hour after the backup, so a night's update always has one behind it.
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

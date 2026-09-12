@@ -1,0 +1,21 @@
+# LiveKit, when the stack runs its own. Leave it out for voice on a server you
+# already run (set LIVEKIT_URL and its key pair), or for no voice at all.
+#
+# Two ports, not a range of thousands: media is muxed onto a single UDP port,
+# with TCP as the fallback for networks that block UDP. On a home server that
+# is two port forwards.
+services:
+  livekit:
+    image: livekit/livekit-server:v1.9.0
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "${LIVEKIT_TCP_PORT:-7881}:7881/tcp"
+      - "${LIVEKIT_UDP_PORT:-7882}:${LIVEKIT_UDP_PORT:-7882}/udp"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
