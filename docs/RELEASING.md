@@ -78,10 +78,14 @@ the only way back.
   something got through, publish the fix as a new patch version rather than
   moving a tag — servers remember the version they are on, and a moved tag
   would leave two different builds with the same name.
-- **The workflow published nothing at all:** no image pushed, no release
-  created, `latest` where it was. Then that version was never released, only
-  attempted, and the tag can be deleted and made again on the fix. The rule
-  above protects against two different builds answering to one name; there is
-  no first build here to collide with. Check the run before assuming it, and
-  check the package: an image that reached the registry counts as published
-  even if the release notes never appeared.
+- **The release never finished:** no release notes, and `latest` still where
+  it was. Then nobody could be running it — there was nothing to find and
+  nothing to follow — so the tag can be deleted and made again on the fix.
+  The rule above protects against two builds answering to one name in the
+  hands of people who already pulled one; an image sitting in the registry
+  that no release points at is not in anybody’s hands. Overwriting it is
+  better than leaving it: a version that exists as an image and not as a
+  release is the more confusing of the two.
+
+  Once `latest` has moved or the notes are up, that stops being true, and the
+  next number is the only way forward.
