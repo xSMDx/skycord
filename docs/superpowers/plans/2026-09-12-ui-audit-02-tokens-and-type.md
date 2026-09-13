@@ -440,7 +440,7 @@ Change `--font-ui` so it leads with a face that is actually present:
 - [ ] **Step 2: Self-host the four optional families**
 
 ```bash
-npm install @fontsource/inter @fontsource/roboto @fontsource-variable/fira-code @fontsource/jetbrains-mono
+npm install @fontsource/inter @fontsource/roboto @fontsource/fira-code @fontsource/jetbrains-mono
 ```
 
 Import them where the app's styles are imported, so Vite bundles and fingerprints them:
@@ -453,7 +453,8 @@ import '@fontsource/inter/700.css'
 import '@fontsource/roboto/400.css'
 import '@fontsource/roboto/500.css'
 import '@fontsource/roboto/700.css'
-import '@fontsource-variable/fira-code'
+import '@fontsource/fira-code/400.css'
+import '@fontsource/fira-code/500.css'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
 ```
@@ -469,6 +470,52 @@ In `useAppearance.ts`, replace the `'gg sans'` entry of `UI_FONTS` with Archivo,
 ```
 
 and change `DEFAULTS.fontUi` from `'gg sans'` to `'Archivo'`.
+
+**Two traps, both found before this task was dispatched — do not skip either.**
+
+*Existing users would get Times New Roman.* `useAppearance.ts:206` reads
+`UI_FONTS[a.fontUi] || UI_FONTS['gg sans']`. Once the `'gg sans'` key is gone,
+anyone with `fontUi: 'gg sans'` saved gets `undefined` from **both** lookups, and
+the browser treats the string `"undefined"` as an unknown font name — so the
+entire app renders in the default serif. Fix both halves:
+
+```ts
+// The fallback names the default rather than a literal key, so renaming a font
+// can never again leave it pointing at nothing.
+root.style.setProperty('--font-ui', UI_FONTS[a.fontUi] || UI_FONTS[DEFAULTS.fontUi])
+```
+
+Apply the same pattern to the `--font-mono` line beside it. Then, in `load()`,
+drop a saved `fontUi` that is not a key of `UI_FONTS` and a saved `fontMono` that
+is not a key of `MONO_FONTS`, so a legacy `'gg sans'` user falls through to the
+default and the font picker shows a real selection rather than none:
+
+```ts
+const load = (): Partial<Appearance> => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}')
+    // A font that no longer exists — 'gg sans' was renamed to Archivo — must
+    // not survive a reload, or it renders as the browser's default serif.
+    if (saved.fontUi && !(saved.fontUi in UI_FONTS)) delete saved.fontUi
+    if (saved.fontMono && !(saved.fontMono in MONO_FONTS)) delete saved.fontMono
+    return saved
+  } catch { return {} }
+}
+```
+
+Check that `UI_FONTS` and `MONO_FONTS` are defined above the first call to
+`load()` — they must be, since `appearance` is built from it.
+
+*Fira Code must be the static package.* `@fontsource-variable/fira-code`
+registers its family as `'Fira Code Variable'`, but `MONO_FONTS` asks for
+`'Fira Code'`, so the variable package would load and never apply. The install
+line and imports above already use the static `@fontsource/fira-code` at 400 and
+500 — the two weights Google Fonts was serving. Confirm each family name the four
+packages register matches what `UI_FONTS` and `MONO_FONTS` ask for, by reading
+each package's CSS, and report all four.
+
+*Also update `DESIGN.md`'s Typography section*, which still documents
+`--font-ui` as leading with `'gg sans'` and lists gg sans as a user choice.
 
 - [ ] **Step 4: Prove nothing reaches Google, and the faces resolve**
 
