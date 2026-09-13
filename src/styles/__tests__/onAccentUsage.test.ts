@@ -212,12 +212,36 @@ describe('text on an accent background', () => {
   const GRADIENT_EXCEPTIONS = new Set([
     'components/modals/QuickSwitcherModal.vue:.qs-av-group', // background is a two-colour gradient; --text-on-accent is only ever measured against a flat colour
   ])
+  // The accent is painted by an inline template :style, never by any CSS rule
+  // this file can parse — SettingsModal's preview avatar takes its background
+  // from :style="{ background: accentHex }" (see the comment on .ap-prev-av
+  // itself). Read by hand and verified true, not a heuristic: a heuristic
+  // general enough to spot every inline-style idiom would also be general
+  // enough to wave through a rule that never touches the accent at all.
+  const INLINE_ACCENT_EXCEPTIONS = new Set([
+    'components/modals/SettingsModal.vue:.ap-prev-av',
+  ])
   it('never uses --text-on-accent as a colour except in a rule whose own background is the accent', () => {
+    // A DESCENDANT of a rule that paints the accent is still "on the accent"
+    // for this question — CallFlyout's hovered row (.fly .fr:hover) fills with
+    // the accent, and its sub-label/check icon underneath (.fly .fr:hover
+    // .fr-sub, .fly .fr:hover .fr-check) correctly wear the same token even
+    // though the fill lives on the ancestor's own rule, not theirs. Same
+    // selector-prefix approach as the "never paints white on a descendant"
+    // check above, for the opposite colour.
+    const accentSelectors: Array<{ file: string; selector: string }> = []
+    for (const r of rules) if (ACCENT_BG.test(r.body)) for (const s of r.selectors) accentSelectors.push({ file: r.file, selector: s })
+    const hasAccentAncestor = (file: string, selector: string): boolean =>
+      accentSelectors.some(a => a.file === file && a.selector !== selector &&
+        (selector.startsWith(a.selector + ' ') || selector.startsWith(a.selector + '>') || selector.startsWith(a.selector + '~')))
+
     const offenders: string[] = []
     for (const r of rules) {
       const color = colorValue(r.body)
       if (!color || !/^var\(--text-on-accent\)/.test(color)) continue
       if (ACCENT_BG.test(r.body)) continue
+      if (r.selectors.some(s => hasAccentAncestor(r.file, s))) continue
+      if (r.selectors.some(s => INLINE_ACCENT_EXCEPTIONS.has(`${r.file}:${s}`))) continue
       const bg = backgroundValue(r.body)
       if (bg && /gradient/.test(bg)) {
         for (const s of r.selectors) expect(GRADIENT_EXCEPTIONS.has(`${r.file}:${s}`), `${describeRule(r)} uses a gradient background with --text-on-accent — verify it's the documented exception, not a new site`).toBe(true)

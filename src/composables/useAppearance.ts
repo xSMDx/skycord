@@ -197,7 +197,16 @@ export const applyAppearance = () => {
       }
     } else {
       const { mentionFg, accentText } = accentTintsOnDark(a.accent)
-      root.style.setProperty('--name-hover', mentionFg)
+      // An inline style always outranks html.names-plain's stylesheet rule
+      // (tokens.css), regardless of specificity, so unconditionally setting
+      // --name-hover here silently defeated "Display Name Styles: off" for
+      // anyone with an explicit accent on a dark theme. Only set it when
+      // styled names are on; otherwise leave it unset, the same way the
+      // 'auto' branch above already leaves it unset for every accent
+      // property. --mention-fg keeps this value regardless — it answers an
+      // unrelated question (inline @mention colour), not display-name hover.
+      if (a.displayNameStyles) root.style.setProperty('--name-hover', mentionFg)
+      else root.style.removeProperty('--name-hover')
       root.style.setProperty('--mention-fg', mentionFg)
       root.style.setProperty('--accent-text', accentText)
       root.style.setProperty('--time-token-fg', accentText)

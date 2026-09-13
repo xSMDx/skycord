@@ -107,10 +107,22 @@ a message into is laid on top; the thing you fill in a form with is cut into.
 | `--text-2` | `#b5bac1` | Secondary |
 | `--text-3` | `#949ba4` | Muted, labels |
 | `--text-faint` | `#999ca2` | Placeholders — 4.58:1 on chat, 4.99:1 on panel |
-| `--text-on-accent` | `#ffffff` | Text on the accent — stays light in **every** theme |
+| `--text-on-accent` | *measured* | Text on the accent — `onAccentText(accent)` in `onAccent.ts`, per-accent, **not** fixed white |
+| `--text-on-green` | `#0e0f11` | Text on `--green` — `onAccentText(--green)` |
+| `--text-on-green-deep` | `#ffffff` | Text on the darker "Copied"/"on" green (`#248046`, InviteGroupModal/InviteServerModal) — a different shade from `--green`, so a different measured answer |
+| `--text-on-danger` | `#0e0f11` | Text on `--danger` — `onAccentText(--danger)` |
+| `--text-on-danger-hover` | `#ffffff` | Text on ConfirmModal's own danger-hover literal (`#c73e3e`), not `--danger-hover` |
 
 `--text-faint` is not "as light as it looks OK"; it is the lightest value that
 still clears AA on the *darkest* surface it can land on. Don't lighten it.
+
+`--text-on-accent` used to be documented (and shipped) as a fixed `#ffffff`
+that "stays light in every theme" — wrong the moment the accent itself is
+light: Yellow measured 1.89:1. It is computed per accent by comparing the
+WCAG contrast of ink and white against it and keeping whichever wins, which is
+why Sky, unlike blurple before it, lands on ink instead. The same reasoning —
+measure the exact background, never assume — is why the green/danger pairs
+above sometimes disagree with each other despite sharing a hue family.
 
 ### Borders
 

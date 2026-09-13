@@ -201,3 +201,42 @@ describe('tokens.css defaults', () => {
     expect(token('time-token-fg')).toBe(accentText)
   })
 })
+
+describe('tokens.css green/danger text tokens', () => {
+  // Same drift concern as the suite above, for a different pair of hand-typed
+  // snapshots: --text-on-green and --text-on-danger are onAccentText of
+  // --green/--danger themselves, so if either base colour ever changes, these
+  // go stale — possibly below AA — with every other test here still green.
+  const css = readFileSync(resolve(__dirname, '../../styles/tokens.css'), 'utf8')
+  const root = /:root\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+  const token = (name: string): string => {
+    const m = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(root)
+    if (!m) throw new Error(`--${name} not found in tokens.css's :root block`)
+    return m[1].toLowerCase()
+  }
+
+  it('text-on-green and text-on-danger match onAccentText of their own base colour', () => {
+    expect(token('text-on-green')).toBe(onAccentText(token('green')))
+    expect(token('text-on-danger')).toBe(onAccentText(token('danger')))
+  })
+
+  it('text-on-danger-hover matches onAccentText of ConfirmModal\'s own hover literal, not --danger-hover', () => {
+    // ConfirmModal.vue's .cfm-confirm.danger:hover paints a literal #c73e3e —
+    // a different shade from --danger-hover (#c93b3e) that component never
+    // adopted — so the stored answer has to be measured against THAT exact
+    // hex, not the token of the same name (which, here, coincidentally agrees:
+    // both read as white — this pins the value to its real background rather
+    // than to that coincidence).
+    expect(token('text-on-danger-hover')).toBe(onAccentText('#c73e3e'))
+  })
+
+  it('text-on-green-deep matches onAccentText of the "Copied"/"on" shade used at InviteGroupModal and InviteServerModal, not --green', () => {
+    // #248046 — also hardcoded at CallBar's .cb-b.on, PermissionsTab's
+    // .allow.on and VoiceConnectedPanel's .on — is a distinct, darker green
+    // from --green (#23a55a), and onAccentText disagrees between the two
+    // (see the comment beside --text-on-green-deep in tokens.css), so it
+    // cannot share --text-on-green's stored value.
+    expect(token('text-on-green-deep')).toBe(onAccentText('#248046'))
+    expect(token('text-on-green-deep')).not.toBe(token('text-on-green'))
+  })
+})

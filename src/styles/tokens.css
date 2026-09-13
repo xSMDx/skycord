@@ -158,6 +158,19 @@
      and all of them point at it. Named for the colour rather than one role,
      because no single role covers a success toast AND an explore button. */
   --green: #23a55a;
+  /* onAccentText(--green) — measured, not assumed: #23a55a reads better with
+     ink (6.03:1) than white (3.18:1), the reverse of the white every hand-
+     written `color: #fff` beside a green background on this branch guessed.
+     onAccent.test.ts's tokens.css suite recomputes this from --green itself,
+     so the two can never quietly drift apart. */
+  --text-on-green: #0e0f11;
+  /* The darker "confirmed" shade already hardcoded at CallBar's .cb-b.on,
+     PermissionsTab's .pm-tri-btn.allow.on and VoiceConnectedPanel's .vcp-btn.on
+     (#248046) — used here at InviteGroupModal/InviteServerModal's "Copied!".
+     It is NOT a duplicate of --green (different lightness), so it does not
+     share --text-on-green's answer: onAccentText(#248046) is white (4.94:1),
+     where ink clears only 3.88:1 — below AA. */
+  --text-on-green-deep: #ffffff;
 
   /* Danger, destructive actions, and the "muted" state. Added because three
      different reds (#ed4245, #f23f43, #f08080) were in use across 67 sites for
@@ -165,6 +178,13 @@
   --danger:      #ed4245;
   --danger-hover:#c93b3e;
   --danger-rgb:  237, 66, 69;
+  /* onAccentText(--danger): ink clears 4.99:1 against #ed4245, white only 3.84:1. */
+  --text-on-danger: #0e0f11;
+  /* ConfirmModal's destructive-confirm hover paints its own literal #c73e3e —
+     a different shade from --danger-hover (#c93b3e) that the component never
+     tokenised — and onAccentText disagrees with --text-on-danger for it:
+     white clears 5.02:1 there, ink only 3.82:1. */
+  --text-on-danger-hover: #ffffff;
 
   /* ── The 2px grid ───────────────────────────────────────────────────────
      Spacing, radii and icon sizes are even numbers. Not a scale invented

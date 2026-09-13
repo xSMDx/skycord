@@ -1788,8 +1788,10 @@ img    { display: block; object-fit: cover; }
 .ap-prev-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text-on-accent); font-weight: 700; }
 /* This second avatar's background is the app's green, not the accent — it must
    not inherit --text-on-accent above, which is only ever measured against the
-   accent and would go wrong the moment an accent choice flips it to ink. */
-.ap-prev-av2 { background: #23a55a; color: #fff; }
+   accent and would go wrong the moment an accent choice flips it to ink.
+   --text-on-green is its own measurement against --green, and for #23a55a
+   that answer is ink, not the white this rule hand-picked before. */
+.ap-prev-av2 { background: var(--green); color: var(--text-on-green); }
 .ap-prev-main { min-width: 0; }
 .ap-prev-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
 .ap-prev-name { font-weight: 600; color: var(--text-strong); }

@@ -102,7 +102,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 /* Destructive action: the app's established danger red (ContextMenu, Settings'
    Log Out, ProfilePopout's Unfriend) rather than the accent — Delete/Leave
-   Server should not look like a routine confirm. */
-.cfm-confirm.danger { background: #ed4245; }
-.cfm-confirm.danger:hover:not(:disabled) { background: #c73e3e; }
+   Server should not look like a routine confirm. Its own colour, not the
+   inherited --text-on-accent above: that token is measured against the
+   accent, and this button isn't painted with it. */
+.cfm-confirm.danger { background: var(--danger); color: var(--text-on-danger); }
+.cfm-confirm.danger:hover:not(:disabled) { background: #c73e3e; color: var(--text-on-danger-hover); }
 </style>
