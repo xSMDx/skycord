@@ -8,7 +8,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
-import { resolveAccentHex } from '@/composables/onAccent'
+import { resolveAccentHex, onAccentText, SKY_DARK, SKY_LIGHT } from '@/composables/onAccent'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
@@ -38,7 +38,11 @@ const { user: authUser, logout, authFetch, updateUser } = useAuth()
 
 const { appearance, setAppearance, setCustomToken, serializeTheme, parseTheme, sanitizeTheme, previewTheme } = useAppearance()
 const { createTheme } = useApi()
-const isCustomAccent = computed(() => !ACCENT_PRESETS.some(p => p.hex === appearance.accent.toLowerCase()))
+// 'auto' has no fixed hex to match against ACCENT_PRESETS, so without this
+// check it fell through to "custom" — the picker showed Custom selected (and
+// nothing else) for the theme-aware default, which is the one accent that is
+// least custom of all.
+const isCustomAccent = computed(() => appearance.accent !== 'auto' && !ACCENT_PRESETS.some(p => p.hex === appearance.accent.toLowerCase()))
 const resetCustom = () => setAppearance({ custom: {}, theme: 'default' })
 
 // ── Theme sharing ──
@@ -1036,12 +1040,24 @@ const handleSelfRevoked = () => handleLogout()
             <h3 class="ap-sub">Accent Color</h3>
             <div class="ap-swatches">
               <button
+                class="ap-swatch ap-swatch-auto" :class="{ active: appearance.accent === 'auto' }"
+                :style="{ background: `linear-gradient(135deg, ${SKY_DARK} 50%, ${SKY_LIGHT} 50%)` }"
+                v-tip="'Automatic — Sky, tuned to each theme'" aria-label="Automatic — Sky, tuned to each theme"
+                @click="setAppearance({ accent: 'auto' })"
+              >
+                <!-- Neither half's own onAccentText is right for a mark straddling
+                     both: white clears SKY_LIGHT but fails SKY_DARK's 3:1 graphics
+                     minimum (2.30:1), so ink — SKY_DARK's own answer — is the one
+                     colour that clears both halves. -->
+                <svg v-if="appearance.accent === 'auto'" width="14" height="14" viewBox="0 0 24 24" fill="none" :stroke="onAccentText(SKY_DARK)" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button
                 v-for="p in ACCENT_PRESETS" :key="p.hex"
                 class="ap-swatch" :class="{ active: appearance.accent.toLowerCase() === p.hex }"
                 :style="{ background: p.hex }" v-tip="p.name"
                 @click="setAppearance({ accent: p.hex })"
               >
-                <svg v-if="appearance.accent.toLowerCase() === p.hex" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-if="appearance.accent.toLowerCase() === p.hex" width="14" height="14" viewBox="0 0 24 24" fill="none" :stroke="onAccentText(p.hex)" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
               <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: accentHex }">
                 <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
