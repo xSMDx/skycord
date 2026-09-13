@@ -142,12 +142,12 @@ carries a hairline ring plus a *neutral* lighter fill instead.
 | Token | Value | Role |
 |---|---|---|
 | `--green` | `#23a55a` | Live, online, affirmative. Voice pips, speaking rings, success, accept |
-| `--mention-fg` | `#8d96f8` | Lightened accent (dark) / full accent (light) |
+| `--mention-fg` | `#38b6f1` | Lightened accent (dark) / full accent (light) — derived from the accent by accentTintsOnDark (onAccent.ts) |
 | `--mention-bg` | `rgba(var(--accent-rgb), .18)` | |
 | `--mention-all-bg` | `rgba(240, 178, 0, .22)` | `@everyone` — amber, distinct from a normal ping |
 | `--mention-row-bar` | `#f0b232` | Left bar on a row that pings you |
-| `--accent-text` | `#c4c9ff` | Text sitting **on** a translucent accent tint |
-| `--time-token-fg` | `#c4c9ff` | |
+| `--accent-text` | `#55c1f3` | Text sitting **on** a translucent accent tint |
+| `--time-token-fg` | `#55c1f3` | |
 
 `--green` is a token because it appears in twelve places for roles no single
 name covers (a success toast *and* an explore button). Name colours after the

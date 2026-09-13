@@ -186,6 +186,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --hover-strong: rgba(0,0,0,.10);
   /* Mentions/time tokens: full accent + deeper tints read clearly on white. */
   --mention-fg:    var(--accent);
+  --name-hover:    var(--accent);
   --mention-bg:    rgba(var(--accent-rgb), .15);
   /* --accent-hover, not --accent: the accent itself only reaches 3.75:1 on
      its own 16% tint, and this is 14px body text. accent-hover is derived
@@ -225,6 +226,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --hover:        rgba(0,0,0,.06);
   --hover-strong: rgba(0,0,0,.10);
   --mention-fg:    var(--accent);
+  --name-hover:    var(--accent);
   --mention-bg:    rgba(var(--accent-rgb), .15);
   /* --accent-hover, not --accent: the accent itself only reaches 3.75:1 on
      its own 16% tint, and this is 14px body text. accent-hover is derived
