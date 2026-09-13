@@ -164,7 +164,9 @@ describe('text on an accent background', () => {
       for (const s of r.selectors) {
         for (const a of accentSelectors) {
           if (a.file !== r.file || a.selector === s) continue
-          if (s.startsWith(a.selector + ' ') || s.startsWith(a.selector + '>') || s.startsWith(a.selector + '~')) {
+          // Descendant or child only. A `~` sibling sits beside the accent, not
+          // on it, so it is no more "on the accent" than any other element.
+          if (s.startsWith(a.selector + ' ') || s.startsWith(a.selector + '>')) {
             offenders.push(`${describeRule(r)}  <- accent ancestor "${a.selector}"  :: color: ${color}`)
           }
         }
@@ -231,9 +233,11 @@ describe('text on an accent background', () => {
     // check above, for the opposite colour.
     const accentSelectors: Array<{ file: string; selector: string }> = []
     for (const r of rules) if (ACCENT_BG.test(r.body)) for (const s of r.selectors) accentSelectors.push({ file: r.file, selector: s })
+    // Descendant or child only: this is an exemption, so a `~` sibling — which
+    // sits beside the accent rather than on it — must not earn one.
     const hasAccentAncestor = (file: string, selector: string): boolean =>
       accentSelectors.some(a => a.file === file && a.selector !== selector &&
-        (selector.startsWith(a.selector + ' ') || selector.startsWith(a.selector + '>') || selector.startsWith(a.selector + '~')))
+        (selector.startsWith(a.selector + ' ') || selector.startsWith(a.selector + '>')))
 
     const offenders: string[] = []
     for (const r of rules) {

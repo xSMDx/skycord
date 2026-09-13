@@ -325,7 +325,12 @@ describe('tokens.css green/danger text tokens', () => {
     // hex, not the token of the same name (which, here, coincidentally agrees:
     // both read as white — this pins the value to its real background rather
     // than to that coincidence).
-    expect(token('text-on-danger-hover')).toBe(onAccentText('#c73e3e'))
+    // Read from the component rather than typed here, so the day that hover
+    // shade changes this fails instead of measuring a colour nobody paints.
+    const confirm = readFileSync(resolve(__dirname, '../../components/modals/ConfirmModal.vue'), 'utf8')
+    const hoverBg = /\.cfm-confirm\.danger:hover[^{]*\{[^}]*background:\s*(#[0-9a-fA-F]{6})/.exec(confirm)?.[1]
+    if (!hoverBg) throw new Error('ConfirmModal.vue: .cfm-confirm.danger:hover no longer paints a hex background — re-measure --text-on-danger-hover against what it paints now')
+    expect(token('text-on-danger-hover')).toBe(onAccentText(hoverBg.toLowerCase()))
   })
 
   it('text-on-green-deep matches onAccentText of the "Copied"/"on" shade used at InviteGroupModal and InviteServerModal, not --green', () => {
