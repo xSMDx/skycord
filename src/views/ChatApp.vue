@@ -63,6 +63,7 @@ import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance, setAppearance, accentHex } from '@/composables/useAppearance'
+import { resolveAccentHex } from '@/composables/onAccent'
 import { THEME_OPTS, STUDIO_OPTS, ALL_PRESETS, type ThemeOpt } from '@/composables/themePresets'
 import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/useSavedThemes'
 import { useVoice, isConnectedVoiceRoom, userPref, setUserPref } from '@/composables/useVoice'
@@ -3134,12 +3135,15 @@ const discoverTab = ref<'servers' | 'themes'>('servers')
 const pickPreset = (t: ThemeOpt) =>
   setAppearance(t.accent ? { theme: t.id, accent: t.accent } : { theme: t.id })
 
-/** A saved theme's swatch shows the surface and accent it would restore. */
+/** A saved theme's swatch shows the surface and accent it would restore.
+ *  Resolved against the SNAPSHOT's own theme, not the live one — a saved
+ *  'auto' means "that theme's Sky", which can differ from whatever theme is
+ *  on screen right now while browsing the list. */
 const savedSwatch = (t: SavedTheme) => {
   const opt = ALL_PRESETS.find(o => o.id === t.theme.theme)
   return {
     background: opt?.preview.background || '#313338',
-    boxShadow: `inset 0 -7px 0 ${t.theme.accent || 'var(--accent)'}`,
+    boxShadow: `inset 0 -7px 0 ${resolveAccentHex(t.theme.accent, t.theme.theme)}`,
   }
 }
 

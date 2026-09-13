@@ -5,7 +5,7 @@
  */
 import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
-import { onAccentText } from './onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme } from './onAccent'
 
 export type Theme =
   | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
@@ -93,21 +93,6 @@ const shade = (hex: string, p: number) => {
 }
 const rgbTriple = (hex: string) => { const { r, g, b } = parseHex(hex); return `${r}, ${g}, ${b}` }
 
-// Material-You needs a concrete hex to seed its palette even when the user's
-// accent is 'auto' — there is no stylesheet to fall back on inside a JS call,
-// unlike the CSS custom properties below, which 'auto' can just leave unset.
-// These match the Sky values in tokens.css (:root and the light-theme
-// override) verbatim, so the seed agrees with what an explicit accent would
-// paint on each theme family.
-const SKY_DARK = '#38b6f1'
-const SKY_LIGHT = '#0a75af'
-// Pulled out so applyAppearance's inline styling and accentHex's colour pick
-// share one definition of "dark" — two copies of this test would eventually
-// disagree about a theme added to only one of them.
-const isDarkTheme = (theme: Theme): boolean => !(theme === 'light' || theme === 'light-dim')
-const resolvedAccent = (a: Appearance, isDark: boolean): string =>
-  a.accent === 'auto' ? (isDark ? SKY_DARK : SKY_LIGHT) : a.accent
-
 const load = (): Partial<Appearance> => {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
 }
@@ -124,7 +109,7 @@ export const appearance = reactive<Appearance>({ ...DEFAULTS, ...load() })
  * instead of `appearance.accent` wherever a real colour is required, or
  * 'auto' ends up parsed as one.
  */
-export const accentHex = computed(() => resolvedAccent(appearance, isDarkTheme(appearance.theme)))
+export const accentHex = computed(() => resolveAccentHex(appearance.accent, appearance.theme))
 
 export const applyAppearance = () => {
   const root = document.documentElement
@@ -151,8 +136,11 @@ export const applyAppearance = () => {
 
   if (a.scheme !== 'off') {
     // Material-You: generate the full surface/text palette from the accent seed.
-    const isDark = isDarkTheme(a.theme)
-    const tokens = buildSchemeTokens(resolvedAccent(a, isDark), a.scheme, isDark, a.contrast)
+    // This is a JS call, not a stylesheet, so 'auto' has nothing to resolve
+    // against on its own — it needs the same concrete hex the CSS custom
+    // properties below would show for this theme.
+    const isDark = !isLightTheme(a.theme)
+    const tokens = buildSchemeTokens(resolveAccentHex(a.accent, a.theme), a.scheme, isDark, a.contrast)
     for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v)
   } else if (a.theme === 'custom') {
     for (const [k, v] of Object.entries(a.custom)) if (v) root.style.setProperty(k, v)

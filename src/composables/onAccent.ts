@@ -41,3 +41,39 @@ const contrast = (aHex: string, bHex: string): number => {
 
 export const onAccentText = (accentHex: string): string =>
   contrast(INK, accentHex) >= contrast(WHITE, accentHex) ? INK : WHITE
+
+/**
+ * Sky, the app's accent, for each theme family. Dark and light themes use
+ * different hex values (light needs a deeper blue to hold contrast on a
+ * bright surface), so resolving 'auto' requires knowing which family the
+ * theme in question belongs to — there is no single "the" Sky. These match
+ * tokens.css's own `--accent` for each family verbatim; drifting from that
+ * stylesheet would make a resolved hex lie about what the live CSS paints.
+ */
+export const SKY_DARK = '#38b6f1'
+export const SKY_LIGHT = '#0a75af'
+
+/**
+ * Only `light` and `light-dim` are the light family; every other theme name
+ * — including one this build has never heard of, e.g. from a saved snapshot
+ * written by a newer version — falls back to dark. That fallback has to
+ * match `resolveAccentHex`'s own fallback below, or the two functions could
+ * disagree about the same unrecognised theme string.
+ */
+export const isLightTheme = (theme: string | undefined): boolean =>
+  theme === 'light' || theme === 'light-dim'
+
+/**
+ * Turn an accent SETTING into an actual paintable colour, for a given theme.
+ *
+ * This takes theme as an explicit argument rather than reading "the current
+ * theme" from anywhere, because the accent and the theme it must resolve
+ * against are not always the same live pair: a saved theme snapshot carries
+ * both its own accent and its own theme, and a preview of that snapshot has
+ * to show what THAT theme's Sky looks like, not whatever theme happens to be
+ * on screen right now. Resolving against the wrong theme is exactly the bug
+ * this function exists to make impossible — pass the two together, always
+ * from the same snapshot (or both from the live appearance).
+ */
+export const resolveAccentHex = (accent: string | undefined, theme: string | undefined): string =>
+  accent && accent !== 'auto' ? accent : (isLightTheme(theme) ? SKY_LIGHT : SKY_DARK)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { onAccentText } from '../onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme, SKY_DARK, SKY_LIGHT } from '../onAccent'
 
 const INK = '#0e0f11'
 const WHITE = '#ffffff'
@@ -60,5 +60,51 @@ describe('onAccentText', () => {
   it('survives a malformed value rather than throwing', () => {
     // Custom accents come from a colour input and from restored settings.
     expect([INK, WHITE]).toContain(onAccentText('not-a-colour'))
+  })
+})
+
+describe('isLightTheme', () => {
+  it('is true for exactly the two light theme families', () => {
+    expect(isLightTheme('light')).toBe(true)
+    expect(isLightTheme('light-dim')).toBe(true)
+  })
+
+  it('is false for dark themes, an unknown name, and undefined', () => {
+    expect(isLightTheme('default')).toBe(false)
+    expect(isLightTheme('midnight')).toBe(false)
+    expect(isLightTheme('amoled')).toBe(false)
+    // A theme this function has never heard of (added elsewhere, or a saved
+    // snapshot from a future version) must still resolve to something, and
+    // dark is the app's fallback family everywhere else in the app.
+    expect(isLightTheme('some-future-theme')).toBe(false)
+    expect(isLightTheme(undefined)).toBe(false)
+  })
+})
+
+describe('resolveAccentHex', () => {
+  it('resolves the auto sentinel to Sky for the theme it is asked about', () => {
+    expect(resolveAccentHex('auto', 'default')).toBe(SKY_DARK)
+    expect(resolveAccentHex('auto', 'light')).toBe(SKY_LIGHT)
+    expect(resolveAccentHex('auto', 'light-dim')).toBe(SKY_LIGHT)
+  })
+
+  it('passes an explicit hex through untouched, regardless of theme', () => {
+    expect(resolveAccentHex('#5865f2', 'default')).toBe('#5865f2')
+    expect(resolveAccentHex('#5865f2', 'light')).toBe('#5865f2')
+  })
+
+  it('treats empty and undefined accent the same as auto', () => {
+    expect(resolveAccentHex('', 'default')).toBe(SKY_DARK)
+    expect(resolveAccentHex('', 'light')).toBe(SKY_LIGHT)
+    expect(resolveAccentHex(undefined, 'default')).toBe(SKY_DARK)
+    expect(resolveAccentHex(undefined, 'light-dim')).toBe(SKY_LIGHT)
+  })
+
+  it('treats an unknown or missing theme name as dark', () => {
+    // A saved snapshot can carry a theme this build no longer recognises;
+    // falling back to dark matches isLightTheme's own fallback so the two
+    // never disagree about the same theme string.
+    expect(resolveAccentHex('auto', 'some-future-theme')).toBe(SKY_DARK)
+    expect(resolveAccentHex('auto', undefined)).toBe(SKY_DARK)
   })
 })

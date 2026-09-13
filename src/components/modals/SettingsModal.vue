@@ -8,6 +8,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
+import { resolveAccentHex } from '@/composables/onAccent'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
@@ -90,11 +91,14 @@ const startRename = (t: SavedTheme) => {
   if (next !== null) renameSavedTheme(t.id, next)
 }
 /** The saved swatch shows the surface and accent that entry would restore —
- *  the two things that actually change when it is applied. */
+ *  the two things that actually change when it is applied. Resolved against
+ *  the SNAPSHOT's own theme, not the live one — a saved 'auto' means "that
+ *  theme's Sky", which can differ from whatever theme is live while this
+ *  list is on screen. */
 const savedPreview = (t: SavedTheme) => {
   const opt = [...THEME_OPTS, ...STUDIO_OPTS].find(o => o.id === t.theme.theme)
   const surface = (opt?.preview.background) || '#313338'
-  return { background: surface, boxShadow: `inset 0 -7px 0 ${t.theme.accent || 'var(--accent)'}` }
+  return { background: surface, boxShadow: `inset 0 -7px 0 ${resolveAccentHex(t.theme.accent, t.theme.theme)}` }
 }
 
 /** A theme card. Studio entries bring their accent with them. */
