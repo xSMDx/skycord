@@ -6,6 +6,7 @@
 import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
 import { onAccentText, resolveAccentHex, isLightTheme, accentTintsOnDark } from './onAccent'
+import { migrateSavedAppearance, APPEARANCE_VERSION } from './appearanceMigration'
 
 export type Theme =
   | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
@@ -96,11 +97,7 @@ const rgbTriple = (hex: string) => { const { r, g, b } = parseHex(hex); return `
 const load = (): Partial<Appearance> => {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}')
-    // A font that no longer exists — 'gg sans' was renamed to Archivo — must
-    // not survive a reload, or it renders as the browser's default serif.
-    if (saved.fontUi && !(saved.fontUi in UI_FONTS)) delete saved.fontUi
-    if (saved.fontMono && !(saved.fontMono in MONO_FONTS)) delete saved.fontMono
-    return saved
+    return migrateSavedAppearance(saved, Object.keys(UI_FONTS), Object.keys(MONO_FONTS)) as Partial<Appearance>
   } catch { return {} }
 }
 
@@ -234,7 +231,7 @@ export const applyAppearance = () => {
 // persist=false applies live without writing localStorage — used by theme preview.
 export const setAppearance = (patch: Partial<Appearance>, persist = true) => {
   Object.assign(appearance, patch)
-  if (persist) localStorage.setItem(KEY, JSON.stringify(appearance))
+  if (persist) localStorage.setItem(KEY, JSON.stringify({ ...appearance, v: APPEARANCE_VERSION }))
   applyAppearance()
 }
 export const setCustomToken = (key: string, value: string) => {
