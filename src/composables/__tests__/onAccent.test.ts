@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { onAccentText, resolveAccentHex, isLightTheme, SKY_DARK, SKY_LIGHT, accentTintsOnDark, accentTintsOnLight } from '../onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme, isAutoAccent, SKY_DARK, SKY_LIGHT, accentTintsOnDark, accentTintsOnLight } from '../onAccent'
 
 const INK = '#0e0f11'
 const WHITE = '#ffffff'
@@ -81,6 +81,19 @@ describe('isLightTheme', () => {
     // dark is the app's fallback family everywhere else in the app.
     expect(isLightTheme('some-future-theme')).toBe(false)
     expect(isLightTheme(undefined)).toBe(false)
+  })
+})
+
+describe('isAutoAccent', () => {
+  it('is true for the sentinel, empty, and undefined', () => {
+    expect(isAutoAccent('auto')).toBe(true)
+    expect(isAutoAccent('')).toBe(true)
+    expect(isAutoAccent(undefined)).toBe(true)
+  })
+
+  it('is false for any explicit hex', () => {
+    expect(isAutoAccent('#5865f2')).toBe(false)
+    expect(isAutoAccent('#38b6f1')).toBe(false)
   })
 })
 
@@ -266,6 +279,24 @@ describe('tokens.css defaults', () => {
     expect(token('name-hover')).toBe(mentionFg)
     expect(token('accent-text')).toBe(accentText)
     expect(token('time-token-fg')).toBe(accentText)
+  })
+
+  // Same drift concern, for the accent hex itself rather than its derived
+  // tints: onAccent.ts's own SKY_DARK/SKY_LIGHT comment says these "match
+  // tokens.css's own --accent for each family verbatim" — nothing enforced
+  // that until now, so the two could silently disagree about what Sky is.
+  const themeBlock = (theme: string): string =>
+    new RegExp(`\\[data-theme="${theme}"\\]\\s*\\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? ''
+  const tokenIn = (block: string, name: string): string => {
+    const m = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(block)
+    if (!m) throw new Error(`--${name} not found in the given block`)
+    return m[1].toLowerCase()
+  }
+
+  it(':root and both light blocks paint --accent with SKY_DARK/SKY_LIGHT', () => {
+    expect(token('accent')).toBe(SKY_DARK)
+    expect(tokenIn(themeBlock('light'), 'accent')).toBe(SKY_LIGHT)
+    expect(tokenIn(themeBlock('light-dim'), 'accent')).toBe(SKY_LIGHT)
   })
 })
 

@@ -5,8 +5,9 @@
  * why seven of the nine shipped presets failed AA — Yellow at 1.89:1. White is
  * right for a dark accent and wrong for a light one, and since the accent can
  * be any colour the user types, the only answer that cannot rot is to measure
- * it. Material-You already derived this correctly from its own palette; this is
- * the same idea for every other path.
+ * it. useAppearance.ts is the one place that sets `--text-on-accent`, calling
+ * this — including with Material-You active, whose own onPrimary role used to
+ * compute a second, always-overwritten answer here and has since been removed.
  *
  * The pick is made by computing the WCAG contrast ratio of the accent against
  * each candidate and keeping the higher one — not by comparing the accent's
@@ -64,6 +65,22 @@ export const isLightTheme = (theme: string | undefined): boolean =>
   theme === 'light' || theme === 'light-dim'
 
 /**
+ * Whether an accent SETTING means "automatic" rather than a real colour to
+ * paint. The sentinel `'auto'` is the obvious case; an empty string reaches
+ * here too — from a settings blob saved without ever picking an accent — and
+ * has to mean the same thing, or the two halves of the app that each ask
+ * this question in their own words can disagree about it. Before this
+ * existed, useAppearance's inline-property branch spelled out `=== 'auto'`
+ * only, so an empty accent fell through to the "explicit colour" branch and
+ * asked `shade('', ...)` for a hex it doesn't have — which is where the
+ * `--accent-hover: #NaNNaNNaN` that branch produced came from, while the
+ * Material-You seed (built from resolveAccentHex below) correctly got Sky.
+ * One shared check is what makes that disagreement impossible instead of
+ * merely unlikely.
+ */
+export const isAutoAccent = (accent: string | undefined): boolean => !accent || accent === 'auto'
+
+/**
  * Turn an accent SETTING into an actual paintable colour, for a given theme.
  *
  * This takes theme as an explicit argument rather than reading "the current
@@ -76,7 +93,7 @@ export const isLightTheme = (theme: string | undefined): boolean =>
  * from the same snapshot (or both from the live appearance).
  */
 export const resolveAccentHex = (accent: string | undefined, theme: string | undefined): string =>
-  accent && accent !== 'auto' ? accent : (isLightTheme(theme) ? SKY_LIGHT : SKY_DARK)
+  isAutoAccent(accent) ? (isLightTheme(theme) ? SKY_LIGHT : SKY_DARK) : (accent as string)
 
 const hexChannels = (hex: string): [number, number, number] => {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())

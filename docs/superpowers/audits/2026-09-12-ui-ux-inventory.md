@@ -122,6 +122,12 @@ reachable.
 
 ### 3. No font the project chose is actually loaded
 
+**Fixed** on branch `ui-audit-02-tokens-and-type` — plan: [`2026-09-12-ui-audit-02-tokens-and-type.md`](../plans/2026-09-12-ui-audit-02-tokens-and-type.md). The rest of
+this entry is the former state. `@font-face` rules now load both shipped
+families from `public/fonts/`: Archivo carries the UI (`--font-ui`), and
+Chakra Petch is the display face (`--font-display`) for the wordmark and
+major headings.
+
 `--font-ui` leads with `'gg sans'` — Discord's proprietary face, not shipped —
 then `'Noto Sans'`, also not shipped. Both resolve absent, so the app falls
 through to `system-ui`: Segoe UI on Windows, something else everywhere else. The

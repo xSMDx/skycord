@@ -5,7 +5,7 @@
  */
 import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
-import { onAccentText, resolveAccentHex, isLightTheme, accentTintsOnDark, accentTintsOnLight } from './onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme, isAutoAccent, accentTintsOnDark, accentTintsOnLight } from './onAccent'
 import { migrateSavedAppearance, APPEARANCE_VERSION } from './appearanceMigration'
 
 export type Theme =
@@ -170,7 +170,10 @@ export const applyAppearance = () => {
   // 'auto' means "whatever this theme says": clearing the inline values lets
   // tokens.css decide, which is how the light themes get the deeper Sky. An
   // explicit accent is the user's choice and applies in every theme.
-  if (a.accent === 'auto') {
+  // isAutoAccent, not a bare `=== 'auto'`, so an empty saved accent takes this
+  // branch too instead of falling into the one below and asking shade('') for
+  // a hex it doesn't have.
+  if (isAutoAccent(a.accent)) {
     for (const p of ['--accent', '--accent-hover', '--accent-deep', '--accent-rgb', '--text-on-accent',
                       '--name-hover', '--mention-fg', '--accent-text', '--time-token-fg']) {
       root.style.removeProperty(p)

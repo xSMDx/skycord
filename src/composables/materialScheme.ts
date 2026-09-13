@@ -23,7 +23,7 @@ export const SCHEME_TOKEN_KEYS = [
   '--bg-floor', '--bg-deep', '--bg-panel', '--bg-chat', '--bg-input', '--bg-raised',
   '--bg-chatbar', '--bg-chatbar-focus',
   '--text-strong', '--text-1', '--text-2', '--text-3', '--text-faint',
-  '--border', '--divider', '--text-on-accent',
+  '--border', '--divider',
 ]
 
 export const buildSchemeTokens = (
@@ -49,6 +49,5 @@ export const buildSchemeTokens = (
     '--text-faint':   hex(M.outline),
     '--border':       hex(M.outlineVariant),
     '--divider':      hex(M.outlineVariant),
-    '--text-on-accent': hex(M.onPrimary),
   }
 }

@@ -8,7 +8,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
-import { resolveAccentHex, onAccentText, SKY_DARK, SKY_LIGHT } from '@/composables/onAccent'
+import { resolveAccentHex, onAccentText, isAutoAccent, SKY_DARK, SKY_LIGHT } from '@/composables/onAccent'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
@@ -38,11 +38,11 @@ const { user: authUser, logout, authFetch, updateUser } = useAuth()
 
 const { appearance, setAppearance, setCustomToken, serializeTheme, parseTheme, sanitizeTheme, previewTheme } = useAppearance()
 const { createTheme } = useApi()
-// 'auto' has no fixed hex to match against ACCENT_PRESETS, so without this
-// check it fell through to "custom" — the picker showed Custom selected (and
-// nothing else) for the theme-aware default, which is the one accent that is
-// least custom of all.
-const isCustomAccent = computed(() => appearance.accent !== 'auto' && !ACCENT_PRESETS.some(p => p.hex === appearance.accent.toLowerCase()))
+// 'auto' (or empty) has no fixed hex to match against ACCENT_PRESETS, so
+// without this check it fell through to "custom" — the picker showed Custom
+// selected (and nothing else) for the theme-aware default, which is the one
+// accent that is least custom of all.
+const isCustomAccent = computed(() => !isAutoAccent(appearance.accent) && !ACCENT_PRESETS.some(p => p.hex === appearance.accent.toLowerCase()))
 const resetCustom = () => setAppearance({ custom: {}, theme: 'default' })
 
 // ── Theme sharing ──
@@ -1040,7 +1040,7 @@ const handleSelfRevoked = () => handleLogout()
             <h3 class="ap-sub">Accent Color</h3>
             <div class="ap-swatches">
               <button
-                class="ap-swatch ap-swatch-auto" :class="{ active: appearance.accent === 'auto' }"
+                class="ap-swatch ap-swatch-auto" :class="{ active: isAutoAccent(appearance.accent) }"
                 :style="{ background: `linear-gradient(135deg, ${SKY_DARK} 50%, ${SKY_LIGHT} 50%)` }"
                 v-tip="'Automatic — Sky, tuned to each theme'" aria-label="Automatic — Sky, tuned to each theme"
                 @click="setAppearance({ accent: 'auto' })"
@@ -1049,7 +1049,7 @@ const handleSelfRevoked = () => handleLogout()
                      both: white clears SKY_LIGHT but fails SKY_DARK's 3:1 graphics
                      minimum (2.30:1), so ink — SKY_DARK's own answer — is the one
                      colour that clears both halves. -->
-                <svg v-if="appearance.accent === 'auto'" width="14" height="14" viewBox="0 0 24 24" fill="none" :stroke="onAccentText(SKY_DARK)" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-if="isAutoAccent(appearance.accent)" width="14" height="14" viewBox="0 0 24 24" fill="none" :stroke="onAccentText(SKY_DARK)" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
               <button
                 v-for="p in ACCENT_PRESETS" :key="p.hex"

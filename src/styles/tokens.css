@@ -63,7 +63,8 @@
   --text-2:         #b5bac1;  /* secondary */
   --text-3:         #949ba4;  /* muted / labels */
   --text-faint:     #999ca2;  /* faint / placeholders — 4.58:1 on chat, 4.99 on panel */
-  /* Derived by luminance in useAppearance.ts (onAccent.ts). This default is the
+  /* Derived by luminance in useAppearance.ts (onAccent.ts) — the only place
+     this is ever set, including under Material-You. This default is the
      right answer for the Sky default only; do not read it as "always ink". */
   --text-on-accent: #0e0f11;
 

@@ -98,11 +98,15 @@ onMounted(async () => {
     <div v-if="!splashDone" class="splash">
       <!-- Lottie-powered loading animation -->
       <div class="splash-icon">
-        <!-- A constant, not the reactive `accentHex` accessor: the splash paints
-             before appearance settings load from localStorage (that's the whole
-             point of a splash), so nothing reactive exists yet to read. SKY_DARK
-             is correct even then because the splash only ever shows on the dark
-             surfaces the app boots into, never mid-session after a theme swap. -->
+        <!-- A constant, not the reactive `accentHex` accessor: .splash's own
+             background below is a fixed #0d0e10, never the live --bg-chat, so
+             the icon needs the family tuned for THAT dark surface regardless
+             of which theme is actually loaded. A light-theme visitor's
+             accentHex resolves to SKY_LIGHT — a deeper blue tuned for a near-
+             white surface — which would under-contrast here; an explicit
+             custom accent tuned for some other surface entirely could fare
+             worse. SKY_DARK is the one value known correct against this
+             backdrop no matter what the loaded settings turn out to be. -->
         <SkycordIcon mode="loading" :size="56" :color="SKY_DARK" />
       </div>
 
