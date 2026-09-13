@@ -1,0 +1,147 @@
+# The colour sweep — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Every colour in a component comes from a token, so all five themes, custom accents and Material-You reach every surface — and a test makes a hardcoded colour impossible to add again.
+
+**Architecture:** Measured on 2026-09-13, `<style>` blocks under `src/` held **237 hex literals and 256 raw `rgb()`/`rgba()` values across 64 files**. Most repeat a handful of values that already have tokens — `rgba(255,255,255,.08)` ×35 is exactly `--border`, `.06` ×31 is exactly `--hover` and `--divider`, and the light themes already invert those. So most of the sweep is a mapping, done family by family, each driven by a guard test that lists what is left. The rest needs a small set of new tokens, which are measured rather than chosen by eye.
+
+**Tech Stack:** CSS custom properties, Vue 3 SFC `<style>` blocks, Vitest (the test reads component source as text, as `src/styles/__tests__/onAccentUsage.test.ts` already does).
+
+## Global Constraints
+
+Inherited from [the slice index](./2026-09-12-ui-audit-00-slices.md#global-constraints--every-slice). The ones that bite here:
+
+- **Only tokens.** The end state is zero hex and zero raw `rgb()`/`rgba()` in component `<style>` blocks, outside `tokens.css`.
+- **Five themes plus Material-You.** Every change must survive `default`, `midnight`, `amoled`, `light`, `light-dim`, a custom accent, and a generated Material-You palette. Light themes invert alpha direction.
+- **AA is the floor.** Any new text token is measured against the surface it sits on.
+- **Muscle memory is binding** — colour only, never layout.
+- **Do not change how anything looks in the default dark theme** unless the old value failed contrast. This is a refactor on dark and a fix on light; a pixel diff on dark should show only the contrast corrections named below.
+
+## Depends on
+
+Slice 2 (`ui-audit-02-tokens-and-type`) **merged first.** It adds `--danger`, `--danger-hover`, `--text-on-green`, `--text-on-green-deep`, `--text-on-danger`, `--text-on-danger-hover`, and widens `onAccentUsage.test.ts`. This plan builds on all of them.
+
+## The rule that decides every mapping: role, not value
+
+Two identical values can need different tokens. `rgba(255,255,255,.06)` is `--hover` on a `:hover` background and `--divider` on a separating border. Picking by value would be right on dark and wrong the day the two tokens diverge. **Every site is mapped by what it does.**
+
+| Role | Token |
+|---|---|
+| Background of a hovered row or control | `--hover` / `--hover-strong` |
+| Pressed state | `--press-veil` |
+| Selected row fill | `--active-bg` |
+| Border around a control or card | `--border` |
+| Line that separates two regions | `--divider` |
+| Body, secondary, muted, placeholder text | `--text-1` / `--text-2` / `--text-3` / `--text-faint` |
+| Destructive fill | `--danger`, hover `--danger-hover` |
+| Destructive **text** on a dark surface | `--danger-text` *(new)* |
+| Live, online, success fill | `--green` |
+| Warning, `@everyone`, amber marker | `--warning` *(new)* |
+| Drop shadow | `--shadow-sm` / `--shadow-md` / `--shadow-lg` *(new)* |
+| Dimming layer behind a modal or media | `--scrim` *(new)* |
+| Text or icon **on** an accent, green or danger fill | the matching `--text-on-*` from slice 2 |
+
+**Where the role is genuinely ambiguous**, stop and report it rather than guess. A wrong guess on a shared value is invisible on dark and breaks light.
+
+---
+
+## File structure
+
+| File | Responsibility | Change |
+|---|---|---|
+| `src/styles/tokens.css` | The new tokens, with light-theme counterparts | Modify |
+| `src/styles/__tests__/noHardcodedColour.test.ts` | The guard: lists every remaining literal | **Create** |
+| 64 component files | Literals → tokens | Modify, family by family |
+
+---
+
+### Task 1: The guard test, failing
+
+**Files:**
+- Create: `src/styles/__tests__/noHardcodedColour.test.ts`
+
+This test is the ground truth for every task after it. The same pattern made the on-accent fix in slice 2 honest: the widened test found a site the branch review had missed.
+
+- [ ] **Step 1: Write the test**
+
+It reads every `.vue` file under `src/` except `__tests__`, extracts the `<style>` blocks, and collects every hex literal (`#rgb`, `#rrggbb`, `#rrggbbaa`) and every `rgb(`/`rgba(`/`hsl(` whose arguments are **literal numbers** — `rgba(var(--accent-rgb), .18)` is a token and must not be flagged. It prints each offender as `path:line  value  selector`, then asserts the list is empty.
+
+Two allowances, each one commented with its reason, never a blanket exclusion: `transparent`, `currentColor` and `inherit` are not literals; and a literal inside a `@supports` or `@media (forced-colors)` block that deliberately targets system colours is allowed.
+
+- [ ] **Step 2: Run it and record the baseline**
+
+Run: `npx vitest run src/styles/__tests__/noHardcodedColour.test.ts`
+Expected: FAIL, listing roughly 490 offenders. Record the exact count in the report; every later task must reduce it.
+
+- [ ] **Step 3: Commit the failing test**
+
+Committing a failing test on the branch is deliberate: it is the checklist. Mark the commit message as such.
+
+```bash
+git add src/styles/__tests__/noHardcodedColour.test.ts
+git commit -m "test(theme): list every hardcoded colour left in a component (fails by design)"
+```
+
+---
+
+### Task 2: The new tokens, measured
+
+**Files:**
+- Modify: `src/styles/tokens.css`
+- Modify: `src/composables/__tests__/onAccent.test.ts` — the drift test
+
+Values below are **starting points to be measured, not decisions.** Every text token must clear 4.5:1 against the darkest and lightest surface it lands on in its theme family.
+
+- `--danger-text` — the lighter red used as text on dark surfaces. Sites use `#f0716f` ×15, `#f08080` ×11, `#f56c6f` ×6, `#fa777c` ×3: four values for one role. Measure against `--bg-panel` and `--bg-chat` in each dark theme; pick the least-lightened red that clears 4.5:1 on both. In light themes it is `var(--danger-hover)` or darker — measure against white.
+- `--warning` — the amber marker. `#f0b232` ×5 and `#f0b132` ×5 are the same colour written twice. `--mention-row-bar` already holds `#f0b232`; make `--warning` the source and `--mention-row-bar` refer to it.
+- `--shadow-sm` / `-md` / `-lg` — from the black-alpha values in drop shadows: `.25`, `.3`, `.4`, `.45`, `.5`, `.55`. Group them into three steps by where they are used, not by value. Light themes keep dark shadows but lighter, since a `.5` black shadow is harsh on white.
+- `--scrim` — the modal and media dimming layer. Shared by every modal backdrop, so one value.
+
+Extend the drift test so each new text token's stored value is asserted to clear 4.5:1 against its surfaces, using the test file's own independent `ratio` helper.
+
+Verify: `npm run typecheck`, `npx vitest run src/`. Commit: `feat(theme): the tokens the colour sweep needs, measured`
+
+---
+
+### Tasks 3–8: the sweep, one family at a time
+
+Each task has the same shape, so it is written once here — but each is its **own task, reviewed and committed separately**, because each touches many files and a reviewer must be able to reject one family without the others.
+
+**For each task:**
+
+- [ ] **Step 1:** Run the guard test and filter its output to this task's family. Record the count.
+- [ ] **Step 2:** Map each site by **role**, using the table above. Where a role is ambiguous, list the site in the report and leave it; do not guess.
+- [ ] **Step 3:** Run the guard test again. This family's count must be zero except the listed ambiguous sites.
+- [ ] **Step 4:** `npm run typecheck` and `npx vitest run src/` — clean, and `onAccentUsage.test.ts` still passing.
+- [ ] **Step 5:** Commit with the family's message.
+
+| Task | Family | Values | Why it matters |
+|---|---|---|---|
+| 3 | **White overlays** | `rgba(255,255,255,.04–.12)` ×~85 | **The light-theme breakers.** Invisible on light surfaces today. Biggest visible win. Commit: `fix(theme): overlays follow the theme instead of assuming dark` |
+| 4 | **Reds** | `#ed4245` ×24, `#f23f43` ×16, and the four light reds | Three reds for one role, plus `DESIGN.md`'s own `.btn.danger` example. Commit: `refactor(theme): one danger colour, and one for danger text` |
+| 5 | **Greens** | `#23a55a` ×21, `#248046` ×7 | Presence and success. Commit: `refactor(theme): greens come from the green tokens` |
+| 6 | **Text greys** | `#4e5058` ×10, `#72767d`, `#8a8e96`, `#b5bac1`, `#c4c7cd`, `#e3e3e3` | **Includes the 1.57:1 message timestamp** — inventory finding 6. Map by role to `--text-*`; the timestamp becomes readable as a side effect. Commit: `fix(theme): text greys come from the text tokens, and timestamps become readable` |
+| 7 | **Blurple leftovers** | `#8d96f8` ×8, `#5865f2` spinners and strokes | Discord's colour surviving next to Sky. Map to the accent tokens. Commit: `fix(theme): the last of Discord's blurple follows the accent` |
+| 8 | **Shadows, scrims, and the rest** | `rgba(0,0,0,…)` ×~63, `#fff` ×35, `#000` ×6, stragglers | `#fff` is role-dependent: text on a fill, a highlight, or a foreground. Commit: `refactor(theme): shadows, scrims and the remaining literals use tokens` |
+
+After Task 8 the guard test must pass with **no offenders**, apart from ambiguous sites the owner has ruled on.
+
+---
+
+### Task 9: See it
+
+- [ ] **Step 1:** Screenshot the same set of surfaces in `default` **before** the sweep (from `main`) and **after**, and diff them. Expect differences only at the contrast fixes named in Tasks 6 and 7. Any other difference on dark is a mis-mapped role.
+- [ ] **Step 2:** Walk `light` and `light-dim` across the sidebar, a channel, the member list, Settings, a context menu, a modal, and the call bar. Expect no invisible overlays, borders or hover states — the defect Task 3 exists to remove.
+- [ ] **Step 3:** Pick Yellow and a Material-You palette and repeat a short pass.
+- [ ] **Step 4:** Tick findings 6, 9 and 10 in the inventory, and list anything the browser showed that this plan did not predict.
+
+---
+
+## Self-review
+
+**Spec coverage.** Triage decision: "Everything, and add the missing tokens." Task 2 adds the tokens; Tasks 3–8 convert everything; Task 1's guard proves "everything" rather than asserting it. Inventory findings 6 (timestamps, Task 6), 9 (systemic hardcoding, all), 10 (`DESIGN.md`'s own red, Task 4) and the blurple leftovers the slice-2 review found (Task 7).
+
+**Placeholders.** The per-site lists are deliberately **not** frozen into this plan: they are produced live by Task 1's test, because slice 2 moves many of these lines and a frozen list would be stale before Task 3 starts. The mapping rule, the families, the counts and the verification are all concrete.
+
+**The risk worth naming.** A role mis-mapped onto a same-valued token looks identical on dark and breaks on light. Task 9's before/after diff on dark and the light-theme walk are the two checks aimed at exactly that.
