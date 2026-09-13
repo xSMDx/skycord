@@ -42,14 +42,55 @@ export interface MenuSlider {
   onInput: (v: number) => void
 }
 
-export type MenuItem = MenuAction | MenuSeparator | MenuSlider
+/** Names the rows after it, up to the next section. A label, not a row: it is
+ *  never focused or selected, and the arrow keys pass over it. A separator
+ *  between two groups stays the builder's job, as it always was. */
+export interface MenuSection { section: string }
+
+/** Everything that renders as a row. */
+export type MenuRow  = MenuAction | MenuSeparator | MenuSlider
+export type MenuItem = MenuRow | MenuSection
 
 export const isSeparator = (i: MenuItem): i is MenuSeparator => 'sep' in i
 export const isSlider    = (i: MenuItem): i is MenuSlider    => 'slider' in i
-/** Rows that behave like buttons — everything that isn't a separator or slider. */
-export const isAction    = (i: MenuItem): i is MenuAction    => !isSeparator(i) && !isSlider(i)
+export const isSection   = (i: MenuItem): i is MenuSection   => 'section' in i
+/** Rows that behave like buttons — everything that isn't a separator, slider or section. */
+export const isAction    = (i: MenuItem): i is MenuAction    => !isSeparator(i) && !isSlider(i) && !isSection(i)
 export const hasSubmenu  = (i: MenuItem): i is MenuAction & { submenu: MenuItem[] } =>
   isAction(i) && !!i.submenu?.length
+
+export interface MenuGroup {
+  /** Absent for the rows above the first section. */
+  label?: string
+  /** Each row with its index in the flat list — active row, open flyout and
+   *  the arrow keys all address rows by that index, not by group. */
+  rows: { item: MenuRow; index: number }[]
+}
+
+/**
+ * The flat list, split at each section.
+ *
+ * A section with no real row under it is dropped, so a builder that filters
+ * rows by permission can never leave a label heading empty space.
+ */
+export const menuGroups = (items: MenuItem[]): MenuGroup[] => {
+  const groups: MenuGroup[] = [{ rows: [] }]
+  items.forEach((item, index) => {
+    if (isSection(item)) groups.push({ label: item.section, rows: [] })
+    else groups[groups.length - 1].rows.push({ item, index })
+  })
+  return groups.filter(g => g.rows.some(r => !isSeparator(r.item)))
+}
+
+/** Indices the arrow keys stop on: enabled actions only. A slider is dragged,
+ *  not selected, so landing on one would be a dead stop. */
+export const navigableIndices = (items: MenuItem[]): number[] =>
+  items.flatMap((it, i) => (isAction(it) && !it.disabled ? [i] : []))
+
+/** Position of the action at `index` among the rendered `.cm-row` buttons —
+ *  only actions render one. */
+export const actionOrdinal = (items: MenuItem[], index: number): number =>
+  items.slice(0, index).filter(isAction).length
 
 interface MenuState {
   open:  boolean
@@ -66,7 +107,7 @@ export const menu = reactive<MenuState>({ open: false, x: 0, y: 0, items: [] })
 let lastFocused: HTMLElement | null = null
 
 const prepare = (items: MenuItem[]): MenuItem[] =>
-  items.map(i => (isSeparator(i) || isSlider(i)) ? i : {
+  items.map(i => !isAction(i) ? i : {
     ...i,
     icon:    i.icon ? markRaw(i.icon) : undefined,
     submenu: i.submenu ? prepare(i.submenu) : undefined,
