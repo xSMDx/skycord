@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useAuth }     from '@/composables/useAuth'
 import { useApi }      from '@/composables/useApi'
 import { useAppearance } from '@/composables/useAppearance'
+import { SKY_DARK } from '@/composables/onAccent'
 import AuthPage        from '@/views/AuthPage.vue'
 import ChatApp         from '@/views/ChatApp.vue'
 import SkycordIcon     from '@/components/SkycordIcon.vue'
@@ -97,7 +98,12 @@ onMounted(async () => {
     <div v-if="!splashDone" class="splash">
       <!-- Lottie-powered loading animation -->
       <div class="splash-icon">
-        <SkycordIcon mode="loading" :size="56" color="#5865f2" />
+        <!-- A constant, not the reactive `accentHex` accessor: the splash paints
+             before appearance settings load from localStorage (that's the whole
+             point of a splash), so nothing reactive exists yet to read. SKY_DARK
+             is correct even then because the splash only ever shows on the dark
+             surfaces the app boots into, never mid-session after a theme swap. -->
+        <SkycordIcon mode="loading" :size="56" :color="SKY_DARK" />
       </div>
 
       <div class="splash-wordmark">skycord</div>

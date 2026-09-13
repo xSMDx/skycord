@@ -77,3 +77,76 @@ export const isLightTheme = (theme: string | undefined): boolean =>
  */
 export const resolveAccentHex = (accent: string | undefined, theme: string | undefined): string =>
   accent && accent !== 'auto' ? accent : (isLightTheme(theme) ? SKY_LIGHT : SKY_DARK)
+
+const hexChannels = (hex: string): [number, number, number] => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  // Same "treat it as dark" fallback as luminance() above, for the same reason.
+  const n = m ? m[1] : '000000'
+  return [0, 2, 4].map(i => parseInt(n.slice(i, i + 2), 16)) as [number, number, number]
+}
+const toHex = (r: number, g: number, b: number): string =>
+  '#' + [r, g, b].map(c => Math.round(Math.min(255, Math.max(0, c))).toString(16).padStart(2, '0')).join('')
+
+// Blend toward white by fraction `t` (0 = unchanged, 1 = white). Every channel
+// moves by the same factor (1 - t), which is what keeps the hue fixed: hue is
+// a function of the ratios between channel differences, and scaling every
+// difference by one shared factor leaves those ratios untouched. Desaturating
+// in HSL instead would land on the same contrast but drift toward grey.
+const towardWhite = (hex: string, t: number): string => {
+  const [r, g, b] = hexChannels(hex)
+  return toHex(r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t)
+}
+
+// Composite `hex` at `alpha` over an opaque `onto` — the same maths the
+// browser performs painting e.g. rgba(var(--accent-rgb), .18) over a panel.
+const compositeOver = (hex: string, alpha: number, onto: string): string => {
+  const [r, g, b] = hexChannels(hex)
+  const [orr, og, ob] = hexChannels(onto)
+  return toHex(r * alpha + orr * (1 - alpha), g * alpha + og * (1 - alpha), b * alpha + ob * (1 - alpha))
+}
+
+// The chat surface the dark family's mention/accent-text tokens are tuned
+// against (tokens.css's --bg-chat default). Fixed rather than parameterised:
+// these two CSS custom properties are single flat values shared by every dark
+// theme (default, midnight, amoled, the studio presets), not recomputed per
+// theme, so there is no "which surface" to pass in without changing that.
+const CHAT_SURFACE_DARK = '#313338'
+
+// Small enough that the step from one candidate to the next is never a
+// visually meaningful jump; large enough to resolve in a couple hundred
+// iterations at most. There's no closed-form solution because contrast is not
+// linear in the lightening fraction, so this searches instead of computing.
+const LIGHTEN_STEP = 0.005
+
+const lightenUntil = (accentHex: string, clears: (candidate: string) => boolean): string => {
+  for (let t = 0; t <= 1; t += LIGHTEN_STEP) {
+    const candidate = towardWhite(accentHex, t)
+    if (clears(candidate)) return candidate
+  }
+  // Unreachable in practice — white clears 4.5:1 against any surface this
+  // dark — but a real colour beats a NaN-tainted one if it ever is.
+  return '#ffffff'
+}
+
+/**
+ * Dark-theme values for `--mention-fg` and `--accent-text`, measured from the
+ * accent instead of hand-picked. Both tokens were tuned once for blurple's
+ * hue (#5865f2) and never revisited when the accent became a user choice —
+ * lightening blurple toward white happens to land somewhere legible, but nothing
+ * about that result generalises to a hue at the opposite side of the wheel, so
+ * every other accent (including Sky, the new default) inherited a lavender
+ * that has nothing to do with its own colour.
+ *
+ * `--name-hover` and `--time-token-fg` are not computed separately: they carry
+ * the same values as `mentionFg` and `accentText` respectively, exactly as the
+ * static defaults in tokens.css already do.
+ */
+export const accentTintsOnDark = (accentHex: string): { mentionFg: string; accentText: string } => {
+  const mentionFg = lightenUntil(accentHex, c => contrast(c, CHAT_SURFACE_DARK) >= 4.5)
+  // The tint mention-fg's sibling actually sits on is the ACCENT's own colour
+  // at 18% (--mention-bg's alpha), not the lightened candidate's — matching
+  // how the CSS paints it: rgba(var(--accent-rgb), .18) over --bg-chat.
+  const ownTint = compositeOver(accentHex, 0.18, CHAT_SURFACE_DARK)
+  const accentText = lightenUntil(accentHex, c => contrast(c, ownTint) >= 4.5)
+  return { mentionFg, accentText }
+}

@@ -5,7 +5,7 @@
  */
 import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
-import { onAccentText, resolveAccentHex, isLightTheme } from './onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme, accentTintsOnDark } from './onAccent'
 
 export type Theme =
   | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
@@ -167,7 +167,8 @@ export const applyAppearance = () => {
   // tokens.css decide, which is how the light themes get the deeper Sky. An
   // explicit accent is the user's choice and applies in every theme.
   if (a.accent === 'auto') {
-    for (const p of ['--accent', '--accent-hover', '--accent-deep', '--accent-rgb', '--text-on-accent']) {
+    for (const p of ['--accent', '--accent-hover', '--accent-deep', '--accent-rgb', '--text-on-accent',
+                      '--name-hover', '--mention-fg', '--accent-text', '--time-token-fg']) {
       root.style.removeProperty(p)
     }
   } else {
@@ -178,6 +179,25 @@ export const applyAppearance = () => {
     root.style.setProperty('--accent-deep', shade(a.accent, -0.28))
     root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
     root.style.setProperty('--text-on-accent', onAccentText(a.accent))
+
+    // Mentions/accent-text only need deriving on the dark family: the light
+    // stylesheet rules (var(--accent) / var(--accent-deep)) already give the
+    // right answer for a chosen accent, same as they do for 'auto'. Clearing
+    // them here rather than leaving old values in place matters when the user
+    // picked an explicit accent on a dark theme and then switches to light —
+    // without this, the last dark-computed tint would sit in `root.style` and
+    // outrank the light stylesheet rule, since inline styles always win.
+    if (isLightTheme(a.theme)) {
+      for (const p of ['--name-hover', '--mention-fg', '--accent-text', '--time-token-fg']) {
+        root.style.removeProperty(p)
+      }
+    } else {
+      const { mentionFg, accentText } = accentTintsOnDark(a.accent)
+      root.style.setProperty('--name-hover', mentionFg)
+      root.style.setProperty('--mention-fg', mentionFg)
+      root.style.setProperty('--accent-text', accentText)
+      root.style.setProperty('--time-token-fg', accentText)
+    }
   }
 
   // Sizing + fonts

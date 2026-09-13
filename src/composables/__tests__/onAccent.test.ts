@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { onAccentText, resolveAccentHex, isLightTheme, SKY_DARK, SKY_LIGHT } from '../onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme, SKY_DARK, SKY_LIGHT, accentTintsOnDark } from '../onAccent'
 
 const INK = '#0e0f11'
 const WHITE = '#ffffff'
@@ -106,5 +106,66 @@ describe('resolveAccentHex', () => {
     // never disagree about the same theme string.
     expect(resolveAccentHex('auto', 'some-future-theme')).toBe(SKY_DARK)
     expect(resolveAccentHex('auto', undefined)).toBe(SKY_DARK)
+  })
+})
+
+describe('accentTintsOnDark', () => {
+  // Independent of the implementation: alpha-composite `hex` over `onto` in
+  // sRGB space, the same maths the browser does painting
+  // rgba(var(--accent-rgb), .18) over an opaque panel.
+  const overlay = (hex: string, alpha: number, onto: string): string => {
+    const chan = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
+    const [r, g, b] = chan(hex)
+    const [or_, og, ob] = chan(onto)
+    const mix = (c: number, o: number) => Math.round(c * alpha + o * (1 - alpha))
+    return '#' + [mix(r, or_), mix(g, og), mix(b, ob)].map(x => x.toString(16).padStart(2, '0')).join('')
+  }
+
+  // Independent HSL hue (0-360), used only to check the lightened colour
+  // hasn't drifted to a different hue — `ratio` above already covers contrast.
+  const hue = (hex: string): number => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+    if (d === 0) return 0 // achromatic — no hue to compare against
+    let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    h *= 60
+    return h < 0 ? h + 360 : h
+  }
+  const hueDiff = (a: number, b: number): number => {
+    const d = Math.abs(a - b) % 360
+    return d > 180 ? 360 - d : d
+  }
+
+  const CHAT_SURFACE = '#313338'
+  // Every shipped preset, Sky included — the same list useAppearance.ts's
+  // ACCENT_PRESETS ships in the color picker.
+  const PRESETS = ['#38b6f1', '#5865f2', '#23a55a', '#1abc9c', '#3498db',
+                   '#eb459e', '#ed4245', '#e67e22', '#f0b232', '#9b59b6']
+
+  it('lightens mention-fg to at least 4.5:1 against the dark chat surface, for every shipped preset', () => {
+    for (const hex of PRESETS) {
+      const { mentionFg } = accentTintsOnDark(hex)
+      expect(ratio(mentionFg, CHAT_SURFACE)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('lightens accent-text to at least 4.5:1 against its own 18% tint over the chat surface, for every shipped preset', () => {
+    for (const hex of PRESETS) {
+      const { accentText } = accentTintsOnDark(hex)
+      const tintedSurface = overlay(hex, 0.18, CHAT_SURFACE)
+      expect(ratio(accentText, tintedSurface)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('keeps both results within a couple degrees of the accent\'s own hue', () => {
+    // A search that lightened by desaturating instead of mixing toward white
+    // would still be able to clear the contrast tests above while drifting
+    // toward grey — this is what catches that.
+    for (const hex of PRESETS) {
+      const { mentionFg, accentText } = accentTintsOnDark(hex)
+      const base = hue(hex)
+      expect(hueDiff(hue(mentionFg), base)).toBeLessThanOrEqual(2)
+      expect(hueDiff(hue(accentText), base)).toBeLessThanOrEqual(2)
+    }
   })
 })
