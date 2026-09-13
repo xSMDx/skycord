@@ -262,11 +262,12 @@ way to guarantee that is: **only ever use tokens.**
 ### App
 
 ```css
---font-ui:   'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
---font-mono: 'Consolas','Menlo',monospace;
+--font-ui:      'Archivo','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+--font-display: 'Chakra Petch','Archivo',system-ui,sans-serif;
+--font-mono:    'Consolas','Menlo',monospace;
 ```
 
-User-swappable: UI = gg sans / Inter / Roboto / System. Mono = Consolas /
+User-swappable: UI = Archivo / Inter / Roboto / System. Mono = Consolas /
 Fira Code / JetBrains Mono.
 
 Sizes in practice — there is no `--font-size-N` scale, and deliberately so:

@@ -6,6 +6,36 @@
  * Accent is exposed both as a hex (--accent / --accent-hover) and as an RGB
  * triple (--accent-rgb) so tints can use rgba(var(--accent-rgb), .x).
  */
+
+/* The files have been in public/fonts/ since before this was written, with no
+   @font-face to load them — so the app rendered in the system font and no two
+   self-hosters saw the same one. Archivo carries the UI; Chakra Petch is the
+   display face for headings and the wordmark. */
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-var.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/chakra-petch-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/chakra-petch-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/chakra-petch-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   /* Accent */
   /* Sky. Replaces Discord's blurple — see docs/superpowers/audits/2026-09-12.
@@ -42,8 +72,9 @@
   --divider: rgba(255,255,255,.06);
 
   /* Typography */
-  --font-ui:   'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-  --font-mono: 'Consolas','Menlo',monospace;
+  --font-ui:      'Archivo','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --font-display: 'Chakra Petch','Archivo',system-ui,sans-serif;
+  --font-mono:    'Consolas','Menlo',monospace;
 
   /* Message sizing */
   --msg-pad-y:     1px;   /* density: vertical padding */

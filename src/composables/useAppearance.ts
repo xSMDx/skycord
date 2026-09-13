@@ -40,7 +40,7 @@ export type MsgLayout = 'cozy' | 'compact'
 const KEY = 'sykord_appearance'
 const DEFAULTS: Appearance = {
   theme: 'default', accent: 'auto', density: 'cozy',
-  msgSize: 15, groupSpacing: 17, fontUi: 'gg sans', fontMono: 'Consolas',
+  msgSize: 15, groupSpacing: 17, fontUi: 'Archivo', fontMono: 'Consolas',
   showSendButton: true, custom: {}, scheme: 'off', contrast: 0, emojiPack: 'native',
   underlineLinks: false, displayNameStyles: true, msgLayout: 'cozy', zoom: 100,
   reduceMotion: false,
@@ -55,7 +55,7 @@ export const ACCENT_PRESETS: { name: string; hex: string }[] = [
 ]
 
 export const UI_FONTS: Record<string, string> = {
-  'gg sans': "'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",
+  'Archivo': "'Archivo','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",
   'Inter':   "'Inter',-apple-system,system-ui,sans-serif",
   'Roboto':  "'Roboto',-apple-system,system-ui,sans-serif",
   'System':  "system-ui,-apple-system,BlinkMacSystemFont,sans-serif",
@@ -94,7 +94,14 @@ const shade = (hex: string, p: number) => {
 const rgbTriple = (hex: string) => { const { r, g, b } = parseHex(hex); return `${r}, ${g}, ${b}` }
 
 const load = (): Partial<Appearance> => {
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}')
+    // A font that no longer exists — 'gg sans' was renamed to Archivo — must
+    // not survive a reload, or it renders as the browser's default serif.
+    if (saved.fontUi && !(saved.fontUi in UI_FONTS)) delete saved.fontUi
+    if (saved.fontMono && !(saved.fontMono in MONO_FONTS)) delete saved.fontMono
+    return saved
+  } catch { return {} }
 }
 
 export const appearance = reactive<Appearance>({ ...DEFAULTS, ...load() })
@@ -203,8 +210,10 @@ export const applyAppearance = () => {
   // Sizing + fonts
   root.style.setProperty('--msg-font-size', `${a.msgSize}px`)
   root.style.setProperty('--msg-group-gap', `${a.groupSpacing}px`)
-  root.style.setProperty('--font-ui', UI_FONTS[a.fontUi] || UI_FONTS['gg sans'])
-  root.style.setProperty('--font-mono', MONO_FONTS[a.fontMono] || MONO_FONTS['Consolas'])
+  // The fallback names the default rather than a literal key, so renaming a font
+  // can never again leave it pointing at nothing.
+  root.style.setProperty('--font-ui', UI_FONTS[a.fontUi] || UI_FONTS[DEFAULTS.fontUi])
+  root.style.setProperty('--font-mono', MONO_FONTS[a.fontMono] || MONO_FONTS[DEFAULTS.fontMono])
 
   // Readability + density extras
   if (a.zoom === 100) {
