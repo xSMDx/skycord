@@ -369,7 +369,7 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.vcp-pop-btn:hover { background: var(--accent); color: #fff; }
+.vcp-pop-btn:hover { background: var(--accent); color: var(--text-on-accent); }
 .vcp-pop-btn:active { transform: scale(.98); }
 .vcp-pop-foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 10px; color: var(--text-faint); }
 

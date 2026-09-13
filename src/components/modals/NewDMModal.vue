@@ -160,7 +160,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-cancel:hover { background: var(--hover-strong); }
 .ndm-create {
   flex: 2; padding: 10px; border-radius: 6px;
-  font-size: 14px; font-weight: 600; color: white;
+  font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .ndm-create:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }

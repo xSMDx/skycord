@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
   font-size: 13.5px; font-weight: 500; color: var(--text-1); border-radius: 6px;
   cursor: pointer; box-sizing: border-box;
 }
-.fly .fr:hover { background: var(--accent); color: #fff; }
+.fly .fr:hover { background: var(--accent); color: var(--text-on-accent); }
 .fly .fr:hover .fr-sub { color: rgba(255,255,255,.8); }
 .fly .fr:disabled { opacity: .45; cursor: not-allowed; }
 .fly .fr:disabled:hover { background: none; color: var(--text-1); }

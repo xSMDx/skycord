@@ -303,7 +303,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-av {
   width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--text-on-accent);
   font-size: 24px; font-weight: 700; overflow: hidden;
 }
 .cd-av img { width: 100%; height: 100%; object-fit: cover; }
@@ -376,7 +376,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-m-av {
   position: relative; width: 40px; height: 40px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  background: var(--accent); color: #fff; font-weight: 700; overflow: visible;
+  background: var(--accent); color: var(--text-on-accent); font-weight: 700; overflow: visible;
 }
 .cd-m-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .cd-m-dot {

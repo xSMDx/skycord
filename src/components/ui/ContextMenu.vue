@@ -486,7 +486,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 /* Hover and keyboard focus share one state, so arrowing through the menu looks
    identical to mousing through it. */
-.cm-row:hover, .cm-row.active         { background: var(--accent); color: #fff; }
+.cm-row:hover, .cm-row.active         { background: var(--accent); color: var(--text-on-accent); }
 .cm-row.danger                        { color: #ed4245; }
 .cm-row.danger:hover,
 .cm-row.danger.active                 { background: #ed4245; color: #fff; }

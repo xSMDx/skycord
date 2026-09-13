@@ -6016,7 +6016,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
 .pend-tab{position:relative}
 .pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
-.add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:white;border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
+.add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
@@ -6031,7 +6031,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-empty p{font-size:16px;font-weight:700;color:var(--text-1)}
 .f-empty span{font-size:14px;line-height:1.5}
 .f-empty strong{color:var(--text-1)}
-.f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 .f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .f-row:hover{background:var(--hover);border-color:transparent}
@@ -6059,7 +6059,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding: 16px;overflow: hidden auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
-.an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:white;font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
+.an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
 .an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:rgba(255,255,255,.04);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
