@@ -67,10 +67,15 @@ single source of truth: every app colour is a token, and nothing hardcodes hex.
 
 | Token | Default | Role |
 |---|---|---|
-| `--accent` | `#5865f2` | Blurple. CTAs, selected states, links, focus of attention |
-| `--accent-hover` | `#4752c4` | Derived: `shade(accent, -12%)` |
-| `--accent-deep` | `#3f49ae` | Derived: `shade(accent, -28%)`. Accent text on an accent tint, light themes |
-| `--accent-rgb` | `88, 101, 242` | Triple, so tints can do `rgba(var(--accent-rgb), .18)` |
+| `--accent` | `#38b6f1` | Sky. CTAs, selected states, links, focus of attention |
+| `--accent-hover` | `#31a0d4` | Derived: `shade(accent, -12%)` |
+| `--accent-deep` | `#2883ae` | Derived: `shade(accent, -28%)`. Accent text on an accent tint, light themes |
+| `--accent-rgb` | `56, 182, 241` | Triple, so tints can do `rgba(var(--accent-rgb), .18)` |
+
+Light themes override `--accent`, `--accent-hover` and `--accent-deep` with
+Sky's own light-family value, `#0a75af` — a bright accent needs dark text to
+stay legible, which reads wrong on a primary button, so light themes take the
+deeper value instead (`tokens.css`'s `[data-theme="light"]` block).
 
 Exposed as **both** hex and an RGB triple on purpose — every accent tint in the
 app is an alpha of the triple, so a user's custom accent tints correctly without
@@ -146,8 +151,8 @@ carries a hairline ring plus a *neutral* lighter fill instead.
 | `--mention-bg` | `rgba(var(--accent-rgb), .18)` | |
 | `--mention-all-bg` | `rgba(240, 178, 0, .22)` | `@everyone` — amber, distinct from a normal ping |
 | `--mention-row-bar` | `#f0b232` | Left bar on a row that pings you |
-| `--accent-text` | `#55c1f3` | Text sitting **on** a translucent accent tint |
-| `--time-token-fg` | `#55c1f3` | |
+| `--accent-text` | `#5bc3f3` | Text sitting **on** a translucent accent tint |
+| `--time-token-fg` | `#5bc3f3` | |
 
 `--green` is a token because it appears in twelve places for roles no single
 name covers (a success toast *and* an explore button). Name colours after the

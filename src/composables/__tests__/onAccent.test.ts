@@ -1,4 +1,7 @@
+/// <reference types="node" />
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { onAccentText, resolveAccentHex, isLightTheme, SKY_DARK, SKY_LIGHT, accentTintsOnDark } from '../onAccent'
 
 const INK = '#0e0f11'
@@ -142,18 +145,18 @@ describe('accentTintsOnDark', () => {
   const PRESETS = ['#38b6f1', '#5865f2', '#23a55a', '#1abc9c', '#3498db',
                    '#eb459e', '#ed4245', '#e67e22', '#f0b232', '#9b59b6']
 
-  it('lightens mention-fg to at least 4.5:1 against the dark chat surface, for every shipped preset', () => {
+  it('lightens mention-fg to at least 4.6:1 against the dark chat surface, for every shipped preset', () => {
     for (const hex of PRESETS) {
       const { mentionFg } = accentTintsOnDark(hex)
-      expect(ratio(mentionFg, CHAT_SURFACE)).toBeGreaterThanOrEqual(4.5)
+      expect(ratio(mentionFg, CHAT_SURFACE)).toBeGreaterThanOrEqual(4.6)
     }
   })
 
-  it('lightens accent-text to at least 4.5:1 against its own 18% tint over the chat surface, for every shipped preset', () => {
+  it('lightens accent-text to at least 4.6:1 against its own 18% tint over the chat surface, for every shipped preset', () => {
     for (const hex of PRESETS) {
       const { accentText } = accentTintsOnDark(hex)
       const tintedSurface = overlay(hex, 0.18, CHAT_SURFACE)
-      expect(ratio(accentText, tintedSurface)).toBeGreaterThanOrEqual(4.5)
+      expect(ratio(accentText, tintedSurface)).toBeGreaterThanOrEqual(4.6)
     }
   })
 
@@ -167,5 +170,34 @@ describe('accentTintsOnDark', () => {
       expect(hueDiff(hue(mentionFg), base)).toBeLessThanOrEqual(2)
       expect(hueDiff(hue(accentText), base)).toBeLessThanOrEqual(2)
     }
+  })
+})
+
+describe('tokens.css defaults', () => {
+  // tokens.css's :root block is a hand-copied snapshot of accentTintsOnDark(SKY_DARK)
+  // (see the comment above --mention-fg there) — nothing regenerates it at build
+  // time. If SKY_DARK, the chat surface, the lighten step, or the contrast target
+  // ever changes, that snapshot goes stale (possibly below AA) with every other
+  // test here still green, because none of them look at the stylesheet. Reading
+  // tokens.css as text and comparing it against the live function is what actually
+  // catches that drift.
+  const css = readFileSync(resolve(__dirname, '../../styles/tokens.css'), 'utf8')
+  // Scoped to the FIRST :root { ... } block only — the one holding the dark
+  // defaults — so a light-theme override of the same custom property (those use
+  // var(--accent) / var(--accent-deep), never a literal hex) can't be mistaken
+  // for the default.
+  const root = /:root\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+  const token = (name: string): string => {
+    const m = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(root)
+    if (!m) throw new Error(`--${name} not found in tokens.css's :root block`)
+    return m[1].toLowerCase()
+  }
+
+  it('matches accentTintsOnDark(SKY_DARK), including the name-hover/time-token-fg mirrors', () => {
+    const { mentionFg, accentText } = accentTintsOnDark(SKY_DARK)
+    expect(token('mention-fg')).toBe(mentionFg)
+    expect(token('name-hover')).toBe(mentionFg)
+    expect(token('accent-text')).toBe(accentText)
+    expect(token('time-token-fg')).toBe(accentText)
   })
 })

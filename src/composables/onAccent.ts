@@ -118,6 +118,17 @@ const CHAT_SURFACE_DARK = '#313338'
 // linear in the lightening fraction, so this searches instead of computing.
 const LIGHTEN_STEP = 0.005
 
+// AA's actual floor is 4.5:1, but stopping the search at the first candidate
+// that clears it ships values a fraction of a step above the line — measured
+// across the ten shipped presets, 7 of 10 mentionFg and 9 of 10 accentText
+// land between 4.50 and 4.55 (Sky's own accentText: 4.509), with the step
+// just before each crossing around 4.46-4.50. That is well inside the range
+// sub-pixel antialiasing and colour management can move rendered contrast by,
+// so a value one LIGHTEN_STEP above the floor is not a dependable pass.
+// Searching against a target above the floor keeps a margin that survives it;
+// 4.5 stays the documented AA floor this exists to protect.
+const CONTRAST_TARGET = 4.6
+
 const lightenUntil = (accentHex: string, clears: (candidate: string) => boolean): string => {
   for (let t = 0; t <= 1; t += LIGHTEN_STEP) {
     const candidate = towardWhite(accentHex, t)
@@ -142,11 +153,11 @@ const lightenUntil = (accentHex: string, clears: (candidate: string) => boolean)
  * static defaults in tokens.css already do.
  */
 export const accentTintsOnDark = (accentHex: string): { mentionFg: string; accentText: string } => {
-  const mentionFg = lightenUntil(accentHex, c => contrast(c, CHAT_SURFACE_DARK) >= 4.5)
+  const mentionFg = lightenUntil(accentHex, c => contrast(c, CHAT_SURFACE_DARK) >= CONTRAST_TARGET)
   // The tint mention-fg's sibling actually sits on is the ACCENT's own colour
   // at 18% (--mention-bg's alpha), not the lightened candidate's — matching
   // how the CSS paints it: rgba(var(--accent-rgb), .18) over --bg-chat.
   const ownTint = compositeOver(accentHex, 0.18, CHAT_SURFACE_DARK)
-  const accentText = lightenUntil(accentHex, c => contrast(c, ownTint) >= 4.5)
+  const accentText = lightenUntil(accentHex, c => contrast(c, ownTint) >= CONTRAST_TARGET)
   return { mentionFg, accentText }
 }

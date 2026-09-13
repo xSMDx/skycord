@@ -63,10 +63,14 @@
      in onAccent.ts, not hand-picked: a value tuned for one accent hue (this
      pair used to be tuned for Blurple's, before Sky) doesn't hold contrast
      for another, which is exactly the bug that shipped twice before this
-     function existed.
+     function existed. The function searches to a 4.6:1 target rather than
+     the 4.5:1 AA floor itself, so this snapshot keeps a margin instead of
+     sitting one rounding error above the line — see CONTRAST_TARGET there.
      Regenerate both — and --name-hover/--time-token-fg, which mirror them —
-     if SKY_DARK ever changes. useAppearance.ts calls the same function for a
-     user-chosen accent; these are only the static fallback for 'auto'. */
+     if SKY_DARK, the target or the chat surface ever changes; onAccent.test.ts's
+     "tokens.css defaults" suite reads this file back and fails if they drift.
+     useAppearance.ts calls the same function for a user-chosen accent; these
+     are only the static fallback for 'auto'. */
   --mention-fg:      #38b6f1;
   --mention-bg:      rgba(var(--accent-rgb), .18);
   --mention-all-fg:  var(--text-strong);
@@ -74,8 +78,8 @@
   /* Text sitting ON a translucent accent tint. Pale in dark themes, the
      accent itself in light ones — the same split --time-token-fg already
      uses, because a pale lavender on a pale tint is invisible. */
-  --accent-text:     #55c1f3;
-  --time-token-fg:   #55c1f3;
+  --accent-text:     #5bc3f3;
+  --time-token-fg:   #5bc3f3;
   --time-token-bg:   rgba(var(--accent-rgb), .16);
   /* Whole-row highlight for messages that ping @everyone (or you). */
   --mention-row-bg:       rgba(240, 178, 0, .07);
