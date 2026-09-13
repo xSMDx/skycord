@@ -287,38 +287,67 @@ git commit -m "feat(theme): Sky becomes the accent, and light themes take their 
 
 ### Task 3: Make the token reach the components that hardcode white
 
-**Files:**
-- Modify: `src/components/ui/ContextMenu.vue:489`, `src/components/profile/UserProfileModal.vue:286`, `src/components/voice/CallFlyout.vue:148`, `src/components/voice/InviteToVoice.vue:236`, `src/components/chat/ConversationDetails.vue:306` and `:379`
+**Files — 15 CSS rules, found by parsing rule bodies, not by grepping lines:**
+
+| File | Rule | Shape |
+|---|---|---|
+| `src/components/chat/ConversationDetails.vue` | `.cd-av` (~:302) | multi-line |
+| `src/components/chat/ConversationDetails.vue` | `.cd-m-av` (~:375) | multi-line |
+| `src/components/chat/MessageInput.vue` | `.send-btn.ready` (~:610) | single-line, `color: white` |
+| `src/components/modals/NewDMModal.vue` | `.ndm-create` (~:160) | multi-line |
+| `src/components/profile/UserProfileModal.vue` | `.up-menu button:hover` (~:285) | single-line |
+| `src/components/ui/ContextMenu.vue` | `.cm-row:hover, .cm-row.active` (~:486) | single-line |
+| `src/components/voice/CallFlyout.vue` | `.fly .fr:hover` (~:147) | single-line |
+| `src/components/voice/InviteToVoice.vue` | `.iv-btn:hover:not(:disabled)` (~:235) | single-line |
+| `src/components/voice/InviteToVoice.vue` | `.iv-copy` (~:244) | multi-line |
+| `src/components/voice/VoiceConnectedPanel.vue` | `.vcp-pop-btn:hover` (~:371) | single-line |
+| `src/views/AuthPage.vue` | `.logo-box` (~:420) | single-line |
+| `src/views/AuthPage.vue` | `.submit` (~:495) | multi-line, `color:white` |
+| `src/views/ChatApp.vue` | `.add-friend-btn` (~:6018) | single-line |
+| `src/views/ChatApp.vue` | `.f-empty-btn` (~:6033) | single-line |
+| `src/views/ChatApp.vue` | `.an-add-btn` (~:6061) | single-line |
+
 - Test: `src/styles/__tests__/onAccentUsage.test.ts` (**create**)
 
-Task 1 and 2 are worth nothing at these six sites: they paint `color: #fff` on `background: var(--accent)`, so they keep white text on Yellow at 1.89:1 whatever the token says.
+Tasks 1 and 2 are worth nothing at these sites: each paints a literal white on `background: var(--accent)`, so it keeps white text on whatever accent the user picks — including Yellow, where white measures 1.89:1, and Sky itself on dark themes, where it measures 2.3:1.
+
+**Why the test must parse rules, not lines.** An earlier draft of this task scanned file text line by line for `background: var(--accent)` and `color: #fff` on the same line. Five of the fifteen rules declare the two properties on different lines, so that test would have passed with a third of the violations still in place. The test below splits each `.vue` file into `selector { body }` blocks and inspects each body whole.
+
+**Why AuthPage is in scope.** `.logo-box` and `.submit` are on the login screen. The login *copy* was triaged as deliberate and must not change. The *colour* is this slice's accent change, and a white-on-Sky submit button fails AA, so the colour is converted and not one word of copy is touched.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'fs'
-import { resolve, join } from 'path'
+import { resolve, join, relative, sep } from 'path'
 
 const SRC = resolve(__dirname, '../..')
-const walk = (dir: string): string[] =>
+
+const vueFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap(name => {
     const p = join(dir, name)
-    return statSync(p).isDirectory() ? walk(p) : p.endsWith('.vue') ? [p] : []
+    return statSync(p).isDirectory() ? vueFiles(p) : p.endsWith('.vue') ? [p] : []
   })
 
-// Painting a literal white on an accent background defeats the whole adaptive
-// scheme: the accent is user-chosen and can be Yellow, where white is 1.89:1.
+// Painting a literal white on the accent defeats the adaptive scheme: the
+// accent is chosen by the user and can be Yellow, where white is 1.89:1.
+//
+// Rules are inspected WHOLE. Scanning line by line misses every rule that
+// declares its background and its colour on separate lines — five of the
+// fifteen this test was written against.
 describe('text on an accent background', () => {
-  it('never hardcodes white', () => {
+  it('never hardcodes white, however the rule is laid out', () => {
     const offenders: string[] = []
-    for (const file of walk(SRC)) {
+    for (const file of vueFiles(SRC)) {
       const text = readFileSync(file, 'utf8')
-      for (const line of text.split('\n')) {
-        if (!/background:\s*var\(--accent\)/.test(line)) continue
-        if (/color:\s*(#fff\b|#ffffff\b|white\b)/i.test(line)) {
-          offenders.push(file.replace(SRC, 'src') + ' :: ' + line.trim().slice(0, 70))
-        }
+      for (const m of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const body = m[2]
+        if (!/background:\s*var\(--accent\)/.test(body)) continue
+        if (!/(^|;|\s)color:\s*(#fff\b|#ffffff\b|white\b)/i.test(body)) continue
+        const line = text.slice(0, m.index).split('\n').length
+        const selector = m[1].trim().split('\n').pop()!.trim()
+        offenders.push(`${relative(SRC, file).split(sep).join('/')}:${line} ${selector}`)
       }
     }
     expect(offenders).toEqual([])
@@ -329,23 +358,28 @@ describe('text on an accent background', () => {
 - [ ] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run src/styles/__tests__/onAccentUsage.test.ts`
-Expected: FAIL, listing the six offending lines.
+Expected: FAIL, listing **exactly fifteen** offenders, including all five multi-line ones. If it lists fewer than fifteen, the parsing is wrong — stop and fix the test before touching any component.
 
 - [ ] **Step 3: Convert each one**
 
-At every listed site, replace `color: #fff` with `color: var(--text-on-accent)`. Change nothing else on those lines — not the background, not the hover selector, not the spacing.
+In each of the fifteen rules, replace the white value with `var(--text-on-accent)`:
+- `color: #fff` → `color: var(--text-on-accent)`
+- `color: white` → `color: var(--text-on-accent)`
+- `color:white` → `color: var(--text-on-accent)`
+
+Change nothing else in those rules — not the background, not the selector, not spacing, not other properties. Where a rule is written without spaces around the colon, keep that file's surrounding style for the rest of the line.
 
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npx vitest run src/styles/__tests__/onAccentUsage.test.ts`
 Expected: PASS.
 
-Then `npm run typecheck` and `npx vitest run src/` — expect no regressions.
+Then `npm run typecheck` (clean) and `npx vitest run src/` (no regressions).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components src/styles/__tests__/onAccentUsage.test.ts
+git add src/components src/views src/styles/__tests__/onAccentUsage.test.ts
 git commit -m "fix(theme): on-accent text follows the token everywhere it is painted"
 ```
 
