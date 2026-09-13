@@ -5,7 +5,7 @@
  */
 import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
-import { onAccentText, resolveAccentHex, isLightTheme, accentTintsOnDark } from './onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme, accentTintsOnDark, accentTintsOnLight } from './onAccent'
 import { migrateSavedAppearance, APPEARANCE_VERSION } from './appearanceMigration'
 
 export type Theme =
@@ -184,33 +184,30 @@ export const applyAppearance = () => {
     root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
     root.style.setProperty('--text-on-accent', onAccentText(a.accent))
 
-    // Mentions/accent-text only need deriving on the dark family: the light
-    // stylesheet rules (var(--accent) / var(--accent-deep)) already give the
-    // right answer for a chosen accent, same as they do for 'auto'. Clearing
-    // them here rather than leaving old values in place matters when the user
-    // picked an explicit accent on a dark theme and then switches to light —
-    // without this, the last dark-computed tint would sit in `root.style` and
-    // outrank the light stylesheet rule, since inline styles always win.
-    if (isLightTheme(a.theme)) {
-      for (const p of ['--name-hover', '--mention-fg', '--accent-text', '--time-token-fg']) {
-        root.style.removeProperty(p)
-      }
-    } else {
-      const { mentionFg, accentText } = accentTintsOnDark(a.accent)
-      // An inline style always outranks html.names-plain's stylesheet rule
-      // (tokens.css), regardless of specificity, so unconditionally setting
-      // --name-hover here silently defeated "Display Name Styles: off" for
-      // anyone with an explicit accent on a dark theme. Only set it when
-      // styled names are on; otherwise leave it unset, the same way the
-      // 'auto' branch above already leaves it unset for every accent
-      // property. --mention-fg keeps this value regardless — it answers an
-      // unrelated question (inline @mention colour), not display-name hover.
-      if (a.displayNameStyles) root.style.setProperty('--name-hover', mentionFg)
-      else root.style.removeProperty('--name-hover')
-      root.style.setProperty('--mention-fg', mentionFg)
-      root.style.setProperty('--accent-text', accentText)
-      root.style.setProperty('--time-token-fg', accentText)
-    }
+    // An explicit accent needs its own tints derived per theme family — dark
+    // lightens toward white, light darkens toward black — the same split
+    // 'auto' already gets from tokens.css choosing SKY_LIGHT (a deeper blue)
+    // over SKY_DARK. The light stylesheet rules (var(--accent) /
+    // var(--accent-deep)) are only correct for THAT deep Sky; a bright
+    // user-chosen accent measured 2.30:1 for mentions falling back to them.
+    // Recomputing on every apply (rather than leaving a stale value) is what
+    // makes switching theme family with an explicit accent still correct —
+    // without it, the other family's tint would sit in `root.style` and
+    // outrank the stylesheet rule, since inline styles always win.
+    const { mentionFg, accentText } = isLightTheme(a.theme) ? accentTintsOnLight(a.accent) : accentTintsOnDark(a.accent)
+    // An inline style always outranks html.names-plain's stylesheet rule
+    // (tokens.css), regardless of specificity, so unconditionally setting
+    // --name-hover here silently defeated "Display Name Styles: off" for
+    // anyone with an explicit accent. Only set it when styled names are on;
+    // otherwise leave it unset, the same way the 'auto' branch above already
+    // leaves it unset for every accent property. --mention-fg keeps this
+    // value regardless — it answers an unrelated question (inline @mention
+    // colour), not display-name hover.
+    if (a.displayNameStyles) root.style.setProperty('--name-hover', mentionFg)
+    else root.style.removeProperty('--name-hover')
+    root.style.setProperty('--mention-fg', mentionFg)
+    root.style.setProperty('--accent-text', accentText)
+    root.style.setProperty('--time-token-fg', accentText)
   }
 
   // Sizing + fonts

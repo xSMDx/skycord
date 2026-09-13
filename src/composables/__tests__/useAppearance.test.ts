@@ -7,7 +7,7 @@
  * explicit accent — see applyAppearance's dark-family branch.
  */
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
-import { onAccentText } from '../onAccent'
+import { onAccentText, accentTintsOnLight } from '../onAccent'
 
 // Same reason as themeCode.test.ts: useAppearance pulls in materialScheme →
 // @material/material-color-utilities, whose published ESM uses extensionless
@@ -128,5 +128,25 @@ describe('applyAppearance — inline accent properties', () => {
     expect(classSet.has('names-plain')).toBe(false)
     expect(styleStore.has('--name-hover')).toBe(true)
     expect(styleStore.get('--name-hover')).toBe(styleStore.get('--mention-fg'))
+  })
+
+  // Regression: these four used to be CLEARED on a light theme, leaving the
+  // stylesheet's var(--accent) / var(--accent-deep) to paint an explicit
+  // bright accent directly — correct for 'auto's own deep Sky, wrong (2.30:1)
+  // for a colour the user picked.
+  it('an explicit accent on a light theme is derived through accentTintsOnLight, not left for the stylesheet to paint raw', () => {
+    setAppearance({ theme: 'light', accent: '#38b6f1', displayNameStyles: true }, false)
+    const { mentionFg, accentText } = accentTintsOnLight('#38b6f1')
+    for (const key of ACCENT_INLINE_KEYS) expect(styleStore.has(key), key).toBe(true)
+    expect(styleStore.get('--mention-fg')).toBe(mentionFg)
+    expect(styleStore.get('--name-hover')).toBe(mentionFg)
+    expect(styleStore.get('--accent-text')).toBe(accentText)
+    expect(styleStore.get('--time-token-fg')).toBe(accentText)
+  })
+
+  it("'auto' still clears every inline accent property on a light theme", () => {
+    setAppearance({ theme: 'light', accent: '#38b6f1', displayNameStyles: true }, false)
+    setAppearance({ accent: 'auto' }, false)
+    for (const key of ACCENT_INLINE_KEYS) expect(styleStore.has(key), key).toBe(false)
   })
 })

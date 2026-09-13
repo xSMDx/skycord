@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { onAccentText, resolveAccentHex, isLightTheme, SKY_DARK, SKY_LIGHT, accentTintsOnDark } from '../onAccent'
+import { onAccentText, resolveAccentHex, isLightTheme, SKY_DARK, SKY_LIGHT, accentTintsOnDark, accentTintsOnLight } from '../onAccent'
 
 const INK = '#0e0f11'
 const WHITE = '#ffffff'
@@ -166,6 +166,73 @@ describe('accentTintsOnDark', () => {
     // toward grey — this is what catches that.
     for (const hex of PRESETS) {
       const { mentionFg, accentText } = accentTintsOnDark(hex)
+      const base = hue(hex)
+      expect(hueDiff(hue(mentionFg), base)).toBeLessThanOrEqual(2)
+      expect(hueDiff(hue(accentText), base)).toBeLessThanOrEqual(2)
+    }
+  })
+})
+
+describe('accentTintsOnLight', () => {
+  // Independent of the implementation, same as accentTintsOnDark's own copies
+  // above — duplicated rather than imported so this suite cannot pass merely
+  // because it agrees with itself.
+  const overlay = (hex: string, alpha: number, onto: string): string => {
+    const chan = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
+    const [r, g, b] = chan(hex)
+    const [or_, og, ob] = chan(onto)
+    const mix = (c: number, o: number) => Math.round(c * alpha + o * (1 - alpha))
+    return '#' + [mix(r, or_), mix(g, og), mix(b, ob)].map(x => x.toString(16).padStart(2, '0')).join('')
+  }
+  const hue = (hex: string): number => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+    if (d === 0) return 0 // achromatic — no hue to compare against
+    let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    h *= 60
+    return h < 0 ? h + 360 : h
+  }
+  const hueDiff = (a: number, b: number): number => {
+    const d = Math.abs(a - b) % 360
+    return d > 180 ? 360 - d : d
+  }
+
+  // The darker of light's (#ffffff) and light-dim's (#eceef0) --bg-chat —
+  // see onAccent.ts's own comment on CHAT_SURFACE_LIGHT for why the darker
+  // one is the value both families have to hold against.
+  const CHAT_SURFACE = '#eceef0'
+  const PRESETS = ['#38b6f1', '#5865f2', '#23a55a', '#1abc9c', '#3498db',
+                   '#eb459e', '#ed4245', '#e67e22', '#f0b232', '#9b59b6']
+
+  it('darkens mention-fg to at least 4.6:1 against the darker light chat surface, for every shipped preset', () => {
+    for (const hex of PRESETS) {
+      const { mentionFg } = accentTintsOnLight(hex)
+      expect(ratio(mentionFg, CHAT_SURFACE)).toBeGreaterThanOrEqual(4.6)
+    }
+  })
+
+  it('darkens accent-text to at least 4.6:1 against its own 18% tint over the darker light chat surface, for every shipped preset', () => {
+    for (const hex of PRESETS) {
+      const { accentText } = accentTintsOnLight(hex)
+      const tintedSurface = overlay(hex, 0.18, CHAT_SURFACE)
+      expect(ratio(accentText, tintedSurface)).toBeGreaterThanOrEqual(4.6)
+    }
+  })
+
+  it('also clears 4.6:1 against the lighter (#ffffff) member of the family, not just the darker one it was measured against', () => {
+    for (const hex of PRESETS) {
+      const { mentionFg, accentText } = accentTintsOnLight(hex)
+      expect(ratio(mentionFg, '#ffffff')).toBeGreaterThanOrEqual(4.6)
+      expect(ratio(accentText, overlay(hex, 0.18, '#ffffff'))).toBeGreaterThanOrEqual(4.6)
+    }
+  })
+
+  it('keeps both results within a couple degrees of the accent\'s own hue', () => {
+    // Same drift check as accentTintsOnDark's: a search that darkened by
+    // desaturating instead of scaling toward black would still clear the
+    // contrast tests above while drifting toward grey.
+    for (const hex of PRESETS) {
+      const { mentionFg, accentText } = accentTintsOnLight(hex)
       const base = hue(hex)
       expect(hueDiff(hue(mentionFg), base)).toBeLessThanOrEqual(2)
       expect(hueDiff(hue(accentText), base)).toBeLessThanOrEqual(2)

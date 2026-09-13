@@ -97,6 +97,16 @@ const towardWhite = (hex: string, t: number): string => {
   return toHex(r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t)
 }
 
+// Blend toward black by fraction `t` (0 = unchanged, 1 = black) — towardWhite's
+// mirror for the light family, where an accent needs to go DARKER to hold
+// contrast on a bright surface. Same reasoning as towardWhite: every channel's
+// distance from 0 shrinks by the same factor (1 - t), so the ratios between
+// channel differences — and so the hue — stay put.
+const towardBlack = (hex: string, t: number): string => {
+  const [r, g, b] = hexChannels(hex)
+  return toHex(r * (1 - t), g * (1 - t), b * (1 - t))
+}
+
 // Composite `hex` at `alpha` over an opaque `onto` — the same maths the
 // browser performs painting e.g. rgba(var(--accent-rgb), .18) over a panel.
 const compositeOver = (hex: string, alpha: number, onto: string): string => {
@@ -111,6 +121,15 @@ const compositeOver = (hex: string, alpha: number, onto: string): string => {
 // theme (default, midnight, amoled, the studio presets), not recomputed per
 // theme, so there is no "which surface" to pass in without changing that.
 const CHAT_SURFACE_DARK = '#313338'
+
+// Same idea for the light family, except it has two members with different
+// --bg-chat values (light: #ffffff, light-dim: #eceef0) where dark has one.
+// A single accentTintsOnLight result has to hold on BOTH, so this measures
+// against the darker of the two — light-dim — rather than parameterising per
+// theme: whatever clears target contrast on the darker surface clears it with
+// room to spare on the lighter one (white), and one stored/tested value can
+// never disagree with itself across the family the way two could.
+const CHAT_SURFACE_LIGHT = '#eceef0'
 
 // Small enough that the step from one candidate to the next is never a
 // visually meaningful jump; large enough to resolve in a couple hundred
@@ -139,6 +158,16 @@ const lightenUntil = (accentHex: string, clears: (candidate: string) => boolean)
   return '#ffffff'
 }
 
+const darkenUntil = (accentHex: string, clears: (candidate: string) => boolean): string => {
+  for (let t = 0; t <= 1; t += LIGHTEN_STEP) {
+    const candidate = towardBlack(accentHex, t)
+    if (clears(candidate)) return candidate
+  }
+  // Unreachable in practice — black clears 4.5:1 against any surface this
+  // light — but a real colour beats a NaN-tainted one if it ever is.
+  return '#000000'
+}
+
 /**
  * Dark-theme values for `--mention-fg` and `--accent-text`, measured from the
  * accent instead of hand-picked. Both tokens were tuned once for blurple's
@@ -159,5 +188,27 @@ export const accentTintsOnDark = (accentHex: string): { mentionFg: string; accen
   // how the CSS paints it: rgba(var(--accent-rgb), .18) over --bg-chat.
   const ownTint = compositeOver(accentHex, 0.18, CHAT_SURFACE_DARK)
   const accentText = lightenUntil(accentHex, c => contrast(c, ownTint) >= CONTRAST_TARGET)
+  return { mentionFg, accentText }
+}
+
+/**
+ * Light-theme mirror of accentTintsOnDark: an explicit accent darkens toward
+ * black instead of lightening toward white, because it is a bright, saturated
+ * colour landing on a near-white surface rather than a dark one — the same
+ * direction 'auto' already gets from tokens.css choosing SKY_LIGHT (a deeper
+ * blue) over SKY_DARK for the light family. Without this, an explicit accent
+ * fell back to the light stylesheet's var(--accent) / var(--accent-deep) —
+ * correct for 'auto's own deep Sky, but a bright user-chosen accent measures
+ * 2.30:1 for mentions and worse for accent-text, well under AA.
+ */
+export const accentTintsOnLight = (accentHex: string): { mentionFg: string; accentText: string } => {
+  const mentionFg = darkenUntil(accentHex, c => contrast(c, CHAT_SURFACE_LIGHT) >= CONTRAST_TARGET)
+  // Same 18% this function's dark counterpart uses for accent-text's own
+  // tint — not light theme's own --mention-bg alpha (.15), which answers a
+  // different, only visually-similar question. Mirroring the dark function's
+  // literal keeps the two directly comparable rather than each tracking its
+  // own theme's incidental wash opacity.
+  const ownTint = compositeOver(accentHex, 0.18, CHAT_SURFACE_LIGHT)
+  const accentText = darkenUntil(accentHex, c => contrast(c, ownTint) >= CONTRAST_TARGET)
   return { mentionFg, accentText }
 }
