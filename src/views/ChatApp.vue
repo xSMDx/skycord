@@ -5470,7 +5470,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-invite{
   display:flex;align-items:center;justify-content:center;gap: 8px;
   margin: 8px 12px 14px;padding: 8px 12px;border-radius: 6px;
-  font-size:14px;font-weight:600;color: var(--text-strong);
+  font-size:14px;font-weight:600;color: var(--text-on-accent);
   background:var(--accent);transition: background var(--dur-1) var(--ease-out);
 }
 .mp-invite:hover{background:var(--accent-hover)}

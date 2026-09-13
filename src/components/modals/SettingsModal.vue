@@ -1044,7 +1044,7 @@ const handleSelfRevoked = () => handleLogout()
                 <svg v-if="appearance.accent.toLowerCase() === p.hex" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
               <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: accentHex }">
-                <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+                <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
                 <!-- type=color needs a real #rrggbb — 'auto' isn't one, and the
                      native picker would silently show black instead of the
                      colour that is actually applied. -->
@@ -1744,7 +1744,10 @@ img    { display: block; object-fit: cover; }
 }
 .ap-custom:hover { transform: scale(1.08); }
 .ap-custom.active { border-color: var(--text-strong); }
-.ap-custom-ico { opacity: .92; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); pointer-events: none; }
+/* Swatch background is the live accent (inline style) — stroke follows the
+   same measured token a solid accent fill uses anywhere else, not a hardcoded
+   white that only reads on the darker presets. */
+.ap-custom-ico { stroke: var(--text-on-accent); opacity: .92; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); pointer-events: none; }
 .ap-custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 /*
  * Appearance — controls left, live preview right.
@@ -1780,8 +1783,13 @@ img    { display: block; object-fit: cover; }
 .ap-preview { background: var(--bg-chat); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
 .ap-prev-msg { display: flex; gap: 12px; padding: var(--row-pad-y, 2px) 0; }
 .ap-prev-ts { display: none; font-size: 11px; color: var(--text-faint); min-width: 52px; text-align: right; line-height: 1.5; }
-.ap-prev-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
-.ap-prev-av2 { background: #23a55a; }
+/* Background is the live accent (inline style, below) — the token measured
+   against it, not a hardcoded white that only ever suited the old blurple. */
+.ap-prev-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text-on-accent); font-weight: 700; }
+/* This second avatar's background is the app's green, not the accent — it must
+   not inherit --text-on-accent above, which is only ever measured against the
+   accent and would go wrong the moment an accent choice flips it to ink. */
+.ap-prev-av2 { background: #23a55a; color: #fff; }
 .ap-prev-main { min-width: 0; }
 .ap-prev-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
 .ap-prev-name { font-weight: 600; color: var(--text-strong); }

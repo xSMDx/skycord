@@ -349,10 +349,11 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .jump-enter-active,.jump-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
 .welcome{padding: 20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom: 8px}
-.ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
+.ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
+.ch-icon svg{stroke:var(--text-on-accent)}
 .dm-av{width:64px;height:64px;border-radius: 50%;overflow:hidden;margin-bottom: 14px;border:3px solid var(--bg-panel)}
-.group-av{display:flex;align-items:center;justify-content:center;background:var(--accent);border:none}
-.group-av svg{width:30px;height:30px}
+.group-av{display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--text-on-accent);border:none}
+.group-av svg{width:30px;height:30px;stroke:var(--text-on-accent)}
 .welcome h3{font-size:26px;font-weight:800;color: var(--text-strong);margin-bottom: 4px}
 .welcome p{font-size:14px;color:var(--text-3)}
 .welcome strong{color: var(--text-strong)}

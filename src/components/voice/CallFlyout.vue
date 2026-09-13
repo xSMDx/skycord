@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
   cursor: pointer; box-sizing: border-box;
 }
 .fly .fr:hover { background: var(--accent); color: var(--text-on-accent); }
-.fly .fr:hover .fr-sub { color: rgba(255,255,255,.8); }
+.fly .fr:hover .fr-sub { color: var(--text-on-accent); }
 .fly .fr:disabled { opacity: .45; cursor: not-allowed; }
 .fly .fr:disabled:hover { background: none; color: var(--text-1); }
 .fly .fr.static, .fly .fr.static:hover { background: none; color: var(--text-1); cursor: default; }
@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
 }
 .fly .fr-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .fly .fr-check  { color: #23a55a; flex-shrink: 0; }
-.fly .fr:hover .fr-check { color: #fff; }
+.fly .fr:hover .fr-check { color: var(--text-on-accent); }
 .fly .fr-tog {
   flex-shrink: 0; width: 38px; height: 20px; border-radius: 10px;
   background: rgba(128,132,142,.5); position: relative; transition: background var(--dur-2) var(--ease-out); display: inline-block;

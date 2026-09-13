@@ -350,7 +350,10 @@ img    { display: block; width: 100%; object-fit: cover; }
   transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ptab:hover { color: var(--text-1); }
-.ptab.active { color: var(--text-on-accent); border-color: var(--accent); }
+/* The tab sits on the panel with only an accent underline — it is never the
+   accent fill itself, so the token measured against the accent (ink, for Sky)
+   is the wrong text colour here. --text-strong is the panel's own light text. */
+.ptab.active { color: var(--text-strong); border-color: var(--accent); }
 
 .picker-search {
   display: flex; align-items: center; gap: 8px;
