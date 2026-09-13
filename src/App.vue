@@ -150,8 +150,9 @@ onMounted(async () => {
 }
 
 .splash-wordmark {
-  font-family: var(--font-ui);
-  font-size: 22px; font-weight: 800; letter-spacing: -.5px;
+  font-family: var(--font-display);
+  /* Chakra Petch ships 500/600/700 only — 700 explicit, not 800 synthesised. */
+  font-size: 22px; font-weight: 700; letter-spacing: -.5px;
   color: var(--text-strong);
 }
 

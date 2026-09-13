@@ -6154,7 +6154,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .call-btn.video{color:var(--text-2)}
 .call-btn.calling{color:#f23f43;animation:call-pulse 1.25s ease-in-out infinite}
 @keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(242,63,67,0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(242,63,67,.6))}}
-.chat-title{font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
+/* Not Chakra Petch: this is the channel/DM/group's own name — data the user
+   or server named, not a heading the app authored. */
+.chat-title{font-family: var(--font-ui);font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
 .ch-hash{color:var(--text-3);flex-shrink:0;margin-right: 4px}
 .ch-topic-sep{width:1px;height:16px;background:rgba(255,255,255,.12);margin: 0 10px;flex-shrink:0}
 .ch-topic{font-size:13px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

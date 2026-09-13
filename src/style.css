@@ -9,6 +9,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Chakra Petch: the display face tokens.css names for headings, applied where
+   heading markup actually lives — modal titles and settings page/section
+   headings are h1/h2 throughout the app, so one rule here reaches all of them
+   instead of a font-family line repeated in every modal.
+   Excluded per-component, not here: the identity of something a user or
+   server named (a channel/conversation title, a member-list count) stays in
+   the UI face so it reads as data rather than display type — see
+   ConversationDetails.vue's .cd-title/.cd-section and ChatApp.vue's
+   .chat-title for the opt-outs. h3 labels (.ap-sub and friends) are untouched
+   because this rule never reaches h3. */
+h1, h2 { font-family: var(--font-display); }
+
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
