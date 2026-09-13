@@ -62,7 +62,7 @@ import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
-import { appearance, setAppearance } from '@/composables/useAppearance'
+import { appearance, setAppearance, accentHex } from '@/composables/useAppearance'
 import { THEME_OPTS, STUDIO_OPTS, ALL_PRESETS, type ThemeOpt } from '@/composables/themePresets'
 import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/useSavedThemes'
 import { useVoice, isConnectedVoiceRoom, userPref, setUserPref } from '@/composables/useVoice'
@@ -4178,7 +4178,7 @@ onBeforeUnmount(() => {
         <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip:right="'Home'" @click.stop="openFriends">
           <div class="ri-pip" />
           <div class="ri-icon home-icon">
-            <SkycordIcon mode="lucky" :color="homeActive ? appearance.accent : 'currentColor'" :size="26" />
+            <SkycordIcon mode="lucky" :color="homeActive ? accentHex : 'currentColor'" :size="26" />
           </div>
         </div>
         <div class="ri-divider" />

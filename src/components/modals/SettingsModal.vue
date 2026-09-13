@@ -7,7 +7,7 @@ import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
-import { useAppearance, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
+import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
@@ -1039,9 +1039,12 @@ const handleSelfRevoked = () => handleLogout()
               >
                 <svg v-if="appearance.accent.toLowerCase() === p.hex" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: appearance.accent }">
+              <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: accentHex }">
                 <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-                <input type="color" aria-label="Custom accent colour" :value="appearance.accent" @input="setAppearance({ accent: ($event.target as HTMLInputElement).value })" />
+                <!-- type=color needs a real #rrggbb — 'auto' isn't one, and the
+                     native picker would silently show black instead of the
+                     colour that is actually applied. -->
+                <input type="color" aria-label="Custom accent colour" :value="accentHex" @input="setAppearance({ accent: ($event.target as HTMLInputElement).value })" />
               </label>
             </div>
 
@@ -1204,7 +1207,7 @@ const handleSelfRevoked = () => handleLogout()
                 <div class="ap-preview" :class="{ 'prev-compact': appearance.msgLayout === 'compact' }" :style="{ fontFamily: 'var(--font-ui)' }">
                   <div class="ap-prev-msg">
                     <span class="ap-prev-ts">1:06 PM</span>
-                    <div class="ap-prev-av" :style="{ background: appearance.accent }">S</div>
+                    <div class="ap-prev-av" :style="{ background: accentHex }">S</div>
                     <div class="ap-prev-main">
                       <span class="ap-prev-head"><span class="ap-prev-name">SMD</span><span class="ap-prev-time">Today at 1:06 PM</span></span>
                       <span class="ap-prev-text" :style="{ fontSize: appearance.msgSize + 'px' }">Sphinx of black quartz, judge my vow</span>

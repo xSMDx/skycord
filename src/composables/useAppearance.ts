@@ -3,7 +3,7 @@
  * custom-color mode. Applied by flipping CSS custom properties / data-attributes
  * on <html>, persisted to localStorage, restored in main.ts before first paint.
  */
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
 import { onAccentText } from './onAccent'
 
@@ -101,6 +101,10 @@ const rgbTriple = (hex: string) => { const { r, g, b } = parseHex(hex); return `
 // paint on each theme family.
 const SKY_DARK = '#38b6f1'
 const SKY_LIGHT = '#0a75af'
+// Pulled out so applyAppearance's inline styling and accentHex's colour pick
+// share one definition of "dark" — two copies of this test would eventually
+// disagree about a theme added to only one of them.
+const isDarkTheme = (theme: Theme): boolean => !(theme === 'light' || theme === 'light-dim')
 const resolvedAccent = (a: Appearance, isDark: boolean): string =>
   a.accent === 'auto' ? (isDark ? SKY_DARK : SKY_LIGHT) : a.accent
 
@@ -109,6 +113,18 @@ const load = (): Partial<Appearance> => {
 }
 
 export const appearance = reactive<Appearance>({ ...DEFAULTS, ...load() })
+
+/**
+ * `appearance.accent` may be the sentinel 'auto', which almost every consumer
+ * never notices because it reads the `--accent` CSS custom property instead
+ * (kept current by applyAppearance below, and meaningless as raw text). The
+ * exception is anything that needs an actual colour rather than a variable —
+ * a Lottie animation's baked-in fill is the case that forced this into
+ * existence, since a Lottie JSON has no notion of `var(--accent)`. Read this
+ * instead of `appearance.accent` wherever a real colour is required, or
+ * 'auto' ends up parsed as one.
+ */
+export const accentHex = computed(() => resolvedAccent(appearance, isDarkTheme(appearance.theme)))
 
 export const applyAppearance = () => {
   const root = document.documentElement
@@ -135,7 +151,7 @@ export const applyAppearance = () => {
 
   if (a.scheme !== 'off') {
     // Material-You: generate the full surface/text palette from the accent seed.
-    const isDark = !(a.theme === 'light' || a.theme === 'light-dim')
+    const isDark = isDarkTheme(a.theme)
     const tokens = buildSchemeTokens(resolvedAccent(a, isDark), a.scheme, isDark, a.contrast)
     for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v)
   } else if (a.theme === 'custom') {
