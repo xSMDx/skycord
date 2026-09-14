@@ -123,7 +123,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-select {
   width: 100%; padding: 8px 12px; border-radius: 8px;
   background: var(--bg-input); color: var(--text-1);
-  border: 1px solid rgba(255,255,255,.08); font: inherit; font-size: 14px; outline: none;
+  border: 1px solid var(--border); font: inherit; font-size: 14px; outline: none;
 }
 
 .cp-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

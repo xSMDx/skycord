@@ -374,7 +374,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .pp-rows {
   margin-top: 14px; padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,.07);
+  border-top: 1px solid var(--divider);
   display: flex; flex-direction: column; gap: 2px;
 }
 .pp-row {

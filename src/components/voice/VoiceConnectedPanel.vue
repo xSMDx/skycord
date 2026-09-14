@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
 .vcp-warn { color: #f0b232; }
 .vcp-leave {
   width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
-  background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
+  background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .vcp-leave:hover { background: #f23f43; color: #fff; transform: translateY(-1px); }
@@ -307,11 +307,11 @@ onBeforeUnmount(() => {
 .vcp-controls { display: flex; gap: 6px; }
 .vcp-btn {
   flex: 1; height: 32px; border-radius: 8px;
-  background: rgba(255,255,255,.06); color: var(--text-2);
+  background: var(--hover); color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.vcp-btn:hover:not(:disabled) { background: rgba(255,255,255,.11); color: var(--text-1); }
+.vcp-btn:hover:not(:disabled) { background: var(--hover-strong); color: var(--text-1); }
 .vcp-btn:active:not(:disabled) { transform: scale(.96); }
 .vcp-btn.on { background: #248046; color: #fff; }
 .vcp-btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -365,7 +365,7 @@ onBeforeUnmount(() => {
 .vcp-pop-btn {
   width: 100%; margin-top: 10px; height: 38px; border-radius: 8px;
   font-weight: 600;
-  background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
+  background: var(--hover); color: var(--text-2); font-size: 12px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }

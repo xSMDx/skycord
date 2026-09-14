@@ -223,7 +223,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-act {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
   padding: 8px 6px; border: none; border-radius: 6px; cursor: pointer;
-  background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
+  background: var(--hover); color: var(--text-2); font-size: 12px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .dbg-act:hover { background: rgba(255,255,255,.12); color: var(--text-1); }

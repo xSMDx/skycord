@@ -78,7 +78,7 @@ const style = computed(() => ({ left: `${pos.value.left}px`, top: `${pos.value.t
   padding: 6px 10px;
   border-radius: 8px;
   background: var(--bg-floor, #111214);
-  border: 1px solid var(--border, rgba(255,255,255,.08));
+  border: 1px solid var(--border);
   box-shadow: 0 8px 24px rgba(0,0,0,.5);
   color: var(--text-strong, #f2f3f5);
   font-size: 12.5px; font-weight: 600; line-height: 1.35;
@@ -90,7 +90,7 @@ const style = computed(() => ({ left: `${pos.value.left}px`, top: `${pos.value.t
 .tip-arrow {
   position: absolute; width: 8px; height: 8px;
   background: var(--bg-floor, #111214);
-  border: 1px solid var(--border, rgba(255,255,255,.08));
+  border: 1px solid var(--border);
   transform: rotate(45deg);
 }
 /* Only two borders show per side, so the arrow reads as a continuation of the

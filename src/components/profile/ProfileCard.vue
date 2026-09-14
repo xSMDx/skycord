@@ -218,7 +218,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-status {
   position: absolute; left: 96px; top: 2px; max-width: 200px;
   display: flex; align-items: center; gap: 8px;
-  background: var(--bg-raised); border: 1px solid rgba(255,255,255,.08);
+  background: var(--bg-raised); border: 1px solid var(--border);
   border-radius: 16px 16px 16px 4px;
   padding: 8px 12px; font-size: 13px; color: var(--text-1);
   box-shadow: 0 4px 14px rgba(0,0,0,.35);

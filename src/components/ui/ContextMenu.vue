@@ -445,7 +445,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm.sheet {
   left: 0; right: 0; bottom: 0; top: auto;
   width: 100%; min-width: 0; max-width: none;
-  border: none; border-top: 1px solid rgba(255,255,255,.08);
+  border: none; border-top: 1px solid var(--border);
   border-radius: 16px 16px 0 0;
   padding: 0 0 max(8px, env(safe-area-inset-bottom));
   max-height: 75vh; overflow: hidden auto;
