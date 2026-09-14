@@ -6336,7 +6336,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   color: var(--text-strong);
 }
 
-.dsc-sec { font-size: 13px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+/* UI face, like .st-section: a small uppercase label, not a title. */
+.dsc-sec { font-family: var(--font-ui);
+           font-size: 13px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
            color: var(--text-3); margin: 28px 0 8px; }
 .dsc-secsub { font-size: 13px; color: var(--text-3); line-height: 1.5; margin: 0 0 14px; max-width: 62ch; }
 .dsc-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
