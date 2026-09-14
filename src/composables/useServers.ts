@@ -111,6 +111,17 @@ const collapseKey = (sid: string, cid: string) => `${sid}:${cid}`
 const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }
 
 /**
+ * A name made safe to draw: an unpaired surrogate becomes U+FFFD, because
+ * encodeURIComponent throws on one and the server stores whatever a raw API
+ * call sends; control characters go, because XML forbids them and the image
+ * would fail to load. Tab, newline and carriage return stay — they are only
+ * word separators here.
+ */
+const drawable = (s: string): string => s
+  .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+
+/**
  * A server with no icon draws its initials on a colour derived from its name,
  * matching how a user with no avatar is handled in useAvatar. Same generator,
  * so a server and a user never look like they came from different apps.
@@ -122,7 +133,7 @@ const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&
  */
 export const serverIconFor = (name: string, icon?: string | null): string => {
   if (icon) return icon
-  const initials = (name.trim().split(/\s+/).filter(Boolean).slice(0, 2)
+  const initials = (drawable(name).trim().split(/\s+/).filter(Boolean).slice(0, 2)
     .map(w => Array.from(w)[0]).join('') || '?')
     .replace(/[&<>"']/g, c => XML_ESCAPES[c])
   const bg = colorForUsername(name || '?')

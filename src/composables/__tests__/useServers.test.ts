@@ -1047,6 +1047,9 @@ describe('useServers', () => {
 })
 
 describe('serverIconFor', () => {
+  /** The initials as they land in the SVG's text element. */
+  const text = (name: string) => /<text[^>]*>([^<]*)<\/text>/.exec(decodeURIComponent(serverIconFor(name)))?.[1]
+
   it('returns the stored icon untouched', () => {
     expect(serverIconFor('Anything', 'https://cdn/a.gif')).toBe('https://cdn/a.gif')
   })
@@ -1076,10 +1079,24 @@ describe('serverIconFor', () => {
   it('escapes the initials, so a name starting with < or & still draws a valid image', () => {
     // Unescaped, "<" and "&" made the SVG malformed: a broken image, which
     // the rail's error fallback would then replace with the same broken image.
-    const text = (name: string) => /<text[^>]*>([^<]*)<\/text>/.exec(decodeURIComponent(serverIconFor(name)))?.[1]
     expect(text('<3 friends')).toBe('&lt;f')
     expect(text('&co')).toBe('&amp;')
     expect(text('"quoted" <tag>')).toBe('&quot;&lt;')
+  })
+
+  it('never throws on half a surrogate pair, which a crafted request can put in a name', () => {
+    // The server stores any Unicode, and a raw API call can send an unpaired
+    // surrogate. Array.from cannot pair what has no partner, and one such
+    // name threw here and stopped the whole server list loading.
+    for (const name of ['\uD83D party', '\uDC00 party', 'x\uD800', '\uDBFF\uDBFF']) {
+      expect(() => serverIconFor(name), JSON.stringify(name)).not.toThrow()
+    }
+    expect(text('\uD83D party')).toBe('\uFFFDp')
+  })
+
+  it('drops control characters, which are not allowed in the image at all', () => {
+    expect(text('\u0001abc def')).toBe('ad')
+    expect(text('\u001F')).toBe('?')
   })
 })
 
