@@ -22,6 +22,7 @@ import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
 import { useServers, resetServers } from '@/composables/useServers'
+import { filterMembers } from '@/composables/memberFilter'
 import { canActOnMemberUI } from '@/composables/permissionMeta'
 import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
@@ -393,6 +394,12 @@ const toggleMembers = () => {
   if (searchPanelShown.value) { closeSearch(); membersOpen.value = true; return }
   membersOpen.value = !membersOpen.value
 }
+
+// Member search: client-side (see memberFilter.ts). Cleared on server change —
+// a filter left over from another server hides people with no visible cause.
+const memberQuery = ref('')
+const shownMembers = computed(() => filterMembers(activeMembers.value, memberQuery.value))
+watch(activeServerId, () => { memberQuery.value = '' })
 
 // Lightweight toast (e.g. @everyone pings)
 const toast = ref('')
@@ -5122,15 +5129,15 @@ onBeforeUnmount(() => {
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="14" :stroke-width="1.5"/>
-            <input type="text" aria-label="Search members" placeholder="Search members…"/>
+            <input v-model="memberQuery" type="text" aria-label="Search members" placeholder="Search members…" @keydown.esc.stop="memberQuery = ''"/>
           </div>
           <div class="mp-list">
             <!-- Wrapped for the same reason the Offline block below is: a section
                  header with nothing under it is noise, and a server where everyone
                  happens to be offline should not announce "Online — 0". -->
-            <template v-if="activeMembers.online.length">
-            <div class="mp-section-label">Online — {{ activeMembers.online.length }}</div>
-            <div v-for="m in activeMembers.online" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+            <template v-if="shownMembers.online.length">
+            <div class="mp-section-label">Online — {{ shownMembers.online.length }}</div>
+            <div v-for="m in shownMembers.online" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
@@ -5144,9 +5151,9 @@ onBeforeUnmount(() => {
 
             </template>
 
-            <template v-if="activeMembers.offline.length">
-              <div class="mp-section-label">Offline — {{ activeMembers.offline.length }}</div>
-              <div v-for="m in activeMembers.offline" :key="m.id" class="mp-member mp-offline" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+            <template v-if="shownMembers.offline.length">
+              <div class="mp-section-label">Offline — {{ shownMembers.offline.length }}</div>
+              <div v-for="m in shownMembers.offline" :key="m.id" class="mp-member mp-offline" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                    @contextmenu="openUserMenu($event, m)">
                 <div class="mp-av">
                   <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
@@ -5157,6 +5164,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </template>
+            <div v-if="memberQuery.trim() && !shownMembers.online.length && !shownMembers.offline.length" class="mp-empty">No one matches “{{ memberQuery.trim() }}”</div>
           </div>
         </aside>
 
@@ -6192,6 +6200,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Sections read as sections when there is air between them — but only from
    the second one on, or the list starts with a hole under the search box. */
 .mp-section-label:not(:first-child){margin-top: 14px}
+.mp-empty{color: var(--text-3); font-size: 13px; padding: 12px 8px;}
 .mp-member{display:flex;align-items:center;gap: 10px;padding: 6px 8px;border-radius: 6px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .mp-member:hover{background:var(--hover)}
 .mp-member.mp-offline{opacity:.35}
