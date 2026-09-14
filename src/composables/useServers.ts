@@ -108,15 +108,23 @@ const collapsedCategories = ref<Record<string, boolean>>(readCollapsedCategories
 
 const collapseKey = (sid: string, cid: string) => `${sid}:${cid}`
 
+const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }
+
 /**
  * A server with no icon draws its initials on a colour derived from its name,
  * matching how a user with no avatar is handled in useAvatar. Same generator,
  * so a server and a user never look like they came from different apps.
+ *
+ * Initials are taken by code point (Array.from), not by index: w[0] splits an
+ * emoji's surrogate pair, and encodeURIComponent throws on half of one. They
+ * are escaped because they land inside SVG markup, where "<" or "&" would
+ * leave a broken image.
  */
 export const serverIconFor = (name: string, icon?: string | null): string => {
   if (icon) return icon
   const initials = (name.trim().split(/\s+/).filter(Boolean).slice(0, 2)
-    .map(w => w[0]).join('') || '?')
+    .map(w => Array.from(w)[0]).join('') || '?')
+    .replace(/[&<>"']/g, c => XML_ESCAPES[c])
   const bg = colorForUsername(name || '?')
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">` +

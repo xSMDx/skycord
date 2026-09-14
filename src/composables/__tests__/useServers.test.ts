@@ -1064,6 +1064,23 @@ describe('serverIconFor', () => {
   it('does not crash on an empty name', () => {
     expect(serverIconFor('')).toContain('data:image/svg+xml')
   })
+
+  it('keeps an emoji whole, so a name starting with one does not throw', () => {
+    // Taking w[0] split an emoji's surrogate pair, and encodeURIComponent
+    // throws on half of one — an icon-less "😀 party" broke loading the
+    // whole server list, since every server goes through here.
+    expect(() => serverIconFor('😀 party')).not.toThrow()
+    expect(decodeURIComponent(serverIconFor('😀 party'))).toContain('>😀p<')
+  })
+
+  it('escapes the initials, so a name starting with < or & still draws a valid image', () => {
+    // Unescaped, "<" and "&" made the SVG malformed: a broken image, which
+    // the rail's error fallback would then replace with the same broken image.
+    const text = (name: string) => /<text[^>]*>([^<]*)<\/text>/.exec(decodeURIComponent(serverIconFor(name)))?.[1]
+    expect(text('<3 friends')).toBe('&lt;f')
+    expect(text('&co')).toBe('&amp;')
+    expect(text('"quoted" <tag>')).toBe('&quot;&lt;')
+  })
 })
 
 /**
