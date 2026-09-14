@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildServerMenu, buildSidebarMenu, type ServerMenuAccess } from '../serverMenu'
-import { isAction, isSeparator, isSection, type MenuItem } from '../../useContextMenu'
+import { isAction, isSeparator, isSection, menuGroups, type MenuItem } from '../../useContextMenu'
 
 const handlers = () => ({
   markRead: vi.fn(),
@@ -27,6 +27,11 @@ const ALL: ServerMenuAccess = { invite: true, manageChannels: true, manageServer
 const MEMBER: ServerMenuAccess = { invite: true, manageChannels: false, manageServer: false }
 /** A member whose server has taken Create Invite away from @everyone. */
 const NOTHING: ServerMenuAccess = { invite: false, manageChannels: false, manageServer: false }
+
+/** Every combination of the three permissions. */
+const EVERY_ACCESS: ServerMenuAccess[] = [false, true].flatMap(invite =>
+  [false, true].flatMap(manageChannels =>
+    [false, true].map(manageServer => ({ invite, manageChannels, manageServer }))))
 
 const mine   = { id: 's1', name: 'HQ', owner: 'me' }
 const theirs = { id: 's1', name: 'HQ', owner: 'someone' }
@@ -159,25 +164,60 @@ describe('buildServerMenu', () => {
     ])
   })
 
-  it('gives an ordinary member no labels — every group they see is one row', () => {
-    expect(buildServerMenu(theirs, 'me', handlers(), MEMBER).some(isSection)).toBe(false)
+  it('names only the groups holding more than one row, for every combination of access', () => {
+    // Written out rather than derived, so the test cannot agree with the code
+    // by repeating its logic. An ordinary member (invite only) sees no label.
+    const cases: Array<[ServerMenuAccess, string[]]> = [
+      [{ invite: false, manageChannels: false, manageServer: false }, []],
+      [{ invite: true,  manageChannels: false, manageServer: false }, []],
+      [{ invite: false, manageChannels: true,  manageServer: false }, ['Create']],
+      [{ invite: true,  manageChannels: true,  manageServer: false }, ['Invite & Create']],
+      [{ invite: false, manageChannels: false, manageServer: true  }, ['Manage']],
+      [{ invite: true,  manageChannels: false, manageServer: true  }, ['Manage']],
+      [{ invite: false, manageChannels: true,  manageServer: true  }, ['Create', 'Manage']],
+      [{ invite: true,  manageChannels: true,  manageServer: true  }, ['Invite & Create', 'Manage']],
+    ]
+    for (const [can, expected] of cases) for (const server of [mine, theirs]) {
+      const sections = buildServerMenu(server, 'me', handlers(), can).filter(isSection).map(s => s.section)
+      expect(sections, JSON.stringify({ can, owner: server === mine })).toEqual(expected)
+    }
   })
 
-  it('calls the add group Create when inviting is off but channels are not', () => {
-    const items = buildServerMenu(theirs, 'me', handlers(), { ...NOTHING, manageChannels: true })
-    expect(shape(items)).toContain('§ Create')
-    expect(shape(items)).not.toContain('§ Invite & Create')
+  it('puts under a label only the rows it names — never Delete, Leave, Copy or Mark As Read', () => {
+    // Read through menuGroups, which is how ContextMenu turns this list into
+    // the labelled groups a screen reader announces. The flat list alone hid
+    // that the last label also claimed every row after it.
+    const NAMED: Record<string, string[]> = {
+      'Invite & Create': ['Invite to Server', 'Create Channel', 'Create Category'],
+      'Create':          ['Create Channel', 'Create Category'],
+      'Manage':          ['Server Settings', 'Voice Servers'],
+    }
+    let labelled = 0
+    for (const can of EVERY_ACCESS) for (const server of [mine, theirs]) {
+      for (const g of menuGroups(buildServerMenu(server, 'me', handlers(), can))) {
+        if (g.label === undefined) continue
+        labelled++
+        expect(g.rows.map(r => (isAction(r.item) ? r.item.label : '—')), `${g.label} ${JSON.stringify(can)}`)
+          .toEqual(NAMED[g.label])
+      }
+    }
+    expect(labelled).toBeGreaterThan(0)
   })
 
   it('only ever places a section straight after a separator, over at least two rows', () => {
-    for (const can of [ALL, MEMBER, NOTHING, { ...MEMBER, manageChannels: true }, { ...NOTHING, manageServer: true }]) {
-      const items = buildServerMenu(mine, 'me', handlers(), can)
+    let seen = 0
+    for (const can of EVERY_ACCESS) for (const server of [mine, theirs]) {
+      const items = buildServerMenu(server, 'me', handlers(), can)
       items.forEach((it, i) => {
         if (!isSection(it)) return
+        seen++
         expect(isSeparator(items[i - 1])).toBe(true)
         expect(items.slice(i + 1).findIndex(isSeparator)).toBeGreaterThanOrEqual(2)
       })
     }
+    // Most combinations show no label at all; without this the loop could
+    // pass having checked nothing.
+    expect(seen).toBeGreaterThan(0)
   })
 })
 

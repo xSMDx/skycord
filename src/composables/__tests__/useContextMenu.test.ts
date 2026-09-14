@@ -36,15 +36,35 @@ describe('menuGroups', () => {
     expect(menuGroups(items).map(g => g.label)).toEqual(['Manage'])
   })
 
-  it('drops a section holding only separators, and its separator with it', () => {
-    // Pinned on purpose, not an accident to "fix": a separator belongs to the
-    // group it follows (see menuGroups), so a builder must close a group
-    // before the next label rather than after a label that may end up empty.
+  it('ends a labelled group at the next separator, so the rows past it are under no label', () => {
+    // The server dropdown's shape: without this, Delete Server and Copy Server
+    // ID were announced as part of "Manage".
+    const items: MenuItem[] = [
+      { section: 'Manage' }, row('Server Settings'), row('Voice Servers'),
+      { sep: true }, row('Delete Server'), { sep: true }, row('Copy Server ID'),
+    ]
+    expect(menuGroups(items)).toEqual([
+      { label: 'Manage', rows: [{ item: items[1], index: 1 }, { item: items[2], index: 2 }] },
+      { rows: [3, 4, 5, 6].map(index => ({ item: items[index], index })) },
+    ])
+  })
+
+  it('drops a label whose rows were all filtered away, and keeps the line between what remains', () => {
     const items: MenuItem[] = [row('A'), { section: 'Lines' }, { sep: true }, { section: 'B' }, row('B1')]
     expect(menuGroups(items)).toEqual([
       { rows: [{ item: items[0], index: 0 }] },
+      { rows: [{ item: items[2], index: 2 }] },
       { label: 'B', rows: [{ item: items[4], index: 4 }] },
     ])
+  })
+
+  it('never loses or reorders a row, whatever the sections around it', () => {
+    const items: MenuItem[] = [
+      { section: 'X' }, row('A'), { sep: true }, { section: 'Empty' }, { sep: true }, row('B'), slider,
+      { section: 'T' }, row('C'), { sep: true }, row('D'),
+    ]
+    expect(menuGroups(items).flatMap(g => g.rows.map(r => r.index)))
+      .toEqual(items.flatMap((it, i) => (isSection(it) ? [] : [i])))
   })
 
   it('keeps a group whose only row is a slider — it is a real row', () => {

@@ -60,7 +60,8 @@ export const hasSubmenu  = (i: MenuItem): i is MenuAction & { submenu: MenuItem[
   isAction(i) && !!i.submenu?.length
 
 export interface MenuGroup {
-  /** Absent for the rows above the first section. */
+  /** Absent for rows no section names: above the first section, and past the
+   *  separator that ends one. */
   label?: string
   /** Each row with its index in the flat list — active row, open flyout and
    *  the arrow keys all address rows by that index, not by group. */
@@ -68,23 +69,33 @@ export interface MenuGroup {
 }
 
 /**
- * The flat list, split at each section.
+ * The flat list, split into groups.
  *
- * A section with no real row under it is dropped, so a builder that filters
- * rows by permission can never leave a label heading empty space.
+ * A section names the rows after it up to the next separator, the next
+ * section, or the end of the menu. So a separator never sits inside a labelled
+ * group, and the rows past it belong to no label: a menu's last section cannot
+ * claim everything below it, the way "Manage" once claimed Delete Server.
  *
- * A separator belongs to the group it FOLLOWS, and leaves with that group if
- * it is dropped. So a builder puts the separator that closes a group before
- * the next section's label, never directly after a label whose rows may all
- * be filtered away — or the line between two surviving groups goes with it.
+ * A section left with no rows is dropped, so a builder that filters rows by
+ * permission can never leave a label heading empty space. Rows themselves are
+ * never dropped or reordered — the keyboard state is keyed on their indices.
  */
 export const menuGroups = (items: MenuItem[]): MenuGroup[] => {
-  const groups: MenuGroup[] = [{ rows: [] }]
+  const groups: MenuGroup[] = []
+  let current: MenuGroup | null = null
   items.forEach((item, index) => {
-    if (isSection(item)) groups.push({ label: item.section, rows: [] })
-    else groups[groups.length - 1].rows.push({ item, index })
+    if (isSection(item)) {
+      current = { label: item.section, rows: [] }
+      groups.push(current)
+      return
+    }
+    if (!current || (isSeparator(item) && current.label !== undefined)) {
+      current = { rows: [] }
+      groups.push(current)
+    }
+    current.rows.push({ item, index })
   })
-  return groups.filter(g => g.rows.some(r => !isSeparator(r.item)))
+  return groups.filter(g => g.rows.length > 0)
 }
 
 /** Indices the arrow keys stop on: enabled actions only. A slider is dragged,
