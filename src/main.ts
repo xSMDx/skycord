@@ -1,6 +1,21 @@
 import { createApp } from 'vue'
 import './styles/tokens.css'
 import './style.css'
+// Self-hosted: these are the four optional UI/mono fonts the Appearance panel
+// offers, previously fetched from Google on every load. Importing the CSS
+// (rather than linking it) lets Vite bundle and fingerprint the font files
+// alongside everything else, so there is nothing left to fetch off-machine.
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
+import '@fontsource/roboto/400.css'
+import '@fontsource/roboto/500.css'
+import '@fontsource/roboto/700.css'
+import '@fontsource/fira-code/400.css'
+import '@fontsource/fira-code/500.css'
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/500.css'
 import App from './App.vue'
 import { applyAppearance } from './composables/useAppearance'
 import { installLongPress } from './composables/useLongPress'

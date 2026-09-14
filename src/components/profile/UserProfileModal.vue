@@ -265,7 +265,7 @@ img { display: block; object-fit: cover; }
 .up-btn:hover:not(:disabled)  { background: rgba(255,255,255,.16); }
 .up-btn:active:not(:disabled) { transform: scale(.97); }
 .up-btn:disabled { opacity: .5; cursor: not-allowed; }
-.up-btn.primary { background: var(--accent); }
+.up-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .up-btn.primary:hover { background: var(--accent-hover); }
 .up-btn.icon { width: 40px; padding: 0; height: 40px; }
 /* Message takes the room; the icon buttons stay square beside it. */
@@ -283,7 +283,7 @@ img { display: block; object-fit: cover; }
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
   padding: 8px 10px; border-radius: 4px; font-size: 14px; color: var(--text-2);
 }
-.up-menu button:hover { background: var(--accent); color: #fff; }
+.up-menu button:hover { background: var(--accent); color: var(--text-on-accent); }
 .up-menu button.danger { color: #f0716f; }
 .up-menu button.danger:hover { background: #ed4245; color: #fff; }
 

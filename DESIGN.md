@@ -67,10 +67,15 @@ single source of truth: every app colour is a token, and nothing hardcodes hex.
 
 | Token | Default | Role |
 |---|---|---|
-| `--accent` | `#5865f2` | Blurple. CTAs, selected states, links, focus of attention |
-| `--accent-hover` | `#4752c4` | Derived: `shade(accent, -12%)` |
-| `--accent-deep` | `#3f49ae` | Derived: `shade(accent, -28%)`. Accent text on an accent tint, light themes |
-| `--accent-rgb` | `88, 101, 242` | Triple, so tints can do `rgba(var(--accent-rgb), .18)` |
+| `--accent` | `#38b6f1` | Sky. CTAs, selected states, links, focus of attention |
+| `--accent-hover` | `#31a0d4` | Derived: `shade(accent, -12%)` |
+| `--accent-deep` | `#2883ae` | Derived: `shade(accent, -28%)`. Accent text on an accent tint, light themes |
+| `--accent-rgb` | `56, 182, 241` | Triple, so tints can do `rgba(var(--accent-rgb), .18)` |
+
+Light themes override `--accent`, `--accent-hover` and `--accent-deep` with
+Sky's own light-family value, `#0a75af` — a bright accent needs dark text to
+stay legible, which reads wrong on a primary button, so light themes take the
+deeper value instead (`tokens.css`'s `[data-theme="light"]` block).
 
 Exposed as **both** hex and an RGB triple on purpose — every accent tint in the
 app is an alpha of the triple, so a user's custom accent tints correctly without
@@ -102,10 +107,22 @@ a message into is laid on top; the thing you fill in a form with is cut into.
 | `--text-2` | `#b5bac1` | Secondary |
 | `--text-3` | `#949ba4` | Muted, labels |
 | `--text-faint` | `#999ca2` | Placeholders — 4.58:1 on chat, 4.99:1 on panel |
-| `--text-on-accent` | `#ffffff` | Text on the accent — stays light in **every** theme |
+| `--text-on-accent` | *measured* | Text on the accent — `onAccentText(accent)` in `onAccent.ts`, per-accent, **not** fixed white |
+| `--text-on-green` | `#0e0f11` | Text on `--green` — `onAccentText(--green)` |
+| `--text-on-green-deep` | `#ffffff` | Text on the darker "Copied"/"on" green (`#248046`, InviteGroupModal/InviteServerModal) — a different shade from `--green`, so a different measured answer |
+| `--text-on-danger` | `#0e0f11` | Text on `--danger` — `onAccentText(--danger)` |
+| `--text-on-danger-hover` | `#ffffff` | Text on ConfirmModal's own danger-hover literal (`#c73e3e`), not `--danger-hover` |
 
 `--text-faint` is not "as light as it looks OK"; it is the lightest value that
 still clears AA on the *darkest* surface it can land on. Don't lighten it.
+
+`--text-on-accent` used to be documented (and shipped) as a fixed `#ffffff`
+that "stays light in every theme" — wrong the moment the accent itself is
+light: Yellow measured 1.89:1. It is computed per accent by comparing the
+WCAG contrast of ink and white against it and keeping whichever wins, which is
+why Sky, unlike blurple before it, lands on ink instead. The same reasoning —
+measure the exact background, never assume — is why the green/danger pairs
+above sometimes disagree with each other despite sharing a hue family.
 
 ### Borders
 
@@ -142,12 +159,12 @@ carries a hairline ring plus a *neutral* lighter fill instead.
 | Token | Value | Role |
 |---|---|---|
 | `--green` | `#23a55a` | Live, online, affirmative. Voice pips, speaking rings, success, accept |
-| `--mention-fg` | `#8d96f8` | Lightened accent (dark) / full accent (light) |
+| `--mention-fg` | `#38b6f1` | Lightened accent (dark) / full accent (light) — derived from the accent by accentTintsOnDark (onAccent.ts) |
 | `--mention-bg` | `rgba(var(--accent-rgb), .18)` | |
 | `--mention-all-bg` | `rgba(240, 178, 0, .22)` | `@everyone` — amber, distinct from a normal ping |
 | `--mention-row-bar` | `#f0b232` | Left bar on a row that pings you |
-| `--accent-text` | `#c4c9ff` | Text sitting **on** a translucent accent tint |
-| `--time-token-fg` | `#c4c9ff` | |
+| `--accent-text` | `#5bc3f3` | Text sitting **on** a translucent accent tint |
+| `--time-token-fg` | `#5bc3f3` | |
 
 `--green` is a token because it appears in twelve places for roles no single
 name covers (a success toast *and* an explore button). Name colours after the
@@ -257,11 +274,12 @@ way to guarantee that is: **only ever use tokens.**
 ### App
 
 ```css
---font-ui:   'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
---font-mono: 'Consolas','Menlo',monospace;
+--font-ui:      'Archivo','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+--font-display: 'Chakra Petch','Archivo',system-ui,sans-serif;
+--font-mono:    'Consolas','Menlo',monospace;
 ```
 
-User-swappable: UI = gg sans / Inter / Roboto / System. Mono = Consolas /
+User-swappable: UI = Archivo / Inter / Roboto / System. Mono = Consolas /
 Fira Code / JetBrains Mono.
 
 Sizes in practice — there is no `--font-size-N` scale, and deliberately so:

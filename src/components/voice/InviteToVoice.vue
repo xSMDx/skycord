@@ -233,7 +233,7 @@ const doCopy = async () => {
   flex: none; padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: 600;
   border: 1px solid var(--accent); background: none; color: var(--accent); cursor: pointer;
 }
-.iv-btn:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.iv-btn:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); }
 .iv-btn.done, .iv-btn:disabled { border-color: transparent; color: var(--text-3); background: none; cursor: default; }
 .iv-foot { padding: 12px 16px 16px; border-top: 1px solid rgba(0,0,0,.25); }
 .iv-foot-label { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text-3); }
@@ -244,7 +244,7 @@ const doCopy = async () => {
 }
 .iv-copy {
   padding: 8px 18px; border-radius: 4px; border: none; cursor: pointer;
-  background: var(--accent); color: #fff; font-size: 13.5px; font-weight: 600;
+  background: var(--accent); color: var(--text-on-accent); font-size: 13.5px; font-weight: 600;
 }
 .iv-copy:hover:not(:disabled) { background: var(--accent-hover); }
 .iv-copy:disabled { opacity: .6; cursor: default; }

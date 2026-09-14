@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Palette } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { useAppearance, type Appearance } from '@/composables/useAppearance'
+import { resolveAccentHex } from '@/composables/onAccent'
 
 // A message carries EITHER an inline theme code (offline-decodable) or a link
 // slug (fetched). Both resolve to a themeable partial + a name to show.
@@ -24,12 +25,15 @@ const THEME_BG: Record<string, string> = {
 
 // A few representative dots: accent first, then key surfaces (custom overrides
 // win, else the theme preset's chat background + standard panel/floor).
+// The accent is resolved against THIS card's own theme (`d.theme`), not
+// whatever theme is live in the viewer's app right now — a shared 'auto'
+// means "that theme's Sky", which the recipient may not currently be on.
 const swatches = computed<string[]>(() => {
   const d = data.value
   if (!d) return []
   const c = (d.custom ?? {}) as Record<string, string>
   return [
-    d.accent || '#5865f2',
+    resolveAccentHex(d.accent, d.theme),
     c['--bg-chat']  || THEME_BG[d.theme || 'default'] || '#313338',
     c['--bg-panel'] || '#2b2d31',
     c['--bg-floor'] || '#111214',

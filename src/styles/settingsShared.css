@@ -30,6 +30,9 @@
 /* More space above than below: the rule that makes a heading belong to what
    follows it rather than float between two blocks. */
 .st-section {
+  /* Not Chakra Petch (owner, 2026-09-14): at 12px uppercase the display face
+     barely reads as itself, and it sat beside field labels set in the UI face. */
+  font-family: var(--font-ui);
   font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
   color: var(--text-2);
   margin: 32px 0 10px;

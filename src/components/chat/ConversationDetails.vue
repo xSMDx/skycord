@@ -303,7 +303,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-av {
   width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--text-on-accent);
   font-size: 24px; font-weight: 700; overflow: hidden;
 }
 .cd-av img { width: 100%; height: 100%; object-fit: cover; }
@@ -311,6 +311,10 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 /* Tighter leading and negative tracking as the type grows — a display size
    set at body metrics reads as too loose. */
 .cd-title {
+  /* Not Chakra Petch: this is the channel/conversation's own name, the same
+     identity chat-title shows in the main header — data the user or server
+     named, not display copy the app authored. */
+  font-family: var(--font-ui);
   font-size: 22px; font-weight: 700; color: var(--text-strong);
   line-height: 1.15; letter-spacing: -.01em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -359,6 +363,8 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-row-chev { color: var(--text-faint); flex-shrink: 0; }
 
 .cd-section {
+  /* Not Chakra Petch: a member-list count ("Members — 12"), not a heading. */
+  font-family: var(--font-ui);
   font-size: 13px; font-weight: 700; letter-spacing: .02em;
   color: var(--text-3); text-transform: none;
   margin: 24px 4px 8px;
@@ -376,7 +382,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-m-av {
   position: relative; width: 40px; height: 40px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  background: var(--accent); color: #fff; font-weight: 700; overflow: visible;
+  background: var(--accent); color: var(--text-on-accent); font-weight: 700; overflow: visible;
 }
 .cd-m-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .cd-m-dot {

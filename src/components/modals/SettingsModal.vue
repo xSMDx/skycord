@@ -7,7 +7,8 @@ import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
-import { useAppearance, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
+import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
+import { resolveAccentHex, onAccentText, isAutoAccent, SKY_DARK, SKY_LIGHT } from '@/composables/onAccent'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
 import ChangeIconModal from './ChangeIconModal.vue'
@@ -37,7 +38,11 @@ const { user: authUser, logout, authFetch, updateUser } = useAuth()
 
 const { appearance, setAppearance, setCustomToken, serializeTheme, parseTheme, sanitizeTheme, previewTheme } = useAppearance()
 const { createTheme } = useApi()
-const isCustomAccent = computed(() => !ACCENT_PRESETS.some(p => p.hex === appearance.accent.toLowerCase()))
+// 'auto' (or empty) has no fixed hex to match against ACCENT_PRESETS, so
+// without this check it fell through to "custom" — the picker showed Custom
+// selected (and nothing else) for the theme-aware default, which is the one
+// accent that is least custom of all.
+const isCustomAccent = computed(() => !isAutoAccent(appearance.accent) && !ACCENT_PRESETS.some(p => p.hex === appearance.accent.toLowerCase()))
 const resetCustom = () => setAppearance({ custom: {}, theme: 'default' })
 
 // ── Theme sharing ──
@@ -90,11 +95,14 @@ const startRename = (t: SavedTheme) => {
   if (next !== null) renameSavedTheme(t.id, next)
 }
 /** The saved swatch shows the surface and accent that entry would restore —
- *  the two things that actually change when it is applied. */
+ *  the two things that actually change when it is applied. Resolved against
+ *  the SNAPSHOT's own theme, not the live one — a saved 'auto' means "that
+ *  theme's Sky", which can differ from whatever theme is live while this
+ *  list is on screen. */
 const savedPreview = (t: SavedTheme) => {
   const opt = [...THEME_OPTS, ...STUDIO_OPTS].find(o => o.id === t.theme.theme)
   const surface = (opt?.preview.background) || '#313338'
-  return { background: surface, boxShadow: `inset 0 -7px 0 ${t.theme.accent || 'var(--accent)'}` }
+  return { background: surface, boxShadow: `inset 0 -7px 0 ${resolveAccentHex(t.theme.accent, t.theme.theme)}` }
 }
 
 /** A theme card. Studio entries bring their accent with them. */
@@ -1023,16 +1031,31 @@ const handleSelfRevoked = () => handleLogout()
             <h3 class="ap-sub">Accent Color</h3>
             <div class="ap-swatches">
               <button
+                class="ap-swatch ap-swatch-auto" :class="{ active: isAutoAccent(appearance.accent) }"
+                :style="{ background: `linear-gradient(135deg, ${SKY_DARK} 50%, ${SKY_LIGHT} 50%)` }"
+                v-tip="'Automatic — Sky, tuned to each theme'" aria-label="Automatic — Sky, tuned to each theme"
+                @click="setAppearance({ accent: 'auto' })"
+              >
+                <!-- Neither half's own onAccentText is right for a mark straddling
+                     both: white clears SKY_LIGHT but fails SKY_DARK's 3:1 graphics
+                     minimum (2.30:1), so ink — SKY_DARK's own answer — is the one
+                     colour that clears both halves. -->
+                <svg v-if="isAutoAccent(appearance.accent)" width="14" height="14" viewBox="0 0 24 24" fill="none" :stroke="onAccentText(SKY_DARK)" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button
                 v-for="p in ACCENT_PRESETS" :key="p.hex"
                 class="ap-swatch" :class="{ active: appearance.accent.toLowerCase() === p.hex }"
                 :style="{ background: p.hex }" v-tip="p.name"
                 @click="setAppearance({ accent: p.hex })"
               >
-                <svg v-if="appearance.accent.toLowerCase() === p.hex" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-if="appearance.accent.toLowerCase() === p.hex" width="14" height="14" viewBox="0 0 24 24" fill="none" :stroke="onAccentText(p.hex)" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: appearance.accent }">
-                <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-                <input type="color" aria-label="Custom accent colour" :value="appearance.accent" @input="setAppearance({ accent: ($event.target as HTMLInputElement).value })" />
+              <label class="ap-custom" :class="{ active: isCustomAccent }" v-tip="'Custom accent'" :style="{ background: accentHex }">
+                <svg class="ap-custom-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+                <!-- type=color needs a real #rrggbb — 'auto' isn't one, and the
+                     native picker would silently show black instead of the
+                     colour that is actually applied. -->
+                <input type="color" aria-label="Custom accent colour" :value="accentHex" @input="setAppearance({ accent: ($event.target as HTMLInputElement).value })" />
               </label>
             </div>
 
@@ -1195,7 +1218,7 @@ const handleSelfRevoked = () => handleLogout()
                 <div class="ap-preview" :class="{ 'prev-compact': appearance.msgLayout === 'compact' }" :style="{ fontFamily: 'var(--font-ui)' }">
                   <div class="ap-prev-msg">
                     <span class="ap-prev-ts">1:06 PM</span>
-                    <div class="ap-prev-av" :style="{ background: appearance.accent }">S</div>
+                    <div class="ap-prev-av" :style="{ background: accentHex }">S</div>
                     <div class="ap-prev-main">
                       <span class="ap-prev-head"><span class="ap-prev-name">SMD</span><span class="ap-prev-time">Today at 1:06 PM</span></span>
                       <span class="ap-prev-text" :style="{ fontSize: appearance.msgSize + 'px' }">Sphinx of black quartz, judge my vow</span>
@@ -1708,7 +1731,10 @@ img    { display: block; object-fit: cover; }
 }
 .ap-custom:hover { transform: scale(1.08); }
 .ap-custom.active { border-color: var(--text-strong); }
-.ap-custom-ico { opacity: .92; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); pointer-events: none; }
+/* Swatch background is the live accent (inline style) — stroke follows the
+   same measured token a solid accent fill uses anywhere else, not a hardcoded
+   white that only reads on the darker presets. */
+.ap-custom-ico { stroke: var(--text-on-accent); opacity: .92; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); pointer-events: none; }
 .ap-custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 /*
  * Appearance — controls left, live preview right.
@@ -1744,8 +1770,15 @@ img    { display: block; object-fit: cover; }
 .ap-preview { background: var(--bg-chat); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
 .ap-prev-msg { display: flex; gap: 12px; padding: var(--row-pad-y, 2px) 0; }
 .ap-prev-ts { display: none; font-size: 11px; color: var(--text-faint); min-width: 52px; text-align: right; line-height: 1.5; }
-.ap-prev-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
-.ap-prev-av2 { background: #23a55a; }
+/* Background is the live accent (inline style, below) — the token measured
+   against it, not a hardcoded white that only ever suited the old blurple. */
+.ap-prev-av { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text-on-accent); font-weight: 700; }
+/* This second avatar's background is the app's green, not the accent — it must
+   not inherit --text-on-accent above, which is only ever measured against the
+   accent and would go wrong the moment an accent choice flips it to ink.
+   --text-on-green is its own measurement against --green, and for #23a55a
+   that answer is ink, not the white this rule hand-picked before. */
+.ap-prev-av2 { background: var(--green); color: var(--text-on-green); }
 .ap-prev-main { min-width: 0; }
 .ap-prev-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
 .ap-prev-name { font-weight: 600; color: var(--text-strong); }

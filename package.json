@@ -17,6 +17,10 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@fontsource/fira-code": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/roboto": "^5.3.0",
     "@ip-location-db/dbip-country-mmdb": "^2.3.2026060120",
     "@material/material-color-utilities": "^0.4.0",
     "@phosphor-icons/vue": "^2.2.0",

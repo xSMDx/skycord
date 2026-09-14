@@ -204,7 +204,10 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .is-copy:hover:not(:disabled) { background: var(--accent-hover); }
-.is-copy.copied { background: #248046; }
+/* #248046, not --green: this is the darker "confirmed" shade (CallBar's
+   .on, PermissionsTab's .allow.on), a different measured answer from the
+   app's main green — see --text-on-green-deep in tokens.css. */
+.is-copy.copied { background: #248046; color: var(--text-on-green-deep); }
 
 .is-expiry-row { display: flex; gap: 10px; }
 .is-expiry-btn {

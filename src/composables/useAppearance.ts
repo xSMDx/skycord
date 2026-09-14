@@ -3,8 +3,10 @@
  * custom-color mode. Applied by flipping CSS custom properties / data-attributes
  * on <html>, persisted to localStorage, restored in main.ts before first paint.
  */
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
+import { onAccentText, resolveAccentHex, isLightTheme, isAutoAccent, accentTintsOnDark, accentTintsOnLight } from './onAccent'
+import { migrateSavedAppearance, APPEARANCE_VERSION } from './appearanceMigration'
 
 export type Theme =
   | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
@@ -38,23 +40,23 @@ export type MsgLayout = 'cozy' | 'compact'
 
 const KEY = 'sykord_appearance'
 const DEFAULTS: Appearance = {
-  theme: 'default', accent: '#5865f2', density: 'cozy',
-  msgSize: 15, groupSpacing: 17, fontUi: 'gg sans', fontMono: 'Consolas',
+  theme: 'default', accent: 'auto', density: 'cozy',
+  msgSize: 15, groupSpacing: 17, fontUi: 'Archivo', fontMono: 'Consolas',
   showSendButton: true, custom: {}, scheme: 'off', contrast: 0, emojiPack: 'native',
   underlineLinks: false, displayNameStyles: true, msgLayout: 'cozy', zoom: 100,
   reduceMotion: false,
 }
 
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
-  { name: 'Blurple', hex: '#5865f2' }, { name: 'Green', hex: '#23a55a' },
-  { name: 'Teal', hex: '#1abc9c' },    { name: 'Blue', hex: '#3498db' },
-  { name: 'Pink', hex: '#eb459e' },    { name: 'Red', hex: '#ed4245' },
-  { name: 'Orange', hex: '#e67e22' },  { name: 'Yellow', hex: '#f0b232' },
-  { name: 'Purple', hex: '#9b59b6' },
+  { name: 'Sky', hex: '#38b6f1' },      { name: 'Blurple', hex: '#5865f2' },
+  { name: 'Green', hex: '#23a55a' },    { name: 'Teal', hex: '#1abc9c' },
+  { name: 'Blue', hex: '#3498db' },     { name: 'Pink', hex: '#eb459e' },
+  { name: 'Red', hex: '#ed4245' },      { name: 'Orange', hex: '#e67e22' },
+  { name: 'Yellow', hex: '#f0b232' },   { name: 'Purple', hex: '#9b59b6' },
 ]
 
 export const UI_FONTS: Record<string, string> = {
-  'gg sans': "'gg sans','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",
+  'Archivo': "'Archivo','Noto Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",
   'Inter':   "'Inter',-apple-system,system-ui,sans-serif",
   'Roboto':  "'Roboto',-apple-system,system-ui,sans-serif",
   'System':  "system-ui,-apple-system,BlinkMacSystemFont,sans-serif",
@@ -93,10 +95,25 @@ const shade = (hex: string, p: number) => {
 const rgbTriple = (hex: string) => { const { r, g, b } = parseHex(hex); return `${r}, ${g}, ${b}` }
 
 const load = (): Partial<Appearance> => {
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}')
+    return migrateSavedAppearance(saved, Object.keys(UI_FONTS), Object.keys(MONO_FONTS)) as Partial<Appearance>
+  } catch { return {} }
 }
 
 export const appearance = reactive<Appearance>({ ...DEFAULTS, ...load() })
+
+/**
+ * `appearance.accent` may be the sentinel 'auto', which almost every consumer
+ * never notices because it reads the `--accent` CSS custom property instead
+ * (kept current by applyAppearance below, and meaningless as raw text). The
+ * exception is anything that needs an actual colour rather than a variable —
+ * a Lottie animation's baked-in fill is the case that forced this into
+ * existence, since a Lottie JSON has no notion of `var(--accent)`. Read this
+ * instead of `appearance.accent` wherever a real colour is required, or
+ * 'auto' ends up parsed as one.
+ */
+export const accentHex = computed(() => resolveAccentHex(appearance.accent, appearance.theme))
 
 export const applyAppearance = () => {
   const root = document.documentElement
@@ -123,8 +140,11 @@ export const applyAppearance = () => {
 
   if (a.scheme !== 'off') {
     // Material-You: generate the full surface/text palette from the accent seed.
-    const isDark = !(a.theme === 'light' || a.theme === 'light-dim')
-    const tokens = buildSchemeTokens(a.accent, a.scheme, isDark, a.contrast)
+    // This is a JS call, not a stylesheet, so 'auto' has nothing to resolve
+    // against on its own — it needs the same concrete hex the CSS custom
+    // properties below would show for this theme.
+    const isDark = !isLightTheme(a.theme)
+    const tokens = buildSchemeTokens(resolveAccentHex(a.accent, a.theme), a.scheme, isDark, a.contrast)
     for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v)
   } else if (a.theme === 'custom') {
     for (const [k, v] of Object.entries(a.custom)) if (v) root.style.setProperty(k, v)
@@ -147,21 +167,59 @@ export const applyAppearance = () => {
     }
   }
 
-  // Accent (always)
-  root.style.setProperty('--accent', a.accent)
-  root.style.setProperty('--accent-hover', shade(a.accent, -0.12))
-  // Text sitting ON an accent tint in a LIGHT theme. -12% is not enough: on
-  // light-dim's mid-tone panel the tinted row composites to #d4d8f0, where
-  // accent-hover measures 4.02:1 against 14px body text. -28% clears 4.5 on
-  // both light themes with room to spare.
-  root.style.setProperty('--accent-deep', shade(a.accent, -0.28))
-  root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
+  // 'auto' means "whatever this theme says": clearing the inline values lets
+  // tokens.css decide, which is how the light themes get the deeper Sky. An
+  // explicit accent is the user's choice and applies in every theme.
+  // isAutoAccent, not a bare `=== 'auto'`, so an empty saved accent takes this
+  // branch too instead of falling into the one below and asking shade('') for
+  // a hex it doesn't have.
+  if (isAutoAccent(a.accent)) {
+    for (const p of ['--accent', '--accent-hover', '--accent-deep', '--accent-rgb', '--text-on-accent',
+                      '--name-hover', '--mention-fg', '--accent-text', '--time-token-fg']) {
+      root.style.removeProperty(p)
+    }
+  } else {
+    root.style.setProperty('--accent', a.accent)
+    root.style.setProperty('--accent-hover', shade(a.accent, -0.12))
+    // -12% is not enough for accent text on a light theme: accent-hover
+    // measures 4.02:1 against 14px body text. -28% clears 4.5.
+    root.style.setProperty('--accent-deep', shade(a.accent, -0.28))
+    root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
+    root.style.setProperty('--text-on-accent', onAccentText(a.accent))
+
+    // An explicit accent needs its own tints derived per theme family — dark
+    // lightens toward white, light darkens toward black — the same split
+    // 'auto' already gets from tokens.css choosing SKY_LIGHT (a deeper blue)
+    // over SKY_DARK. The light stylesheet rules (var(--accent) /
+    // var(--accent-deep)) are only correct for THAT deep Sky; a bright
+    // user-chosen accent measured 2.30:1 for mentions falling back to them.
+    // Recomputing on every apply (rather than leaving a stale value) is what
+    // makes switching theme family with an explicit accent still correct —
+    // without it, the other family's tint would sit in `root.style` and
+    // outrank the stylesheet rule, since inline styles always win.
+    const { mentionFg, accentText } = isLightTheme(a.theme) ? accentTintsOnLight(a.accent) : accentTintsOnDark(a.accent)
+    // An inline style always outranks html.names-plain's stylesheet rule
+    // (tokens.css), regardless of specificity, so unconditionally setting
+    // --name-hover here silently defeated "Display Name Styles: off" for
+    // anyone with an explicit accent. Only set it when styled names are on;
+    // otherwise leave it unset, the same way the 'auto' branch above already
+    // leaves it unset for every accent property. --mention-fg keeps this
+    // value regardless — it answers an unrelated question (inline @mention
+    // colour), not display-name hover.
+    if (a.displayNameStyles) root.style.setProperty('--name-hover', mentionFg)
+    else root.style.removeProperty('--name-hover')
+    root.style.setProperty('--mention-fg', mentionFg)
+    root.style.setProperty('--accent-text', accentText)
+    root.style.setProperty('--time-token-fg', accentText)
+  }
 
   // Sizing + fonts
   root.style.setProperty('--msg-font-size', `${a.msgSize}px`)
   root.style.setProperty('--msg-group-gap', `${a.groupSpacing}px`)
-  root.style.setProperty('--font-ui', UI_FONTS[a.fontUi] || UI_FONTS['gg sans'])
-  root.style.setProperty('--font-mono', MONO_FONTS[a.fontMono] || MONO_FONTS['Consolas'])
+  // The fallback names the default rather than a literal key, so renaming a font
+  // can never again leave it pointing at nothing.
+  root.style.setProperty('--font-ui', UI_FONTS[a.fontUi] || UI_FONTS[DEFAULTS.fontUi])
+  root.style.setProperty('--font-mono', MONO_FONTS[a.fontMono] || MONO_FONTS[DEFAULTS.fontMono])
 
   // Readability + density extras
   if (a.zoom === 100) {
@@ -182,7 +240,7 @@ export const applyAppearance = () => {
 // persist=false applies live without writing localStorage — used by theme preview.
 export const setAppearance = (patch: Partial<Appearance>, persist = true) => {
   Object.assign(appearance, patch)
-  if (persist) localStorage.setItem(KEY, JSON.stringify(appearance))
+  if (persist) localStorage.setItem(KEY, JSON.stringify({ ...appearance, v: APPEARANCE_VERSION }))
   applyAppearance()
 }
 export const setCustomToken = (key: string, value: string) => {

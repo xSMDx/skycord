@@ -80,7 +80,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .efm-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .efm-btn.primary:hover { background: var(--accent-hover); }
 .efm-btn:disabled { opacity: .5; cursor: not-allowed; }
-.efm-btn:disabled:hover { background: var(--accent); }
+.efm-btn:disabled:hover { background: var(--accent); color: var(--text-on-accent); }
 
 /* Shared field styles, used by whatever the parent slots in */
 :deep(.efm-field-label) { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-2); margin-bottom: 6px; display: block; }

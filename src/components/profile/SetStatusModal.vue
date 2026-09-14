@@ -134,7 +134,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ss-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .ss-btn { font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 6px; color: var(--text-strong); background: var(--hover-strong); }
 .ss-btn:hover { background: rgba(255,255,255,.16); }
-.ss-btn.primary { background: var(--accent); }
+.ss-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .ss-btn.primary:hover { background: var(--accent-hover); }
 .ss-btn.primary:disabled { opacity: .6; cursor: not-allowed; }
 .ss-btn.ghost { background: none; color: var(--text-2); }
