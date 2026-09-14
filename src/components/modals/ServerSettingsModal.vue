@@ -221,7 +221,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   box-shadow: inset 0 0 0 1px var(--active-ring);
   color: var(--text-strong);
 }
-.sv-navitem.danger { color: #f0716f; }
+.sv-navitem.danger { color: var(--danger-text); }
 .sv-navitem.danger:hover { background: rgba(237,66,69,.12); color: #ff8785; }
 .sv-navsep { height: 1px; background: var(--divider); margin: 12px 10px; }
 

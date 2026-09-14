@@ -1447,7 +1447,7 @@ img    { display: block; object-fit: cover; }
 .pf-sub { font-size: 13.5px; color: var(--text-3); margin: -6px 0 20px; }
 .pf-err {
   padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 13px;
-  background: rgba(237,66,69,.14); border: 1px solid rgba(237,66,69,.32); color: #f0716f;
+  background: rgba(237,66,69,.14); border: 1px solid rgba(237,66,69,.32); color: var(--danger-text);
 }
 /*
  * Profile — the card is the stage.
@@ -1483,7 +1483,7 @@ img    { display: block; object-fit: cover; }
 .sm-modal.mobile .st-field-idle .acc-idlerow { width: 100%; }
 .pf-idle { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
 .pf-idleval { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-1); min-width: 52px; text-align: right; }
-.pf-danger { color: #f0716f; background: none; }
+.pf-danger { color: var(--danger-text); background: none; }
 .pf-danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
 .pf-danger:disabled { opacity: .4; cursor: not-allowed; }
 
@@ -1584,7 +1584,7 @@ img    { display: block; object-fit: cover; }
   box-shadow: inset 0 0 0 1px var(--active-ring);
   color: var(--text-strong);
 }
-.sm-nav-item.danger { color: #ed4245; margin-top: 4px; }
+.sm-nav-item.danger { color: var(--danger-text); margin-top: 4px; }
 .sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
 .sm-nav-divider { height: 1px; background: var(--divider); margin: 8px 10px; }
 
@@ -1872,7 +1872,7 @@ img    { display: block; object-fit: cover; }
   word-break: break-all;
 }
 .ap-share-input:focus { outline: none; border-color: var(--accent); }
-.ap-share-err { font-size: 12px; color: #f08080; margin: 6px 0 2px; }
+.ap-share-err { font-size: 12px; color: var(--danger-text); margin: 6px 0 2px; }
 .ap-name-input {
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
   padding: 8px 12px; color: var(--text-1); font-size: 14px; min-width: 180px;

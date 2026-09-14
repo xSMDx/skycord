@@ -82,10 +82,10 @@
 
 .st-btn.st-btn--primary { background: var(--accent); color: var(--text-on-accent); }
 .st-btn.st-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
-.st-btn.st-btn--danger { color: #f0716f; }
+.st-btn.st-btn--danger { color: var(--danger-text); }
 .st-btn.st-btn--danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
-.st-btn.st-btn--danger-solid { background: #ed4245; color: #fff; }
-.st-btn.st-btn--danger-solid:hover:not(:disabled) { background: #c93b3e; }
+.st-btn.st-btn--danger-solid { background: var(--danger); color: var(--text-on-danger); }
+.st-btn.st-btn--danger-solid:hover:not(:disabled) { background: var(--danger-hover); color: var(--text-on-danger-hover); }
 .st-btn.st-btn--outline { border: 1px solid var(--border); }
 .st-btn.st-btn--sm { padding: 6px 12px; font-size: 13px; }
 

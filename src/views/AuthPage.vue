@@ -428,7 +428,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:#2e3136; border-radius: 6px; transition:transform .22s cubic-bezier(.4,0,.2,1); box-shadow:0 1px 4px rgba(0,0,0,.3); }
 .tab-slider.right { transform:translateX(100%); }
 
-.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(237,66,69,.12); border:1px solid rgba(237,66,69,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#f08080; font-size:13px; }
+.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(237,66,69,.12); border:1px solid rgba(237,66,69,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--danger-text); font-size:13px; }
 
 /* The success twin of .err-banner. Green rather than red because these two
    appear in the same slot and a reset confirmation that is styled like a
@@ -457,7 +457,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 }
 .inp-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15); }
 .inp-wrap.match { border-color:#23a55a; }
-.field.err .inp-wrap { border-color:#ed4245; }
+.field.err .inp-wrap { border-color:var(--danger); }
 .field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(237,66,69,.15); }
 
 .fi { color:#4e5058; margin: 0 8px; flex-shrink:0; }
@@ -489,7 +489,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 }
 .check { flex-shrink:0; margin-right: 8px; }
 
-.ferr { font-size:12px; color:#f08080; }
+.ferr { font-size:12px; color:var(--danger-text); }
 
 .strength { display:flex; align-items:center; gap: 8px; }
 .s-bars { display:flex; gap: 4px; flex:1; }

@@ -106,5 +106,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    inherited --text-on-accent above: that token is measured against the
    accent, and this button isn't painted with it. */
 .cfm-confirm.danger { background: var(--danger); color: var(--text-on-danger); }
-.cfm-confirm.danger:hover:not(:disabled) { background: #c73e3e; color: var(--text-on-danger-hover); }
+.cfm-confirm.danger:hover:not(:disabled) { background: var(--danger-hover); color: var(--text-on-danger-hover); }
 </style>

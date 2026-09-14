@@ -392,8 +392,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-presence-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .pp-presence-note { font-size: 11.5px; line-height: 1.3; color: var(--text-faint); white-space: normal; }
 .pp-row.sub .pp-dot { margin-top: 6px; }
-.pp-row.danger { color: #f0716f; }
-.pp-row.danger svg { color: #f0716f; }
+.pp-row.danger { color: var(--danger-text); }
+.pp-row.danger svg { color: var(--danger-text); }
 /* A status row and the chevron that bounds it in time. The row keeps its
    full-width hover; the chevron is a sibling so both stay valid buttons. */
 .pp-splitrow { display: flex; align-items: stretch; }

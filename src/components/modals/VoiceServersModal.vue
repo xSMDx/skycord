@@ -224,7 +224,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   font-size: 12.5px; line-height: 1.55; color: var(--text-2);
 }
 .vs-callout-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
-.vs-error { font-size: 13px; color: #f0716f; margin-bottom: 12px; }
+.vs-error { font-size: 13px; color: var(--danger-text); margin-bottom: 12px; }
 .vs-empty { font-size: 13px; color: var(--text-3); padding: 16px 0; }
 
 .vs-sub {
@@ -260,7 +260,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .vs-mini:hover:not(:disabled) { background: var(--hover); color: var(--text-strong); }
-.vs-mini.danger:hover:not(:disabled) { background: rgba(237,66,69,.14); color: #f0716f; }
+.vs-mini.danger:hover:not(:disabled) { background: rgba(237,66,69,.14); color: var(--danger-text); }
 .vs-mini:disabled { opacity: .4; cursor: default; }
 
 .vs-add {

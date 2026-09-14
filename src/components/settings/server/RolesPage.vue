@@ -716,7 +716,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-swatch-none {
   background: var(--bg-input);
   /* A slash, so "no colour" reads as a choice rather than a missing swatch. */
-  background-image: linear-gradient(135deg, transparent 44%, #ed4245 44%, #ed4245 56%, transparent 56%);
+  background-image: linear-gradient(135deg, transparent 44%, var(--danger) 44%, var(--danger) 56%, transparent 56%);
 }
 
 /* ── Permissions ── */
@@ -768,7 +768,7 @@ const removeFromRole = (m: ServerMember) => {
               background var(--dur-1) var(--ease-out);
 }
 .rl-member:hover .rl-member-x, .rl-member-x:focus-visible { opacity: 1; }
-.rl-member-x:hover:not(:disabled) { color: #f0716f; background: color-mix(in srgb, #ed4245 14%, transparent); }
+.rl-member-x:hover:not(:disabled) { color: var(--danger-text); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .rl-member-x:disabled { cursor: default; opacity: .4; }
 /* Hover does not exist on a touch screen, so a control revealed on hover is a
    control that cannot be found there. Always shown when there is no hover. */
@@ -785,7 +785,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
 /* Cool, not warm — this one is a caveat on something that works, not a gap. */
 .rl-advis { background: color-mix(in srgb, #5865f2 20%, transparent); color: #8b95f8; }
-.st-field-label.danger { color: #f0716f; }
+.st-field-label.danger { color: var(--danger-text); }
 
 .rl-admin {
   display: flex; align-items: flex-start; gap: 10px;
@@ -793,7 +793,7 @@ const removeFromRole = (m: ServerMember) => {
   border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
   font-size: 13px; line-height: 1.55; color: var(--text-1); max-width: 78ch;
 }
-.rl-admin-ic { color: #f0716f; flex: none; margin-top: 1px; }
+.rl-admin-ic { color: var(--danger-text); flex: none; margin-top: 1px; }
 .rl-admin-owner { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; color: var(--text-2); }
 .rl-admin-owner svg { flex: none; margin-top: 3px; }
 /* Administrator implies the rest, so those switches read as "on because of

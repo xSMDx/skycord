@@ -217,7 +217,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 
 .ig-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 20px; }
-.ig-error { padding: 0 20px; font-size: 13px; color: #fa777c; }
+.ig-error { padding: 0 20px; font-size: 13px; color: var(--danger-text); }
 
 .ig-linkbox {
   display: flex; flex-direction: column; gap: 8px;

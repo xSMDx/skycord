@@ -155,7 +155,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-spinner { flex-shrink: 0; }
 .spin { animation: rot .7s linear infinite; }
 @keyframes rot { to{transform:rotate(360deg)} }
-.af-err { font-size: 12px; color: #f08080; margin-top: 6px; padding-left: 2px; }
+.af-err { font-size: 12px; color: var(--danger-text); margin-top: 6px; padding-left: 2px; }
 
 .af-results {
   max-height: 320px; overflow: hidden auto;

@@ -102,5 +102,5 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   background: rgba(0,0,0,.35); color: var(--text-strong); font-size: 15px; font-weight: 700;
 }
 
-.ci-error { padding: 0 18px 16px; font-size: 13px; color: #fa777c; }
+.ci-error { padding: 0 18px 16px; font-size: 13px; color: var(--danger-text); }
 </style>

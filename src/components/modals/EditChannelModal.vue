@@ -409,7 +409,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .ec-range { width: 100%; margin-bottom: 6px; accent-color: var(--accent); cursor: pointer; }
 
-.ec-error { font-size: 13px; color: #f0716f; margin-bottom: 12px; }
+.ec-error { font-size: 13px; color: var(--danger-text); margin-bottom: 12px; }
 .ec-empty { font-size: 13px; color: var(--text-3); padding: 22px 0; }
 
 .ec-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
