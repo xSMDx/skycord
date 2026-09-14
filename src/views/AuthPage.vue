@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { User, Lock, Eye, EyeOff, CircleAlert, LoaderCircle, Check } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
+import { offlineMessage } from '@/composables/offlineMessage'
 import SkycordIcon from '@/components/SkycordIcon.vue'
 
 /**
@@ -16,6 +17,11 @@ const serverError = ref('')
 
 const { login, register, loading, serverDown, probeServer,
         forgotPassword, resetPassword, resetAvailable } = useAuth()
+
+// import.meta.env.DEV never changes during a session, so a plain constant is
+// enough — Vite inlines it at build time, so a member on a production image
+// can never receive the developer sentence.
+const offlineText = offlineMessage(import.meta.env.DEV)
 
 // ── Password reset ────────────────────────────────────────────────────────
 const ff        = reactive({ email: '' })
@@ -165,7 +171,7 @@ const submitRegister = async () => {
       <transition name="drop">
         <div v-if="serverDown" class="err-banner">
           <CircleAlert :size="15" :stroke-width="2" aria-hidden="true" />
-          Server offline — start the API server (start-dev.cmd). Retrying automatically…
+          {{ offlineText }}
         </div>
       </transition>
 
