@@ -278,7 +278,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .reply-previews{display:flex;flex-direction:column;gap: 1px;margin-bottom: 4px}
 .reply-preview{display:flex;align-items:center;gap: 6px;margin-left: 6px;font-size:13px;color:#8a8e96;overflow:hidden;position:relative;padding-left: 14px;cursor:pointer;border-radius: 4px;transition: background var(--dur-1) var(--ease-out);width:fit-content;max-width:100%}
 .reply-preview:hover{background:var(--hover)}
-.reply-preview:active{background:rgba(255,255,255,.08)}
+.reply-preview:active{background:var(--press-veil)}
 .reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid #4e5058;border-top:2px solid #4e5058;border-radius: 6px 0 0 0}
 .reply-icon{flex-shrink:0;color:var(--text-faint);display:none}
 .reply-author{color:var(--accent-text);font-weight:600;white-space:nowrap}
@@ -325,7 +325,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-text :deep(.mention-all){color: var(--mention-all-fg);background:var(--mention-all-bg);padding: 0 4px;border-radius: 4px;font-weight:600}
 .msg-text :deep(.msg-time-token){background:var(--time-token-bg);color:var(--time-token-fg);padding: 0 4px;border-radius: 4px;font-weight:500;cursor:default}
 .msg-text :deep(.msg-bq){border-left:3px solid #4e5058;padding: 1px 0 1px 10px;margin: 2px 0;color:#c4c7cd}
-.msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid rgba(255,255,255,.08);border-radius: 6px;padding: 8px 10px;margin: 4px 0;font-family: var(--font-mono);font-size:13px;color:#e3e3e3;white-space:pre-wrap;word-break:break-word}
+.msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid var(--border);border-radius: 6px;padding: 8px 10px;margin: 4px 0;font-family: var(--font-mono);font-size:13px;color:#e3e3e3;white-space:pre-wrap;word-break:break-word}
 .msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:rgba(0,0,0,.3);padding: 1px 4px;border-radius: 4px;color:#e3e3e3}
 .edit-wrap{display:flex;flex-direction:column;gap: 4px}
 .edit-input{width:100%;padding: 8px 12px;border-radius: 8px;background:#40444b;border:1.5px solid rgba(var(--accent-rgb),.6);font-size:15px;color:var(--text-1);outline:none;font-family:inherit}
@@ -333,7 +333,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .el{color:var(--accent);font-size:12px;font-weight:600}
 .el:hover{text-decoration:underline}
 .msg-reactions{display:flex;flex-wrap:wrap;gap: 4px;margin-top: 4px}
-.rp{display:flex;align-items:center;gap: 4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius: 10px;padding: 2px 8px;font-size:14px;cursor:pointer;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.rp{display:flex;align-items:center;gap: 4px;background:var(--hover);border:1px solid var(--border);border-radius: 10px;padding: 2px 8px;font-size:14px;cursor:pointer;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .rp span{font-size:12px;font-weight:600;color:var(--text-2)}
 .rp:hover{background:var(--hover-strong)}
 /* The background change already announces the hover. The scale moved to the
@@ -341,7 +341,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rp:active{transform:scale(.96)}
 .rp.active{background:rgba(var(--accent-rgb),.2);border-color:rgba(var(--accent-rgb),.5)}
 .rp.active span{color:#8d96f8}
-.rp-add{width:24px;height:24px;border-radius: 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.rp-add{width:24px;height:24px;border-radius: 10px;background:var(--hover);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .rp-add:hover{background:var(--hover-strong);color: var(--text-strong)}
 /* Hover OR keyboard focus. The toolbar used to be revealed by @mouseenter
    alone on a row that could not hold focus, so Reply, Edit, React and Delete
@@ -358,7 +358,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    it still works and :focus-within still reveals it. */
 .msg-actions{
   position:absolute;right:10px;top:-16px;background:var(--bg-panel);
-  border:1px solid rgba(255,255,255,.08);border-radius: 8px;
+  border:1px solid var(--border);border-radius: 8px;
   display:flex;gap: 1px;padding: 4px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10;
   opacity:0;pointer-events:none;transform:translateY(2px);
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);

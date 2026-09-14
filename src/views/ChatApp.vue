@@ -5312,7 +5312,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,#111214);border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
 .rvp-ch{margin-top: 8px}
@@ -5962,7 +5962,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .f-btn{width:44px;height:44px}
 /* Hover does not exist here; left alone these stick in the hovered look after
    a tap and the row reads as still selected. */
-.shell.mobile .f-btn:hover{background:rgba(255,255,255,.06);color:var(--text-3);transform:none}
+.shell.mobile .f-btn:hover{background:var(--hover);color:var(--text-3);transform:none}
 .shell.mobile .f-btn.accept:hover{background:rgba(35,165,90,.15);color:var(--green);transform:none}
 .shell.mobile .f-btn.decline:hover{background:rgba(237,66,69,.15);color:#ed4245;transform:none}
 .shell.mobile .f-btn:active{background:var(--hover-strong)}
@@ -6048,7 +6048,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    were rendering OUTSIDE their own row (row 63px wide, actions painted at x=88
    on top of the next column). */
 .f-actions{display:flex;gap: 6px;flex-shrink:0}
-.f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:var(--hover);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
 .f-btn.accept{background:rgba(35,165,90,.15);color:var(--green)}
 .f-btn.accept:hover{background:rgba(35,165,90,.28);transform:scale(1.1)}
@@ -6056,7 +6056,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}
 
 /* Active Now */
-.active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding: 16px;overflow: hidden auto}
+.active-now{width:280px;flex-shrink:0;border-left:1px solid var(--divider);padding: 16px;overflow: hidden auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
 .an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
@@ -6178,7 +6178,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .members-panel.closed{width:0;opacity:0;pointer-events:none}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,.25);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
-.mp-count{font-size:11px;background:rgba(255,255,255,.1);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
+.mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
 .mp-search{margin: 8px 10px;background:rgba(0,0,0,.2);border-radius: 6px;display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
@@ -6354,7 +6354,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 .dsc-theme:active { transform: scale(.97); }
 .dsc-theme.on { border-color: var(--accent); }
-.dsc-theme-sw { height: 76px; border-radius: 7px; border: 1px solid rgba(255,255,255,.07); }
+.dsc-theme-sw { height: 76px; border-radius: 7px; border: 1px solid var(--border); }
 .dsc-theme-name { font-size: 14px; font-weight: 500; color: var(--text-1);
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

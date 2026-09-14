@@ -116,6 +116,6 @@ const join = async () => {
   flex-shrink: 0;
 }
 .ic-btn:hover:not(:disabled) { background: var(--accent-hover); }
-.ic-btn.joined { background: rgba(255,255,255,.1); color: var(--text-2); cursor: default; }
+.ic-btn.joined { background: var(--hover-strong); color: var(--text-2); cursor: default; }
 .ic-btn:disabled { opacity: .7; cursor: not-allowed; }
 </style>

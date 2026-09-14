@@ -411,7 +411,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .card {
   width:100%; max-width:488px;
   background:var(--bg-raised);
-  border:1px solid rgba(255,255,255,.07);
+  border:1px solid var(--border);
   border-radius: 16px; padding: 32px 36px 28px;
   position:relative; z-index:1;
   box-shadow:0 24px 80px rgba(0,0,0,.6);
@@ -451,7 +451,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .inp-wrap {
   display:flex; align-items:center;
-  background:rgba(0,0,0,.28); border:1.5px solid rgba(255,255,255,.08); border-radius: 8px;
+  background:rgba(0,0,0,.28); border:1.5px solid var(--border); border-radius: 8px;
   transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   overflow:hidden;
 }

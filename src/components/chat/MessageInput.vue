@@ -519,7 +519,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .reply-strip-close {
   width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-2); background: rgba(255,255,255,.06);
+  color: var(--text-2); background: var(--hover);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-strip-close:hover { background: var(--hover-strong); color: var(--text-strong); }

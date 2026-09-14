@@ -348,7 +348,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .ml-jump:hover{filter:brightness(1.08)}
 .jump-enter-active,.jump-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
-.welcome{padding: 20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom: 8px}
+.welcome{padding: 20px 16px 16px;border-bottom:1px solid var(--divider);margin-bottom: 8px}
 .ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
 .ch-icon svg{stroke:var(--text-on-accent)}
 .dm-av{width:64px;height:64px;border-radius: 50%;overflow:hidden;margin-bottom: 14px;border:3px solid var(--bg-panel)}
@@ -372,7 +372,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 
 /* Per-day date divider */
 .day-divider{display:flex;align-items:center;margin: 14px 16px 6px;height:0}
-.day-divider::before,.day-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07)}
+.day-divider::before,.day-divider::after{content:'';flex:1;height:1px;background:var(--divider)}
 .day-divider span{padding: 0 10px;font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap}
 /* The highest-frequency animation in the app — every message that arrives, in
    every channel, all day. It earns an entrance (it explains where the message
