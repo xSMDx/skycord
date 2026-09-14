@@ -80,7 +80,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .cfm-footer {
   display: flex; justify-content: flex-end; gap: 10px;
-  padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.06);
+  padding: 16px 20px; border-top: 1px solid var(--divider);
 }
 /* Cancel is deliberately the quieter of the two — no fill, so the confirm
    button (accent or danger) is the one that reads as the default action. */

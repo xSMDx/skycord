@@ -137,7 +137,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .rp-search {
   display: flex; align-items: center; gap: 8px;
   margin: 12px 12px 0; background: rgba(0,0,0,.3);
-  border: 1.5px solid rgba(255,255,255,.08);
+  border: 1.5px solid var(--border);
   border-radius: 8px; padding: 8px 12px;
   transition: border-color var(--dur-2) var(--ease-out);
 }
@@ -148,7 +148,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 
 .rp-cats {
   display: flex; gap: 2px; padding: 10px 12px 8px;
-  border-bottom: 1px solid rgba(255,255,255,.06); flex-wrap: wrap;
+  border-bottom: 1px solid var(--divider); flex-wrap: wrap;
 }
 .rp-cat-btn {
   width: 34px; height: 34px; border-radius: 6px; font-size: 18px;

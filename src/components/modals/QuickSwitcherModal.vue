@@ -161,7 +161,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .qs-search {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 14px 16px; border-bottom: 1px solid var(--divider);
 }
 .qs-icon { color: var(--text-faint); flex-shrink: 0; }
 .qs-search input { flex: 1; font-size: 16px; color: var(--text-strong); }

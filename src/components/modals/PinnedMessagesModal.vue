@@ -63,7 +63,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .pinned-header {
   display: flex; align-items: center; gap: 8px;
-  padding: 16px; border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 16px; border-bottom: 1px solid var(--divider);
   font-size: 14px; font-weight: 700; color: var(--text-strong);
 }
 .pinned-close {

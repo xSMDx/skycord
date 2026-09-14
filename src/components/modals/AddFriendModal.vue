@@ -144,7 +144,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-search-wrap { padding: 16px 20px 0; }
 .af-search {
   display: flex; align-items: center; gap: 10px;
-  background: var(--bg-raised); border: 1.5px solid rgba(255,255,255,.08);
+  background: var(--bg-raised); border: 1.5px solid var(--border);
   border-radius: 8px; padding: 10px 14px;
   transition: border-color var(--dur-2) var(--ease-out);
 }

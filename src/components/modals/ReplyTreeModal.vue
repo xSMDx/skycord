@@ -219,7 +219,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 16px 18px 14px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  border-bottom: 1px solid var(--divider);
   flex-shrink: 0;
 }
 .rt-header-text h3 { font-size: 16px; font-weight: 700; color: var(--text-strong); }
@@ -312,7 +312,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 
 .rt-footer {
-  padding: 8px 18px; border-top: 1px solid rgba(255,255,255,.06);
+  padding: 8px 18px; border-top: 1px solid var(--divider);
   font-size: 11.5px; color: var(--text-faint); text-align: center; flex-shrink: 0;
 }
 

@@ -337,13 +337,13 @@ img    { display: block; width: 100%; object-fit: cover; }
 
 .picker {
   width: 360px; background: var(--bg-panel);
-  border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: 10px;
   display: flex; flex-direction: column; overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,.5);
   max-height: 420px;
 }
 
-.picker-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,.06); padding: 0 8px; flex-shrink: 0; }
+.picker-tabs { display: flex; border-bottom: 1px solid var(--divider); padding: 0 8px; flex-shrink: 0; }
 .ptab {
   padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--text-3);
   border-bottom: 2px solid transparent; margin-bottom: -1px;
@@ -370,7 +370,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 
 .picker-cats {
   display: flex; gap: 2px; padding: 4px 8px 6px; flex-shrink: 0;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  border-bottom: 1px solid var(--divider);
 }
 .cat-btn {
   width: 28px; height: 28px; border-radius: 6px; font-size: 16px;

@@ -1429,7 +1429,7 @@ img    { display: block; object-fit: cover; }
 .kb-list { display: flex; flex-direction: column; }
 .kb-row {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, .06);
+  padding: 12px 0; border-bottom: 1px solid var(--divider);
 }
 .kb-row:last-child { border-bottom: none; }
 .kb-label { font-size: 14px; color: var(--text-1); }
@@ -1586,7 +1586,7 @@ img    { display: block; object-fit: cover; }
 }
 .sm-nav-item.danger { color: #ed4245; margin-top: 4px; }
 .sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
-.sm-nav-divider { height: 1px; background: rgba(255,255,255,.07); margin: 8px 10px; }
+.sm-nav-divider { height: 1px; background: var(--divider); margin: 8px 10px; }
 
 /*
  * In-page sub-nav — the sections of the page you are already on.
@@ -1753,7 +1753,7 @@ img    { display: block; object-fit: cover; }
 .ap-card {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 10px; border-radius: 10px; cursor: pointer;
-  border: 2px solid rgba(255,255,255,.08); background: var(--bg-panel);
+  border: 2px solid var(--border); background: var(--bg-panel);
   transition: border-color var(--dur-1) var(--ease-out); min-width: 96px;
   font-size: 13px; font-weight: 600; color: var(--text-1);
 }
@@ -1946,7 +1946,7 @@ img    { display: block; object-fit: cover; }
   padding: env(safe-area-inset-top) 8px 0;
   min-height: calc(56px + env(safe-area-inset-top));
   background: var(--bg-floor);
-  border-bottom: 1px solid rgba(255,255,255,.07);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
 }
 .sm-mhead-detail { background: var(--bg-raised); }
@@ -2030,6 +2030,6 @@ img    { display: block; object-fit: cover; }
   .ap-saved-main:hover { background: var(--hover-strong); }
 }
 .ap-saved-main:active { transform: scale(.99); }
-.ap-saved-chip { width: 44px; height: 28px; border-radius: 5px; flex: none; border: 1px solid rgba(255,255,255,.07); }
+.ap-saved-chip { width: 44px; height: 28px; border-radius: 5px; flex: none; border: 1px solid var(--border); }
 .ap-saved-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

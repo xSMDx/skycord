@@ -132,7 +132,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 
 .csm-footer {
   display: flex; justify-content: flex-end; gap: 10px;
-  padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.06);
+  padding: 16px 20px; border-top: 1px solid var(--divider);
 }
 .csm-cancel {
   padding: 10px 16px; border-radius: 6px;
