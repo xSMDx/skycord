@@ -260,6 +260,10 @@ cheap.
     `soon: true`. Honest per the standing directive, and still five-eighths of
     the first thing you read. There is also a search box in that shell.
 
+    **Fixed** on `ui-audit-07-menus-and-settings`: Settings lists only built pages;
+    the six "Soon" rows and the placeholder page are gone. The Account page's
+    Two-Factor row is left for the owner.
+
 18. **The same red means two opposite things in one call tile.**
     `CallStage.vue:394` `.g-live { background: #f23f43 }` — someone is sharing
     their screen, a good thing — and `:398` `.g-mute { background: #f23f43 }` —

@@ -12,7 +12,9 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 
   What that changes: **Server Settings and roles no longer block a deploy.** They are the next
   slices, not a gate. Absent capabilities are badged "Soon" in the UI rather than hidden, so
-  shipping without them is honest rather than misleading.
+  shipping without them is honest rather than misleading. The one exception is the Settings shell,
+  where an unbuilt page is hidden until it is built (owner, 2026-09-12); permission rows and
+  "Forgot?" keep the pattern.
 
   What it does NOT change — these are safety gates and still hold:
     1. ✅ nginx location alternation must include `servers` and `invites`, and `/join/<code>`

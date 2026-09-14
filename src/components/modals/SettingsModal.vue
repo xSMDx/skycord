@@ -398,13 +398,12 @@ const onBioInput = (e: Event) => {
 
 interface NavSection { label: string; items: NavItem[] }
 /**
- * `soon` marks a section whose page is still the WIP placeholder. Seven of the
- * eleven are, and finding that out by clicking each one in turn is the worst
- * way to learn it -- you go looking for a setting, navigate away from what you
- * were doing, and land on a traffic cone. The badge moves that answer into the
- * nav, where it costs one glance instead of seven clicks.
+ * Only pages that exist are listed. Six of these twelve rows used to be
+ * unbuilt, badged "Soon" — most of the first thing anyone read here. The
+ * owner reversed the badge-don't-hide directive for Settings on 2026-09-12:
+ * a page joins this list the day it is built. See docs/ROADMAP.md.
  */
-interface NavItem    { id: string; label: string; icon?: any; soon?: boolean }
+interface NavItem    { id: string; label: string; icon?: any }
 
 /**
  * The shortcuts the app actually listens for.
@@ -434,23 +433,17 @@ const navSections: NavSection[] = [
   {
     label: '',
     items: [
-      { id: 'account',         label: 'Account'           },
-      { id: 'profile',         label: 'Profile'           },
-      { id: 'devices',         label: 'Devices'           },
-      { id: 'content-social',  label: 'Content & Social', soon: true },
-      { id: 'data-privacy',    label: 'Data & Privacy', soon: true },
-      { id: 'authorized-apps', label: 'Authorized Apps', soon: true },
-      { id: 'connections',     label: 'Connections', soon: true },
-      { id: 'notifs',          label: 'Notifications', soon: true },
+      { id: 'account',  label: 'Account'  },
+      { id: 'profile',  label: 'Profile'  },
+      { id: 'devices',  label: 'Devices'  },
     ]
   },
   {
     label: 'App Settings',
     items: [
-      { id: 'appearance', label: 'Appearance'       },
-      { id: 'voice',      label: 'Voice & Video'    },
-      { id: 'keybinds',   label: 'Keybinds' },
-      { id: 'language',   label: 'Language & Time', soon: true },
+      { id: 'appearance', label: 'Appearance'    },
+      { id: 'voice',      label: 'Voice & Video' },
+      { id: 'keybinds',   label: 'Keybinds'      },
     ]
   },
 ]
@@ -670,12 +663,10 @@ const handleSelfRevoked = () => handleLogout()
             <template v-for="item in section.items" :key="item.id">
               <button
                 class="sm-nav-item"
-                :class="{ active: page === item.id, soon: item.soon }"
-                :aria-label="item.soon ? item.label + ' — coming soon' : undefined"
+                :class="{ active: page === item.id }"
                 @click="selectPage(item.id)"
               >
                 {{ item.label }}
-                <span v-if="item.soon" class="sm-soon">Soon</span>
                 <!-- A chevron says "this pushes a screen". Without it a phone
                      user can't tell a list row from a toggle. -->
                 <ChevronRight v-if="isMobile" class="sm-nav-chev" :size="14" :stroke-width="2.25" />
@@ -1253,15 +1244,6 @@ const handleSelfRevoked = () => handleLogout()
             </div>
           </template>
 
-          <!-- ── WIP pages ── -->
-          <template v-else>
-            <div class="wip-page">
-              <div class="wip-icon">🚧</div>
-              <h2>{{ navSections.flatMap(s=>s.items).find(i=>i.id===page)?.label }}</h2>
-              <p>This section is under construction.<br>Check back soon!</p>
-            </div>
-          </template>
-
           <!-- See measureTail(): lets the last section reach the top of the
                pane so the sub-nav can actually select it. 0 on pages without
                a sub-nav. -->
@@ -1581,17 +1563,6 @@ img    { display: block; object-fit: cover; }
 }
 .sm-nav-item.danger { color: #ed4245; margin-top: 4px; }
 .sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
-/* Reads as a quiet annotation on the row, not an alert. The row itself dims
-   slightly so the eye skips the unfinished sections when scanning. */
-.sm-nav-item.soon { color: var(--text-3); }
-.sm-nav-item.soon.active { color: var(--text-1); }
-.sm-soon {
-  margin-left: auto;
-  font-size: 10px; font-weight: 600; letter-spacing: .02em;
-  padding: 1px 6px; border-radius: 999px;
-  background: rgba(255, 255, 255, .07); color: var(--text-3);
-}
-.sm-nav-item.active .sm-soon { background: rgba(255, 255, 255, .16); }
 .sm-nav-divider { height: 1px; background: rgba(255,255,255,.07); margin: 8px 10px; }
 
 /*
@@ -1882,11 +1853,6 @@ img    { display: block; object-fit: cover; }
 .ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
 .ap-toggle.on span { transform: translateX(18px); }
 
-.wip-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--text-faint); text-align: center; }
-.wip-icon { font-size: 48px; }
-.wip-page h2 { font-size: 20px; font-weight: 700; color: var(--text-1); }
-.wip-page p  { font-size: 14px; line-height: 1.6; }
-
 /* Scrollbar */
 /* ══ MOBILE ═══════════════════════════════════════════════════════════════
    The nav is 268px wide, so on a 375px screen the content pane gets 92px.
@@ -1935,10 +1901,6 @@ img    { display: block; object-fit: cover; }
    permanently-lit row just looks like a stuck selection. */
 .sm-modal.mobile .sm-nav-item.active { background: transparent; box-shadow: none; color: var(--text-1); }
 .sm-nav-chev { color: var(--text-3); flex-shrink: 0; margin-left: auto; }
-/* Two auto margins on one row split the slack between them, which left the
-   badges at a different x on every row. With a badge present the badge owns
-   the slack and the chevron just follows it. */
-.sm-soon + .sm-nav-chev { margin-left: 8px; }
 .sm-modal.mobile .sm-nav-label { padding-left: 16px; }
 .sm-modal.mobile .sm-nav-divider { margin: 8px 0; }
 /* The in-page sub-nav duplicates headings that are already in the scrolling
