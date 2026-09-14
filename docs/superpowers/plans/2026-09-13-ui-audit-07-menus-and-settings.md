@@ -32,11 +32,11 @@ From the inventory's triage table (2026-09-12):
 | 16 | Server dropdown | **Add sections to the `MenuItem` model**, then section the menu. |
 | 17 | Settings "Soon" rows | **Hide until built.** The owner reversed the standing directive **for the Settings shell only**; permission rows and "Forgot?" keep the honesty pattern. |
 
-## Open — needs the owner before Task 3
+## Section names — decided: A (owner, 2026-09-14)
 
-**What the server dropdown's sections are called.** The triage decided *that* the menu is sectioned, not the names, and the names are copy the owner should choose. Every candidate has to stay true for whatever subset of rows a viewer is allowed to see: a member under the default `@everyone` sees only *Invite to Server* in the add group, and only *Server Settings* in the settings group.
+**What the server dropdown's sections are called.** The triage decided *that* the menu is sectioned, not the names, and the names are copy the owner chose from the options below. Every candidate has to stay true for whatever subset of rows a viewer is allowed to see: a member under the default `@everyone` sees only *Invite to Server* in the add group, and only *Server Settings* in the settings group.
 
-- **A — recommended.** Label only groups holding more than one row, with a name true to the rows actually present: `Invite & Create` (invite and channels), `Create` (channels without invite), `Manage` (Server Settings with Voice Servers). A member sees single-row groups and therefore no labels at all; their menu looks exactly as it does today. Code for A is written out in Task 3.
+- **A — chosen.** Label only groups holding more than one row, with a name true to the rows actually present: `Invite & Create` (invite and channels), `Create` (channels without invite), `Manage` (Server Settings with Voice Servers). A member sees single-row groups and therefore no labels at all; their menu looks exactly as it does today. Code for A is written out in Task 3.
 - **B.** Fixed labels whatever the viewer sees: `People & Channels`, `Server`. Simpler, but `People & Channels` sits over a lone *Invite to Server* for most members.
 - **C.** No labels in this menu. Separators stay; the primitive from Task 1 remains for menus that need it. Finding 16 closes as "decided: separators are enough".
 
@@ -483,7 +483,7 @@ git commit -m "feat(settings): list only the pages that exist"
 
 ---
 
-### Task 3: The server dropdown, sectioned — **after the owner picks A, B or C**
+### Task 3: The server dropdown, sectioned — option A, chosen by the owner
 
 **Files:**
 - Modify: `src/composables/contextMenus/serverMenu.ts`
