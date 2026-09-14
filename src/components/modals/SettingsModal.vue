@@ -1709,7 +1709,6 @@ img    { display: block; object-fit: cover; }
 .acc-standing-title { font-size: 15px; font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
 .acc-standing-sub   { font-size: 12px; color: var(--text-3); }
 
-/* WIP */
 /* Appearance */
 .ap-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
 .ap-swatch {
