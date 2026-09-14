@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { User, Lock, Eye, EyeOff, CircleAlert, LoaderCircle, Check } from 'lucide-vue-next'
+import { User, Lock, Eye, EyeOff, CircleAlert, LoaderCircle, Check, Hash, Mail, Shield } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
 import { offlineMessage } from '@/composables/offlineMessage'
 import SkycordIcon from '@/components/SkycordIcon.vue'
@@ -233,7 +233,7 @@ const submitRegister = async () => {
             <div class="field" :class="{err: re.username}">
               <label for="reg-username">Username *</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+                <Hash class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reg-username" v-model="rf.username" type="text" placeholder="pixel_wizard" maxlength="32" autocomplete="username"/>
               </div>
               <span v-if="re.username" class="ferr">{{ re.username }}</span>
@@ -250,7 +250,7 @@ const submitRegister = async () => {
           <div class="field" :class="{err: re.email}">
             <label for="reg-email">Email *</label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <Mail class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="reg-email" v-model="rf.email" type="email" placeholder="you@example.com" autocomplete="email"/>
             </div>
             <span v-if="re.email" class="ferr">{{ re.email }}</span>
@@ -278,7 +278,7 @@ const submitRegister = async () => {
           <div class="field" :class="{err: re.confirm}">
             <label for="reg-confirm">Confirm Password *</label>
             <div class="inp-wrap" :class="{match: rf.confirm && rf.password===rf.confirm}">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <Shield class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="reg-confirm" v-model="rf.confirm" :type="showConfirm?'text':'password'" placeholder="Re-enter password" autocomplete="new-password" @keydown.enter="submitRegister"/>
               <button class="eye" type="button" :aria-label="showConfirm ? 'Hide password' : 'Show password'" :aria-pressed="showConfirm" @click="showConfirm=!showConfirm">
                 <Eye v-if="!showConfirm" :size="15" :stroke-width="2" aria-hidden="true" />
@@ -320,7 +320,7 @@ const submitRegister = async () => {
             <div class="field" :class="{err: resetErr}">
               <label for="forgot-email">Email</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+                <Mail class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="forgot-email" v-model="ff.email" type="email" placeholder="you@example.com" autocomplete="email" autofocus @keydown.enter="submitForgot"/>
               </div>
               <span v-if="resetErr" class="ferr">{{ resetErr }}</span>
