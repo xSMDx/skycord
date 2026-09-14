@@ -137,7 +137,7 @@ const join = async () => {
     </template>
 
     <template v-else>
-      <img class="ic-icon ic-icon--img" :src="iconSrc" alt="" />
+      <img class="ic-icon ic-icon--img" :src="iconSrc" alt="" @error="(e) => ((e.target as HTMLImageElement).src = serverIconFor(serverInfo?.name ?? '?'))" />
       <div class="ic-body">
         <span class="ic-name">{{ serverInfo?.name }}</span>
         <span v-if="errorMessage" class="ic-sub ic-sub--err">{{ errorMessage }}</span>
