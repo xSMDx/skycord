@@ -39,7 +39,8 @@ const drill = ref<{ label: string; items: MenuItem[] } | null>(null)
 /** What the sheet is currently listing — the menu, or a submenu drilled into. */
 const rows = computed<MenuItem[]>(() => drill.value?.items ?? items.value)
 
-/** What the menu and the flyout render: the rows split at each section. */
+/** What the menu and the flyout render: the rows in groups, each label over
+ *  only the rows it names (see menuGroups). */
 const groups    = computed(() => menuGroups(rows.value))
 const subGroups = computed(() => menuGroups(sub.value?.items ?? []))
 

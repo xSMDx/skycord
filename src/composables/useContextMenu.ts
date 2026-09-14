@@ -42,9 +42,10 @@ export interface MenuSlider {
   onInput: (v: number) => void
 }
 
-/** Names the rows after it, up to the next section. A label, not a row: it is
- *  never focused or selected, and the arrow keys pass over it. A separator
- *  between two groups stays the builder's job, as it always was. */
+/** Names the rows after it, up to the next separator or section (see
+ *  menuGroups). A label, not a row: it is never focused or selected, and the
+ *  arrow keys pass over it. The separator that ends a group stays the
+ *  builder's job, as it always was. */
 export interface MenuSection { section: string }
 
 /** Everything that renders as a row. */
