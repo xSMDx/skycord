@@ -4179,7 +4179,11 @@ onBeforeUnmount(() => {
       <!-- Server Rail -->
       <nav class="rail">
         <!-- Home -->
-        <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip:right="'Home'" @click.stop="openFriends">
+        <div class="ri home" :class="{ active: homeActive }" v-tip:right="'Home'"
+          role="button" tabindex="0" aria-label="Home"
+          :aria-current="homeActive ? 'page' : undefined"
+          @keydown.self.enter.prevent="openFriends" @keydown.self.space.prevent="openFriends"
+          @click.stop="openFriends">
           <div class="ri-pip" />
           <div class="ri-icon home-icon">
             <SkycordIcon mode="lucky" :color="homeActive ? accentHex : 'currentColor'" :size="26" />
