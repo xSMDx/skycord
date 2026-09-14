@@ -77,7 +77,8 @@ Two allowances, each one commented with its reason, never a blanket exclusion: `
 
 - [ ] **Step 2: Run it and set the baseline**
 
-Run: `LIST_COLOURS=1 npx vitest run src/styles/__tests__/noHardcodedColour.test.ts`
+Run: `LIST_COLOURS=1 npx vitest run src/styles/__tests__/noHardcodedColour.test.ts --disableConsoleIntercept`
+(The flag is required: Vitest 4 drops console output from a passing test, so without it nothing prints.)
 Record the exact count — roughly 490 was measured on 2026-09-13 before slice 2 merged — and set `BASELINE` to it. Run again without the variable: PASS. Then add one literal to any component, confirm the test FAILS, and remove it.
 
 - [ ] **Step 3: Commit**
@@ -114,7 +115,7 @@ Each task has the same shape, so it is written once here — but each is its **o
 
 **For each task:**
 
-- [ ] **Step 1:** Run the guard with `LIST_COLOURS=1` and filter its output to this task's family. Record the family count and the total.
+- [ ] **Step 1:** Run the guard with `LIST_COLOURS=1` **and `--disableConsoleIntercept`** and filter its output to this task's family. Record the family count and the total. A literal used as a `var()` fallback — `var(--hover, rgba(255,255,255,.06))` — counts: the token always exists, so the fallback is dead and goes.
 - [ ] **Step 2:** Map each site by **role**, using the table above. Where a role is ambiguous, list the site in the report and leave it; do not guess.
 - [ ] **Step 3:** Run the guard again. This family's count must be zero except the listed ambiguous sites. **Lower `BASELINE` to the new total** — it must go down, never up.
 - [ ] **Step 4:** `npm run typecheck` and `npx vitest run src/` — clean, including the guard and `onAccentUsage.test.ts`.

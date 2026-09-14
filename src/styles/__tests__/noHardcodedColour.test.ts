@@ -282,8 +282,10 @@ describe('no hardcoded colour', () => {
   const offenders = [...vueOffenders, ...cssOffenders]
 
   it('never exceeds the recorded baseline of hardcoded colours', () => {
-    // Filterable so a sweep task can narrow the flood to its own family,
-    // e.g. `LIST_COLOURS=1 npx vitest run src/styles/__tests__/noHardcodedColour.test.ts | grep 'rgba(255,255,255'`
+    // Filterable so a sweep task can narrow the flood to its own family, e.g.
+    // `LIST_COLOURS=1 npx vitest run src/styles/__tests__/noHardcodedColour.test.ts --disableConsoleIntercept | grep 'rgba(255,255,255'`
+    // The flag is required: Vitest 4 drops console output from a passing
+    // test, so without it this prints nothing and the list looks empty.
     if (process.env.LIST_COLOURS) {
       console.log(
         `${offenders.length} offender(s):\n` +
