@@ -90,6 +90,18 @@ export const buildSidebarMenu = (
   can: ServerMenuAccess,
 ): MenuItem[] => buildAddRows(server.id, h, can)
 
+/**
+ * Names for the two groups that can hold more than one row. Each must stay
+ * true for whatever the viewer is allowed to see, so it is chosen from their
+ * access rather than fixed — and a group of one row gets no name, because a
+ * label over a single row only repeats it. An ordinary member therefore sees
+ * no labels at all, and their menu is exactly what it was.
+ */
+const addLabel = (can: ServerMenuAccess): string | null =>
+  can.manageChannels ? (can.invite ? 'Invite & Create' : 'Create') : null
+const manageLabel = (can: ServerMenuAccess): string | null =>
+  can.manageServer ? 'Manage' : null
+
 export const buildServerMenu = (
   server: MenuServer,
   myId: string | undefined,
@@ -107,12 +119,16 @@ export const buildServerMenu = (
   // Only when there is something to add: a separator under nothing would
   // leave two touching.
   const add = buildAddRows(server.id, h, can)
-  if (add.length) items.push(...add, { sep: true })
+  if (add.length) {
+    const label = addLabel(can)
+    items.push(...(label ? [{ section: label }] : []), ...add, { sep: true })
+  }
   // Server Settings is open to every member — they can read the name,
   // description and who else is in here, with the fields disabled for them.
   // Voice Servers keeps its own row because it was a working screen of its
   // own before settings existed.
   items.push(
+    ...(manageLabel(can) ? [{ section: manageLabel(can)! }] : []),
     { label: 'Server Settings', icon: Settings, onSelect: () => h.serverSettings(server.id) },
     ...(can.manageServer
       ? [{ label: 'Voice Servers', icon: ServerIcon, onSelect: () => h.voiceServers(server.id) } as MenuItem]
