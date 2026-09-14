@@ -23,4 +23,22 @@ describe('filterMembers', () => {
   it('keeps each group\'s order', () => {
     expect(ids(filterMembers(groups, 'e'))).toEqual([['owner', 'renée'], ['alice', 'zed']])
   })
+  it('finds a capital I in a Turkish-locale browser too', () => {
+    // A locale-following lowercase turns "I" into dotless "ı" there, so "Ivan"
+    // silently stopped matching "ivan". Emulates that browser for this test.
+    const original = String.prototype.toLocaleLowerCase
+    String.prototype.toLocaleLowerCase = function (this: string) { return original.call(this, 'tr') }
+    try {
+      const people = { online: [m('Ivan')], offline: [m('İlkay')] }
+      expect(ids(filterMembers(people, 'ivan'))).toEqual([['Ivan'], []])
+      expect(ids(filterMembers(people, 'ilkay'))).toEqual([[], ['İlkay']])
+    } finally {
+      String.prototype.toLocaleLowerCase = original
+    }
+  })
+  it('treats ß and ss as the same, either way round', () => {
+    const people = { online: [m('k1', 'Weiß'), m('k2', 'Strasser')], offline: [] }
+    expect(ids(filterMembers(people, 'weiss'))).toEqual([['k1'], []])
+    expect(ids(filterMembers(people, 'straß'))).toEqual([['k2'], []])
+  })
 })
