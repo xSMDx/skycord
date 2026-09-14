@@ -673,7 +673,10 @@ const removeFromRole = (m: ServerMember) => {
 /* ── Editor ── */
 .rl-editor { flex: 1; min-width: 0; }
 .rl-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.rl-head-name { font-size: 19px; font-weight: 700; color: var(--text-strong); margin: 0; flex: 1; min-width: 0;
+/* Not Chakra Petch: the role's own name, typed by whoever made it — identity,
+   like .cd-title and .chat-title, not a heading the app wrote. */
+.rl-head-name { font-family: var(--font-ui);
+                font-size: 19px; font-weight: 700; color: var(--text-strong); margin: 0; flex: 1; min-width: 0;
                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-del { flex: none; }
 

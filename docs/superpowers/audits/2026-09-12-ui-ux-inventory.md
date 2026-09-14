@@ -96,6 +96,12 @@ manipulation the test machine could not script.
 
 ### 2. Seven of the nine shipped accent presets fail AA for white text
 
+**Fixed** on branch `ui-audit-02-tokens-and-type` — plan: [`2026-09-12-ui-audit-02-tokens-and-type.md`](../plans/2026-09-12-ui-audit-02-tokens-and-type.md). The rest of
+this entry is the former state. `--text-on-accent` is now chosen by measuring
+contrast against ink and white, and the fifteen rules that painted literal
+white on the accent use the token. Measured live on real buttons: Yellow
+10.15:1 (was 1.89:1), Teal 7.96:1 (was 2.41:1), Sky 8.34:1 dark / 5.03:1 light.
+
 Measured in the running app against `--text-on-accent: #ffffff`, which
 `DESIGN.md` states "stays light in **every** theme":
 
@@ -115,6 +121,12 @@ white, which also covers custom accents and Material-You, where any hex is
 reachable.
 
 ### 3. No font the project chose is actually loaded
+
+**Fixed** on branch `ui-audit-02-tokens-and-type` — plan: [`2026-09-12-ui-audit-02-tokens-and-type.md`](../plans/2026-09-12-ui-audit-02-tokens-and-type.md). The rest of
+this entry is the former state. `@font-face` rules now load both shipped
+families from `public/fonts/`: Archivo carries the UI (`--font-ui`), and
+Chakra Petch is the display face (`--font-display`) for the wordmark and
+major headings.
 
 `--font-ui` leads with `'gg sans'` — Discord's proprietary face, not shipped —
 then `'Noto Sans'`, also not shipped. Both resolve absent, so the app falls
@@ -217,6 +229,11 @@ cheap.
    `MessageItem.vue`.
 
 10. **`DESIGN.md` hardcodes a hex in the pattern it tells you to copy.** Its
+
+    **Half fixed** on `ui-audit-02-tokens-and-type`: the `--danger` tokens now
+    exist. `DESIGN.md`'s `.btn.danger` example still hardcodes `#ed4245` — that
+    and the 67 sites using three different reds belong to slice 3, the colour sweep.
+
     `.btn` block writes `border: 1px solid #ed4245; color: #ed4245`, three
     hundred lines above an anti-pattern table whose first row forbids exactly
     that. There is no `--danger` or `--red` token in `tokens.css` at all, which
@@ -242,6 +259,10 @@ cheap.
     fixed. Home is DMs and Friends, the most-visited rail destination.
 
 15. **Google Fonts is fetched on every load.** `index.html` preconnects to
+
+    **Fixed** on `ui-audit-02-tokens-and-type`: the four families are bundled from
+    `@fontsource`; zero requests to Google measured across seven reloads.
+
     `fonts.googleapis.com` / `fonts.gstatic.com` for Inter, Roboto, Fira Code
     and JetBrains Mono — none of which are the default, all opt-in in
     Appearance. For a product whose first claim is "your hardware, your data, no

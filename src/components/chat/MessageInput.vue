@@ -608,7 +608,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
               opacity    var(--dur-1) var(--ease-out),
               transform  var(--dur-1) var(--ease-out);
 }
-.send-btn.ready { background: var(--accent); color: white; }
+.send-btn.ready { background: var(--accent); color: var(--text-on-accent); }
 .send-btn.ready:hover  { background: var(--accent-hover); transform: scale(1.06) rotate(8deg); }
 .send-btn.ready:active { transform: scale(.93); }
 .send-btn:disabled { cursor: not-allowed; }

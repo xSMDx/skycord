@@ -136,7 +136,7 @@ onMounted(async () => {
             <span class="ig-tag">{{ f.username ?? f.name.toLowerCase() }}</span>
           </div>
           <div class="ig-checkbox" :class="{ checked: selected.has(f.id) }">
-            <svg v-if="selected.has(f.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg v-if="selected.has(f.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
         </div>
         <div v-if="addable.length === 0" class="ig-empty">No friends to add</div>
@@ -214,7 +214,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   border: 2px solid var(--text-faint); display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
-.ig-checkbox.checked { background: var(--accent); border-color: var(--accent); }
+.ig-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 
 .ig-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 20px; }
 .ig-error { padding: 0 20px; font-size: 13px; color: #fa777c; }
@@ -237,7 +237,10 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .ig-copy:hover:not(:disabled) { background: var(--accent-hover); }
-.ig-copy.copied { background: #248046; }
+/* #248046, not --green: this is the darker "confirmed" shade (CallBar's
+   .on, PermissionsTab's .allow.on), a different measured answer from the
+   app's main green — see --text-on-green-deep in tokens.css. */
+.ig-copy.copied { background: #248046; color: var(--text-on-green-deep); }
 .ig-copy:disabled { opacity: .5; cursor: not-allowed; }
 .ig-expiry { font-size: 12px; color: var(--text-3); }
 </style>

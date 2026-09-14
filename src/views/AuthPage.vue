@@ -418,8 +418,9 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 }
 
 .logo-row { display:flex; align-items:center; gap: 10px; justify-content:center; margin-bottom: 24px; }
-.logo-box { width:42px;height:42px; background:var(--accent); border-radius: 12px; display:flex; align-items:center; justify-content:center; color:white; box-shadow:0 4px 18px rgba(var(--accent-rgb),.4); }
-.logo-name { font-size:22px; font-weight:800; color: var(--text-strong); letter-spacing:-.4px; }
+.logo-box { width:42px;height:42px; background:var(--accent); border-radius: 12px; display:flex; align-items:center; justify-content:center; color:var(--text-on-accent); box-shadow:0 4px 18px rgba(var(--accent-rgb),.4); }
+/* Chakra Petch ships 500/600/700 only — 700 explicit, not 800 synthesised. */
+.logo-name { font-family: var(--font-display); font-size:22px; font-weight:700; color: var(--text-strong); letter-spacing:-.4px; }
 
 .tabs { display:flex; position:relative; background:rgba(0,0,0,.25); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
 .tab { flex:1; padding: 8px; border-radius: 6px; font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition: color var(--dur-2) var(--ease-out); }
@@ -496,7 +497,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .submit {
   width:100%; padding: 12px; margin-top: 4px;
-  background:var(--accent); color:white;
+  background:var(--accent); color:var(--text-on-accent);
   font-size:15px; font-weight:700; border-radius: 8px;
   transition: background var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   box-shadow:0 4px 16px rgba(var(--accent-rgb),.35);

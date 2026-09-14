@@ -62,7 +62,8 @@ import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
-import { appearance, setAppearance } from '@/composables/useAppearance'
+import { appearance, setAppearance, accentHex } from '@/composables/useAppearance'
+import { resolveAccentHex } from '@/composables/onAccent'
 import { THEME_OPTS, STUDIO_OPTS, ALL_PRESETS, type ThemeOpt } from '@/composables/themePresets'
 import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/useSavedThemes'
 import { useVoice, isConnectedVoiceRoom, userPref, setUserPref } from '@/composables/useVoice'
@@ -3134,12 +3135,15 @@ const discoverTab = ref<'servers' | 'themes'>('servers')
 const pickPreset = (t: ThemeOpt) =>
   setAppearance(t.accent ? { theme: t.id, accent: t.accent } : { theme: t.id })
 
-/** A saved theme's swatch shows the surface and accent it would restore. */
+/** A saved theme's swatch shows the surface and accent it would restore.
+ *  Resolved against the SNAPSHOT's own theme, not the live one — a saved
+ *  'auto' means "that theme's Sky", which can differ from whatever theme is
+ *  on screen right now while browsing the list. */
 const savedSwatch = (t: SavedTheme) => {
   const opt = ALL_PRESETS.find(o => o.id === t.theme.theme)
   return {
     background: opt?.preview.background || '#313338',
-    boxShadow: `inset 0 -7px 0 ${t.theme.accent || 'var(--accent)'}`,
+    boxShadow: `inset 0 -7px 0 ${resolveAccentHex(t.theme.accent, t.theme.theme)}`,
   }
 }
 
@@ -4178,7 +4182,7 @@ onBeforeUnmount(() => {
         <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip:right="'Home'" @click.stop="openFriends">
           <div class="ri-pip" />
           <div class="ri-icon home-icon">
-            <SkycordIcon mode="lucky" :color="homeActive ? appearance.accent : 'currentColor'" :size="26" />
+            <SkycordIcon mode="lucky" :color="homeActive ? accentHex : 'currentColor'" :size="26" />
           </div>
         </div>
         <div class="ri-divider" />
@@ -5466,7 +5470,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-invite{
   display:flex;align-items:center;justify-content:center;gap: 8px;
   margin: 8px 12px 14px;padding: 8px 12px;border-radius: 6px;
-  font-size:14px;font-weight:600;color: var(--text-strong);
+  font-size:14px;font-weight:600;color: var(--text-on-accent);
   background:var(--accent);transition: background var(--dur-1) var(--ease-out);
 }
 .mp-invite:hover{background:var(--accent-hover)}
@@ -6012,7 +6016,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
 .pend-tab{position:relative}
 .pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
-.add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:white;border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
+.add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
@@ -6027,7 +6031,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-empty p{font-size:16px;font-weight:700;color:var(--text-1)}
 .f-empty span{font-size:14px;line-height:1.5}
 .f-empty strong{color:var(--text-1)}
-.f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:white;font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 .f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .f-row:hover{background:var(--hover);border-color:transparent}
@@ -6055,7 +6059,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding: 16px;overflow: hidden auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
-.an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:white;font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
+.an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
 .an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:rgba(255,255,255,.04);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
@@ -6150,7 +6154,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .call-btn.video{color:var(--text-2)}
 .call-btn.calling{color:#f23f43;animation:call-pulse 1.25s ease-in-out infinite}
 @keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(242,63,67,0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(242,63,67,.6))}}
-.chat-title{font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
+/* Not Chakra Petch: this is the channel/DM/group's own name — data the user
+   or server named, not a heading the app authored. */
+.chat-title{font-family: var(--font-ui);font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
 .ch-hash{color:var(--text-3);flex-shrink:0;margin-right: 4px}
 .ch-topic-sep{width:1px;height:16px;background:rgba(255,255,255,.12);margin: 0 10px;flex-shrink:0}
 .ch-topic{font-size:13px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -6330,7 +6336,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   color: var(--text-strong);
 }
 
-.dsc-sec { font-size: 13px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+/* UI face, like .st-section: a small uppercase label, not a title. */
+.dsc-sec { font-family: var(--font-ui);
+           font-size: 13px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
            color: var(--text-3); margin: 28px 0 8px; }
 .dsc-secsub { font-size: 13px; color: var(--text-3); line-height: 1.5; margin: 0 0 14px; max-width: 62ch; }
 .dsc-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }

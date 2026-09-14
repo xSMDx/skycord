@@ -61,14 +61,49 @@ multi-instance split out to v0.21, then the phone app, then E2EE.
 | # | Item | State |
 |---|------|-------|
 | 1 | ~~**Channels**~~ | ✅ shipped, through v0.19.0 — servers, categories, roles and permissions, voice, moderation, search and message history |
-| 2 | **UI/UX audit and polish (whole app)** | queued, scoped below |
-| 3 | **One-command install and update** | **in progress**, and moved ahead of the audit on 2026-09-11 at the user's request. Compose stack (app + Mongo 4.4 + LiveKit + Caddy), `install.sh`, and a `skycord` command whose update backs up, health-checks and rolls itself back. Spec: `docs/superpowers/specs/2026-09-11-one-command-install-design.md` |
+| 2 | **UI/UX audit and polish (whole app)** | **in progress** — 8 slices in `docs/superpowers/plans/2026-09-12-ui-audit-00-slices.md`. Slice 1 (voice truthfulness) merged; slice 2 (Sky accent, fonts) in final review. |
+| 3 | **One-command install and update** | ✅ **shipped — v0.19.1 (2026-09-12)**, released after a CI rehearsal that installs, updates, and rolls a broken update back on its own. Moved ahead of the audit on 2026-09-11 at the user's request. Compose stack (app + Mongo 4.4 + LiveKit + Caddy), `install.sh`, and a `skycord` command whose update backs up, health-checks and rolls itself back. Spec: `docs/superpowers/specs/2026-09-11-one-command-install-design.md` |
 | 4 | ~~**Multi-LiveKit (voice server picker)**~~ | ✅ **DONE — v0.14.0 (2026-08-30) and v0.14.1 (2026-08-31).** Shipped differently from the line this row used to carry, and deliberately: it assumed *"same API key/secret across servers, so a list of URLs — not a credential set each"*. Every server carries **its own** credentials instead, encrypted at rest via `secretBox`, because one shared key means one leak exposes every box. Two tiers: a guild owner registers servers for their own server, and an instance admin lists servers for the whole build in `voice-servers.json` (ids prefixed `instance:`, read-only in the app, secrets never reaching Mongo or a browser). Resolution is channel override → guild default → instance default → the `LIVEKIT_URL` trio. No lowest-ping auto — a per-channel pin and a per-user default for DMs, plus anyone in a DM/group call being able to move it live |
 | 5 | **Windows desktop app — v0.20.0** | Electron shell, installer, auto-update, tray, notifications, push-to-talk that works unfocused, its own screen-share picker, invite links that open the app |
 | 5a | **Instance picker — belongs in v0.20, not v0.21** | Requested 2026-09-12. A screen before login: use the hosted instance, or enter your own address. **This is a v0.20 blocker, not a nice-to-have** — without it the desktop app can only ever talk to app.skycord.xyz, which is useless to the audience PRODUCT.md names first. Choosing ONE instance is a different, much smaller problem than 5b switching between several. Client work is small: 7 fetch call sites use relative paths and `useSocket.ts:257` connects to `io('/')`. On the WEB it does not solve the stated problem and mostly cannot — a self-hoster already gets their own client from their own server, and an HTTPS page may not call `http://192.168.x.x` (mixed content), which is exactly the local-self-host case it was asked for. App-first. |
 | 5b | Multi-instance — v0.21 | add another instance's address and switch between them, TeamSpeak-style. Split out of the desktop release because it changes how signing in works across instances. Blocks E2EE |
 | 6 | Native phone app | push notifications, and the same instance list as desktop. Blocks E2EE |
 | 7 | E2EE (DMs only) | designed, not built — `docs/superpowers/specs/2026-08-30-e2ee-revision.md`. **After both apps**, not by preference: delete-on-delivery makes the device the only copy, and a browser tab that "clear site data" wipes is the wrong home for it. Write the protocol spec first — see that doc |
+
+### 5. Windows desktop app — the slices
+
+**An estimate, not a plan.** Recorded 2026-09-13. Each needs brainstorming and a
+design before it is planned; nothing here is decided beyond what it names.
+
+| # | Slice | Notes |
+|---|---|---|
+| 5.1 | Shell and installer | Electron wrapping the existing web app. No new design language (PRODUCT.md). |
+| 5.2 | Instance picker | Roadmap 5a. Choose one instance on first run. A blocker: without it the app only reaches app.skycord.xyz. |
+| 5.3 | Auto-update | |
+| 5.4 | Tray and notifications | |
+| 5.5 | Voice on the desktop | Push-to-talk that works while the window is unfocused. |
+| 5.6 | **Custom screen share** | Added 2026-09-13 at the owner's request. Skycord's own source picker in place of the browser's. See below. |
+| 5.7 | Invite links open the app | |
+
+**Custom screen share, and why it is cheap to wire.** The web app shares through
+LiveKit's `setScreenShareEnabled` (`useVoiceMedia.ts:163`), which calls the
+browser's `getDisplayMedia` and therefore shows the browser's picker — the one
+thing about sharing Skycord cannot design. Electron's
+`session.setDisplayMediaRequestHandler` lets the app answer that same
+`getDisplayMedia` call itself, with the source the person chose in Skycord's own
+picker — so the sharing code does not need rewriting, only the picker does.
+`desktopCapturer.getSources` supplies windows and screens with thumbnails and
+app icons to build it from.
+
+What it can offer that the browser cannot, to be confirmed at design time:
+
+- **System audio on Windows** — the handler accepts `audio: 'loopback'`. Browsers
+  share tab audio at best. Windows-first; other platforms differ.
+- **Windows and screens in one picker, with live thumbnails**, styled as Skycord.
+- **Switching what is shared without stopping the stream.**
+
+Carry over DESIGN.md's screen-share notes: name the media server in the UI, and
+keep LiveKit secrets out of client code.
 
 Done and shipped: context menus (v0.6), mobile/PWA rebuild (v0.10), profile picture and banner
 framing, landing page, call telemetry (v0.9), presence fixes (v0.10.1).

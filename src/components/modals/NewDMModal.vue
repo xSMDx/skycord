@@ -75,7 +75,7 @@ const create = () => {
             <span class="ndm-tag">{{ f.username ?? f.name.toLowerCase() }}</span>
           </div>
           <div class="ndm-checkbox" :class="{ checked: selected.has(f.id) }">
-            <svg v-if="selected.has(f.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg v-if="selected.has(f.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
         </div>
         <div v-if="filtered.length === 0" class="ndm-empty">No friends found</div>
@@ -144,7 +144,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   border: 2px solid var(--text-3); display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
-.ndm-checkbox.checked { background: var(--accent); border-color: var(--accent); }
+.ndm-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 .ndm-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 24px; }
 
 .ndm-footer {
@@ -160,7 +160,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-cancel:hover { background: var(--hover-strong); }
 .ndm-create {
   flex: 2; padding: 10px; border-radius: 6px;
-  font-size: 14px; font-weight: 600; color: white;
+  font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .ndm-create:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
