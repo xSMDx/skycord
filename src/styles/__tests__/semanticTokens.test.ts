@@ -46,7 +46,11 @@ const CONTRAST_TARGET = 4.6
 // task brief: a marker/dot only needs 3:1, not text's 4.5.
 const GRAPHICAL_TARGET = 3
 
-const css = readFileSync(resolve(__dirname, '../tokens.css'), 'utf8')
+// Comments stripped first. tokens.css explains its values at length, and a
+// comment that mentions a token followed by a colon — "was --danger-text: #fff"
+// — would otherwise be read as the declaration: a false failure at best, and
+// a false pass if the comment's value happens to clear the target.
+const css = readFileSync(resolve(__dirname, '../tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 
 // Scoped to the FIRST :root { ... } block only — tokens.css has three
 // (palette, density, motion) and only the first holds the surfaces and

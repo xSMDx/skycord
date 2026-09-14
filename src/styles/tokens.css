@@ -211,8 +211,7 @@
      Measured, not picked: lightened from --danger (#ed4245) toward white,
      stopping at the least lightening that clears CONTRAST_TARGET (4.6, see
      onAccent.ts) against EVERY surface token of EVERY dark theme block —
-     :root, midnight, amoled and all eight studio themes — not just the
-     --bg-panel/--bg-chat pair the plan's first draft named. The binding
+     :root, midnight, amoled and all eight studio themes. The binding
      case is default's own --bg-chat at 4.63:1; every other dark theme's
      surfaces clear it with more room (stripe's --bg-raised is next-closest
      at 4.89:1). One value serves every dark theme; none needed its own.
@@ -345,13 +344,10 @@ html.names-plain { --name-hover: var(--text-strong); }
   /* --warning as a graphical (non-text) colour: #f0b232 as-is measures
      1.17-1.89:1 against these ten surfaces, well under the 3:1 floor.
      Darkened toward black to 3.1:1 (a small margin over the floor, same
-     idea as CONTRAST_TARGET) against every surface of BOTH light blocks —
-     not just "the lightest light surface" as the plan first suggested:
-     tuning only to light's white --bg-chat clears that one surface at
-     3.11:1 but leaves light-dim's surfaces between 1.92 and 2.67:1, still
-     failing everywhere in that block. Measuring against all ten together
-     (light-dim's --bg-floor ends up binding, at 3.10:1) is what actually
-     clears the floor in both blocks. Explicit in both for the same
+     idea as CONTRAST_TARGET) against every surface of BOTH light blocks.
+     Tuned to light's white --bg-chat alone it would clear that surface at
+     3.11:1 and still fail every light-dim surface (1.92-2.67:1); measured
+     against all ten, light-dim's --bg-floor binds, at 3.10:1. Explicit in both for the same
      sibling-selector reason as --danger-text above. */
   --warning: #8e691d;
   /* Shadows keep their dark-theme offset/blur; only alpha drops — a shadow
