@@ -255,6 +255,9 @@ cheap.
     This is the roadmap's "reads closer to a context menu than a sectioned
     server menu", with the reason.
 
+    **Fixed** on `ui-audit-07-menus-and-settings`: the menu model has sections, and the
+    server dropdown uses them for the groups that hold more than one row.
+
 17. **Settings' first group is eight rows, five of them dead** — Content &
     Social, Data & Privacy, Authorized Apps, Connections, Notifications, all
     `soon: true`. Honest per the standing directive, and still five-eighths of

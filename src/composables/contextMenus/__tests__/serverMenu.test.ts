@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildServerMenu, buildSidebarMenu, type ServerMenuAccess } from '../serverMenu'
-import { isAction, isSeparator, type MenuItem } from '../../useContextMenu'
+import { isAction, isSeparator, isSection, type MenuItem } from '../../useContextMenu'
 
 const handlers = () => ({
   markRead: vi.fn(),
@@ -16,6 +16,10 @@ const handlers = () => ({
 
 const labels = (items: MenuItem[]) =>
   items.filter(isAction).map(i => i.label)
+
+/** The whole sequence: rows by label, separators as —, sections as § Name. */
+const shape = (items: MenuItem[]) =>
+  items.map(i => (isSeparator(i) ? '—' : isSection(i) ? `§ ${i.section}` : isAction(i) ? i.label : '(slider)'))
 
 /** The owner holds every permission. */
 const ALL: ServerMenuAccess = { invite: true, manageChannels: true, manageServer: true }
@@ -143,6 +147,37 @@ describe('buildServerMenu', () => {
     buildServerMenu(mine, 'me', h, ALL).filter(isAction)
       .find(i => i.label === 'Voice Servers')!.onSelect?.()
     expect(h.voiceServers).toHaveBeenCalledWith('s1')
+  })
+
+  it('sections the owner\'s menu without moving a row', () => {
+    expect(shape(buildServerMenu(mine, 'me', handlers(), ALL))).toEqual([
+      'Mark As Read', '—',
+      '§ Invite & Create', 'Invite to Server', 'Create Channel', 'Create Category', '—',
+      '§ Manage', 'Server Settings', 'Voice Servers', '—',
+      'Delete Server', '—',
+      'Copy Server ID',
+    ])
+  })
+
+  it('gives an ordinary member no labels — every group they see is one row', () => {
+    expect(buildServerMenu(theirs, 'me', handlers(), MEMBER).some(isSection)).toBe(false)
+  })
+
+  it('calls the add group Create when inviting is off but channels are not', () => {
+    const items = buildServerMenu(theirs, 'me', handlers(), { ...NOTHING, manageChannels: true })
+    expect(shape(items)).toContain('§ Create')
+    expect(shape(items)).not.toContain('§ Invite & Create')
+  })
+
+  it('only ever places a section straight after a separator, over at least two rows', () => {
+    for (const can of [ALL, MEMBER, NOTHING, { ...MEMBER, manageChannels: true }, { ...NOTHING, manageServer: true }]) {
+      const items = buildServerMenu(mine, 'me', handlers(), can)
+      items.forEach((it, i) => {
+        if (!isSection(it)) return
+        expect(isSeparator(items[i - 1])).toBe(true)
+        expect(items.slice(i + 1).findIndex(isSeparator)).toBeGreaterThanOrEqual(2)
+      })
+    }
   })
 })
 
