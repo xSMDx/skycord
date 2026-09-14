@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { User, Lock, Eye, EyeOff, CircleAlert, LoaderCircle, Check } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
 import SkycordIcon from '@/components/SkycordIcon.vue'
 
@@ -163,7 +164,7 @@ const submitRegister = async () => {
       <!-- Server-offline banner (auto-clears when /health responds again) -->
       <transition name="drop">
         <div v-if="serverDown" class="err-banner">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="currentColor"/></svg>
+          <CircleAlert :size="15" :stroke-width="2" aria-hidden="true" />
           Server offline — start the API server (start-dev.cmd). Retrying automatically…
         </div>
       </transition>
@@ -171,7 +172,7 @@ const submitRegister = async () => {
       <!-- Error banner -->
       <transition name="drop">
         <div v-if="serverError && !serverDown" class="err-banner">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="currentColor"/></svg>
+          <CircleAlert :size="15" :stroke-width="2" aria-hidden="true" />
           {{ serverError }}
         </div>
       </transition>
@@ -185,7 +186,7 @@ const submitRegister = async () => {
           <div class="field" :class="{err: le.identifier}">
             <label for="login-identifier">Username or Email</label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <User class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="login-identifier" v-model="lf.identifier" type="text" placeholder="username or email" autocomplete="username" @keydown.enter="submitLogin"/>
             </div>
             <span v-if="le.identifier" class="ferr">{{ le.identifier }}</span>
@@ -199,11 +200,11 @@ const submitRegister = async () => {
               <button v-if="canReset" class="forgot" type="button" @click="mode='forgot'">Forgot?</button>
             </label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="login-password" v-model="lf.password" :type="showPw?'text':'password'" placeholder="your password" autocomplete="current-password" @keydown.enter="submitLogin"/>
               <button class="eye" type="button" :aria-label="showPw ? 'Hide password' : 'Show password'" :aria-pressed="showPw" @click="showPw=!showPw">
-                <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <Eye v-if="!showPw" :size="15" :stroke-width="2" aria-hidden="true" />
+                <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
               </button>
             </div>
             <span v-if="le.password" class="ferr">{{ le.password }}</span>
@@ -211,7 +212,7 @@ const submitRegister = async () => {
 
           <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitLogin">
             <template v-if="!loading">Sign In</template>
-            <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Signing in…</template>
+            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Signing in…</template>
           </button>
 
           <p class="switch">No account? <button type="button" @click="switchMode('register')">Register</button></p>
@@ -234,7 +235,7 @@ const submitRegister = async () => {
             <div class="field">
               <label for="reg-displayname">Display Name</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <User class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reg-displayname" v-model="rf.displayName" type="text" placeholder="Optional" maxlength="50"/>
               </div>
             </div>
@@ -252,11 +253,11 @@ const submitRegister = async () => {
           <div class="field" :class="{err: re.password}">
             <label for="reg-password">Password *</label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="reg-password" v-model="rf.password" :type="showPw?'text':'password'" placeholder="Min 8 chars, uppercase, number, symbol" autocomplete="new-password"/>
               <button class="eye" type="button" :aria-label="showPw ? 'Hide password' : 'Show password'" :aria-pressed="showPw" @click="showPw=!showPw">
-                <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <Eye v-if="!showPw" :size="15" :stroke-width="2" aria-hidden="true" />
+                <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
               </button>
             </div>
             <div v-if="rf.password" class="strength">
@@ -274,10 +275,10 @@ const submitRegister = async () => {
               <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               <input id="reg-confirm" v-model="rf.confirm" :type="showConfirm?'text':'password'" placeholder="Re-enter password" autocomplete="new-password" @keydown.enter="submitRegister"/>
               <button class="eye" type="button" :aria-label="showConfirm ? 'Hide password' : 'Show password'" :aria-pressed="showConfirm" @click="showConfirm=!showConfirm">
-                <svg v-if="!showConfirm" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <Eye v-if="!showConfirm" :size="15" :stroke-width="2" aria-hidden="true" />
+                <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
               </button>
-              <svg v-if="rf.confirm && rf.password===rf.confirm" class="check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#23a55a" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <Check v-if="rf.confirm && rf.password===rf.confirm" class="check" :size="14" :stroke-width="2" aria-hidden="true" />
             </div>
             <span v-if="re.confirm" class="ferr">{{ re.confirm }}</span>
           </div>
@@ -286,7 +287,7 @@ const submitRegister = async () => {
 
           <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitRegister">
             <template v-if="!loading">Create Account</template>
-            <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Creating…</template>
+            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Creating…</template>
           </button>
 
           <p class="switch">Have an account? <button type="button" @click="switchMode('login')">Sign in</button></p>
@@ -302,7 +303,7 @@ const submitRegister = async () => {
                anyone else. -->
           <template v-if="resetDone">
             <div class="ok-banner">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              <Check :size="15" :stroke-width="2" aria-hidden="true" />
               {{ resetNote }}
             </div>
             <p class="form-sub reset-hint">Check your spam folder if it hasn’t arrived in a minute. The link expires in 30 minutes.</p>
@@ -321,7 +322,7 @@ const submitRegister = async () => {
 
             <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitForgot">
               <template v-if="!loading">Send reset link</template>
-              <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Sending…</template>
+              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Sending…</template>
             </button>
 
             <p class="switch">Remembered it? <button type="button" @click="backToLogin">Sign in</button></p>
@@ -334,7 +335,7 @@ const submitRegister = async () => {
 
           <template v-if="resetDone">
             <div class="ok-banner">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              <Check :size="15" :stroke-width="2" aria-hidden="true" />
               {{ resetNote }}
             </div>
             <!-- Said plainly because it is surprising: a reset signs out every
@@ -350,11 +351,11 @@ const submitRegister = async () => {
             <div class="field" :class="{err: resetErr}">
               <label for="reset-pw">New password</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reset-pw" v-model="rsf.password" :type="showPw?'text':'password'" placeholder="at least 8 characters" autocomplete="new-password" autofocus/>
                 <button class="eye" type="button" @click="showPw=!showPw" :aria-label="showPw ? 'Hide password' : 'Show password'">
-                  <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  <Eye v-if="!showPw" :size="15" :stroke-width="2" aria-hidden="true" />
+                  <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -362,11 +363,11 @@ const submitRegister = async () => {
             <div class="field">
               <label for="reset-confirm">Confirm password</label>
               <div class="inp-wrap" :class="{match: rsf.confirm && rsf.password === rsf.confirm}">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reset-confirm" v-model="rsf.confirm" :type="showConfirm?'text':'password'" placeholder="repeat it" autocomplete="new-password" @keydown.enter="submitReset"/>
                 <button class="eye" type="button" @click="showConfirm=!showConfirm" :aria-label="showConfirm ? 'Hide password' : 'Show password'">
-                  <svg v-if="!showConfirm" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  <Eye v-if="!showConfirm" :size="15" :stroke-width="2" aria-hidden="true" />
+                  <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
                 </button>
               </div>
               <span v-if="resetErr" class="ferr">{{ resetErr }}</span>
@@ -374,7 +375,7 @@ const submitRegister = async () => {
 
             <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitReset">
               <template v-if="!loading">Set new password</template>
-              <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving…</template>
+              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Saving…</template>
             </button>
 
             <p class="switch">Link expired? <button type="button" @click="mode='forgot'; resetErr=''">Ask for a new one</button></p>
@@ -487,7 +488,8 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
   .eye { width: 44px; height: 44px; }
   .eye:active { color: var(--text-2); }
 }
-.check { flex-shrink:0; margin-right: 8px; }
+/* Was stroke="#23a55a" on the element; Lucide strokes with currentColor. */
+.check { color: var(--green); flex-shrink:0; margin-right: 8px; }
 
 .ferr { font-size:12px; color:#f08080; }
 
