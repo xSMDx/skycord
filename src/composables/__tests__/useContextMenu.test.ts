@@ -36,9 +36,15 @@ describe('menuGroups', () => {
     expect(menuGroups(items).map(g => g.label)).toEqual(['Manage'])
   })
 
-  it('drops a section holding only separators', () => {
+  it('drops a section holding only separators, and its separator with it', () => {
+    // Pinned on purpose, not an accident to "fix": a separator belongs to the
+    // group it follows (see menuGroups), so a builder must close a group
+    // before the next label rather than after a label that may end up empty.
     const items: MenuItem[] = [row('A'), { section: 'Lines' }, { sep: true }, { section: 'B' }, row('B1')]
-    expect(menuGroups(items).map(g => g.label)).toEqual([undefined, 'B'])
+    expect(menuGroups(items)).toEqual([
+      { rows: [{ item: items[0], index: 0 }] },
+      { label: 'B', rows: [{ item: items[4], index: 4 }] },
+    ])
   })
 
   it('keeps a group whose only row is a slider — it is a real row', () => {

@@ -160,9 +160,7 @@ const move = (dir: 1 | -1) => {
   closeSub()
 }
 
-const subNavigable = () => (sub.value?.items ?? [])
-  .map((it, i) => (isAction(it) && !it.disabled ? i : -1))
-  .filter(i => i !== -1)
+const subNavigable = () => navigableIndices(sub.value?.items ?? [])
 
 const onKey = (e: KeyboardEvent) => {
   if (!menu.open) return

@@ -72,6 +72,11 @@ export interface MenuGroup {
  *
  * A section with no real row under it is dropped, so a builder that filters
  * rows by permission can never leave a label heading empty space.
+ *
+ * A separator belongs to the group it FOLLOWS, and leaves with that group if
+ * it is dropped. So a builder puts the separator that closes a group before
+ * the next section's label, never directly after a label whose rows may all
+ * be filtered away — or the line between two surviving groups goes with it.
  */
 export const menuGroups = (items: MenuItem[]): MenuGroup[] => {
   const groups: MenuGroup[] = [{ rows: [] }]
