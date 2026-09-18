@@ -5312,7 +5312,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,#111214);border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
 .rvp-ch{margin-top: 8px}
@@ -6265,7 +6265,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   to   { opacity: 1; transform: translateY(0); }
 }
 .reply-bar {
-  width: 2px; height: 28px; background: #4e5058;
+  width: 2px; height: 28px; background: var(--border);
   border-radius: 1px; flex-shrink: 0;
 }
 .reply-banner-info { flex: 1; min-width: 0; }

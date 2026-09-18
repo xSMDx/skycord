@@ -11,7 +11,7 @@ const SRC = resolve(__dirname, '../..')
 // down. When it reaches 0 the assertion below becomes
 // `expect(offenders).toEqual([])`, with any owner-ruled ambiguous site
 // named in an allowlist beside it.
-const BASELINE = 322
+const BASELINE = 302
 
 // Same recursive walk onAccentUsage.test.ts uses (vueFiles), generalised to
 // take an extension so it can also list plain .css files. __tests__ is

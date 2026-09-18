@@ -284,7 +284,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-card-author { font-size: 12.5px; font-weight: 700; color: var(--text-strong); }
 .rt-card-time   { font-size: 10.5px; color: var(--text-faint); }
 .rt-card-content {
-  font-size: 12.5px; color: #c4c7cd; line-height: 1.4;
+  font-size: 12.5px; color: var(--text-2); line-height: 1.4;
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }

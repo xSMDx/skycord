@@ -460,15 +460,15 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .field.err .inp-wrap { border-color:var(--danger); }
 .field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(237,66,69,.15); }
 
-.fi { color:#4e5058; margin: 0 8px; flex-shrink:0; }
+.fi { color:var(--text-3); margin: 0 8px; flex-shrink:0; }
 /* min-width:0 because a flex item defaults to min-width:auto and so refuses to
    shrink below its own content. A long value (an email, a pasted password)
    then pushed the row wider than .inp-wrap, and since the wrapper is
    overflow:hidden, what got clipped was the eye button on the end. */
 .inp-wrap input { flex:1; min-width:0; padding: 10px 6px 10px 0; font-size:14px; color:var(--text-1); }
-.inp-wrap input::placeholder { color:#4e5058; }
+.inp-wrap input::placeholder { color:var(--text-faint); }
 
-.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#4e5058; border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
+.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-3); border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
 .eye:hover { color:var(--text-2); }
 
 /* ── Phone ────────────────────────────────────────────────────────────────

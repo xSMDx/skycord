@@ -55,6 +55,6 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .ac-glyph { font-size: 16px; }
 .ac-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.ac-title { font-size: 14px; font-weight: 600; color: #f2f3f5; white-space: nowrap; }
+.ac-title { font-size: 14px; font-weight: 600; color: var(--text-strong); white-space: nowrap; }
 .ac-sub { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

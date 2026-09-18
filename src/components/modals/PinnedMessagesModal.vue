@@ -92,6 +92,6 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .pm-body { flex: 1; min-width: 0; }
 .pm-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
 .pm-author { font-size: 13px; font-weight: 600; color: var(--text-strong); }
-.pm-time   { font-size: 11px; color: #4e5058; }
+.pm-time   { font-size: 11px; color: var(--text-faint); }
 .pm-content { font-size: 13px; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
