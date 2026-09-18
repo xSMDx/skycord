@@ -248,11 +248,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-system-icon{display:flex;align-items:center;justify-content:center;width:22px;color:var(--text-3);flex-shrink:0}
 .msg-system-text{color:var(--text-2)}
 .msg-system.sys-join .msg-system-icon{color:#23a55a}
-.msg-system.sys-leave .msg-system-icon{color:#f23f43}
+.msg-system.sys-leave .msg-system-icon{color:var(--danger-text)}
 .msg-system.sys-add .msg-system-icon{color:#23a55a}
 /* Call logs: green when a call starts, red once it ends */
 .msg-system.sys-call .msg-system-icon{color:#23a55a}
-.msg-system.sys-call.call-ended .msg-system-icon{color:#f23f43}
+.msg-system.sys-call.call-ended .msg-system-icon{color:var(--danger-text)}
 .msg-system-link{color:#00a8fc;font-weight:500;cursor:pointer}
 .msg-system-link:hover{text-decoration:underline}
 .msg-system-time{font-size:11px;color:#5c5e66;margin-left: 2px}
@@ -263,7 +263,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg.mentioned:hover{background:var(--mention-row-bg-hover)}
 .msg:not(.consecutive){margin-top: var(--msg-group-gap, 16px)}
 .msg.consecutive{padding-top: 0}
-.msg.failed .msg-text{color:#f08080}
+.msg.failed .msg-text{color:var(--danger-text)}
 .msg-left{width:56px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;padding-top: 4px}
 .msg-av{width:32px;height:32px;border-radius: 50%;overflow:hidden;cursor:pointer;flex-shrink:0;background:var(--bg-panel);transition: transform var(--dur-2) var(--ease-out)}
 /* Was `.msg:hover .msg-av` — the avatar grew whenever any part of the row was
@@ -289,7 +289,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-time{font-size:11px;color:#4e5058}
 .msg-edited{font-size:10px;color:var(--text-faint);font-style:italic}
 .msg-pin{font-size:11px}
-.msg-fail{font-size:11px;color:#f08080}
+.msg-fail{font-size:11px;color:var(--danger-text)}
 /* Cap the measure, not the row.
 
    At 1512px the text ran to about 150 characters a line with no limit at all,

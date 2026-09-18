@@ -95,8 +95,8 @@ const join = async () => {
 
 .ic-icon {
   width: 44px; height: 44px; border-radius: 10px;
-  background: #ed4245; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; color: var(--text-strong);
+  background: var(--danger); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: var(--text-on-danger);
 }
 .ic-icon--err { background: #4f3535; }
 

@@ -235,7 +235,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-h span { color: var(--text-faint); font-weight: 400; font-size: 12px; }
 .dbg-err {
   background: rgba(242,63,67,.12); border: 1px solid rgba(242,63,67,.3);
-  color: #f23f43; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
+  color: var(--danger-text); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
 }
 
 .dbg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-bottom: 20px; }
@@ -251,7 +251,7 @@ const lossPct = computed(() => outLossPct())
   color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.dbg-rows strong.bad { color: #f23f43; }
+.dbg-rows strong.bad { color: var(--danger-text); }
 .dbg-rows strong.mono { font-family: ui-monospace, monospace; font-size: 11px; }
 
 @media (max-width: 720px) {

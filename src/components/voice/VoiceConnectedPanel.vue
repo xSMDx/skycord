@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
   background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.vcp-leave:hover { background: #f23f43; color: #fff; transform: translateY(-1px); }
+.vcp-leave:hover { background: var(--danger); color: var(--text-on-danger); transform: translateY(-1px); }
 
 .vcp-controls { display: flex; gap: 6px; }
 .vcp-btn {
@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
 }
 .vcp-pop-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-3); padding: 2px 0; }
 .vcp-pop-row strong { color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums; }
-.vcp-pop-row strong.bad { color: #f23f43; }
+.vcp-pop-row strong.bad { color: var(--danger-text); }
 .vcp-pop-vs { align-items: center; }
 .vcp-pop-select {
   flex: 1; min-width: 0; max-width: 60%;

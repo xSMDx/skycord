@@ -5235,7 +5235,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-h1{margin:0;font-size:24px;font-weight:700;color:var(--text-strong)}
 .dsc-sub{margin: 6px 0 0;font-size:14px;color:var(--text-2);max-width:60ch}
 .dsc-msg{font-size:13px;margin: 0 0 16px}
-.dsc-err{color:#f0716f}
+.dsc-err{color:var(--danger-text)}
 
 /* auto-fill, not auto-fit: with one server, auto-fit collapses the empty
    tracks and stretches that single card the full width of the column, which
@@ -5296,7 +5296,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.home .ri-icon{background:var(--bg-chat);color:var(--text-1)}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
-.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
 /* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
    is both unread and occupied shows two marks that never touch: this one at
    x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
@@ -5414,7 +5414,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-info{flex:1;min-width:0}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:#ed4245;color:white;font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:var(--danger);color:white;font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Muted: the count still matters, it just stops shouting. */
 .dm-unread.muted{background:var(--text-3);opacity:.6}
 .dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
@@ -5453,7 +5453,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-edit-btn:hover{background:var(--hover);color: var(--text-strong)}
 
 /* Leave button */
-.icon-btn-leave{color:#ed4245 !important}
+.icon-btn-leave{color:var(--danger-text) !important}
 .icon-btn-leave:hover{background:rgba(237,66,69,.12) !important}
 
 /* @everyone toast */
@@ -5617,7 +5617,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-more:hover{color:var(--text-strong)}
 .ch-icon{flex-shrink:0}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
-.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
+.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
 /* Who is sitting in a voice channel. Indented under its row so the nesting is
    read from the left edge, and deliberately quieter than the channel name —
    these are occupants of the row above, not siblings of it. The reference also
@@ -5628,7 +5628,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .vc-occ-ic{display:flex;flex-shrink:0;color:var(--text-3)}
 /* Not an icon: the reference uses a word, and a word survives being the
    only red thing in a list of grey ones. */
-.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:#f23f43;border-radius: 4px;padding: 1px 4px;line-height:1.4}
+.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:var(--text-on-danger);background:var(--danger);border-radius: 4px;padding: 1px 4px;line-height:1.4}
 .vc-occ{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 8px 6px 26px;border:none;background:none;border-radius: 6px;cursor:pointer;text-align:left;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
@@ -5667,7 +5667,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
-.up-btn.danger{color:#ed4245;background:rgba(237,66,69,.12)}
+.up-btn.danger{color:var(--danger-text);background:rgba(237,66,69,.12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
 .up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
@@ -5850,7 +5850,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   display:flex;align-items:center;justify-content:center;
   position:absolute;top:3px;right:0;
   min-width:18px;height:18px;padding: 0 6px;
-  background:#f23f43;color:#fff;
+  background:var(--danger);color:#fff;
   font-size:11px;font-weight:700;line-height:1;
   border-radius: 8px;border:2px solid var(--bg-chat);
   pointer-events:none;
@@ -5964,7 +5964,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    a tap and the row reads as still selected. */
 .shell.mobile .f-btn:hover{background:var(--hover);color:var(--text-3);transform:none}
 .shell.mobile .f-btn.accept:hover{background:rgba(35,165,90,.15);color:var(--green);transform:none}
-.shell.mobile .f-btn.decline:hover{background:rgba(237,66,69,.15);color:#ed4245;transform:none}
+.shell.mobile .f-btn.decline:hover{background:rgba(237,66,69,.15);color:var(--danger-text);transform:none}
 .shell.mobile .f-btn:active{background:var(--hover-strong)}
 
 .shell.mobile .f-empty{padding:48px 24px}
@@ -6015,7 +6015,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
 .pend-tab{position:relative}
-.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
+.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
 .add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
@@ -6052,7 +6052,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
 .f-btn.accept{background:rgba(35,165,90,.15);color:var(--green)}
 .f-btn.accept:hover{background:rgba(35,165,90,.28);transform:scale(1.1)}
-.f-btn.decline{background:rgba(237,66,69,.15);color:#ed4245}
+.f-btn.decline{background:rgba(237,66,69,.15);color:var(--danger-text)}
 .f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}
 
 /* Active Now */
@@ -6152,7 +6152,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .call-btn:hover{transform:translateY(-1px) scale(1.08)}
 .call-btn:active{transform:scale(.9)}
 .call-btn.video{color:var(--text-2)}
-.call-btn.calling{color:#f23f43;animation:call-pulse 1.25s ease-in-out infinite}
+.call-btn.calling{color:var(--danger-text);animation:call-pulse 1.25s ease-in-out infinite}
 @keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(242,63,67,0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(242,63,67,.6))}}
 /* Not Chakra Petch: this is the channel/DM/group's own name — data the user
    or server named, not a heading the app authored. */

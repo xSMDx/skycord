@@ -83,6 +83,6 @@ onBeforeUnmount(soundRingStop)
 }
 .ic-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.08); }
 .ic-btn:active { transform: scale(.94); }
-.ic-btn.decline { background: #f23f43; }
+.ic-btn.decline { background: var(--danger); color: var(--text-on-danger); }
 .ic-btn.accept  { background: #23a55a; }
 </style>

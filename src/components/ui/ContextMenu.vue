@@ -516,9 +516,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 /* Hover and keyboard focus share one state, so arrowing through the menu looks
    identical to mousing through it. */
 .cm-row:hover, .cm-row.active         { background: var(--accent); color: var(--text-on-accent); }
-.cm-row.danger                        { color: #ed4245; }
+.cm-row.danger                        { color: var(--danger-text); }
 .cm-row.danger:hover,
-.cm-row.danger.active                 { background: #ed4245; color: #fff; }
+.cm-row.danger.active                 { background: var(--danger); color: var(--text-on-danger); }
 .cm-row.disabled                      { color: var(--text-3); cursor: default; }
 .cm-row.disabled:hover                { background: none; color: var(--text-3); }
 .cm-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

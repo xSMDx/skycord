@@ -111,7 +111,7 @@ a message into is laid on top; the thing you fill in a form with is cut into.
 | `--text-on-green` | `#0e0f11` | Text on `--green` — `onAccentText(--green)` |
 | `--text-on-green-deep` | `#ffffff` | Text on the darker "Copied"/"on" green (`#248046`, InviteGroupModal/InviteServerModal) — a different shade from `--green`, so a different measured answer |
 | `--text-on-danger` | `#0e0f11` | Text on `--danger` — `onAccentText(--danger)` |
-| `--text-on-danger-hover` | `#ffffff` | Text on ConfirmModal's own danger-hover literal (`#c73e3e`), not `--danger-hover` |
+| `--text-on-danger-hover` | `#ffffff` | Text on `--danger-hover` — `onAccentText(--danger-hover)` |
 
 `--text-faint` is not "as light as it looks OK"; it is the lightest value that
 still clears AA on the *darkest* surface it can land on. Don't lighten it.
@@ -552,12 +552,18 @@ Recurring shapes. Copy these rather than inventing parallel ones.
 .btn.primary                { background: var(--accent); color: var(--text-on-accent); }
 .btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
 .btn.primary:disabled       { opacity: .5; cursor: default; }
-.btn.danger                 { background: transparent; border: 1px solid #ed4245; color: #ed4245; }
+.btn.danger                 { background: transparent; border: 1px solid var(--danger); color: var(--danger-text); }
 .btn.danger:hover           { background: rgba(237,66,69,.12); }
 ```
 
 Secondary buttons are **transparent until hovered**. Only one button per surface
 carries the accent.
+
+A **solid** danger button (ConfirmModal's destructive confirm, the settings
+danger-solid button) fills with `--danger` and pairs it with `--text-on-danger`;
+once the fill itself darkens to `--danger-hover` on hover, the text follows to
+`--text-on-danger-hover` — the same on-fill pairing the accent and green
+buttons use, just measured against red.
 
 ### Input
 
