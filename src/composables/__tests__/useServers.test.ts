@@ -92,7 +92,7 @@ class FakeStorage {
 // is in place. `vi.mock('../useApi', …)` above still applies to it: Vitest's
 // mocking intercepts module resolution regardless of static vs. dynamic
 // import.
-const { useServers, serverIconFor, COLLAPSED_CATEGORIES_KEY } = await import('../useServers')
+const { useServers, serverIconFor, fallBackToInitials, COLLAPSED_CATEGORIES_KEY } = await import('../useServers')
 const { applyPresence, resetPresenceMap } = await import('../usePresence')
 
 describe('useServers', () => {
@@ -1047,6 +1047,9 @@ describe('useServers', () => {
 })
 
 describe('serverIconFor', () => {
+  /** The initials as they land in the SVG's text element. */
+  const text = (name: string) => /<text[^>]*>([^<]*)<\/text>/.exec(decodeURIComponent(serverIconFor(name)))?.[1]
+
   it('returns the stored icon untouched', () => {
     expect(serverIconFor('Anything', 'https://cdn/a.gif')).toBe('https://cdn/a.gif')
   })
@@ -1063,6 +1066,37 @@ describe('serverIconFor', () => {
 
   it('does not crash on an empty name', () => {
     expect(serverIconFor('')).toContain('data:image/svg+xml')
+  })
+
+  it('keeps an emoji whole, so a name starting with one does not throw', () => {
+    // Taking w[0] split an emoji's surrogate pair, and encodeURIComponent
+    // throws on half of one — an icon-less "😀 party" broke loading the
+    // whole server list, since every server goes through here.
+    expect(() => serverIconFor('😀 party')).not.toThrow()
+    expect(decodeURIComponent(serverIconFor('😀 party'))).toContain('>😀p<')
+  })
+
+  it('escapes the initials, so a name starting with < or & still draws a valid image', () => {
+    // Unescaped, "<" and "&" made the SVG malformed: a broken image, which
+    // the rail's error fallback would then replace with the same broken image.
+    expect(text('<3 friends')).toBe('&lt;f')
+    expect(text('&co')).toBe('&amp;')
+    expect(text('"quoted" <tag>')).toBe('&quot;&lt;')
+  })
+
+  it('never throws on half a surrogate pair, which a crafted request can put in a name', () => {
+    // The server stores any Unicode, and a raw API call can send an unpaired
+    // surrogate. Array.from cannot pair what has no partner, and one such
+    // name threw here and stopped the whole server list loading.
+    for (const name of ['\uD83D party', '\uDC00 party', 'x\uD800', '\uDBFF\uDBFF']) {
+      expect(() => serverIconFor(name), JSON.stringify(name)).not.toThrow()
+    }
+    expect(text('\uD83D party')).toBe('\uFFFDp')
+  })
+
+  it('drops control characters, which are not allowed in the image at all', () => {
+    expect(text('\u0001abc def')).toBe('ad')
+    expect(text('\u001F')).toBe('?')
   })
 })
 
@@ -1173,5 +1207,46 @@ describe('voiceActivityByServer', () => {
     const out = s.voiceActivityByServer.value
     expect(out['s1'][0].userIds).toEqual(['u1'])
     expect(out['s2'][0].userIds).toEqual(['u2', 'u3'])
+  })
+})
+
+describe('serverIconFor: the characters XML cannot carry', () => {
+  // Built with a RegExp string so this file needs no escape sequences at all.
+  const text = (name: string) =>
+    new RegExp('<text[^>]*>([^<]*)</text>').exec(decodeURIComponent(serverIconFor(name)))?.[1]
+
+  it('drops U+FFFE and U+FFFF, which XML forbids', () => {
+    // These survive encodeURIComponent, so nothing throws — but the SVG would
+    // be invalid, the image would never load, and an error fallback pointed at
+    // the same tile would retry it forever.
+    expect(text(String.fromCharCode(0xffff) + ' party')).toBe('p')
+    expect(text(String.fromCharCode(0xfffe) + 'abc def')).toBe('ad')
+  })
+})
+
+/** Stands in for the <img> the error handler receives. */
+class FakeImg {
+  assigns = 0
+  private value: string
+  constructor(src: string) { this.value = src }
+  getAttribute(name: string): string | null { return name === 'src' ? this.value : null }
+  get src(): string { return this.value }
+  set src(v: string) { this.value = v; this.assigns++ }
+}
+
+describe('fallBackToInitials', () => {
+  it('swaps a broken icon for the initials tile', () => {
+    const img = new FakeImg('https://cdn/gone.png')
+    fallBackToInitials({ target: img } as unknown as Event, 'Sky Den')
+    expect(img.src).toBe(serverIconFor('Sky Den'))
+    expect(img.assigns).toBe(1)
+  })
+
+  it('leaves the tile alone when it is already showing, so it cannot loop', () => {
+    // Assigning src restarts the load even with the same value, so an error
+    // on the tile itself would fire the handler again, forever.
+    const img = new FakeImg(serverIconFor('Sky Den'))
+    fallBackToInitials({ target: img } as unknown as Event, 'Sky Den')
+    expect(img.assigns).toBe(0)
   })
 })
