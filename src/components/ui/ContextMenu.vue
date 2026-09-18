@@ -12,7 +12,7 @@ import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Check, ChevronRight, ChevronLeft } from 'lucide-vue-next'
 import { useViewport } from '@/composables/useViewport'
 import { useSheetDrag } from '@/composables/useSheetDrag'
-import { menu, menuItems as items, closeMenu, isSeparator, isSlider, isAction, hasSubmenu, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
+import { menu, menuItems as items, closeMenu, isSeparator, isSlider, isAction, hasSubmenu, menuGroups, navigableIndices, actionOrdinal, type MenuAction, type MenuItem } from '@/composables/useContextMenu'
 import { applyClickOrigin } from '@/composables/useClickOrigin'
 
 const el   = ref<HTMLElement | null>(null)
@@ -39,6 +39,11 @@ const drill = ref<{ label: string; items: MenuItem[] } | null>(null)
 /** What the sheet is currently listing — the menu, or a submenu drilled into. */
 const rows = computed<MenuItem[]>(() => drill.value?.items ?? items.value)
 
+/** What the menu and the flyout render: the rows in groups, each label over
+ *  only the rows it names (see menuGroups). */
+const groups    = computed(() => menuGroups(rows.value))
+const subGroups = computed(() => menuGroups(sub.value?.items ?? []))
+
 // Physics live in useSheetDrag, shared with ModalBase.
 const sheetDrag = useSheetDrag(
   () => el.value?.getBoundingClientRect().height ?? 0,
@@ -57,13 +62,9 @@ watch(() => menu.open, (open) => {
 })
 const subActive = ref(-1)
 
-// Indices of items that can actually be focused — separators and disabled rows
-// are skipped by the arrow keys rather than swallowing a keypress.
-// Sliders are skipped too — they're dragged, not selected, so landing keyboard
-// focus on one would be a dead stop.
-const navigable = () => items.value
-  .map((it, i) => (!isSeparator(it) && !isSlider(it) && !it.disabled ? i : -1))
-  .filter(i => i !== -1)
+// Separators, sliders, sections and disabled rows are skipped by the arrow
+// keys rather than swallowing a keypress.
+const navigable = () => navigableIndices(items.value)
 
 const GAP = 8   // keep this far from the viewport edge
 
@@ -160,9 +161,7 @@ const move = (dir: 1 | -1) => {
   closeSub()
 }
 
-const subNavigable = () => (sub.value?.items ?? [])
-  .map((it, i) => (isAction(it) && !it.disabled ? i : -1))
-  .filter(i => i !== -1)
+const subNavigable = () => navigableIndices(sub.value?.items ?? [])
 
 const onKey = (e: KeyboardEvent) => {
   if (!menu.open) return
@@ -185,7 +184,7 @@ const onKey = (e: KeyboardEvent) => {
       case 'Enter':
       case ' ': {
         const it = sub.value.items[subActive.value]
-        if (it && !isSeparator(it)) { e.preventDefault(); select(it) }
+        if (it && isAction(it)) { e.preventDefault(); select(it) }
         return
       }
     }
@@ -203,8 +202,7 @@ const onKey = (e: KeyboardEvent) => {
       const it = items.value[active.value]
       if (it && hasSubmenu(it)) {
         e.preventDefault()
-        const row = el.value?.querySelectorAll('.cm-row')[
-          items.value.slice(0, active.value).filter(x => !isSeparator(x)).length] as HTMLElement | undefined
+        const row = el.value?.querySelectorAll('.cm-row')[actionOrdinal(items.value, active.value)] as HTMLElement | undefined
         if (row) void openSub(active.value, it.submenu!, row)
       }
       break
@@ -212,7 +210,7 @@ const onKey = (e: KeyboardEvent) => {
     case 'Enter':
     case ' ': {
       const it = items.value[active.value]
-      if (it && !isSeparator(it)) { e.preventDefault(); select(it) }
+      if (it && isAction(it)) { e.preventDefault(); select(it) }
       break
     }
   }
@@ -307,40 +305,50 @@ const onBeforeEnter = (el: Element) => {
            quick-reaction strip is the one real case). -->
       <slot v-if="!drill" name="header" />
 
-      <template v-for="(item, i) in rows" :key="i">
-        <div v-if="isSeparator(item)" class="cm-sep" />
-        <!-- Slider: a live control, so clicks inside must NOT close the menu. -->
-        <div v-if="isSlider(item)" class="cm-slider" @click.stop>
-          <div class="cm-slider-top">
-            <span>{{ item.label }}</span>
-            <span class="cm-slider-val">{{ (item.format ?? (v => String(v)))(item.value) }}</span>
+      <div
+        v-for="(group, g) in groups" :key="g"
+        class="cm-group"
+        :role="group.label ? 'group' : undefined"
+        :aria-labelledby="group.label ? `cm-sec-${g}` : undefined"
+      >
+        <!-- Hidden from assistive tech because the group is named BY it: read
+             once as the group's name, not again as stray text between rows. -->
+        <div v-if="group.label" :id="`cm-sec-${g}`" class="cm-section" aria-hidden="true">{{ group.label }}</div>
+        <template v-for="{ item, index: i } in group.rows" :key="i">
+          <div v-if="isSeparator(item)" class="cm-sep" />
+          <!-- Slider: a live control, so clicks inside must NOT close the menu. -->
+          <div v-if="isSlider(item)" class="cm-slider" @click.stop>
+            <div class="cm-slider-top">
+              <span>{{ item.label }}</span>
+              <span class="cm-slider-val">{{ (item.format ?? (v => String(v)))(item.value) }}</span>
+            </div>
+            <input type="range"
+                   :min="item.min ?? 0" :max="item.max ?? 200" :value="item.value"
+                   :style="{ background: sliderFill(item) }"
+                   @input="item.onInput(+($event.target as HTMLInputElement).value)" />
           </div>
-          <input type="range"
-                 :min="item.min ?? 0" :max="item.max ?? 200" :value="item.value"
-                 :style="{ background: sliderFill(item) }"
-                 @input="item.onInput(+($event.target as HTMLInputElement).value)" />
-        </div>
-        <!-- A positive `isAction` guard rather than v-else: type narrowing does
-             not carry across a v-if/v-else chain, so under v-else this branch
-             still sees the whole union and every action-only field below is
-             unchecked. Same runtime behaviour, real coverage. -->
-        <button
-          v-if="isAction(item)"
-          class="cm-row"
-          role="menuitem"
-          :class="{ danger: item.danger, active: i === active, disabled: item.disabled }"
-          :disabled="item.disabled"
-          :aria-haspopup="item.submenu ? 'menu' : undefined"
-          :aria-expanded="item.submenu ? sub?.index === i : undefined"
-          @click="select(item)"
-          @mouseenter="onRowEnter(i, item, $event)"
-        >
-          <component :is="item.icon" v-if="item.icon" :size="16" :stroke-width="1.5" />
-          <span class="cm-label">{{ item.label }}</span>
-          <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
-          <ChevronRight v-if="item.submenu" :size="12" :stroke-width="2.25" class="cm-caret" />
-        </button>
-      </template>
+          <!-- A positive `isAction` guard rather than v-else: type narrowing does
+               not carry across a v-if/v-else chain, so under v-else this branch
+               still sees the whole union and every action-only field below is
+               unchecked. Same runtime behaviour, real coverage. -->
+          <button
+            v-if="isAction(item)"
+            class="cm-row"
+            role="menuitem"
+            :class="{ danger: item.danger, active: i === active, disabled: item.disabled }"
+            :disabled="item.disabled"
+            :aria-haspopup="item.submenu ? 'menu' : undefined"
+            :aria-expanded="item.submenu ? sub?.index === i : undefined"
+            @click="select(item)"
+            @mouseenter="onRowEnter(i, item, $event)"
+          >
+            <component :is="item.icon" v-if="item.icon" :size="16" :stroke-width="1.5" />
+            <span class="cm-label">{{ item.label }}</span>
+            <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
+            <ChevronRight v-if="item.submenu" :size="12" :stroke-width="2.25" class="cm-caret" />
+          </button>
+        </template>
+      </div>
     </div>
     </Transition>
 
@@ -362,22 +370,32 @@ const onBeforeEnter = (el: Element) => {
       @contextmenu.prevent.stop
       @mouseleave="closeSub()"
     >
-      <template v-for="(item, j) in sub.items" :key="j">
-        <div v-if="isSeparator(item)" class="cm-sep" />
-        <button
-          v-if="isAction(item)"
-          class="cm-row"
-          role="menuitem"
-          :class="{ danger: item.danger, active: j === subActive, disabled: item.disabled }"
-          :disabled="item.disabled"
-          @click="select(item)"
-          @mouseenter="subActive = j"
-        >
-          <component :is="item.icon" v-if="item.icon" :size="16" :stroke-width="1.5" />
-          <span class="cm-label">{{ item.label }}</span>
-          <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
-        </button>
-      </template>
+      <div
+        v-for="(group, g) in subGroups" :key="g"
+        class="cm-group"
+        :role="group.label ? 'group' : undefined"
+        :aria-labelledby="group.label ? `cm-subsec-${g}` : undefined"
+      >
+        <!-- Hidden from assistive tech because the group is named BY it: read
+             once as the group's name, not again as stray text between rows. -->
+        <div v-if="group.label" :id="`cm-subsec-${g}`" class="cm-section" aria-hidden="true">{{ group.label }}</div>
+        <template v-for="{ item, index: j } in group.rows" :key="j">
+          <div v-if="isSeparator(item)" class="cm-sep" />
+          <button
+            v-if="isAction(item)"
+            class="cm-row"
+            role="menuitem"
+            :class="{ danger: item.danger, active: j === subActive, disabled: item.disabled }"
+            :disabled="item.disabled"
+            @click="select(item)"
+            @mouseenter="subActive = j"
+          >
+            <component :is="item.icon" v-if="item.icon" :size="16" :stroke-width="1.5" />
+            <span class="cm-label">{{ item.label }}</span>
+            <Check v-if="item.check" :size="14" :stroke-width="2.25" class="cm-check" />
+          </button>
+        </template>
+      </div>
     </div>
     </Transition>
   </Teleport>
@@ -465,6 +483,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm.sheet .cm-row:active { background: var(--hover); }
 .cm.sheet .cm-sep { margin: 4px 0; }
 .cm.sheet .cm-slider { padding: 10px 18px; }
+.cm.sheet .cm-section { padding: 12px 18px 6px; }
 
 @media (prefers-reduced-motion: reduce) {
   .cm.sheet { animation: none; transition:none; }
@@ -477,6 +496,16 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 
 .cm-sep { height: 1px; background: rgba(255,255,255,.08); margin: 4px 0; }
+
+/* A group's name, in DESIGN.md's section-label style. Not a row: no hover, no
+   pointer, and the arrow keys pass over it. --text-2 on --bg-floor measures
+   9.60:1 default, 6.37:1 light, 4.97:1 light-dim (the lowest). */
+.cm-section {
+  padding: 8px 14px 4px;
+  font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--text-2);
+  cursor: default; user-select: none;
+}
 
 .cm-row {
   display: flex; align-items: center; gap: 10px;

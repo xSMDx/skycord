@@ -64,7 +64,7 @@ watch(() => props.code, async code => {
 <template>
   <!-- Not a background-image: an <img> carries the name as real alternative
        text, and gets the browser's own lazy decoding. -->
-  <img v-if="src" class="cf" :src="src" :alt="name" v-tip="name" width="16" height="12" />
+  <img v-if="src" class="cf" :src="src" :alt="name" v-tip="name" width="16" height="12" @error="src = null" />
 </template>
 
 <style scoped>

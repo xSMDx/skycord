@@ -19,6 +19,8 @@ import { computed, ref, watch, onMounted } from 'vue'
 import type { Crop } from '@/composables/useCrop'
 import { isAnimated, cropLayout } from '@/composables/useCrop'
 import { useGifBurst, hasHover, motionAllowed, freezeFrame } from '@/composables/useGifPlayback'
+import { defaultAvatar } from '@/composables/useAvatar'
+import { serverIconFor } from '@/composables/useServers'
 
 const props = withDefaults(defineProps<{
   src: string
@@ -67,7 +69,25 @@ const playing = computed(() => {
   return hasHover ? hovering.value : bursting.value
 })
 
-const shownSrc = computed(() => (playing.value || !poster.value) ? props.src : poster.value)
+/**
+ * Set on a load failure (a deleted upload, a dead CDN URL); cleared the
+ * moment `src` changes so a freshly uploaded picture replaces the fallback
+ * instead of being stuck behind it. Checked first in `shownSrc`, ahead of
+ * the GIF poster logic, so a failure always wins over "should it be
+ * playing" — there is no live image to play once the load has failed.
+ *
+ * `square` is how a caller marks this as a server/group icon rather than a
+ * person: those already show the same initials tile (serverIconFor) when
+ * there is no icon at all, so a broken one should degrade to the same
+ * place rather than the person-shaped default avatar.
+ */
+const failed = ref(false)
+watch(() => props.src, () => { failed.value = false })
+
+const shownSrc = computed(() => {
+  if (failed.value) return props.square ? serverIconFor(props.alt || '?') : defaultAvatar(props.alt || '?')
+  return (playing.value || !poster.value) ? props.src : poster.value
+})
 
 const boxStyle = computed(() => {
   const s = props.size
@@ -121,7 +141,7 @@ const imgStyle = computed(() => {
     @pointerenter="hovering = true"
     @pointerleave="hovering = false"
   >
-    <img ref="el" :src="shownSrc" :alt="alt" :style="imgStyle" draggable="false" @load="measure" />
+    <img ref="el" :src="shownSrc" :alt="alt" :style="imgStyle" draggable="false" @load="measure" @error="failed = true" />
     <slot />
   </span>
 </template>

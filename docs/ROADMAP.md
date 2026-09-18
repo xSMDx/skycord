@@ -12,7 +12,11 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 
   What that changes: **Server Settings and roles no longer block a deploy.** They are the next
   slices, not a gate. Absent capabilities are badged "Soon" in the UI rather than hidden, so
-  shipping without them is honest rather than misleading.
+  shipping without them is honest rather than misleading. The one exception is the Settings shell,
+  where an unbuilt page is hidden until it is built (owner, 2026-09-12). Elsewhere the honesty
+  pattern holds as it was: unbuilt capabilities keep their "Soon" badge, rows a person has no
+  permission for stay omitted rather than disabled, and "Forgot?" stays hidden when the instance
+  cannot send mail.
 
   What it does NOT change — these are safety gates and still hold:
     1. ✅ nginx location alternation must include `servers` and `invites`, and `/join/<code>`
@@ -283,8 +287,8 @@ known to be inconsistent or half-finished, and the user has already named some o
   addressed in 3f (live status, chevrons, member list) but never audited end to end.
 - **Voice channel styling** — reference is Discord and Stoat; the separated-from-Discord direction
   is wanted, the execution is not finished.
-- **The server dropdown** — restyled in 3b but still reads closer to a context menu than to a
-  sectioned server menu.
+- **The server dropdown** — restyled in 3b; sectioned in the UI/UX audit's slice 7, with labels
+  over its multi-row groups (2026-09-14).
 - Light-mode issues and layout glitches the user will name per screen.
 - Call visuals: participant tiles, speaking rings, mute/deafen states, layout for 2+ people.
 

@@ -42,14 +42,72 @@ export interface MenuSlider {
   onInput: (v: number) => void
 }
 
-export type MenuItem = MenuAction | MenuSeparator | MenuSlider
+/** Names the rows after it, up to the next separator or section (see
+ *  menuGroups). A label, not a row: it is never focused or selected, and the
+ *  arrow keys pass over it. The separator that ends a group stays the
+ *  builder's job, as it always was. */
+export interface MenuSection { section: string }
+
+/** Everything that renders as a row. */
+export type MenuRow  = MenuAction | MenuSeparator | MenuSlider
+export type MenuItem = MenuRow | MenuSection
 
 export const isSeparator = (i: MenuItem): i is MenuSeparator => 'sep' in i
 export const isSlider    = (i: MenuItem): i is MenuSlider    => 'slider' in i
-/** Rows that behave like buttons — everything that isn't a separator or slider. */
-export const isAction    = (i: MenuItem): i is MenuAction    => !isSeparator(i) && !isSlider(i)
+export const isSection   = (i: MenuItem): i is MenuSection   => 'section' in i
+/** Rows that behave like buttons — everything that isn't a separator, slider or section. */
+export const isAction    = (i: MenuItem): i is MenuAction    => !isSeparator(i) && !isSlider(i) && !isSection(i)
 export const hasSubmenu  = (i: MenuItem): i is MenuAction & { submenu: MenuItem[] } =>
   isAction(i) && !!i.submenu?.length
+
+export interface MenuGroup {
+  /** Absent for rows no section names: above the first section, and past the
+   *  separator that ends one. */
+  label?: string
+  /** Each row with its index in the flat list — active row, open flyout and
+   *  the arrow keys all address rows by that index, not by group. */
+  rows: { item: MenuRow; index: number }[]
+}
+
+/**
+ * The flat list, split into groups.
+ *
+ * A section names the rows after it up to the next separator, the next
+ * section, or the end of the menu. So a separator never sits inside a labelled
+ * group, and the rows past it belong to no label: a menu's last section cannot
+ * claim everything below it, the way "Manage" once claimed Delete Server.
+ *
+ * A section left with no rows is dropped, so a builder that filters rows by
+ * permission can never leave a label heading empty space. Rows themselves are
+ * never dropped or reordered — the keyboard state is keyed on their indices.
+ */
+export const menuGroups = (items: MenuItem[]): MenuGroup[] => {
+  const groups: MenuGroup[] = []
+  let current: MenuGroup | null = null
+  items.forEach((item, index) => {
+    if (isSection(item)) {
+      current = { label: item.section, rows: [] }
+      groups.push(current)
+      return
+    }
+    if (!current || (isSeparator(item) && current.label !== undefined)) {
+      current = { rows: [] }
+      groups.push(current)
+    }
+    current.rows.push({ item, index })
+  })
+  return groups.filter(g => g.rows.length > 0)
+}
+
+/** Indices the arrow keys stop on: enabled actions only. A slider is dragged,
+ *  not selected, so landing on one would be a dead stop. */
+export const navigableIndices = (items: MenuItem[]): number[] =>
+  items.flatMap((it, i) => (isAction(it) && !it.disabled ? [i] : []))
+
+/** Position of the action at `index` among the rendered `.cm-row` buttons —
+ *  only actions render one. */
+export const actionOrdinal = (items: MenuItem[], index: number): number =>
+  items.slice(0, index).filter(isAction).length
 
 interface MenuState {
   open:  boolean
@@ -66,7 +124,7 @@ export const menu = reactive<MenuState>({ open: false, x: 0, y: 0, items: [] })
 let lastFocused: HTMLElement | null = null
 
 const prepare = (items: MenuItem[]): MenuItem[] =>
-  items.map(i => (isSeparator(i) || isSlider(i)) ? i : {
+  items.map(i => !isAction(i) ? i : {
     ...i,
     icon:    i.icon ? markRaw(i.icon) : undefined,
     submenu: i.submenu ? prepare(i.submenu) : undefined,

@@ -276,10 +276,17 @@ cheap.
     This is the roadmap's "reads closer to a context menu than a sectioned
     server menu", with the reason.
 
+    **Fixed** on `ui-audit-07-menus-and-settings`: the menu model has sections, and the
+    server dropdown uses them for the groups that hold more than one row.
+
 17. **Settings' first group is eight rows, five of them dead** — Content &
     Social, Data & Privacy, Authorized Apps, Connections, Notifications, all
     `soon: true`. Honest per the standing directive, and still five-eighths of
     the first thing you read. There is also a search box in that shell.
+
+    **Fixed** on `ui-audit-07-menus-and-settings`: Settings lists only built pages;
+    the six "Soon" rows and the placeholder page are gone. The Account page's
+    Two-Factor row is left for the owner.
 
 18. **The same red means two opposite things in one call tile.**
     `CallStage.vue:394` `.g-live { background: #f23f43 }` — someone is sharing
