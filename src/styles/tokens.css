@@ -173,6 +173,20 @@
      and all of them point at it. Named for the colour rather than one role,
      because no single role covers a success toast AND an explore button. */
   --green: #23a55a;
+  /* The same green, darker, for a fill that has to carry white text: the
+     "Copied" and "on" states already painted it by hand. --text-on-green-deep
+     (white, 4.94:1 on it) is its pair; white on --green itself is 2.77:1. */
+  --green-deep: #248046;
+  /* For tints: rgba(var(--green-rgb), a), the pattern --accent-rgb uses. A
+     tint of a fixed green needs no per-theme value — what sits ON it does. */
+  --green-rgb: 35, 165, 90;
+  /* Green as TEXT, an icon or a border on an ordinary surface. --green itself
+     measures 3.97:1 on default's --bg-chat and 1.97:1 on light-dim's
+     --bg-floor, so it fails as a mark in both families. Lightened toward white
+     by the least that clears CONTRAST_TARGET (4.6) against every surface of
+     every dark theme: worst 4.66:1 on default --bg-chat. See
+     semanticTokens.test.ts. */
+  --green-text: #40b16f;
   /* onAccentText(--green) — measured, not assumed: #23a55a reads better with
      ink (6.03:1) than white (3.18:1), the reverse of the white every hand-
      written `color: #fff` beside a green background on this branch guessed.
@@ -289,6 +303,10 @@ html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  /* Green as a mark on a light surface: darkened toward black by the least
+     that clears 4.6:1 against every surface of BOTH light blocks — worst
+     4.65:1 on light-dim --bg-floor, which binds for the pair. */
+  --green-text: #156135;
   --accent:         #0a75af;
   --accent-hover:   #09679a;
   --accent-deep:    #07547e;
@@ -360,6 +378,10 @@ html.names-plain { --name-hover: var(--text-strong); }
   --shadow-lg: 0 24px 80px rgba(0, 0, 0, .22);
 }
 [data-theme="light-dim"] {
+  /* Green as a mark on a light surface: darkened toward black by the least
+     that clears 4.6:1 against every surface of BOTH light blocks — worst
+     4.65:1 on light-dim --bg-floor, which binds for the pair. */
+  --green-text: #156135;
   --accent:         #0a75af;
   --accent-hover:   #09679a;
   --accent-deep:    #07547e;

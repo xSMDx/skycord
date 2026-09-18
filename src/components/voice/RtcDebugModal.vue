@@ -205,7 +205,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-who { padding: 0 8px 14px; display: flex; flex-direction: column; gap: 2px; }
 .dbg-who strong { font-size: 15px; color: var(--text-1); }
 .dbg-who span { font-size: 12px; color: var(--text-3); }
-.dbg-who span.ok { color: #23a55a; }
+.dbg-who span.ok { color: var(--green-text); }
 .dbg-navlabel {
   font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: var(--text-faint); padding: 0 8px 6px;

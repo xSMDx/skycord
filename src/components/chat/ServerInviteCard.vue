@@ -192,7 +192,7 @@ const join = async () => {
 .ic-sub--err { color: var(--danger-text); }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;
-  border-radius: 50%; background: #23a55a; flex-shrink: 0;
+  border-radius: 50%; background: var(--green); flex-shrink: 0;
 }
 
 .ic-btn {

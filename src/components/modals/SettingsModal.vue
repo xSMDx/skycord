@@ -1679,12 +1679,12 @@ img    { display: block; object-fit: cover; }
 .acc-av { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--bg-raised); }
 .acc-av-status {
   position: absolute; bottom: 2px; right: 2px;
-  width: 14px; height: 14px; background: #23a55a; border-radius: 50%; border: 2px solid var(--bg-raised);
+  width: 14px; height: 14px; background: var(--green); border-radius: 50%; border: 2px solid var(--bg-raised);
 }
 .acc-av-names { z-index: 1; }
 .acc-display  { display: block; font-size: 20px; font-weight: 800; color: var(--text-strong); }
 .acc-tag      { font-size: 13px; color: var(--text-3); }
-.acc-save-msg { padding: 10px 14px; background: rgba(35,165,90,.15); border: 1px solid rgba(35,165,90,.3); border-radius: 8px; color: #23a55a; font-size: 13px; margin-bottom: 14px; }
+.acc-save-msg { padding: 10px 14px; background: rgba(var(--green-rgb), .15); border: 1px solid rgba(var(--green-rgb), .3); border-radius: 8px; color: var(--green-text); font-size: 13px; margin-bottom: 14px; }
 
 /* The lift on hover went the way of the others tonight: hover announces that
    a thing is interactive, press answers that it heard you. These buttons had

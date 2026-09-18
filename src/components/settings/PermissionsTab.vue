@@ -534,7 +534,7 @@ const onBarLeave = (el: Element) => {
    thirty rows, is a wall of red and green with no signal in it. */
 .pm-tri-btn.deny.on    { background: var(--danger); color: var(--text-on-danger); }
 .pm-tri-btn.neutral.on { background: var(--hover-strong); color: var(--text-1); }
-.pm-tri-btn.allow.on   { background: #248046; color: #fff; }
+.pm-tri-btn.allow.on   { background: var(--green-deep); color: var(--text-on-green-deep); }
 
 /* ── Save bar ── */
 .pm-bar {

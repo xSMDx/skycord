@@ -5658,7 +5658,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    it never fired. Sizing it like its neighbours removes the problem instead of
    trying to measure around it. */
 .up-callback{color:#3ba55d}
-.up-callback:hover{background:rgba(35,165,90,.16);color:#4ade80}
+.up-callback:hover{background:rgba(var(--green-rgb), .16);color:var(--green-text)}
 .up-callback.connecting{color:#f0b232}
 .up-callback.connecting svg{animation:up-cb-pulse 1.1s ease-in-out infinite}
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
@@ -5963,7 +5963,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Hover does not exist here; left alone these stick in the hovered look after
    a tap and the row reads as still selected. */
 .shell.mobile .f-btn:hover{background:var(--hover);color:var(--text-3);transform:none}
-.shell.mobile .f-btn.accept:hover{background:rgba(35,165,90,.15);color:var(--green);transform:none}
+.shell.mobile .f-btn.accept:hover{background:rgba(var(--green-rgb), .15);color:var(--green-text);transform:none}
 .shell.mobile .f-btn.decline:hover{background:rgba(237,66,69,.15);color:var(--danger-text);transform:none}
 .shell.mobile .f-btn:active{background:var(--hover-strong)}
 
@@ -6050,8 +6050,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-actions{display:flex;gap: 6px;flex-shrink:0}
 .f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:var(--hover);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
-.f-btn.accept{background:rgba(35,165,90,.15);color:var(--green)}
-.f-btn.accept:hover{background:rgba(35,165,90,.28);transform:scale(1.1)}
+.f-btn.accept{background:rgba(var(--green-rgb), .15);color:var(--green-text)}
+.f-btn.accept:hover{background:rgba(var(--green-rgb), .28);transform:scale(1.1)}
 .f-btn.decline{background:rgba(237,66,69,.15);color:var(--danger-text)}
 .f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}
 

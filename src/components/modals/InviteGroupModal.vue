@@ -240,7 +240,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* #248046, not --green: this is the darker "confirmed" shade (CallBar's
    .on, PermissionsTab's .allow.on), a different measured answer from the
    app's main green — see --text-on-green-deep in tokens.css. */
-.ig-copy.copied { background: #248046; color: var(--text-on-green-deep); }
+.ig-copy.copied { background: var(--green-deep); color: var(--text-on-green-deep); }
 .ig-copy:disabled { opacity: .5; cursor: not-allowed; }
 .ig-expiry { font-size: 12px; color: var(--text-3); }
 </style>

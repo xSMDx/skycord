@@ -185,7 +185,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .af-send-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
-.af-send-btn.sent { background: rgba(35,165,90,.2); color: #23a55a; cursor: default; }
+.af-send-btn.sent { background: rgba(var(--green-rgb), .2); color: var(--green-text); cursor: default; }
 
 .af-empty {
   display: flex; flex-direction: column; align-items: center;

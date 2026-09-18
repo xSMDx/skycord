@@ -153,6 +153,22 @@ describe('tokens.css: --danger-text clears CONTRAST_TARGET against every surface
   }
 })
 
+describe('tokens.css: --green-text clears CONTRAST_TARGET against every surface of its theme family', () => {
+  // --green itself stays the fill colour; this is the value green has to take
+  // when it is text, an icon or a border on an ordinary surface, where the
+  // fill green measures 3.97:1 on dark and 1.97:1 on light.
+  for (const theme of ALL_THEMES) {
+    it(`${theme}`, () => {
+      const block = blockFor(theme)
+      const text = resolveHex(block, 'green-text')
+      for (const surface of SURFACES) {
+        const bg = resolveHex(block, surface)
+        expect(ratio(text, bg), `--green-text (${text}) vs ${theme}'s --${surface} (${bg})`).toBeGreaterThanOrEqual(CONTRAST_TARGET)
+      }
+    })
+  }
+})
+
 describe('tokens.css: --warning clears the graphical 3:1 floor against every surface', () => {
   for (const theme of ALL_THEMES) {
     it(`${theme}`, () => {

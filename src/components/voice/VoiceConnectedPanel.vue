@@ -313,10 +313,10 @@ onBeforeUnmount(() => {
 }
 .vcp-btn:hover:not(:disabled) { background: var(--hover-strong); color: var(--text-1); }
 .vcp-btn:active:not(:disabled) { transform: scale(.96); }
-.vcp-btn.on { background: #248046; color: #fff; }
+.vcp-btn.on { background: var(--green-deep); color: var(--text-on-green-deep); }
 .vcp-btn:disabled { opacity: .45; cursor: not-allowed; }
 .vcp-back { color: #3ba55d; }
-.vcp-back:hover { background: rgba(35,165,90,.18); color: #4ade80; }
+.vcp-back:hover { background: rgba(var(--green-rgb), .18); color: var(--green-text); }
 
 /* Hover popover — appears above the strip */
 .vcp-pop {

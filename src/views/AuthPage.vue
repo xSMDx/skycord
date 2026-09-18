@@ -405,7 +405,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .blob { position:absolute; border-radius: 50%; filter:blur(80px); pointer-events:none; animation:drift 12s ease-in-out infinite alternate; }
 .b1 { width:480px;height:480px; background:rgba(var(--accent-rgb),.18); top:-100px; left:-100px; animation-delay:0s; }
 .b2 { width:380px;height:380px; background:rgba(235,69,158,.10); bottom:-60px; right:-60px; animation-delay:-4s; }
-.b3 { width:280px;height:280px; background:rgba(35,165,90,.07);  top:55%; left:58%; animation-delay:-8s; }
+.b3 { width:280px;height:280px; background:rgba(var(--green-rgb), .07);  top:55%; left:58%; animation-delay:-8s; }
 @keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(28px,18px) scale(1.05)}}
 
 .card {
@@ -433,7 +433,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 /* The success twin of .err-banner. Green rather than red because these two
    appear in the same slot and a reset confirmation that is styled like a
    failure gets read as one. */
-.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(35,165,90,.12); border:1px solid rgba(35,165,90,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#3ba55d; font-size:13px; line-height:1.45; }
+.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--green-rgb), .12); border:1px solid rgba(var(--green-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#3ba55d; font-size:13px; line-height:1.45; }
 
 .form-title { font-size:21px; font-weight:800; color: var(--text-strong); margin-bottom: 4px; }
 .form-sub   { font-size:13px; color:var(--text-faint); margin-bottom: 18px; }
@@ -456,7 +456,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
   overflow:hidden;
 }
 .inp-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15); }
-.inp-wrap.match { border-color:#23a55a; }
+.inp-wrap.match { border-color:var(--green-text); }
 .field.err .inp-wrap { border-color:var(--danger); }
 .field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(237,66,69,.15); }
 

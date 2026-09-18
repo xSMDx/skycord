@@ -105,7 +105,7 @@ const join = async () => {
 .ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;
-  border-radius: 50%; background: #23a55a; flex-shrink: 0;
+  border-radius: 50%; background: var(--green); flex-shrink: 0;
 }
 
 .ic-btn {

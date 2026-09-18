@@ -247,11 +247,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-system{display:flex;align-items:center;gap: 8px;padding: 4px 48px 4px 18px;font-size:13.5px;color:var(--text-3)}
 .msg-system-icon{display:flex;align-items:center;justify-content:center;width:22px;color:var(--text-3);flex-shrink:0}
 .msg-system-text{color:var(--text-2)}
-.msg-system.sys-join .msg-system-icon{color:#23a55a}
+.msg-system.sys-join .msg-system-icon{color:var(--green-text)}
 .msg-system.sys-leave .msg-system-icon{color:var(--danger-text)}
-.msg-system.sys-add .msg-system-icon{color:#23a55a}
+.msg-system.sys-add .msg-system-icon{color:var(--green-text)}
 /* Call logs: green when a call starts, red once it ends */
-.msg-system.sys-call .msg-system-icon{color:#23a55a}
+.msg-system.sys-call .msg-system-icon{color:var(--green-text)}
 .msg-system.sys-call.call-ended .msg-system-icon{color:var(--danger-text)}
 .msg-system-link{color:#00a8fc;font-weight:500;cursor:pointer}
 .msg-system-link:hover{text-decoration:underline}
