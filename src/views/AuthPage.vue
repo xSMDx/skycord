@@ -447,7 +447,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .field label { font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--text-2); }
 .lrow { display:flex; align-items:center; justify-content:space-between; }
 .forgot { font-size:11px; font-weight:600; color:var(--accent); text-transform:none; letter-spacing:0; transition: color var(--dur-1) var(--ease-out); }
-.forgot:hover { color:#8d96f8; }
+.forgot:hover { color:var(--accent-text); }
 
 .inp-wrap {
   display:flex; align-items:center;
@@ -516,7 +516,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .switch { text-align:center; font-size:13px; color:var(--text-faint); margin-top: 14px; }
 .switch button { color:var(--accent); font-weight:600; }
-.switch button:hover { color:#8d96f8; text-decoration:underline; }
+.switch button:hover { color:var(--accent-text); text-decoration:underline; }
 
 .slide-enter-active,.slide-leave-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
 .slide-enter-from{opacity:0;transform:translateX(18px)}

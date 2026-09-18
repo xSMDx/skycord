@@ -529,7 +529,7 @@ const onBarLeave = (el: Element) => {
   background: var(--hover-strong); color: var(--text-3);
 }
 .pm-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
-.pm-advis { background: color-mix(in srgb, #5865f2 20%, transparent); color: #8b95f8; }
+.pm-advis { background: rgba(var(--accent-rgb), .2); color: var(--accent-text); }
 /* Colour only lands on the SELECTED state: three lit buttons per row, times
    thirty rows, is a wall of red and green with no signal in it. */
 .pm-tri-btn.deny.on    { background: var(--danger); color: var(--text-on-danger); }

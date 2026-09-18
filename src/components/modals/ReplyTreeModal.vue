@@ -306,7 +306,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-ctx-item:hover { background: var(--accent); color: var(--text-on-accent); }
 .rt-card-badge {
   display: inline-block; margin-top: 6px;
-  font-size: 9.5px; font-weight: 700; color: #8d96f8;
+  font-size: 9.5px; font-weight: 700; color: var(--accent-text);
   background: rgba(var(--accent-rgb),.18); padding: 1px 6px; border-radius: 4px;
   letter-spacing: .3px; text-transform: uppercase;
 }

@@ -279,13 +279,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .reply-preview{display:flex;align-items:center;gap: 6px;margin-left: 6px;font-size:13px;color:var(--text-3);overflow:hidden;position:relative;padding-left: 14px;cursor:pointer;border-radius: 4px;transition: background var(--dur-1) var(--ease-out);width:fit-content;max-width:100%}
 .reply-preview:hover{background:var(--hover)}
 .reply-preview:active{background:var(--press-veil)}
-.reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid var(--border);border-top:2px solid #4e5058;border-radius: 6px 0 0 0}
+.reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid var(--border);border-top:2px solid var(--border);border-radius: 6px 0 0 0}
 .reply-icon{flex-shrink:0;color:var(--text-faint);display:none}
 .reply-author{color:var(--accent-text);font-weight:600;white-space:nowrap}
 .reply-content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9a9ea6}
 .msg-meta{display:flex;align-items:baseline;gap: 8px;margin-bottom: 2px;flex-wrap:wrap}
 .msg-author{font-size:15px;font-weight:700;color: var(--text-strong);cursor:pointer;transition: color var(--dur-1) var(--ease-out)}
-.msg-author:hover{color:var(--name-hover, #8d96f8)}
+.msg-author:hover{color:var(--name-hover, var(--accent-text))}
 .msg-time{font-size:11px;color:var(--text-faint)}
 .msg-edited{font-size:10px;color:var(--text-faint);font-style:italic}
 .msg-pin{font-size:11px}
@@ -340,7 +340,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    press, where feedback is actually needed and where it was missing. */
 .rp:active{transform:scale(.96)}
 .rp.active{background:rgba(var(--accent-rgb),.2);border-color:rgba(var(--accent-rgb),.5)}
-.rp.active span{color:#8d96f8}
+.rp.active span{color:var(--accent-text)}
 .rp-add{width:24px;height:24px;border-radius: 10px;background:var(--hover);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .rp-add:hover{background:var(--hover-strong);color: var(--text-strong)}
 /* Hover OR keyboard focus. The toolbar used to be revealed by @mouseenter

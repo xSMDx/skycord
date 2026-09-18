@@ -5547,7 +5547,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    move the row under the pointer mid-drag. */
 .ch-drop-line{
   height:0;margin:0 4px;
-  border-top:2px solid var(--accent, #5865f2);border-radius:2px;
+  border-top:2px solid var(--accent);border-radius:2px;
   /* Pointer-transparent, or it would sit between the pointer and the row whose
      dragover set it, and the marker would flicker as the cursor crossed it. */
   pointer-events:none;
@@ -6013,7 +6013,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .fh-tabs{display:flex;gap: 2px}
 .ftab{padding: 6px 12px;border-radius: 6px;font-size:13px;font-weight:500;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
-.ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
+.ftab.active{background:rgba(var(--accent-rgb),.2);color:var(--accent-text)}
 .pend-tab{position:relative}
 .pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
 .add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
@@ -6167,7 +6167,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
 .icon-btn:active{transform:scale(.88)}
-.icon-btn.active{color:#8d96f8;background:rgba(var(--accent-rgb),.15)}
+.icon-btn.active{color:var(--accent-text);background:rgba(var(--accent-rgb),.15)}
 
 /* Pinned sidebar */
 .pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);animation:slide-in .18s cubic-bezier(.4,0,.2,1)}

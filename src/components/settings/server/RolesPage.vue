@@ -784,7 +784,7 @@ const removeFromRole = (m: ServerMember) => {
 /* Warmer than "Soon": this one is a live gap, not a roadmap note. */
 .rl-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
 /* Cool, not warm — this one is a caveat on something that works, not a gap. */
-.rl-advis { background: color-mix(in srgb, #5865f2 20%, transparent); color: #8b95f8; }
+.rl-advis { background: rgba(var(--accent-rgb), .2); color: var(--accent-text); }
 .st-field-label.danger { color: var(--danger-text); }
 
 .rl-admin {
