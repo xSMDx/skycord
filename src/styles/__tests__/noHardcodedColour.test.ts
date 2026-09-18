@@ -4,14 +4,69 @@ import { resolve, join, relative, sep } from 'path'
 
 const SRC = resolve(__dirname, '../..')
 
-// This is a RATCHET, not a test committed failing (see the plan, revised
-// 2026-09-14): it passes while the offender count is at or below this
-// recorded baseline, and fails the moment anyone adds one. Each sweep task
-// (Tasks 3-8 of the colour-sweep plan) lowers it — it must only ever go
-// down. When it reaches 0 the assertion below becomes
-// `expect(offenders).toEqual([])`, with any owner-ruled ambiguous site
-// named in an allowlist beside it.
-const BASELINE = 80
+// The ratchet the sweep ran on — a single BASELINE number, lowered by each
+// task from 492 to 80 — has done its job and is gone. What replaces it is
+// what the plan said it would: an empty assertion for the app at large, a
+// named list of sites the owner has ruled on, and one count that still has an
+// owner, the call surfaces slice 5 themes against real video.
+//
+// A ruled site is not an excuse; it is a claim, and the third test below
+// holds it to that claim. An entry that stops matching anything fails, so the
+// list cannot quietly outlive the code it was written for.
+type RuledSite = { file: string; selector: string; why: string }
+
+const RULED: RuledSite[] = [
+  // The component's colours are its data. A hue rail painted in tokens is a
+  // hue rail that cannot show hues, and the knob and its ring sit over
+  // whatever colour the user is currently choosing.
+  { file: 'components/ui/ColorPicker.vue', selector: '.cp-hue', why: 'the spectrum IS the control' },
+  { file: 'components/ui/ColorPicker.vue', selector: '.cp-knob', why: 'drawn over the colour being picked' },
+
+  // A theme preview has to be the theme it previews. Tokens would paint every
+  // card in the theme the reader is already looking at.
+  { file: 'components/modals/SettingsModal.vue', selector: '.ap-card.theme-midnight .ap-card-preview', why: 'depicts Midnight' },
+  { file: 'components/modals/SettingsModal.vue', selector: '.ap-card.theme-amoled .ap-card-preview', why: 'depicts AMOLED' },
+
+  // Letterbox: not a surface but the absence of one — the ground behind
+  // pixels that have not arrived yet. Black in every theme, like every video
+  // player.
+  { file: 'components/voice/CameraPreviewModal.vue', selector: '.cp-stage', why: 'letterbox behind video' },
+  { file: 'components/voice/VideoTile.vue', selector: '.vtile', why: 'letterbox behind video' },
+  { file: 'components/voice/VoiceVideoSettings.vue', selector: '.vv-cambox', why: 'letterbox behind the camera preview' },
+
+  // A hairline separating an arbitrary image from whatever is behind it.
+  // --border follows the theme, which is exactly wrong here: the thing being
+  // separated does not.
+  { file: 'components/settings/CountryFlag.vue', selector: '.cf', why: 'ring around an arbitrary flag' },
+
+  // The banner's three fills are deliberately the same in every theme (see
+  // --warning-deep in tokens.css), so a veil laid over one of them is too.
+  { file: 'components/ui/ConnectionBanner.vue', selector: '.cb-retry', why: 'veil over a fixed coloured fill' },
+  { file: 'components/ui/ConnectionBanner.vue', selector: '.cb-retry:active', why: 'veil over a fixed coloured fill' },
+
+  // Decorative gradient partners — violet in the group avatars, pink in two
+  // banners. Which hue (if any) replaces them is a design decision, not a
+  // mapping, so the sweep left them for the owner rather than guessing.
+  { file: 'components/modals/QuickSwitcherModal.vue', selector: '.qs-av-group', why: 'gradient partner: owner decision pending' },
+  { file: 'views/ChatApp.vue', selector: '.grp-av', why: 'gradient partner: owner decision pending' },
+  { file: 'views/ChatApp.vue', selector: '.grp-header-av', why: 'gradient partner: owner decision pending' },
+  { file: 'components/modals/SettingsModal.vue', selector: '.acc-banner-bg', why: 'gradient partner: owner decision pending' },
+  { file: 'views/AuthPage.vue', selector: '.b2', why: 'gradient partner: owner decision pending' },
+
+  // Presence belongs to slice 4, which decides every status colour at once.
+  { file: 'views/ChatApp.vue', selector: '.up-status-dot', why: 'offline grey: slice 4 (presence)' },
+]
+
+// The call surfaces are skipped by this sweep on purpose: slice 5 themes them
+// against real video, where a colour is judged on a moving picture rather
+// than on a static panel. Until then they keep a count of their own, which
+// may only go down.
+const DEFERRED_FILES = [
+  'components/voice/CallBar.vue',
+  'components/voice/CallStage.vue',
+  'components/voice/CallFlyout.vue',
+]
+const DEFERRED_BASELINE = 53
 
 // Same recursive walk onAccentUsage.test.ts uses (vueFiles), generalised to
 // take an extension so it can also list plain .css files. __tests__ is
@@ -281,17 +336,39 @@ describe('no hardcoded colour', () => {
     .flatMap(f => scanFile(f, false))
   const offenders = [...vueOffenders, ...cssOffenders]
 
-  it('never exceeds the recorded baseline of hardcoded colours', () => {
-    // Filterable so a sweep task can narrow the flood to its own family, e.g.
-    // `LIST_COLOURS=1 npx vitest run src/styles/__tests__/noHardcodedColour.test.ts --disableConsoleIntercept | grep 'rgba(255,255,255'`
-    // The flag is required: Vitest 4 drops console output from a passing
-    // test, so without it this prints nothing and the list looks empty.
-    if (process.env.LIST_COLOURS) {
-      console.log(
-        `${offenders.length} offender(s):\n` +
-          offenders.map(o => `${o.file}:${o.line}  ${o.value}  ${o.selector}`).join('\n'),
-      )
-    }
-    expect(offenders.length).toBeLessThanOrEqual(BASELINE)
+  // Filterable so a later slice can narrow the list to its own family, e.g.
+  // `LIST_COLOURS=1 npx vitest run src/styles/__tests__/noHardcodedColour.test.ts --disableConsoleIntercept | grep 'rgba(255,255,255'`
+  // The flag is required: Vitest 4 drops console output from a passing
+  // test, so without it this prints nothing and the list looks empty.
+  if (process.env.LIST_COLOURS) {
+    console.log(
+      `${offenders.length} offender(s):\n` +
+        offenders.map(o => `${o.file}:${o.line}  ${o.value}  ${o.selector}`).join('\n'),
+    )
+  }
+
+  const isRuled = (o: FileOffender) =>
+    RULED.some(r => r.file === o.file && r.selector === o.selector)
+  const isDeferred = (o: FileOffender) => DEFERRED_FILES.includes(o.file)
+
+  it('has no hardcoded colour outside the ruled sites', () => {
+    const unruled = offenders
+      .filter(o => !isRuled(o) && !isDeferred(o))
+      .map(o => `${o.file}:${o.line}  ${o.value}  ${o.selector}`)
+    expect(unruled).toEqual([])
+  })
+
+  it('keeps the call surfaces at or below their deferred count until slice 5', () => {
+    expect(offenders.filter(isDeferred).length).toBeLessThanOrEqual(DEFERRED_BASELINE)
+  })
+
+  // Without this the list above would be write-only: a ruled site that gets
+  // fixed, renamed or deleted would leave an entry behind that silently
+  // excuses whatever lands on that selector next.
+  it('has no ruled site that no longer exists', () => {
+    const dead = RULED.filter(
+      r => !offenders.some(o => o.file === r.file && o.selector === r.selector),
+    ).map(r => `${r.file}  ${r.selector}  (${r.why})`)
+    expect(dead).toEqual([])
   })
 })
