@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Volume2 } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
-import { useServers, serverIconFor } from '@/composables/useServers'
+import { useServers, serverIconFor, fallBackToInitials } from '@/composables/useServers'
 
 const props = defineProps<{ code: string }>()
 // The second argument is the voice channel to land in, or null. Emitted on
@@ -137,7 +137,7 @@ const join = async () => {
     </template>
 
     <template v-else>
-      <img class="ic-icon ic-icon--img" :src="iconSrc" alt="" @error="(e) => ((e.target as HTMLImageElement).src = serverIconFor(serverInfo?.name ?? '?'))" />
+      <img class="ic-icon ic-icon--img" :src="iconSrc" alt="" @error="fallBackToInitials($event, serverInfo?.name ?? '?')" />
       <div class="ic-body">
         <span class="ic-name">{{ serverInfo?.name }}</span>
         <span v-if="errorMessage" class="ic-sub ic-sub--err">{{ errorMessage }}</span>

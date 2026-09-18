@@ -113,13 +113,13 @@ const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&
 /**
  * A name made safe to draw: an unpaired surrogate becomes U+FFFD, because
  * encodeURIComponent throws on one and the server stores whatever a raw API
- * call sends; control characters go, because XML forbids them and the image
- * would fail to load. Tab, newline and carriage return stay — they are only
- * word separators here.
+ * call sends; control characters and the noncharacters U+FFFE and U+FFFF go,
+ * because XML forbids them and the image would fail to load. Tab, newline and
+ * carriage return stay — they are only word separators here.
  */
 const drawable = (s: string): string => s
   .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
-  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFE\uFFFF]/g, '')
 
 /**
  * A server with no icon draws its initials on a colour derived from its name,
@@ -144,6 +144,18 @@ export const serverIconFor = (name: string, icon?: string | null): string => {
     `font-weight="600" text-anchor="middle" dominant-baseline="central">${initials}</text>` +
     `</svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
+/**
+ * An <img> error handler that swaps a broken server icon for its initials
+ * tile — once. Setting src starts a new load even when the value is the same,
+ * so if the tile itself ever failed, re-assigning it would error again forever;
+ * comparing first makes that impossible whatever the tile turns out to be.
+ */
+export const fallBackToInitials = (e: Event, name: string): void => {
+  const img = e.target as HTMLImageElement
+  const tile = serverIconFor(name)
+  if (img.getAttribute('src') !== tile) img.src = tile
 }
 
 const toClientServer = (w: WireServer): Server => ({

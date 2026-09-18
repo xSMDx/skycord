@@ -218,7 +218,7 @@ const submitRegister = async () => {
 
           <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitLogin">
             <template v-if="!loading">Sign In</template>
-            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Signing in…</template>
+            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Signing in…</template>
           </button>
 
           <p class="switch">No account? <button type="button" @click="switchMode('register')">Register</button></p>
@@ -284,7 +284,7 @@ const submitRegister = async () => {
                 <Eye v-if="!showConfirm" :size="15" :stroke-width="2" aria-hidden="true" />
                 <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
               </button>
-              <Check v-if="rf.confirm && rf.password===rf.confirm" class="check" :size="14" :stroke-width="2" aria-hidden="true" />
+              <Check v-if="rf.confirm && rf.password===rf.confirm" class="check" :size="14" :stroke-width="3" aria-hidden="true" />
             </div>
             <span v-if="re.confirm" class="ferr">{{ re.confirm }}</span>
           </div>
@@ -293,7 +293,7 @@ const submitRegister = async () => {
 
           <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitRegister">
             <template v-if="!loading">Create Account</template>
-            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Creating…</template>
+            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Creating…</template>
           </button>
 
           <p class="switch">Have an account? <button type="button" @click="switchMode('login')">Sign in</button></p>
@@ -328,7 +328,7 @@ const submitRegister = async () => {
 
             <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitForgot">
               <template v-if="!loading">Send reset link</template>
-              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Sending…</template>
+              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Sending…</template>
             </button>
 
             <p class="switch">Remembered it? <button type="button" @click="backToLogin">Sign in</button></p>
@@ -381,7 +381,7 @@ const submitRegister = async () => {
 
             <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitReset">
               <template v-if="!loading">Set new password</template>
-              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2" aria-hidden="true" /> Saving…</template>
+              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Saving…</template>
             </button>
 
             <p class="switch">Link expired? <button type="button" @click="mode='forgot'; resetErr=''">Ask for a new one</button></p>

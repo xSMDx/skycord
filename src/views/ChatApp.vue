@@ -21,7 +21,7 @@ import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
-import { useServers, resetServers, serverIconFor } from '@/composables/useServers'
+import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
 import { filterMembers } from '@/composables/memberFilter'
 import { canActOnMemberUI } from '@/composables/permissionMeta'
 import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
@@ -4223,7 +4223,7 @@ onBeforeUnmount(() => {
           @pointerdown="closeRailPreview"
           @click.stop="openServer(srv)">
           <div class="ri-pip" />
-          <div class="ri-icon"><img :src="srv.img" :alt="srv.name" @error="(e) => ((e.target as HTMLImageElement).src = serverIconFor(srv.name))" /></div>
+          <div class="ri-icon"><img :src="srv.img" :alt="srv.name" @error="fallBackToInitials($event, srv.name)" /></div>
           <!--
             Lower-LEFT, deliberately: `.ri-badge` (unread) already owns the
             lower-right of every rail icon, and the two must never stack. They
