@@ -130,8 +130,17 @@ above sometimes disagree with each other despite sharing a hue family.
 |---|---|
 | `--border` | `rgba(255,255,255,.08)` |
 | `--divider` | `rgba(255,255,255,.06)` |
+| `--seam` | `rgba(0,0,0,.3)` (light: `rgba(0,0,0,.08)`) |
 
 Alpha, not solid — they must sit on any surface and stay proportionate.
+
+`--seam` is the **recessed** hairline between two panels: the rail's right edge,
+a header's underline, a popup's outline. It is not interchangeable with
+`--border`, which is a *lighter* line on the dark themes — swap one for the
+other and a groove becomes a ridge. On the light themes the two converge,
+because a .3 black edge on white is a bruise. On AMOLED neither does much: every
+surface there is `#000000`, so panel boundaries come from the surfaces
+themselves.
 
 ### State tints
 
@@ -154,15 +163,52 @@ hover, mentions and primary buttons. A filled selection competed with all of
 them and read as one more coloured thing in a column of coloured things. The row
 carries a hairline ring plus a *neutral* lighter fill instead.
 
+### Neutral shapes
+
+Small shapes drawn *over* a surface rather than states of it. They invert with
+the theme like the tints above.
+
+| Token | Value | Role |
+|---|---|---|
+| `--track` | `rgba(255,255,255,.10)` (light: `rgba(0,0,0,.18)`) | Scrollbar thumbs, slider grooves, connectors, progress rails |
+| `--grabber` | `rgba(255,255,255,.22)` (light: `rgba(0,0,0,.28)`) | The handle on a bottom sheet — heavier, because it is an affordance |
+| `--toggle-off` | `rgba(128,132,142,.5)` | A switch's off track. **Constant across themes** |
+| `--toggle-knob` | `#ffffff` | A switch's knob. Constant: it has to read on the grey track *and* on the accent fill the track becomes |
+
+### Over arbitrary media
+
+| Token | Value | Role |
+|---|---|---|
+| `--media-veil` | `rgba(0,0,0,.45)` | A chip or button resting on a photo, a video, a user-chosen colour |
+| `--media-veil-strong` | `rgba(0,0,0,.65)` | The same, hovered — or a badge that has to win |
+| `--on-media` | `#ffffff` | Anything drawn on one of those veils |
+
+**These three never follow the theme, and the reason is not taste.** What is
+underneath is not a surface this design system controls: a light theme does not
+make someone's banner photo light. Inverting them paints a near-black icon onto
+whatever a member happened to upload. `--text-strong` is the trap here — it is
+near-black on the light themes, so a label that uses it over a veil vanishes.
+
 ### Semantic
 
 | Token | Value | Role |
 |---|---|---|
 | `--green` | `#23a55a` | Live, online, affirmative. Voice pips, speaking rings, success, accept |
+| `--green-text` | `#40b16f` | Green as **words or an icon** — the fill measures 3.97:1 on dark, 1.97:1 on light |
+| `--green-deep` | `#248046` | Green as a **solid fill carrying white text** — "Copied", the connection banner's "Back online" |
+| `--green-rgb` | `35, 165, 90` | For `rgba(var(--green-rgb), .x)` tints |
+| `--danger` | `#ed4245` | Destructive, failed, muted-mic. One red, not three |
+| `--danger-hover` | `#c93b3e` | The same red, pressed or deepened — and the banner's "can't reach" fill |
+| `--danger-text` | `#f27779` | Red as **words** (light: `#9b2d30`) |
+| `--danger-rgb` | `237, 66, 69` | For `rgba(var(--danger-rgb), .x)` tints |
+| `--warning` | `#f0b232` | Amber as a **marker** — measured against the 3:1 graphical floor, not the text floor |
+| `--warning-text` | `#f0b232` | Amber as **words** (light: `#6c5016`) — the marker misses the text floor at 3.10:1 on light |
+| `--warning-deep` | `#8e691d` | Amber as a **solid fill carrying white text** (5.01:1); the banner's old `#b8871f` carried it at 3.22:1 |
+| `--warning-rgb` | `240, 178, 50` | For `rgba(var(--warning-rgb), .x)` tints |
 | `--mention-fg` | `#38b6f1` | Lightened accent (dark) / full accent (light) — derived from the accent by accentTintsOnDark (onAccent.ts) |
 | `--mention-bg` | `rgba(var(--accent-rgb), .18)` | |
 | `--mention-all-bg` | `rgba(240, 178, 0, .22)` | `@everyone` — amber, distinct from a normal ping |
-| `--mention-row-bar` | `#f0b232` | Left bar on a row that pings you |
+| `--mention-row-bar` | `var(--warning)` | Left bar on a row that pings you |
 | `--accent-text` | `#5bc3f3` | Text sitting **on** a translucent accent tint |
 | `--time-token-fg` | `#5bc3f3` | |
 
@@ -172,6 +218,15 @@ colour when the roles don't converge.
 
 `--accent-text` exists because a pale lavender on a pale tint is invisible — it
 splits: pale in dark themes, the *accent itself* in light ones.
+
+**Three values per semantic hue, and why.** A fill, the words drawn *in* that
+hue, and the deep version of it that carries white text are three different
+measurements, and a colour that passes one fails another: `--green` on the chat
+surface is 3.97:1 — fine as a dot, unreadable as a label — and `--warning` as
+words on a light surface is 3.10:1. Pick by what the colour is *doing*: filling
+a shape, spelling a word, or being a background something else is written on.
+`semanticTokens.test.ts` measures the text ones against every surface of all
+thirteen themes on every run.
 
 ### Skeletons
 
@@ -404,13 +459,29 @@ the thing that tells the user work is happening."
 
 ## Elevation
 
-No `--shadow-N` tokens; shadows are written where used, and cluster into three:
+Six shadow tokens and one scrim. Three are depths; three exist because depth is
+not what makes them read.
 
-| Depth | Value | Use |
+| Token | Value | Use |
 |---|---|---|
-| Menu / flyout | `0 8px 28px rgba(0,0,0,.55)` | Context menus, popovers |
-| Modal | `0 12px 34px rgba(0,0,0,.6)` | Dialogs |
-| Overlay | `0 24px 80px rgba(0,0,0,.7)` | Full-screen surfaces, image viewer |
+| `--shadow-xs` | `0 1px 3px rgba(0,0,0,.4)` | Sits *on* a surface it never leaves: a swatch dot, a tab indicator |
+| `--shadow-sm` | `0 4px 14px rgba(0,0,0,.4)` | Small raised controls, cards, a message's hover toolbar |
+| `--shadow-md` | `0 8px 28px rgba(0,0,0,.55)` | Menus, popovers, flyouts, tooltips |
+| `--shadow-lg` | `0 24px 80px rgba(0,0,0,.7)` | Modals, sheets, full-screen surfaces |
+| `--shadow-drawer` | `-8px 0 24px rgba(0,0,0,.45)` | A pane sliding in from the right, casting **left** |
+| `--shadow-sheet` | `0 -12px 40px rgba(0,0,0,.5)` | A sheet rising from the bottom edge, casting **up** |
+| `--scrim` | `rgba(0,0,0,.75)` | The dimming layer behind a modal, a sheet or full-screen media |
+
+Direction is the point of the last two: mapped onto a downward depth, the shadow
+lands on the wrong side of the moving edge, which is the one thing it is there
+to show.
+
+On the light themes the offsets and blurs stay and only the alpha drops (.14 /
+.18 / .22 for the three depths): depth reads from a shadow's *shape*, and a .55
+black shadow that says "elevated" on near-black says "grime" on white. A shadow
+and a scrim stay **black** in every theme rather than flipping to white-alpha
+the way `--border` and `--hover` do — they dim what is under them, which is a
+different job from tinting a surface.
 
 Big blur, big offset, high alpha. On dark surfaces a subtle shadow does nothing;
 depth comes from the shadow, since the surfaces themselves are close in value.
@@ -553,7 +624,7 @@ Recurring shapes. Copy these rather than inventing parallel ones.
 .btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
 .btn.primary:disabled       { opacity: .5; cursor: default; }
 .btn.danger                 { background: transparent; border: 1px solid var(--danger); color: var(--danger-text); }
-.btn.danger:hover           { background: rgba(237,66,69,.12); }
+.btn.danger:hover           { background: rgba(var(--danger-rgb), .12); }
 ```
 
 Secondary buttons are **transparent until hovered**. Only one button per surface

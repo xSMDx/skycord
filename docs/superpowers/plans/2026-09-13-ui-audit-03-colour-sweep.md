@@ -150,3 +150,52 @@ After Task 8 the guard test must pass with **no offenders**, apart from ambiguou
 **Placeholders.** The per-site lists are deliberately **not** frozen into this plan: they are produced live by Task 1's test, because slice 2 moves many of these lines and a frozen list would be stale before Task 3 starts. The mapping rule, the families, the counts and the verification are all concrete.
 
 **The risk worth naming.** A role mis-mapped onto a same-valued token looks identical on dark and breaks on light. Task 9's before/after diff on dark and the light-theme walk are the two checks aimed at exactly that.
+
+---
+
+## Status, 2026-09-18
+
+**Tasks 1-8: done.** The guard counted 492 hardcoded colours at the start and
+asserts zero at the end, outside two named sets it carries with their reasons:
+sixteen owner-ruled sites, and the three call-surface files slice 5 themes
+against real video (53, ceilinged so they can only shrink). `BASELINE` is gone.
+
+Tokens the sweep added beyond the ones Task 2 named, each for a role that had
+none: `--warning-text`, `--green-text`, `--green-deep`, `--green-rgb`,
+`--warning-rgb`, `--shadow-xs`, `--shadow-drawer`, `--shadow-sheet`, `--seam`,
+`--track`, `--grabber`, `--media-veil`, `--media-veil-strong`, `--on-media`,
+`--toggle-off`, `--toggle-knob`, `--warning-deep`, `--text-on-warning-deep`.
+All are documented in `tokens.css` and in `DESIGN.md`.
+
+Three contrast defects fell out of the mapping rather than being hunted: the
+connection banner's amber state (white text at 3.22:1), the DM call button and
+mobile back badge (white on `--green` and `--danger`), and the GIF badge
+labelled in `--text-strong`, which is near-black on the light themes.
+
+**Task 9: half done, and the half that is left needs the owner.**
+
+- Step 1, dark before/after: done for the sign-in surface only (the one that
+  needs no session). 0.17-0.50% of pixels changed and the diff mask is
+  placeholders and field icons — Task 6's grey fixes, which is what this step
+  exists to confirm. Light and light-dim changed 76-81% on the same page,
+  because its ground was a hardcoded `#0d0e10`: the sign-in page was dark in
+  the light themes.
+- Steps 1-3 for every logged-in surface: **blocked**. The preview origin is
+  logged out and signing in is the owner's to do. Everything is in place for
+  it: the preview worktree at the branch head on 4174, the API on 3001 (8990
+  fell inside a new Windows excluded range), `sweep-capture.js` to take the
+  same 15 shots as the `before` set, and `sweep_diff.py` to diff them.
+- Instead, every token the sweep added was rendered by the browser in default,
+  light, light-dim and amoled on a token board (`scratchpad/token-board.html`),
+  which is what the appearance of these tokens can be checked against without
+  a session. All four read correctly.
+- Step 4: findings 6, 7, 9 and 10 are marked fixed in the inventory.
+
+**One finding the board turned up:** on AMOLED, `--seam` is invisible, because
+that theme's floor, deep and chat surfaces are all `#000000` and a recessed
+hairline has nothing to recess into. Pre-existing rather than a regression (the
+literal it replaced was equally invisible there), and a one-line per-theme
+override would fix it if the owner wants panel edges on AMOLED.
+
+**Not merged.** The branch waits on the owner's own walk through the running
+app, and on a final review once the weekly model limit lifts.
