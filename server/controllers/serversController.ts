@@ -11,6 +11,7 @@ import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf, has, requirePerm } from '../utils/access'
 import { parseOverwrites, canActOnMember, serializeBits } from '../permissions'
+import { wellFormed } from '../utils/wellFormed'
 
 /** Discover is a directory, not a feed: one page, no pagination yet. */
 const DISCOVER_LIMIT = 50
@@ -130,7 +131,7 @@ export const requireOwner = (server: any, userId: string, res: Response): boolea
 export const createServer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.sub
-    const name = String(req.body.name ?? '').trim()
+    const name = wellFormed(String(req.body.name ?? '').trim())
     if (!name || name.length > 100) { res.status(400).json({ message: 'Give the server a name' }); return }
 
     const server = await Server.create({ name, owner: userId, members: [userId] })
@@ -370,7 +371,7 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
 
     const { name, icon, iconCrop, bannerColor, description, isPublic } = req.body
     if (name !== undefined) {
-      const n = String(name).trim()
+      const n = wellFormed(String(name).trim())
       if (!n || n.length > 100) { res.status(400).json({ message: 'Give the server a name' }); return }
       server.name = n
     }
@@ -386,7 +387,7 @@ export const updateServer = async (req: Request, res: Response, next: NextFuncti
       else if (/^#[0-9a-f]{6}$/i.test(String(bannerColor))) server.bannerColor = String(bannerColor).toLowerCase()
       else { res.status(400).json({ message: 'Banner colour must be a #rrggbb hex' }); return }
     }
-    if (description !== undefined) server.description = description === null ? null : String(description).slice(0, 300)
+    if (description !== undefined) server.description = description === null ? null : wellFormed(String(description).slice(0, 300))
     // Owner-only, and requireOwner above already guarantees that. Coerced
     // rather than trusted: this one field decides whether the server is
     // visible to everyone on the instance.

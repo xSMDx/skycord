@@ -58,7 +58,10 @@ export interface IServer extends Document {
 const ServerSchema = new Schema<IServer>(
   {
     // Free unicode: reference channel and server names carry emoji, so there
-    // is no slug validation here on purpose.
+    // is no slug validation here on purpose. Well-formed unicode, though: the
+    // controllers put chosen text through utils/wellFormed first, because half
+    // a surrogate pair is stored as U+FFFD and every copy sent out has to say
+    // what the database says.
     name:        { type: String, required: true, maxlength: 100 },
     icon:        { type: String, default: null },
     iconCrop:    { type: { zoom: Number, x: Number, y: Number }, default: null, _id: false },
