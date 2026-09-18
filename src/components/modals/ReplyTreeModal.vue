@@ -258,7 +258,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 .rt-edge {
   fill: none;
-  stroke: rgba(255,255,255,.14);
+  stroke: var(--track);
   stroke-width: 2;
 }
 
@@ -268,11 +268,11 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   padding: 8px 12px;
   border-radius: 8px;
   background: var(--bg-raised);
-  border: 1px solid rgba(255,255,255,.06);
+  border: 1px solid var(--hover);
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.rt-card:hover { background: #25272c; border-color: rgba(255,255,255,.14); transform: translateY(-1px); }
+.rt-card:hover { background: var(--hover-strong); border-color: var(--border); transform: translateY(-1px); }
 .rt-card.own { background: rgba(var(--accent-rgb),.1); border-color: rgba(var(--accent-rgb),.25); }
 .rt-card.own:hover { background: rgba(var(--accent-rgb),.16); }
 .rt-card.target {
@@ -294,8 +294,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-ctx-overlay { position: fixed; inset: 0; z-index: 2100; }
 .rt-ctx {
   position: absolute; min-width: 168px;
-  background: var(--bg-floor); border: 1px solid rgba(0,0,0,.4); border-radius: 8px;
-  padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  background: var(--bg-floor); border: 1px solid var(--seam); border-radius: 8px;
+  padding: 6px; box-shadow: var(--shadow-lg);
 }
 .rt-ctx-item {
   display: block; width: 100%; text-align: left;
@@ -318,5 +318,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .rt-body::-webkit-scrollbar { height: 6px; width: 6px; }
 .rt-body::-webkit-scrollbar-track { background: transparent; }
-.rt-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
+.rt-body::-webkit-scrollbar-thumb { background: var(--track); border-radius: 4px; }
 </style>

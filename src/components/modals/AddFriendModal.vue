@@ -203,5 +203,5 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .af-results::-webkit-scrollbar { width: 4px; }
 .af-results::-webkit-scrollbar-track { background: transparent; }
-.af-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.af-results::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 </style>

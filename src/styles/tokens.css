@@ -130,6 +130,14 @@
      dark value; unify the two tokens when both exist rather than carrying
      two names for one colour. */
   --warning: #f0b232;
+  /* For tints: rgba(var(--warning-rgb), a). */
+  --warning-rgb: 240, 178, 50;
+  /* Amber as TEXT. On dark the marker colour is already 6.69:1 at its worst,
+     so it is the same value; the light themes need it darker, since the
+     marker value there is tuned to the 3:1 graphical floor and reads at
+     3.10:1. Darkened to the least that clears 4.6:1 on every surface of both
+     light blocks — worst 4.64:1 on light-dim --bg-floor. */
+  --warning-text: #f0b232;
   --mention-row-bar: var(--warning);
 
   /* Hover / active surface tints — theme-aware (dark = white-alpha) */
@@ -262,6 +270,22 @@
   --shadow-md: 0 8px 28px rgba(0, 0, 0, .55);  /* menus, popovers, flyouts — DESIGN.md's "Menu / flyout" */
   --shadow-lg: 0 24px 80px rgba(0, 0, 0, .7);  /* modals, sheets — DESIGN.md's "Overlay"; ModalBase.vue's .overlay already paints exactly this */
 
+  /* Three more shadow roles the three depths above cannot express, kept
+     separate rather than folded into them because what makes each one read
+     correctly is its DIRECTION or its smallness, not its depth. All three
+     still drop their alpha on light exactly as the depths do.
+     --shadow-xs is a hairline lift for something sitting ON a surface it
+     never leaves (a swatch dot, a sliding tab indicator): --shadow-sm's
+     14px blur under a 12px dot is a smudge, not an edge.
+     --shadow-drawer and --shadow-sheet cast SIDEWAYS and UPWARD, from a
+     panel that slides in over another (mobile Settings and Server Settings
+     detail panes) and from a sheet that rises from the bottom edge. Mapping
+     either onto a downward depth would put the shadow on the wrong side of
+     the moving edge, which is the one thing the shadow is there to show. */
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, .4);      /* sits on the surface: swatch dots, tab indicators */
+  --shadow-drawer: -8px 0 24px rgba(0, 0, 0, .45); /* a pane sliding in from the right, casting left */
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, .5);  /* a sheet rising from the bottom edge, casting up */
+
   /* The dimming layer behind a modal or full-screen media. One value for
      every modal backdrop rather than one per component: ModalBase.vue's own
      .overlay (rgba(0,0,0,.75)) is the canonical instance — the shared
@@ -275,6 +299,66 @@
      overlay TINT does: dimming the app behind a light-themed modal needs
      the same weight of dimming as behind a dark-themed one. */
   --scrim: rgba(0, 0, 0, .75);
+
+  /* ── Seams, tracks and grabbers ─────────────────────────────────────────
+     Three shapes the app draws over a surface that --border and --hover
+     cannot stand in for.
+
+     --seam is the RECESSED hairline between two panels — the sidebar's right
+     edge, a header's underline, a popup's outline. It was black at eight
+     different alphas (.2 to .4) in 20 places. It is not --border: --border is
+     a LIGHTER line on dark (white .08), so swapping a seam for it turns a
+     groove into a ridge and erases the depth the layout is built on. On the
+     light themes a black seam at .3 is a bruise, so it lands exactly where
+     --border already is — the two roles converge on light and separate on
+     dark, which is the whole reason both exist.
+
+     --track is a quiet neutral bar: scrollbar thumbs (.08-.12 in ten places),
+     a slider's groove, the reply tree's connector, a progress rail.
+     --grabber is the sheet handle — the same shape, but an affordance the
+     user is meant to notice, so it stays heavier. Both invert on light: a
+     white thumb on a white panel is not a thumb. */
+  --seam:    rgba(0, 0, 0, .3);
+  --track:   rgba(255, 255, 255, .10);
+  --grabber: rgba(255, 255, 255, .22);
+
+  /* ── Over arbitrary media ───────────────────────────────────────────────
+     A chip, badge or icon drawn on top of a photo, a video or a
+     user-chosen colour — the pencil on an avatar, the GIF badge on a
+     thumbnail, the voice chip on a server icon, the close button on a
+     profile banner.
+
+     These are the one family that must NOT follow the theme, and the reason
+     is not style: what is underneath is not a surface we control. A light
+     theme does not make someone's banner photo light. Inverting these would
+     paint a near-black icon onto whatever the member happened to upload.
+     The veils were seven hand-picked alphas (.35 to .7); two steps are
+     enough — resting, and hovered or badge-weight. */
+  --media-veil:        rgba(0, 0, 0, .45);
+  --media-veil-strong: rgba(0, 0, 0, .65);
+  --on-media:          #ffffff;
+
+  /* ── Toggles ────────────────────────────────────────────────────────────
+     The off track and the knob, shared by the two switches in the app
+     (Appearance and Voice & Video). Both constant across themes for the
+     same reason --on-media is: the knob has to read on the grey track AND
+     on the accent fill the track becomes when it is on, and --text-strong
+     (the obvious candidate) is near-black on the light themes, which would
+     lose the knob inside a light accent. */
+  --toggle-off:  rgba(128, 132, 142, .5);
+  --toggle-knob: #ffffff;
+
+  /* ── Warning, as a solid fill ───────────────────────────────────────────
+     --warning is the marker amber, measured against the 3:1 graphical floor.
+     A full-width banner filled with it and labelled in white is a different
+     job, and the value the connection banner used (#b8871f) carried its own
+     white text at 3.22:1 — under the 4.5 text floor, on the one strip in the
+     app that exists to be read in a hurry. This is that fill measured
+     properly: white on it is 5.01:1. Constant across themes, like the deep
+     green and the deep red the same banner's other two states use — a status
+     strip is deliberately loud in every theme. */
+  --warning-deep:          #8e691d;
+  --text-on-warning-deep:  #ffffff;
 
   /* ── The 2px grid ───────────────────────────────────────────────────────
      Spacing, radii and icon sizes are even numbers. Not a scale invented
@@ -368,6 +452,7 @@ html.names-plain { --name-hover: var(--text-strong); }
      against all ten, light-dim's --bg-floor binds, at 3.10:1. Explicit in both for the same
      sibling-selector reason as --danger-text above. */
   --warning: #8e691d;
+  --warning-text: #6c5016;
   /* Shadows keep their dark-theme offset/blur; only alpha drops — a shadow
      this heavy reads as elevation on a near-black surface and as grime on
      white. Not inverted to white-alpha; see the dark block's shadow
@@ -376,6 +461,12 @@ html.names-plain { --name-hover: var(--text-strong); }
   --shadow-sm: 0 4px 14px rgba(0, 0, 0, .14);
   --shadow-md: 0 8px 28px rgba(0, 0, 0, .18);
   --shadow-lg: 0 24px 80px rgba(0, 0, 0, .22);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, .12);
+  --shadow-drawer: -8px 0 24px rgba(0, 0, 0, .16);
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, .17);
+  --seam:    rgba(0, 0, 0, .08);
+  --track:   rgba(0, 0, 0, .18);
+  --grabber: rgba(0, 0, 0, .28);
 }
 [data-theme="light-dim"] {
   /* Green as a mark on a light surface: darkened toward black by the least
@@ -427,9 +518,16 @@ html.names-plain { --name-hover: var(--text-strong); }
      inherits from the other. */
   --danger-text: #9b2d30;
   --warning: #8e691d;
+  --warning-text: #6c5016;
   --shadow-sm: 0 4px 14px rgba(0, 0, 0, .14);
   --shadow-md: 0 8px 28px rgba(0, 0, 0, .18);
   --shadow-lg: 0 24px 80px rgba(0, 0, 0, .22);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, .12);
+  --shadow-drawer: -8px 0 24px rgba(0, 0, 0, .16);
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, .17);
+  --seam:    rgba(0, 0, 0, .08);
+  --track:   rgba(0, 0, 0, .18);
+  --grabber: rgba(0, 0, 0, .28);
 }
 
 /* ── Theme presets (dark family — text stays light) ─────────────────────── */

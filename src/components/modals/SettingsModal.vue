@@ -1437,7 +1437,7 @@ img    { display: block; object-fit: cover; }
 .kb-key {
   font-family: var(--font-ui); font-size: 12px; font-weight: 600; line-height: 1;
   color: var(--text-1); background: var(--bg-input);
-  border: 1px solid rgba(255, 255, 255, .10);
+  border: 1px solid var(--border);
   border-bottom-width: 2px;
   border-radius: var(--edge-sm); padding: 6px 8px; min-width: 24px; text-align: center;
 }
@@ -1447,7 +1447,7 @@ img    { display: block; object-fit: cover; }
 .pf-sub { font-size: 13.5px; color: var(--text-3); margin: -6px 0 20px; }
 .pf-err {
   padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 13px;
-  background: rgba(237,66,69,.14); border: 1px solid rgba(237,66,69,.32); color: var(--danger-text);
+  background: rgba(var(--danger-rgb), .14); border: 1px solid rgba(var(--danger-rgb), .32); color: var(--danger-text);
 }
 /*
  * Profile — the card is the stage.
@@ -1484,7 +1484,7 @@ img    { display: block; object-fit: cover; }
 .pf-idle { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
 .pf-idleval { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-1); min-width: 52px; text-align: right; }
 .pf-danger { color: var(--danger-text); background: none; }
-.pf-danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
+.pf-danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), .12); }
 .pf-danger:disabled { opacity: .4; cursor: not-allowed; }
 
 .pf-bnwrap { position: relative; }
@@ -1492,7 +1492,7 @@ img    { display: block; object-fit: cover; }
   /* 16:5, matching .pc-banner and the crop window. A preview in a different
      shape is not a preview. */
   width: 100%; aspect-ratio: 16 / 5; border-radius: 8px; cursor: pointer;
-  border: 1px solid rgba(0,0,0,.35); transition: filter var(--dur-1) var(--ease-out);
+  border: 1px solid var(--seam); transition: filter var(--dur-1) var(--ease-out);
 }
 .pf-bnbox:hover { filter: brightness(1.25); }
 .pf-bnbox { position: relative; overflow: hidden; padding: 0; }
@@ -1509,12 +1509,12 @@ img    { display: block; object-fit: cover; }
 .pf-pop-panel {
   position: fixed; z-index: 1401;
   background: var(--bg-floor); border-radius: 8px; padding: 14px;
-  box-shadow: 0 14px 40px rgba(0,0,0,.65);
+  box-shadow: var(--shadow-lg);
 }
 
 
 .pf-textarea {
-  width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
+  width: 100%; background: var(--bg-input); border: 1px solid var(--seam);
   border-radius: 6px; padding: 10px 12px; color: var(--text-1);
   font: inherit; font-size: 14.5px; line-height: 1.5; resize: vertical; min-height: 74px;
 }
@@ -1585,7 +1585,7 @@ img    { display: block; object-fit: cover; }
   color: var(--text-strong);
 }
 .sm-nav-item.danger { color: var(--danger-text); margin-top: 4px; }
-.sm-nav-item.danger:hover { background: rgba(237,66,69,.12); }
+.sm-nav-item.danger:hover { background: rgba(var(--danger-rgb), .12); }
 .sm-nav-divider { height: 1px; background: var(--divider); margin: 8px 10px; }
 
 /*
@@ -1725,7 +1725,7 @@ img    { display: block; object-fit: cover; }
   position: relative; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
   border: 2px solid transparent;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
+  box-shadow: inset 0 0 0 2px var(--active-ring);
   transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ap-custom:hover { transform: scale(1.08); }
@@ -1733,7 +1733,7 @@ img    { display: block; object-fit: cover; }
 /* Swatch background is the live accent (inline style) — stroke follows the
    same measured token a solid accent fill uses anywhere else, not a hardcoded
    white that only reads on the darker presets. */
-.ap-custom-ico { stroke: var(--text-on-accent); opacity: .92; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); pointer-events: none; }
+.ap-custom-ico { stroke: var(--text-on-accent); opacity: .92; filter: drop-shadow(var(--shadow-xs)); pointer-events: none; }
 .ap-custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 /*
  * Appearance — controls left, live preview right.
@@ -1758,7 +1758,7 @@ img    { display: block; object-fit: cover; }
   font-size: 13px; font-weight: 600; color: var(--text-1);
 }
 .ap-card.active { border-color: var(--accent); }
-.ap-card-preview { width: 72px; height: 44px; border-radius: 6px; background: var(--bg-chat); border: 1px solid rgba(255,255,255,.06); }
+.ap-card-preview { width: 72px; height: 44px; border-radius: 6px; background: var(--bg-chat); border: 1px solid var(--hover); }
 .ap-card.theme-midnight .ap-card-preview { background: #1a1b1f; }
 .ap-card.theme-amoled .ap-card-preview { background: #000; }
 .ap-card-sm { min-width: 0; padding: 10px 20px; }
@@ -1846,7 +1846,7 @@ img    { display: block; object-fit: cover; }
 .ap-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
-  background: var(--accent); border: 2px solid var(--bg-panel); box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  background: var(--accent); border: 2px solid var(--bg-panel); box-shadow: var(--shadow-xs);
 }
 .ap-slider::-moz-range-thumb {
   width: 16px; height: 16px; border-radius: 50%;
@@ -1880,9 +1880,9 @@ img    { display: block; object-fit: cover; }
 .ap-name-input:focus { outline: none; border-color: var(--accent); }
 
 /* Toggle */
-.ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: rgba(128,132,142,.5); position: relative; transition: background var(--dur-2) var(--ease-out); flex-shrink: 0; }
+.ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: var(--toggle-off); position: relative; transition: background var(--dur-2) var(--ease-out); flex-shrink: 0; }
 .ap-toggle.on { background: var(--accent); }
-.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
+.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out); }
 .ap-toggle.on span { transform: translateX(18px); }
 
 /* Scrollbar */
@@ -1917,7 +1917,7 @@ img    { display: block; object-fit: cover; }
 
 /* Same parallax as the shell, so the two stacks feel like one system. */
 .sm-modal.mobile.m-detail .sm-nav     { transform: translate3d(-28%, 0, 0); opacity: .65; }
-.sm-modal.mobile.m-detail .sm-content { transform: translate3d(0, 0, 0); box-shadow: -8px 0 24px rgba(0,0,0,.45); }
+.sm-modal.mobile.m-detail .sm-content { transform: translate3d(0, 0, 0); box-shadow: var(--shadow-drawer); }
 
 /* Nav rows become list rows: full-bleed, 48px tall, chevron pushed right. */
 /* flex-start + gap, NOT space-between: rows like "Log Out" have an icon next to
@@ -1977,7 +1977,7 @@ img    { display: block; object-fit: cover; }
 
 .sm-content::-webkit-scrollbar, .sm-nav::-webkit-scrollbar { width: 4px; }
 .sm-content::-webkit-scrollbar-track, .sm-nav::-webkit-scrollbar-track { background: transparent; }
-.sm-content::-webkit-scrollbar-thumb, .sm-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.sm-content::-webkit-scrollbar-thumb, .sm-nav::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 
 /* ── Profile / Appearance stages: press feedback and stacking ── */
 

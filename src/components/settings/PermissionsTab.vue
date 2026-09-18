@@ -528,7 +528,7 @@ const onBarLeave = (el: Element) => {
   padding: 2px 6px; border-radius: 4px;
   background: var(--hover-strong); color: var(--text-3);
 }
-.pm-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
+.pm-unenf { background: rgba(var(--warning-rgb), .22); color: var(--warning-text); }
 .pm-advis { background: rgba(var(--accent-rgb), .2); color: var(--accent-text); }
 /* Colour only lands on the SELECTED state: three lit buttons per row, times
    thirty rows, is a wall of red and green with no signal in it. */
@@ -541,7 +541,7 @@ const onBarLeave = (el: Element) => {
   position: sticky; bottom: 0; z-index: 2;
   display: flex; align-items: center; gap: 10px;
   margin-top: 20px; padding: 12px 14px; border-radius: 10px;
-  background: var(--bg-floor); box-shadow: 0 6px 24px rgba(0,0,0,.4);
+  background: var(--bg-floor); box-shadow: var(--shadow-md);
 }
 .pm-bar-text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-1); }
 .pm-bar-enter-active, .pm-bar-leave-active {

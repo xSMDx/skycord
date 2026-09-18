@@ -222,7 +222,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: var(--text-strong);
 }
 .sv-navitem.danger { color: var(--danger-text); }
-.sv-navitem.danger:hover { background: rgba(237,66,69,.12); color: #ff8785; }
+.sv-navitem.danger:hover { background: rgba(var(--danger-rgb), .12); color: var(--danger-text); }
 .sv-navsep { height: 1px; background: var(--divider); margin: 12px 10px; }
 
 /* ── Content ── */
@@ -286,7 +286,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   .sv-nav-inner { width: 100%; padding: 20px 12px 40px; }
   .sv-main { z-index: 2; transform: translate3d(100%, 0, 0); background: var(--bg-raised); }
   .sv.m-detail .sv-nav { transform: translate3d(-28%, 0, 0); opacity: .6; }
-  .sv.m-detail .sv-main { transform: translate3d(0, 0, 0); box-shadow: -8px 0 24px rgba(0,0,0,.45); }
+  .sv.m-detail .sv-main { transform: translate3d(0, 0, 0); box-shadow: var(--shadow-drawer); }
   .sv-navitem { min-height: 44px; }
   .sv-back { display: flex; }
   .sv-scroll { padding: 4px 16px 60px; max-width: none; }

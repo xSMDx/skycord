@@ -260,7 +260,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .vs-mini:hover:not(:disabled) { background: var(--hover); color: var(--text-strong); }
-.vs-mini.danger:hover:not(:disabled) { background: rgba(237,66,69,.14); color: var(--danger-text); }
+.vs-mini.danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), .14); color: var(--danger-text); }
 .vs-mini:disabled { opacity: .4; cursor: default; }
 
 .vs-add {
@@ -296,7 +296,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .vs-btn:hover { background: var(--hover); }
-.vs-btn.primary { background: var(--accent); color: var(--text-on-accent, #fff); }
+.vs-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .vs-btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
 .vs-btn.primary:disabled { opacity: .5; cursor: default; }
 

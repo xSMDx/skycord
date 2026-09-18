@@ -45,7 +45,7 @@ onBeforeUnmount(soundRingStop)
      sat on top of this and the call simply never appeared. */
   position: fixed; inset: 0; z-index: 9700;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,.45);
+  background: var(--scrim);
   animation: ic-fade .15s ease;
 }
 @keyframes ic-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -53,7 +53,7 @@ onBeforeUnmount(soundRingStop)
 .ic-card {
   width: 280px; padding: 28px 24px 22px;
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px;
-  box-shadow: 0 24px 70px rgba(0,0,0,.6);
+  box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; align-items: center;
   animation: ic-pop .22s cubic-bezier(.34,1.56,.64,1);
 }
@@ -77,9 +77,9 @@ onBeforeUnmount(soundRingStop)
 
 .ic-actions { display: flex; gap: 36px; margin-top: 24px; }
 .ic-btn {
-  width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer; color: #fff;
+  width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: transform var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out); box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  transition: transform var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out); box-shadow: var(--shadow-sm);
 }
 .ic-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.08); }
 .ic-btn:active { transform: scale(.94); }

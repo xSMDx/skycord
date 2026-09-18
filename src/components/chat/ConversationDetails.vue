@@ -396,7 +396,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   font-size: 15px; font-weight: 600; color: var(--text-1);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cd-m-owner { color: #f0b232; flex-shrink: 0; }
+.cd-m-owner { color: var(--warning); flex-shrink: 0; }
 .cd-m-user { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cd-soon { padding: 32px 16px; text-align: center; color: var(--text-3); font-size: 14px; line-height: 1.5; }

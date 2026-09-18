@@ -136,7 +136,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 
 .rp-search {
   display: flex; align-items: center; gap: 8px;
-  margin: 12px 12px 0; background: rgba(0,0,0,.3);
+  margin: 12px 12px 0; background: var(--bg-input);
   border: 1.5px solid var(--border);
   border-radius: 8px; padding: 8px 12px;
   transition: border-color var(--dur-2) var(--ease-out);
@@ -185,5 +185,5 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 
 .rp-grid-wrap::-webkit-scrollbar { width: 4px; }
 .rp-grid-wrap::-webkit-scrollbar-track { background: transparent; }
-.rp-grid-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+.rp-grid-wrap::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 </style>

@@ -499,7 +499,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   padding: 8px 12px 8px 14px;
   background: var(--bg-panel);
   border-radius: 10px 10px 0 0;
-  border-bottom: 1px solid rgba(0,0,0,.22);
+  border-bottom: 1px solid var(--seam);
 }
 .reply-strip-label { font-size: 13px; color: var(--text-2); flex-shrink: 0; }
 .reply-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
@@ -602,7 +602,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .send-btn {
   width: 32px; height: 32px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-faint); background: rgba(255,255,255,.04);
+  color: var(--text-faint); background: var(--hover);
   transition: background var(--dur-1) var(--ease-out),
               color      var(--dur-1) var(--ease-out),
               opacity    var(--dur-1) var(--ease-out),
@@ -683,8 +683,8 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .fmt-toolbar {
   position: fixed; z-index: 1401; transform: translateX(-50%);
   display: flex; gap: 1px; padding: 4px;
-  background: var(--bg-panel); border: 1px solid rgba(0,0,0,.4); border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: 8px;
+  box-shadow: var(--shadow-md);
 }
 .fmt-toolbar button {
   width: 30px; height: 30px; border-radius: 6px;

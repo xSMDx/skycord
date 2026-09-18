@@ -296,7 +296,7 @@ onBeforeUnmount(() => {
 .vcp-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .vcp-status { font-size: 13px; font-weight: 700; }
 .vcp-name { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vcp-warn { color: #f0b232; }
+.vcp-warn { color: var(--warning-text); }
 .vcp-leave {
   width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
   background: var(--hover); color: var(--text-1);
@@ -315,14 +315,14 @@ onBeforeUnmount(() => {
 .vcp-btn:active:not(:disabled) { transform: scale(.96); }
 .vcp-btn.on { background: var(--green-deep); color: var(--text-on-green-deep); }
 .vcp-btn:disabled { opacity: .45; cursor: not-allowed; }
-.vcp-back { color: #3ba55d; }
+.vcp-back { color: var(--green-text); }
 .vcp-back:hover { background: rgba(var(--green-rgb), .18); color: var(--green-text); }
 
 /* Hover popover — appears above the strip */
 .vcp-pop {
   position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px);
   background: var(--bg-floor); border: 1px solid var(--border); border-radius: 10px;
-  padding: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.5); z-index: 50;
+  padding: 12px; box-shadow: var(--shadow-md); z-index: 50;
   opacity: 0; transform: translateY(6px); pointer-events: none;
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

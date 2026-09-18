@@ -142,7 +142,7 @@ onMounted(async () => {
 .splash {
   position: fixed; inset: 0;
   width: 100vw; height: 100vh; height: 100dvh;
-  background: #0d0e10;
+  background: var(--bg-floor);
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: 16px; z-index: 9999;
@@ -162,7 +162,7 @@ onMounted(async () => {
 
 .splash-bar {
   width: 120px; height: 3px;
-  background: rgba(255,255,255,.08);
+  background: var(--track);
   border-radius: 2px; overflow: hidden;
   margin-top: 4px;
 }

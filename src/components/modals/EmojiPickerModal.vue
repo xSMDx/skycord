@@ -339,7 +339,7 @@ img    { display: block; width: 100%; object-fit: cover; }
   width: 360px; background: var(--bg-panel);
   border: 1px solid var(--border); border-radius: 10px;
   display: flex; flex-direction: column; overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  box-shadow: var(--shadow-md);
   max-height: 420px;
 }
 
@@ -357,8 +357,8 @@ img    { display: block; width: 100%; object-fit: cover; }
 
 .picker-search {
   display: flex; align-items: center; gap: 8px;
-  margin: 8px; background: rgba(0,0,0,.3); border-radius: 6px;
-  padding: 8px 10px; border: 1px solid rgba(255,255,255,.06);
+  margin: 8px; background: var(--bg-input); border-radius: 6px;
+  padding: 8px 10px; border: 1px solid var(--border);
   flex-shrink: 0; transition: border-color var(--dur-2) var(--ease-out);
 }
 .picker-search:focus-within { border-color: rgba(var(--accent-rgb),.5); }
@@ -397,7 +397,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .gif-item {
   break-inside: avoid; margin-bottom: 6px; border-radius: 6px; overflow: hidden;
   cursor: pointer; transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
-  background: rgba(255,255,255,.04);
+  background: var(--hover);
 }
 .gif-item:hover { opacity: .85; transform: scale(1.02); }
 .gif-item img { border-radius: 6px; width: 100%; height: auto; display: block; }
@@ -431,7 +431,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 
 .picker-grid::-webkit-scrollbar { width: 4px; }
 .picker-grid::-webkit-scrollbar-track { background: transparent; }
-.picker-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+.picker-grid::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 
 /* ── On a phone ────────────────────────────────────────────────────────────
  *

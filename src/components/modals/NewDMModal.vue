@@ -113,7 +113,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-search {
   display: flex; align-items: center; gap: 8px;
   margin: 16px 20px 0;
-  background: rgba(0,0,0,.3); border: 1.5px solid var(--border);
+  background: var(--bg-input); border: 1.5px solid var(--border);
   border-radius: 8px; padding: 8px 12px;
   transition: border-color var(--dur-2) var(--ease-out);
 }

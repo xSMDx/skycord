@@ -174,7 +174,7 @@ const lossPct = computed(() => outLossPct())
 
 <style scoped>
 .ov {
-  position: fixed; inset: 0; background: rgba(0,0,0,.78);
+  position: fixed; inset: 0; background: var(--scrim);
   display: flex; align-items: center; justify-content: center; z-index: 1200;
   animation: dbg-fade .15s ease;
 }
@@ -184,7 +184,7 @@ const lossPct = computed(() => outLossPct())
   position: relative; display: flex;
   width: 940px; max-width: 96vw; height: 640px; max-height: 90vh;
   background: var(--bg-panel); border-radius: 12px; overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0,0,0,.7);
+  box-shadow: var(--shadow-lg);
   animation: dbg-in .18s cubic-bezier(.4,0,.2,1);
 }
 @keyframes dbg-in { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }
@@ -217,7 +217,7 @@ const lossPct = computed(() => outLossPct())
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .dbg-nav > button:hover { background: var(--hover); color: var(--text-1); }
-.dbg-nav > button.on { background: var(--active, rgba(255,255,255,.09)); color: var(--text-1); font-weight: 600; }
+.dbg-nav > button.on { background: var(--active, var(--hover-strong)); color: var(--text-1); font-weight: 600; }
 
 .dbg-navfoot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
 .dbg-act {
@@ -226,7 +226,7 @@ const lossPct = computed(() => outLossPct())
   background: var(--hover); color: var(--text-2); font-size: 12px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.dbg-act:hover { background: rgba(255,255,255,.12); color: var(--text-1); }
+.dbg-act:hover { background: var(--hover-strong); color: var(--text-1); }
 .dbg-act:active { transform: scale(.97); }
 
 /* Body */
@@ -234,7 +234,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-h { font-size: 14px; color: var(--text-1); margin: 0 0 16px; font-weight: 600; }
 .dbg-h span { color: var(--text-faint); font-weight: 400; font-size: 12px; }
 .dbg-err {
-  background: rgba(242,63,67,.12); border: 1px solid rgba(242,63,67,.3);
+  background: rgba(var(--danger-rgb), .12); border: 1px solid rgba(var(--danger-rgb), .3);
   color: var(--danger-text); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
 }
 

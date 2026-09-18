@@ -286,7 +286,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   transform: translate(-50%, -50%);
   width: var(--cw, 300px); height: var(--ch, 300px);
   pointer-events: none;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.9), 0 0 0 9999px rgba(0,0,0,.55);
+  box-shadow: inset 0 0 0 2px var(--on-media), 0 0 0 9999px var(--scrim);
   border-radius: var(--cr, 50%);
 }
 /* Banners are a rectangle. Showing a circle here would frame the image

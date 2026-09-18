@@ -5253,7 +5253,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-desc{margin: 4px 0 0;padding: 0 14px;font-size:13px;line-height:1.4;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
 .dsc-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding: 12px 14px 14px}
 .dsc-count{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
-.dsc-join{padding: 7px 16px;border-radius:6px;background:var(--accent);color:var(--text-on-accent, #fff);font-size:13px;font-weight:600;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.dsc-join{padding: 7px 16px;border-radius:6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .dsc-join:hover:not(:disabled){background:var(--accent-hover)}
 .dsc-join:disabled{opacity:.6;cursor:default}
 
@@ -5303,7 +5303,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Same 18px circle + 2px floor-coloured ring as .dm-call in the DM list, so a
    voice indicator looks like a voice indicator wherever it appears — the ring
    is what keeps a green disc legible against a green server icon. */
-.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius: 50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius: 50%;background:var(--media-veil-strong);color:var(--on-media);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
 /* Green means you are in this one. Every other server with voice activity
    keeps the dark chip — the user asked for two colours, not a palette. */
 .ri-voice.mine{background:var(--green)}
@@ -5312,7 +5312,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:var(--shadow-md)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
 .rvp-ch{margin-top: 8px}
@@ -5342,12 +5342,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid rgba(0,0,0,.3);transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
+.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
 .sb-search{padding: 8px 8px 4px;flex-shrink:0}
-.sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
-.sb-search-btn:hover{background:rgba(0,0,0,.5);color:var(--text-1)}
+.sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:var(--bg-input);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.sb-search-btn:hover{background:var(--bg-floor);color:var(--text-1)}
 
 .sb-nav{padding: 4px 8px}
 .sb-nav-item{display:flex;align-items:center;gap: 10px;width:100%;padding: 8px 10px;border-radius: 6px;font-size:14px;font-weight:500;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
@@ -5374,7 +5374,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   color      var(--dur-1) var(--ease-out),
   transform  var(--dur-1) var(--ease-out); }
 
-.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap: 8px;padding: 0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition: background var(--dur-2) var(--ease-out);white-space:nowrap}
+.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap: 8px;padding: 0 16px;border-bottom:1px solid var(--seam);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition: background var(--dur-2) var(--ease-out);white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
 /* The one flexible child, so the voice cluster and the chevron keep their
    size and a 40-character server name ellipses instead of shoving them out
@@ -5425,7 +5425,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    still need to be noticeable. The active row stays at full strength — you're
    reading it. */
 .dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
-.dm-call{width:18px;height:18px;border-radius: 50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-call{width:18px;height:18px;border-radius: 50%;background:var(--green);color:var(--text-on-green);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
 .dm-x:hover{color: var(--text-strong)}
@@ -5454,10 +5454,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* Leave button */
 .icon-btn-leave{color:var(--danger-text) !important}
-.icon-btn-leave:hover{background:rgba(237,66,69,.12) !important}
+.icon-btn-leave:hover{background:rgba(var(--danger-rgb), .12) !important}
 
 /* @everyone toast */
-.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:var(--shadow-md)}
 .toast-pop-enter-active,.toast-pop-leave-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
@@ -5531,7 +5531,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   padding: 8px 14px; border-radius: 6px;
   background:var(--bg-floating, var(--bg-panel)); color:var(--text-strong);
   font-size:14px; font-weight:600; border:1px solid var(--active-ring);
-  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  box-shadow:var(--shadow-md);
   transition: transform var(--dur-2) var(--ease-out);
 }
 .skip-link:focus-visible{ transform:translateY(0); }
@@ -5640,7 +5640,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .vc-occ:last-child{margin-bottom: 6px}
 
 /* User Panel */
-.user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px}
+.user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid var(--seam);display:flex;align-items:center;justify-content:space-between;padding: 0 8px}
 .up-left{display:flex;align-items:center;gap: 8px;cursor:pointer;padding: 4px 6px;border-radius: 6px;transition: background var(--dur-2) var(--ease-out);flex:1;min-width:0}
 .up-left:hover{background:var(--hover)}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
@@ -5657,9 +5657,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    (max-width:420px) when the constraint is the CONTAINER — on a 1280px window
    it never fired. Sizing it like its neighbours removes the problem instead of
    trying to measure around it. */
-.up-callback{color:#3ba55d}
+.up-callback{color:var(--green-text)}
 .up-callback:hover{background:rgba(var(--green-rgb), .16);color:var(--green-text)}
-.up-callback.connecting{color:#f0b232}
+.up-callback.connecting{color:var(--warning-text)}
 .up-callback.connecting svg{animation:up-cb-pulse 1.1s ease-in-out infinite}
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
@@ -5667,7 +5667,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
-.up-btn.danger{color:var(--danger-text);background:rgba(237,66,69,.12)}
+.up-btn.danger{color:var(--danger-text);background:rgba(var(--danger-rgb), .12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
 .up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
@@ -5755,7 +5755,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   z-index:2;
   /* A shadow along the leading edge separates the pushed screen from the list
      underneath, which is what makes the parallax legible. */
-  box-shadow:-8px 0 24px rgba(0,0,0,.45);
+  box-shadow:var(--shadow-drawer);
 }
 
 /* Mid-drag the finger owns the position; a transition here would fight it. */
@@ -5850,7 +5850,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   display:flex;align-items:center;justify-content:center;
   position:absolute;top:3px;right:0;
   min-width:18px;height:18px;padding: 0 6px;
-  background:var(--danger);color:#fff;
+  background:var(--danger);color:var(--text-on-danger);
   font-size:11px;font-weight:700;line-height:1;
   border-radius: 8px;border:2px solid var(--bg-chat);
   pointer-events:none;
@@ -5964,7 +5964,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    a tap and the row reads as still selected. */
 .shell.mobile .f-btn:hover{background:var(--hover);color:var(--text-3);transform:none}
 .shell.mobile .f-btn.accept:hover{background:rgba(var(--green-rgb), .15);color:var(--green-text);transform:none}
-.shell.mobile .f-btn.decline:hover{background:rgba(237,66,69,.15);color:var(--danger-text);transform:none}
+.shell.mobile .f-btn.decline:hover{background:rgba(var(--danger-rgb), .15);color:var(--danger-text);transform:none}
 .shell.mobile .f-btn:active{background:var(--hover-strong)}
 
 .shell.mobile .f-empty{padding:48px 24px}
@@ -6007,7 +6007,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .shell.mobile .main-content,
   .shell.mobile .chat{transition: opacity var(--dur-3) var(--ease-out)}
 }
-.friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;gap: 8px;padding: 0 16px}
+.friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid var(--seam);display:flex;align-items:center;gap: 8px;padding: 0 16px}
 .fh-icon{color:var(--text-3);flex-shrink:0}
 .fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right: 4px;white-space:nowrap}
 .fh-tabs{display:flex;gap: 2px}
@@ -6022,7 +6022,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .friends-body{flex:1;display:flex;overflow:hidden}
 .friends-list{flex:1;overflow: hidden auto;padding: 16px}
 .f-loading{display:flex;align-items:center;gap: 10px;padding: 20px;color:var(--text-faint);font-size:14px}
-.f-search{display:flex;align-items:center;gap: 8px;background:rgba(0,0,0,.25);border-radius: 6px;padding: 8px 12px;margin-bottom: 16px}
+.f-search{display:flex;align-items:center;gap: 8px;background:var(--bg-input);border-radius: 6px;padding: 8px 12px;margin-bottom: 16px}
 .f-search input{flex:1;font-size:14px;color:var(--text-1)}
 .f-search input::placeholder{color:var(--text-faint)}
 .f-section-label{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom: 8px}
@@ -6033,7 +6033,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-empty strong{color:var(--text-1)}
 .f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
-.f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid var(--hover);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .f-row:hover{background:var(--hover);border-color:transparent}
 .f-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .f-av img{border-radius: 50%}
@@ -6052,8 +6052,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
 .f-btn.accept{background:rgba(var(--green-rgb), .15);color:var(--green-text)}
 .f-btn.accept:hover{background:rgba(var(--green-rgb), .28);transform:scale(1.1)}
-.f-btn.decline{background:rgba(237,66,69,.15);color:var(--danger-text)}
-.f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}
+.f-btn.decline{background:rgba(var(--danger-rgb), .15);color:var(--danger-text)}
+.f-btn.decline:hover{background:rgba(var(--danger-rgb), .28);transform:scale(1.1)}
 
 /* Active Now */
 .active-now{width:280px;flex-shrink:0;border-left:1px solid var(--divider);padding: 16px;overflow: hidden auto}
@@ -6061,7 +6061,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
 .an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
-.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:rgba(255,255,255,.04);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:var(--hover);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .an-av img{border-radius: 50%}
@@ -6088,7 +6088,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   width:100%;max-width:none;height:70dvh;
   z-index:960;
   border-left:none;border-radius: 16px 16px 0 0;
-  box-shadow:0 -12px 40px rgba(0,0,0,.5);
+  box-shadow:var(--shadow-sheet);
   padding-bottom: env(safe-area-inset-bottom);
   transform:translate3d(0,0,0);
   transition:transform .34s cubic-bezier(.32,.72,0,1);
@@ -6101,14 +6101,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Grab handle, so it reads as a sheet rather than a panel that appeared. */
 .shell.mobile .members-panel::before{
   content:'';position:absolute;top:8px;left:50%;margin-left: -18px;
-  width:36px;height:4px;border-radius: 2px;background:rgba(255,255,255,.22);
+  width:36px;height:4px;border-radius: 2px;background:var(--grabber);
 }
 .shell.mobile .mp-header{padding-top: 20px}
 .shell.mobile .mp-member{min-height:56px}
 
 .m-sheet-scrim{
   position:fixed;inset:0;z-index:955;
-  background:rgba(0,0,0,.55);
+  background:var(--scrim);
   animation:m-scrim-in .28s ease;
 }
 @keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
@@ -6140,7 +6140,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Same reason as above — the child's root is .ml-wrap, so targeting .ml from
    here does nothing and the split never applied when video was on the stage. */
 .chat:has(.callbar.has-video) .ml-wrap { flex: 1 1 auto; min-height: 0; }
-.chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px 0 12px}
+.chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid var(--seam);display:flex;align-items:center;justify-content:space-between;padding: 0 8px 0 12px}
 .chat-header-left,.chat-header-right{display:flex;align-items:center;gap: 4px}
 /* The search field, the one shrinkable thing here, gives up width before the channel name does. */
 .chat-header-right{min-width:0}
@@ -6153,12 +6153,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .call-btn:active{transform:scale(.9)}
 .call-btn.video{color:var(--text-2)}
 .call-btn.calling{color:var(--danger-text);animation:call-pulse 1.25s ease-in-out infinite}
-@keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(242,63,67,0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(242,63,67,.6))}}
+@keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(var(--danger-rgb), 0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(var(--danger-rgb), .6))}}
 /* Not Chakra Petch: this is the channel/DM/group's own name — data the user
    or server named, not a heading the app authored. */
 .chat-title{font-family: var(--font-ui);font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
 .ch-hash{color:var(--text-3);flex-shrink:0;margin-right: 4px}
-.ch-topic-sep{width:1px;height:16px;background:rgba(255,255,255,.12);margin: 0 10px;flex-shrink:0}
+.ch-topic-sep{width:1px;height:16px;background:var(--border);margin: 0 10px;flex-shrink:0}
 .ch-topic{font-size:13px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-header-av{position:relative;width:28px;height:28px;margin-right: 4px;flex-shrink:0;cursor:pointer}
 .dm-header-av img{border-radius: 50%}
@@ -6170,16 +6170,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .icon-btn.active{color:var(--accent-text);background:rgba(var(--accent-rgb),.15)}
 
 /* Pinned sidebar */
-.pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);animation:slide-in .18s cubic-bezier(.4,0,.2,1)}
+.pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid var(--seam);animation:slide-in .18s cubic-bezier(.4,0,.2,1)}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
-.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);display:flex;flex-direction:column;transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
+.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .members-panel.closed{width:0;opacity:0;pointer-events:none}
-.mp-header{height:48px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,.25);display:flex;align-items:center;padding: 0 14px}
+.mp-header{height:48px;flex-shrink:0;border-bottom:1px solid var(--seam);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
 .mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
-.mp-search{margin: 8px 10px;background:rgba(0,0,0,.2);border-radius: 6px;display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
+.mp-search{margin: 8px 10px;background:var(--bg-input);border-radius: 6px;display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
 .mp-search input::placeholder{color:var(--text-faint)}
@@ -6228,7 +6228,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (max-width: 768px) {
   .emoji-scrim{
     display:block; position:fixed; inset:0; z-index:499;
-    background:rgba(0,0,0,.55);
+    background:var(--scrim);
   }
   .pf-scrim-enter-active{transition:opacity var(--dur-3) var(--ease-out)}
   .pf-scrim-leave-active{transition:opacity var(--dur-exit) var(--ease-in)}
@@ -6249,14 +6249,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Scrollbars */
 .sb-body::-webkit-scrollbar,.friends-list::-webkit-scrollbar,.active-now::-webkit-scrollbar,.mp-list::-webkit-scrollbar{width:4px}
 .sb-body::-webkit-scrollbar-track,.friends-list::-webkit-scrollbar-track,.active-now::-webkit-scrollbar-track,.mp-list::-webkit-scrollbar-track{background:transparent}
-.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius: 2px}
+.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:var(--track);border-radius: 2px}
 
 /* Reply banner — neutral, blends with chat surface */
 .reply-banner {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 16px;
   background: var(--bg-panel);
-  border-top: 1px solid rgba(0,0,0,.2);
+  border-top: 1px solid var(--seam);
   flex-shrink: 0;
   animation: reply-slide-in .15s ease;
 }
@@ -6302,7 +6302,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    one). Prefixed instead, the same way CallFlyout handles its row styles. */
 .cm .qr-strip {
   display: flex; gap: 2px; padding: 2px 6px 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  border-bottom: 1px solid var(--divider);
   margin-bottom: 4px;
 }
 .cm .qr {

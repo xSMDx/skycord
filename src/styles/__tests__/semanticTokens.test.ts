@@ -169,6 +169,22 @@ describe('tokens.css: --green-text clears CONTRAST_TARGET against every surface 
   }
 })
 
+describe('tokens.css: --warning-text clears CONTRAST_TARGET against every surface of its theme family', () => {
+  // --warning is the marker value, measured against the 3:1 graphical floor;
+  // amber used as words needs the text floor, which on the light themes the
+  // marker value misses at 3.10:1.
+  for (const theme of ALL_THEMES) {
+    it(`${theme}`, () => {
+      const block = blockFor(theme)
+      const text = resolveHex(block, 'warning-text')
+      for (const surface of SURFACES) {
+        const bg = resolveHex(block, surface)
+        expect(ratio(text, bg), `--warning-text (${text}) vs ${theme}'s --${surface} (${bg})`).toBeGreaterThanOrEqual(CONTRAST_TARGET)
+      }
+    })
+  }
+})
+
 describe('tokens.css: --warning clears the graphical 3:1 floor against every surface', () => {
   for (const theme of ALL_THEMES) {
     it(`${theme}`, () => {

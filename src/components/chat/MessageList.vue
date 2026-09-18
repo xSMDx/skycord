@@ -328,7 +328,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
   position:absolute;left:16px;right:16px;bottom:10px;z-index:5;
   display:flex;align-items:center;justify-content:space-between;gap: 12px;
   padding: 8px 8px 8px 14px;border-radius: 8px;
-  background:var(--bg-floor);box-shadow:0 4px 16px rgba(0,0,0,.45);
+  background:var(--bg-floor);box-shadow:var(--shadow-sm);
   font-size:13px;color:var(--text-1);
 }
 .ml-away-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -343,7 +343,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
   padding: 8px 14px;border-radius: 999px;border:none;cursor:pointer;
   background:var(--accent);color:var(--text-on-accent);
   font:inherit;font-size:13px;font-weight:600;
-  box-shadow:0 4px 16px rgba(0,0,0,.45);
+  box-shadow:var(--shadow-sm);
 }
 .ml-jump:hover{filter:brightness(1.08)}
 .jump-enter-active,.jump-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
@@ -363,7 +363,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap: 8px}
 .ml-sk-head{display:flex;align-items:center;gap: 8px;margin-bottom: 1px}
 @keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin .8s linear infinite;flex-shrink:0}
-.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius: 2px}
+.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:var(--track);border-radius: 2px}
 
 /* New message pop-in — only applies to genuinely new sends/receives via the
    msg-no-anim escape hatch set by MessageList for anything present at the

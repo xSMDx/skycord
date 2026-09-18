@@ -253,12 +253,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Call logs: green when a call starts, red once it ends */
 .msg-system.sys-call .msg-system-icon{color:var(--green-text)}
 .msg-system.sys-call.call-ended .msg-system-icon{color:var(--danger-text)}
-.msg-system-link{color:#00a8fc;font-weight:500;cursor:pointer}
+.msg-system-link{color:var(--text-link);font-weight:500;cursor:pointer}
 .msg-system-link:hover{text-decoration:underline}
 .msg-system-time{font-size:11px;color:var(--text-faint);margin-left: 2px}
 
 .msg{display:flex;align-items:flex-start;padding: var(--msg-pad-y, 1px) 48px var(--msg-pad-y, 1px) 16px;position:relative;transition: background var(--dur-1) var(--ease-out)}
-.msg:hover{background:rgba(0,0,0,.1)}
+.msg:hover{background:var(--hover)}
 .msg.mentioned{background:var(--mention-row-bg);box-shadow:inset 2px 0 0 var(--mention-row-bar)}
 .msg.mentioned:hover{background:var(--mention-row-bg-hover)}
 .msg:not(.consecutive){margin-top: var(--msg-group-gap, 16px)}
@@ -282,7 +282,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid var(--border);border-top:2px solid var(--border);border-radius: 6px 0 0 0}
 .reply-icon{flex-shrink:0;color:var(--text-faint);display:none}
 .reply-author{color:var(--accent-text);font-weight:600;white-space:nowrap}
-.reply-content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9a9ea6}
+.reply-content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3)}
 .msg-meta{display:flex;align-items:baseline;gap: 8px;margin-bottom: 2px;flex-wrap:wrap}
 .msg-author{font-size:15px;font-weight:700;color: var(--text-strong);cursor:pointer;transition: color var(--dur-1) var(--ease-out)}
 .msg-author:hover{color:var(--name-hover, var(--accent-text))}
@@ -321,14 +321,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-text :deep(strong){font-weight:700;color: var(--text-strong)}
 .msg-text :deep(em){font-style:italic}
 .msg-text :deep(u){text-decoration:underline}
-.msg-text :deep(s){text-decoration:line-through;color:#9a9ea6}
+.msg-text :deep(s){text-decoration:line-through;color:var(--text-3)}
 .msg-text :deep(.mention-all){color: var(--mention-all-fg);background:var(--mention-all-bg);padding: 0 4px;border-radius: 4px;font-weight:600}
 .msg-text :deep(.msg-time-token){background:var(--time-token-bg);color:var(--time-token-fg);padding: 0 4px;border-radius: 4px;font-weight:500;cursor:default}
 .msg-text :deep(.msg-bq){border-left:3px solid var(--border);padding: 1px 0 1px 10px;margin: 2px 0;color:var(--text-2)}
 .msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid var(--border);border-radius: 6px;padding: 8px 10px;margin: 4px 0;font-family: var(--font-mono);font-size:13px;color:var(--text-1);white-space:pre-wrap;word-break:break-word}
-.msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:rgba(0,0,0,.3);padding: 1px 4px;border-radius: 4px;color:var(--text-1)}
+.msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:var(--bg-input);padding: 1px 4px;border-radius: 4px;color:var(--text-1)}
 .edit-wrap{display:flex;flex-direction:column;gap: 4px}
-.edit-input{width:100%;padding: 8px 12px;border-radius: 8px;background:#40444b;border:1.5px solid rgba(var(--accent-rgb),.6);font-size:15px;color:var(--text-1);outline:none;font-family:inherit}
+.edit-input{width:100%;padding: 8px 12px;border-radius: 8px;background:var(--bg-chatbar);border:1.5px solid rgba(var(--accent-rgb),.6);font-size:15px;color:var(--text-1);outline:none;font-family:inherit}
 .edit-hint{font-size:12px;color:var(--text-faint)}
 .el{color:var(--accent);font-size:12px;font-weight:600}
 .el:hover{text-decoration:underline}
@@ -359,7 +359,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-actions{
   position:absolute;right:10px;top:-16px;background:var(--bg-panel);
   border:1px solid var(--border);border-radius: 8px;
-  display:flex;gap: 1px;padding: 4px;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:10;
+  display:flex;gap: 1px;padding: 4px;box-shadow:var(--shadow-sm);z-index:10;
   opacity:0;pointer-events:none;transform:translateY(2px);
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

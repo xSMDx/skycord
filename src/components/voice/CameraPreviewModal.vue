@@ -117,7 +117,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-err {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 8px; text-align: center;
-  padding: 16px; color: var(--text-2); font-size: 13px; background: rgba(0,0,0,.55);
+  padding: 16px; color: var(--text-2); font-size: 13px; background: var(--media-veil-strong);
 }
 
 .cp-select {

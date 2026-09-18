@@ -196,5 +196,5 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .qs-results::-webkit-scrollbar { width: 4px; }
 .qs-results::-webkit-scrollbar-track { background: transparent; }
-.qs-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.qs-results::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 </style>

@@ -370,11 +370,11 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-toggle-text { display: flex; flex-direction: column; min-width: 0; }
 .vv-tog {
   flex-shrink: 0; width: 44px; height: 24px; border-radius: 12px; border: none; padding: 0;
-  background: rgba(128,132,142,.5); position: relative; cursor: pointer; transition: background var(--dur-2) var(--ease-out);
+  background: var(--toggle-off); position: relative; cursor: pointer; transition: background var(--dur-2) var(--ease-out);
   box-sizing: border-box;
 }
 .vv-tog.on { background: var(--accent); }
-.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
+.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out); }
 .vv-tog.on span { transform: translateX(20px); }
 
 .vv-btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }
@@ -382,7 +382,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .vv-btn.primary:hover { background: var(--accent-hover); }
 .vv-btn.danger { background: transparent; border: 1px solid var(--danger); color: var(--danger-text); }
-.vv-btn.danger:hover { background: rgba(237,66,69,.12); }
+.vv-btn.danger:hover { background: rgba(var(--danger-rgb), .12); }
 
 /* Camera preview — centered + wide, breathing room before the dropdown */
 .vv-cambox {

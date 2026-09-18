@@ -221,7 +221,7 @@ const signOutOthers = async () => {
  */
 .dv-error {
   font-size: 13px; color: var(--danger-text);
-  background: rgba(245, 108, 111, .1);
+  background: rgba(var(--danger-rgb), .12);
   border-radius: var(--edge-md, 6px);
   padding: 9px 12px; margin-bottom: 12px;
 }
@@ -299,12 +299,12 @@ const signOutOthers = async () => {
   font-size: 13px; font-weight: 600;
   color: var(--danger-text); background: transparent;
   /* .75 alpha, not .38 — a control boundary needs 3:1 to be a boundary. */
-  border: 1px solid rgba(245, 108, 111, .75);
+  border: 1px solid rgba(var(--danger-rgb), .75);
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out),
               color var(--dur-1) var(--ease-out);
 }
-.dv-signout:hover:not(:disabled) { background: rgba(245, 108, 111, .14); border-color: var(--danger-text); color: #ff9093; }
+.dv-signout:hover:not(:disabled) { background: rgba(var(--danger-rgb), .14); border-color: var(--danger-text); color: var(--danger-text); }
 .dv-signout:disabled { opacity: .55; cursor: default; }
 /* 7px of padding gave a 31px button on a phone. Padding alone cannot promise a
    touch size — the text height decides it. */
@@ -336,14 +336,14 @@ const signOutOthers = async () => {
   border: none; background: transparent;
   transition: background var(--dur-1) var(--ease-out);
 }
-.dv-all { color: var(--danger-text); border: 1px solid rgba(245, 108, 111, .75); }
-.dv-all:hover { background: rgba(245, 108, 111, .14); border-color: var(--danger-text); color: #ff9093; }
+.dv-all { color: var(--danger-text); border: 1px solid rgba(var(--danger-rgb), .75); }
+.dv-all:hover { background: rgba(var(--danger-rgb), .14); border-color: var(--danger-text); color: var(--danger-text); }
 
 .dv-confirm-q { font-size: 14px; color: var(--text-1); margin-right: 2px; }
 .dv-confirm-no { color: var(--text-2); }
 .dv-confirm-no:hover:not(:disabled) { background: var(--hover); }
 .dv-confirm-yes { background: var(--danger-hover); color: var(--text-on-danger-hover); }
-.dv-confirm-yes:hover:not(:disabled) { background: #a83133; }
+.dv-confirm-yes:hover:not(:disabled) { background: var(--danger-hover); }
 .dv-confirm-yes:disabled, .dv-confirm-no:disabled { opacity: .55; cursor: default; }
 .sm-modal.mobile .dv-all,
 .sm-modal.mobile .dv-confirm-no,

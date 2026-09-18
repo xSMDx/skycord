@@ -169,7 +169,7 @@ const join = async () => {
 .ic-vc { vertical-align: -2px; margin-right: 4px; }
 .invite-card {
   display: flex; align-items: center; gap: 12px;
-  background: var(--bg-floor); border: 1px solid rgba(255,255,255,.06);
+  background: var(--bg-floor); border: 1px solid var(--hover);
   border-radius: 8px; padding: 12px 16px;
   margin-top: 6px; max-width: 380px;
 }
@@ -183,7 +183,7 @@ const join = async () => {
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; color: var(--text-strong);
 }
-.ic-icon--err { background: #4f3535; font-size: 20px; font-weight: 700; }
+.ic-icon--err { background: rgba(var(--danger-rgb), .14); font-size: 20px; font-weight: 700; }
 .ic-icon--img { object-fit: cover; }
 
 .ic-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }

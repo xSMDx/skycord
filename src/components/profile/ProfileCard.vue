@@ -159,7 +159,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc {
   width: 340px; max-width: 100%;
   background: var(--bg-panel); border-radius: 10px; overflow: hidden;
-  box-shadow: 0 8px 30px rgba(0,0,0,.45);
+  box-shadow: var(--shadow-md);
 }
 /* The card IS the panel here, so it drops its own frame. Nesting a shadowed,
    rounded card inside an already-rounded panel is what reads as blocky. */
@@ -174,7 +174,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-bpencil {
   position: absolute; right: 12px; top: 12px;
   width: 32px; height: 32px; border-radius: 50%;
-  background: rgba(0,0,0,.55); color: #fff;
+  background: var(--media-veil-strong); color: var(--on-media);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
@@ -199,7 +199,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .pc-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-apencil {
-  position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff;
+  position: absolute; inset: 0; background: var(--media-veil-strong); color: var(--on-media);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
@@ -221,7 +221,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   background: var(--bg-raised); border: 1px solid var(--border);
   border-radius: 16px 16px 16px 4px;
   padding: 8px 12px; font-size: 13px; color: var(--text-1);
-  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  box-shadow: var(--shadow-sm);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .pc-status:not(.static):hover { background: var(--bg-deep); color: var(--text-1); }

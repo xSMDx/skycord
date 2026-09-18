@@ -419,7 +419,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .ec-btn:hover { background: var(--hover); }
-.ec-btn.primary { background: var(--accent); color: var(--text-on-accent, #fff); }
+.ec-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .ec-btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
 .ec-btn.primary:disabled { opacity: .5; cursor: default; }
 

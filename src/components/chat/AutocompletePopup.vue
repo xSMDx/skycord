@@ -36,8 +36,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .ac {
-  background: var(--bg-panel); border: 1px solid rgba(0,0,0,.4); border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0,0,0,.55); overflow: hidden;
+  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: 8px;
+  box-shadow: var(--shadow-md); overflow: hidden;
 }
 .ac-header {
   font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;

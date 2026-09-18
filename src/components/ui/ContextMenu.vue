@@ -411,9 +411,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm {
   position: fixed; z-index: 9001;
   background: var(--bg-floor);
-  border: 1px solid rgba(255,255,255,.1);
+  border: 1px solid var(--border);
   border-radius: 8px; padding: 6px 0; min-width: 200px; max-width: 280px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.85);
+  box-shadow: var(--shadow-md);
   animation: cm-pop var(--dur-1) var(--ease-out);
   outline: none;
 }
@@ -437,7 +437,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    nothing can push it off-screen. */
 .cm-scrim {
   position: fixed; inset: 0; z-index: 9000;
-  background: rgba(0,0,0,.5);
+  background: var(--scrim);
   animation: cm-scrim-in .18s ease;
 }
 @keyframes cm-scrim-in { from { opacity: 0 } to { opacity: 1 } }
@@ -495,7 +495,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   to   { opacity: 1; transform: scale(1)   translateY(0);    }
 }
 
-.cm-sep { height: 1px; background: rgba(255,255,255,.08); margin: 4px 0; }
+.cm-sep { height: 1px; background: var(--divider); margin: 4px 0; }
 
 /* A group's name, in DESIGN.md's section-label style. Not a row: no hover, no
    pointer, and the arrow keys pass over it. --text-2 on --bg-floor measures
@@ -531,7 +531,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm-slider-val { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .cm-slider input[type=range] {
   width: 100%; height: 4px; border-radius: 2px; appearance: none;
-  background: rgba(255,255,255,.14); outline: none; cursor: pointer;
+  background: var(--track); outline: none; cursor: pointer;
 }
 .cm-slider input[type=range]::-webkit-slider-thumb {
   appearance: none; width: 13px; height: 13px; border-radius: 50%;
