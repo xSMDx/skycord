@@ -12,6 +12,7 @@ import { Pencil, Plus } from 'lucide-vue-next'
 import type { Crop } from '@/composables/useCrop'
 import AnimatedImage from '@/components/ui/AnimatedImage.vue'
 import { avatarFor } from '@/composables/useAvatar'
+import { statusColor } from '@/composables/usePresence'
 
 const props = withDefaults(defineProps<{
   username:      string
@@ -80,10 +81,7 @@ const bannerBg = computed(() =>
   props.banner ? DEFAULT_BANNER : (props.bannerColor || DEFAULT_BANNER))
 const statusText = computed(() => props.customStatus?.text?.trim() || '')
 
-const STATUS_COLORS: Record<string, string> = {
-  online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#80848e', invisible: '#80848e',
-}
-const dotColor = computed(() => STATUS_COLORS[props.status || 'offline'] || STATUS_COLORS.offline)
+const dotColor = computed(() => statusColor(props.status))
 
 const memberSinceLabel = computed(() => {
   if (!props.memberSince) return null

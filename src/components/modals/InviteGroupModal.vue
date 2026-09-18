@@ -4,6 +4,7 @@ import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
 import type { Group, Friend } from '@/types'
+import { statusColor } from '@/composables/usePresence'
 
 const MAX_GROUP_MEMBERS = 10
 
@@ -19,10 +20,6 @@ const error     = ref('')
 
 const inviteUrl = ref('')
 const copied    = ref(false)
-
-const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e',
-}
 
 const remaining = computed(() => Math.max(0, MAX_GROUP_MEMBERS - props.group.memberCount))
 
@@ -129,7 +126,7 @@ onMounted(async () => {
         >
           <div class="ig-avatar">
             <Avatar :src="f.avatar" :alt="f.name" :crop="(f as any).avatarCrop" />
-            <span class="ig-status" :style="{ background: statusColor[f.status] }" />
+            <span class="ig-status" :style="{ background: statusColor(f.status) }" />
           </div>
           <div class="ig-info">
             <span class="ig-name">{{ f.name }}</span>

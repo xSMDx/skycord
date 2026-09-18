@@ -4,6 +4,7 @@ import { X, Search, UserPlus, Check } from 'lucide-vue-next'
 import { useApi, type ApiUser } from '@/composables/useApi'
 import ModalBase from './ModalBase.vue'
 import { avatarFor } from '@/composables/useAvatar'
+import { statusColor } from '@/composables/usePresence'
 
 const emit = defineEmits<{ close: [] }>()
 const { searchUsers, sendFriendRequest } = useApi()
@@ -41,10 +42,6 @@ const send = async (user: ApiUser) => {
 }
 
 const avatarUrl = (u: ApiUser) => avatarFor(u.username, u.avatar)
-
-const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e'
-}
 </script>
 
 <template>
@@ -84,7 +81,7 @@ const statusColor: Record<string, string> = {
             <div v-for="u in results" :key="u.id" class="af-user">
               <div class="af-user-av">
                 <Avatar :src="avatarUrl(u)" :alt="u.displayName" :crop="(u as any).avatarCrop" />
-                <span class="af-user-dot" :style="{ background: statusColor[u.status] || '#80848e' }" />
+                <span class="af-user-dot" :style="{ background: statusColor(u.status) }" />
               </div>
               <div class="af-user-info">
                 <span class="af-user-name">{{ u.displayName }}</span>

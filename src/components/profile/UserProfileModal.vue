@@ -17,6 +17,7 @@ import ModalBase from '@/components/modals/ModalBase.vue'
 import ProfileCard from './ProfileCard.vue'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
+import { statusColor } from '@/composables/usePresence'
 
 const props = defineProps<{ userId: string }>()
 // Emits the whole user, not just an id: a mutual friend you aren't friends with
@@ -97,10 +98,6 @@ const copyId = () => {
   navigator.clipboard.writeText(user.value?.id || '')
     .then(() => emit('toast', 'User ID copied'))
     .catch(() => emit('toast', 'Couldn’t copy the User ID'))
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#80848e', invisible: '#80848e',
 }
 </script>
 
@@ -202,7 +199,7 @@ const STATUS_COLORS: Record<string, string> = {
               <span class="up-mav">
                 <Avatar :src="avatarFor(m.username, m.avatar)" :alt="m.displayName || m.username"
                        :size="38" :crop="(m as any).avatarCrop" />
-                <span class="up-mdot" :style="{ background: STATUS_COLORS[m.status] || STATUS_COLORS.offline }" />
+                <span class="up-mdot" :style="{ background: statusColor(m.status) }" />
               </span>
               <span class="up-minfo">
                 <span class="up-mname">{{ m.displayName || m.username }}</span>
