@@ -217,7 +217,7 @@ const lossPct = computed(() => outLossPct())
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .dbg-nav > button:hover { background: var(--hover); color: var(--text-1); }
-.dbg-nav > button.on { background: var(--active, var(--hover-strong)); color: var(--text-1); font-weight: 600; }
+.dbg-nav > button.on { background: var(--hover-strong); color: var(--text-1); font-weight: 600; }
 
 .dbg-navfoot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
 .dbg-act {

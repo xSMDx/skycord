@@ -5529,7 +5529,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   position:fixed; top:8px; left:8px; z-index:10000;
   transform:translateY(-200%);
   padding: 8px 14px; border-radius: 6px;
-  background:var(--bg-floating, var(--bg-panel)); color:var(--text-strong);
+  background:var(--bg-panel); color:var(--text-strong);
   font-size:14px; font-weight:600; border:1px solid var(--active-ring);
   box-shadow:var(--shadow-md);
   transition: transform var(--dur-2) var(--ease-out);
