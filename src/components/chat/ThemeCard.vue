@@ -98,7 +98,7 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
    and a single accent action (Apply) — Preview demoted to a quiet text button. */
 .theme-card {
   display: flex; align-items: center; gap: 12px;
-  background: var(--bg-floor); border: 1px solid rgba(255,255,255,.06);
+  background: var(--bg-floor); border: 1px solid var(--hover);
   border-radius: 8px; padding: 12px 16px; margin-top: 6px; max-width: 380px;
 }
 .tc-loading { color: var(--text-3); font-size: 13px; }
@@ -107,12 +107,12 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
   display: flex; align-items: center; justify-content: center;
   background: var(--accent); color: var(--text-on-accent);
 }
-.tc-icon--err { background: #4f3535; color: var(--text-strong); }
+.tc-icon--err { background: rgba(var(--danger-rgb), .14); color: var(--text-strong); }
 .tc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tc-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-sub { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 8px; }
 .tc-swatches { display: inline-flex; gap: 4px; }
-.tc-swatches i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.25); }
+.tc-swatches i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--seam); }
 .tc-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .tc-preview {
   border: none; background: none; padding: 4px 2px; cursor: pointer;

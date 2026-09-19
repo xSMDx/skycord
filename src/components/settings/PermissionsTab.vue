@@ -528,20 +528,20 @@ const onBarLeave = (el: Element) => {
   padding: 2px 6px; border-radius: 4px;
   background: var(--hover-strong); color: var(--text-3);
 }
-.pm-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
-.pm-advis { background: color-mix(in srgb, #5865f2 20%, transparent); color: #8b95f8; }
+.pm-unenf { background: rgba(var(--warning-rgb), .22); color: var(--warning-text); }
+.pm-advis { background: rgba(var(--accent-rgb), .2); color: var(--accent-text); }
 /* Colour only lands on the SELECTED state: three lit buttons per row, times
    thirty rows, is a wall of red and green with no signal in it. */
-.pm-tri-btn.deny.on    { background: #ed4245; color: #fff; }
+.pm-tri-btn.deny.on    { background: var(--danger); color: var(--text-on-danger); }
 .pm-tri-btn.neutral.on { background: var(--hover-strong); color: var(--text-1); }
-.pm-tri-btn.allow.on   { background: #248046; color: #fff; }
+.pm-tri-btn.allow.on   { background: var(--green-deep); color: var(--text-on-green-deep); }
 
 /* ── Save bar ── */
 .pm-bar {
   position: sticky; bottom: 0; z-index: 2;
   display: flex; align-items: center; gap: 10px;
   margin-top: 20px; padding: 12px 14px; border-radius: 10px;
-  background: var(--bg-floor); box-shadow: 0 6px 24px rgba(0,0,0,.4);
+  background: var(--bg-floor); box-shadow: var(--shadow-md);
 }
 .pm-bar-text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-1); }
 .pm-bar-enter-active, .pm-bar-leave-active {

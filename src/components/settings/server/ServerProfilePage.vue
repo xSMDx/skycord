@@ -170,10 +170,10 @@ const traits = reactive<string[]>(['', '', '', '', ''])
   border: none; cursor: pointer; padding: 0;
   /* The ring is drawn with box-shadow rather than a border so selecting one
      cannot nudge the row by two pixels. */
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  box-shadow: inset 0 0 0 1px var(--border);
   transition: box-shadow var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.sp-swatch:hover:not(:disabled) { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); }
+.sp-swatch:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--active-ring); }
 .sp-swatch:active:not(:disabled) { transform: scale(.96); }
 /* Offset ring in the neutral focus colour, not the accent — an accent ring
    disappears the moment the chosen swatch is near the accent's own hue. */
@@ -200,7 +200,7 @@ const traits = reactive<string[]>(['', '', '', '', ''])
 .sp-preview { width: 300px; flex-shrink: 0; position: sticky; top: 0; }
 .sp-card {
   background: var(--bg-panel); border-radius: 12px; overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  box-shadow: var(--shadow-sm);
 }
 .sp-card-banner {
   height: 108px;

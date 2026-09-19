@@ -318,19 +318,16 @@ describe('tokens.css green/danger text tokens', () => {
     expect(token('text-on-danger')).toBe(onAccentText(token('danger')))
   })
 
-  it('text-on-danger-hover matches onAccentText of ConfirmModal\'s own hover literal, not --danger-hover', () => {
-    // ConfirmModal.vue's .cfm-confirm.danger:hover paints a literal #c73e3e —
-    // a different shade from --danger-hover (#c93b3e) that component never
-    // adopted — so the stored answer has to be measured against THAT exact
-    // hex, not the token of the same name (which, here, coincidentally agrees:
-    // both read as white — this pins the value to its real background rather
-    // than to that coincidence).
-    // Read from the component rather than typed here, so the day that hover
-    // shade changes this fails instead of measuring a colour nobody paints.
-    const confirm = readFileSync(resolve(__dirname, '../../components/modals/ConfirmModal.vue'), 'utf8')
-    const hoverBg = /\.cfm-confirm\.danger:hover[^{]*\{[^}]*background:\s*(#[0-9a-fA-F]{6})/.exec(confirm)?.[1]
-    if (!hoverBg) throw new Error('ConfirmModal.vue: .cfm-confirm.danger:hover no longer paints a hex background — re-measure --text-on-danger-hover against what it paints now')
-    expect(token('text-on-danger-hover')).toBe(onAccentText(hoverBg.toLowerCase()))
+  it('text-on-danger-hover matches onAccentText of --danger-hover', () => {
+    // ConfirmModal.vue's .cfm-confirm.danger:hover used to paint its own
+    // literal #c73e3e — a different shade from --danger-hover (#c93b3e) the
+    // component never adopted — so this test used to read that literal out of
+    // the component rather than trust a token of the same name. The colour
+    // sweep (slice 3, Task 4) tokenised that hover rule onto --danger-hover
+    // itself, so there is now exactly one hover shade to measure against:
+    // resolve it from tokens.css like every other token in this file, and
+    // keep failing if either value drifts.
+    expect(token('text-on-danger-hover')).toBe(onAccentText(token('danger-hover')))
   })
 
   it('text-on-green-deep matches onAccentText of the "Copied"/"on" shade used at InviteGroupModal and InviteServerModal, not --green', () => {

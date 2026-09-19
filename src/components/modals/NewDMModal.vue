@@ -113,7 +113,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-search {
   display: flex; align-items: center; gap: 8px;
   margin: 16px 20px 0;
-  background: rgba(0,0,0,.3); border: 1.5px solid rgba(255,255,255,.08);
+  background: var(--bg-input); border: 1.5px solid var(--border);
   border-radius: 8px; padding: 8px 12px;
   transition: border-color var(--dur-2) var(--ease-out);
 }
@@ -149,12 +149,12 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .ndm-footer {
   display: flex; gap: 10px; padding: 16px 20px;
-  border-top: 1px solid rgba(255,255,255,.06);
+  border-top: 1px solid var(--divider);
 }
 .ndm-cancel {
   flex: 1; padding: 10px; border-radius: 6px;
   font-size: 14px; font-weight: 600; color: var(--text-1);
-  background: rgba(255,255,255,.06);
+  background: var(--hover);
   transition: background var(--dur-1) var(--ease-out);
 }
 .ndm-cancel:hover { background: var(--hover-strong); }

@@ -703,11 +703,11 @@ const removeFromRole = (m: ServerMember) => {
 .rl-swatches { display: flex; flex-wrap: wrap; gap: 9px; }
 .rl-swatch {
   width: 40px; height: 40px; border-radius: 8px; border: none; cursor: pointer; padding: 0;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  box-shadow: inset 0 0 0 1px var(--border);
   transition: box-shadow var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .rl-swatch:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
+  .rl-swatch:hover { box-shadow: inset 0 0 0 1px var(--active-ring); }
 }
 .rl-swatch:active { transform: scale(.94); }
 /* Offset ring in a neutral colour — an accent ring vanishes against a swatch
@@ -716,7 +716,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-swatch-none {
   background: var(--bg-input);
   /* A slash, so "no colour" reads as a choice rather than a missing swatch. */
-  background-image: linear-gradient(135deg, transparent 44%, #ed4245 44%, #ed4245 56%, transparent 56%);
+  background-image: linear-gradient(135deg, transparent 44%, var(--danger) 44%, var(--danger) 56%, transparent 56%);
 }
 
 /* ── Permissions ── */
@@ -759,7 +759,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-member-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; color: var(--text-strong); }
 .rl-member-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-member-user { font-size: 12px; color: var(--text-faint); }
-.rl-member-crown { color: #f0b132; flex: none; }
+.rl-member-crown { color: var(--warning); flex: none; }
 .rl-member-x {
   display: grid; place-items: center; width: 28px; height: 28px; flex: none;
   border: 0; border-radius: 6px; background: none; color: var(--text-faint); cursor: pointer;
@@ -768,7 +768,7 @@ const removeFromRole = (m: ServerMember) => {
               background var(--dur-1) var(--ease-out);
 }
 .rl-member:hover .rl-member-x, .rl-member-x:focus-visible { opacity: 1; }
-.rl-member-x:hover:not(:disabled) { color: #f0716f; background: color-mix(in srgb, #ed4245 14%, transparent); }
+.rl-member-x:hover:not(:disabled) { color: var(--danger-text); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .rl-member-x:disabled { cursor: default; opacity: .4; }
 /* Hover does not exist on a touch screen, so a control revealed on hover is a
    control that cannot be found there. Always shown when there is no hover. */
@@ -782,18 +782,18 @@ const removeFromRole = (m: ServerMember) => {
   background: var(--hover-strong); color: var(--text-3);
 }
 /* Warmer than "Soon": this one is a live gap, not a roadmap note. */
-.rl-unenf { background: color-mix(in srgb, #f0b132 22%, transparent); color: #f0b132; }
+.rl-unenf { background: rgba(var(--warning-rgb), .22); color: var(--warning-text); }
 /* Cool, not warm — this one is a caveat on something that works, not a gap. */
-.rl-advis { background: color-mix(in srgb, #5865f2 20%, transparent); color: #8b95f8; }
-.st-field-label.danger { color: #f0716f; }
+.rl-advis { background: rgba(var(--accent-rgb), .2); color: var(--accent-text); }
+.st-field-label.danger { color: var(--danger-text); }
 
 .rl-admin {
   display: flex; align-items: flex-start; gap: 10px;
-  background: rgba(237,66,69,.10); box-shadow: inset 0 0 0 1px rgba(237,66,69,.28);
+  background: rgba(var(--danger-rgb), .10); box-shadow: inset 0 0 0 1px rgba(var(--danger-rgb), .28);
   border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
   font-size: 13px; line-height: 1.55; color: var(--text-1); max-width: 78ch;
 }
-.rl-admin-ic { color: #f0716f; flex: none; margin-top: 1px; }
+.rl-admin-ic { color: var(--danger-text); flex: none; margin-top: 1px; }
 .rl-admin-owner { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; color: var(--text-2); }
 .rl-admin-owner svg { flex: none; margin-top: 3px; }
 /* Administrator implies the rest, so those switches read as "on because of

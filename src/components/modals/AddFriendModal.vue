@@ -144,18 +144,18 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-search-wrap { padding: 16px 20px 0; }
 .af-search {
   display: flex; align-items: center; gap: 10px;
-  background: var(--bg-raised); border: 1.5px solid rgba(255,255,255,.08);
+  background: var(--bg-raised); border: 1.5px solid var(--border);
   border-radius: 8px; padding: 10px 14px;
   transition: border-color var(--dur-2) var(--ease-out);
 }
 .af-search:focus-within { border-color: var(--accent); }
-.af-search-icon { color: var(--text-faint); flex-shrink: 0; }
+.af-search-icon { color: var(--icon); flex-shrink: 0; }
 .af-search input { flex: 1; font-size: 15px; color: var(--text-strong); }
 .af-search input::placeholder { color: var(--text-faint); }
 .af-spinner { flex-shrink: 0; }
 .spin { animation: rot .7s linear infinite; }
 @keyframes rot { to{transform:rotate(360deg)} }
-.af-err { font-size: 12px; color: #f08080; margin-top: 6px; padding-left: 2px; }
+.af-err { font-size: 12px; color: var(--danger-text); margin-top: 6px; padding-left: 2px; }
 
 .af-results {
   max-height: 320px; overflow: hidden auto;
@@ -185,7 +185,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .af-send-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
-.af-send-btn.sent { background: rgba(35,165,90,.2); color: #23a55a; cursor: default; }
+.af-send-btn.sent { background: rgba(var(--green-rgb), .2); color: var(--green-text); cursor: default; }
 
 .af-empty {
   display: flex; flex-direction: column; align-items: center;
@@ -203,5 +203,5 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .af-results::-webkit-scrollbar { width: 4px; }
 .af-results::-webkit-scrollbar-track { background: transparent; }
-.af-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.af-results::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 </style>

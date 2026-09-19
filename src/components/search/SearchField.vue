@@ -385,7 +385,7 @@ defineExpose({ focus: () => input.value?.focus(), popupOpen })
   overflow: hidden auto; overscroll-behavior: contain;
   padding: 4px 8px 8px; border-radius: var(--edge-lg);
   background: var(--bg-floor); border: 1px solid var(--border);
-  box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  box-shadow: var(--shadow-md);
   transform-origin: top right;
 }
 .sf-pop-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }

@@ -200,12 +200,12 @@ const savePerms = async (payload: { overwrites: WireOverwrite[] }) => {
   text-transform: uppercase; color: var(--text-3); margin-bottom: 8px;
 }
 .ec-input {
-  width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
+  width: 100%; background: var(--bg-input); border: 1px solid var(--seam);
   border-radius: 6px; padding: 10px 12px; color: var(--text-1);
   font: inherit; font-size: 15px;
 }
 .ec-input:focus { outline: none; border-color: var(--accent); }
-.ec-error { font-size: 13px; color: #f0716f; margin-top: 10px; }
+.ec-error { font-size: 13px; color: var(--danger-text); margin-top: 10px; }
 .ec-empty { font-size: 13.5px; color: var(--text-3); }
 .ec-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .ec-btn {
