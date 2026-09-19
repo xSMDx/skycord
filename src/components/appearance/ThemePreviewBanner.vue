@@ -24,7 +24,7 @@ const { themePreview, keepPreview, revertPreview } = useAppearance()
   display: flex; align-items: center; gap: 14px;
   padding: 12px 14px 12px 18px;
   background: var(--bg-floor); border: 1px solid var(--border);
-  border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  border-radius: 12px; box-shadow: var(--shadow-md);
   max-width: min(560px, calc(100vw - 32px));
 }
 .tpb-dot {
@@ -37,8 +37,8 @@ const { themePreview, keepPreview, revertPreview } = useAppearance()
   padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
   cursor: pointer; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.tpb-btn.ghost { color: var(--text-2); background: rgba(128,132,142,.16); }
-.tpb-btn.ghost:hover { background: rgba(128,132,142,.28); color: var(--text-strong); }
+.tpb-btn.ghost { color: var(--text-2); background: var(--hover); }
+.tpb-btn.ghost:hover { background: var(--hover-strong); color: var(--text-strong); }
 .tpb-btn.primary { color: var(--text-on-accent); background: var(--accent); }
 .tpb-btn.primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
 

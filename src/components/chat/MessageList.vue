@@ -328,7 +328,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
   position:absolute;left:16px;right:16px;bottom:10px;z-index:5;
   display:flex;align-items:center;justify-content:space-between;gap: 12px;
   padding: 8px 8px 8px 14px;border-radius: 8px;
-  background:var(--bg-floor);box-shadow:0 4px 16px rgba(0,0,0,.45);
+  background:var(--bg-floor);box-shadow:var(--shadow-sm);
   font-size:13px;color:var(--text-1);
 }
 .ml-away-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -343,12 +343,12 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
   padding: 8px 14px;border-radius: 999px;border:none;cursor:pointer;
   background:var(--accent);color:var(--text-on-accent);
   font:inherit;font-size:13px;font-weight:600;
-  box-shadow:0 4px 16px rgba(0,0,0,.45);
+  box-shadow:var(--shadow-sm);
 }
 .ml-jump:hover{filter:brightness(1.08)}
 .jump-enter-active,.jump-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
-.welcome{padding: 20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom: 8px}
+.welcome{padding: 20px 16px 16px;border-bottom:1px solid var(--divider);margin-bottom: 8px}
 .ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
 .ch-icon svg{stroke:var(--text-on-accent)}
 .dm-av{width:64px;height:64px;border-radius: 50%;overflow:hidden;margin-bottom: 14px;border:3px solid var(--bg-panel)}
@@ -363,7 +363,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap: 8px}
 .ml-sk-head{display:flex;align-items:center;gap: 8px;margin-bottom: 1px}
 @keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin .8s linear infinite;flex-shrink:0}
-.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius: 2px}
+.ml::-webkit-scrollbar{width:4px}.ml::-webkit-scrollbar-track{background:transparent}.ml::-webkit-scrollbar-thumb{background:var(--track);border-radius: 2px}
 
 /* New message pop-in — only applies to genuinely new sends/receives via the
    msg-no-anim escape hatch set by MessageList for anything present at the
@@ -372,7 +372,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 
 /* Per-day date divider */
 .day-divider{display:flex;align-items:center;margin: 14px 16px 6px;height:0}
-.day-divider::before,.day-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07)}
+.day-divider::before,.day-divider::after{content:'';flex:1;height:1px;background:var(--divider)}
 .day-divider span{padding: 0 10px;font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap}
 /* The highest-frequency animation in the app — every message that arrives, in
    every channel, all day. It earns an entrance (it explains where the message
@@ -383,7 +383,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
    Charming once, noise by the hundredth, and it is the one animation nobody in
    a busy channel can look away from. And the fade ran at --dur-3 (240ms), the
    band for popovers and panels; a message is neither. */
-.msg-pop-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform 140ms var(--ease-out); }
+.msg-pop-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
 .msg-pop-enter-from   { opacity: 0; transform: translateY(8px) scale(.97); }
 .msg-no-anim.msg-pop-enter-active { transition:none; }
 .msg-no-anim.msg-pop-enter-from   { opacity: 1; transform: none; }

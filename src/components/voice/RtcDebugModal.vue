@@ -174,9 +174,9 @@ const lossPct = computed(() => outLossPct())
 
 <style scoped>
 .ov {
-  position: fixed; inset: 0; background: rgba(0,0,0,.78);
+  position: fixed; inset: 0; background: var(--scrim);
   display: flex; align-items: center; justify-content: center; z-index: 1200;
-  animation: dbg-fade .15s ease;
+  animation: dbg-fade var(--dur-2) var(--ease-out);
 }
 @keyframes dbg-fade { from { opacity: 0 } to { opacity: 1 } }
 
@@ -184,8 +184,8 @@ const lossPct = computed(() => outLossPct())
   position: relative; display: flex;
   width: 940px; max-width: 96vw; height: 640px; max-height: 90vh;
   background: var(--bg-panel); border-radius: 12px; overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0,0,0,.7);
-  animation: dbg-in .18s cubic-bezier(.4,0,.2,1);
+  box-shadow: var(--shadow-lg);
+  animation: dbg-in var(--dur-4) var(--ease-out);
 }
 @keyframes dbg-in { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }
 
@@ -205,7 +205,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-who { padding: 0 8px 14px; display: flex; flex-direction: column; gap: 2px; }
 .dbg-who strong { font-size: 15px; color: var(--text-1); }
 .dbg-who span { font-size: 12px; color: var(--text-3); }
-.dbg-who span.ok { color: #23a55a; }
+.dbg-who span.ok { color: var(--green-text); }
 .dbg-navlabel {
   font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: var(--text-faint); padding: 0 8px 6px;
@@ -217,16 +217,16 @@ const lossPct = computed(() => outLossPct())
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .dbg-nav > button:hover { background: var(--hover); color: var(--text-1); }
-.dbg-nav > button.on { background: var(--active, rgba(255,255,255,.09)); color: var(--text-1); font-weight: 600; }
+.dbg-nav > button.on { background: var(--hover-strong); color: var(--text-1); font-weight: 600; }
 
 .dbg-navfoot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
 .dbg-act {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
   padding: 8px 6px; border: none; border-radius: 6px; cursor: pointer;
-  background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
+  background: var(--hover); color: var(--text-2); font-size: 12px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.dbg-act:hover { background: rgba(255,255,255,.12); color: var(--text-1); }
+.dbg-act:hover { background: var(--hover-strong); color: var(--text-1); }
 .dbg-act:active { transform: scale(.97); }
 
 /* Body */
@@ -234,8 +234,8 @@ const lossPct = computed(() => outLossPct())
 .dbg-h { font-size: 14px; color: var(--text-1); margin: 0 0 16px; font-weight: 600; }
 .dbg-h span { color: var(--text-faint); font-weight: 400; font-size: 12px; }
 .dbg-err {
-  background: rgba(242,63,67,.12); border: 1px solid rgba(242,63,67,.3);
-  color: #f23f43; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
+  background: rgba(var(--danger-rgb), .12); border: 1px solid rgba(var(--danger-rgb), .3);
+  color: var(--danger-text); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
 }
 
 .dbg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-bottom: 20px; }
@@ -251,7 +251,7 @@ const lossPct = computed(() => outLossPct())
   color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.dbg-rows strong.bad { color: #f23f43; }
+.dbg-rows strong.bad { color: var(--danger-text); }
 .dbg-rows strong.mono { font-family: ui-monospace, monospace; font-size: 11px; }
 
 @media (max-width: 720px) {

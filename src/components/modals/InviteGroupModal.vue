@@ -4,6 +4,7 @@ import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
 import type { Group, Friend } from '@/types'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const MAX_GROUP_MEMBERS = 10
 
@@ -19,10 +20,6 @@ const error     = ref('')
 
 const inviteUrl = ref('')
 const copied    = ref(false)
-
-const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e',
-}
 
 const remaining = computed(() => Math.max(0, MAX_GROUP_MEMBERS - props.group.memberCount))
 
@@ -129,7 +126,7 @@ onMounted(async () => {
         >
           <div class="ig-avatar">
             <Avatar :src="f.avatar" :alt="f.name" :crop="(f as any).avatarCrop" />
-            <span class="ig-status" :style="{ background: statusColor[f.status] }" />
+            <StatusDot class="ig-status" :status="f.status" />
           </div>
           <div class="ig-info">
             <span class="ig-name">{{ f.name }}</span>
@@ -204,7 +201,8 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-avatar img { border-radius: 50%; }
 .ig-status {
   position: absolute; bottom: -1px; right: -1px;
-  width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-panel);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--bg-panel); border: 2px solid var(--bg-panel);
 }
 .ig-info { flex: 1; min-width: 0; }
 .ig-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); }
@@ -217,7 +215,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 
 .ig-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 20px; }
-.ig-error { padding: 0 20px; font-size: 13px; color: #fa777c; }
+.ig-error { padding: 0 20px; font-size: 13px; color: var(--danger-text); }
 
 .ig-linkbox {
   display: flex; flex-direction: column; gap: 8px;
@@ -240,7 +238,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* #248046, not --green: this is the darker "confirmed" shade (CallBar's
    .on, PermissionsTab's .allow.on), a different measured answer from the
    app's main green — see --text-on-green-deep in tokens.css. */
-.ig-copy.copied { background: #248046; color: var(--text-on-green-deep); }
+.ig-copy.copied { background: var(--green-deep); color: var(--text-on-green-deep); }
 .ig-copy:disabled { opacity: .5; cursor: not-allowed; }
 .ig-expiry { font-size: 12px; color: var(--text-3); }
 </style>

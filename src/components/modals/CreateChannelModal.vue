@@ -175,7 +175,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-type-btn.active { border-color: var(--accent); color: var(--text-strong); background: rgba(var(--accent-rgb),.14); }
 
 .ccm-input-wrap { position: relative; display: flex; align-items: center; }
-.ccm-input-icon { position: absolute; left: 12px; color: var(--text-faint); pointer-events: none; }
+.ccm-input-icon { position: absolute; left: 12px; color: var(--icon); pointer-events: none; }
 .ccm-input {
   width: 100%; padding: 10px 12px; border-radius: 4px;
   border: 1px solid transparent; background: var(--bg-input);
@@ -186,11 +186,11 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-input::placeholder { color: var(--text-faint); }
 .ccm-preview { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 .ccm-preview strong { color: var(--text-2); font-weight: 600; }
-.ccm-err { font-size: 12px; color: #f08080; margin-top: 8px; }
+.ccm-err { font-size: 12px; color: var(--danger-text); margin-top: 8px; }
 
 .ccm-footer {
   display: flex; justify-content: flex-end; gap: 10px;
-  padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.06);
+  padding: 16px 20px; border-top: 1px solid var(--divider);
 }
 .ccm-cancel {
   padding: 10px 16px; border-radius: 6px;

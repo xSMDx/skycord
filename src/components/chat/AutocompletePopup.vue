@@ -36,8 +36,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .ac {
-  background: var(--bg-panel); border: 1px solid rgba(0,0,0,.4); border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0,0,0,.55); overflow: hidden;
+  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: 8px;
+  box-shadow: var(--shadow-md); overflow: hidden;
 }
 .ac-header {
   font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
@@ -55,6 +55,6 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .ac-glyph { font-size: 16px; }
 .ac-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.ac-title { font-size: 14px; font-weight: 600; color: #f2f3f5; white-space: nowrap; }
+.ac-title { font-size: 14px; font-weight: 600; color: var(--text-strong); white-space: nowrap; }
 .ac-sub { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

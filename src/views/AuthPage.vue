@@ -399,7 +399,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .shell {
   width:100vw; min-height:100vh; min-height:100dvh;
-  background:#0d0e10;
+  background:var(--bg-floor);
   display:flex; align-items:center; justify-content:center;
   /* Safe-area padding so the card clears the notch and home indicator once
      viewport-fit=cover lets us paint into them. */
@@ -410,18 +410,19 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 }
 
 .blob { position:absolute; border-radius: 50%; filter:blur(80px); pointer-events:none; animation:drift 12s ease-in-out infinite alternate; }
+/* Each blob starts its drift at its own point: offsets, not durations. */
 .b1 { width:480px;height:480px; background:rgba(var(--accent-rgb),.18); top:-100px; left:-100px; animation-delay:0s; }
 .b2 { width:380px;height:380px; background:rgba(235,69,158,.10); bottom:-60px; right:-60px; animation-delay:-4s; }
-.b3 { width:280px;height:280px; background:rgba(35,165,90,.07);  top:55%; left:58%; animation-delay:-8s; }
+.b3 { width:280px;height:280px; background:rgba(var(--green-rgb), .07);  top:55%; left:58%; animation-delay:-8s; }
 @keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(28px,18px) scale(1.05)}}
 
 .card {
   width:100%; max-width:488px;
   background:var(--bg-raised);
-  border:1px solid rgba(255,255,255,.07);
+  border:1px solid var(--border);
   border-radius: 16px; padding: 32px 36px 28px;
   position:relative; z-index:1;
-  box-shadow:0 24px 80px rgba(0,0,0,.6);
+  box-shadow:var(--shadow-lg);
 }
 
 .logo-row { display:flex; align-items:center; gap: 10px; justify-content:center; margin-bottom: 24px; }
@@ -429,18 +430,18 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 /* Chakra Petch ships 500/600/700 only — 700 explicit, not 800 synthesised. */
 .logo-name { font-family: var(--font-display); font-size:22px; font-weight:700; color: var(--text-strong); letter-spacing:-.4px; }
 
-.tabs { display:flex; position:relative; background:rgba(0,0,0,.25); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
+.tabs { display:flex; position:relative; background:var(--bg-input); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
 .tab { flex:1; padding: 8px; border-radius: 6px; font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition: color var(--dur-2) var(--ease-out); }
 .tab.active { color: var(--text-strong); }
-.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:#2e3136; border-radius: 6px; transition:transform .22s cubic-bezier(.4,0,.2,1); box-shadow:0 1px 4px rgba(0,0,0,.3); }
+.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:var(--bg-panel); border-radius: 6px; transition: transform var(--dur-2) var(--ease-inout); box-shadow:var(--shadow-xs); }
 .tab-slider.right { transform:translateX(100%); }
 
-.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(237,66,69,.12); border:1px solid rgba(237,66,69,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#f08080; font-size:13px; }
+.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--danger-rgb), .12); border:1px solid rgba(var(--danger-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--danger-text); font-size:13px; }
 
 /* The success twin of .err-banner. Green rather than red because these two
    appear in the same slot and a reset confirmation that is styled like a
    failure gets read as one. */
-.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(35,165,90,.12); border:1px solid rgba(35,165,90,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#3ba55d; font-size:13px; line-height:1.45; }
+.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--green-rgb), .12); border:1px solid rgba(var(--green-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--green-text); font-size:13px; line-height:1.45; }
 
 .form-title { font-size:21px; font-weight:800; color: var(--text-strong); margin-bottom: 4px; }
 .form-sub   { font-size:13px; color:var(--text-faint); margin-bottom: 18px; }
@@ -454,28 +455,28 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .field label { font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--text-2); }
 .lrow { display:flex; align-items:center; justify-content:space-between; }
 .forgot { font-size:11px; font-weight:600; color:var(--accent); text-transform:none; letter-spacing:0; transition: color var(--dur-1) var(--ease-out); }
-.forgot:hover { color:#8d96f8; }
+.forgot:hover { color:var(--accent-text); }
 
 .inp-wrap {
   display:flex; align-items:center;
-  background:rgba(0,0,0,.28); border:1.5px solid rgba(255,255,255,.08); border-radius: 8px;
+  background:var(--bg-input); border:1.5px solid var(--border); border-radius: 8px;
   transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   overflow:hidden;
 }
 .inp-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15); }
-.inp-wrap.match { border-color:#23a55a; }
-.field.err .inp-wrap { border-color:#ed4245; }
-.field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(237,66,69,.15); }
+.inp-wrap.match { border-color:var(--green-text); }
+.field.err .inp-wrap { border-color:var(--danger); }
+.field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(var(--danger-rgb), .15); }
 
-.fi { color:#4e5058; margin: 0 8px; flex-shrink:0; }
+.fi { color:var(--text-3); margin: 0 8px; flex-shrink:0; }
 /* min-width:0 because a flex item defaults to min-width:auto and so refuses to
    shrink below its own content. A long value (an email, a pasted password)
    then pushed the row wider than .inp-wrap, and since the wrapper is
    overflow:hidden, what got clipped was the eye button on the end. */
 .inp-wrap input { flex:1; min-width:0; padding: 10px 6px 10px 0; font-size:14px; color:var(--text-1); }
-.inp-wrap input::placeholder { color:#4e5058; }
+.inp-wrap input::placeholder { color:var(--text-faint); }
 
-.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#4e5058; border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
+.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-3); border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
 .eye:hover { color:var(--text-2); }
 
 /* ── Phone ────────────────────────────────────────────────────────────────
@@ -497,11 +498,11 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 /* Was stroke="#23a55a" on the element; Lucide strokes with currentColor. */
 .check { color: var(--green); flex-shrink:0; margin-right: 8px; }
 
-.ferr { font-size:12px; color:#f08080; }
+.ferr { font-size:12px; color:var(--danger-text); }
 
 .strength { display:flex; align-items:center; gap: 8px; }
 .s-bars { display:flex; gap: 4px; flex:1; }
-.s-bar { flex:1; height:4px; background:rgba(255,255,255,.1); border-radius: 2px; opacity:.3; transition: background var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
+.s-bar { flex:1; height:4px; background:var(--track); border-radius: 2px; opacity:.3; transition: background var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
 
 .submit {
   width:100%; padding: 12px; margin-top: 4px;
@@ -524,7 +525,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .switch { text-align:center; font-size:13px; color:var(--text-faint); margin-top: 14px; }
 .switch button { color:var(--accent); font-weight:600; }
-.switch button:hover { color:#8d96f8; text-decoration:underline; }
+.switch button:hover { color:var(--accent-text); text-decoration:underline; }
 
 .slide-enter-active,.slide-leave-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
 .slide-enter-from{opacity:0;transform:translateX(18px)}

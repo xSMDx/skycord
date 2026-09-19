@@ -5,6 +5,7 @@ import { useApi, type ApiUser } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import ModalBase from './ModalBase.vue'
 import type { DM, Group } from '@/types'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const props = defineProps<{ dms: DM[]; groups?: Group[] }>()
 const emit  = defineEmits<{ close: []; openDM: [dm: DM]; openGroup: [g: Group] }>()
@@ -44,10 +45,6 @@ watch(query, (q) => {
 })
 
 const avatarUrl = (u: ApiUser) => avatarFor(u.username, u.avatar)
-
-const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e'
-}
 
 const selectUser = (u: ApiUser) => {
   // Find or build a DM object
@@ -90,7 +87,7 @@ const selectUser = (u: ApiUser) => {
             >
               <div class="qs-av">
                 <Avatar :src="dm.avatar" :alt="dm.name" :crop="(dm as any).avatarCrop" />
-                <span class="qs-dot" :style="{ background: statusColor[dm.status] || '#80848e' }" />
+                <StatusDot class="qs-dot" :status="dm.status" />
               </div>
               <div class="qs-info">
                 <span class="qs-name">{{ dm.name }}</span>
@@ -130,7 +127,7 @@ const selectUser = (u: ApiUser) => {
             >
               <div class="qs-av">
                 <Avatar :src="avatarUrl(u)" :alt="u.displayName" :crop="(u as any).avatarCrop" />
-                <span class="qs-dot" :style="{ background: statusColor[u.status] || '#80848e' }" />
+                <StatusDot class="qs-dot" :status="u.status" />
               </div>
               <div class="qs-info">
                 <span class="qs-name">{{ u.displayName }}</span>
@@ -161,9 +158,9 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .qs-search {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 14px 16px; border-bottom: 1px solid var(--divider);
 }
-.qs-icon { color: var(--text-faint); flex-shrink: 0; }
+.qs-icon { color: var(--icon); flex-shrink: 0; }
 .qs-search input { flex: 1; font-size: 16px; color: var(--text-strong); }
 .qs-search input::placeholder { color: var(--text-faint); }
 .qs-spin { flex-shrink: 0; }
@@ -196,5 +193,5 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .qs-results::-webkit-scrollbar { width: 4px; }
 .qs-results::-webkit-scrollbar-track { background: transparent; }
-.qs-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.qs-results::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 </style>

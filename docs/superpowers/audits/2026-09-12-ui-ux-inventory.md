@@ -164,6 +164,22 @@ signal", and `ConversationDetails.vue:206` already does it correctly with
 This is the "presence UI is buggy, needs a full overhaul" from the roadmap, now
 locatable.
 
+**Fixed** on branch `ui-audit-04-presence` — plan:
+[`2026-09-14-ui-audit-04-presence.md`](../plans/2026-09-14-ui-audit-04-presence.md).
+The six copies are gone and usePresence.ts returns tokens, with a guard that
+fails on any status mapped to a colour outside it — matching the status side
+rather than the colour side, so a corrected copy is still caught. The colours
+themselves became `--status-*`, measured: all four were under the 3:1 a
+graphical object needs on the light themes (idle 1.17:1 on Light Dim), and the
+light families now carry a derived set that clears it on every surface.
+
+The accessible-name half is fixed by the same slice: every dot in the app is a
+`StatusDot`, which carries the shape (online filled, idle crescent,
+do-not-disturb bar, offline ring) as well as the colour, and announces the
+status name once. `DESIGN.md` commitment 8 — "colour is never the only
+signal" — is true of presence now. What is left is the walk through the
+running app that Task 4 of that plan describes.
+
 ### 5. The call bar and call stage are dark-only
 
 `CallBar.vue:526` sets `.cb-bar { background: var(--bg-floor) }` — which is
@@ -189,7 +205,16 @@ Related and by design: `.msg-ts` on grouped messages is `color: transparent`
 until `.msg:hover` — correct. But it reveals to the same `#4e5058`, so it hovers
 into 1.57:1 too.
 
+**Fixed** on branch `ui-audit-03-colour-sweep` — plan: [`2026-09-13-ui-audit-03-colour-sweep.md`](../plans/2026-09-13-ui-audit-03-colour-sweep.md). Both timestamps now
+take `--text-faint`, which is 4.59:1 on the chat surface and is the value the
+type scale already defines as "the lightest that still clears AA on the darkest
+surface it can land on". The hover reveal inherits the fix for free.
+
 ### 7. The sidebar search hardcodes a black overlay, breaking light themes
+
+**Fixed** on branch `ui-audit-03-colour-sweep` — plan: [`2026-09-13-ui-audit-03-colour-sweep.md`](../plans/2026-09-13-ui-audit-03-colour-sweep.md). The search button is
+`--bg-input`, the token that names exactly what it is (a recessed field), so it
+is a dark well on the dark themes and a light one on the light themes.
 
 `.sb-search-btn` carries `background: rgba(0, 0, 0, 0.3)`. Over the light
 theme's white sidebar that composites to `rgb(179,179,179)`, dropping the
@@ -228,11 +253,27 @@ cheap.
    Worst files: `ChatApp.vue`, `SettingsModal.vue`, `CallBar.vue`,
    `MessageItem.vue`.
 
+   **Fixed** on branch `ui-audit-03-colour-sweep` — plan: [`2026-09-13-ui-audit-03-colour-sweep.md`](../plans/2026-09-13-ui-audit-03-colour-sweep.md). A guard test
+   counted the real number (492, higher than either estimate because it reads
+   every style block in the tree) and came down with each family: overlays,
+   reds, greens, text greys, blurple, amber, then shadows, seams, scrims and
+   the rest. It now asserts **zero** outside two named sets: sixteen sites the
+   owner ruled on, each carrying its reason, and the three call-surface files
+   slice 5 themes against real video, which keep a count of their own that may
+   only go down. `DESIGN.md`'s claim is true of the tree for the first time.
+
 10. **`DESIGN.md` hardcodes a hex in the pattern it tells you to copy.** Its
 
     **Half fixed** on `ui-audit-02-tokens-and-type`: the `--danger` tokens now
     exist. `DESIGN.md`'s `.btn.danger` example still hardcodes `#ed4245` — that
     and the 67 sites using three different reds belong to slice 3, the colour sweep.
+
+    **Fixed** on `ui-audit-03-colour-sweep` — plan: [`2026-09-13-ui-audit-03-colour-sweep.md`](../plans/2026-09-13-ui-audit-03-colour-sweep.md). The example's fill and
+    its hover tint both name tokens, the three reds are one `--danger` with
+    `--danger-text` for words and `--danger-hover` for the deep fill, and the
+    document now also carries the families the sweep added (semantic threes,
+    seams, neutral shapes, the media veils, six shadow roles) so the next
+    reader copying from it copies tokens.
 
     `.btn` block writes `border: 1px solid #ed4245; color: #ed4245`, three
     hundred lines above an anti-pattern table whose first row forbids exactly

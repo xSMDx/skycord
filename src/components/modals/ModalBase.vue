@@ -233,7 +233,7 @@ const onBeforeEnter = (el: Element) => {
 }
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,.75);
+  background: var(--scrim);
   display: flex; align-items: center; justify-content: center;
   z-index: 1000;
 }
@@ -249,7 +249,7 @@ const onBeforeEnter = (el: Element) => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 80px rgba(0,0,0,.7);
+  box-shadow: var(--shadow-lg);
 }
 
 /* ── Phone: bottom sheet ──────────────────────────────────────────────── */

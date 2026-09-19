@@ -7,6 +7,21 @@
         "rule": "overused-font",
         "value": "inter",
         "createdAt": "2026-08-24T17:12:36.657Z"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(.34, 1.56, .64, 1)",
+        "createdAt": "2026-09-18T18:59:13.954Z",
+        "reason": "Owner triage 2026-09-12 (audit inventory finding 21): bounce easings stay, treated as intentional character"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/chat/MessageItem.vue"
+        ],
+        "createdAt": "2026-09-19T06:18:19.161Z",
+        "reason": "Message-structure conventions, not card accents: the curved reply connector (.reply-preview::before) and the Markdown blockquote rule (.msg-bq), both in neutral --border"
       }
     ]
   }

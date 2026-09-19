@@ -187,7 +187,7 @@ const doCopy = async () => {
 <style scoped>
 /* inline (floating panel) */
 .iv-pop { display: flex; flex-direction: column; }
-.iv-sep { height: 1px; margin: 4px 6px; background: rgba(255,255,255,.08); }
+.iv-sep { height: 1px; margin: 4px 6px; background: var(--divider); }
 .iv-row {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 6px 8px; border-radius: 4px; background: none; border: none;
@@ -200,7 +200,7 @@ const doCopy = async () => {
 .iv-add { font-size: 11px; color: var(--text-3); }
 .iv-add-ic { color: var(--text-3); flex: none; }
 .iv-row:hover .iv-add-ic { color: var(--accent); }
-.iv-done { color: #23a55a; flex: none; }
+.iv-done { color: var(--green-text); flex: none; }
 .iv-more {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 6px 8px; border-radius: 4px; background: none; border: none;
@@ -219,7 +219,7 @@ const doCopy = async () => {
 .iv-x:hover { color: var(--text-1); }
 .iv-search {
   display: flex; align-items: center; gap: 8px; margin: 0 16px 8px;
-  padding: 8px 10px; border-radius: 6px; background: rgba(0,0,0,.28); color: var(--text-3);
+  padding: 8px 10px; border-radius: 6px; background: var(--bg-input); color: var(--text-3);
 }
 .iv-search input { flex: 1; font-size: 13.5px; color: var(--text-1); background: none; border: none; outline: none; }
 .iv-list { flex: 1; overflow: hidden auto; padding: 0 8px; min-height: 90px; }
@@ -235,12 +235,12 @@ const doCopy = async () => {
 }
 .iv-btn:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); }
 .iv-btn.done, .iv-btn:disabled { border-color: transparent; color: var(--text-3); background: none; cursor: default; }
-.iv-foot { padding: 12px 16px 16px; border-top: 1px solid rgba(0,0,0,.25); }
+.iv-foot { padding: 12px 16px 16px; border-top: 1px solid var(--seam); }
 .iv-foot-label { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text-3); }
 .iv-link { display: flex; gap: 8px; margin-top: 6px; }
 .iv-link input {
   flex: 1; min-width: 0; padding: 8px 10px; border-radius: 4px; border: none;
-  background: rgba(0,0,0,.32); color: var(--text-1); font-size: 13px;
+  background: var(--bg-input); color: var(--text-1); font-size: 13px;
 }
 .iv-copy {
   padding: 8px 18px; border-radius: 4px; border: none; cursor: pointer;

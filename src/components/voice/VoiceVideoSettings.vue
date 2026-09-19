@@ -252,7 +252,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
     <div class="vv-mictest">
       <button class="vv-btn primary" @click="startMicTest">{{ micTesting ? 'Stop Test' : 'Mic Test' }}</button>
       <div class="vv-meter">
-        <div class="vv-meter-fill" :class="{ open: micOpen }" :style="{ width: (micLevel*100).toFixed(0) + '%' }" />
+        <div class="vv-meter-fill" :class="{ open: micOpen }" :style="{ '--level': micLevel.toFixed(3) }" />
         <!-- where the sensitivity gate opens: bar past this line = transmitting -->
         <div class="vv-meter-thresh" :style="{ left: (gateThreshold*100).toFixed(0) + '%' }" />
       </div>
@@ -341,7 +341,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-select:focus { outline: none; border-color: var(--accent); }
 .vv-select:disabled { opacity: .6; cursor: not-allowed; }
 .vv-select option { background: var(--bg-panel); color: var(--text-1); }
-.vv-selchev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.vv-selchev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--icon); pointer-events: none; }
 
 .vv-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 
@@ -355,7 +355,13 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-mictest { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
 .vv-meter { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
 /* Dim until the gate opens, so you can SEE when you're actually transmitting */
-.vv-meter-fill { height: 100%; background: linear-gradient(90deg, #23a55a, #f0b232 70%, #ed4245); transition:width .05s linear; opacity: .35; }
+/* Scaled, not resized — see MicFlyout's .mf-fill. .05s smooths a live
+   signal and stays a literal. */
+.vv-meter-fill {
+  width: 100%; height: 100%; transform: scaleX(var(--level, 0)); transform-origin: left;
+  background: linear-gradient(90deg, var(--green), var(--warning) 70%, var(--danger));
+  transition: transform .05s linear; opacity: .35;
+}
 .vv-meter-fill.open { opacity: 1; }
 .vv-meter-thresh { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-1); border-radius: 1px; }
 .vv-divider { height: 1px; background: var(--border); margin: 22px 0; }
@@ -370,19 +376,19 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-toggle-text { display: flex; flex-direction: column; min-width: 0; }
 .vv-tog {
   flex-shrink: 0; width: 44px; height: 24px; border-radius: 12px; border: none; padding: 0;
-  background: rgba(128,132,142,.5); position: relative; cursor: pointer; transition: background var(--dur-2) var(--ease-out);
+  background: var(--toggle-off); position: relative; cursor: pointer; transition: background var(--dur-2) var(--ease-out);
   box-sizing: border-box;
 }
 .vv-tog.on { background: var(--accent); }
-.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out); }
+.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out); }
 .vv-tog.on span { transform: translateX(20px); }
 
 .vv-btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }
 .vv-btn:hover { background: var(--hover); }
 .vv-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .vv-btn.primary:hover { background: var(--accent-hover); }
-.vv-btn.danger { background: transparent; border: 1px solid #ed4245; color: #ed4245; }
-.vv-btn.danger:hover { background: rgba(237,66,69,.12); }
+.vv-btn.danger { background: transparent; border: 1px solid var(--danger); color: var(--danger-text); }
+.vv-btn.danger:hover { background: rgba(var(--danger-rgb), .12); }
 
 /* Camera preview — centered + wide, breathing room before the dropdown */
 .vv-cambox {
