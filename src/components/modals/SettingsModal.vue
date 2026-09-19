@@ -1695,7 +1695,7 @@ img    { display: block; object-fit: cover; }
 .st-field.soon .st-btn { cursor: not-allowed; }
 
 .st-field-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
-.st-field-arrow:hover { background: var(--hover); color: white; }
+.st-field-arrow:hover { background: var(--hover); color: var(--text-strong); }
 /* A whole row that navigates. It is a <button> so it is reachable and
    announced as one control rather than as a div with a clickable arrow inside;
    the arrow is decorative and inherits the row's hover. */

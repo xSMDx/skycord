@@ -225,6 +225,12 @@ const ALL_LITERAL_ARGS = /^[\d.,%\s+\/-]+$/
 // doesn't fool it) recorded as "consumed", so the hex pass below can't
 // separately flag a digit run living inside an already-counted rgba(...)'s
 // own arguments.
+const DECLARATION = /([a-z-]+)\s*:\s*([^;{}]+)/g
+const COLOUR_PROPERTY = /color|background|border|outline|fill|stroke|shadow|text-decoration|column-rule/
+// The common names. A rarer one (papayawhip) would slip past; add it here the
+// day one appears rather than listing all 148.
+const NAMED_COLOUR = /(^|[^-\w])(white|black|red|green|blue|gray|grey|silver|yellow|orange|purple|pink|navy|teal|maroon|lime|aqua|fuchsia|olive|gold|cyan|magenta|brown|crimson|coral|salmon|violet|indigo)(?![-\w])/gi
+
 const scanLeafForLiterals = (masked: string, bodyStart: number, bodyEnd: number): Offender[] => {
   const body = masked.slice(bodyStart, bodyEnd)
   const offenders: Offender[] = []
@@ -255,6 +261,24 @@ const scanLeafForLiterals = (masked: string, bodyStart: number, bodyEnd: number)
     const idx = m.index
     if (consumed.some(([s, e]) => idx >= s && idx < e)) continue
     offenders.push({ start: bodyStart + idx, end: bodyStart + idx + m[0].length })
+  }
+
+  // Named colours: `color: white` is as much a hardcoded colour as #fff, and
+  // the two passes above cannot see it — eight slipped through the sweep that
+  // way, white text on the light themes' pale hover among them. Only in
+  // properties that take a colour, so a keyframe or grid area that happens to
+  // be called "red" is not flagged. A token name such as var(--green) is not
+  // matched: a word joined to a hyphen is not a colour name.
+  DECLARATION.lastIndex = 0
+  while ((m = DECLARATION.exec(body))) {
+    if (!COLOUR_PROPERTY.test(m[1])) continue
+    const valueStart = m.index + m[0].length - m[2].length
+    NAMED_COLOUR.lastIndex = 0
+    let n: RegExpExecArray | null
+    while ((n = NAMED_COLOUR.exec(m[2]))) {
+      const idx = valueStart + n.index + n[1].length
+      offenders.push({ start: bodyStart + idx, end: bodyStart + idx + n[2].length })
+    }
   }
 
   return offenders.sort((a, b) => a.start - b.start)
