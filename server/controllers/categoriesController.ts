@@ -6,6 +6,7 @@ import { loadServer, requireOwner, shapeCategory, emitToServer } from './servers
 import { withServerLock } from './channelsController'
 import { requirePerm, loadAccess, validateOverwrites } from '../utils/access'
 import { refreshChannelAccess } from '../sockets/visibility'
+import { wellFormed } from '../utils/wellFormed'
 
 /**
  * Resolve a category and prove the caller may touch it. Mirrors loadChannel
@@ -34,7 +35,7 @@ export const createCategory = async (req: Request, res: Response, next: NextFunc
     const server = await loadServer(req, res); if (!server) return
     if (!await requirePerm(server, req.user!.sub, 'ManageChannels', res)) return
 
-    const name = String(req.body.name ?? '').trim()
+    const name = wellFormed(String(req.body.name ?? '').trim())
     if (!name || name.length > 100) { res.status(400).json({ message: 'Give the category a name' }); return }
 
     // The cap check and the highest-position read are both check-then-act:
@@ -90,7 +91,7 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
     // A permissions-only edit sends no name, so the rename validation has to
     // be skipped rather than 400 on the absence.
     const wantsName = req.body.name !== undefined
-    const name = String(req.body.name ?? '').trim()
+    const name = wellFormed(String(req.body.name ?? '').trim())
     if (wantsName && (!name || name.length > 100)) {
       res.status(400).json({ message: 'Give the category a name' }); return
     }

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { validateImageUrl } from '../utils/imageUrl'
 import { Sticker } from '../models/Sticker'
+import { wellFormed } from '../utils/wellFormed'
 
 // 1MB cap on the raw base64 string (~750KB actual image data after the ~33%
 // base64 inflation) — generous enough for a small sticker image, small enough
@@ -40,11 +41,11 @@ export const createSticker = async (req: Request, res: Response, next: NextFunct
 
     const sticker = await Sticker.create({
       creatorId,
-      name: name.trim().slice(0, 32),
+      name: wellFormed(name.trim().slice(0, 32)),
       type,
       ...(type === 'text'
         ? { text: {
-            content:    text.content.trim().slice(0, 12),
+            content:    wellFormed(text.content.trim().slice(0, 12)),
             color:      text.color || '#ffffff',
             background: text.background || '#5865f2',
             fontWeight: text.fontWeight === 'normal' ? 'normal' : 'bold',
