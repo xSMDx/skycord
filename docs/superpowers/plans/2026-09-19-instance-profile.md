@@ -1595,7 +1595,7 @@ const load = () => fetchLegalDocument(props.entry.href)
 </style>
 ```
 
-`--icon` is added by the colour sweep (slice 3). If this branch is merged before slice 3, use `var(--text-3)` here instead and note it in the commit.
+`--icon` is the resting icon colour from the colour sweep, which is on main and merged into this branch.
 
 - [ ] **Step 8: Tests and typecheck** — `npx vitest run src/` then `npm run typecheck`. Expected: all pass, including the colour guard.
 
@@ -2263,7 +2263,7 @@ watch(view, () => { (root.value?.closest('.sm-content') as HTMLElement | null)?.
 </style>
 ```
 
-`--icon` is added by the colour sweep (slice 3); if this branch merges first, use `var(--text-3)` in `.lg-go`.
+`--icon` is the resting icon colour from the colour sweep, already on this branch.
 
 - [ ] **Step 6: SettingsModal** — add `{ id: 'legal', label: 'Legal' }` after `about` in the bottom nav section; add the import
 
@@ -2470,4 +2470,4 @@ Needs a running app and a signed-in session; the owner signs in.
 
 **Type consistency.** `InstanceProfile`, `LegalEntry`, `Contact` have the same shape on the server (Task 1) and the client (Task 4). `DocumentEntry` is the `document` arm of `LegalEntry`. `useInstance()` returns `{ profile, state, retry }` everywhere it is used (Tasks 6, 7, 8). `legalRows` and `sourceHref` are defined in Task 8 and used only there. `LegalPage.vue`'s `View` union gains `oss` in Task 9 exactly as Task 8 defines the others.
 
-**Order and conflicts.** This branch shares `SettingsModal.vue` and `AuthPage.vue` with the colour sweep (slice 3). Merge slice 3 first and bring it in before Task 5, so `--icon` exists; otherwise use `var(--text-3)` where the plan says so.
+**Order and conflicts.** Slices 3, 4 and 8 are on main and merged into this branch (2026-09-19), so `--icon` and the other colour tokens exist, and four guards apply to every task here: no literal colour (named ones included), no raw duration outside the named exceptions (a spinner's `infinite` loop is fine), no transition on a layout property, and no regex lookbehind. The plan's own CSS already keeps to all four.
