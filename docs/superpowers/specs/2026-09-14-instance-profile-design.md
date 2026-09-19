@@ -172,7 +172,7 @@ Same public CORS policy and rate limit. The icon is served with the content type
 
 ### Where the logic lives
 
-A pure function, `readInstanceProfile(env, files)`, turns environment values and file facts into the profile and a list of warnings. The route is a thin layer over it, and startup logs the warnings once. Keeping the rules in one pure function is what makes every row in the tables above unit-testable without a server. The list of kinds, their order and their file names live in one shared constant the server and the client both import, so the two cannot disagree about what a kind is called.
+A pure function, `readInstanceProfile(env, files)`, turns environment values and file facts into the profile and a list of warnings. The route is a thin layer over it, and startup logs the warnings once. Keeping the rules in one pure function is what makes every row in the tables above unit-testable without a server. The list of kinds and their order live in `server/utils/legalKinds.ts`. The client cannot import it — `tsconfig.server.json` pins `rootDir` to `server/` — so it keeps a mirror, held equal to the server's by a test, the way `permissionMeta.ts` is held to `server/permissions.ts`. The two cannot disagree about what a kind is called without a test failing.
 
 ---
 
@@ -279,7 +279,7 @@ Reads `https://<address>/instance` before sign-in and accepts the address only i
 
 **Server, routes:** `GET /instance` with nothing configured and with everything configured; `Access-Control-Allow-Origin: *` present and `Access-Control-Allow-Credentials` absent on every instance route while the rest of the API keeps its single-origin policy; icon served with the right type and `nosniff`, `404` when absent or oversize; each document kind served as Markdown, `404` when absent or a link; an unknown kind and a kind carrying path characters (`..%2fprivacy`, `privacy.md`) both `404` without touching the filesystem; the rate limit; `API_PREFIXES` parity.
 
-**Client, node:** the consent sentence for every row of its table, including loading and failure; the sign-in footer's list and its absence; titles for every kind; the About page's row omission; the Legal page's rows (link vs document), its empty line, and the Skycord group present in every state, including a failed profile; the link-scheme filter; the Settings nav test sees `about` and `legal`; the shared kinds constant matches the server's.
+**Client, node:** the consent sentence for every row of its table, including loading and failure; the sign-in footer's list and its absence; titles for every kind; the About page's row omission; the Legal page's rows (link vs document), its empty line, and the Skycord group present in every state, including a failed profile; the link-scheme filter; the Settings nav test sees `about` and `legal`; the client's mirror of the kinds matches the server's list.
 
 **Build:** the licence generator produces an entry for every package in the client bundle, and the build fails if a bundled package has no licence it can read.
 
