@@ -105,7 +105,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   display: flex; align-items: center; justify-content: center;
   color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.ndm-close:hover { background: var(--hover); color: white; }
+.ndm-close:hover { background: var(--hover); color: var(--text-strong); }
 
 .ndm-search {
   display: flex; align-items: center; gap: 8px;

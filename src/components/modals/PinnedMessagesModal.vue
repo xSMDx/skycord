@@ -71,7 +71,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   display: flex; align-items: center; justify-content: center;
   color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.pinned-close:hover { background: var(--hover); color: white; }
+.pinned-close:hover { background: var(--hover); color: var(--text-strong); }
 
 .pinned-body { flex: 1; overflow: hidden auto; padding: 8px; }
 .pinned-empty {

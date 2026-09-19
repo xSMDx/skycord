@@ -5313,7 +5313,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.home .ri-icon{background:var(--bg-chat);color:var(--text-1)}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
-.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
 /* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
    is both unread and occupied shows two marks that never touch: this one at
    x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
@@ -5356,7 +5356,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius: 1px;margin: 4px 0}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:var(--green)}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:var(--green)}
-.ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
+.ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:var(--text-on-green)}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
@@ -5431,7 +5431,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-info{flex:1;min-width:0}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:var(--danger);color:white;font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:var(--danger);color:var(--text-on-danger);font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Muted: the count still matters, it just stops shouting. */
 .dm-unread.muted{background:var(--text-3);opacity:.6}
 .dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
@@ -5641,7 +5641,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    row again, as it always did. The occupied voice icon keeps its green. */
 .ch-item:hover .ch-icon:not(.occupied),.ch-item.active .ch-icon:not(.occupied),.ch-item.unread .ch-icon:not(.occupied){color:inherit}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
-.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
+.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
 /* Who is sitting in a voice channel. Indented under its row so the nesting is
    read from the left edge, and deliberately quieter than the channel name —
    these are occupants of the row above, not siblings of it. The reference also
@@ -6039,7 +6039,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:var(--accent-text)}
 .pend-tab{position:relative}
-.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
+.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
 .add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
