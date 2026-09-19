@@ -5225,7 +5225,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
   margin-top: var(--conn-h, 0px);
   overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
-  transition: height var(--dur-2) var(--ease-out), margin-top .26s cubic-bezier(.32,.72,0,1);
+  /* No transition. Height and margin follow --conn-h and --keyboard-h, and
+     animating them reflowed the whole app on every frame; the connection
+     strip animates its own entrance, by transform. */
 }
 .shell{display:flex;height:100%;overflow:hidden}
 
@@ -5288,8 +5290,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (pointer: coarse){.dsc-join{min-height:44px;padding-inline:20px}}
 
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition: height var(--dur-2) var(--ease-out)}
-.ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}
+.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:36px;top:50%;transform:translateY(-50%) scaleY(0);transition: transform var(--dur-2) var(--ease-out)}
+/* Scaled from the full 36px rather than grown, so the pip never makes the
+   browser lay out the rail: 18px on hover is half, active is all of it. */
+.ri:hover .ri-pip{transform:translateY(-50%) scaleY(.5)}.ri.active .ri-pip{transform:translateY(-50%) scaleY(1)}
 
 /* Press feedback belongs to the ICON, not the hit box.
    `.ri` is a 68x54 target wrapping a 44px ROUND icon, and it carries
@@ -5355,7 +5359,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
+.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
 .sb-search{padding: 8px 8px 4px;flex-shrink:0}
@@ -5520,17 +5524,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    disclosure chevron and carries a desktop `display:none`. */
 .ch-group-chev{flex-shrink:0;transition: transform var(--dur-2) var(--ease-out)}
 .ch-group-chev.open{transform:rotate(90deg)}
-/* Folding a category is an animation, not a v-if. `interpolate-size:
-   allow-keywords` lets height animate to and from `auto` without measuring
-   anything, which matters because categories hold different numbers of
-   channels and channel names wrap. NOT the grid 0fr/1fr trick: in this
-   Chromium, `transition: grid-template-rows` between fr endpoints settles on
-   the WRONG endpoint (verified in isolation — a probe closed to 0fr still
-   measured 31px, then reopened to 1fr and measured 0), so a fold that used
-   it closed once and never came back. Timing matches .ch-group-chev so the
-   chevron and the rows read as one motion. */
-.ch-fold{overflow:hidden;height:auto;interpolate-size:allow-keywords;transition: height var(--dur-2) var(--ease-out)}
-.ch-fold.folded{height:0}
+/* Folding a category is a class, not a v-if, so the rows keep their state.
+   The height no longer animates: animating it laid out the whole channel list
+   on every frame, which is the cost the motion rules exist to avoid (audit
+   finding 19). The rows fade instead, on the same timing as .ch-group-chev,
+   so the chevron and the rows still read as one motion. (The grid 0fr/1fr
+   trick is not an option either way: in this Chromium it settles on the wrong
+   endpoint, verified in isolation.) */
+.ch-fold{overflow:hidden;height:auto;transition: opacity var(--dur-2) var(--ease-out)}
+.ch-fold.folded{height:0;opacity:0}
 
 /* Where the drag would land. min-height keeps the headerless uncategorised
    group hittable while it is empty — during a drag it is the only visible
@@ -5573,7 +5575,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-add-btn{color:var(--icon);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
-.ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), padding-left var(--dur-1) var(--ease-out);white-space:nowrap}
+.ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 /* The label, now a real button rather than the row pretending to be one.
    Everything visual still belongs to .ch-item — this only has to disappear:
    no chrome of its own, inheriting colour so the row's hover and active rules
@@ -5600,7 +5602,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-open:active, .ch-group-toggle:active { box-shadow: none }
 .ch-item:has(.ch-open:active){ box-shadow: inset 0 0 0 100vmax var(--press-veil) }
 .ch-group-label:has(.ch-group-toggle:active){ box-shadow: inset 0 0 0 100vmax var(--press-veil) }
-.ch-item:hover{background:var(--hover);color:var(--text-2);padding-left: 12px}
+.ch-item:hover{background:var(--hover);color:var(--text-2)}
+/* The hover nudge, by transform: the label (icon and name) moves 4px while
+   the row and its fill stay put. It was padding, which laid the row out on
+   every frame of the hover. */
+.ch-open{transition: transform var(--dur-1) var(--ease-out)}
+.ch-item:hover .ch-open{transform:translateX(4px)}
 .ch-item.active{color:var(--text-strong);background:var(--active-bg);outline:1px solid var(--active-ring);outline-offset:-1px}
 /* Hover still has somewhere to go on a selected row: without this the
    active fill would swallow the hover tint, since both are (0,2,0) and
@@ -6191,7 +6198,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
-.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
+.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .members-panel.closed{width:0;opacity:0;pointer-events:none}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid var(--seam);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
