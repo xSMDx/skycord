@@ -172,7 +172,7 @@ const onFocusOut = (e: FocusEvent) => {
   list-style: none; margin: 0; padding: 4px;
   max-height: 216px; overflow: hidden auto; overscroll-behavior: contain;
   background: var(--bg-floor); border: 1px solid var(--border); border-radius: var(--edge-md);
-  box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  box-shadow: var(--shadow-md);
   animation: sp-in var(--dur-2) var(--ease-out);
 }
 @keyframes sp-in { from { opacity: 0; transform: translateY(-2px); } }

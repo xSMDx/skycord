@@ -296,33 +296,33 @@ onBeforeUnmount(() => {
 .vcp-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .vcp-status { font-size: 13px; font-weight: 700; }
 .vcp-name { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vcp-warn { color: #f0b232; }
+.vcp-warn { color: var(--warning-text); }
 .vcp-leave {
   width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
-  background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
+  background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.vcp-leave:hover { background: #f23f43; color: #fff; transform: translateY(-1px); }
+.vcp-leave:hover { background: var(--danger); color: var(--text-on-danger); transform: translateY(-1px); }
 
 .vcp-controls { display: flex; gap: 6px; }
 .vcp-btn {
   flex: 1; height: 32px; border-radius: 8px;
-  background: rgba(255,255,255,.06); color: var(--text-2);
+  background: var(--hover); color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.vcp-btn:hover:not(:disabled) { background: rgba(255,255,255,.11); color: var(--text-1); }
+.vcp-btn:hover:not(:disabled) { background: var(--hover-strong); color: var(--text-1); }
 .vcp-btn:active:not(:disabled) { transform: scale(.96); }
-.vcp-btn.on { background: #248046; color: #fff; }
+.vcp-btn.on { background: var(--green-deep); color: var(--text-on-green-deep); }
 .vcp-btn:disabled { opacity: .45; cursor: not-allowed; }
-.vcp-back { color: #3ba55d; }
-.vcp-back:hover { background: rgba(35,165,90,.18); color: #4ade80; }
+.vcp-back { color: var(--green-text); }
+.vcp-back:hover { background: rgba(var(--green-rgb), .18); color: var(--green-text); }
 
 /* Hover popover — appears above the strip */
 .vcp-pop {
   position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px);
   background: var(--bg-floor); border: 1px solid var(--border); border-radius: 10px;
-  padding: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.5); z-index: 50;
+  padding: 12px; box-shadow: var(--shadow-md); z-index: 50;
   opacity: 0; transform: translateY(6px); pointer-events: none;
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
 }
 .vcp-pop-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-3); padding: 2px 0; }
 .vcp-pop-row strong { color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums; }
-.vcp-pop-row strong.bad { color: #f23f43; }
+.vcp-pop-row strong.bad { color: var(--danger-text); }
 .vcp-pop-vs { align-items: center; }
 .vcp-pop-select {
   flex: 1; min-width: 0; max-width: 60%;
@@ -365,7 +365,7 @@ onBeforeUnmount(() => {
 .vcp-pop-btn {
   width: 100%; margin-top: 10px; height: 38px; border-radius: 8px;
   font-weight: 600;
-  background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
+  background: var(--hover); color: var(--text-2); font-size: 12px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }

@@ -117,13 +117,13 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-err {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 8px; text-align: center;
-  padding: 16px; color: var(--text-2); font-size: 13px; background: rgba(0,0,0,.55);
+  padding: 16px; color: var(--text-2); font-size: 13px; background: var(--media-veil-strong);
 }
 
 .cp-select {
   width: 100%; padding: 8px 12px; border-radius: 8px;
   background: var(--bg-input); color: var(--text-1);
-  border: 1px solid rgba(255,255,255,.08); font: inherit; font-size: 14px; outline: none;
+  border: 1px solid var(--border); font: inherit; font-size: 14px; outline: none;
 }
 
 .cp-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

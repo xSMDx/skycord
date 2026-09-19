@@ -219,7 +219,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 16px 18px 14px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  border-bottom: 1px solid var(--divider);
   flex-shrink: 0;
 }
 .rt-header-text h3 { font-size: 16px; font-weight: 700; color: var(--text-strong); }
@@ -258,7 +258,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 .rt-edge {
   fill: none;
-  stroke: rgba(255,255,255,.14);
+  stroke: var(--track);
   stroke-width: 2;
 }
 
@@ -268,11 +268,11 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   padding: 8px 12px;
   border-radius: 8px;
   background: var(--bg-raised);
-  border: 1px solid rgba(255,255,255,.06);
+  border: 1px solid var(--hover);
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.rt-card:hover { background: #25272c; border-color: rgba(255,255,255,.14); transform: translateY(-1px); }
+.rt-card:hover { background: var(--hover-strong); border-color: var(--border); transform: translateY(-1px); }
 .rt-card.own { background: rgba(var(--accent-rgb),.1); border-color: rgba(var(--accent-rgb),.25); }
 .rt-card.own:hover { background: rgba(var(--accent-rgb),.16); }
 .rt-card.target {
@@ -284,7 +284,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-card-author { font-size: 12.5px; font-weight: 700; color: var(--text-strong); }
 .rt-card-time   { font-size: 10.5px; color: var(--text-faint); }
 .rt-card-content {
-  font-size: 12.5px; color: #c4c7cd; line-height: 1.4;
+  font-size: 12.5px; color: var(--text-2); line-height: 1.4;
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
@@ -294,8 +294,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-ctx-overlay { position: fixed; inset: 0; z-index: 2100; }
 .rt-ctx {
   position: absolute; min-width: 168px;
-  background: var(--bg-floor); border: 1px solid rgba(0,0,0,.4); border-radius: 8px;
-  padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  background: var(--bg-floor); border: 1px solid var(--seam); border-radius: 8px;
+  padding: 6px; box-shadow: var(--shadow-lg);
 }
 .rt-ctx-item {
   display: block; width: 100%; text-align: left;
@@ -306,17 +306,17 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-ctx-item:hover { background: var(--accent); color: var(--text-on-accent); }
 .rt-card-badge {
   display: inline-block; margin-top: 6px;
-  font-size: 9.5px; font-weight: 700; color: #8d96f8;
+  font-size: 9.5px; font-weight: 700; color: var(--accent-text);
   background: rgba(var(--accent-rgb),.18); padding: 1px 6px; border-radius: 4px;
   letter-spacing: .3px; text-transform: uppercase;
 }
 
 .rt-footer {
-  padding: 8px 18px; border-top: 1px solid rgba(255,255,255,.06);
+  padding: 8px 18px; border-top: 1px solid var(--divider);
   font-size: 11.5px; color: var(--text-faint); text-align: center; flex-shrink: 0;
 }
 
 .rt-body::-webkit-scrollbar { height: 6px; width: 6px; }
 .rt-body::-webkit-scrollbar-track { background: transparent; }
-.rt-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
+.rt-body::-webkit-scrollbar-thumb { background: var(--track); border-radius: 4px; }
 </style>

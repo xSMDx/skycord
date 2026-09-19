@@ -185,7 +185,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .is-close:hover { background: var(--hover); color: var(--text-strong); }
 
-.is-error { padding: 12px 20px 0; font-size: 13px; color: #f08080; }
+.is-error { padding: 12px 20px 0; font-size: 13px; color: var(--danger-text); }
 
 .is-linkbox {
   display: flex; flex-direction: column; gap: 8px;
@@ -207,7 +207,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 /* #248046, not --green: this is the darker "confirmed" shade (CallBar's
    .on, PermissionsTab's .allow.on), a different measured answer from the
    app's main green — see --text-on-green-deep in tokens.css. */
-.is-copy.copied { background: #248046; color: var(--text-on-green-deep); }
+.is-copy.copied { background: var(--green-deep); color: var(--text-on-green-deep); }
 
 .is-expiry-row { display: flex; gap: 10px; }
 .is-expiry-btn {
@@ -247,5 +247,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; align-items: center; justify-content: center;
   color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.is-revoke:hover { background: var(--hover); color: #f08080; }
+.is-revoke:hover { background: var(--hover); color: var(--danger-text); }
 </style>

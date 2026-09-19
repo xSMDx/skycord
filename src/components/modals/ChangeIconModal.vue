@@ -85,7 +85,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .ci-card:hover { filter: brightness(1.08); }
 .ci-card:active { transform: scale(.98); }
-.ci-upload { background: #404249; color: var(--text-2); }
+.ci-upload { background: var(--bg-chatbar); color: var(--text-2); }
 .ci-card-label { font-size: 14px; font-weight: 600; }
 .ci-file { display: none; }
 
@@ -94,13 +94,13 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ci-gif-cell { overflow: hidden; background: var(--bg-panel); }
 .ci-gif-badge {
   position: absolute; left: 8px; bottom: 8px;
-  background: rgba(0,0,0,.7); color: var(--text-strong); font-size: 10px; font-weight: 800;
+  background: var(--media-veil-strong); color: var(--on-media); font-size: 10px; font-weight: 800;
   padding: 2px 6px; border-radius: 4px; letter-spacing: .3px;
 }
 .ci-gif-overlay {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,.35); color: var(--text-strong); font-size: 15px; font-weight: 700;
+  background: var(--media-veil); color: var(--text-strong); font-size: 15px; font-weight: 700;
 }
 
-.ci-error { padding: 0 18px 16px; font-size: 13px; color: #fa777c; }
+.ci-error { padding: 0 18px 16px; font-size: 13px; color: var(--danger-text); }
 </style>

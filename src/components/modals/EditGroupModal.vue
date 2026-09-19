@@ -177,7 +177,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .eg-input:focus { border-color: var(--accent); }
 .eg-input::placeholder { color: var(--text-faint); }
 
-.eg-error { align-self: stretch; margin-top: 8px; font-size: 13px; color: #fa777c; }
+.eg-error { align-self: stretch; margin-top: 8px; font-size: 13px; color: var(--danger-text); }
 
 .eg-footer {
   display: flex; align-items: center; justify-content: flex-end; gap: 12px;

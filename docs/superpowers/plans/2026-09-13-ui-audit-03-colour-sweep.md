@@ -20,7 +20,9 @@ Inherited from [the slice index](./2026-09-12-ui-audit-00-slices.md#global-const
 
 ## Depends on
 
-Slice 2 (`ui-audit-02-tokens-and-type`) **merged first.** It adds `--danger`, `--danger-hover`, `--text-on-green`, `--text-on-green-deep`, `--text-on-danger`, `--text-on-danger-hover`, and widens `onAccentUsage.test.ts`. This plan builds on all of them.
+Slice 2 (`ui-audit-02-tokens-and-type`) **merged first** — done, 2026-09-14. It adds `--danger`, `--danger-hover`, `--text-on-green`, `--text-on-green-deep`, `--text-on-danger`, `--text-on-danger-hover`, and widens `onAccentUsage.test.ts`. This plan builds on all of them.
+
+Slice 7 (`ui-audit-07-menus-and-settings`) is on its own branch and touches `ContextMenu.vue` and `SettingsModal.vue`, including literals this sweep would convert. Whichever merges second takes the other in first and re-runs the guard; its count will move, which is expected.
 
 ## The rule that decides every mapping: role, not value
 
@@ -56,31 +58,34 @@ Two identical values can need different tokens. `rgba(255,255,255,.06)` is `--ho
 
 ---
 
-### Task 1: The guard test, failing
+### Task 1: The guard test, as a ratchet
 
 **Files:**
 - Create: `src/styles/__tests__/noHardcodedColour.test.ts`
 
 This test is the ground truth for every task after it. The same pattern made the on-accent fix in slice 2 honest: the widened test found a site the branch review had missed.
 
+It is a **ratchet**, not a test committed failing: it passes while the number of literals is at or below a recorded baseline, and fails the moment anyone adds one. Each sweep task lowers the baseline, so every commit on the branch is green, `npx vitest run src/` stays a meaningful check in every task, and CI can run the branch at any point. (Revised 2026-09-14; the first draft committed it failing, which would have made "tests clean" impossible to verify until Task 8.)
+
 - [ ] **Step 1: Write the test**
 
-It reads every `.vue` file under `src/` except `__tests__`, extracts the `<style>` blocks, and collects every hex literal (`#rgb`, `#rrggbb`, `#rrggbbaa`) and every `rgb(`/`rgba(`/`hsl(` whose arguments are **literal numbers** — `rgba(var(--accent-rgb), .18)` is a token and must not be flagged. It prints each offender as `path:line  value  selector`, then asserts the list is empty.
+It reads every `.vue` file under `src/` except `__tests__` and extracts the `<style>` blocks, plus every `.css` file under `src/` **except `src/styles/tokens.css`**, which is where literals belong. It collects every hex literal (`#rgb`, `#rrggbb`, `#rrggbbaa`) and every `rgb(`/`rgba(`/`hsl(` whose arguments are **literal numbers** — `rgba(var(--accent-rgb), .18)` is a token and must not be flagged. Each offender is formatted as `path:line  value  selector`.
+
+The assertion is `expect(offenders.length).toBeLessThanOrEqual(BASELINE)`, where `BASELINE` is a named constant at the top of the file, commented: *lowered by each sweep task; when it reaches 0 the assertion becomes `expect(offenders).toEqual([])`.* When `process.env.LIST_COLOURS` is set, the test prints the full offender list, so a task can filter it to its family without the list flooding every normal run.
 
 Two allowances, each one commented with its reason, never a blanket exclusion: `transparent`, `currentColor` and `inherit` are not literals; and a literal inside a `@supports` or `@media (forced-colors)` block that deliberately targets system colours is allowed.
 
-- [ ] **Step 2: Run it and record the baseline**
+- [ ] **Step 2: Run it and set the baseline**
 
-Run: `npx vitest run src/styles/__tests__/noHardcodedColour.test.ts`
-Expected: FAIL, listing roughly 490 offenders. Record the exact count in the report; every later task must reduce it.
+Run: `LIST_COLOURS=1 npx vitest run src/styles/__tests__/noHardcodedColour.test.ts --disableConsoleIntercept`
+(The flag is required: Vitest 4 drops console output from a passing test, so without it nothing prints.)
+Record the exact count — roughly 490 was measured on 2026-09-13 before slice 2 merged — and set `BASELINE` to it. Run again without the variable: PASS. Then add one literal to any component, confirm the test FAILS, and remove it.
 
-- [ ] **Step 3: Commit the failing test**
-
-Committing a failing test on the branch is deliberate: it is the checklist. Mark the commit message as such.
+- [ ] **Step 3: Commit**
 
 ```bash
 git add src/styles/__tests__/noHardcodedColour.test.ts
-git commit -m "test(theme): list every hardcoded colour left in a component (fails by design)"
+git commit -m "test(theme): a ratchet on hardcoded colours in components"
 ```
 
 ---
@@ -110,10 +115,10 @@ Each task has the same shape, so it is written once here — but each is its **o
 
 **For each task:**
 
-- [ ] **Step 1:** Run the guard test and filter its output to this task's family. Record the count.
+- [ ] **Step 1:** Run the guard with `LIST_COLOURS=1` **and `--disableConsoleIntercept`** and filter its output to this task's family. Record the family count and the total. A literal used as a `var()` fallback — `var(--hover, rgba(255,255,255,.06))` — counts: the token always exists, so the fallback is dead and goes.
 - [ ] **Step 2:** Map each site by **role**, using the table above. Where a role is ambiguous, list the site in the report and leave it; do not guess.
-- [ ] **Step 3:** Run the guard test again. This family's count must be zero except the listed ambiguous sites.
-- [ ] **Step 4:** `npm run typecheck` and `npx vitest run src/` — clean, and `onAccentUsage.test.ts` still passing.
+- [ ] **Step 3:** Run the guard again. This family's count must be zero except the listed ambiguous sites. **Lower `BASELINE` to the new total** — it must go down, never up.
+- [ ] **Step 4:** `npm run typecheck` and `npx vitest run src/` — clean, including the guard and `onAccentUsage.test.ts`.
 - [ ] **Step 5:** Commit with the family's message.
 
 | Task | Family | Values | Why it matters |
@@ -125,7 +130,7 @@ Each task has the same shape, so it is written once here — but each is its **o
 | 7 | **Blurple leftovers** | `#8d96f8` ×8, `#5865f2` spinners and strokes | Discord's colour surviving next to Sky. Map to the accent tokens. Commit: `fix(theme): the last of Discord's blurple follows the accent` |
 | 8 | **Shadows, scrims, and the rest** | `rgba(0,0,0,…)` ×~63, `#fff` ×35, `#000` ×6, stragglers | `#fff` is role-dependent: text on a fill, a highlight, or a foreground. Commit: `refactor(theme): shadows, scrims and the remaining literals use tokens` |
 
-After Task 8 the guard test must pass with **no offenders**, apart from ambiguous sites the owner has ruled on.
+After Task 8 the guard test must pass with **no offenders**, apart from ambiguous sites the owner has ruled on: `BASELINE` is gone and the assertion is `expect(offenders).toEqual([])`, with any owner-ruled site in a named `file:selector` allowlist beside it.
 
 ---
 
@@ -145,3 +150,56 @@ After Task 8 the guard test must pass with **no offenders**, apart from ambiguou
 **Placeholders.** The per-site lists are deliberately **not** frozen into this plan: they are produced live by Task 1's test, because slice 2 moves many of these lines and a frozen list would be stale before Task 3 starts. The mapping rule, the families, the counts and the verification are all concrete.
 
 **The risk worth naming.** A role mis-mapped onto a same-valued token looks identical on dark and breaks on light. Task 9's before/after diff on dark and the light-theme walk are the two checks aimed at exactly that.
+
+---
+
+## Status, 2026-09-18
+
+**Tasks 1-8: done.** The guard counted 492 hardcoded colours at the start and
+asserts zero at the end, outside two named sets it carries with their reasons:
+sixteen owner-ruled sites, and the three call-surface files slice 5 themes
+against real video (53, ceilinged so they can only shrink). `BASELINE` is gone.
+
+Tokens the sweep added beyond the ones Task 2 named, each for a role that had
+none: `--warning-text`, `--green-text`, `--green-deep`, `--green-rgb`,
+`--warning-rgb`, `--shadow-xs`, `--shadow-drawer`, `--shadow-sheet`, `--seam`,
+`--track`, `--grabber`, `--media-veil`, `--media-veil-strong`, `--on-media`,
+`--toggle-off`, `--toggle-knob`, `--warning-deep`, `--text-on-warning-deep`.
+All are documented in `tokens.css` and in `DESIGN.md`.
+
+Three contrast defects fell out of the mapping rather than being hunted: the
+connection banner's amber state (white text at 3.22:1), the DM call button and
+mobile back badge (white on `--green` and `--danger`), and the GIF badge
+labelled in `--text-strong`, which is near-black on the light themes.
+
+**Task 9: half done, and the half that is left needs the owner.**
+
+- Step 1, dark before/after: done for the sign-in surface only (the one that
+  needs no session). 0.17-0.50% of pixels changed and the diff mask is
+  placeholders and field icons — Task 6's grey fixes, which is what this step
+  exists to confirm. Light and light-dim changed 76-81% on the same page,
+  because its ground was a hardcoded `#0d0e10`: the sign-in page was dark in
+  the light themes.
+- Steps 1-3 for every logged-in surface: **blocked**. The preview origin is
+  logged out and signing in is the owner's to do. Everything is in place for
+  it: the preview worktree at the branch head on 4174, the API on 3001 (8990
+  fell inside a new Windows excluded range), `sweep-capture.js` to take the
+  same 15 shots as the `before` set, and `sweep_diff.py` to diff them.
+- Instead, every token the sweep added was rendered by the browser in default,
+  light, light-dim and amoled on a token board (`scratchpad/token-board.html`),
+  which is what the appearance of these tokens can be checked against without
+  a session. All four read correctly.
+- Step 4: findings 6, 7, 9 and 10 are marked fixed in the inventory.
+
+**One finding the board turned up:** on AMOLED, `--seam` is invisible, because
+that theme's floor, deep and chat surfaces are all `#000000` and a recessed
+hairline has nothing to recess into. Pre-existing rather than a regression (the
+literal it replaced was equally invisible there). **Owner, 2026-09-19: AMOLED
+stays as it is** — no edges, by choice.
+
+**Also ruled 2026-09-19:** the five decorative gradient partners (violet in the
+group avatars, pink in two banners) stay as they are. Making them follow the
+accent is later work; the guard's ruled list names all five.
+
+**Not merged.** The branch waits on the owner's own walk through the running
+app, and on a final review once the weekly model limit lifts.

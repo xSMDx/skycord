@@ -215,7 +215,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 
 .ig-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 20px; }
-.ig-error { padding: 0 20px; font-size: 13px; color: #fa777c; }
+.ig-error { padding: 0 20px; font-size: 13px; color: var(--danger-text); }
 
 .ig-linkbox {
   display: flex; flex-direction: column; gap: 8px;
@@ -238,7 +238,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* #248046, not --green: this is the darker "confirmed" shade (CallBar's
    .on, PermissionsTab's .allow.on), a different measured answer from the
    app's main green — see --text-on-green-deep in tokens.css. */
-.ig-copy.copied { background: #248046; color: var(--text-on-green-deep); }
+.ig-copy.copied { background: var(--green-deep); color: var(--text-on-green-deep); }
 .ig-copy:disabled { opacity: .5; cursor: not-allowed; }
 .ig-expiry { font-size: 12px; color: var(--text-3); }
 </style>

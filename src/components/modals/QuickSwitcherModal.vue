@@ -158,9 +158,9 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .qs-search {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 14px 16px; border-bottom: 1px solid var(--divider);
 }
-.qs-icon { color: var(--text-faint); flex-shrink: 0; }
+.qs-icon { color: var(--icon); flex-shrink: 0; }
 .qs-search input { flex: 1; font-size: 16px; color: var(--text-strong); }
 .qs-search input::placeholder { color: var(--text-faint); }
 .qs-spin { flex-shrink: 0; }
@@ -193,5 +193,5 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .qs-results::-webkit-scrollbar { width: 4px; }
 .qs-results::-webkit-scrollbar-track { background: transparent; }
-.qs-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.qs-results::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 </style>

@@ -134,7 +134,7 @@ watch(() => results.value[0], () => body.value?.scrollTo({ top: 0 }))
 .srp {
   width: clamp(300px, 30vw, 400px); flex-shrink: 0; min-height: 0;
   display: flex; flex-direction: column;
-  background: var(--bg-panel); border-left: 1px solid rgba(0,0,0,.25);
+  background: var(--bg-panel); border-left: 1px solid var(--seam);
   font-family: var(--font-ui);
   animation: srp-in var(--dur-3) var(--ease-out);
 }
@@ -144,7 +144,7 @@ watch(() => results.value[0], () => body.value?.scrollTo({ top: 0 }))
 .srp-head {
   height: 48px; flex-shrink: 0;
   display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px;
-  border-bottom: 1px solid rgba(0,0,0,.25);
+  border-bottom: 1px solid var(--seam);
 }
 .srp.screen .srp-head { padding: 0 16px; }
 .srp-count {

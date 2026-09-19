@@ -678,10 +678,10 @@ onBeforeUnmount(() => {
 .cb-join:active { transform: scale(.96); }
 .cb-dismiss {
   width: 40px; height: 40px; border-radius: 8px;
-  background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
+  background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out);
 }
-.cb-dismiss:hover { background: var(--hover-strong, rgba(255,255,255,.12)); }
+.cb-dismiss:hover { background: var(--hover-strong); }
 
 /* Active camera / screen share — green like Discord */
 .cb-b.on { background: #248046; color: #fff; }

@@ -354,7 +354,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp {
   position: fixed; z-index: 1200; width: 300px;
   border-radius: 10px; overflow: hidden;
-  box-shadow: 0 18px 50px rgba(0,0,0,.7);
+  box-shadow: var(--shadow-lg);
   animation: pp-in var(--dur-1) var(--ease-out);
   /* Opens out of the avatar that spawned it, not out of its own middle. */
   transform-origin: top left;
@@ -375,7 +375,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .pp-rows {
   margin-top: 14px; padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,.07);
+  border-top: 1px solid var(--divider);
   display: flex; flex-direction: column; gap: 2px;
 }
 .pp-row {
@@ -393,8 +393,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-presence-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .pp-presence-note { font-size: 11.5px; line-height: 1.3; color: var(--text-faint); white-space: normal; }
 .pp-row.sub .pp-dot { margin-top: 6px; }
-.pp-row.danger { color: #f0716f; }
-.pp-row.danger svg { color: #f0716f; }
+.pp-row.danger { color: var(--danger-text); }
+.pp-row.danger svg { color: var(--danger-text); }
 /* A status row and the chevron that bounds it in time. The row keeps its
    full-width hover; the chevron is a sibling so both stay valid buttons. */
 .pp-splitrow { display: flex; align-items: stretch; }
@@ -410,9 +410,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .pp-dur:hover { background: var(--hover-strong); color: var(--text-1); }
 @media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition:none; } }
-.pp-row.danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
+.pp-row.danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), .12); }
 .pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; background: var(--bg-panel); }
-.pp-chev { margin-left: auto; color: var(--text-3); transition: transform var(--dur-1) var(--ease-out); }
+.pp-chev { margin-left: auto; color: var(--icon); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }
 .pp-note { font-size: 12.5px; color: var(--text-3); padding: 8px 10px; background: var(--hover); border-radius: 6px; }

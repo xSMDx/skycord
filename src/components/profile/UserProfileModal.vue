@@ -224,14 +224,14 @@ img { display: block; object-fit: cover; }
   position: absolute; top: 14px; right: 14px; z-index: 5;
   width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-2); background: rgba(0,0,0,.4);
+  color: var(--text-2); background: var(--media-veil);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.up-close:hover  { color: var(--text-strong); background: rgba(0,0,0,.65); }
+.up-close:hover  { color: var(--text-strong); background: var(--media-veil-strong); }
 .up-close:active { transform: scale(.94); }
 
 .up-state { padding: 72px 24px; text-align: center; color: var(--text-3); font-size: 14px; }
-.up-state.err { color: #f0716f; }
+.up-state.err { color: var(--danger-text); }
 
 .up-cols { display: flex; gap: 0; min-height: 560px; max-height: 86vh; }
 /* Inset panel with its own radius: the banner bleeds to the panel's edges
@@ -249,7 +249,7 @@ img { display: block; object-fit: cover; }
 }
 .up-left::-webkit-scrollbar { width: 4px; }
 .up-left::-webkit-scrollbar-track { background: transparent; }
-.up-left::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.up-left::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 
 .up-actions { display: flex; gap: 8px; margin-top: 18px; }
 .up-anchor { position: relative; }
@@ -259,7 +259,7 @@ img { display: block; object-fit: cover; }
   background: var(--hover-strong); color: var(--text-strong);
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.up-btn:hover:not(:disabled)  { background: rgba(255,255,255,.16); }
+.up-btn:hover:not(:disabled)  { background: var(--hover-strong); }
 .up-btn:active:not(:disabled) { transform: scale(.97); }
 .up-btn:disabled { opacity: .5; cursor: not-allowed; }
 .up-btn.primary { background: var(--accent); color: var(--text-on-accent); }
@@ -274,15 +274,15 @@ img { display: block; object-fit: cover; }
 .up-menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
   min-width: 190px; background: var(--bg-floor); border-radius: 6px; padding: 6px;
-  box-shadow: 0 12px 34px rgba(0,0,0,.6);
+  box-shadow: var(--shadow-lg);
 }
 .up-menu button {
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
   padding: 8px 10px; border-radius: 4px; font-size: 14px; color: var(--text-2);
 }
 .up-menu button:hover { background: var(--accent); color: var(--text-on-accent); }
-.up-menu button.danger { color: #f0716f; }
-.up-menu button.danger:hover { background: #ed4245; color: #fff; }
+.up-menu button.danger { color: var(--danger-text); }
+.up-menu button.danger:hover { background: var(--danger); color: var(--text-on-danger); }
 
 .up-bio { font-size: 14px; color: var(--text-2); line-height: 1.55; margin-top: 18px; white-space: pre-wrap; word-break: break-word; }
 .up-meta { margin-top: 8px; }
@@ -329,7 +329,7 @@ img { display: block; object-fit: cover; }
 
 .up-mutuals::-webkit-scrollbar { width: 4px; }
 .up-mutuals::-webkit-scrollbar-track { background: transparent; }
-.up-mutuals::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+.up-mutuals::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 
 @media (max-width: 820px) {
   .up-cols { flex-direction: column; }
