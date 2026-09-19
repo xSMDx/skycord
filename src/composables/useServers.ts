@@ -113,12 +113,17 @@ const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&
 /**
  * A name made safe to draw: an unpaired surrogate becomes U+FFFD, because
  * encodeURIComponent throws on one and the server stores whatever a raw API
- * call sends; control characters and the noncharacters U+FFFE and U+FFFF go,
- * because XML forbids them and the image would fail to load. Tab, newline and
- * carriage return stay — they are only word separators here.
+ * call sends. The pattern matches a whole pair first and keeps it, so only a
+ * half left on its own is replaced. It is written that way rather than with a
+ * lookbehind because Safari before 16.4 cannot parse one, and a regex literal
+ * it cannot parse stops the whole bundle from loading.
+ *
+ * Control characters and the noncharacters U+FFFE and U+FFFF go, because XML
+ * forbids them and the image would fail to load. Tab, newline and carriage
+ * return stay — they are only word separators here.
  */
 const drawable = (s: string): string => s
-  .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
+  .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, half => (half.length === 2 ? half : '\uFFFD'))
   .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFE\uFFFF]/g, '')
 
 /**

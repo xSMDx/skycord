@@ -154,7 +154,7 @@ export const renderMessage = (raw: string): string => {
   const BLOCK = '(?:pre|blockquote)'
   return s
     .replace(new RegExp('<br>(?=<' + BLOCK + '\\b)', 'g'), '')
-    .replace(new RegExp('(?<=</' + BLOCK + '>)<br>', 'g'), '')
+    .replace(new RegExp('(</' + BLOCK + '>)<br>', 'g'), '$1')
 }
 
 // ── Strip to plain text (reply previews, tree cards, sidebar last-message) ──
