@@ -341,7 +341,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-select:focus { outline: none; border-color: var(--accent); }
 .vv-select:disabled { opacity: .6; cursor: not-allowed; }
 .vv-select option { background: var(--bg-panel); color: var(--text-1); }
-.vv-selchev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.vv-selchev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--icon); pointer-events: none; }
 
 .vv-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 

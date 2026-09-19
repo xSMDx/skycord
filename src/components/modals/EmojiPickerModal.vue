@@ -362,7 +362,7 @@ img    { display: block; width: 100%; object-fit: cover; }
   flex-shrink: 0; transition: border-color var(--dur-2) var(--ease-out);
 }
 .picker-search:focus-within { border-color: rgba(var(--accent-rgb),.5); }
-.ps-icon { color: var(--text-faint); flex-shrink: 0; }
+.ps-icon { color: var(--icon); flex-shrink: 0; }
 .picker-search input { flex: 1; font-size: 13px; color: var(--text-1); }
 .picker-search input::placeholder { color: var(--text-faint); }
 .ps-clear { color: var(--text-faint); width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); flex-shrink: 0; }

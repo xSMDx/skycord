@@ -220,7 +220,7 @@ const apply = () => {
 .smf-select { position: relative; display: block; }
 .smf-select select { appearance: none; padding-right: 36px; cursor: pointer; }
 .smf-select select:disabled { cursor: not-allowed; }
-.smf-chev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-3); }
+.smf-chev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--icon); }
 
 .smf-date { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .smf-op { width: 116px; flex: none; }

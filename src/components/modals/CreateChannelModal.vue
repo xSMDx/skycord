@@ -175,7 +175,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-type-btn.active { border-color: var(--accent); color: var(--text-strong); background: rgba(var(--accent-rgb),.14); }
 
 .ccm-input-wrap { position: relative; display: flex; align-items: center; }
-.ccm-input-icon { position: absolute; left: 12px; color: var(--text-faint); pointer-events: none; }
+.ccm-input-icon { position: absolute; left: 12px; color: var(--icon); pointer-events: none; }
 .ccm-input {
   width: 100%; padding: 10px 12px; border-radius: 4px;
   border: 1px solid transparent; background: var(--bg-input);

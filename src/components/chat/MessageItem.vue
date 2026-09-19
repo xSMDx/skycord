@@ -245,7 +245,7 @@ button{background:none;border:none;cursor:pointer;color:inherit;font:inherit}
 img{display:block;width:100%;height:100%;object-fit:cover}
 /* System log line */
 .msg-system{display:flex;align-items:center;gap: 8px;padding: 4px 48px 4px 18px;font-size:13.5px;color:var(--text-3)}
-.msg-system-icon{display:flex;align-items:center;justify-content:center;width:22px;color:var(--text-3);flex-shrink:0}
+.msg-system-icon{display:flex;align-items:center;justify-content:center;width:22px;color:var(--icon);flex-shrink:0}
 .msg-system-text{color:var(--text-2)}
 .msg-system.sys-join .msg-system-icon{color:var(--green-text)}
 .msg-system.sys-leave .msg-system-icon{color:var(--danger-text)}
@@ -280,7 +280,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .reply-preview:hover{background:var(--hover)}
 .reply-preview:active{background:var(--press-veil)}
 .reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid var(--border);border-top:2px solid var(--border);border-radius: 6px 0 0 0}
-.reply-icon{flex-shrink:0;color:var(--text-faint);display:none}
+.reply-icon{flex-shrink:0;color:var(--icon);display:none}
 .reply-author{color:var(--accent-text);font-weight:600;white-space:nowrap}
 .reply-content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3)}
 .msg-meta{display:flex;align-items:baseline;gap: 8px;margin-bottom: 2px;flex-wrap:wrap}

@@ -63,6 +63,14 @@
   --text-2:         #b5bac1;  /* secondary */
   --text-3:         #949ba4;  /* muted / labels */
   --text-faint:     #999ca2;  /* faint / placeholders — 4.58:1 on chat, 4.99 on panel */
+  /* Resting icons. The same grey as --text-3 on the dark themes, one step
+     darker on the light ones: a 1.5-2px stroke carries far less ink than a
+     text glyph of the same colour, so on a pale ground an icon reads a step
+     lighter than a label painted identically. Hover and active states still
+     brighten icons the way they always have — this is only the resting
+     value. Icons are graphical objects: 3:1 against every surface, proven in
+     semanticTokens.test.ts. */
+  --icon: var(--text-3);
   /* Derived by luminance in useAppearance.ts (onAccent.ts) — the only place
      this is ever set, including under Material-You. This default is the
      right answer for the Sky default only; do not read it as "always ink". */
@@ -467,6 +475,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --seam:    rgba(0, 0, 0, .08);
   --track:   rgba(0, 0, 0, .18);
   --grabber: rgba(0, 0, 0, .28);
+  --icon: var(--text-2);
 }
 [data-theme="light-dim"] {
   /* Green as a mark on a light surface: darkened toward black by the least
@@ -528,6 +537,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --seam:    rgba(0, 0, 0, .08);
   --track:   rgba(0, 0, 0, .18);
   --grabber: rgba(0, 0, 0, .28);
+  --icon: var(--text-2);
 }
 
 /* ── Theme presets (dark family — text stays light) ─────────────────────── */

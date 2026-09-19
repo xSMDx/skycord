@@ -267,7 +267,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   padding: 0 14px;
 }
 .cd-search-ico { flex-shrink: 0; }
-.cd-head.searching .cd-search-ico { color: var(--text-3); }
+.cd-head.searching .cd-search-ico { color: var(--icon); }
 .cd-search-input {
   flex: 1; min-width: 0; height: 100%;
   border: none; background: none; outline: none;
@@ -360,7 +360,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-row:active { background: var(--hover); }
 .cd-row-ico { display: flex; color: var(--text-2); flex-shrink: 0; }
 .cd-row-label { flex: 1; font-size: 15px; font-weight: 600; }
-.cd-row-chev { color: var(--text-faint); flex-shrink: 0; }
+.cd-row-chev { color: var(--icon); flex-shrink: 0; }
 
 .cd-section {
   /* Not Chakra Petch: a member-list count ("Members — 12"), not a heading. */

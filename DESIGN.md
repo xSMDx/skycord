@@ -107,6 +107,7 @@ a message into is laid on top; the thing you fill in a form with is cut into.
 | `--text-2` | `#b5bac1` | Secondary |
 | `--text-3` | `#949ba4` | Muted, labels |
 | `--text-faint` | `#999ca2` | Placeholders — 4.58:1 on chat, 4.99:1 on panel |
+| `--icon` | `var(--text-3)` (light: `var(--text-2)`) | Resting icons — a step darker on light, where a thin stroke reads paler than text of the same grey. Hover and active still brighten them |
 | `--text-on-accent` | *measured* | Text on the accent — `onAccentText(accent)` in `onAccent.ts`, per-accent, **not** fixed white |
 | `--text-on-green` | `#0e0f11` | Text on `--green` — `onAccentText(--green)` |
 | `--text-on-green-deep` | `#ffffff` | Text on the darker "Copied"/"on" green (`#248046`, InviteGroupModal/InviteServerModal) — a different shade from `--green`, so a different measured answer |

@@ -1932,7 +1932,7 @@ img    { display: block; object-fit: cover; }
    at once there. In a stack you're either on the list or on the page, so a
    permanently-lit row just looks like a stuck selection. */
 .sm-modal.mobile .sm-nav-item.active { background: transparent; box-shadow: none; color: var(--text-1); }
-.sm-nav-chev { color: var(--text-3); flex-shrink: 0; margin-left: auto; }
+.sm-nav-chev { color: var(--icon); flex-shrink: 0; margin-left: auto; }
 .sm-modal.mobile .sm-nav-label { padding-left: 16px; }
 .sm-modal.mobile .sm-nav-divider { margin: 8px 0; }
 /* The in-page sub-nav duplicates headings that are already in the scrolling

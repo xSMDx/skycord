@@ -149,7 +149,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   transition: border-color var(--dur-2) var(--ease-out);
 }
 .af-search:focus-within { border-color: var(--accent); }
-.af-search-icon { color: var(--text-faint); flex-shrink: 0; }
+.af-search-icon { color: var(--icon); flex-shrink: 0; }
 .af-search input { flex: 1; font-size: 15px; color: var(--text-strong); }
 .af-search input::placeholder { color: var(--text-faint); }
 .af-spinner { flex-shrink: 0; }

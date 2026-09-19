@@ -411,7 +411,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 @media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition:none; } }
 .pp-row.danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), .12); }
 .pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
-.pp-chev { margin-left: auto; color: var(--text-3); transition: transform var(--dur-1) var(--ease-out); }
+.pp-chev { margin-left: auto; color: var(--icon); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }
 .pp-note { font-size: 12.5px; color: var(--text-3); padding: 8px 10px; background: var(--hover); border-radius: 6px; }

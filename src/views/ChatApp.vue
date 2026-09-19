@@ -5355,7 +5355,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-nav-item.active{color:var(--text-strong);outline:1px solid var(--active-ring);outline-offset:-1px}
 
 .sb-section-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding: 12px 16px 4px;white-space:nowrap}
-.sb-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.sb-add-btn{color:var(--icon);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
@@ -5557,7 +5557,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .ch-fold{transition:none}
   .ch-group-chev{transition:none}
 }
-.ch-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
+.ch-add-btn{color:var(--icon);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
 .ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), padding-left var(--dur-1) var(--ease-out);white-space:nowrap}
@@ -5615,7 +5615,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}
-.ch-icon{flex-shrink:0}
+.ch-icon{flex-shrink:0;color:var(--icon)}
+/* At rest a channel icon takes --icon, a step darker than its label on the
+   light themes; once the row is hovered, active or unread it follows the
+   row again, as it always did. The occupied voice icon keeps its green. */
+.ch-item:hover .ch-icon:not(.occupied),.ch-item.active .ch-icon:not(.occupied),.ch-item.unread .ch-icon:not(.occupied){color:inherit}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
 .ch-unread{min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:white;font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
 /* Who is sitting in a voice channel. Indented under its row so the nesting is
@@ -5664,13 +5668,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
 .up-btns{display:flex;gap: 1px;flex-shrink:0}
-.up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
 .up-btn.danger{color:var(--danger-text);background:rgba(var(--danger-rgb), .12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
-.up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
 /* The chevron points down when the menu is shut and up while it is open, so
    the button says which way it will move things. It was a hardcoded
@@ -5824,7 +5828,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 /* The chevron is the affordance that says the title goes somewhere. Dimmer
    than the title so it reads as a hint, not a second piece of content. */
-.shell.mobile .ch-chev{display:block;flex-shrink:0;color:var(--text-3);opacity:.9}
+.shell.mobile .ch-chev{display:block;flex-shrink:0;color:var(--icon);opacity:.9}
 /* The desktop separator dot is meaningless once the two lines are stacked. */
 .shell.mobile .ch-topic-sep{display:none}
 .shell.mobile .ch-topic{
@@ -5962,7 +5966,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .f-btn{width:44px;height:44px}
 /* Hover does not exist here; left alone these stick in the hovered look after
    a tap and the row reads as still selected. */
-.shell.mobile .f-btn:hover{background:var(--hover);color:var(--text-3);transform:none}
+.shell.mobile .f-btn:hover{background:var(--hover);color:var(--icon);transform:none}
 .shell.mobile .f-btn.accept:hover{background:rgba(var(--green-rgb), .15);color:var(--green-text);transform:none}
 .shell.mobile .f-btn.decline:hover{background:rgba(var(--danger-rgb), .15);color:var(--danger-text);transform:none}
 .shell.mobile .f-btn:active{background:var(--hover-strong)}
@@ -6008,7 +6012,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .shell.mobile .chat{transition: opacity var(--dur-3) var(--ease-out)}
 }
 .friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid var(--seam);display:flex;align-items:center;gap: 8px;padding: 0 16px}
-.fh-icon{color:var(--text-3);flex-shrink:0}
+.fh-icon{color:var(--icon);flex-shrink:0}
 .fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right: 4px;white-space:nowrap}
 .fh-tabs{display:flex;gap: 2px}
 .ftab{padding: 6px 12px;border-radius: 6px;font-size:13px;font-weight:500;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
@@ -6048,7 +6052,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    were rendering OUTSIDE their own row (row 63px wide, actions painted at x=88
    on top of the next column). */
 .f-actions{display:flex;gap: 6px;flex-shrink:0}
-.f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:var(--hover);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--icon);background:var(--hover);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
 .f-btn.accept{background:rgba(var(--green-rgb), .15);color:var(--green-text)}
 .f-btn.accept:hover{background:rgba(var(--green-rgb), .28);transform:scale(1.1)}
@@ -6157,14 +6161,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Not Chakra Petch: this is the channel/DM/group's own name — data the user
    or server named, not a heading the app authored. */
 .chat-title{font-family: var(--font-ui);font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
-.ch-hash{color:var(--text-3);flex-shrink:0;margin-right: 4px}
+.ch-hash{color:var(--icon);flex-shrink:0;margin-right: 4px}
 .ch-topic-sep{width:1px;height:16px;background:var(--border);margin: 0 10px;flex-shrink:0}
 .ch-topic{font-size:13px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-header-av{position:relative;width:28px;height:28px;margin-right: 4px;flex-shrink:0;cursor:pointer}
 .dm-header-av img{border-radius: 50%}
 .dm-header-dot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius: 50%;border:2px solid var(--bg-chat)}
 
-.icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
+.icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
 .icon-btn:active{transform:scale(.88)}
 .icon-btn.active{color:var(--accent-text);background:rgba(var(--accent-rgb),.15)}

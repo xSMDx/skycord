@@ -185,6 +185,23 @@ describe('tokens.css: --warning-text clears CONTRAST_TARGET against every surfac
   }
 })
 
+describe('tokens.css: --icon clears the graphical 3:1 floor against every surface', () => {
+  // Resting icons are graphical objects (WCAG 1.4.11), so 3:1 is their floor.
+  // On the light themes --icon sits a step darker than --text-3 on purpose —
+  // a thin stroke reads lighter than a text glyph of the same grey — and this
+  // is what keeps a later retune from going the other way past the line.
+  for (const theme of ALL_THEMES) {
+    it(`${theme}`, () => {
+      const block = blockFor(theme)
+      const icon = resolveHex(block, 'icon')
+      for (const surface of SURFACES) {
+        const bg = resolveHex(block, surface)
+        expect(ratio(icon, bg), `--icon (${icon}) vs ${theme}'s --${surface} (${bg})`).toBeGreaterThanOrEqual(GRAPHICAL_TARGET)
+      }
+    })
+  }
+})
+
 describe('tokens.css: --warning clears the graphical 3:1 floor against every surface', () => {
   for (const theme of ALL_THEMES) {
     it(`${theme}`, () => {

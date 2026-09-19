@@ -142,7 +142,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   transition: border-color var(--dur-2) var(--ease-out);
 }
 .rp-search:focus-within { border-color: var(--accent); }
-.rp-search-icon { color: var(--text-faint); flex-shrink: 0; }
+.rp-search-icon { color: var(--icon); flex-shrink: 0; }
 .rp-search input { flex: 1; font-size: 14px; color: var(--text-strong); }
 .rp-search input::placeholder { color: var(--text-faint); }
 
