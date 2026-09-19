@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
       <span class="fr-label">Input Volume — {{ voiceSettings.inputVolume }}%</span>
       <div class="fr static"><input class="fr-slider" type="range" min="0" max="100" :value="voiceSettings.inputVolume" @input="onInputVolume" /></div>
       <span class="fr-label">Input Level</span>
-      <div class="fr static"><div class="mf-meter"><div class="mf-fill" :style="{ width: (level*100).toFixed(0) + '%' }" /></div></div>
+      <div class="fr static"><div class="mf-meter"><div class="mf-fill" :style="{ '--level': level.toFixed(3) }" /></div></div>
     </template>
     <template v-if="show('output')">
       <span class="fr-label">Output Volume — {{ voiceSettings.outputVolume }}%</span>
@@ -185,5 +185,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .mf-meter { width: 100%; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
-.mf-fill  { height: 100%; background: linear-gradient(90deg, var(--green), var(--warning) 70%, var(--danger)); transition:width .05s linear; }
+/* Scaled, not resized: a meter updates every frame, and width would lay the
+   row out on every one. The gradient scales with it, exactly as it squeezed
+   into a narrower width before. .05s linear is not a UI duration — it
+   smooths a live signal — so it stays a literal. */
+.mf-fill  {
+  width: 100%; height: 100%; transform: scaleX(var(--level, 0)); transform-origin: left;
+  background: linear-gradient(90deg, var(--green), var(--warning) 70%, var(--danger));
+  transition: transform .05s linear;
+}
 </style>

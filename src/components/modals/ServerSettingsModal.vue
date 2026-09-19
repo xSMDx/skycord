@@ -245,7 +245,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
  * crossfading through each other is legible as neither.
  */
 .sv-page-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
-.sv-page-leave-active { transition: opacity 90ms var(--ease-in); }
+.sv-page-leave-active { transition: opacity var(--dur-exit) var(--ease-in); }
 .sv-page-enter-from { opacity: 0; transform: translateY(4px); }
 .sv-page-leave-to { opacity: 0; }
 

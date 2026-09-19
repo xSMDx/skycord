@@ -331,7 +331,7 @@ defineExpose({ focus: () => input.value?.focus(), popupOpen })
   width: 200px; max-width: 100%; height: 30px; padding: 0 7px 0 3px;
   background: var(--bg-input); border: 1px solid transparent; border-radius: var(--edge-md);
   cursor: text;
-  transition: border-color var(--dur-2) var(--ease-out), width var(--dur-3) var(--ease-out);
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .sf.focused .sf-box, .sf.filled .sf-box { width: 280px; }
 .sf.focused .sf-box { border-color: var(--accent); }

@@ -438,7 +438,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cm-scrim {
   position: fixed; inset: 0; z-index: 9000;
   background: var(--scrim);
-  animation: cm-scrim-in .18s ease;
+  animation: cm-scrim-in var(--dur-2) var(--ease-out);
 }
 @keyframes cm-scrim-in { from { opacity: 0 } to { opacity: 1 } }
 
@@ -449,7 +449,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   border-radius: 16px 16px 0 0;
   padding: 0 0 max(8px, env(safe-area-inset-bottom));
   max-height: 75vh; overflow: hidden auto;
-  animation: cm-sheet-up .22s cubic-bezier(.2,.8,.3,1);
+  animation: cm-sheet-up var(--dur-3) var(--ease-out);
   /* No transition while a finger is on it: the drag IS the position, and
      easing it would put the sheet behind the thumb. */
   transition:transform .22s cubic-bezier(.2,.8,.3,1);

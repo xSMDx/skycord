@@ -254,7 +254,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   padding: 0 12px; border-radius: 22px;
   border: 1.5px solid transparent; background: transparent;
   color: var(--text-2); cursor: pointer; overflow: hidden;
-  transition:width .28s cubic-bezier(.2,.8,.3,1), background var(--dur-3) var(--ease-out), border-color var(--dur-3) var(--ease-out), padding .28s cubic-bezier(.2,.8,.3,1);
+  transition: background var(--dur-3) var(--ease-out), border-color var(--dur-3) var(--ease-out);
 }
 .cd-head.searching .cd-searchfield {
   width: 100%; cursor: text;
@@ -274,11 +274,10 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-search-input::-webkit-search-cancel-button { display: none; }
 .cd-search-input::placeholder { color: var(--text-faint); }
 
-/* The trailing actions collapse to zero width so the field can take the row,
-   and animate on width rather than being removed — removing them makes the
-   row jump instead of moving. */
+/* The trailing actions collapse to zero width so the field can take the row.
+   The width snaps rather than animating — animating it laid the header out on
+   every frame (audit finding 19); the field's border and fill still ease. */
 .cd-head.searching .cd-head-actions { width: 0; overflow: hidden; }
-.cd-head-actions { transition:width .28s cubic-bezier(.2,.8,.3,1); }
 .cd-filter { flex-shrink: 0; color: var(--text-2); }
 .cd-filter:active { background: var(--hover); color: var(--text-1); }
 

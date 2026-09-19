@@ -252,7 +252,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
     <div class="vv-mictest">
       <button class="vv-btn primary" @click="startMicTest">{{ micTesting ? 'Stop Test' : 'Mic Test' }}</button>
       <div class="vv-meter">
-        <div class="vv-meter-fill" :class="{ open: micOpen }" :style="{ width: (micLevel*100).toFixed(0) + '%' }" />
+        <div class="vv-meter-fill" :class="{ open: micOpen }" :style="{ '--level': micLevel.toFixed(3) }" />
         <!-- where the sensitivity gate opens: bar past this line = transmitting -->
         <div class="vv-meter-thresh" :style="{ left: (gateThreshold*100).toFixed(0) + '%' }" />
       </div>
@@ -355,7 +355,13 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-mictest { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
 .vv-meter { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
 /* Dim until the gate opens, so you can SEE when you're actually transmitting */
-.vv-meter-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--warning) 70%, var(--danger)); transition:width .05s linear; opacity: .35; }
+/* Scaled, not resized — see MicFlyout's .mf-fill. .05s smooths a live
+   signal and stays a literal. */
+.vv-meter-fill {
+  width: 100%; height: 100%; transform: scaleX(var(--level, 0)); transform-origin: left;
+  background: linear-gradient(90deg, var(--green), var(--warning) 70%, var(--danger));
+  transition: transform .05s linear; opacity: .35;
+}
 .vv-meter-fill.open { opacity: 1; }
 .vv-meter-thresh { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-1); border-radius: 1px; }
 .vv-divider { height: 1px; background: var(--border); margin: 22px 0; }

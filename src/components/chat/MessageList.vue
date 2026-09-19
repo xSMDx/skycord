@@ -383,7 +383,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
    Charming once, noise by the hundredth, and it is the one animation nobody in
    a busy channel can look away from. And the fade ran at --dur-3 (240ms), the
    band for popovers and panels; a message is neither. */
-.msg-pop-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform 140ms var(--ease-out); }
+.msg-pop-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
 .msg-pop-enter-from   { opacity: 0; transform: translateY(8px) scale(.97); }
 .msg-no-anim.msg-pop-enter-active { transition:none; }
 .msg-no-anim.msg-pop-enter-from   { opacity: 1; transform: none; }

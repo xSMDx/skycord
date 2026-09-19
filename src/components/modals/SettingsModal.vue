@@ -1602,12 +1602,12 @@ img    { display: block; object-fit: cover; }
  * indent already says these belong to the row above.
  */
 .sm-subnav-wrap {
-  /* 0fr → 1fr is the height transition that does not need a measured pixel
-     height. Without it the Log Out row below jumps the moment a page with
-     sub-sections is selected. */
+  /* The rows open at once and fade in. The 0fr → 1fr track used to animate
+     so the Log Out row below slid rather than stepped; animating a grid
+     track lays out the nav on every frame (audit finding 19), and a step
+     that happens once, with the sub-sections fading in, reads as intended. */
   display: grid; grid-template-rows: 0fr; opacity: 0;
-  transition: grid-template-rows var(--dur-2) var(--ease-out),
-              opacity var(--dur-2) var(--ease-out);
+  transition: opacity var(--dur-2) var(--ease-out);
 }
 .sm-subnav-wrap.open { grid-template-rows: 1fr; opacity: 1; }
 .sm-subnav {
@@ -1903,7 +1903,7 @@ img    { display: block; object-fit: cover; }
 .sm-modal.mobile .sm-content {
   position: absolute; inset: 0;
   width: 100%; padding-left: 0; padding-right: 0;
-  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out), opacity var(--dur-4) var(--ease-out);
 }
 .sm-modal.mobile .sm-nav     { padding-top: 0; z-index: 1; }
 /* Explicit background is required, not decorative. Side by side these panes sat

@@ -258,7 +258,7 @@ onBeforeUnmount(() => {
   position: relative;
   background: var(--bg-deep); border-top: 1px solid var(--border);
   padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px;
-  animation: vcp-in .22s cubic-bezier(.4,0,.2,1);
+  animation: vcp-in var(--dur-3) var(--ease-out);
 }
 /* Kill the default browser button border (the ugly bevel) on every control */
 .vcp button { border: none; cursor: pointer; box-sizing: border-box; }
@@ -273,15 +273,16 @@ onBeforeUnmount(() => {
 .vcp-sig {
   display: flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; flex-shrink: 0;
-  transition: color var(--dur-3) var(--ease-out), transform .16s cubic-bezier(.34,1.56,.64,1);
+  transition: color var(--dur-3) var(--ease-out), transform var(--dur-2) cubic-bezier(.34,1.56,.64,1);
 }
 .vcp-sig :deep(svg) { overflow: visible; }
 /* Lucide draws the bars shortest-first, so staggering by child index animates
    them left-to-right the way a signal meter fills. */
 .vcp-sig :deep(path) {
   transform-origin: bottom;
-  animation: vcp-bar .34s cubic-bezier(.34,1.56,.64,1) backwards;
+  animation: vcp-bar var(--dur-2) cubic-bezier(.34,1.56,.64,1) backwards;
 }
+/* The bars rise one after another: offsets, not durations. */
 .vcp-sig :deep(path:nth-child(1)) { animation-delay: 0s; }
 .vcp-sig :deep(path:nth-child(2)) { animation-delay: .06s; }
 .vcp-sig :deep(path:nth-child(3)) { animation-delay: .12s; }
