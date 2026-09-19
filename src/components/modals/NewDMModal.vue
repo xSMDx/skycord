@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { X, Search } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import type { Friend } from '@/types'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const props = defineProps<{ friends: Friend[]; title?: string }>()
 const emit  = defineEmits<{ close: []; create: [ids: string[]] }>()
@@ -21,10 +22,6 @@ const toggle = (id: string) => {
   if (s.has(id)) s.delete(id)
   else s.add(id)
   selected.value = s
-}
-
-const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e'
 }
 
 const create = () => {
@@ -68,7 +65,7 @@ const create = () => {
         >
           <div class="ndm-avatar">
             <Avatar :src="f.avatar" :alt="f.name" :crop="(f as any).avatarCrop" />
-            <span class="ndm-status" :style="{ background: statusColor[f.status] }" />
+            <StatusDot class="ndm-status" :status="f.status" />
           </div>
           <div class="ndm-info">
             <span class="ndm-name">{{ f.name }}</span>
@@ -134,7 +131,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-status {
   position: absolute; bottom: -1px; right: -1px;
   width: 11px; height: 11px; border-radius: 50%;
-  border: 2px solid var(--bg-panel);
+  background: var(--bg-panel); border: 2px solid var(--bg-panel);
 }
 .ndm-info  { flex: 1; }
 .ndm-name  { display: block; font-size: 15px; font-weight: 600; color: var(--text-strong); }

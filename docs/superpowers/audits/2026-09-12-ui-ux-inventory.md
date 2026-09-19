@@ -164,6 +164,22 @@ signal", and `ConversationDetails.vue:206` already does it correctly with
 This is the "presence UI is buggy, needs a full overhaul" from the roadmap, now
 locatable.
 
+**Fixed** on branch `ui-audit-04-presence` — plan:
+[`2026-09-14-ui-audit-04-presence.md`](../plans/2026-09-14-ui-audit-04-presence.md).
+The six copies are gone and usePresence.ts returns tokens, with a guard that
+fails on any status mapped to a colour outside it — matching the status side
+rather than the colour side, so a corrected copy is still caught. The colours
+themselves became `--status-*`, measured: all four were under the 3:1 a
+graphical object needs on the light themes (idle 1.17:1 on Light Dim), and the
+light families now carry a derived set that clears it on every surface.
+
+The accessible-name half is fixed by the same slice: every dot in the app is a
+`StatusDot`, which carries the shape (online filled, idle crescent,
+do-not-disturb bar, offline ring) as well as the colour, and announces the
+status name once. `DESIGN.md` commitment 8 — "colour is never the only
+signal" — is true of presence now. What is left is the walk through the
+running app that Task 4 of that plan describes.
+
 ### 5. The call bar and call stage are dark-only
 
 `CallBar.vue:526` sets `.cb-bar { background: var(--bg-floor) }` — which is

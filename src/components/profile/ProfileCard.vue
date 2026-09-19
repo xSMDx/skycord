@@ -12,6 +12,7 @@ import { Pencil, Plus } from 'lucide-vue-next'
 import type { Crop } from '@/composables/useCrop'
 import AnimatedImage from '@/components/ui/AnimatedImage.vue'
 import { avatarFor } from '@/composables/useAvatar'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const props = withDefaults(defineProps<{
   username:      string
@@ -80,10 +81,6 @@ const bannerBg = computed(() =>
   props.banner ? DEFAULT_BANNER : (props.bannerColor || DEFAULT_BANNER))
 const statusText = computed(() => props.customStatus?.text?.trim() || '')
 
-const STATUS_COLORS: Record<string, string> = {
-  online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#80848e', invisible: '#80848e',
-}
-const dotColor = computed(() => STATUS_COLORS[props.status || 'offline'] || STATUS_COLORS.offline)
 
 const memberSinceLabel = computed(() => {
   if (!props.memberSince) return null
@@ -119,7 +116,7 @@ const memberSinceLabel = computed(() => {
         <AnimatedImage :src="avatarSrc" :alt="name" :crop="avatarCrop" />
         <span v-if="editable" class="pc-apencil"><Pencil :size="20" :stroke-width="2.25" /></span>
       </div>
-      <span class="pc-dot" :style="{ background: dotColor }" />
+      <StatusDot class="pc-dot" :status="status" />
 
       <button v-if="editable || statusButton" class="pc-status" @click.stop="emit('editStatus')">
         <Plus v-if="!statusText" :size="14" :stroke-width="2.25" class="pc-status-plus" />
@@ -207,7 +204,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-av.editable:focus-visible .pc-apencil { opacity: 1; }
 .pc-dot {
   position: absolute; right: 3px; bottom: 3px;
-  width: 22px; height: 22px; border-radius: 50%; border: 5px solid var(--bg-panel);
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--bg-panel); border: 5px solid var(--bg-panel);
 }
 
 /* Sits beside the avatar, overlapping the banner — the "Add status" pill. */

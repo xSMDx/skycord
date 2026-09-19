@@ -4,6 +4,7 @@ import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
 import type { Group, Friend } from '@/types'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const MAX_GROUP_MEMBERS = 10
 
@@ -19,10 +20,6 @@ const error     = ref('')
 
 const inviteUrl = ref('')
 const copied    = ref(false)
-
-const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e',
-}
 
 const remaining = computed(() => Math.max(0, MAX_GROUP_MEMBERS - props.group.memberCount))
 
@@ -129,7 +126,7 @@ onMounted(async () => {
         >
           <div class="ig-avatar">
             <Avatar :src="f.avatar" :alt="f.name" :crop="(f as any).avatarCrop" />
-            <span class="ig-status" :style="{ background: statusColor[f.status] }" />
+            <StatusDot class="ig-status" :status="f.status" />
           </div>
           <div class="ig-info">
             <span class="ig-name">{{ f.name }}</span>
@@ -204,7 +201,8 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-avatar img { border-radius: 50%; }
 .ig-status {
   position: absolute; bottom: -1px; right: -1px;
-  width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-panel);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--bg-panel); border: 2px solid var(--bg-panel);
 }
 .ig-info { flex: 1; min-width: 0; }
 .ig-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); }

@@ -5,6 +5,7 @@ import { useApi, type ApiUser } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
 import ModalBase from './ModalBase.vue'
 import type { DM, Group } from '@/types'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const props = defineProps<{ dms: DM[]; groups?: Group[] }>()
 const emit  = defineEmits<{ close: []; openDM: [dm: DM]; openGroup: [g: Group] }>()
@@ -44,10 +45,6 @@ watch(query, (q) => {
 })
 
 const avatarUrl = (u: ApiUser) => avatarFor(u.username, u.avatar)
-
-const statusColor: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245', offline: '#80848e'
-}
 
 const selectUser = (u: ApiUser) => {
   // Find or build a DM object
@@ -90,7 +87,7 @@ const selectUser = (u: ApiUser) => {
             >
               <div class="qs-av">
                 <Avatar :src="dm.avatar" :alt="dm.name" :crop="(dm as any).avatarCrop" />
-                <span class="qs-dot" :style="{ background: statusColor[dm.status] || '#80848e' }" />
+                <StatusDot class="qs-dot" :status="dm.status" />
               </div>
               <div class="qs-info">
                 <span class="qs-name">{{ dm.name }}</span>
@@ -130,7 +127,7 @@ const selectUser = (u: ApiUser) => {
             >
               <div class="qs-av">
                 <Avatar :src="avatarUrl(u)" :alt="u.displayName" :crop="(u as any).avatarCrop" />
-                <span class="qs-dot" :style="{ background: statusColor[u.status] || '#80848e' }" />
+                <StatusDot class="qs-dot" :status="u.status" />
               </div>
               <div class="qs-info">
                 <span class="qs-name">{{ u.displayName }}</span>

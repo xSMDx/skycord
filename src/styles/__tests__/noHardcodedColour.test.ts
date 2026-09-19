@@ -54,8 +54,6 @@ const RULED: RuledSite[] = [
   { file: 'components/modals/SettingsModal.vue', selector: '.acc-banner-bg', why: 'gradient partner: kept for now, accent-following is later work' },
   { file: 'views/AuthPage.vue', selector: '.b2', why: 'gradient partner: kept for now, accent-following is later work' },
 
-  // Presence belongs to slice 4, which decides every status colour at once.
-  { file: 'views/ChatApp.vue', selector: '.up-status-dot', why: 'offline grey: slice 4 (presence)' },
 ]
 
 // The call surfaces are skipped by this sweep on purpose: slice 5 themes them

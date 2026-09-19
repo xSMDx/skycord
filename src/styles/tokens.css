@@ -134,9 +134,8 @@
      dark surface with room to spare — 6.69:1 on default's --bg-chat, the
      lowest of the 55 dark-surface checks (11 dark theme blocks x 5
      surfaces) — so no lightening/darkening was needed for dark at all.
-     See semanticTokens.test.ts. Slice 4 plans --status-idle at this same
-     dark value; unify the two tokens when both exist rather than carrying
-     two names for one colour. */
+     See semanticTokens.test.ts. --status-idle is this token, not a copy of
+     its value: presence's idle amber and the app's amber are one colour. */
   --warning: #f0b232;
   /* For tints: rgba(var(--warning-rgb), a). */
   --warning-rgb: 240, 178, 50;
@@ -368,6 +367,30 @@
   --warning-deep:          #8e691d;
   --text-on-warning-deep:  #ffffff;
 
+  /* ── Presence ───────────────────────────────────────────────
+     A status dot is a graphical object, so the floor is 3:1 against every
+     surface it can sit on (WCAG 1.4.11), not text's 4.5 — and the SHAPE, not
+     the colour, is what actually carries the status (StatusDot.vue). The
+     colour confirms it, which is why a colour-blind member and a member on
+     Light Dim both read presence correctly.
+
+     Online and do-not-disturb borrow the semantic colours rather than
+     repeating them, so that changing --green or --danger moves presence with
+     them — they are the same statements ("live", "stop") in another place.
+     Idle is --warning, the app's one amber, rather than the older #f0a500 —
+     so on the light themes it takes --warning's measured darker value too
+     (3.10:1 on Light Dim's floor, the hardest surface) with no override of
+     its own. On dark the difference from #f0a500 is slight (6.69:1 against
+     the worst dark surface instead of 6.07:1). Offline is the neutral it
+     always was.
+
+     statusTokens.test.ts measures all four against every surface of every
+     theme block on every run. */
+  --status-online:  var(--green);
+  --status-idle:    var(--warning);
+  --status-dnd:     var(--danger);
+  --status-offline: #80848e;
+
   /* ── The 2px grid ───────────────────────────────────────────────────────
      Spacing, radii and icon sizes are even numbers. Not a scale invented
      here — it is the one the app already used, in 27 spacing values, 20 icon
@@ -476,6 +499,24 @@ html.names-plain { --name-hover: var(--text-strong); }
   --track:   rgba(0, 0, 0, .18);
   --grabber: rgba(0, 0, 0, .28);
   --icon: var(--text-2);
+  /* Presence, tuned for a pale ground. The dark values are invisible here —
+     online measures 2.52:1 on Light and 1.97:1 on Light Dim, idle 1.50:1 and
+     1.17:1 — so each is the same hue taken down in OKLCH lightness, holding
+     hue and chroma (chroma is only given up where the darker colour would
+     leave the sRGB gamut), until it clears 3.1:1 against the HARDEST surface
+     of the two light families, Light Dim's own --bg-floor (#c7ccd1). Deriving
+     against the hardest surface rather than the lightest is what lets one set
+     of values serve both families: a dot that clears the darkest pale surface
+     clears every paler one above it.
+
+     Measured, worst surface of each family: online 3.99 / 3.12, dnd 4.00 /
+     3.12, offline 3.97 / 3.10. A plain RGB darkening to the same target gives
+     #1b7f45, #c9383b, #6c6f77 — the same lightness but less colour, so these
+     keep the hue the dark themes use. Idle needs no line here: it is
+     --warning, whose light value was measured the same way. */
+  --status-online:  #018041;
+  --status-dnd:     #d52731;
+  --status-offline: #6c6f79;
 }
 [data-theme="light-dim"] {
   /* Green as a mark on a light surface: darkened toward black by the least
@@ -538,6 +579,24 @@ html.names-plain { --name-hover: var(--text-strong); }
   --track:   rgba(0, 0, 0, .18);
   --grabber: rgba(0, 0, 0, .28);
   --icon: var(--text-2);
+  /* Presence, tuned for a pale ground. The dark values are invisible here —
+     online measures 2.52:1 on Light and 1.97:1 on Light Dim, idle 1.50:1 and
+     1.17:1 — so each is the same hue taken down in OKLCH lightness, holding
+     hue and chroma (chroma is only given up where the darker colour would
+     leave the sRGB gamut), until it clears 3.1:1 against the HARDEST surface
+     of the two light families, Light Dim's own --bg-floor (#c7ccd1). Deriving
+     against the hardest surface rather than the lightest is what lets one set
+     of values serve both families: a dot that clears the darkest pale surface
+     clears every paler one above it.
+
+     Measured, worst surface of each family: online 3.99 / 3.12, dnd 4.00 /
+     3.12, offline 3.97 / 3.10. A plain RGB darkening to the same target gives
+     #1b7f45, #c9383b, #6c6f77 — the same lightness but less colour, so these
+     keep the hue the dark themes use. Idle needs no line here: it is
+     --warning, whose light value was measured the same way. */
+  --status-online:  #018041;
+  --status-dnd:     #d52731;
+  --status-offline: #6c6f79;
 }
 
 /* ── Theme presets (dark family — text stays light) ─────────────────────── */

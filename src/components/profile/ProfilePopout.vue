@@ -18,7 +18,8 @@ import ProfileCard from './ProfileCard.vue'
 import AnchoredPanel from '@/components/ui/AnchoredPanel.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
-import { statusColor, chosenStatus } from '@/composables/usePresence'
+import { chosenStatus } from '@/composables/usePresence'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const props = withDefaults(defineProps<{
   /** Whose profile. When it matches the signed-in user, the self rows show. */
@@ -261,7 +262,7 @@ onBeforeUnmount(() => {
             </button>
 
             <button class="pp-row" @click="togglePresence($event)">
-              <span class="pp-dot" :style="{ background: statusColor(currentPresence.id) }" />
+              <StatusDot class="pp-dot" :status="currentPresence.id" :named="false" />
               <span>{{ currentPresence.label }}</span>
               <ChevronRight :size="14" :stroke-width="2.25" class="pp-chev" :class="{ open: showPresence }" />
             </button>
@@ -276,7 +277,7 @@ onBeforeUnmount(() => {
                 <div class="pp-splitrow">
                   <!-- The row itself sets instantly, forever — unchanged. -->
                   <button class="pp-row sub" @click="pick(p.id)">
-                    <span class="pp-dot" :style="{ background: statusColor(p.id) }" />
+                    <StatusDot class="pp-dot" :status="p.id" :named="false" />
                     <span class="pp-presence-text">
                       <span>{{ p.label }}</span>
                       <span v-if="p.note" class="pp-presence-note">{{ p.note }}</span>
@@ -410,7 +411,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-dur:hover { background: var(--hover-strong); color: var(--text-1); }
 @media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition:none; } }
 .pp-row.danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), .12); }
-.pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; background: var(--bg-panel); }
 .pp-chev { margin-left: auto; color: var(--icon); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }
