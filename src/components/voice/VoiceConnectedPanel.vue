@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
            every stream. Transport encryption is real and is what this claims.
            Swap the wording once E2EE actually ships — see
            docs/superpowers/specs/2026-08-09-e2ee-design.md -->
-      <div class="vcp-pop-foot">Encrypted in transit (DTLS-SRTP)</div>
+      <div class="vcp-pop-foot">Encrypted in transit</div>
     </div>
 
     <div class="vcp-top" @click="togglePin">
@@ -258,7 +258,7 @@ onBeforeUnmount(() => {
   position: relative;
   background: var(--bg-deep); border-top: 1px solid var(--border);
   padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px;
-  animation: vcp-in .22s cubic-bezier(.4,0,.2,1);
+  animation: vcp-in var(--dur-3) var(--ease-out);
 }
 /* Kill the default browser button border (the ugly bevel) on every control */
 .vcp button { border: none; cursor: pointer; box-sizing: border-box; }
@@ -273,15 +273,16 @@ onBeforeUnmount(() => {
 .vcp-sig {
   display: flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; flex-shrink: 0;
-  transition: color var(--dur-3) var(--ease-out), transform .16s cubic-bezier(.34,1.56,.64,1);
+  transition: color var(--dur-3) var(--ease-out), transform var(--dur-2) cubic-bezier(.34,1.56,.64,1);
 }
 .vcp-sig :deep(svg) { overflow: visible; }
 /* Lucide draws the bars shortest-first, so staggering by child index animates
    them left-to-right the way a signal meter fills. */
 .vcp-sig :deep(path) {
   transform-origin: bottom;
-  animation: vcp-bar .34s cubic-bezier(.34,1.56,.64,1) backwards;
+  animation: vcp-bar var(--dur-2) cubic-bezier(.34,1.56,.64,1) backwards;
 }
+/* The bars rise one after another: offsets, not durations. */
 .vcp-sig :deep(path:nth-child(1)) { animation-delay: 0s; }
 .vcp-sig :deep(path:nth-child(2)) { animation-delay: .06s; }
 .vcp-sig :deep(path:nth-child(3)) { animation-delay: .12s; }
@@ -296,33 +297,33 @@ onBeforeUnmount(() => {
 .vcp-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .vcp-status { font-size: 13px; font-weight: 700; }
 .vcp-name { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vcp-warn { color: #f0b232; }
+.vcp-warn { color: var(--warning-text); }
 .vcp-leave {
   width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
-  background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
+  background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.vcp-leave:hover { background: #f23f43; color: #fff; transform: translateY(-1px); }
+.vcp-leave:hover { background: var(--danger); color: var(--text-on-danger); transform: translateY(-1px); }
 
 .vcp-controls { display: flex; gap: 6px; }
 .vcp-btn {
   flex: 1; height: 32px; border-radius: 8px;
-  background: rgba(255,255,255,.06); color: var(--text-2);
+  background: var(--hover); color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.vcp-btn:hover:not(:disabled) { background: rgba(255,255,255,.11); color: var(--text-1); }
+.vcp-btn:hover:not(:disabled) { background: var(--hover-strong); color: var(--text-1); }
 .vcp-btn:active:not(:disabled) { transform: scale(.96); }
-.vcp-btn.on { background: #248046; color: #fff; }
+.vcp-btn.on { background: var(--green-deep); color: var(--text-on-green-deep); }
 .vcp-btn:disabled { opacity: .45; cursor: not-allowed; }
-.vcp-back { color: #3ba55d; }
-.vcp-back:hover { background: rgba(35,165,90,.18); color: #4ade80; }
+.vcp-back { color: var(--green-text); }
+.vcp-back:hover { background: rgba(var(--green-rgb), .18); color: var(--green-text); }
 
 /* Hover popover — appears above the strip */
 .vcp-pop {
   position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px);
   background: var(--bg-floor); border: 1px solid var(--border); border-radius: 10px;
-  padding: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.5); z-index: 50;
+  padding: 12px; box-shadow: var(--shadow-md); z-index: 50;
   opacity: 0; transform: translateY(6px); pointer-events: none;
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -348,7 +349,7 @@ onBeforeUnmount(() => {
 }
 .vcp-pop-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-3); padding: 2px 0; }
 .vcp-pop-row strong { color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums; }
-.vcp-pop-row strong.bad { color: #f23f43; }
+.vcp-pop-row strong.bad { color: var(--danger-text); }
 .vcp-pop-vs { align-items: center; }
 .vcp-pop-select {
   flex: 1; min-width: 0; max-width: 60%;
@@ -365,7 +366,7 @@ onBeforeUnmount(() => {
 .vcp-pop-btn {
   width: 100%; margin-top: 10px; height: 38px; border-radius: 8px;
   font-weight: 600;
-  background: rgba(255,255,255,.06); color: var(--text-2); font-size: 12px;
+  background: var(--hover); color: var(--text-2); font-size: 12px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }

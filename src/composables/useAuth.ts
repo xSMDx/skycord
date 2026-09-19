@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
- 
+import { offlineMessage } from './offlineMessage'
+
 /** A custom status line. `clearAt` null = it never expires. The server already
  *  filters expired ones out, so anything present here is live. */
 export interface CustomStatus {
@@ -36,7 +37,6 @@ const initialized = ref(false)
 // persistent banner on the auth page and self-clears by re-probing /health.
 const serverDown = ref(false)
 let probeTimer: ReturnType<typeof setTimeout> | null = null
-const OFFLINE_MSG = 'Skycord server is offline — start the API server (start-dev.cmd), it will reconnect automatically.'
 
 const probeServer = async (): Promise<void> => {
   try {
@@ -99,7 +99,7 @@ export const useAuth = () => {
       const res  = await authFetch('/auth/register', { method: 'POST', body: JSON.stringify(payload) })
       const data = await readJson(res)
       if (!res.ok) {
-        if (!data) { flagServerDown('/auth/register', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        if (!data) { flagServerDown('/auth/register', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
         return { ok: false as const, errors: data.errors, message: data.message }
       }
       serverDown.value = false
@@ -107,7 +107,7 @@ export const useAuth = () => {
       user.value = data.user
       scheduleRefresh()
       return { ok: true as const }
-    } catch (e) { flagServerDown('/auth/register', e); return { ok: false as const, message: OFFLINE_MSG } }
+    } catch (e) { flagServerDown('/auth/register', e); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
     finally   { loading.value = false }
   }
  
@@ -117,7 +117,7 @@ export const useAuth = () => {
       const res  = await authFetch('/auth/login', { method: 'POST', body: JSON.stringify(payload) })
       const data = await readJson(res)
       if (!res.ok) {
-        if (!data) { flagServerDown('/auth/login', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        if (!data) { flagServerDown('/auth/login', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
         return { ok: false as const, errors: data.errors, message: data.message }
       }
       serverDown.value = false
@@ -125,7 +125,7 @@ export const useAuth = () => {
       user.value = data.user
       scheduleRefresh()
       return { ok: true as const }
-    } catch (e) { flagServerDown('/auth/login', e); return { ok: false as const, message: OFFLINE_MSG } }
+    } catch (e) { flagServerDown('/auth/login', e); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
     finally   { loading.value = false }
   }
  
@@ -142,12 +142,12 @@ export const useAuth = () => {
       const res  = await authFetch('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) })
       const data = await readJson(res)
       if (!res.ok) {
-        if (!data) { flagServerDown('/auth/forgot-password', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        if (!data) { flagServerDown('/auth/forgot-password', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
         return { ok: false as const, message: data.message }
       }
       serverDown.value = false
       return { ok: true as const, message: data.message as string }
-    } catch (e) { flagServerDown('/auth/forgot-password', e); return { ok: false as const, message: OFFLINE_MSG } }
+    } catch (e) { flagServerDown('/auth/forgot-password', e); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
     finally   { loading.value = false }
   }
 
@@ -159,12 +159,12 @@ export const useAuth = () => {
       const res  = await authFetch('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) })
       const data = await readJson(res)
       if (!res.ok) {
-        if (!data) { flagServerDown('/auth/reset-password', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: OFFLINE_MSG } }
+        if (!data) { flagServerDown('/auth/reset-password', `HTTP ${res.status}, non-JSON body`); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
         return { ok: false as const, message: data.message }
       }
       serverDown.value = false
       return { ok: true as const, message: data.message as string }
-    } catch (e) { flagServerDown('/auth/reset-password', e); return { ok: false as const, message: OFFLINE_MSG } }
+    } catch (e) { flagServerDown('/auth/reset-password', e); return { ok: false as const, message: offlineMessage(import.meta.env.DEV) } }
     finally   { loading.value = false }
   }
 

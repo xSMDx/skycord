@@ -655,7 +655,7 @@ onBeforeUnmount(() => {
    hover pop above animates transform, and an animation beats a plain
    declaration for the same property — so without it, hovering an open
    chevron would snap back to 0deg for the length of the pop, then jump. */
-.cb-chev svg      { transition:transform .18s cubic-bezier(.2,.7,.3,1); }
+.cb-chev svg      { transition: transform var(--dur-2) var(--ease-inout); }
 .cb-chev.open svg { transform: rotate(180deg); animation: none; }
 .cb-chev.open:hover:not(:disabled) svg { animation: none; }
 
@@ -678,10 +678,10 @@ onBeforeUnmount(() => {
 .cb-join:active { transform: scale(.96); }
 .cb-dismiss {
   width: 40px; height: 40px; border-radius: 8px;
-  background: var(--hover, rgba(255,255,255,.06)); color: var(--text-1);
+  background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out);
 }
-.cb-dismiss:hover { background: var(--hover-strong, rgba(255,255,255,.12)); }
+.cb-dismiss:hover { background: var(--hover-strong); }
 
 /* Active camera / screen share — green like Discord */
 .cb-b.on { background: #248046; color: #fff; }

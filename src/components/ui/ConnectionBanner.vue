@@ -92,11 +92,13 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: calc(6px + env(safe-area-inset-top)) 12px 6px;
   font-size: 12.5px; font-weight: 600; letter-spacing: .01em;
-  color: #fff;
+  /* No colour here: each of the three tones sets its own, because each fill
+     needs its own measured foreground. The tones are exhaustive - view.tone
+     is always wait, bad or ok - so nothing renders without one. */
 }
-.cb.wait { background: #b8871f; }
-.cb.bad  { background: #a12f31; }
-.cb.ok   { background: #1c7a45; }
+.cb.wait { background: var(--warning-deep); color: var(--text-on-warning-deep); }
+.cb.bad  { background: var(--danger-hover); color: var(--text-on-danger-hover); }
+.cb.ok   { background: var(--green-deep); color: var(--text-on-green-deep); }
 
 .cb-ico  { flex-shrink: 0; }
 .cb-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -115,7 +117,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 /* Slides from the top edge and leaves the same way, so it reads as one object
    coming and going rather than two unrelated events. */
-.cb-enter-active, .cb-leave-active { transition:transform .26s cubic-bezier(.32,.72,0,1), opacity var(--dur-3) var(--ease-out); }
+.cb-enter-active { transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
+.cb-leave-active { transition: transform var(--dur-exit) var(--ease-in), opacity var(--dur-exit) var(--ease-in); }
 .cb-enter-from, .cb-leave-to { transform: translateY(-100%); opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {

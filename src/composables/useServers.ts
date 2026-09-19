@@ -108,15 +108,39 @@ const collapsedCategories = ref<Record<string, boolean>>(readCollapsedCategories
 
 const collapseKey = (sid: string, cid: string) => `${sid}:${cid}`
 
+const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }
+
+/**
+ * A name made safe to draw: an unpaired surrogate becomes U+FFFD, because
+ * encodeURIComponent throws on one and the server stores whatever a raw API
+ * call sends. The pattern matches a whole pair first and keeps it, so only a
+ * half left on its own is replaced. It is written that way rather than with a
+ * lookbehind because Safari before 16.4 cannot parse one, and a regex literal
+ * it cannot parse stops the whole bundle from loading.
+ *
+ * Control characters and the noncharacters U+FFFE and U+FFFF go, because XML
+ * forbids them and the image would fail to load. Tab, newline and carriage
+ * return stay — they are only word separators here.
+ */
+const drawable = (s: string): string => s
+  .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, half => (half.length === 2 ? half : '\uFFFD'))
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFE\uFFFF]/g, '')
+
 /**
  * A server with no icon draws its initials on a colour derived from its name,
  * matching how a user with no avatar is handled in useAvatar. Same generator,
  * so a server and a user never look like they came from different apps.
+ *
+ * Initials are taken by code point (Array.from), not by index: w[0] splits an
+ * emoji's surrogate pair, and encodeURIComponent throws on half of one. They
+ * are escaped because they land inside SVG markup, where "<" or "&" would
+ * leave a broken image.
  */
 export const serverIconFor = (name: string, icon?: string | null): string => {
   if (icon) return icon
-  const initials = (name.trim().split(/\s+/).filter(Boolean).slice(0, 2)
-    .map(w => w[0]).join('') || '?')
+  const initials = (drawable(name).trim().split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(w => Array.from(w)[0]).join('') || '?')
+    .replace(/[&<>"']/g, c => XML_ESCAPES[c])
   const bg = colorForUsername(name || '?')
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">` +
@@ -125,6 +149,18 @@ export const serverIconFor = (name: string, icon?: string | null): string => {
     `font-weight="600" text-anchor="middle" dominant-baseline="central">${initials}</text>` +
     `</svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
+/**
+ * An <img> error handler that swaps a broken server icon for its initials
+ * tile — once. Setting src starts a new load even when the value is the same,
+ * so if the tile itself ever failed, re-assigning it would error again forever;
+ * comparing first makes that impossible whatever the tile turns out to be.
+ */
+export const fallBackToInitials = (e: Event, name: string): void => {
+  const img = e.target as HTMLImageElement
+  const tile = serverIconFor(name)
+  if (img.getAttribute('src') !== tile) img.src = tile
 }
 
 const toClientServer = (w: WireServer): Server => ({

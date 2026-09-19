@@ -247,9 +247,22 @@ export const livePresence = (userId: string, fallback?: string | null): Effectiv
 
 /** Logout seam — a second account must not inherit the first one's dots. */
 export const resetPresenceMap = (): void => { presenceById.value = {} }
+/**
+ * What a status looks like. Tokens rather than hexes, so presence follows the
+ * theme: the light families paint their own darker set (a #23a55a dot on a
+ * white panel measures 2.52:1, under the 3:1 a graphical object needs), and
+ * online and do-not-disturb move with --green and --danger. See the Presence
+ * block in tokens.css, and statusTokens.test.ts, which measures all four
+ * against every surface of every theme.
+ *
+ * These strings are CSS, not colour values — they go into a style binding and
+ * nowhere else. Anything that needs to COMPUTE with a status colour (mix it,
+ * draw it into a canvas, compare it) cannot use these and must resolve the
+ * custom property at runtime instead.
+ */
 const COLORS: Record<string, string> = {
-  online: '#23a55a', idle: '#f0a500', dnd: '#ed4245',
-  offline: '#80848e', invisible: '#80848e',
+  online: 'var(--status-online)', idle: 'var(--status-idle)', dnd: 'var(--status-dnd)',
+  offline: 'var(--status-offline)', invisible: 'var(--status-offline)',
 }
 const LABELS: Record<string, string> = {
   online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb',

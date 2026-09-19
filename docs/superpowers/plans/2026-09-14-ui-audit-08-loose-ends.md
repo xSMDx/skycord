@@ -21,7 +21,9 @@ Inherited from [the slice index](./2026-09-12-ui-audit-00-slices.md#global-const
 
 ## Depends on
 
-Slice 2 merged (`ui-audit-02-tokens-and-type`). It changes `AuthPage.vue`'s wordmark, the Home icon's colour source (`accentHex` instead of `appearance.accent`) and the duration-adjacent tokens. **Cut this branch from `main` after slice 2 lands.** Measured on `main` at `c4b29db`; re-run each task's guard before starting it, because slice 2 moved lines.
+Slice 2 merged (`ui-audit-02-tokens-and-type`). It changes `AuthPage.vue`'s wordmark, the Home icon's colour source (`accentHex` instead of `appearance.accent`) and the duration-adjacent tokens. **Cut this branch from `main` after slice 2 lands** — done 2026-09-14, from `886b0c0`. Measured on `main` at `c4b29db`; re-run each task's guard before starting it, because slice 2 moved lines.
+
+**Tasks 6 and 7 wait for slice 3 to merge.** `ChatApp.vue` writes most rules on one line, so a transition and a colour literal share lines: the colour sweep and the motion tasks would conflict on nearly every rule they both touch. Tasks 1–5 and 8 change markup and script and can go ahead.
 
 ## Re-measured, not copied from the inventory
 
@@ -30,11 +32,13 @@ Slice 2 merged (`ui-audit-02-tokens-and-type`). It changes `AuthPage.vue`'s word
 - **Finding 23 counted 69 raw durations across 26 files; the stricter pattern finds 57 across 27.** Task 7's guard produces the live list.
 - **Finding 25 said six hand-rolled SVGs; `AuthPage.vue` has 31 `<svg>` elements** — six *shapes*, repeated across the login, register and reset forms.
 
-## Waiting on the owner
+## Owner decisions (2026-09-14)
 
-**Task 8 — host-facing copy.** Direction decided ("rewrite for the member, move host detail where a host would look"); the words are proposed below and need a yes.
+**Task 8 — host-facing copy.** **Approved as proposed** in Task 8's table.
 
-**Task 9 — consent links.** Not decided: *whose* terms, on someone else's box. Options below.
+**Task 9 — consent links.** **Option A: the host supplies the terms.** Still needs a short design pass with the "about this instance" surface before it is planned; it is not executed from this plan.
+
+**Still open:**
 
 **GIF embeds with no error handling** — a removed Tenor GIF shows a broken-image icon in the message list. Cheap to fix alongside Task 3, but it adds a visible placeholder and copy, so it is the owner's call to include.
 
@@ -353,7 +357,7 @@ Finding 23. Triage: fix. Tokens: `--dur-1 120ms`, `--dur-2 180ms`, `--dur-3 240m
 
 ---
 
-### Task 8: Host-facing copy, rewritten for the member — **needs the owner's yes on the words**
+### Task 8: Host-facing copy, rewritten for the member — wording approved by the owner
 
 Triage: "rewrite for the member, move host detail where a host would look". Slice 1 fixed `mic needs HTTPS`; these three remain.
 
@@ -369,11 +373,11 @@ Triage: "rewrite for the member, move host detail where a host would look". Slic
 
 ---
 
-### Task 9: The consent links — **needs the owner's decision**
+### Task 9: The consent links — option A chosen; design pass before planning
 
 Finding 13. "By registering you agree to our Terms & Privacy Policy" links both words to `#`. A draft exists at the repo root (`Skycord — Terms of Service Draft Outline vision 1.md`, with a `REVIEW.md`). The question is whose terms these are on an instance someone else runs.
 
-- **A — recommended.** The instance supplies them. Two optional settings, `TERMS_URL` and `PRIVACY_URL`, exposed through the existing public instance endpoint. Set → the sentence links to them. Unset → **the sentence is not shown**: agreeing to nothing is not a claim the page should make. This is the same data the triaged "about this instance" surface needs, so it is designed once.
+- **A — chosen.** The instance supplies them. Two optional settings, `TERMS_URL` and `PRIVACY_URL`, exposed through the existing public instance endpoint. Set → the sentence links to them. Unset → **the sentence is not shown**: agreeing to nothing is not a claim the page should make. This is the same data the triaged "about this instance" surface needs, so it is designed once.
 - **B.** Skycord ships its own terms and privacy pages from the draft, shown on every instance. Only right if the project, not each host, is the party people agree with.
 - **C.** Remove the sentence until A or B exists.
 

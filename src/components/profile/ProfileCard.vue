@@ -12,6 +12,7 @@ import { Pencil, Plus } from 'lucide-vue-next'
 import type { Crop } from '@/composables/useCrop'
 import AnimatedImage from '@/components/ui/AnimatedImage.vue'
 import { avatarFor } from '@/composables/useAvatar'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 const props = withDefaults(defineProps<{
   username:      string
@@ -80,10 +81,6 @@ const bannerBg = computed(() =>
   props.banner ? DEFAULT_BANNER : (props.bannerColor || DEFAULT_BANNER))
 const statusText = computed(() => props.customStatus?.text?.trim() || '')
 
-const STATUS_COLORS: Record<string, string> = {
-  online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#80848e', invisible: '#80848e',
-}
-const dotColor = computed(() => STATUS_COLORS[props.status || 'offline'] || STATUS_COLORS.offline)
 
 const memberSinceLabel = computed(() => {
   if (!props.memberSince) return null
@@ -119,7 +116,7 @@ const memberSinceLabel = computed(() => {
         <AnimatedImage :src="avatarSrc" :alt="name" :crop="avatarCrop" />
         <span v-if="editable" class="pc-apencil"><Pencil :size="20" :stroke-width="2.25" /></span>
       </div>
-      <span class="pc-dot" :style="{ background: dotColor }" />
+      <StatusDot class="pc-dot" :status="status" />
 
       <button v-if="editable || statusButton" class="pc-status" @click.stop="emit('editStatus')">
         <Plus v-if="!statusText" :size="14" :stroke-width="2.25" class="pc-status-plus" />
@@ -159,7 +156,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc {
   width: 340px; max-width: 100%;
   background: var(--bg-panel); border-radius: 10px; overflow: hidden;
-  box-shadow: 0 8px 30px rgba(0,0,0,.45);
+  box-shadow: var(--shadow-md);
 }
 /* The card IS the panel here, so it drops its own frame. Nesting a shadowed,
    rounded card inside an already-rounded panel is what reads as blocky. */
@@ -174,7 +171,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-bpencil {
   position: absolute; right: 12px; top: 12px;
   width: 32px; height: 32px; border-radius: 50%;
-  background: rgba(0,0,0,.55); color: #fff;
+  background: var(--media-veil-strong); color: var(--on-media);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
@@ -199,7 +196,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .pc-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pc-apencil {
-  position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff;
+  position: absolute; inset: 0; background: var(--media-veil-strong); color: var(--on-media);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
@@ -207,7 +204,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-av.editable:focus-visible .pc-apencil { opacity: 1; }
 .pc-dot {
   position: absolute; right: 3px; bottom: 3px;
-  width: 22px; height: 22px; border-radius: 50%; border: 5px solid var(--bg-panel);
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--bg-panel); border: 5px solid var(--bg-panel);
 }
 
 /* Sits beside the avatar, overlapping the banner — the "Add status" pill. */
@@ -218,10 +216,10 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pc-status {
   position: absolute; left: 96px; top: 2px; max-width: 200px;
   display: flex; align-items: center; gap: 8px;
-  background: var(--bg-raised); border: 1px solid rgba(255,255,255,.08);
+  background: var(--bg-raised); border: 1px solid var(--border);
   border-radius: 16px 16px 16px 4px;
   padding: 8px 12px; font-size: 13px; color: var(--text-1);
-  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  box-shadow: var(--shadow-sm);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .pc-status:not(.static):hover { background: var(--bg-deep); color: var(--text-1); }

@@ -123,22 +123,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <style scoped>
 .bs-root { position: fixed; inset: 0; z-index: 950; }
-.bs-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+.bs-scrim { position: absolute; inset: 0; background: var(--scrim); }
 
 .bs {
   position: absolute; left: 0; right: 0; bottom: 0;
   display: flex; flex-direction: column;
   background: var(--bg-raised);
   border-radius: 16px 16px 0 0;
-  box-shadow: 0 -12px 40px rgba(0,0,0,.5);
+  box-shadow: var(--shadow-sheet);
   /* The home indicator sits under the sheet's own bottom edge. */
   padding-bottom: env(safe-area-inset-bottom);
-  transition:transform .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out);
   touch-action: none;   /* the sheet owns vertical drag; the body re-enables it */
 }
 
 .bs-grab { display: flex; justify-content: center; padding: 8px 0 4px; flex-shrink: 0 }
-.bs-grab span { width: 36px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.22) }
+.bs-grab span { width: 36px; height: 4px; border-radius: 2px; background: var(--grabber) }
 
 .bs-head {
   flex-shrink: 0; padding: 6px 16px 12px;
@@ -154,8 +154,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 /* Enter/exit along the same path — it came from the bottom, it leaves there. */
-.sheet-enter-active .bs, .sheet-leave-active .bs { transition:transform .34s cubic-bezier(.32,.72,0,1) }
-.sheet-enter-active .bs-scrim, .sheet-leave-active .bs-scrim { transition: opacity var(--dur-3) var(--ease-out)}
+.sheet-enter-active .bs { transition: transform var(--dur-4) var(--ease-out) }
+.sheet-leave-active .bs { transition: transform var(--dur-exit) var(--ease-in) }
+.sheet-enter-active .bs-scrim { transition: opacity var(--dur-3) var(--ease-out) }
+.sheet-leave-active .bs-scrim { transition: opacity var(--dur-exit) var(--ease-in) }
 .sheet-enter-from .bs, .sheet-leave-to .bs { transform: translate3d(0, 100%, 0) }
 .sheet-enter-from .bs-scrim, .sheet-leave-to .bs-scrim { opacity: 0 }
 

@@ -136,19 +136,19 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 
 .rp-search {
   display: flex; align-items: center; gap: 8px;
-  margin: 12px 12px 0; background: rgba(0,0,0,.3);
-  border: 1.5px solid rgba(255,255,255,.08);
+  margin: 12px 12px 0; background: var(--bg-input);
+  border: 1.5px solid var(--border);
   border-radius: 8px; padding: 8px 12px;
   transition: border-color var(--dur-2) var(--ease-out);
 }
 .rp-search:focus-within { border-color: var(--accent); }
-.rp-search-icon { color: var(--text-faint); flex-shrink: 0; }
+.rp-search-icon { color: var(--icon); flex-shrink: 0; }
 .rp-search input { flex: 1; font-size: 14px; color: var(--text-strong); }
 .rp-search input::placeholder { color: var(--text-faint); }
 
 .rp-cats {
   display: flex; gap: 2px; padding: 10px 12px 8px;
-  border-bottom: 1px solid rgba(255,255,255,.06); flex-wrap: wrap;
+  border-bottom: 1px solid var(--divider); flex-wrap: wrap;
 }
 .rp-cat-btn {
   width: 34px; height: 34px; border-radius: 6px; font-size: 18px;
@@ -185,5 +185,5 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 
 .rp-grid-wrap::-webkit-scrollbar { width: 4px; }
 .rp-grid-wrap::-webkit-scrollbar-track { background: transparent; }
-.rp-grid-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+.rp-grid-wrap::-webkit-scrollbar-thumb { background: var(--track); border-radius: 2px; }
 </style>

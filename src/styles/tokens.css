@@ -63,6 +63,14 @@
   --text-2:         #b5bac1;  /* secondary */
   --text-3:         #949ba4;  /* muted / labels */
   --text-faint:     #999ca2;  /* faint / placeholders — 4.58:1 on chat, 4.99 on panel */
+  /* Resting icons. The same grey as --text-3 on the dark themes, one step
+     darker on the light ones: a 1.5-2px stroke carries far less ink than a
+     text glyph of the same colour, so on a pale ground an icon reads a step
+     lighter than a label painted identically. Hover and active states still
+     brighten icons the way they always have — this is only the resting
+     value. Icons are graphical objects: 3:1 against every surface, proven in
+     semanticTokens.test.ts. */
+  --icon: var(--text-3);
   /* Derived by luminance in useAppearance.ts (onAccent.ts) — the only place
      this is ever set, including under Material-You. This default is the
      right answer for the Sky default only; do not read it as "always ink". */
@@ -116,7 +124,28 @@
   /* Whole-row highlight for messages that ping @everyone (or you). */
   --mention-row-bg:       rgba(240, 178, 0, .07);
   --mention-row-bg-hover: rgba(240, 178, 0, .11);
-  --mention-row-bar:      #f0b232;
+  /* The app's amber: warnings, @everyone/@here, the unenforced-permission and
+     advisory-role markers, mic/camera meters mid-way to danger. Was written
+     twice (#f0b232 x5, #f0b132 x5 — one typo'd digit apart) with no token;
+     --mention-row-bar held the canonical spelling, so it becomes the source
+     and --mention-row-bar now refers to it instead of repeating the literal.
+     A GRAPHICAL colour (marker/dot/bar), not text: measured against the
+     3:1 non-text floor, not 4.5. #f0b232 as-is clears 3:1 against every
+     dark surface with room to spare — 6.69:1 on default's --bg-chat, the
+     lowest of the 55 dark-surface checks (11 dark theme blocks x 5
+     surfaces) — so no lightening/darkening was needed for dark at all.
+     See semanticTokens.test.ts. --status-idle is this token, not a copy of
+     its value: presence's idle amber and the app's amber are one colour. */
+  --warning: #f0b232;
+  /* For tints: rgba(var(--warning-rgb), a). */
+  --warning-rgb: 240, 178, 50;
+  /* Amber as TEXT. On dark the marker colour is already 6.69:1 at its worst,
+     so it is the same value; the light themes need it darker, since the
+     marker value there is tuned to the 3:1 graphical floor and reads at
+     3.10:1. Darkened to the least that clears 4.6:1 on every surface of both
+     light blocks — worst 4.64:1 on light-dim --bg-floor. */
+  --warning-text: #f0b232;
+  --mention-row-bar: var(--warning);
 
   /* Hover / active surface tints — theme-aware (dark = white-alpha) */
   --hover:        rgba(255,255,255,.06);
@@ -159,6 +188,20 @@
      and all of them point at it. Named for the colour rather than one role,
      because no single role covers a success toast AND an explore button. */
   --green: #23a55a;
+  /* The same green, darker, for a fill that has to carry white text: the
+     "Copied" and "on" states already painted it by hand. --text-on-green-deep
+     (white, 4.94:1 on it) is its pair; white on --green itself is 2.77:1. */
+  --green-deep: #248046;
+  /* For tints: rgba(var(--green-rgb), a), the pattern --accent-rgb uses. A
+     tint of a fixed green needs no per-theme value — what sits ON it does. */
+  --green-rgb: 35, 165, 90;
+  /* Green as TEXT, an icon or a border on an ordinary surface. --green itself
+     measures 3.97:1 on default's --bg-chat and 1.97:1 on light-dim's
+     --bg-floor, so it fails as a mark in both families. Lightened toward white
+     by the least that clears CONTRAST_TARGET (4.6) against every surface of
+     every dark theme: worst 4.66:1 on default --bg-chat. See
+     semanticTokens.test.ts. */
+  --green-text: #40b16f;
   /* onAccentText(--green) — measured, not assumed: #23a55a reads better with
      ink (6.03:1) than white (3.18:1), the reverse of the white every hand-
      written `color: #fff` beside a green background on this branch guessed.
@@ -186,6 +229,167 @@
      tokenised — and onAccentText disagrees with --text-on-danger for it:
      white clears 5.02:1 there, ink only 3.82:1. */
   --text-on-danger-hover: #ffffff;
+  /* Destructive TEXT on an ordinary dark surface — distinct from --danger (a
+     FILL colour) and --text-on-danger (ink/white chosen to sit ON a
+     --danger fill): this is for red text/icons painted directly on a panel
+     or chat background. Replaces four unrelated reds used for that one role
+     — #f0716f x15, #f08080 x11, #f56c6f x6, #fa777c x3 (LIST_COLOURS=1 npx
+     vitest run src/styles/__tests__/noHardcodedColour.test.ts lists every
+     site; they sit across Settings pages, AuthPage's own dark shell and the
+     chat surface — Task 4 maps each by role).
+     Measured, not picked: lightened from --danger (#ed4245) toward white,
+     stopping at the least lightening that clears CONTRAST_TARGET (4.6, see
+     onAccent.ts) against EVERY surface token of EVERY dark theme block —
+     :root, midnight, amoled and all eight studio themes. The binding
+     case is default's own --bg-chat at 4.63:1; every other dark theme's
+     surfaces clear it with more room (stripe's --bg-raised is next-closest
+     at 4.89:1). One value serves every dark theme; none needed its own.
+     semanticTokens.test.ts proves this against the live stylesheet. */
+  --danger-text: #f27779;
+
+  /* ── Shadows and scrim ─────────────────────────────────────────────────
+     Three shadow depths, grouped by WHERE a shadow is used, not by the
+     alpha it happened to be written with — the same role-over-value rule
+     the rest of this sweep follows (see "The rule that decides every
+     mapping" in the colour-sweep plan). DESIGN.md's own Elevation table
+     already names two of these exactly; --shadow-sm is new, derived from
+     the tightest cluster of shadows already used on small raised controls
+     (a message's hover action toolbar, small cards) since DESIGN.md's own
+     table starts at "Menu / flyout" and doesn't cover anything smaller.
+     --shadow-lg takes DESIGN.md's "Overlay" row rather than its "Modal"
+     row: ModalBase.vue's shared .overlay — the backdrop wrapper every
+     modal in the app actually renders through — already paints exactly
+     the Overlay value, not the Modal one, so Overlay is what "a modal"
+     means in this codebase today regardless of what DESIGN.md's row is
+     named. Task 8 does the actual per-site conversion; this only names
+     the three values.
+     Offset and blur stay the same for light themes — depth reads from a
+     shadow's shape, not its colour — only the alpha drops, because a .55
+     black shadow that reads as "elevated" on a near-black surface reads as
+     grime on white (not measured against a contrast floor: shadows aren't
+     text or graphical markers, so there is no ratio to clear here — the
+     lighter alphas are a judgement call, kept proportional to their dark
+     values). This is NOT the "light inverts alpha direction" rule --border/
+     --hover/--focus-ring follow: a shadow (and --scrim below) dims what's
+     under it in every theme, so it stays BLACK rather than flipping to
+     white-alpha. */
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, .4);   /* small raised controls, cards */
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, .55);  /* menus, popovers, flyouts — DESIGN.md's "Menu / flyout" */
+  --shadow-lg: 0 24px 80px rgba(0, 0, 0, .7);  /* modals, sheets — DESIGN.md's "Overlay"; ModalBase.vue's .overlay already paints exactly this */
+
+  /* Three more shadow roles the three depths above cannot express, kept
+     separate rather than folded into them because what makes each one read
+     correctly is its DIRECTION or its smallness, not its depth. All three
+     still drop their alpha on light exactly as the depths do.
+     --shadow-xs is a hairline lift for something sitting ON a surface it
+     never leaves (a swatch dot, a sliding tab indicator): --shadow-sm's
+     14px blur under a 12px dot is a smudge, not an edge.
+     --shadow-drawer and --shadow-sheet cast SIDEWAYS and UPWARD, from a
+     panel that slides in over another (mobile Settings and Server Settings
+     detail panes) and from a sheet that rises from the bottom edge. Mapping
+     either onto a downward depth would put the shadow on the wrong side of
+     the moving edge, which is the one thing the shadow is there to show. */
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, .4);      /* sits on the surface: swatch dots, tab indicators */
+  --shadow-drawer: -8px 0 24px rgba(0, 0, 0, .45); /* a pane sliding in from the right, casting left */
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, .5);  /* a sheet rising from the bottom edge, casting up */
+
+  /* The dimming layer behind a modal or full-screen media. One value for
+     every modal backdrop rather than one per component: ModalBase.vue's own
+     .overlay (rgba(0,0,0,.75)) is the canonical instance — the shared
+     wrapper nearly every modal in the app renders through — so it is the
+     source rather than any of the several other values sites picked
+     independently (BottomSheet.vue and ChatApp.vue's sheet/emoji scrims at
+     .55, ContextMenu.vue's mobile scrim at .5, IncomingCallModal.vue's
+     overlay at .45); Task 8 unifies them onto this token. Stays this exact
+     value in every theme, light included — see the shadows comment above
+     for why a dimming layer doesn't invert alpha direction the way an
+     overlay TINT does: dimming the app behind a light-themed modal needs
+     the same weight of dimming as behind a dark-themed one. */
+  --scrim: rgba(0, 0, 0, .75);
+
+  /* ── Seams, tracks and grabbers ─────────────────────────────────────────
+     Three shapes the app draws over a surface that --border and --hover
+     cannot stand in for.
+
+     --seam is the RECESSED hairline between two panels — the sidebar's right
+     edge, a header's underline, a popup's outline. It was black at eight
+     different alphas (.2 to .4) in 20 places. It is not --border: --border is
+     a LIGHTER line on dark (white .08), so swapping a seam for it turns a
+     groove into a ridge and erases the depth the layout is built on. On the
+     light themes a black seam at .3 is a bruise, so it lands exactly where
+     --border already is — the two roles converge on light and separate on
+     dark, which is the whole reason both exist.
+
+     --track is a quiet neutral bar: scrollbar thumbs (.08-.12 in ten places),
+     a slider's groove, the reply tree's connector, a progress rail.
+     --grabber is the sheet handle — the same shape, but an affordance the
+     user is meant to notice, so it stays heavier. Both invert on light: a
+     white thumb on a white panel is not a thumb. */
+  --seam:    rgba(0, 0, 0, .3);
+  --track:   rgba(255, 255, 255, .10);
+  --grabber: rgba(255, 255, 255, .22);
+
+  /* ── Over arbitrary media ───────────────────────────────────────────────
+     A chip, badge or icon drawn on top of a photo, a video or a
+     user-chosen colour — the pencil on an avatar, the GIF badge on a
+     thumbnail, the voice chip on a server icon, the close button on a
+     profile banner.
+
+     These are the one family that must NOT follow the theme, and the reason
+     is not style: what is underneath is not a surface we control. A light
+     theme does not make someone's banner photo light. Inverting these would
+     paint a near-black icon onto whatever the member happened to upload.
+     The veils were seven hand-picked alphas (.35 to .7); two steps are
+     enough — resting, and hovered or badge-weight. */
+  --media-veil:        rgba(0, 0, 0, .45);
+  --media-veil-strong: rgba(0, 0, 0, .65);
+  --on-media:          #ffffff;
+
+  /* ── Toggles ────────────────────────────────────────────────────────────
+     The off track and the knob, shared by the two switches in the app
+     (Appearance and Voice & Video). Both constant across themes for the
+     same reason --on-media is: the knob has to read on the grey track AND
+     on the accent fill the track becomes when it is on, and --text-strong
+     (the obvious candidate) is near-black on the light themes, which would
+     lose the knob inside a light accent. */
+  --toggle-off:  rgba(128, 132, 142, .5);
+  --toggle-knob: #ffffff;
+
+  /* ── Warning, as a solid fill ───────────────────────────────────────────
+     --warning is the marker amber, measured against the 3:1 graphical floor.
+     A full-width banner filled with it and labelled in white is a different
+     job, and the value the connection banner used (#b8871f) carried its own
+     white text at 3.22:1 — under the 4.5 text floor, on the one strip in the
+     app that exists to be read in a hurry. This is that fill measured
+     properly: white on it is 5.01:1. Constant across themes, like the deep
+     green and the deep red the same banner's other two states use — a status
+     strip is deliberately loud in every theme. */
+  --warning-deep:          #8e691d;
+  --text-on-warning-deep:  #ffffff;
+
+  /* ── Presence ───────────────────────────────────────────────
+     A status dot is a graphical object, so the floor is 3:1 against every
+     surface it can sit on (WCAG 1.4.11), not text's 4.5 — and the SHAPE, not
+     the colour, is what actually carries the status (StatusDot.vue). The
+     colour confirms it, which is why a colour-blind member and a member on
+     Light Dim both read presence correctly.
+
+     Online and do-not-disturb borrow the semantic colours rather than
+     repeating them, so that changing --green or --danger moves presence with
+     them — they are the same statements ("live", "stop") in another place.
+     Idle is --warning, the app's one amber, rather than the older #f0a500 —
+     so on the light themes it takes --warning's measured darker value too
+     (3.10:1 on Light Dim's floor, the hardest surface) with no override of
+     its own. On dark the difference from #f0a500 is slight (6.69:1 against
+     the worst dark surface instead of 6.07:1). Offline is the neutral it
+     always was.
+
+     statusTokens.test.ts measures all four against every surface of every
+     theme block on every run. */
+  --status-online:  var(--green);
+  --status-idle:    var(--warning);
+  --status-dnd:     var(--danger);
+  --status-offline: #80848e;
 
   /* ── The 2px grid ───────────────────────────────────────────────────────
      Spacing, radii and icon sizes are even numbers. Not a scale invented
@@ -214,6 +418,10 @@ html.names-plain { --name-hover: var(--text-strong); }
 
 /* ── Light themes ───────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  /* Green as a mark on a light surface: darkened toward black by the least
+     that clears 4.6:1 against every surface of BOTH light blocks — worst
+     4.65:1 on light-dim --bg-floor, which binds for the pair. */
+  --green-text: #156135;
   --accent:         #0a75af;
   --accent-hover:   #09679a;
   --accent-deep:    #07547e;
@@ -253,8 +461,68 @@ html.names-plain { --name-hover: var(--text-strong); }
   --mention-all-bg:       rgba(200, 142, 0, .24);
   --mention-row-bg:       rgba(200, 142, 0, .10);
   --mention-row-bg-hover: rgba(200, 142, 0, .15);
+  /* Destructive text on a light surface: starts from --danger-hover (this
+     family doesn't override that token, so it resolves to :root's #c93b3e)
+     and darkens toward black, stopping at the least darkening that clears
+     CONTRAST_TARGET (4.6) against every surface of BOTH light blocks —
+     light and light-dim share this one value rather than each getting its
+     own, since light-dim's own --bg-floor (the darkest of the ten surfaces
+     across both blocks) is already the binding case at 4.62:1, and every
+     one of light's own surfaces clears it with more room (5.92:1 or
+     better). Explicit here rather than left to inherit :root's dark value
+     for this token — light and light-dim are sibling [data-theme] blocks,
+     so one cannot fall back to a value only the other declares. See
+     semanticTokens.test.ts. */
+  --danger-text: #9b2d30;
+  /* --warning as a graphical (non-text) colour: #f0b232 as-is measures
+     1.17-1.89:1 against these ten surfaces, well under the 3:1 floor.
+     Darkened toward black to 3.1:1 (a small margin over the floor, same
+     idea as CONTRAST_TARGET) against every surface of BOTH light blocks.
+     Tuned to light's white --bg-chat alone it would clear that surface at
+     3.11:1 and still fail every light-dim surface (1.92-2.67:1); measured
+     against all ten, light-dim's --bg-floor binds, at 3.10:1. Explicit in both for the same
+     sibling-selector reason as --danger-text above. */
+  --warning: #8e691d;
+  --warning-text: #6c5016;
+  /* Shadows keep their dark-theme offset/blur; only alpha drops — a shadow
+     this heavy reads as elevation on a near-black surface and as grime on
+     white. Not inverted to white-alpha; see the dark block's shadow
+     comment. --scrim is deliberately NOT overridden here: it stays :root's
+     exact value in every theme, light included. */
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, .14);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, .18);
+  --shadow-lg: 0 24px 80px rgba(0, 0, 0, .22);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, .12);
+  --shadow-drawer: -8px 0 24px rgba(0, 0, 0, .16);
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, .17);
+  --seam:    rgba(0, 0, 0, .08);
+  --track:   rgba(0, 0, 0, .18);
+  --grabber: rgba(0, 0, 0, .28);
+  --icon: var(--text-2);
+  /* Presence, tuned for a pale ground. The dark values are invisible here —
+     online measures 2.52:1 on Light and 1.97:1 on Light Dim, idle 1.50:1 and
+     1.17:1 — so each is the same hue taken down in OKLCH lightness, holding
+     hue and chroma (chroma is only given up where the darker colour would
+     leave the sRGB gamut), until it clears 3.1:1 against the HARDEST surface
+     of the two light families, Light Dim's own --bg-floor (#c7ccd1). Deriving
+     against the hardest surface rather than the lightest is what lets one set
+     of values serve both families: a dot that clears the darkest pale surface
+     clears every paler one above it.
+
+     Measured, worst surface of each family: online 3.99 / 3.12, dnd 4.00 /
+     3.12, offline 3.97 / 3.10. A plain RGB darkening to the same target gives
+     #1b7f45, #c9383b, #6c6f77 — the same lightness but less colour, so these
+     keep the hue the dark themes use. Idle needs no line here: it is
+     --warning, whose light value was measured the same way. */
+  --status-online:  #018041;
+  --status-dnd:     #d52731;
+  --status-offline: #6c6f79;
 }
 [data-theme="light-dim"] {
+  /* Green as a mark on a light surface: darkened toward black by the least
+     that clears 4.6:1 against every surface of BOTH light blocks — worst
+     4.65:1 on light-dim --bg-floor, which binds for the pair. */
+  --green-text: #156135;
   --accent:         #0a75af;
   --accent-hover:   #09679a;
   --accent-deep:    #07547e;
@@ -293,6 +561,42 @@ html.names-plain { --name-hover: var(--text-strong); }
   --mention-all-bg:       rgba(200, 142, 0, .24);
   --mention-row-bg:       rgba(200, 142, 0, .10);
   --mention-row-bg-hover: rgba(200, 142, 0, .15);
+  /* Same values and reasoning as [data-theme="light"]'s --danger-text,
+     --warning and shadow comments just above in this file — both light
+     blocks together are what those values were measured against, and each
+     needs its own explicit declaration since neither [data-theme] block
+     inherits from the other. */
+  --danger-text: #9b2d30;
+  --warning: #8e691d;
+  --warning-text: #6c5016;
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, .14);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, .18);
+  --shadow-lg: 0 24px 80px rgba(0, 0, 0, .22);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, .12);
+  --shadow-drawer: -8px 0 24px rgba(0, 0, 0, .16);
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, .17);
+  --seam:    rgba(0, 0, 0, .08);
+  --track:   rgba(0, 0, 0, .18);
+  --grabber: rgba(0, 0, 0, .28);
+  --icon: var(--text-2);
+  /* Presence, tuned for a pale ground. The dark values are invisible here —
+     online measures 2.52:1 on Light and 1.97:1 on Light Dim, idle 1.50:1 and
+     1.17:1 — so each is the same hue taken down in OKLCH lightness, holding
+     hue and chroma (chroma is only given up where the darker colour would
+     leave the sRGB gamut), until it clears 3.1:1 against the HARDEST surface
+     of the two light families, Light Dim's own --bg-floor (#c7ccd1). Deriving
+     against the hardest surface rather than the lightest is what lets one set
+     of values serve both families: a dot that clears the darkest pale surface
+     clears every paler one above it.
+
+     Measured, worst surface of each family: online 3.99 / 3.12, dnd 4.00 /
+     3.12, offline 3.97 / 3.10. A plain RGB darkening to the same target gives
+     #1b7f45, #c9383b, #6c6f77 — the same lightness but less colour, so these
+     keep the hue the dark themes use. Idle needs no line here: it is
+     --warning, whose light value was measured the same way. */
+  --status-online:  #018041;
+  --status-dnd:     #d52731;
+  --status-offline: #6c6f79;
 }
 
 /* ── Theme presets (dark family — text stays light) ─────────────────────── */

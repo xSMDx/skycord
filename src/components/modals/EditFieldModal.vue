@@ -91,5 +91,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 :deep(.efm-input:focus) { border-color: var(--accent); }
 :deep(.efm-hint) { font-size: 12px; color: var(--text-3); margin-top: 4px; }
-:deep(.efm-err)  { font-size: 12px; color: #f23f42; margin-top: 4px; }
+:deep(.efm-err)  { font-size: 12px; color: var(--danger-text); margin-top: 4px; }
 </style>

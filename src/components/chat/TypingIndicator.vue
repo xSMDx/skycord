@@ -42,6 +42,7 @@ defineProps<{ typers: string[] }>()
   opacity: 0.3;
   animation: dot-pulse 1.4s ease-in-out infinite;
 }
+/* Offsets between the three dots of one loop, not durations. */
 .d1 { animation-delay: 0s;    }
 .d2 { animation-delay: 0.22s; }
 .d3 { animation-delay: 0.44s; }

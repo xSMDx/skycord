@@ -19,9 +19,10 @@ import SearchFiltersModal from '@/components/search/SearchFiltersModal.vue'
 import SearchResultsPanel from '@/components/search/SearchResultsPanel.vue'
 import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
-import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
+import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
-import { useServers, resetServers } from '@/composables/useServers'
+import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
+import { filterMembers } from '@/composables/memberFilter'
 import { canActOnMemberUI } from '@/composables/permissionMeta'
 import { hideTip, OPEN_DELAY as TIP_OPEN_DELAY } from '@/composables/useTooltip'
 
@@ -92,6 +93,7 @@ import { stripMarkers } from '@/utils/richText'
 
 import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 import EditCategoryModal from '@/components/modals/EditCategoryModal.vue'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -393,6 +395,12 @@ const toggleMembers = () => {
   if (searchPanelShown.value) { closeSearch(); membersOpen.value = true; return }
   membersOpen.value = !membersOpen.value
 }
+
+// Member search: client-side (see memberFilter.ts). Cleared on server change —
+// a filter left over from another server hides people with no visible cause.
+const memberQuery = ref('')
+const shownMembers = computed(() => filterMembers(activeMembers.value, memberQuery.value))
+watch(activeServerId, () => { memberQuery.value = '' })
 
 // Lightweight toast (e.g. @everyone pings)
 const toast = ref('')
@@ -4179,7 +4187,11 @@ onBeforeUnmount(() => {
       <!-- Server Rail -->
       <nav class="rail">
         <!-- Home -->
-        <div class="ri home" :class="{ active: view==='friends'||view==='dm' }" v-tip:right="'Home'" @click.stop="openFriends">
+        <div class="ri home" :class="{ active: homeActive }" v-tip:right="'Home'"
+          role="button" tabindex="0" aria-label="Home"
+          :aria-current="homeActive ? 'page' : undefined"
+          @keydown.self.enter.prevent="openFriends" @keydown.self.space.prevent="openFriends"
+          @click.stop="openFriends">
           <div class="ri-pip" />
           <div class="ri-icon home-icon">
             <SkycordIcon mode="lucky" :color="homeActive ? accentHex : 'currentColor'" :size="26" />
@@ -4212,7 +4224,7 @@ onBeforeUnmount(() => {
           @pointerdown="closeRailPreview"
           @click.stop="openServer(srv)">
           <div class="ri-pip" />
-          <div class="ri-icon"><img :src="srv.img" :alt="srv.name" /></div>
+          <div class="ri-icon"><img :src="srv.img" :alt="srv.name" @error="fallBackToInitials($event, srv.name)" /></div>
           <!--
             Lower-LEFT, deliberately: `.ri-badge` (unread) already owns the
             lower-right of every rail icon, and the two must never stack. They
@@ -4276,7 +4288,7 @@ onBeforeUnmount(() => {
             >
               <div class="dm-av">
                 <Avatar :src="c.dm.avatar" :alt="c.dm.name" :crop="(c.dm as any).avatarCrop" />
-                <span class="dm-dot" :style="{ background: statusColor(livePresence(c.dm.id, c.dm.status)) }" />
+                <StatusDot class="dm-dot" :status="livePresence(c.dm.id, c.dm.status)" />
               </div>
               <div class="dm-info">
                 <span class="dm-name">{{ c.dm.name }}</span>
@@ -4324,7 +4336,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
+            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><StatusDot class="up-status-dot" :status="chosenStatus" v-tip="statusLabel(chosenStatus)" /></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator || '0000' }}</span>
@@ -4599,7 +4611,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
+            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><StatusDot class="up-status-dot" :status="chosenStatus" v-tip="statusLabel(chosenStatus)" /></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator||'0000' }}</span>
@@ -4688,7 +4700,7 @@ onBeforeUnmount(() => {
               >
                 <div class="f-av">
                   <Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" />
-                  <span class="f-dot" :style="{ background: statusColor(livePresence(f.id, f.status)) }"/>
+                  <StatusDot class="f-dot" :status="livePresence(f.id, f.status)" />
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ f.displayName||f.username }}</span>
@@ -4714,7 +4726,7 @@ onBeforeUnmount(() => {
                    @contextmenu="openUserMenu($event, req.requester)">
                 <div class="f-av">
                   <Avatar :src="avatarFor(req.requester.username,req.requester.avatar)" :alt="req.requester.displayName" :crop="(req.requester as any).avatarCrop" />
-                  <span class="f-dot" :style="{ background: statusColor(livePresence(req.requester.id, req.requester.status)) }"/>
+                  <StatusDot class="f-dot" :status="livePresence(req.requester.id, req.requester.status)" />
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ req.requester.displayName||req.requester.username }}</span>
@@ -4742,7 +4754,7 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
                  @contextmenu="openUserMenu($event, f)">
-              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><span class="an-dot" :style="{ background: statusColor(livePresence(f.id, f.status)) }"/></div>
+              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><StatusDot class="an-dot" :status="livePresence(f.id, f.status)" /></div>
               <div class="an-info">
                 <span class="an-name">{{ f.displayName||f.username }}</span>
                 <span class="an-sub">{{ statusLabel(livePresence(f.id, f.status)) }}</span>
@@ -4905,7 +4917,7 @@ onBeforeUnmount(() => {
               <template v-if="view==='dm' && activeDM">
                 <div class="dm-header-av" @click.stop="showUserProfile = activeDM?.id || null">
                   <Avatar :src="activeDM.avatar" :alt="activeDM.name" :crop="(activeDM as any).avatarCrop" />
-                  <span class="dm-header-dot" :style="{ background: statusColor(livePresence(activeDM.id, activeDM.status)) }"/>
+                  <StatusDot class="dm-header-dot" :status="livePresence(activeDM.id, activeDM.status)" />
                 </div>
                 <!-- `display: contents` on desktop, so the row below is laid out
                      exactly as it was; a flex column on mobile, where the title
@@ -5118,19 +5130,19 @@ onBeforeUnmount(() => {
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="14" :stroke-width="1.5"/>
-            <input type="text" aria-label="Search members" placeholder="Search members…"/>
+            <input v-model="memberQuery" type="text" aria-label="Search members" placeholder="Search members…" @keydown.esc.stop="memberQuery = ''"/>
           </div>
           <div class="mp-list">
             <!-- Wrapped for the same reason the Offline block below is: a section
                  header with nothing under it is noise, and a server where everyone
                  happens to be offline should not announce "Online — 0". -->
-            <template v-if="activeMembers.online.length">
-            <div class="mp-section-label">Online — {{ activeMembers.online.length }}</div>
-            <div v-for="m in activeMembers.online" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+            <template v-if="shownMembers.online.length">
+            <div class="mp-section-label">Online — {{ shownMembers.online.length }}</div>
+            <div v-for="m in shownMembers.online" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
-                <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+                <StatusDot class="mp-dot" :status="livePresence(m.id, m.status)" />
               </div>
               <div class="mp-info">
                 <span class="mp-name">{{ m.displayName || m.username }}</span>
@@ -5140,9 +5152,9 @@ onBeforeUnmount(() => {
 
             </template>
 
-            <template v-if="activeMembers.offline.length">
-              <div class="mp-section-label">Offline — {{ activeMembers.offline.length }}</div>
-              <div v-for="m in activeMembers.offline" :key="m.id" class="mp-member mp-offline" @click.stop="openProfilePopout($event, m.id, m, 'left')"
+            <template v-if="shownMembers.offline.length">
+              <div class="mp-section-label">Offline — {{ shownMembers.offline.length }}</div>
+              <div v-for="m in shownMembers.offline" :key="m.id" class="mp-member mp-offline" @click.stop="openProfilePopout($event, m.id, m, 'left')"
                    @contextmenu="openUserMenu($event, m)">
                 <div class="mp-av">
                   <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
@@ -5153,6 +5165,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </template>
+            <div v-if="memberQuery.trim() && !shownMembers.online.length && !shownMembers.offline.length" class="mp-empty">No one matches “{{ memberQuery.trim() }}”</div>
           </div>
         </aside>
 
@@ -5164,7 +5177,7 @@ onBeforeUnmount(() => {
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="(m as any).avatarCrop" />
-                <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+                <StatusDot class="mp-dot" :status="livePresence(m.id, m.status)" />
               </div>
               <div class="mp-info">
                 <span class="mp-name">{{ m.displayName || m.username }}</span>
@@ -5212,7 +5225,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
   margin-top: var(--conn-h, 0px);
   overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
-  transition: height var(--dur-2) var(--ease-out), margin-top .26s cubic-bezier(.32,.72,0,1);
+  /* No transition. Height and margin follow --conn-h and --keyboard-h, and
+     animating them reflowed the whole app on every frame; the connection
+     strip animates its own entrance, by transform. */
 }
 .shell{display:flex;height:100%;overflow:hidden}
 
@@ -5235,7 +5250,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-h1{margin:0;font-size:24px;font-weight:700;color:var(--text-strong)}
 .dsc-sub{margin: 6px 0 0;font-size:14px;color:var(--text-2);max-width:60ch}
 .dsc-msg{font-size:13px;margin: 0 0 16px}
-.dsc-err{color:#f0716f}
+.dsc-err{color:var(--danger-text)}
 
 /* auto-fill, not auto-fit: with one server, auto-fit collapses the empty
    tracks and stretches that single card the full width of the column, which
@@ -5253,7 +5268,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-desc{margin: 4px 0 0;padding: 0 14px;font-size:13px;line-height:1.4;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
 .dsc-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding: 12px 14px 14px}
 .dsc-count{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
-.dsc-join{padding: 7px 16px;border-radius:6px;background:var(--accent);color:var(--text-on-accent, #fff);font-size:13px;font-weight:600;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.dsc-join{padding: 7px 16px;border-radius:6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .dsc-join:hover:not(:disabled){background:var(--accent-hover)}
 .dsc-join:disabled{opacity:.6;cursor:default}
 
@@ -5275,8 +5290,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (pointer: coarse){.dsc-join{min-height:44px;padding-inline:20px}}
 
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:0;top:50%;transform:translateY(-50%);transition: height var(--dur-2) var(--ease-out)}
-.ri:hover .ri-pip{height:18px}.ri.active .ri-pip{height:36px}
+.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:36px;top:50%;transform:translateY(-50%) scaleY(0);transition: transform var(--dur-2) var(--ease-out)}
+/* Scaled from the full 36px rather than grown, so the pip never makes the
+   browser lay out the rail: 18px on hover is half, active is all of it. */
+.ri:hover .ri-pip{transform:translateY(-50%) scaleY(.5)}.ri.active .ri-pip{transform:translateY(-50%) scaleY(1)}
 
 /* Press feedback belongs to the ICON, not the hit box.
    `.ri` is a 68x54 target wrapping a 44px ROUND icon, and it carries
@@ -5296,14 +5313,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.home .ri-icon{background:var(--bg-chat);color:var(--text-1)}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
-.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
 /* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
    is both unread and occupied shows two marks that never touch: this one at
    x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
    Same 18px circle + 2px floor-coloured ring as .dm-call in the DM list, so a
    voice indicator looks like a voice indicator wherever it appears — the ring
    is what keeps a green disc legible against a green server icon. */
-.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius: 50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
+.ri-voice{position:absolute;bottom:4px;left:10px;width:18px;height:18px;border-radius: 50%;background:var(--media-veil-strong);color:var(--on-media);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-floor);pointer-events:none}
 /* Green means you are in this one. Every other server with voice activity
    keeps the dark chip — the user asked for two colours, not a palette. */
 .ri-voice.mine{background:var(--green)}
@@ -5312,7 +5329,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,#111214);border:1px solid var(--border,rgba(255,255,255,.08));box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:var(--shadow-md)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
 .rvp-ch{margin-top: 8px}
@@ -5328,7 +5345,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rvp-more{font-size:11px;font-weight:600;color:var(--text-3);margin-top: 6px;padding-left: 30px}
 /* Slides out of the rail rather than fading in place, so the panel reads as
    belonging to the icon the pointer is on. */
-.rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform .12s cubic-bezier(.32,.72,0,1)}
+.rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out)}
 .rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
 .rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
 .rvp-leave-to{opacity:0}
@@ -5339,15 +5356,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri-divider{width:32px;height:2px;background:var(--bg-panel);border-radius: 1px;margin: 4px 0}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:var(--green)}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:var(--green)}
-.ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:white}
+.ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:var(--text-on-green)}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid rgba(0,0,0,.3);transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
+.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
 .sb-search{padding: 8px 8px 4px;flex-shrink:0}
-.sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:rgba(0,0,0,.3);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
-.sb-search-btn:hover{background:rgba(0,0,0,.5);color:var(--text-1)}
+.sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:var(--bg-input);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.sb-search-btn:hover{background:var(--bg-floor);color:var(--text-1)}
 
 .sb-nav{padding: 4px 8px}
 .sb-nav-item{display:flex;align-items:center;gap: 10px;width:100%;padding: 8px 10px;border-radius: 6px;font-size:14px;font-weight:500;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
@@ -5355,7 +5372,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-nav-item.active{color:var(--text-strong);outline:1px solid var(--active-ring);outline-offset:-1px}
 
 .sb-section-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding: 12px 16px 4px;white-space:nowrap}
-.sb-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.sb-add-btn{color:var(--icon);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-section-label:hover .sb-add-btn{opacity:1}
 .sb-add-btn:hover{color: var(--text-strong)}
 
@@ -5374,7 +5391,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   color      var(--dur-1) var(--ease-out),
   transform  var(--dur-1) var(--ease-out); }
 
-.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap: 8px;padding: 0 16px;border-bottom:1px solid rgba(0,0,0,.3);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition: background var(--dur-2) var(--ease-out);white-space:nowrap}
+.sb-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap: 8px;padding: 0 16px;border-bottom:1px solid var(--seam);font-weight:700;font-size:14px;color: var(--text-strong);cursor:pointer;transition: background var(--dur-2) var(--ease-out);white-space:nowrap}
 .sb-header:hover{background:var(--hover)}
 /* The one flexible child, so the voice cluster and the chevron keep their
    size and a 40-character server name ellipses instead of shoving them out
@@ -5410,11 +5427,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-item.active{outline:1px solid var(--active-ring);outline-offset:-1px}
 .dm-av{position:relative;width:32px;height:32px;flex-shrink:0}
 .dm-av img{border-radius: 50%}
-.dm-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-raised)}
+.dm-dot{background:var(--bg-raised);position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-raised)}
 .dm-info{flex:1;min-width:0}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:#ed4245;color:white;font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:var(--danger);color:var(--text-on-danger);font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Muted: the count still matters, it just stops shouting. */
 .dm-unread.muted{background:var(--text-3);opacity:.6}
 .dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
@@ -5425,7 +5442,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    still need to be noticeable. The active row stays at full strength — you're
    reading it. */
 .dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
-.dm-call{width:18px;height:18px;border-radius: 50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-call{width:18px;height:18px;border-radius: 50%;background:var(--green);color:var(--text-on-green);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
 .dm-x:hover{color: var(--text-strong)}
@@ -5453,11 +5470,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-edit-btn:hover{background:var(--hover);color: var(--text-strong)}
 
 /* Leave button */
-.icon-btn-leave{color:#ed4245 !important}
-.icon-btn-leave:hover{background:rgba(237,66,69,.12) !important}
+.icon-btn-leave{color:var(--danger-text) !important}
+.icon-btn-leave:hover{background:rgba(var(--danger-rgb), .12) !important}
 
 /* @everyone toast */
-.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:var(--shadow-md)}
 .toast-pop-enter-active,.toast-pop-leave-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
@@ -5507,17 +5524,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    disclosure chevron and carries a desktop `display:none`. */
 .ch-group-chev{flex-shrink:0;transition: transform var(--dur-2) var(--ease-out)}
 .ch-group-chev.open{transform:rotate(90deg)}
-/* Folding a category is an animation, not a v-if. `interpolate-size:
-   allow-keywords` lets height animate to and from `auto` without measuring
-   anything, which matters because categories hold different numbers of
-   channels and channel names wrap. NOT the grid 0fr/1fr trick: in this
-   Chromium, `transition: grid-template-rows` between fr endpoints settles on
-   the WRONG endpoint (verified in isolation — a probe closed to 0fr still
-   measured 31px, then reopened to 1fr and measured 0), so a fold that used
-   it closed once and never came back. Timing matches .ch-group-chev so the
-   chevron and the rows read as one motion. */
-.ch-fold{overflow:hidden;height:auto;interpolate-size:allow-keywords;transition: height var(--dur-2) var(--ease-out)}
-.ch-fold.folded{height:0}
+/* Folding a category is a class, not a v-if, so the rows keep their state.
+   The height no longer animates: animating it laid out the whole channel list
+   on every frame, which is the cost the motion rules exist to avoid (audit
+   finding 19). The rows fade instead, on the same timing as .ch-group-chev,
+   so the chevron and the rows still read as one motion. (The grid 0fr/1fr
+   trick is not an option either way: in this Chromium it settles on the wrong
+   endpoint, verified in isolation.) */
+.ch-fold{overflow:hidden;height:auto;transition: opacity var(--dur-2) var(--ease-out)}
+.ch-fold.folded{height:0;opacity:0}
 
 /* Where the drag would land. min-height keeps the headerless uncategorised
    group hittable while it is empty — during a drag it is the only visible
@@ -5529,9 +5544,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   position:fixed; top:8px; left:8px; z-index:10000;
   transform:translateY(-200%);
   padding: 8px 14px; border-radius: 6px;
-  background:var(--bg-floating, var(--bg-panel)); color:var(--text-strong);
+  background:var(--bg-panel); color:var(--text-strong);
   font-size:14px; font-weight:600; border:1px solid var(--active-ring);
-  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  box-shadow:var(--shadow-md);
   transition: transform var(--dur-2) var(--ease-out);
 }
 .skip-link:focus-visible{ transform:translateY(0); }
@@ -5547,7 +5562,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    move the row under the pointer mid-drag. */
 .ch-drop-line{
   height:0;margin:0 4px;
-  border-top:2px solid var(--accent, #5865f2);border-radius:2px;
+  border-top:2px solid var(--accent);border-radius:2px;
   /* Pointer-transparent, or it would sit between the pointer and the row whose
      dragover set it, and the marker would flicker as the cursor crossed it. */
   pointer-events:none;
@@ -5557,10 +5572,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .ch-fold{transition:none}
   .ch-group-chev{transition:none}
 }
-.ch-add-btn{color:var(--text-3);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
+.ch-add-btn{color:var(--icon);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
-.ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), padding-left var(--dur-1) var(--ease-out);white-space:nowrap}
+.ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 /* The label, now a real button rather than the row pretending to be one.
    Everything visual still belongs to .ch-item — this only has to disappear:
    no chrome of its own, inheriting colour so the row's hover and active rules
@@ -5587,7 +5602,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-open:active, .ch-group-toggle:active { box-shadow: none }
 .ch-item:has(.ch-open:active){ box-shadow: inset 0 0 0 100vmax var(--press-veil) }
 .ch-group-label:has(.ch-group-toggle:active){ box-shadow: inset 0 0 0 100vmax var(--press-veil) }
-.ch-item:hover{background:var(--hover);color:var(--text-2);padding-left: 12px}
+.ch-item:hover{background:var(--hover);color:var(--text-2)}
+/* The hover nudge, by transform: the label (icon and name) moves 4px while
+   the row and its fill stay put. It was padding, which laid the row out on
+   every frame of the hover. */
+.ch-open{transition: transform var(--dur-1) var(--ease-out)}
+.ch-item:hover .ch-open{transform:translateX(4px)}
 .ch-item.active{color:var(--text-strong);background:var(--active-bg);outline:1px solid var(--active-ring);outline-offset:-1px}
 /* Hover still has somewhere to go on a selected row: without this the
    active fill would swallow the hover tint, since both are (0,2,0) and
@@ -5615,9 +5635,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}
-.ch-icon{flex-shrink:0}
+.ch-icon{flex-shrink:0;color:var(--icon)}
+/* At rest a channel icon takes --icon, a step darker than its label on the
+   light themes; once the row is hovered, active or unread it follows the
+   row again, as it always did. The occupied voice icon keeps its green. */
+.ch-item:hover .ch-icon:not(.occupied),.ch-item.active .ch-icon:not(.occupied),.ch-item.unread .ch-icon:not(.occupied){color:inherit}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
-.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
+.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
 /* Who is sitting in a voice channel. Indented under its row so the nesting is
    read from the left edge, and deliberately quieter than the channel name —
    these are occupants of the row above, not siblings of it. The reference also
@@ -5628,7 +5652,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .vc-occ-ic{display:flex;flex-shrink:0;color:var(--text-3)}
 /* Not an icon: the reference uses a word, and a word survives being the
    only red thing in a list of grey ones. */
-.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:#f23f43;border-radius: 4px;padding: 1px 4px;line-height:1.4}
+.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:var(--text-on-danger);background:var(--danger);border-radius: 4px;padding: 1px 4px;line-height:1.4}
 .vc-occ{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 8px 6px 26px;border:none;background:none;border-radius: 6px;cursor:pointer;text-align:left;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
@@ -5640,13 +5664,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .vc-occ:last-child{margin-bottom: 6px}
 
 /* User Panel */
-.user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px}
+.user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid var(--seam);display:flex;align-items:center;justify-content:space-between;padding: 0 8px}
 .up-left{display:flex;align-items:center;gap: 8px;cursor:pointer;padding: 4px 6px;border-radius: 6px;transition: background var(--dur-2) var(--ease-out);flex:1;min-width:0}
 .up-left:hover{background:var(--hover)}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius: 50%;overflow:hidden}
 .up-av-img img{width:100%;height:100%;object-fit:cover;border-radius: 50%}
-.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#80848e;border-radius: 50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
+.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:var(--bg-deep);border-radius: 50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
 .up-info{display:flex;flex-direction:column;gap: 1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
@@ -5657,20 +5681,20 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    (max-width:420px) when the constraint is the CONTAINER — on a 1280px window
    it never fired. Sizing it like its neighbours removes the problem instead of
    trying to measure around it. */
-.up-callback{color:#3ba55d}
-.up-callback:hover{background:rgba(35,165,90,.16);color:#4ade80}
-.up-callback.connecting{color:#f0b232}
+.up-callback{color:var(--green-text)}
+.up-callback:hover{background:rgba(var(--green-rgb), .16);color:var(--green-text)}
+.up-callback.connecting{color:var(--warning-text)}
 .up-callback.connecting svg{animation:up-cb-pulse 1.1s ease-in-out infinite}
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
 .up-btns{display:flex;gap: 1px;flex-shrink:0}
-.up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
-.up-btn.danger{color:#ed4245;background:rgba(237,66,69,.12)}
+.up-btn.danger{color:var(--danger-text);background:rgba(var(--danger-rgb), .12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
-.up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
 /* The chevron points down when the menu is shut and up while it is open, so
    the button says which way it will move things. It was a hardcoded
@@ -5725,7 +5749,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
      inventing a new one. */
   transform:translate3d(calc(var(--m, 0) * -28vw), 0, 0);
   opacity:calc(1 - (var(--m, 0) * 0.35));
-  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out), opacity var(--dur-4) var(--ease-out);
   z-index:1;
 }
 
@@ -5742,7 +5766,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
      the rail exactly. */
   transform:translate3d(calc(var(--m, 0) * -28vw), 0, 0);
   opacity:calc(1 - (var(--m, 0) * 0.35));
-  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out), opacity var(--dur-4) var(--ease-out);
   z-index:1;
 }
 
@@ -5751,11 +5775,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .chat{
   position:absolute;inset:0;
   transform:translate3d(calc((1 - var(--m, 0)) * 100%), 0, 0);
-  transition:transform .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out);
   z-index:2;
   /* A shadow along the leading edge separates the pushed screen from the list
      underneath, which is what makes the parallax legible. */
-  box-shadow:-8px 0 24px rgba(0,0,0,.45);
+  box-shadow:var(--shadow-drawer);
 }
 
 /* Mid-drag the finger owns the position; a transition here would fight it. */
@@ -5824,7 +5848,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 /* The chevron is the affordance that says the title goes somewhere. Dimmer
    than the title so it reads as a hint, not a second piece of content. */
-.shell.mobile .ch-chev{display:block;flex-shrink:0;color:var(--text-3);opacity:.9}
+.shell.mobile .ch-chev{display:block;flex-shrink:0;color:var(--icon);opacity:.9}
 /* The desktop separator dot is meaningless once the two lines are stacked. */
 .shell.mobile .ch-topic-sep{display:none}
 .shell.mobile .ch-topic{
@@ -5850,7 +5874,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   display:flex;align-items:center;justify-content:center;
   position:absolute;top:3px;right:0;
   min-width:18px;height:18px;padding: 0 6px;
-  background:#f23f43;color:#fff;
+  background:var(--danger);color:var(--text-on-danger);
   font-size:11px;font-weight:700;line-height:1;
   border-radius: 8px;border:2px solid var(--bg-chat);
   pointer-events:none;
@@ -5962,9 +5986,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .f-btn{width:44px;height:44px}
 /* Hover does not exist here; left alone these stick in the hovered look after
    a tap and the row reads as still selected. */
-.shell.mobile .f-btn:hover{background:rgba(255,255,255,.06);color:var(--text-3);transform:none}
-.shell.mobile .f-btn.accept:hover{background:rgba(35,165,90,.15);color:var(--green);transform:none}
-.shell.mobile .f-btn.decline:hover{background:rgba(237,66,69,.15);color:#ed4245;transform:none}
+.shell.mobile .f-btn:hover{background:var(--hover);color:var(--icon);transform:none}
+.shell.mobile .f-btn.accept:hover{background:rgba(var(--green-rgb), .15);color:var(--green-text);transform:none}
+.shell.mobile .f-btn.decline:hover{background:rgba(var(--danger-rgb), .15);color:var(--danger-text);transform:none}
 .shell.mobile .f-btn:active{background:var(--hover-strong)}
 
 .shell.mobile .f-empty{padding:48px 24px}
@@ -6007,22 +6031,22 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .shell.mobile .main-content,
   .shell.mobile .chat{transition: opacity var(--dur-3) var(--ease-out)}
 }
-.friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;gap: 8px;padding: 0 16px}
-.fh-icon{color:var(--text-3);flex-shrink:0}
+.friends-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid var(--seam);display:flex;align-items:center;gap: 8px;padding: 0 16px}
+.fh-icon{color:var(--icon);flex-shrink:0}
 .fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right: 4px;white-space:nowrap}
 .fh-tabs{display:flex;gap: 2px}
 .ftab{padding: 6px 12px;border-radius: 6px;font-size:13px;font-weight:500;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
-.ftab.active{background:rgba(var(--accent-rgb),.2);color:#8d96f8}
+.ftab.active{background:rgba(var(--accent-rgb),.2);color:var(--accent-text)}
 .pend-tab{position:relative}
-.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:#ed4245;color:white;font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
+.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
 .add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
 .friends-list{flex:1;overflow: hidden auto;padding: 16px}
 .f-loading{display:flex;align-items:center;gap: 10px;padding: 20px;color:var(--text-faint);font-size:14px}
-.f-search{display:flex;align-items:center;gap: 8px;background:rgba(0,0,0,.25);border-radius: 6px;padding: 8px 12px;margin-bottom: 16px}
+.f-search{display:flex;align-items:center;gap: 8px;background:var(--bg-input);border-radius: 6px;padding: 8px 12px;margin-bottom: 16px}
 .f-search input{flex:1;font-size:14px;color:var(--text-1)}
 .f-search input::placeholder{color:var(--text-faint)}
 .f-section-label{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom: 8px}
@@ -6033,11 +6057,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-empty strong{color:var(--text-1)}
 .f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
-.f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid var(--hover);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .f-row:hover{background:var(--hover);border-color:transparent}
 .f-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .f-av img{border-radius: 50%}
-.f-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
+.f-dot{background:var(--bg-chat);position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
 .f-info{flex:1;min-width:0}
 /* Truncation, which this never had. `.f-info` is `flex:1;min-width:0`, so when
    the row is squeezed the name has no way to ellipsise and is crushed to zero
@@ -6048,24 +6072,24 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    were rendering OUTSIDE their own row (row 63px wide, actions painted at x=88
    on top of the next column). */
 .f-actions{display:flex;gap: 6px;flex-shrink:0}
-.f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--text-3);background:rgba(255,255,255,.06);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.f-btn{width:34px;height:34px;border-radius: 50%;display:flex;align-items:center;justify-content:center;color:var(--icon);background:var(--hover);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-btn:hover{background:var(--hover-strong);color: var(--text-strong)}
-.f-btn.accept{background:rgba(35,165,90,.15);color:var(--green)}
-.f-btn.accept:hover{background:rgba(35,165,90,.28);transform:scale(1.1)}
-.f-btn.decline{background:rgba(237,66,69,.15);color:#ed4245}
-.f-btn.decline:hover{background:rgba(237,66,69,.28);transform:scale(1.1)}
+.f-btn.accept{background:rgba(var(--green-rgb), .15);color:var(--green-text)}
+.f-btn.accept:hover{background:rgba(var(--green-rgb), .28);transform:scale(1.1)}
+.f-btn.decline{background:rgba(var(--danger-rgb), .15);color:var(--danger-text)}
+.f-btn.decline:hover{background:rgba(var(--danger-rgb), .28);transform:scale(1.1)}
 
 /* Active Now */
-.active-now{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);padding: 16px;overflow: hidden auto}
+.active-now{width:280px;flex-shrink:0;border-left:1px solid var(--divider);padding: 16px;overflow: hidden auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
 .an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
-.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:rgba(255,255,255,.04);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:var(--hover);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .an-av img{border-radius: 50%}
-.an-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
+.an-dot{background:var(--bg-chat);position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
 .an-info{flex:1;min-width:0}
 .an-name{display:block;font-size:14px;font-weight:600;color: var(--text-strong)}
 .an-sub{display:block;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -6088,10 +6112,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   width:100%;max-width:none;height:70dvh;
   z-index:960;
   border-left:none;border-radius: 16px 16px 0 0;
-  box-shadow:0 -12px 40px rgba(0,0,0,.5);
+  box-shadow:var(--shadow-sheet);
   padding-bottom: env(safe-area-inset-bottom);
   transform:translate3d(0,0,0);
-  transition:transform .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out);
 }
 /* .closed is the desktop collapse (width:0). On mobile it has to mean
    "off the bottom" instead, or the sheet would still occupy the screen. */
@@ -6101,15 +6125,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Grab handle, so it reads as a sheet rather than a panel that appeared. */
 .shell.mobile .members-panel::before{
   content:'';position:absolute;top:8px;left:50%;margin-left: -18px;
-  width:36px;height:4px;border-radius: 2px;background:rgba(255,255,255,.22);
+  width:36px;height:4px;border-radius: 2px;background:var(--grabber);
 }
 .shell.mobile .mp-header{padding-top: 20px}
 .shell.mobile .mp-member{min-height:56px}
 
 .m-sheet-scrim{
   position:fixed;inset:0;z-index:955;
-  background:rgba(0,0,0,.55);
-  animation:m-scrim-in .28s ease;
+  background:var(--scrim);
+  animation: m-scrim-in var(--dur-2) var(--ease-out);
 }
 @keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
 
@@ -6140,7 +6164,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Same reason as above — the child's root is .ml-wrap, so targeting .ml from
    here does nothing and the split never applied when video was on the stage. */
 .chat:has(.callbar.has-video) .ml-wrap { flex: 1 1 auto; min-height: 0; }
-.chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;justify-content:space-between;padding: 0 8px 0 12px}
+.chat-header{height:48px;flex-shrink:0;background:var(--bg-chat);border-bottom:1px solid var(--seam);display:flex;align-items:center;justify-content:space-between;padding: 0 8px 0 12px}
 .chat-header-left,.chat-header-right{display:flex;align-items:center;gap: 4px}
 /* The search field, the one shrinkable thing here, gives up width before the channel name does. */
 .chat-header-right{min-width:0}
@@ -6152,34 +6176,34 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .call-btn:hover{transform:translateY(-1px) scale(1.08)}
 .call-btn:active{transform:scale(.9)}
 .call-btn.video{color:var(--text-2)}
-.call-btn.calling{color:#f23f43;animation:call-pulse 1.25s ease-in-out infinite}
-@keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(242,63,67,0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(242,63,67,.6))}}
+.call-btn.calling{color:var(--danger-text);animation:call-pulse 1.25s ease-in-out infinite}
+@keyframes call-pulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(var(--danger-rgb), 0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 5px rgba(var(--danger-rgb), .6))}}
 /* Not Chakra Petch: this is the channel/DM/group's own name — data the user
    or server named, not a heading the app authored. */
 .chat-title{font-family: var(--font-ui);font-size:15px;font-weight:700;color: var(--text-strong);white-space:nowrap}
-.ch-hash{color:var(--text-3);flex-shrink:0;margin-right: 4px}
-.ch-topic-sep{width:1px;height:16px;background:rgba(255,255,255,.12);margin: 0 10px;flex-shrink:0}
+.ch-hash{color:var(--icon);flex-shrink:0;margin-right: 4px}
+.ch-topic-sep{width:1px;height:16px;background:var(--border);margin: 0 10px;flex-shrink:0}
 .ch-topic{font-size:13px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-header-av{position:relative;width:28px;height:28px;margin-right: 4px;flex-shrink:0;cursor:pointer}
 .dm-header-av img{border-radius: 50%}
-.dm-header-dot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius: 50%;border:2px solid var(--bg-chat)}
+.dm-header-dot{background:var(--bg-chat);position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius: 50%;border:2px solid var(--bg-chat)}
 
-.icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
+.icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
 .icon-btn:active{transform:scale(.88)}
-.icon-btn.active{color:#8d96f8;background:rgba(var(--accent-rgb),.15)}
+.icon-btn.active{color:var(--accent-text);background:rgba(var(--accent-rgb),.15)}
 
 /* Pinned sidebar */
-.pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);animation:slide-in .18s cubic-bezier(.4,0,.2,1)}
+.pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid var(--seam);animation:slide-in var(--dur-3) var(--ease-out)}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
-.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid rgba(0,0,0,.25);display:flex;flex-direction:column;transition: width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);overflow:hidden}
+.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
 .members-panel.closed{width:0;opacity:0;pointer-events:none}
-.mp-header{height:48px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,.25);display:flex;align-items:center;padding: 0 14px}
+.mp-header{height:48px;flex-shrink:0;border-bottom:1px solid var(--seam);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
-.mp-count{font-size:11px;background:rgba(255,255,255,.1);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
-.mp-search{margin: 8px 10px;background:rgba(0,0,0,.2);border-radius: 6px;display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
+.mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
+.mp-search{margin: 8px 10px;background:var(--bg-input);border-radius: 6px;display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
 .mp-search input::placeholder{color:var(--text-faint)}
@@ -6188,13 +6212,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Sections read as sections when there is air between them — but only from
    the second one on, or the list starts with a hole under the search box. */
 .mp-section-label:not(:first-child){margin-top: 14px}
+.mp-empty{color: var(--text-3); font-size: 13px; padding: 12px 8px;}
 .mp-member{display:flex;align-items:center;gap: 10px;padding: 6px 8px;border-radius: 6px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .mp-member:hover{background:var(--hover)}
 .mp-member.mp-offline{opacity:.35}
 .mp-member.mp-offline:hover{opacity:.8}
 .mp-av{position:relative;width:32px;height:32px;flex-shrink:0}
 .mp-av img{width:100%;height:100%;border-radius: 50%;object-fit:cover}
-.mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-panel)}
+.mp-dot{background:var(--bg-panel);position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-panel)}
 .mp-info{flex:1;min-width:0}
 .mp-name{display:block;font-size:14px;font-weight:600;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mp-member:hover .mp-name{color:var(--text-1)}
@@ -6228,7 +6253,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (max-width: 768px) {
   .emoji-scrim{
     display:block; position:fixed; inset:0; z-index:499;
-    background:rgba(0,0,0,.55);
+    background:var(--scrim);
   }
   .pf-scrim-enter-active{transition:opacity var(--dur-3) var(--ease-out)}
   .pf-scrim-leave-active{transition:opacity var(--dur-exit) var(--ease-in)}
@@ -6249,23 +6274,23 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Scrollbars */
 .sb-body::-webkit-scrollbar,.friends-list::-webkit-scrollbar,.active-now::-webkit-scrollbar,.mp-list::-webkit-scrollbar{width:4px}
 .sb-body::-webkit-scrollbar-track,.friends-list::-webkit-scrollbar-track,.active-now::-webkit-scrollbar-track,.mp-list::-webkit-scrollbar-track{background:transparent}
-.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius: 2px}
+.sb-body::-webkit-scrollbar-thumb,.friends-list::-webkit-scrollbar-thumb,.active-now::-webkit-scrollbar-thumb,.mp-list::-webkit-scrollbar-thumb{background:var(--track);border-radius: 2px}
 
 /* Reply banner — neutral, blends with chat surface */
 .reply-banner {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 16px;
   background: var(--bg-panel);
-  border-top: 1px solid rgba(0,0,0,.2);
+  border-top: 1px solid var(--seam);
   flex-shrink: 0;
-  animation: reply-slide-in .15s ease;
+  animation: reply-slide-in var(--dur-2) var(--ease-out);
 }
 @keyframes reply-slide-in {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .reply-bar {
-  width: 2px; height: 28px; background: #4e5058;
+  width: 2px; height: 28px; background: var(--border);
   border-radius: 1px; flex-shrink: 0;
 }
 .reply-banner-info { flex: 1; min-width: 0; }
@@ -6286,7 +6311,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 .reply-banner-close:hover { background: var(--hover-strong); color: var(--text-strong); }
 
-/* Jump-to-message highlight flash */
+/* Jump-to-message highlight flash. Its 1.2s is how long the highlight stays
+   readable, not a UI duration, so it stays a literal. */
 :global(.msg-flash) {
   animation: msg-flash-anim 1.2s ease;
 }
@@ -6302,7 +6328,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    one). Prefixed instead, the same way CallFlyout handles its row styles. */
 .cm .qr-strip {
   display: flex; gap: 2px; padding: 2px 6px 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  border-bottom: 1px solid var(--divider);
   margin-bottom: 4px;
 }
 .cm .qr {
@@ -6354,7 +6380,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 .dsc-theme:active { transform: scale(.97); }
 .dsc-theme.on { border-color: var(--accent); }
-.dsc-theme-sw { height: 76px; border-radius: 7px; border: 1px solid rgba(255,255,255,.07); }
+.dsc-theme-sw { height: 76px; border-radius: 7px; border: 1px solid var(--border); }
 .dsc-theme-name { font-size: 14px; font-weight: 500; color: var(--text-1);
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

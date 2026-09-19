@@ -120,7 +120,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   letter-spacing: .4px; color: var(--text-3); margin-bottom: 8px;
 }
 .ss-input {
-  width: 100%; background: var(--bg-input); border: 1px solid rgba(0,0,0,.4);
+  width: 100%; background: var(--bg-input); border: 1px solid var(--seam);
   border-radius: 6px; padding: 12px 12px; color: var(--text-1); font: inherit; font-size: 15px;
 }
 .ss-input:focus { outline: none; border-color: var(--accent); }
@@ -133,7 +133,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .ss-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .ss-btn { font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 6px; color: var(--text-strong); background: var(--hover-strong); }
-.ss-btn:hover { background: rgba(255,255,255,.16); }
+.ss-btn:hover { background: var(--hover-strong); }
 .ss-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .ss-btn.primary:hover { background: var(--accent-hover); }
 .ss-btn.primary:disabled { opacity: .6; cursor: not-allowed; }

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import lottie, { type AnimationItem } from 'lottie-web'
-import skycordSpinData from '@/assets/lottie/skycord-spin.json'
+import type { AnimationItem } from 'lottie-web'
 import { appearance } from '@/composables/useAppearance'
 
 const props = withDefaults(defineProps<{
@@ -26,6 +25,16 @@ const props = withDefaults(defineProps<{
 const lottieEl = ref<HTMLDivElement | null>(null)
 let anim: AnimationItem | null = null
 
+// lottie-web and the spin data are only needed by the animated modes. Loaded
+// on first use: 'static' costs nothing, and the animated modes arrive after
+// the shell has painted instead of holding it up.
+type Lottie = (typeof import('lottie-web'))['default']
+let loading: Promise<[Lottie, unknown]> | null = null
+const loadLottie = () => (loading ??= Promise.all([
+  import('lottie-web').then(m => m.default),
+  import('@/assets/lottie/skycord-spin.json').then(m => m.default as unknown),
+]))
+
 // The source asset is drawn in black (#000) — recolor every shape's fill/stroke
 // to match the `color` prop so it isn't a black hole on the app's dark surfaces.
 // `currentColor` has no meaning inside a Lottie JSON (it's not CSS), so when
@@ -41,8 +50,8 @@ const resolveColor = (raw: string): string => {
   return `#${[r, g, b].map(n => n.toString(16).padStart(2, '0')).join('')}`
 }
 
-const buildRecoloredData = (rawColor: string) => {
-  const clone = JSON.parse(JSON.stringify(skycordSpinData))
+const buildRecoloredData = (rawColor: string, data: unknown) => {
+  const clone = JSON.parse(JSON.stringify(data))
   const hex = resolveColor(rawColor).replace('#', '')
   const r = parseInt(hex.slice(0, 2), 16) / 255
   const g = parseInt(hex.slice(2, 4), 16) / 255
@@ -58,14 +67,19 @@ const buildRecoloredData = (rawColor: string) => {
   return clone
 }
 
-const buildAnim = () => {
-  if (!lottieEl.value) return
+// Bumped by every destroy and build, so a build that finishes late — after an
+// unmount, a rebuild or a switch to static — knows it is stale and does nothing.
+let generation = 0
+const buildAnim = async () => {
+  const mine = ++generation
+  const [lottie, data] = await loadLottie()
+  if (mine !== generation || !lottieEl.value || props.mode === 'static') return
   anim = lottie.loadAnimation({
     container: lottieEl.value,
     renderer: 'svg',
     loop:     props.mode === 'loading',
     autoplay: props.mode === 'loading',
-    animationData: buildRecoloredData(props.color),
+    animationData: buildRecoloredData(props.color, data),
   })
   // One-shot modes settle back to the rest pose (frame 0) after a spin.
   if (props.mode === 'hover' || props.mode === 'lucky') {
@@ -73,7 +87,7 @@ const buildAnim = () => {
   }
 }
 
-const destroyAnim = () => { anim?.destroy(); anim = null }
+const destroyAnim = () => { generation++; anim?.destroy(); anim = null }
 
 // Easter egg: only 1 interaction in 30 actually spins.
 const SPIN_CHANCE = 1 / 30
@@ -86,7 +100,9 @@ const onEnter = () => {
   if (props.mode === 'hover') {
     // CSS hover-state color changes never trigger Vue reactivity, so rebuild
     // right before playing to capture whatever color is true at this moment.
-    destroyAnim(); buildAnim(); anim?.play()
+    // buildAnim is async now (lottie-web loads on first use), so play only
+    // once the build actually finishes instead of calling play() too early.
+    destroyAnim(); void buildAnim().then(() => anim?.play())
   } else if (props.mode === 'lucky') {
     maybeSpin()
   }
@@ -98,19 +114,19 @@ const onLeave = () => {
 }
 
 onMounted(() => {
-  if (props.mode !== 'static') buildAnim()
+  if (props.mode !== 'static') void buildAnim()
 })
 onBeforeUnmount(destroyAnim)
 
 watch(() => props.mode, (newMode, oldMode) => {
   if (oldMode !== 'static' && anim) destroyAnim()
-  if (newMode !== 'static') buildAnim()
+  if (newMode !== 'static') void buildAnim()
 })
 
 watch(() => props.color, () => {
   if (props.mode === 'static' || !anim) return
   destroyAnim()
-  buildAnim()
+  void buildAnim()
 })
 
 // When `color` resolves to currentColor, the baked Lottie color is frozen at
@@ -121,7 +137,7 @@ watch(
   () => {
     if (props.mode === 'static' || !anim || props.color !== 'currentColor') return
     destroyAnim()
-    buildAnim()
+    void buildAnim()
   },
 )
 </script>

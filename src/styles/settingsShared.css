@@ -82,10 +82,10 @@
 
 .st-btn.st-btn--primary { background: var(--accent); color: var(--text-on-accent); }
 .st-btn.st-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
-.st-btn.st-btn--danger { color: #f0716f; }
-.st-btn.st-btn--danger:hover:not(:disabled) { background: rgba(237,66,69,.12); }
-.st-btn.st-btn--danger-solid { background: #ed4245; color: #fff; }
-.st-btn.st-btn--danger-solid:hover:not(:disabled) { background: #c93b3e; }
+.st-btn.st-btn--danger { color: var(--danger-text); }
+.st-btn.st-btn--danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), .12); }
+.st-btn.st-btn--danger-solid { background: var(--danger); color: var(--text-on-danger); }
+.st-btn.st-btn--danger-solid:hover:not(:disabled) { background: var(--danger-hover); color: var(--text-on-danger-hover); }
 .st-btn.st-btn--outline { border: 1px solid var(--border); }
 .st-btn.st-btn--sm { padding: 6px 12px; font-size: 13px; }
 
@@ -94,14 +94,14 @@
 /* ── Toggle ────────────────────────────────────────────────────────────── */
 .st-toggle {
   width: 42px; height: 24px; border-radius: 12px; flex-shrink: 0;
-  background: rgba(128,132,142,.5); position: relative; border: none; cursor: pointer;
+  background: var(--toggle-off); position: relative; border: none; cursor: pointer;
   transition: background var(--dur-2) var(--ease-out);
 }
 .st-toggle.on { background: var(--accent); }
 .st-toggle:disabled { opacity: .5; cursor: not-allowed; }
 .st-toggle span {
   position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
-  border-radius: 50%; background: #fff;
+  border-radius: 50%; background: var(--toggle-knob);
   transition: transform var(--dur-2) var(--ease-out);
 }
 .st-toggle.on span { transform: translateX(18px); }

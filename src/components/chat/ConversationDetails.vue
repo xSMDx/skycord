@@ -17,7 +17,7 @@ import {
   ChevronLeft, Search, Bell, Settings as SettingsIcon,
   UserPlus, UsersRound, Crown, ChevronRight, SlidersHorizontal, Volume2,
 } from 'lucide-vue-next'
-import { statusColor, statusLabel } from '@/composables/usePresence'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 export type DetailsTab = 'members' | 'media' | 'pins' | 'links' | 'files'
 
@@ -200,11 +200,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
               <span class="cd-m-av">
                 <Avatar v-if="m.avatar" :src="m.avatar" :alt="m.displayName || m.username" :crop="(m as any).avatarCrop" />
                 <template v-else>{{ initial(m.displayName || m.username) }}</template>
-                <span
-                  class="cd-m-dot"
-                  :style="{ background: statusColor(m.status) }"
-                  :aria-label="statusLabel(m.status)"
-                />
+                <StatusDot class="cd-m-dot" :status="m.status" />
               </span>
               <span class="cd-m-text">
                 <span class="cd-m-name">
@@ -258,7 +254,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   padding: 0 12px; border-radius: 22px;
   border: 1.5px solid transparent; background: transparent;
   color: var(--text-2); cursor: pointer; overflow: hidden;
-  transition:width .28s cubic-bezier(.2,.8,.3,1), background var(--dur-3) var(--ease-out), border-color var(--dur-3) var(--ease-out), padding .28s cubic-bezier(.2,.8,.3,1);
+  transition: background var(--dur-3) var(--ease-out), border-color var(--dur-3) var(--ease-out);
 }
 .cd-head.searching .cd-searchfield {
   width: 100%; cursor: text;
@@ -267,7 +263,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   padding: 0 14px;
 }
 .cd-search-ico { flex-shrink: 0; }
-.cd-head.searching .cd-search-ico { color: var(--text-3); }
+.cd-head.searching .cd-search-ico { color: var(--icon); }
 .cd-search-input {
   flex: 1; min-width: 0; height: 100%;
   border: none; background: none; outline: none;
@@ -278,11 +274,10 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-search-input::-webkit-search-cancel-button { display: none; }
 .cd-search-input::placeholder { color: var(--text-faint); }
 
-/* The trailing actions collapse to zero width so the field can take the row,
-   and animate on width rather than being removed — removing them makes the
-   row jump instead of moving. */
+/* The trailing actions collapse to zero width so the field can take the row.
+   The width snaps rather than animating — animating it laid the header out on
+   every frame (audit finding 19); the field's border and fill still ease. */
 .cd-head.searching .cd-head-actions { width: 0; overflow: hidden; }
-.cd-head-actions { transition:width .28s cubic-bezier(.2,.8,.3,1); }
 .cd-filter { flex-shrink: 0; color: var(--text-2); }
 .cd-filter:active { background: var(--hover); color: var(--text-1); }
 
@@ -360,7 +355,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-row:active { background: var(--hover); }
 .cd-row-ico { display: flex; color: var(--text-2); flex-shrink: 0; }
 .cd-row-label { flex: 1; font-size: 15px; font-weight: 600; }
-.cd-row-chev { color: var(--text-faint); flex-shrink: 0; }
+.cd-row-chev { color: var(--icon); flex-shrink: 0; }
 
 .cd-section {
   /* Not Chakra Petch: a member-list count ("Members — 12"), not a heading. */
@@ -388,6 +383,9 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-m-dot {
   position: absolute; right: -1px; bottom: -1px;
   width: 13px; height: 13px; border-radius: 50%;
+  /* The shapes are cut out of the dot, so its own background has to be the
+     same surface its ring is drawn in. */
+  background: var(--bg-raised);
   border: 2.5px solid var(--bg-raised);
 }
 .cd-m-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -396,7 +394,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   font-size: 15px; font-weight: 600; color: var(--text-1);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cd-m-owner { color: #f0b232; flex-shrink: 0; }
+.cd-m-owner { color: var(--warning); flex-shrink: 0; }
 .cd-m-user { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cd-soon { padding: 32px 16px; text-align: center; color: var(--text-3); font-size: 14px; line-height: 1.5; }

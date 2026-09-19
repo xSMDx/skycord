@@ -84,7 +84,7 @@ const join = async () => {
 <style scoped>
 .invite-card {
   display: flex; align-items: center; gap: 12px;
-  background: var(--bg-floor); border: 1px solid rgba(255,255,255,.06);
+  background: var(--bg-floor); border: 1px solid var(--hover);
   border-radius: 8px; padding: 12px 16px;
   margin-top: 6px; max-width: 380px;
 }
@@ -95,17 +95,17 @@ const join = async () => {
 
 .ic-icon {
   width: 44px; height: 44px; border-radius: 10px;
-  background: #ed4245; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; color: var(--text-strong);
+  background: var(--danger); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: var(--text-on-danger);
 }
-.ic-icon--err { background: #4f3535; }
+.ic-icon--err { background: rgba(var(--danger-rgb), .14); }
 
 .ic-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ic-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ic-sub  { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
 .ic-dot  {
   display: inline-block; width: 7px; height: 7px;
-  border-radius: 50%; background: #23a55a; flex-shrink: 0;
+  border-radius: 50%; background: var(--green); flex-shrink: 0;
 }
 
 .ic-btn {
@@ -116,6 +116,6 @@ const join = async () => {
   flex-shrink: 0;
 }
 .ic-btn:hover:not(:disabled) { background: var(--accent-hover); }
-.ic-btn.joined { background: rgba(255,255,255,.1); color: var(--text-2); cursor: default; }
+.ic-btn.joined { background: var(--hover-strong); color: var(--text-2); cursor: default; }
 .ic-btn:disabled { opacity: .7; cursor: not-allowed; }
 </style>

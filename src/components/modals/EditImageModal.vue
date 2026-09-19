@@ -286,7 +286,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   transform: translate(-50%, -50%);
   width: var(--cw, 300px); height: var(--ch, 300px);
   pointer-events: none;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.9), 0 0 0 9999px rgba(0,0,0,.55);
+  box-shadow: inset 0 0 0 2px var(--on-media), 0 0 0 9999px var(--scrim);
   border-radius: var(--cr, 50%);
 }
 /* Banners are a rectangle. Showing a circle here would frame the image
@@ -309,7 +309,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ei-reset { font-size: 14px; font-weight: 600; color: var(--accent); }
 .ei-reset:hover { text-decoration: underline; }
 .ei-actions { display: flex; align-items: center; gap: 12px; }
-.ei-cancel { padding: 8px 18px; border-radius: 4px; font-size: 14px; font-weight: 600; color: var(--text-1); background: rgba(255,255,255,.06); }
+.ei-cancel { padding: 8px 18px; border-radius: 4px; font-size: 14px; font-weight: 600; color: var(--text-1); background: var(--hover); }
 .ei-cancel:hover { background: var(--hover-strong); }
 .ei-apply { padding: 8px 24px; border-radius: 4px; font-size: 14px; font-weight: 600; color: var(--text-on-accent); background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out); }
 .ei-apply:hover:not(:disabled) { background: var(--accent-hover); }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { User, Lock, Eye, EyeOff, CircleAlert, LoaderCircle, Check, Hash, Mail, Shield } from 'lucide-vue-next'
 import { useAuth } from '@/composables/useAuth'
+import { offlineMessage } from '@/composables/offlineMessage'
 import SkycordIcon from '@/components/SkycordIcon.vue'
 
 /**
@@ -15,6 +17,11 @@ const serverError = ref('')
 
 const { login, register, loading, serverDown, probeServer,
         forgotPassword, resetPassword, resetAvailable } = useAuth()
+
+// import.meta.env.DEV never changes during a session, so a plain constant is
+// enough — Vite inlines it at build time, so a member on a production image
+// can never receive the developer sentence.
+const offlineText = offlineMessage(import.meta.env.DEV)
 
 // ── Password reset ────────────────────────────────────────────────────────
 const ff        = reactive({ email: '' })
@@ -163,15 +170,15 @@ const submitRegister = async () => {
       <!-- Server-offline banner (auto-clears when /health responds again) -->
       <transition name="drop">
         <div v-if="serverDown" class="err-banner">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="currentColor"/></svg>
-          Server offline — start the API server (start-dev.cmd). Retrying automatically…
+          <CircleAlert :size="15" :stroke-width="2" aria-hidden="true" />
+          {{ offlineText }}
         </div>
       </transition>
 
       <!-- Error banner -->
       <transition name="drop">
         <div v-if="serverError && !serverDown" class="err-banner">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="currentColor"/></svg>
+          <CircleAlert :size="15" :stroke-width="2" aria-hidden="true" />
           {{ serverError }}
         </div>
       </transition>
@@ -185,7 +192,7 @@ const submitRegister = async () => {
           <div class="field" :class="{err: le.identifier}">
             <label for="login-identifier">Username or Email</label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <User class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="login-identifier" v-model="lf.identifier" type="text" placeholder="username or email" autocomplete="username" @keydown.enter="submitLogin"/>
             </div>
             <span v-if="le.identifier" class="ferr">{{ le.identifier }}</span>
@@ -199,11 +206,11 @@ const submitRegister = async () => {
               <button v-if="canReset" class="forgot" type="button" @click="mode='forgot'">Forgot?</button>
             </label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="login-password" v-model="lf.password" :type="showPw?'text':'password'" placeholder="your password" autocomplete="current-password" @keydown.enter="submitLogin"/>
               <button class="eye" type="button" :aria-label="showPw ? 'Hide password' : 'Show password'" :aria-pressed="showPw" @click="showPw=!showPw">
-                <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <Eye v-if="!showPw" :size="15" :stroke-width="2" aria-hidden="true" />
+                <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
               </button>
             </div>
             <span v-if="le.password" class="ferr">{{ le.password }}</span>
@@ -211,7 +218,7 @@ const submitRegister = async () => {
 
           <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitLogin">
             <template v-if="!loading">Sign In</template>
-            <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Signing in…</template>
+            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Signing in…</template>
           </button>
 
           <p class="switch">No account? <button type="button" @click="switchMode('register')">Register</button></p>
@@ -226,7 +233,7 @@ const submitRegister = async () => {
             <div class="field" :class="{err: re.username}">
               <label for="reg-username">Username *</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+                <Hash class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reg-username" v-model="rf.username" type="text" placeholder="pixel_wizard" maxlength="32" autocomplete="username"/>
               </div>
               <span v-if="re.username" class="ferr">{{ re.username }}</span>
@@ -234,7 +241,7 @@ const submitRegister = async () => {
             <div class="field">
               <label for="reg-displayname">Display Name</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <User class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reg-displayname" v-model="rf.displayName" type="text" placeholder="Optional" maxlength="50"/>
               </div>
             </div>
@@ -243,7 +250,7 @@ const submitRegister = async () => {
           <div class="field" :class="{err: re.email}">
             <label for="reg-email">Email *</label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <Mail class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="reg-email" v-model="rf.email" type="email" placeholder="you@example.com" autocomplete="email"/>
             </div>
             <span v-if="re.email" class="ferr">{{ re.email }}</span>
@@ -252,11 +259,11 @@ const submitRegister = async () => {
           <div class="field" :class="{err: re.password}">
             <label for="reg-password">Password *</label>
             <div class="inp-wrap">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="reg-password" v-model="rf.password" :type="showPw?'text':'password'" placeholder="Min 8 chars, uppercase, number, symbol" autocomplete="new-password"/>
               <button class="eye" type="button" :aria-label="showPw ? 'Hide password' : 'Show password'" :aria-pressed="showPw" @click="showPw=!showPw">
-                <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <Eye v-if="!showPw" :size="15" :stroke-width="2" aria-hidden="true" />
+                <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
               </button>
             </div>
             <div v-if="rf.password" class="strength">
@@ -271,13 +278,13 @@ const submitRegister = async () => {
           <div class="field" :class="{err: re.confirm}">
             <label for="reg-confirm">Confirm Password *</label>
             <div class="inp-wrap" :class="{match: rf.confirm && rf.password===rf.confirm}">
-              <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <Shield class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
               <input id="reg-confirm" v-model="rf.confirm" :type="showConfirm?'text':'password'" placeholder="Re-enter password" autocomplete="new-password" @keydown.enter="submitRegister"/>
               <button class="eye" type="button" :aria-label="showConfirm ? 'Hide password' : 'Show password'" :aria-pressed="showConfirm" @click="showConfirm=!showConfirm">
-                <svg v-if="!showConfirm" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <Eye v-if="!showConfirm" :size="15" :stroke-width="2" aria-hidden="true" />
+                <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
               </button>
-              <svg v-if="rf.confirm && rf.password===rf.confirm" class="check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#23a55a" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <Check v-if="rf.confirm && rf.password===rf.confirm" class="check" :size="14" :stroke-width="3" aria-hidden="true" />
             </div>
             <span v-if="re.confirm" class="ferr">{{ re.confirm }}</span>
           </div>
@@ -286,7 +293,7 @@ const submitRegister = async () => {
 
           <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitRegister">
             <template v-if="!loading">Create Account</template>
-            <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Creating…</template>
+            <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Creating…</template>
           </button>
 
           <p class="switch">Have an account? <button type="button" @click="switchMode('login')">Sign in</button></p>
@@ -302,7 +309,7 @@ const submitRegister = async () => {
                anyone else. -->
           <template v-if="resetDone">
             <div class="ok-banner">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              <Check :size="15" :stroke-width="2" aria-hidden="true" />
               {{ resetNote }}
             </div>
             <p class="form-sub reset-hint">Check your spam folder if it hasn’t arrived in a minute. The link expires in 30 minutes.</p>
@@ -313,7 +320,7 @@ const submitRegister = async () => {
             <div class="field" :class="{err: resetErr}">
               <label for="forgot-email">Email</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+                <Mail class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="forgot-email" v-model="ff.email" type="email" placeholder="you@example.com" autocomplete="email" autofocus @keydown.enter="submitForgot"/>
               </div>
               <span v-if="resetErr" class="ferr">{{ resetErr }}</span>
@@ -321,7 +328,7 @@ const submitRegister = async () => {
 
             <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitForgot">
               <template v-if="!loading">Send reset link</template>
-              <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Sending…</template>
+              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Sending…</template>
             </button>
 
             <p class="switch">Remembered it? <button type="button" @click="backToLogin">Sign in</button></p>
@@ -334,7 +341,7 @@ const submitRegister = async () => {
 
           <template v-if="resetDone">
             <div class="ok-banner">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              <Check :size="15" :stroke-width="2" aria-hidden="true" />
               {{ resetNote }}
             </div>
             <!-- Said plainly because it is surprising: a reset signs out every
@@ -350,11 +357,11 @@ const submitRegister = async () => {
             <div class="field" :class="{err: resetErr}">
               <label for="reset-pw">New password</label>
               <div class="inp-wrap">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reset-pw" v-model="rsf.password" :type="showPw?'text':'password'" placeholder="at least 8 characters" autocomplete="new-password" autofocus/>
                 <button class="eye" type="button" @click="showPw=!showPw" :aria-label="showPw ? 'Hide password' : 'Show password'">
-                  <svg v-if="!showPw" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  <Eye v-if="!showPw" :size="15" :stroke-width="2" aria-hidden="true" />
+                  <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -362,11 +369,11 @@ const submitRegister = async () => {
             <div class="field">
               <label for="reset-confirm">Confirm password</label>
               <div class="inp-wrap" :class="{match: rsf.confirm && rsf.password === rsf.confirm}">
-                <svg class="fi" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <Lock class="fi" :size="15" :stroke-width="2" aria-hidden="true" />
                 <input id="reset-confirm" v-model="rsf.confirm" :type="showConfirm?'text':'password'" placeholder="repeat it" autocomplete="new-password" @keydown.enter="submitReset"/>
                 <button class="eye" type="button" @click="showConfirm=!showConfirm" :aria-label="showConfirm ? 'Hide password' : 'Show password'">
-                  <svg v-if="!showConfirm" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  <Eye v-if="!showConfirm" :size="15" :stroke-width="2" aria-hidden="true" />
+                  <EyeOff v-else :size="15" :stroke-width="2" aria-hidden="true" />
                 </button>
               </div>
               <span v-if="resetErr" class="ferr">{{ resetErr }}</span>
@@ -374,7 +381,7 @@ const submitRegister = async () => {
 
             <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitReset">
               <template v-if="!loading">Set new password</template>
-              <template v-else><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving…</template>
+              <template v-else><LoaderCircle class="spin" :size="16" :stroke-width="2.5" aria-hidden="true" /> Saving…</template>
             </button>
 
             <p class="switch">Link expired? <button type="button" @click="mode='forgot'; resetErr=''">Ask for a new one</button></p>
@@ -392,7 +399,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .shell {
   width:100vw; min-height:100vh; min-height:100dvh;
-  background:#0d0e10;
+  background:var(--bg-floor);
   display:flex; align-items:center; justify-content:center;
   /* Safe-area padding so the card clears the notch and home indicator once
      viewport-fit=cover lets us paint into them. */
@@ -403,18 +410,19 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 }
 
 .blob { position:absolute; border-radius: 50%; filter:blur(80px); pointer-events:none; animation:drift 12s ease-in-out infinite alternate; }
+/* Each blob starts its drift at its own point: offsets, not durations. */
 .b1 { width:480px;height:480px; background:rgba(var(--accent-rgb),.18); top:-100px; left:-100px; animation-delay:0s; }
 .b2 { width:380px;height:380px; background:rgba(235,69,158,.10); bottom:-60px; right:-60px; animation-delay:-4s; }
-.b3 { width:280px;height:280px; background:rgba(35,165,90,.07);  top:55%; left:58%; animation-delay:-8s; }
+.b3 { width:280px;height:280px; background:rgba(var(--green-rgb), .07);  top:55%; left:58%; animation-delay:-8s; }
 @keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(28px,18px) scale(1.05)}}
 
 .card {
   width:100%; max-width:488px;
   background:var(--bg-raised);
-  border:1px solid rgba(255,255,255,.07);
+  border:1px solid var(--border);
   border-radius: 16px; padding: 32px 36px 28px;
   position:relative; z-index:1;
-  box-shadow:0 24px 80px rgba(0,0,0,.6);
+  box-shadow:var(--shadow-lg);
 }
 
 .logo-row { display:flex; align-items:center; gap: 10px; justify-content:center; margin-bottom: 24px; }
@@ -422,18 +430,18 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 /* Chakra Petch ships 500/600/700 only — 700 explicit, not 800 synthesised. */
 .logo-name { font-family: var(--font-display); font-size:22px; font-weight:700; color: var(--text-strong); letter-spacing:-.4px; }
 
-.tabs { display:flex; position:relative; background:rgba(0,0,0,.25); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
+.tabs { display:flex; position:relative; background:var(--bg-input); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
 .tab { flex:1; padding: 8px; border-radius: 6px; font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition: color var(--dur-2) var(--ease-out); }
 .tab.active { color: var(--text-strong); }
-.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:#2e3136; border-radius: 6px; transition:transform .22s cubic-bezier(.4,0,.2,1); box-shadow:0 1px 4px rgba(0,0,0,.3); }
+.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:var(--bg-panel); border-radius: 6px; transition: transform var(--dur-2) var(--ease-inout); box-shadow:var(--shadow-xs); }
 .tab-slider.right { transform:translateX(100%); }
 
-.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(237,66,69,.12); border:1px solid rgba(237,66,69,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#f08080; font-size:13px; }
+.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--danger-rgb), .12); border:1px solid rgba(var(--danger-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--danger-text); font-size:13px; }
 
 /* The success twin of .err-banner. Green rather than red because these two
    appear in the same slot and a reset confirmation that is styled like a
    failure gets read as one. */
-.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(35,165,90,.12); border:1px solid rgba(35,165,90,.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:#3ba55d; font-size:13px; line-height:1.45; }
+.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--green-rgb), .12); border:1px solid rgba(var(--green-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--green-text); font-size:13px; line-height:1.45; }
 
 .form-title { font-size:21px; font-weight:800; color: var(--text-strong); margin-bottom: 4px; }
 .form-sub   { font-size:13px; color:var(--text-faint); margin-bottom: 18px; }
@@ -447,28 +455,28 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .field label { font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--text-2); }
 .lrow { display:flex; align-items:center; justify-content:space-between; }
 .forgot { font-size:11px; font-weight:600; color:var(--accent); text-transform:none; letter-spacing:0; transition: color var(--dur-1) var(--ease-out); }
-.forgot:hover { color:#8d96f8; }
+.forgot:hover { color:var(--accent-text); }
 
 .inp-wrap {
   display:flex; align-items:center;
-  background:rgba(0,0,0,.28); border:1.5px solid rgba(255,255,255,.08); border-radius: 8px;
+  background:var(--bg-input); border:1.5px solid var(--border); border-radius: 8px;
   transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   overflow:hidden;
 }
 .inp-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15); }
-.inp-wrap.match { border-color:#23a55a; }
-.field.err .inp-wrap { border-color:#ed4245; }
-.field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(237,66,69,.15); }
+.inp-wrap.match { border-color:var(--green-text); }
+.field.err .inp-wrap { border-color:var(--danger); }
+.field.err .inp-wrap:focus-within { box-shadow:0 0 0 3px rgba(var(--danger-rgb), .15); }
 
-.fi { color:#4e5058; margin: 0 8px; flex-shrink:0; }
+.fi { color:var(--text-3); margin: 0 8px; flex-shrink:0; }
 /* min-width:0 because a flex item defaults to min-width:auto and so refuses to
    shrink below its own content. A long value (an email, a pasted password)
    then pushed the row wider than .inp-wrap, and since the wrapper is
    overflow:hidden, what got clipped was the eye button on the end. */
 .inp-wrap input { flex:1; min-width:0; padding: 10px 6px 10px 0; font-size:14px; color:var(--text-1); }
-.inp-wrap input::placeholder { color:#4e5058; }
+.inp-wrap input::placeholder { color:var(--text-faint); }
 
-.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#4e5058; border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
+.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-3); border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
 .eye:hover { color:var(--text-2); }
 
 /* ── Phone ────────────────────────────────────────────────────────────────
@@ -487,13 +495,14 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
   .eye { width: 44px; height: 44px; }
   .eye:active { color: var(--text-2); }
 }
-.check { flex-shrink:0; margin-right: 8px; }
+/* Was stroke="#23a55a" on the element; Lucide strokes with currentColor. */
+.check { color: var(--green); flex-shrink:0; margin-right: 8px; }
 
-.ferr { font-size:12px; color:#f08080; }
+.ferr { font-size:12px; color:var(--danger-text); }
 
 .strength { display:flex; align-items:center; gap: 8px; }
 .s-bars { display:flex; gap: 4px; flex:1; }
-.s-bar { flex:1; height:4px; background:rgba(255,255,255,.1); border-radius: 2px; opacity:.3; transition: background var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
+.s-bar { flex:1; height:4px; background:var(--track); border-radius: 2px; opacity:.3; transition: background var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
 
 .submit {
   width:100%; padding: 12px; margin-top: 4px;
@@ -516,7 +525,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .switch { text-align:center; font-size:13px; color:var(--text-faint); margin-top: 14px; }
 .switch button { color:var(--accent); font-weight:600; }
-.switch button:hover { color:#8d96f8; text-decoration:underline; }
+.switch button:hover { color:var(--accent-text); text-decoration:underline; }
 
 .slide-enter-active,.slide-leave-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
 .slide-enter-from{opacity:0;transform:translateX(18px)}
