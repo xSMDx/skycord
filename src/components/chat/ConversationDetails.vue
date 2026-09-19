@@ -17,7 +17,7 @@ import {
   ChevronLeft, Search, Bell, Settings as SettingsIcon,
   UserPlus, UsersRound, Crown, ChevronRight, SlidersHorizontal, Volume2,
 } from 'lucide-vue-next'
-import { statusColor, statusLabel } from '@/composables/usePresence'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 export type DetailsTab = 'members' | 'media' | 'pins' | 'links' | 'files'
 
@@ -200,11 +200,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
               <span class="cd-m-av">
                 <Avatar v-if="m.avatar" :src="m.avatar" :alt="m.displayName || m.username" :crop="(m as any).avatarCrop" />
                 <template v-else>{{ initial(m.displayName || m.username) }}</template>
-                <span
-                  class="cd-m-dot"
-                  :style="{ background: statusColor(m.status) }"
-                  :aria-label="statusLabel(m.status)"
-                />
+                <StatusDot class="cd-m-dot" :status="m.status" />
               </span>
               <span class="cd-m-text">
                 <span class="cd-m-name">
@@ -388,6 +384,9 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-m-dot {
   position: absolute; right: -1px; bottom: -1px;
   width: 13px; height: 13px; border-radius: 50%;
+  /* The shapes are cut out of the dot, so its own background has to be the
+     same surface its ring is drawn in. */
+  background: var(--bg-raised);
   border: 2.5px solid var(--bg-raised);
 }
 .cd-m-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }

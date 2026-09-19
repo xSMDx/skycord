@@ -19,7 +19,7 @@ import SearchFiltersModal from '@/components/search/SearchFiltersModal.vue'
 import SearchResultsPanel from '@/components/search/SearchResultsPanel.vue'
 import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
-import { statusColor, statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
+import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
 import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
 import { filterMembers } from '@/composables/memberFilter'
@@ -93,6 +93,7 @@ import { stripMarkers } from '@/utils/richText'
 
 import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 import EditCategoryModal from '@/components/modals/EditCategoryModal.vue'
+import StatusDot from '@/components/ui/StatusDot.vue'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -4287,7 +4288,7 @@ onBeforeUnmount(() => {
             >
               <div class="dm-av">
                 <Avatar :src="c.dm.avatar" :alt="c.dm.name" :crop="(c.dm as any).avatarCrop" />
-                <span class="dm-dot" :style="{ background: statusColor(livePresence(c.dm.id, c.dm.status)) }" />
+                <StatusDot class="dm-dot" :status="livePresence(c.dm.id, c.dm.status)" />
               </div>
               <div class="dm-info">
                 <span class="dm-name">{{ c.dm.name }}</span>
@@ -4335,7 +4336,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
+            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><StatusDot class="up-status-dot" :status="chosenStatus" v-tip="statusLabel(chosenStatus)" /></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator || '0000' }}</span>
@@ -4610,7 +4611,7 @@ onBeforeUnmount(() => {
         />
         <div class="user-panel">
           <div class="up-left" @click.stop="toggleSelfPopout($event)">
-            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><span class="up-status-dot" :style="{ background: statusColor(chosenStatus) }" v-tip="statusLabel(chosenStatus)"/></div>
+            <div class="up-av"><div class="up-av-img"><Avatar :src="myAvatar" alt="me" :crop="(authUser as any)?.avatarCrop" /></div><StatusDot class="up-status-dot" :status="chosenStatus" v-tip="statusLabel(chosenStatus)" /></div>
             <div class="up-info">
               <span class="up-name">{{ authUser?.displayName || authUser?.username || 'You' }}</span>
               <span class="up-tag">#{{ authUser?.discriminator||'0000' }}</span>
@@ -4699,7 +4700,7 @@ onBeforeUnmount(() => {
               >
                 <div class="f-av">
                   <Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" />
-                  <span class="f-dot" :style="{ background: statusColor(livePresence(f.id, f.status)) }"/>
+                  <StatusDot class="f-dot" :status="livePresence(f.id, f.status)" />
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ f.displayName||f.username }}</span>
@@ -4725,7 +4726,7 @@ onBeforeUnmount(() => {
                    @contextmenu="openUserMenu($event, req.requester)">
                 <div class="f-av">
                   <Avatar :src="avatarFor(req.requester.username,req.requester.avatar)" :alt="req.requester.displayName" :crop="(req.requester as any).avatarCrop" />
-                  <span class="f-dot" :style="{ background: statusColor(livePresence(req.requester.id, req.requester.status)) }"/>
+                  <StatusDot class="f-dot" :status="livePresence(req.requester.id, req.requester.status)" />
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ req.requester.displayName||req.requester.username }}</span>
@@ -4753,7 +4754,7 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
                  @contextmenu="openUserMenu($event, f)">
-              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><span class="an-dot" :style="{ background: statusColor(livePresence(f.id, f.status)) }"/></div>
+              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><StatusDot class="an-dot" :status="livePresence(f.id, f.status)" /></div>
               <div class="an-info">
                 <span class="an-name">{{ f.displayName||f.username }}</span>
                 <span class="an-sub">{{ statusLabel(livePresence(f.id, f.status)) }}</span>
@@ -4916,7 +4917,7 @@ onBeforeUnmount(() => {
               <template v-if="view==='dm' && activeDM">
                 <div class="dm-header-av" @click.stop="showUserProfile = activeDM?.id || null">
                   <Avatar :src="activeDM.avatar" :alt="activeDM.name" :crop="(activeDM as any).avatarCrop" />
-                  <span class="dm-header-dot" :style="{ background: statusColor(livePresence(activeDM.id, activeDM.status)) }"/>
+                  <StatusDot class="dm-header-dot" :status="livePresence(activeDM.id, activeDM.status)" />
                 </div>
                 <!-- `display: contents` on desktop, so the row below is laid out
                      exactly as it was; a flex column on mobile, where the title
@@ -5141,7 +5142,7 @@ onBeforeUnmount(() => {
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="m.avatarCrop" />
-                <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+                <StatusDot class="mp-dot" :status="livePresence(m.id, m.status)" />
               </div>
               <div class="mp-info">
                 <span class="mp-name">{{ m.displayName || m.username }}</span>
@@ -5176,7 +5177,7 @@ onBeforeUnmount(() => {
                  @contextmenu="openUserMenu($event, m)">
               <div class="mp-av">
                 <Avatar :src="m.avatar || avatarFor(m.username)" :alt="m.displayName || m.username" :crop="(m as any).avatarCrop" />
-                <span class="mp-dot" :style="{ background: statusColor(livePresence(m.id, m.status)) }"/>
+                <StatusDot class="mp-dot" :status="livePresence(m.id, m.status)" />
               </div>
               <div class="mp-info">
                 <span class="mp-name">{{ m.displayName || m.username }}</span>
@@ -5422,7 +5423,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-item.active{outline:1px solid var(--active-ring);outline-offset:-1px}
 .dm-av{position:relative;width:32px;height:32px;flex-shrink:0}
 .dm-av img{border-radius: 50%}
-.dm-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-raised)}
+.dm-dot{background:var(--bg-raised);position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-raised)}
 .dm-info{flex:1;min-width:0}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -5658,7 +5659,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius: 50%;overflow:hidden}
 .up-av-img img{width:100%;height:100%;object-fit:cover;border-radius: 50%}
-.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:var(--status-offline);border-radius: 50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
+.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:var(--bg-deep);border-radius: 50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
 .up-info{display:flex;flex-direction:column;gap: 1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
@@ -6049,7 +6050,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-row:hover{background:var(--hover);border-color:transparent}
 .f-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .f-av img{border-radius: 50%}
-.f-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
+.f-dot{background:var(--bg-chat);position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
 .f-info{flex:1;min-width:0}
 /* Truncation, which this never had. `.f-info` is `flex:1;min-width:0`, so when
    the row is squeezed the name has no way to ellipsise and is crushed to zero
@@ -6077,7 +6078,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .an-av img{border-radius: 50%}
-.an-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
+.an-dot{background:var(--bg-chat);position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius: 50%;border:2px solid var(--bg-chat)}
 .an-info{flex:1;min-width:0}
 .an-name{display:block;font-size:14px;font-weight:600;color: var(--text-strong)}
 .an-sub{display:block;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -6174,7 +6175,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-topic{font-size:13px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-header-av{position:relative;width:28px;height:28px;margin-right: 4px;flex-shrink:0;cursor:pointer}
 .dm-header-av img{border-radius: 50%}
-.dm-header-dot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius: 50%;border:2px solid var(--bg-chat)}
+.dm-header-dot{background:var(--bg-chat);position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius: 50%;border:2px solid var(--bg-chat)}
 
 .icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
@@ -6207,7 +6208,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-member.mp-offline:hover{opacity:.8}
 .mp-av{position:relative;width:32px;height:32px;flex-shrink:0}
 .mp-av img{width:100%;height:100%;border-radius: 50%;object-fit:cover}
-.mp-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-panel)}
+.mp-dot{background:var(--bg-panel);position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius: 50%;border:2px solid var(--bg-panel)}
 .mp-info{flex:1;min-width:0}
 .mp-name{display:block;font-size:14px;font-weight:600;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mp-member:hover .mp-name{color:var(--text-1)}
