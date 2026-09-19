@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
            every stream. Transport encryption is real and is what this claims.
            Swap the wording once E2EE actually ships — see
            docs/superpowers/specs/2026-08-09-e2ee-design.md -->
-      <div class="vcp-pop-foot">Encrypted in transit (DTLS-SRTP)</div>
+      <div class="vcp-pop-foot">Encrypted in transit</div>
     </div>
 
     <div class="vcp-top" @click="togglePin">
