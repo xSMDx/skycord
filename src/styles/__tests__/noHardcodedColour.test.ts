@@ -45,13 +45,14 @@ const RULED: RuledSite[] = [
   { file: 'components/ui/ConnectionBanner.vue', selector: '.cb-retry:active', why: 'veil over a fixed coloured fill' },
 
   // Decorative gradient partners — violet in the group avatars, pink in two
-  // banners. Which hue (if any) replaces them is a design decision, not a
-  // mapping, so the sweep left them for the owner rather than guessing.
-  { file: 'components/modals/QuickSwitcherModal.vue', selector: '.qs-av-group', why: 'gradient partner: owner decision pending' },
-  { file: 'views/ChatApp.vue', selector: '.grp-av', why: 'gradient partner: owner decision pending' },
-  { file: 'views/ChatApp.vue', selector: '.grp-header-av', why: 'gradient partner: owner decision pending' },
-  { file: 'components/modals/SettingsModal.vue', selector: '.acc-banner-bg', why: 'gradient partner: owner decision pending' },
-  { file: 'views/AuthPage.vue', selector: '.b2', why: 'gradient partner: owner decision pending' },
+  // banners. They do not follow the accent, which a Material-You palette will
+  // show. Owner's call (2026-09-19): keep them as they are for now; making
+  // them follow the accent is later work, not part of this sweep.
+  { file: 'components/modals/QuickSwitcherModal.vue', selector: '.qs-av-group', why: 'gradient partner: kept for now, accent-following is later work' },
+  { file: 'views/ChatApp.vue', selector: '.grp-av', why: 'gradient partner: kept for now, accent-following is later work' },
+  { file: 'views/ChatApp.vue', selector: '.grp-header-av', why: 'gradient partner: kept for now, accent-following is later work' },
+  { file: 'components/modals/SettingsModal.vue', selector: '.acc-banner-bg', why: 'gradient partner: kept for now, accent-following is later work' },
+  { file: 'views/AuthPage.vue', selector: '.b2', why: 'gradient partner: kept for now, accent-following is later work' },
 
   // Presence belongs to slice 4, which decides every status colour at once.
   { file: 'views/ChatApp.vue', selector: '.up-status-dot', why: 'offline grey: slice 4 (presence)' },

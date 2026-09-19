@@ -194,8 +194,12 @@ labelled in `--text-strong`, which is near-black on the light themes.
 **One finding the board turned up:** on AMOLED, `--seam` is invisible, because
 that theme's floor, deep and chat surfaces are all `#000000` and a recessed
 hairline has nothing to recess into. Pre-existing rather than a regression (the
-literal it replaced was equally invisible there), and a one-line per-theme
-override would fix it if the owner wants panel edges on AMOLED.
+literal it replaced was equally invisible there). **Owner, 2026-09-19: AMOLED
+stays as it is** — no edges, by choice.
+
+**Also ruled 2026-09-19:** the five decorative gradient partners (violet in the
+group avatars, pink in two banners) stay as they are. Making them follow the
+accent is later work; the guard's ruled list names all five.
 
 **Not merged.** The branch waits on the owner's own walk through the running
 app, and on a final review once the weekly model limit lifts.
