@@ -133,7 +133,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   box-shadow: var(--shadow-sheet);
   /* The home indicator sits under the sheet's own bottom edge. */
   padding-bottom: env(safe-area-inset-bottom);
-  transition:transform .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out);
   touch-action: none;   /* the sheet owns vertical drag; the body re-enables it */
 }
 
@@ -154,8 +154,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 /* Enter/exit along the same path — it came from the bottom, it leaves there. */
-.sheet-enter-active .bs, .sheet-leave-active .bs { transition:transform .34s cubic-bezier(.32,.72,0,1) }
-.sheet-enter-active .bs-scrim, .sheet-leave-active .bs-scrim { transition: opacity var(--dur-3) var(--ease-out)}
+.sheet-enter-active .bs { transition: transform var(--dur-4) var(--ease-out) }
+.sheet-leave-active .bs { transition: transform var(--dur-exit) var(--ease-in) }
+.sheet-enter-active .bs-scrim { transition: opacity var(--dur-3) var(--ease-out) }
+.sheet-leave-active .bs-scrim { transition: opacity var(--dur-exit) var(--ease-in) }
 .sheet-enter-from .bs, .sheet-leave-to .bs { transform: translate3d(0, 100%, 0) }
 .sheet-enter-from .bs-scrim, .sheet-leave-to .bs-scrim { opacity: 0 }
 

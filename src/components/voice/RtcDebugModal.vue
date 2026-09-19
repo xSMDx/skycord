@@ -176,7 +176,7 @@ const lossPct = computed(() => outLossPct())
 .ov {
   position: fixed; inset: 0; background: var(--scrim);
   display: flex; align-items: center; justify-content: center; z-index: 1200;
-  animation: dbg-fade .15s ease;
+  animation: dbg-fade var(--dur-2) var(--ease-out);
 }
 @keyframes dbg-fade { from { opacity: 0 } to { opacity: 1 } }
 
@@ -185,7 +185,7 @@ const lossPct = computed(() => outLossPct())
   width: 940px; max-width: 96vw; height: 640px; max-height: 90vh;
   background: var(--bg-panel); border-radius: 12px; overflow: hidden;
   box-shadow: var(--shadow-lg);
-  animation: dbg-in .18s cubic-bezier(.4,0,.2,1);
+  animation: dbg-in var(--dur-4) var(--ease-out);
 }
 @keyframes dbg-in { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }
 

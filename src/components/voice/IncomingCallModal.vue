@@ -46,7 +46,7 @@ onBeforeUnmount(soundRingStop)
   position: fixed; inset: 0; z-index: 9700;
   display: flex; align-items: center; justify-content: center;
   background: var(--scrim);
-  animation: ic-fade .15s ease;
+  animation: ic-fade var(--dur-2) var(--ease-out);
 }
 @keyframes ic-fade { from { opacity: 0; } to { opacity: 1; } }
 
@@ -55,7 +55,7 @@ onBeforeUnmount(soundRingStop)
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px;
   box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; align-items: center;
-  animation: ic-pop .22s cubic-bezier(.34,1.56,.64,1);
+  animation: ic-pop var(--dur-4) cubic-bezier(.34,1.56,.64,1);
 }
 @keyframes ic-pop { from { opacity: 0; transform: scale(.9) translateY(10px); } to { opacity: 1; transform: none; } }
 
@@ -66,6 +66,7 @@ onBeforeUnmount(soundRingStop)
   border: 2px solid var(--accent);
   animation: ic-pulse 1.8s ease-out infinite;
 }
+/* Half the ring's period, so the two rings alternate: an offset, not a duration. */
 .ic-ring2 { animation-delay: .9s; }
 @keyframes ic-pulse {
   0%   { transform: scale(1);   opacity: .7; }

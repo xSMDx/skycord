@@ -410,6 +410,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 }
 
 .blob { position:absolute; border-radius: 50%; filter:blur(80px); pointer-events:none; animation:drift 12s ease-in-out infinite alternate; }
+/* Each blob starts its drift at its own point: offsets, not durations. */
 .b1 { width:480px;height:480px; background:rgba(var(--accent-rgb),.18); top:-100px; left:-100px; animation-delay:0s; }
 .b2 { width:380px;height:380px; background:rgba(235,69,158,.10); bottom:-60px; right:-60px; animation-delay:-4s; }
 .b3 { width:280px;height:280px; background:rgba(var(--green-rgb), .07);  top:55%; left:58%; animation-delay:-8s; }
@@ -432,7 +433,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .tabs { display:flex; position:relative; background:var(--bg-input); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
 .tab { flex:1; padding: 8px; border-radius: 6px; font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition: color var(--dur-2) var(--ease-out); }
 .tab.active { color: var(--text-strong); }
-.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:var(--bg-panel); border-radius: 6px; transition:transform .22s cubic-bezier(.4,0,.2,1); box-shadow:var(--shadow-xs); }
+.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:var(--bg-panel); border-radius: 6px; transition: transform var(--dur-2) var(--ease-inout); box-shadow:var(--shadow-xs); }
 .tab-slider.right { transform:translateX(100%); }
 
 .err-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--danger-rgb), .12); border:1px solid rgba(var(--danger-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--danger-text); font-size:13px; }

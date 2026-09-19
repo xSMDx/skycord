@@ -5345,7 +5345,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rvp-more{font-size:11px;font-weight:600;color:var(--text-3);margin-top: 6px;padding-left: 30px}
 /* Slides out of the rail rather than fading in place, so the panel reads as
    belonging to the icon the pointer is on. */
-.rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform .12s cubic-bezier(.32,.72,0,1)}
+.rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out)}
 .rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
 .rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
 .rvp-leave-to{opacity:0}
@@ -5749,7 +5749,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
      inventing a new one. */
   transform:translate3d(calc(var(--m, 0) * -28vw), 0, 0);
   opacity:calc(1 - (var(--m, 0) * 0.35));
-  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out), opacity var(--dur-4) var(--ease-out);
   z-index:1;
 }
 
@@ -5766,7 +5766,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
      the rail exactly. */
   transform:translate3d(calc(var(--m, 0) * -28vw), 0, 0);
   opacity:calc(1 - (var(--m, 0) * 0.35));
-  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out), opacity var(--dur-4) var(--ease-out);
   z-index:1;
 }
 
@@ -5775,7 +5775,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .chat{
   position:absolute;inset:0;
   transform:translate3d(calc((1 - var(--m, 0)) * 100%), 0, 0);
-  transition:transform .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out);
   z-index:2;
   /* A shadow along the leading edge separates the pushed screen from the list
      underneath, which is what makes the parallax legible. */
@@ -6115,7 +6115,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   box-shadow:var(--shadow-sheet);
   padding-bottom: env(safe-area-inset-bottom);
   transform:translate3d(0,0,0);
-  transition:transform .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out);
 }
 /* .closed is the desktop collapse (width:0). On mobile it has to mean
    "off the bottom" instead, or the sheet would still occupy the screen. */
@@ -6133,7 +6133,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .m-sheet-scrim{
   position:fixed;inset:0;z-index:955;
   background:var(--scrim);
-  animation:m-scrim-in .28s ease;
+  animation: m-scrim-in var(--dur-2) var(--ease-out);
 }
 @keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
 
@@ -6194,7 +6194,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .icon-btn.active{color:var(--accent-text);background:rgba(var(--accent-rgb),.15)}
 
 /* Pinned sidebar */
-.pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid var(--seam);animation:slide-in .18s cubic-bezier(.4,0,.2,1)}
+.pinned-sidebar{position:absolute;top:48px;right:0;width:320px;height:calc(100% - 48px);z-index:100;background:var(--bg-panel);border-left:1px solid var(--seam);animation:slide-in var(--dur-3) var(--ease-out)}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
@@ -6283,7 +6283,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   background: var(--bg-panel);
   border-top: 1px solid var(--seam);
   flex-shrink: 0;
-  animation: reply-slide-in .15s ease;
+  animation: reply-slide-in var(--dur-2) var(--ease-out);
 }
 @keyframes reply-slide-in {
   from { opacity: 0; transform: translateY(4px); }
@@ -6311,7 +6311,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 .reply-banner-close:hover { background: var(--hover-strong); color: var(--text-strong); }
 
-/* Jump-to-message highlight flash */
+/* Jump-to-message highlight flash. Its 1.2s is how long the highlight stays
+   readable, not a UI duration, so it stays a literal. */
 :global(.msg-flash) {
   animation: msg-flash-anim 1.2s ease;
 }

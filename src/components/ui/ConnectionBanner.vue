@@ -117,7 +117,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 /* Slides from the top edge and leaves the same way, so it reads as one object
    coming and going rather than two unrelated events. */
-.cb-enter-active, .cb-leave-active { transition:transform .26s cubic-bezier(.32,.72,0,1), opacity var(--dur-3) var(--ease-out); }
+.cb-enter-active { transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
+.cb-leave-active { transition: transform var(--dur-exit) var(--ease-in), opacity var(--dur-exit) var(--ease-in); }
 .cb-enter-from, .cb-leave-to { transform: translateY(-100%); opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {

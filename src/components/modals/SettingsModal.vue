@@ -1903,7 +1903,7 @@ img    { display: block; object-fit: cover; }
 .sm-modal.mobile .sm-content {
   position: absolute; inset: 0;
   width: 100%; padding-left: 0; padding-right: 0;
-  transition:transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1);
+  transition: transform var(--dur-4) var(--ease-out), opacity var(--dur-4) var(--ease-out);
 }
 .sm-modal.mobile .sm-nav     { padding-top: 0; z-index: 1; }
 /* Explicit background is required, not decorative. Side by side these panes sat

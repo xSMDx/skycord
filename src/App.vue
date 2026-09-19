@@ -166,6 +166,7 @@ onMounted(async () => {
   border-radius: 2px; overflow: hidden;
   margin-top: 4px;
 }
+/* A loading bar's fill time, not a transition: stays a literal (durationTokens.test.ts). */
 .splash-fill {
   height: 100%; background: var(--accent); border-radius: 2px;
   /* Exactly 3s to match the Promise timeout — animates from left edge to right */
