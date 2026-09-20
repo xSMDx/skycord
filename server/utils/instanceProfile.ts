@@ -85,7 +85,12 @@ const limit = (key: string, value: string | null, max: number, warnings: string[
 }
 
 export const classifyContact = (value: string): Contact => {
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { kind: 'email', value }
+  // A host is as likely to write "mailto:sam@example.com" as the bare address,
+  // and the prefix used to survive into the profile — where every consumer
+  // builds its own href and would have produced mailto:mailto:sam@example.com.
+  // Stripped once, here, so what we publish is always just the address.
+  const bare = value.replace(/^mailto:/i, '').trim()
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bare)) return { kind: 'email', value: bare }
   if (httpUrl(value)) return { kind: 'url', value }
   return { kind: 'text', value }
 }

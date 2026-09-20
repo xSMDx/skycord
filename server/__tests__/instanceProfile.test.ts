@@ -88,6 +88,12 @@ describe('classifyContact', () => {
   it('reads an email address as email', () => {
     expect(classifyContact('sam@example.com')).toEqual({ kind: 'email', value: 'sam@example.com' })
   })
+  it('strips a mailto: prefix rather than publishing it twice', () => {
+    expect(classifyContact('mailto:sam@example.com')).toEqual({ kind: 'email', value: 'sam@example.com' })
+    expect(classifyContact('MAILTO:Sam@Example.com')).toEqual({ kind: 'email', value: 'Sam@Example.com' })
+    // Not an address once the prefix is gone: keep what the host actually wrote.
+    expect(classifyContact('mailto:not an address')).toEqual({ kind: 'text', value: 'mailto:not an address' })
+  })
   it('reads an http(s) address as a link', () => {
     expect(classifyContact('https://example.com/contact')).toEqual({ kind: 'url', value: 'https://example.com/contact' })
   })
