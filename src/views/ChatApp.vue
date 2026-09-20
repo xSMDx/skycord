@@ -4564,7 +4564,7 @@ onBeforeUnmount(() => {
               <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
                 class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })"
                 @contextmenu.prevent.stop="openVoiceOccupantMenu($event, ch.id, o)">
-                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
+                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? 'var(--green-text)' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
                 <!-- Deafened implies muted, so only the stronger of the two is
                      shown: a row wearing both icons says the same thing twice
@@ -5528,12 +5528,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Folding a category is a class, not a v-if, so the rows keep their state.
    The height no longer animates: animating it laid out the whole channel list
    on every frame, which is the cost the motion rules exist to avoid (audit
-   finding 19). The rows fade instead, on the same timing as .ch-group-chev,
-   so the chevron and the rows still read as one motion. (The grid 0fr/1fr
-   trick is not an option either way: in this Chromium it settles on the wrong
-   endpoint, verified in isolation.) */
+   finding 19). The rows fade instead: opening on --dur-2, which is the
+   chevron's own timing, so the two read as one motion; closing on --dur-exit,
+   because a departure is quicker than an arrival, while the chevron keeps
+   --dur-2 in both directions. They no longer match on the way out, and that
+   is deliberate. (The grid 0fr/1fr trick is not an option either way: in this
+   Chromium it settles on the wrong endpoint, verified in isolation.) */
 .ch-fold{overflow:hidden;height:auto;transition: opacity var(--dur-2) var(--ease-out), height 0s}
-.ch-fold.folded{height:0;opacity:0;transition: opacity var(--dur-exit) var(--ease-in), height 0s var(--dur-exit)}
+/* pointer-events from the landing frame, as .sidebar.collapsed and
+   .members-panel.closed already do. The height snap is held back for the
+   length of the fade, so without this a folded group's rows stay full-height,
+   clickable and focusable for 140ms after they have visually gone. */
+.ch-fold.folded{height:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), height 0s var(--dur-exit)}
 
 /* Where the drag would land. min-height keeps the headerless uncategorised
    group hittable while it is empty — during a drag it is the only visible

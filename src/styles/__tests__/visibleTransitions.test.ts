@@ -38,6 +38,27 @@ const cssOf = (file: string): string => {
   return text.replace(/\/\*[\s\S]*?\*\//g, '')
 }
 
+/**
+ * The properties a transition value actually names, exactly.
+ *
+ * This used to be `declaration.includes(property)`, and a substring is not a
+ * name: `max-height` answered for `height`, `padding-top` for `padding`,
+ * `background-color` for `color`. In the one file whose whole subject is that
+ * a collapse must be accounted for, a leave-to that changed `height` while its
+ * leave-active transitioned only `max-height` passed.
+ */
+const namesIn = (value: string): Set<string> => {
+  const names = new Set<string>()
+  for (const item of value.split(/,(?![^(]*\))/)) {
+    for (const word of item.trim().split(/\s+/)) {
+      if (/^[a-z-]+$/.test(word) && !/^(ease|linear|step-start|step-end|normal|none|all|both|infinite|alternate|reverse|forwards|backwards|running|paused)$/.test(word)) {
+        names.add(word)
+      }
+    }
+  }
+  return names
+}
+
 /** Properties that do not belong in a transition at all — they lay out. */
 const LAYOUT = /^(width|height|min-width|min-height|max-width|max-height|padding(-[\w]+)?|margin(-[\w]+)?|top|right|bottom|left|inset|flex-basis|gap|row-gap|column-gap)$/
 /** Changed by a from/to class but never animated by anyone, by design. */
@@ -67,8 +88,9 @@ const misses = (): Miss[] => {
             .map(a => (/transition\s*:\s*([^;]+)/.exec(a[2]) ?? [, ''])[1]!.trim())
             .filter(Boolean).join(' | ')
           if (!declaration) continue   // no transition at all: nothing is claimed
+          const answered = namesIn(declaration)
           for (const property of new Set(changed)) {
-            if (declaration.includes(property)) continue
+            if (answered.has(property)) continue
             out.push({ file: rel(file), name, phase, property, declaration })
           }
         }
@@ -114,11 +136,18 @@ describe('a transition can actually be seen', () => {
         // "fill the parent", and reading it as a collapse flagged two rules
         // that were doing nothing of the kind.
         const SIZE = /^(width|height|max-width|max-height|min-width|min-height|padding(-[\w]+)?|margin(-[\w]+)?|gap|row-gap|column-gap|flex-basis)$/
-        const collapsed = [...body.matchAll(/([a-z-]+)\s*:\s*0(?:px|%|em|rem)?\s*[;}]?/g)]
+        // Anchored: `padding: 0 6px` and `margin: 0 auto` are layout, not a
+        // collapse, and an unanchored match read the first component of each
+        // as one. The file had already removed `inset: 0` for this reason.
+        const collapsed = [...body.matchAll(/([a-z-]+)\s*:\s*0(?:px|%|em|rem)?\s*(?=[;}]|$)/g)]
           .map(m => m[1]).filter(p => SIZE.test(p))
         if (!collapsed.length) continue
-        // The base: everything before the modifier or descendant.
-        const base = /^\s*(\.[\w-]+)(?:[.: ]|$)/.exec(rule[1].trim())?.[1]
+        // The LAST compound, not the first: `.ch-group.folded .ch-fold` is a
+        // rule about .ch-fold, and reading .ch-group as the base found a rule
+        // with no transition and skipped the whole thing — the identical
+        // defect, invisible.
+        const compounds = rule[1].trim().split(/\s+/).filter(Boolean)
+        const base = /^(\.[\w-]+)/.exec(compounds[compounds.length - 1] ?? '')?.[1]
         if (!base) continue
         const owner = rules.filter(r => r[1].trim() === base)
         const declaration = owner
@@ -140,7 +169,10 @@ describe('a transition can actually be seen', () => {
           if (!item) return false
           const times = item.trim().slice(property.length).trim()
             .split(/\s+/).filter(t => /^-?\d*\.?\d+m?s$/.test(t) || /^var\(--dur/.test(t))
-          return times.length >= 2 && !/^0m?s$/.test(times[1])
+          // Zero by VALUE, not by spelling: 0.0s, .0s and 0.00s are the same
+          // instant snap as 0s, and matching the literal text let them pass.
+          const isZeroTime = (t: string) => /^-?[\d.]+m?s$/.test(t) && Number(t.replace(/m?s$/, '')) === 0
+          return times.length >= 2 && !isZeroTime(times[1])
         }
         for (const property of new Set(collapsed))
           if (!scheduled(property))

@@ -44,9 +44,17 @@ const STAGE_LABEL: Record<string, string> = {
 //   signal-low    orange (>250ms) / blue while reconnecting
 //   signal-zero   red    (no route / failed)
 const GREEN = 'var(--green-text)', YELLOW = 'var(--warning-text)', RED = 'var(--danger-text)', BLUE = 'var(--accent)'
-// Amber covers both degraded bands. A fourth colour between amber and red
-// cannot clear AA on the dark themes without becoming the red: see the
-// commit that made this change.
+// Amber covers both degraded bands. The scale used to have four colours; the
+// orange between amber and red has to clear 4.6:1 on the dark themes, because
+// this value paints the LABEL as well as the icon, and lightening it that far
+// puts it at the same lightness as the lightened red — so lightness can no
+// longer separate the two, and the only thing left distinguishing them is hue
+// at nearly equal luminance, which is the pairing colour-blind readers lose
+// first. The step survives where it was already carried: the four signal
+// icons. (An earlier note here said the two were "the same colour to any eye"
+// on the strength of a 1.001:1 contrast ratio. That ratio compares luminance
+// only; the two differ by ΔE2000 ≈ 13, which is plainly visible. The
+// conclusion was right and the reason given for it was not.)
 const ORANGE = YELLOW
 const q = computed(() => {
   if (voice.connectStage === 'failed') return { icon: SignalZero, color: RED, label: 'Couldn’t connect' }

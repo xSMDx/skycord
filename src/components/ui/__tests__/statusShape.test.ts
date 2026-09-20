@@ -40,7 +40,12 @@ describe('status dots', () => {
   // actually removed — the others were statusColor[u.status], dotColor and
   // STATUS_COLORS[m.status]. A guard that only recognises the spelling its
   // author happened to type last is not a guard.
-  const PAINTS_A_STATUS = /(background|background-color|fill)\s*:\s*[^;{}\n]*\b(statusColor|dotColor|STATUS_COLORS|statusColour)\b/
+  // `color` belongs in this list, and its absence was the hole that mattered
+  // most: StatusDot itself paints with `:style="{ color: statusColor(status) }"`
+  // and `fill="currentColor"`, so the app's OWN idiom was the one spelling a
+  // hand-rolled dot could copy and pass. An earlier version of this test went
+  // further and pinned `color: statusColor(s)` as innocent.
+  const PAINTS_A_STATUS = /(background|background-color|fill|color)\s*:\s*[^;{}\n]*\b(statusColor|dotColor|STATUS_COLORS|statusColour)\b/
 
   it('are all drawn by StatusDot', () => {
     const offenders = walk(SRC)
@@ -59,7 +64,9 @@ describe('status dots', () => {
       'background-color: dotColor',
       'fill: STATUS_COLORS[m.status]',
     ]) expect(PAINTS_A_STATUS.test(spelling), spelling).toBe(true)
-    for (const innocent of ['background: var(--bg-panel)', 'color: statusColor(s)'])
+    // The app's own idiom, which only StatusDot.vue is allowed to use.
+    expect(PAINTS_A_STATUS.test(':style="{ color: statusColor(status) }"')).toBe(true)
+    for (const innocent of ['background: var(--bg-panel)', 'color: var(--text-1)', 'const statusColor = 1'])
       expect(PAINTS_A_STATUS.test(innocent), innocent).toBe(false)
   })
 })

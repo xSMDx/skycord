@@ -388,7 +388,15 @@
      surface we control. Pinned white, the knob measured 1.78:1 on light and
      2.10:1 on light-dim, under the 3:1 floor for a control's state, and the
      track itself sat at 1.60:1 against its own surface. The light override
-     below carries both to 3.60:1 and 3.11:1 at their worst. */
+     below carries the knob to 3.54:1 and the track's own edge to 3.04:1,
+     measured against all eight --bg-* surfaces of both light themes and
+     checked by semanticTokens.test.ts rather than stated here.
+
+     (The first attempt at that override said "3.60:1 and 3.11:1 at their
+     worst" and was measured over three surfaces, not eight — the same defect
+     this file had just been repaired for. Its real worst edge was 2.74:1, on
+     light-dim's --bg-floor. That is why the numbers are now derived by a
+     test: a worst case asserted in a comment is a worst case nobody rechecks.) */
   --toggle-off:  rgba(128, 132, 142, .5);
   --toggle-knob: #ffffff;
 
@@ -537,9 +545,10 @@ html.names-plain { --name-hover: var(--text-strong); }
   --grabber: rgba(0, 0, 0, .28);
 
   /* A white knob needs a darker track here: over these pale surfaces the
-     shared rgba(128,132,142,.5) left it at 1.78:1. Worst case now 3.60:1,
-     and the track reads 3.11:1 against its own surface. */
-  --toggle-off: rgba(79, 84, 94, .7);
+     shared rgba(128,132,142,.5) left it at 1.78:1, and the track itself at
+     1.60:1. Worst across all eight surfaces of both light themes: knob
+     3.54:1 (light --bg-chat), track edge 3.04:1 (light-dim --bg-floor). */
+  --toggle-off: rgba(30, 35, 45, .54);
 
   /* The skeleton's two greys are white-alpha, so on a pale surface they
      resolved to nothing: every loading placeholder was blank space with no
@@ -630,9 +639,10 @@ html.names-plain { --name-hover: var(--text-strong); }
   --grabber: rgba(0, 0, 0, .28);
 
   /* A white knob needs a darker track here: over these pale surfaces the
-     shared rgba(128,132,142,.5) left it at 1.78:1. Worst case now 3.60:1,
-     and the track reads 3.11:1 against its own surface. */
-  --toggle-off: rgba(79, 84, 94, .7);
+     shared rgba(128,132,142,.5) left it at 1.78:1, and the track itself at
+     1.60:1. Worst across all eight surfaces of both light themes: knob
+     3.54:1 (light --bg-chat), track edge 3.04:1 (light-dim --bg-floor). */
+  --toggle-off: rgba(30, 35, 45, .54);
 
   /* The skeleton's two greys are white-alpha, so on a pale surface they
      resolved to nothing: every loading placeholder was blank space with no

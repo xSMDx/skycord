@@ -50,6 +50,12 @@ const RULED: Ruling[] = [
     why: 'a canvas fill for the exported image, not a surface the app paints' },
   { file: 'composables/onAccent.ts',
     why: 'the accent derivation itself: these are the measured inputs a token is generated FROM' },
+  { file: 'components/settings/server/ServerProfilePage.vue',
+    why: 'the banner swatches a host picks FROM — the colours themselves are the choice, not a role' },
+  { file: 'composables/permissionMeta.ts',
+    why: "the role colours a server owner picks FROM, and which they then see on their own members' names" },
+  { file: 'composables/useAvatar.ts',
+    why: 'the palette a default avatar is generated from, keyed off the username: the same person keeps the same colour on every theme, which is the point' },
 ]
 
 const filesUnder = (dir: string): string[] =>
@@ -78,14 +84,19 @@ const scannable = (file: string): string => {
   return text.replace(/(^|[^:"'`\w])\/\/[^\n]*/g, (m, lead) => lead + blank(m.slice(lead.length)))
 }
 
-const LITERAL = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/g
+const LITERAL = /#[0-9a-fA-F]{3,8}\b|(?:rgba?|hsla?)\(\s*[\d.%\s,/]+\)/g
 
 /**
  * A literal only matters where something paints with it. A hex in an id, a
  * hash in a URL or a byte in a buffer is not a colour, and this guard has no
  * business failing on one.
+ *
+ * The word list carries the names this app gives to painted things, not just
+ * the CSS property names — a "ring", a "banner", a "pip" is a colour by any
+ * other name, and an independent review found three live role-colours hiding
+ * behind exactly those words.
  */
-const PAINTS = /(colou?r|background|bg|fill|stroke|shadow|border|tint|accent|gradient|swatch|preset|palette|theme|surface|ink)/i
+const PAINTS = /(colou?r|background|bg|fill|stroke|shadow|border|tint|accent|gradient|swatch|preset|palette|theme|surface|ink|ring|banner|dot|pip|veil|edge|glow|halo)/i
 
 interface Found { file: string; line: number; literal: string; context: string }
 
@@ -93,9 +104,15 @@ const found = (): Found[] => {
   const out: Found[] = []
   for (const file of filesUnder(SRC)) {
     const text = scannable(file)
+    const lines = text.split('\n')
     for (const m of text.matchAll(LITERAL)) {
       const line = text.slice(0, m.index!).split('\n').length
-      const context = (text.split('\n')[line - 1] ?? '').trim()
+      // The line, plus the one before and after. A literal is routinely a
+      // continuation of the attribute that names it, and a module constant's
+      // only clue is often its own name on the line above. One line of
+      // context each way was enough for every case the review found; widening
+      // further starts reading unrelated code.
+      const context = lines.slice(Math.max(0, line - 2), line + 1).join(' ').trim()
       if (!PAINTS.test(context)) continue
       out.push({ file: rel(file), line, literal: m[0], context: context.slice(0, 110) })
     }

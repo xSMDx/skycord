@@ -229,6 +229,51 @@ for (const token of ['text-3', 'text-faint']) {
   })
 }
 
+// The switch is two graphical objects stacked on a surface, so it needs the
+// 3:1 floor twice over: the knob has to read against the track, and the track
+// against whatever it sits on. Both were asserted in a comment once, measured
+// over three of the eight surfaces, and the stated worst case was 0.37 out.
+// A number in a comment is a number nobody rechecks.
+describe('tokens.css: the toggle track and knob clear the graphical 3:1 floor on every surface', () => {
+  const alpha = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/
+  /** An alpha track composited onto the surface it is drawn on. */
+  const rendered = (track: string, surface: string): string => {
+    const m = alpha.exec(track.trim())
+    if (!m) return track
+    const a = Number(m[4])
+    const chan = (i: number) =>
+      Math.round(Number(m[i + 1]) * a + parseInt(surface.slice(1 + i * 2, 3 + i * 2), 16) * (1 - a))
+    return '#' + [0, 1, 2].map(i => chan(i).toString(16).padStart(2, '0')).join('')
+  }
+
+  for (const theme of ALL_THEMES) {
+    it(`${theme}`, () => {
+      const block = blockFor(theme)
+      const knob = resolveHex(block, 'toggle-knob')
+      const trackRaw = (/--toggle-off\s*:\s*([^;]+);/.exec(block) ?? /--toggle-off\s*:\s*([^;]+);/.exec(rootBlock))![1].trim()
+      // The dark families have never cleared the edge half of this: the
+      // shared rgba(128,132,142,.5) measures 1.65:1 at its worst (stripe's
+      // --bg-chatbar-focus) and 2.15:1 at its best, so a dark switch is a shape
+      // you can only find because you know it is there. That is a real
+      // WCAG 1.4.11 gap, older than this file, and fixing it means visibly
+      // relighting every toggle on twelve themes — the owner's call, not a
+      // test's. It is a ratchet rather than a silence: the current worst is
+      // written down, so it can improve and cannot slip.
+      const DARK_EDGE_FLOOR = 1.65
+      const light = theme === 'light' || theme === 'light-dim'
+
+      for (const surface of SURFACES) {
+        const bg = resolveHex(block, surface)
+        const track = rendered(trackRaw, bg)
+        expect(ratio(knob, track), `--toggle-knob (${knob}) vs the off track (${track}) on ${theme}'s --${surface}`)
+          .toBeGreaterThanOrEqual(3)
+        expect(ratio(track, bg), `the off track (${track}) vs ${theme}'s --${surface} (${bg}) — the control's own edge`)
+          .toBeGreaterThanOrEqual(light ? 3 : DARK_EDGE_FLOOR)
+      }
+    })
+  }
+})
+
 describe('tokens.css: --icon clears the graphical 3:1 floor against every surface', () => {
   // Resting icons are graphical objects (WCAG 1.4.11), so 3:1 is their floor.
   // On the light themes --icon sits a step darker than --text-3 on purpose —
