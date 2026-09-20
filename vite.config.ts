@@ -1,6 +1,30 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+import license from 'rollup-plugin-license'
+import { existsSync, readFileSync, readdirSync } from 'fs'
+
+/**
+ * The licence a package really declares, read from the package's OWN root.
+ *
+ * rollup-plugin-license reads the package.json nearest the bundled file, and
+ * several packages ship a stub beside their ESM build holding only name,
+ * version and "type": "module". socket.io-client is one: it is MIT and ships
+ * its LICENSE, but the stub is what the bundler reaches, so the plugin saw a
+ * package declaring nothing and — correctly, on what it could see — failed the
+ * build. This looks one level up instead of excusing the package by name, so a
+ * dependency that genuinely declares no licence still stops the build.
+ */
+const declaredLicence = (name: string): { license: string; text: string } | null => {
+  const root = resolve(__dirname, 'node_modules', ...name.split('/'))
+  const manifest = resolve(root, 'package.json')
+  if (!existsSync(manifest)) return null
+  const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as { license?: string; licenses?: { type?: string }[] }
+  const id = pkg.license ?? pkg.licenses?.[0]?.type
+  if (!id) return null
+  const file = existsSync(root) && readdirSync(root).find(f => /^licen[cs]e(\.|$)/i.test(f))
+  return { license: id, text: file ? readFileSync(resolve(root, file), 'utf8') : '' }
+}
 
 /**
  * Point the browser's HMR socket at the port the dev server actually listens on.
@@ -28,7 +52,43 @@ export default defineConfig(({ mode }) => {
   const api = `http://127.0.0.1:${env.API_PORT || '3001'}`
 
   return {
-    plugins: [vue(), hmrFollowsPort()],
+    plugins: [
+      vue(),
+      hmrFollowsPort(),
+      // Every third-party package the bundler actually included, with its
+      // licence text, written beside the app for Settings › Legal to read.
+      // Build only; the build fails if a bundled package has a licence it
+      // cannot read, rather than shipping a list with a hole in it.
+      {
+        ...license({
+          thirdParty: {
+            includePrivate: false,
+            allow: {
+              test: dep => Boolean(dep.license) || Boolean(declaredLicence(dep.name ?? '')),
+              failOnUnlicensed: true,
+              failOnViolation: true,
+            },
+            output: {
+              file: resolve(__dirname, 'dist', 'licenses.json'),
+              template: deps => JSON.stringify(
+                deps
+                  .map(d => {
+                    const fallback = d.license && d.licenseText ? null : declaredLicence(d.name ?? '')
+                    return {
+                      name: d.name ?? '',
+                      version: d.version ?? '',
+                      license: d.license ?? fallback?.license ?? '',
+                      text: d.licenseText ?? fallback?.text ?? '',
+                    }
+                  })
+                  .sort((a, b) => a.name.localeCompare(b.name)),
+              ),
+            },
+          },
+        }),
+        apply: 'build' as const,
+      },
+    ],
     resolve: {
       alias: { '@': resolve(__dirname, 'src') }
     },
@@ -51,6 +111,7 @@ export default defineConfig(({ mode }) => {
         '/conversations': { target: api, changeOrigin: true },
         '/servers':       { target: api, changeOrigin: true },
         '/invites':       { target: api, changeOrigin: true },
+        '/instance':      { target: api, changeOrigin: true },
         '/gifs':          { target: api, changeOrigin: true },
         '/socket.io':     { target: api, changeOrigin: true, ws: true },
       }

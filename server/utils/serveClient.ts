@@ -24,7 +24,7 @@ import { join } from 'path'
  */
 export const API_PREFIXES = [
   '/auth', '/users', '/messages', '/stickers', '/conversations',
-  '/themes', '/voice', '/gifs', '/servers', '/invites',
+  '/themes', '/voice', '/gifs', '/servers', '/invites', '/instance',
   '/health', '/socket.io',
 ]
 

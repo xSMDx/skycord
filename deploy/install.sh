@@ -34,6 +34,21 @@ say()  { echo "$*"; }
 warn() { echo "install: $*" >&2; }
 ask()  { local prompt="$1" default="${2:-}" answer; printf '%s' "$prompt" > /dev/tty; read -r answer < /dev/tty; printf '%s' "${answer:-$default}"; }
 
+# A value written into .env so docker compose reads it back exactly: plain when
+# it is only safe characters; single-quoted (compose takes those literally)
+# unless it holds a single quote itself; otherwise double-quoted with compose's
+# escapes — backslash and double quote escaped, and $ doubled so it is not read
+# as a variable.
+env_quote() {
+  local v="$1"
+  if [[ "$v" =~ ^[A-Za-z0-9._:/@+=,-]*$ ]]; then printf '%s' "$v"; return; fi
+  if [[ "$v" != *\'* ]]; then printf "'%s'" "$v"; return; fi
+  v="${v//\\/\\\\}"
+  v="${v//\"/\\\"}"
+  v="${v//\$/\$\$}"
+  printf '"%s"' "$v"
+}
+
 usage() {
   cat <<'USAGE'
 Skycord installer
@@ -146,6 +161,21 @@ if [ -z "$ASSUME_YES" ]; then
   [ -n "$RESEND_API_KEY" ] && EMAIL_FROM="$(ask 'Sender address, e.g. Skycord <noreply@example.com>: ')"
 fi
 
+INSTANCE_NAME=""
+INSTANCE_OPERATOR=""
+INSTANCE_CONTACT=""
+TERMS_URL=""
+PRIVACY_URL=""
+if [ -z "$ASSUME_YES" ]; then
+  say ""
+  say "About this instance, shown to people who join. All optional; change later with: sudo skycord config"
+  INSTANCE_NAME="$(ask 'Name for this instance, shown to people who join (enter to use the address): ')"
+  INSTANCE_OPERATOR="$(ask 'Who runs it — a name people will recognise (enter to skip): ')"
+  INSTANCE_CONTACT="$(ask 'How people can reach you — an email or a link (enter to skip): ')"
+  TERMS_URL="$(ask 'Link to your terms of service (enter to skip): ')"
+  PRIVACY_URL="$(ask 'Link to your privacy policy (enter to skip): ')"
+fi
+
 # ── Secrets ──────────────────────────────────────────────────────────────────
 rand() { openssl rand -hex "$1" 2>/dev/null || head -c "$1" /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 
@@ -223,6 +253,8 @@ fi
 
 # ── Write it down ────────────────────────────────────────────────────────────
 mkdir -p "$SKYCORD_DIR/backups" "$SKYCORD_DIR/tls" "$SKYCORD_DIR/templates"
+# World-readable: the container reads these files as its own user.
+install -d -m 0755 "$SKYCORD_DIR/instance"
 chmod 700 "$SKYCORD_DIR"
 
 if [ -n "$TLS_CERT" ]; then
@@ -263,6 +295,12 @@ LIVEKIT_TCP_PORT=7881
 KLIPY_API_KEY=$KLIPY_API_KEY
 RESEND_API_KEY=$RESEND_API_KEY
 EMAIL_FROM=$EMAIL_FROM
+
+INSTANCE_NAME=$(env_quote "$INSTANCE_NAME")
+INSTANCE_OPERATOR=$(env_quote "$INSTANCE_OPERATOR")
+INSTANCE_CONTACT=$(env_quote "$INSTANCE_CONTACT")
+TERMS_URL=$(env_quote "$TERMS_URL")
+PRIVACY_URL=$(env_quote "$PRIVACY_URL")
 
 # true only behind Cloudflare with the origin firewalled to its addresses.
 # Anywhere else this header can be forged, and a session would show a made-up
