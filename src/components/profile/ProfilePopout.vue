@@ -411,7 +411,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-dur:hover { background: var(--hover-strong); color: var(--text-1); }
 @media (prefers-reduced-motion: reduce) { .pp-chev-btn svg { transition:none; } }
 .pp-row.danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), .12); }
-.pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; background: var(--bg-panel); }
+/* No ring and no background: the cut-outs show the row, which is what keeps
+   them right when .pp-row:hover lightens it. */
+.pp-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
 .pp-chev { margin-left: auto; color: var(--icon); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }

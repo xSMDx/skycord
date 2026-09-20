@@ -4700,7 +4700,7 @@ onBeforeUnmount(() => {
               >
                 <div class="f-av">
                   <Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" />
-                  <StatusDot class="f-dot" :status="livePresence(f.id, f.status)" />
+                  <StatusDot class="f-dot" :status="livePresence(f.id, f.status)" :named="false" />
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ f.displayName||f.username }}</span>
@@ -4754,7 +4754,7 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
                  @contextmenu="openUserMenu($event, f)">
-              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><StatusDot class="an-dot" :status="livePresence(f.id, f.status)" /></div>
+              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><StatusDot class="an-dot" :status="livePresence(f.id, f.status)" :named="false" /></div>
               <div class="an-info">
                 <span class="an-name">{{ f.displayName||f.username }}</span>
                 <span class="an-sub">{{ statusLabel(livePresence(f.id, f.status)) }}</span>
@@ -5670,7 +5670,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius: 50%;overflow:hidden}
 .up-av-img img{width:100%;height:100%;object-fit:cover;border-radius: 50%}
-.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:var(--bg-deep);border-radius: 50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
+.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:var(--bg-deep);border-radius: 50%;border:2px solid var(--bg-deep);transition: color var(--dur-2) var(--ease-out)}
 .up-info{display:flex;flex-direction:column;gap: 1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
