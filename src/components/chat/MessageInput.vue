@@ -523,7 +523,8 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .reply-strip-close:hover { background: var(--hover-strong); color: var(--text-strong); }
-.reply-strip-enter-active, .reply-strip-leave-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+.reply-strip-enter-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+.reply-strip-leave-active { transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in); }
 .reply-strip-enter-from, .reply-strip-leave-to { opacity: 0; transform: translateY(6px); }
 
 .input-wrapper {

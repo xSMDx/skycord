@@ -5290,7 +5290,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (pointer: coarse){.dsc-join{min-height:44px;padding-inline:20px}}
 
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:36px;top:50%;transform:translateY(-50%) scaleY(0);transition: transform var(--dur-2) var(--ease-out)}
+.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 2px 2px 0;height:36px;top:50%;transform:translateY(-50%) scaleY(0);transition: transform var(--dur-2) var(--ease-out)}
 /* Scaled from the full 36px rather than grown, so the pip never makes the
    browser lay out the rail: 18px on hover is half, active is all of it. */
 .ri:hover .ri-pip{transform:translateY(-50%) scaleY(.5)}.ri.active .ri-pip{transform:translateY(-50%) scaleY(1)}
@@ -5346,7 +5346,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Slides out of the rail rather than fading in place, so the panel reads as
    belonging to the icon the pointer is on. */
 .rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out)}
-.rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
+.rvp-leave-active{transition: opacity var(--dur-exit) var(--ease-in)}
 .rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
 .rvp-leave-to{opacity:0}
 @media (prefers-reduced-motion: reduce){
@@ -5359,8 +5359,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:var(--text-on-green)}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
-.sidebar.collapsed{width:0;opacity:0;pointer-events:none}
+.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out), width 0s;overflow:hidden}
+.sidebar.collapsed{width:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), width 0s var(--dur-exit)}
 
 .sb-search{padding: 8px 8px 4px;flex-shrink:0}
 .sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:var(--bg-input);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
@@ -5475,7 +5475,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* @everyone toast */
 .app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:var(--shadow-md)}
-.toast-pop-enter-active,.toast-pop-leave-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
+.toast-pop-enter-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
+.toast-pop-leave-active{transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
 
@@ -5531,8 +5532,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    so the chevron and the rows still read as one motion. (The grid 0fr/1fr
    trick is not an option either way: in this Chromium it settles on the wrong
    endpoint, verified in isolation.) */
-.ch-fold{overflow:hidden;height:auto;transition: opacity var(--dur-2) var(--ease-out)}
-.ch-fold.folded{height:0;opacity:0}
+.ch-fold{overflow:hidden;height:auto;transition: opacity var(--dur-2) var(--ease-out), height 0s}
+.ch-fold.folded{height:0;opacity:0;transition: opacity var(--dur-exit) var(--ease-in), height 0s var(--dur-exit)}
 
 /* Where the drag would land. min-height keeps the headerless uncategorised
    group hittable while it is empty — during a drag it is the only visible
@@ -6133,7 +6134,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .m-sheet-scrim{
   position:fixed;inset:0;z-index:955;
   background:var(--scrim);
-  animation: m-scrim-in var(--dur-2) var(--ease-out);
+  animation: m-scrim-in var(--dur-3) var(--ease-out);
 }
 @keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
 
@@ -6198,8 +6199,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
-.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
-.members-panel.closed{width:0;opacity:0;pointer-events:none}
+.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: opacity var(--dur-3) var(--ease-out), width 0s;overflow:hidden}
+.members-panel.closed{width:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), width 0s var(--dur-exit)}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid var(--seam);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
 .mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}

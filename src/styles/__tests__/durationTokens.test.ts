@@ -38,18 +38,25 @@ const items = (value: string): string[] => {
 }
 const isLoop = (value: string) => /\binfinite\b/.test(value)
 
+// A zero time is the absence of animation, not a choice of one: it says "snap",
+// and where it carries a delay it says "snap, then". The delay itself is still
+// read, so `height 0s .14s` fails and `height 0s var(--dur-exit)` passes.
+const isZero = (item: string) => {
+  const times = [...item.matchAll(/(?:^|[\s,(])(-?\d*\.?\d+)(ms|s)\b/g)]
+  return times.length > 0 && times.every(t => Number(t[1]) === 0)
+}
+
+// The first member of each stagger carries 0s, which isZero exempts by kind:
+// no offset is not an offset. Only the members that actually wait are named.
 const STAGGER = 'an offset between the members of one repeating motion, not a duration'
 const ALLOWED: { file: string; selector: string; why: string }[] = [
-  { file: 'components/chat/TypingIndicator.vue', selector: '.d1', why: STAGGER },
   { file: 'components/chat/TypingIndicator.vue', selector: '.d2', why: STAGGER },
   { file: 'components/chat/TypingIndicator.vue', selector: '.d3', why: STAGGER },
   { file: 'components/voice/CallStage.vue', selector: '.s-wave2', why: STAGGER },
   { file: 'components/voice/CallStage.vue', selector: '.g-wave2', why: STAGGER },
   { file: 'components/voice/IncomingCallModal.vue', selector: '.ic-ring2', why: STAGGER },
-  { file: 'views/AuthPage.vue', selector: '.b1', why: STAGGER },
   { file: 'views/AuthPage.vue', selector: '.b2', why: STAGGER },
   { file: 'views/AuthPage.vue', selector: '.b3', why: STAGGER },
-  { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(1))', why: 'the bars rise one after another: offsets, not durations' },
   { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(2))', why: 'the bars rise one after another: offsets, not durations' },
   { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(3))', why: 'the bars rise one after another: offsets, not durations' },
   { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(4))', why: 'the bars rise one after another: offsets, not durations' },
@@ -105,7 +112,7 @@ const offenders = (): Offender[] => {
         if (/^(from|to|\d+%)/.test(selector)) continue
         for (const decl of rule[2].matchAll(/([a-z-]+)\s*:\s*([^;]+)/g)) {
           if (!TIMED.test(decl[1])) continue
-          if (!items(decl[2]).some(item => LITERAL_TIME.test(item) && !isLoop(item))) continue
+          if (!items(decl[2]).some(item => LITERAL_TIME.test(item) && !isLoop(item) && !isZero(item))) continue
           const at = line + text.slice(0, rule.index! + rule[1].length + 1 + decl.index!).split('\n').length - 1
           found.push({ file: rel(file), line: at, selector, declaration: `${decl[1]}: ${decl[2].trim()}` })
         }
@@ -141,6 +148,78 @@ describe('the two things this guard used to be unable to see', () => {
 
   it('splits on top-level commas only', () => {
     expect(items('a 1s cubic-bezier(.1,.2,.3,.4), b 2s')).toHaveLength(2)
+  })
+})
+
+describe('a departure is timed as a departure', () => {
+  // The motion slice's rule: an arrival decelerates into place over its own
+  // duration, a departure accelerates away over --dur-exit. Eight rules were
+  // left on the entrance timing — six of them by sharing one selector list
+  // with the enter they belong to, which is how it went unnoticed for a slice
+  // whose whole subject was motion. A rule nothing checks is a preference.
+  //
+  // prefers-reduced-motion is exempt by kind. There the fade IS the motion,
+  // and giving it a direction it does not have would be inventing one.
+  const REDUCED = /@media[^{]*prefers-reduced-motion[^{]*\{/g
+
+  const withoutReducedMotion = (text: string) => {
+    let out = text
+    for (const m of [...text.matchAll(REDUCED)]) {
+      // Blank from the @media to its matching close brace, keeping newlines.
+      let depth = 0
+      let i = m.index! + m[0].length - 1
+      for (; i < text.length; i++) {
+        if (text[i] === '{') depth++
+        else if (text[i] === '}' && --depth === 0) break
+      }
+      const region = text.slice(m.index!, i + 1)
+      out = out.replace(region, region.replace(/[^\n]/g, ' '))
+    }
+    return out
+  }
+
+  // A departure whose duration is deliberate, not inherited. --dur-exit is
+  // tuned for something fading a few pixels; a bottom sheet travels its whole
+  // height, and the enter it answers is --dur-4, so this is already the
+  // shorter of the pair. The easing is right; only the duration is named here.
+  const RULED_DEPARTURES = [
+    { file: 'components/modals/ModalBase.vue', selector: '.mb-leave-active .modal.sheet',
+      why: 'a full-height slide: --dur-exit is tuned for a small fade, and this is already shorter than its --dur-4 enter' },
+  ]
+
+  const offenders: string[] = []
+  for (const file of filesUnder(SRC)) {
+    for (const { text, line } of cssOf(file)) {
+      const scoped = withoutReducedMotion(text)
+      for (const rule of scoped.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = rule[1].trim().replace(/\s+/g, ' ')
+        if (!/-leave-(active|to)\b/.test(selector)) continue
+        for (const decl of rule[2].matchAll(/(transition[\w-]*)\s*:\s*([^;]+)/g)) {
+          const wrong = items(decl[2]).filter(item => /var\(--ease-out\)/.test(item) || /var\(--dur-[1-4]\)/.test(item))
+          if (!wrong.length) continue
+          const at = line + scoped.slice(0, rule.index!).split('\n').length - 1
+          if (RULED_DEPARTURES.some(r => r.file === rel(file) && r.selector === selector)) continue
+          offenders.push(`${rel(file)}:${at}  ${selector}  ${decl[2].trim()}`)
+        }
+      }
+    }
+  }
+
+  it('reads leave rules at all', () => {
+    const seen = filesUnder(SRC).flatMap(f => cssOf(f))
+      .filter(b => /-leave-active/.test(b.text))
+    expect(seen.length).toBeGreaterThan(5)
+  })
+
+  it('has no departure on an entrance duration or easing', () => {
+    expect(offenders).toEqual([])
+  })
+
+  it('has no ruled departure that no longer exists', () => {
+    const live = filesUnder(SRC).flatMap(f => cssOf(f).map(b => ({ file: rel(f), text: b.text })))
+    const dead = RULED_DEPARTURES.filter(r =>
+      !live.some(l => l.file === r.file && l.text.includes(r.selector.split(' ')[0])))
+    expect(dead.map(r => r.file + '  ' + r.selector)).toEqual([])
   })
 })
 

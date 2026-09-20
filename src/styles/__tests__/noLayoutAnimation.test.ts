@@ -56,6 +56,15 @@ const topLevel = (value: string): string[] => {
 const namedProperties = (item: string): string[] =>
   item.split(/\s+/).filter(Boolean).filter(word => !/^(var\(|cubic-bezier\(|steps\(|-?[\d.]|ease|linear|step-)/.test(word))
 
+/** A shorthand item whose every time is zero animates nothing — it schedules
+ *  when a snap happens. `width 0s var(--dur-exit)` keeps the panel at full
+ *  width for the length of its fade and then drops it, which is the opposite
+ *  of laying out on every frame. */
+const isSnap = (item: string) => {
+  const times = [...item.matchAll(/(?:^|[\s,(])(-?\d*\.?\d+)(ms|s)\b/g)]
+  return times.length > 0 && times.every(t => Number(t[1]) === 0)
+}
+
 const offenders = (): string[] => {
   const found: string[] = []
   const at = (file: string, offset: number, text: string, index: number) =>
@@ -64,7 +73,7 @@ const offenders = (): string[] => {
   for (const file of filesUnder(SRC)) {
     for (const { text, offset } of cssOf(file)) {
       for (const m of text.matchAll(/(?:^|[;{\s])(transition(?:-property)?)\s*:\s*([^;}]+)/g)) {
-        const layout = topLevel(m[2]).flatMap(namedProperties).filter(p => LAYOUT.test(p))
+        const layout = topLevel(m[2]).filter(item => !isSnap(item)).flatMap(namedProperties).filter(p => LAYOUT.test(p))
         if (!layout.length) continue
         found.push(`${at(file, offset, text, m.index)}  ${[...new Set(layout)].join(', ')}`)
       }
@@ -100,6 +109,11 @@ describe('no animation on a layout property', () => {
     expect(namedProperties('height var(--dur-2) var(--ease-out)')).toContain('height')
     expect(namedProperties('transform var(--dur-2) cubic-bezier(.4,0,.6,1)')).not.toContain('cubic-bezier(.4,0,.6,1)')
     expect(LAYOUT.test('gap')).toBe(true)
+    // A zero-time item is a scheduled snap, not an animation; anything else is.
+    expect(isSnap('width 0s var(--dur-exit)')).toBe(true)
+    expect(isSnap('width 0s')).toBe(true)
+    expect(isSnap('width var(--dur-3) var(--ease-out)')).toBe(false)
+    expect(isSnap('height .2s')).toBe(false)
     // Every @keyframes in src is found and none of them animates layout.
     const frames = filesUnder(SRC).flatMap(f => cssOf(f))
       .flatMap(b => [...b.text.matchAll(/@keyframes\s+([\w-]+)/g)].map(m => m[1]))

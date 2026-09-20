@@ -64,9 +64,12 @@ defineProps<{ typers: string[] }>()
 }
 
 /* Slide up / down transition */
-.ti-slide-enter-active,
-.ti-slide-leave-active {
+.ti-slide-enter-active {
   transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+  overflow: hidden;
+}
+.ti-slide-leave-active {
+  transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in);
   overflow: hidden;
 }
 .ti-slide-enter-from,

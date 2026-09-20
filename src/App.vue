@@ -194,6 +194,6 @@ onMounted(async () => {
    and it means that even if this node somehow outlives its transition it can
    never block a click. Belt and braces for the bug described on
    SPLASH_FADE_MS. */
-.splash-fade-leave-active { transition: opacity var(--dur-4) var(--ease-out); pointer-events: none; }
+.splash-fade-leave-active { transition: opacity var(--dur-exit) var(--ease-in); pointer-events: none; }
 .splash-fade-leave-to     { opacity: 0; }
 </style>

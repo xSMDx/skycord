@@ -529,9 +529,11 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .switch button { color:var(--accent); font-weight:600; }
 .switch button:hover { color:var(--accent-text); text-decoration:underline; }
 
-.slide-enter-active,.slide-leave-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
+.slide-enter-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
+.slide-leave-active{transition:opacity var(--dur-exit) var(--ease-in),transform var(--dur-exit) var(--ease-in)}
 .slide-enter-from{opacity:0;transform:translateX(18px)}
 .slide-leave-to{opacity:0;transform:translateX(-18px)}
-.drop-enter-active,.drop-leave-active{transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out)}
+.drop-enter-active{transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out)}
+.drop-leave-active{transition:opacity var(--dur-exit) var(--ease-in),transform var(--dur-exit) var(--ease-in)}
 .drop-enter-from,.drop-leave-to{opacity:0;transform:translateY(-6px)}
 </style>

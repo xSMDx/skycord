@@ -350,6 +350,11 @@
      paint a near-black icon onto whatever the member happened to upload.
      The veils were seven hand-picked alphas (.35 to .7); two steps are
      enough — resting, and hovered or badge-weight. */
+  /* The hairline around a piece of media, as --media-veil is the wash over
+     one: a flag, a theme swatch, a banner. Same reason it does not follow the
+     theme — --seam separates two surfaces the app draws, and neither side of
+     THIS edge is one. */
+  --media-edge:        rgba(0, 0, 0, .28);
   --media-veil:        rgba(0, 0, 0, .45);
   --media-veil-strong: rgba(0, 0, 0, .65);
   --on-media:          #ffffff;
