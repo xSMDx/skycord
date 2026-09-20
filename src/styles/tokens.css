@@ -338,6 +338,17 @@
   --track:   rgba(255, 255, 255, .10);
   --grabber: rgba(255, 255, 255, .22);
 
+  /* Skeleton placeholders. A raised tone, not a darker one: content arriving
+     should read as laid ON the surface rather than cut out of it.
+
+     Declared HERE, with the rest of the white-alpha family, and not beside the
+     motion tokens where they used to sit: that block is a second :root AFTER
+     the light blocks, and :root and [data-theme="light"] carry the same
+     specificity, so the later one wins. A light override written against a
+     token declared down there silently does nothing. */
+  --sk-base:  rgba(255, 255, 255, .055);
+  --sk-sheen: rgba(255, 255, 255, .11);
+
   /* ── Over arbitrary media ───────────────────────────────────────────────
      A chip, badge or icon drawn on top of a photo, a video or a
      user-chosen colour — the pencil on an avatar, the GIF badge on a
@@ -791,10 +802,6 @@ html.names-plain { --name-hover: var(--text-strong); }
   --ease-in:    cubic-bezier(.4, 0, 1, 1);     /* leaving, decisively        */
   --ease-inout: cubic-bezier(.4, 0, .2, 1);    /* on-screen state changes    */
 
-  /* Skeleton placeholders. A raised tone, not a darker one: content arriving
-     should read as laid ON the surface rather than cut out of it. */
-  --sk-base:  rgba(255, 255, 255, .055);
-  --sk-sheen: rgba(255, 255, 255, .11);
 }
 
 /* The in-app switch (Settings -> Appearance -> Motion) sets this attribute.

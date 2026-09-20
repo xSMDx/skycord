@@ -106,6 +106,17 @@ const blockNamed = (selector: string): string => {
   const re = new RegExp(selector.replace(/[[\]"]/g, m => '\\' + m) + '\\s*\\{([\\s\\S]*?)\\n\\}', 'g')
   return [...tokensCss.matchAll(re)].map(m => m[1]).join('\n')
 }
+
+/** Where a token is last declared under a selector, as a character offset. */
+const lastDeclaredAt = (selector: string, name: string): number => {
+  const re = new RegExp(selector.replace(/[[\]"]/g, m => '\\' + m) + '\\s*\\{([\\s\\S]*?)\\n\\}', 'g')
+  let at = -1
+  for (const block of tokensCss.matchAll(re)) {
+    const inner = new RegExp(name + '\\s*:').exec(block[1])
+    if (inner) at = block.index! + block[0].indexOf(block[1]) + inner.index!
+  }
+  return at
+}
 const declared = (text: string): Map<string, string> =>
   new Map([...text.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(m => [m[1], m[2].trim()]))
 
@@ -148,4 +159,24 @@ describe('every white-alpha token is answered by both light blocks', () => {
     const dead = Object.keys(RULED).filter(name => !whites.includes(name))
     expect(dead).toEqual([])
   })
+
+  // Declaring the override is not the same as the override applying.
+  // :root and [data-theme="light"] have identical specificity (0,1,0), so the
+  // one written LATER in the file wins. tokens.css has three :root blocks, and
+  // two tokens were declared in the last of them — after both light blocks —
+  // so the light values added for them resolved to nothing in a real browser
+  // while this suite was green. Order is part of the override.
+  for (const theme of ['light', 'light-dim']) {
+    it(`${theme}'s overrides are written after the :root they override`, () => {
+      const block = declared(blockNamed(`[data-theme="${theme}"]`))
+      const losing = [...block.keys()]
+        .filter(name => {
+          const root = lastDeclaredAt(':root', name)
+          const light = lastDeclaredAt(`[data-theme="${theme}"]`, name)
+          return root !== -1 && light !== -1 && root > light
+        })
+      expect(losing, `these are declared again under :root further down the file, so :root wins and the ${theme} value never applies`)
+        .toEqual([])
+    })
+  }
 })
