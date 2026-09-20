@@ -64,12 +64,18 @@ defineProps<{ typers: string[] }>()
 }
 
 /* Slide up / down transition */
+/* The row's height and padding SNAP — they are layout, and animating them
+   would lay out the message list on every frame. What is scheduled is WHEN
+   they snap: on the way out, after the fade, or the box collapses on the
+   first frame and the fade is never seen. Same shape as .ch-fold in ChatApp.
+   transform is not listed: nothing here changes it. */
 .ti-slide-enter-active {
-  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+  transition: opacity var(--dur-2) var(--ease-out), max-height 0s, padding-top 0s;
   overflow: hidden;
 }
 .ti-slide-leave-active {
-  transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in);
+  transition: opacity var(--dur-exit) var(--ease-in),
+              max-height 0s var(--dur-exit), padding-top 0s var(--dur-exit);
   overflow: hidden;
 }
 .ti-slide-enter-from,
