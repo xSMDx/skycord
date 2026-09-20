@@ -4,6 +4,10 @@ import { User, Lock, Eye, EyeOff, CircleAlert, LoaderCircle, Check, Hash, Mail, 
 import { useAuth } from '@/composables/useAuth'
 import { offlineMessage } from '@/composables/offlineMessage'
 import SkycordIcon from '@/components/SkycordIcon.vue'
+import LegalDocModal from '@/components/legal/LegalDocModal.vue'
+import { useInstance } from '@/composables/useInstance'
+import { consentSentence } from '@/composables/consentSentence'
+import { LEGAL_TITLES, type DocumentEntry, type LegalEntry } from '@/composables/legalDocs'
 
 /**
  * `reset` is reached from the emailed link, not from the tabs — it is the only
@@ -17,6 +21,24 @@ const serverError = ref('')
 
 const { login, register, loading, serverDown, probeServer,
         forgotPassword, resetPassword, resetAvailable } = useAuth()
+
+// Who runs this instance and what they publish. One request, shared with
+// Settings; nothing is shown until it answers.
+const { profile: instance } = useInstance()
+const consent = computed(() => consentSentence(instance.value))
+const legalLinks = computed(() => instance.value?.legal ?? [])
+const openDoc = ref<DocumentEntry | null>(null)
+
+/** A link opens in a new tab; a document opens in the reader. */
+const legalAttrs = (entry: LegalEntry) =>
+  entry.source === 'url'
+    ? { href: entry.href, target: '_blank', rel: 'noopener noreferrer' }
+    : { href: entry.href }
+const openLegal = (event: MouseEvent, entry: LegalEntry) => {
+  if (entry.source !== 'document') return
+  event.preventDefault()
+  openDoc.value = entry
+}
 
 // import.meta.env.DEV never changes during a session, so a plain constant is
 // enough — Vite inlines it at build time, so a member on a production image
@@ -289,7 +311,12 @@ const submitRegister = async () => {
             <span v-if="re.confirm" class="ferr">{{ re.confirm }}</span>
           </div>
 
-          <p class="terms">By registering you agree to our <a href="#">Terms</a> &amp; <a href="#">Privacy Policy</a></p>
+          <p v-if="consent.length" class="terms">
+            <template v-for="(segment, i) in consent" :key="i">
+              <a v-if="segment.link" v-bind="legalAttrs(segment.link)" @click="openLegal($event, segment.link)">{{ segment.text }}</a>
+              <template v-else>{{ segment.text }}</template>
+            </template>
+          </p>
 
           <button class="submit" :class="{busy: loading}" :disabled="loading" @click="submitRegister">
             <template v-if="!loading">Create Account</template>
@@ -389,18 +416,47 @@ const submitRegister = async () => {
         </div>
       </transition>
     </div>
+
+    <!-- Every document the instance publishes, reachable before sign-in: an
+         imprint, where one is required, must be reachable from every page. -->
+    <nav v-if="legalLinks.length" class="legal-foot" aria-label="Legal">
+      <template v-for="(entry, i) in legalLinks" :key="entry.kind">
+        <span v-if="i > 0" class="legal-dot" aria-hidden="true">·</span>
+        <a v-bind="legalAttrs(entry)" @click="openLegal($event, entry)">{{ LEGAL_TITLES[entry.kind] }}</a>
+      </template>
+    </nav>
+
+    <LegalDocModal
+      v-if="openDoc"
+      :entry="openDoc"
+      :instance-name="instance?.name ?? ''"
+      @close="openDoc = null"
+    />
   </div>
 </template>
 
 <style scoped>
 *,*::before,*::after{box-sizing:border-box;margin: 0;padding: 0}
+
+.legal-foot {
+  position: relative; z-index: 1;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px;
+  max-width: 488px; margin-top: 14px; padding: 0 12px;
+  font-size: 12px; color: var(--text-faint);
+}
+.legal-foot a { color: inherit; text-decoration: none; }
+.legal-foot a:hover { color: var(--text-2); text-decoration: underline; }
+.legal-dot { color: var(--text-faint); }
 button{background:none;border:none;cursor:pointer;color:inherit;font:inherit}
 input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .shell {
   width:100vw; min-height:100vh; min-height:100dvh;
   background:var(--bg-floor);
-  display:flex; align-items:center; justify-content:center;
+  /* Column, not row: the legal footer is a second child and must sit UNDER
+     the card, not beside it. The card still centres — both children are
+     centred as a group. */
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
   /* Safe-area padding so the card clears the notch and home indicator once
      viewport-fit=cover lets us paint into them. */
   padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
