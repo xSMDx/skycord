@@ -42,8 +42,16 @@ const loadLottie = () => (loading ??= Promise.all([
 // element itself once it's mounted, the same way a real currentColor would.
 const resolveColor = (raw: string): string => {
   if (raw !== 'currentColor') return raw
-  if (!lottieEl.value) return '#dcddde' // sensible dark-theme fallback pre-mount
-  const computed = getComputedStyle(lottieEl.value).color
+  // Before mount there is no element to read, but there is always a document,
+  // and --text-1 is what currentColor would inherit anyway. Read it rather
+  // than guess: the guess was a dark-theme value, which drew a near-white
+  // mark on the light themes for the frame before mount.
+  const from = lottieEl.value ?? (typeof document === 'undefined' ? null : document.documentElement)
+  if (!from) return '#dcddde'
+  const style = getComputedStyle(from)
+  const computed = lottieEl.value ? style.color : (style.getPropertyValue('--text-1').trim() || style.color)
+  const hex = /^#([0-9a-f]{6})$/i.exec(computed)
+  if (hex) return computed
   const match = computed.match(/\d+/g)
   if (!match) return '#dcddde'
   const [r, g, b] = match.map(Number)

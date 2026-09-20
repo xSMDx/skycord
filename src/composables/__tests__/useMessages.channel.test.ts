@@ -5,7 +5,7 @@ import type { Message } from '@/types'
 const msg = (id: number, dbId: string, content = 'hi'): Message => ({
   id, dbId, author: 'Ada', authorId: 'u1', content,
   time: '10:30', timestamp: 1_755_000_000_000,
-  avatar: '', avatarColor: '#5865f2', reactions: [],
+  avatar: '', reactions: [],
 })
 
 describe('useMessages — channel store', () => {

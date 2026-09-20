@@ -4,7 +4,7 @@ import type { Message } from '@/types'
 
 const msg = (dbId: string, content = dbId): Message => ({
   id: parseInt(dbId.slice(-6), 16), dbId, author: 'a', authorId: 'u1', content,
-  time: '', timestamp: 0, avatar: '', avatarColor: '#5865f2', reactions: [],
+  time: '', timestamp: 0, avatar: '', reactions: [],
 })
 const ids = (list: Message[]) => list.map(m => m.dbId)
 

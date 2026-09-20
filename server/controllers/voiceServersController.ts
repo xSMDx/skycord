@@ -16,6 +16,7 @@ import { loadServer, requireOwner } from './serversController'
 import { seal, hint } from '../utils/secretBox'
 import { instanceVoiceServers, isInstanceVoiceId } from '../config/instanceVoice'
 import { requirePerm } from '../utils/access'
+import { wellFormed } from '../utils/wellFormed'
 
 /** Never includes apiSecret. The field is `select: false` as a second line of
  *  defence, but the shape is the first. */
@@ -120,7 +121,7 @@ export const createVoiceServer = async (req: Request, res: Response, next: NextF
     const server = await loadServer(req, res); if (!server) return
     if (!await requirePerm(server, req.user!.sub, 'ManageServer', res)) return
 
-    const name      = String(req.body?.name ?? '').trim()
+    const name      = wellFormed(String(req.body?.name ?? '').trim())
     const apiKey    = String(req.body?.apiKey ?? '').trim()
     const apiSecret = String(req.body?.apiSecret ?? '')
     const url       = validUrl(String(req.body?.url ?? '').trim())
@@ -168,7 +169,7 @@ export const updateVoiceServer = async (req: Request, res: Response, next: NextF
     if (!row) { res.status(404).json({ message: 'Voice server not found' }); return }
 
     if (req.body?.name !== undefined) {
-      const n = String(req.body.name).trim()
+      const n = wellFormed(String(req.body.name).trim())
       if (!n || n.length > 40) { res.status(400).json({ message: 'Give the server a name' }); return }
       row.name = n
     }

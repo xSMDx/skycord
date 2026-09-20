@@ -3,6 +3,7 @@ import { Message } from '../models/Message'
 import { User } from '../models/User'
 import mongoose from 'mongoose'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
+import { wellFormed } from '../utils/wellFormed'
 
 // Make a stable conversation ID from two user IDs (sorted so A↔B = B↔A)
 export const dmConvId = (a: string, b: string) =>
@@ -175,7 +176,7 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
-      content:        content.trim(),
+      content:        wellFormed(content.trim()),
       replyToIds:     rawReplyIds.filter(id => validReplyIds.has(id)),
     })
 
@@ -215,7 +216,7 @@ export const editMessageContent = async (req: Request, res: Response, next: Next
       res.status(403).json({ message: 'Cannot edit another user\'s message' }); return
     }
 
-    msg.content = content.trim()
+    msg.content = wellFormed(content.trim())
     msg.edited  = true
     await msg.save()
     res.json({ message: msg })

@@ -3606,7 +3606,7 @@ const keyOf = (m: Message) => (m as any).dbId || String(m.id)
 const stubFromPreview = (p: { id: string; author: string; content: string }): Message => ({
   id: parseInt(p.id.slice(-8), 16) || Date.now(),
   dbId: p.id, author: p.author, authorId: '', content: p.content,
-  time: '', timestamp: 0, avatar: avatarFor(p.author), avatarColor: '#5865f2', reactions: [],
+  time: '', timestamp: 0, avatar: avatarFor(p.author), reactions: [],
 } as Message)
 
 const buildReplyGraph = (held: Message): ReplyGraph => {
@@ -4564,7 +4564,7 @@ onBeforeUnmount(() => {
               <button v-for="o in voiceOccupants(ch.id)" :key="ch.id + ':' + o.id"
                 class="vc-occ" @click.stop="openProfilePopout($event, o.id, { id: o.id, displayName: o.name, avatar: o.avatar })"
                 @contextmenu.prevent.stop="openVoiceOccupantMenu($event, ch.id, o)">
-                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? '#23a55a' : null" /></span>
+                <span class="vc-occ-av"><Avatar :src="o.avatar" :alt="o.name" :crop="o.avatarCrop" :ring="o.speaking ? 'var(--green-text)' : null" /></span>
                 <span class="vc-occ-name">{{ o.name }}</span>
                 <!-- Deafened implies muted, so only the stronger of the two is
                      shown: a row wearing both icons says the same thing twice
@@ -4668,7 +4668,7 @@ onBeforeUnmount(() => {
           <div class="friends-list">
             <!-- Loading -->
             <div v-if="apiLoading" class="f-loading">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5865f2" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
               Loading…
             </div>
 
@@ -4700,7 +4700,7 @@ onBeforeUnmount(() => {
               >
                 <div class="f-av">
                   <Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" />
-                  <StatusDot class="f-dot" :status="livePresence(f.id, f.status)" />
+                  <StatusDot class="f-dot" :status="livePresence(f.id, f.status)" :named="false" />
                 </div>
                 <div class="f-info">
                   <span class="f-name">{{ f.displayName||f.username }}</span>
@@ -4754,7 +4754,7 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
                  @contextmenu="openUserMenu($event, f)">
-              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><StatusDot class="an-dot" :status="livePresence(f.id, f.status)" /></div>
+              <div class="an-av"><Avatar :src="avatarFor(f.username,f.avatar)" :alt="f.displayName" :crop="(f as any).avatarCrop" /><StatusDot class="an-dot" :status="livePresence(f.id, f.status)" :named="false" /></div>
               <div class="an-info">
                 <span class="an-name">{{ f.displayName||f.username }}</span>
                 <span class="an-sub">{{ statusLabel(livePresence(f.id, f.status)) }}</span>
@@ -5290,7 +5290,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @media (pointer: coarse){.dsc-join{min-height:44px;padding-inline:20px}}
 
 .ri{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:68px;height:54px;flex-shrink:0}
-.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 4px 4px 0;height:36px;top:50%;transform:translateY(-50%) scaleY(0);transition: transform var(--dur-2) var(--ease-out)}
+.ri-pip{position:absolute;left:0;width:4px;background:var(--text-strong);border-radius: 0 2px 2px 0;height:36px;top:50%;transform:translateY(-50%) scaleY(0);transition: transform var(--dur-2) var(--ease-out)}
 /* Scaled from the full 36px rather than grown, so the pip never makes the
    browser lay out the rail: 18px on hover is half, active is all of it. */
 .ri:hover .ri-pip{transform:translateY(-50%) scaleY(.5)}.ri.active .ri-pip{transform:translateY(-50%) scaleY(1)}
@@ -5346,7 +5346,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Slides out of the rail rather than fading in place, so the panel reads as
    belonging to the icon the pointer is on. */
 .rvp-enter-active{transition: opacity var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out)}
-.rvp-leave-active{transition: opacity var(--dur-1) var(--ease-out)}
+.rvp-leave-active{transition: opacity var(--dur-exit) var(--ease-in)}
 .rvp-enter-from{opacity:0;transform:translateX(-4px) scale(.97)}
 .rvp-leave-to{opacity:0}
 @media (prefers-reduced-motion: reduce){
@@ -5359,8 +5359,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:var(--text-on-green)}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
-.sidebar.collapsed{width:0;opacity:0;pointer-events:none}
+.sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out), width 0s;overflow:hidden}
+.sidebar.collapsed{width:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), width 0s var(--dur-exit)}
 
 .sb-search{padding: 8px 8px 4px;flex-shrink:0}
 .sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:var(--bg-input);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
@@ -5475,7 +5475,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* @everyone toast */
 .app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:var(--shadow-md)}
-.toast-pop-enter-active,.toast-pop-leave-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
+.toast-pop-enter-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
+.toast-pop-leave-active{transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
 
@@ -5527,12 +5528,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Folding a category is a class, not a v-if, so the rows keep their state.
    The height no longer animates: animating it laid out the whole channel list
    on every frame, which is the cost the motion rules exist to avoid (audit
-   finding 19). The rows fade instead, on the same timing as .ch-group-chev,
-   so the chevron and the rows still read as one motion. (The grid 0fr/1fr
-   trick is not an option either way: in this Chromium it settles on the wrong
-   endpoint, verified in isolation.) */
-.ch-fold{overflow:hidden;height:auto;transition: opacity var(--dur-2) var(--ease-out)}
-.ch-fold.folded{height:0;opacity:0}
+   finding 19). The rows fade instead: opening on --dur-2, which is the
+   chevron's own timing, so the two read as one motion; closing on --dur-exit,
+   because a departure is quicker than an arrival, while the chevron keeps
+   --dur-2 in both directions. They no longer match on the way out, and that
+   is deliberate. (The grid 0fr/1fr trick is not an option either way: in this
+   Chromium it settles on the wrong endpoint, verified in isolation.) */
+.ch-fold{overflow:hidden;height:auto;transition: opacity var(--dur-2) var(--ease-out), height 0s}
+/* pointer-events from the landing frame, as .sidebar.collapsed and
+   .members-panel.closed already do. The height snap is held back for the
+   length of the fade, so without this a folded group's rows stay full-height,
+   clickable and focusable for 140ms after they have visually gone. */
+.ch-fold.folded{height:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), height 0s var(--dur-exit)}
 
 /* Where the drag would land. min-height keeps the headerless uncategorised
    group hittable while it is empty — during a drag it is the only visible
@@ -5670,7 +5677,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius: 50%;overflow:hidden}
 .up-av-img img{width:100%;height:100%;object-fit:cover;border-radius: 50%}
-.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:var(--bg-deep);border-radius: 50%;border:2px solid var(--bg-deep);transition: background var(--dur-2) var(--ease-out)}
+.up-status-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:var(--bg-deep);border-radius: 50%;border:2px solid var(--bg-deep);transition: color var(--dur-2) var(--ease-out)}
 .up-info{display:flex;flex-direction:column;gap: 1px;min-width:0}
 .up-name{font-size:13px;font-weight:700;color: var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
 .up-tag{font-size:10px;color:var(--text-faint);line-height:1}
@@ -6133,7 +6140,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .m-sheet-scrim{
   position:fixed;inset:0;z-index:955;
   background:var(--scrim);
-  animation: m-scrim-in var(--dur-2) var(--ease-out);
+  animation: m-scrim-in var(--dur-3) var(--ease-out);
 }
 @keyframes m-scrim-in{from{opacity:0}to{opacity:1}}
 
@@ -6198,8 +6205,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* Members panel */
-.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: opacity var(--dur-3) var(--ease-out);overflow:hidden}
-.members-panel.closed{width:0;opacity:0;pointer-events:none}
+.members-panel{width:234px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--seam);display:flex;flex-direction:column;transition: opacity var(--dur-3) var(--ease-out), width 0s;overflow:hidden}
+.members-panel.closed{width:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), width 0s var(--dur-exit)}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid var(--seam);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
 .mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}

@@ -182,7 +182,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .qs-av { position: relative; width: 32px; height: 32px; flex-shrink: 0; }
 .qs-av img { border-radius: 50%; width: 100%; height: 100%; object-fit: cover; }
 .qs-av-group { border-radius: 50%; overflow: hidden; background: linear-gradient(135deg,var(--accent),#7b68ee); display: flex; align-items: center; justify-content: center; color: var(--text-on-accent); }
-.qs-dot { position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-chat); }
+.qs-dot { background: var(--bg-panel); position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-panel); }
 .qs-info { flex: 1; min-width: 0; }
 .qs-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qs-sub  { display: block; font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

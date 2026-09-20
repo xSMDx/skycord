@@ -77,6 +77,6 @@ watch(() => props.code, async code => {
   object-fit: cover;
   /* Several flags are mostly white and vanish on the panel. A hairline inset
      ring rather than a border, so it costs no layout. */
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .28);
+  box-shadow: inset 0 0 0 1px var(--media-edge);
 }
 </style>

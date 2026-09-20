@@ -13,6 +13,7 @@ import { loadAccess, channelBits, has, requirePerm, requireBits, validateOverwri
 import { parseOverwrites } from '../permissions'
 import { emitChannelEvent, refreshChannelAccess } from '../sockets/visibility'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
+import { wellFormed } from '../utils/wellFormed'
 
 /**
  * Serializes callbacks per server id, within this process only. Guards every
@@ -138,7 +139,7 @@ export const createChannel = async (req: Request, res: Response, next: NextFunct
     const server = await loadServer(req, res); if (!server) return
     if (!await requirePerm(server, req.user!.sub, 'ManageChannels', res)) return
 
-    const name = String(req.body.name ?? '').trim()
+    const name = wellFormed(String(req.body.name ?? '').trim())
     const type = req.body.type === 'voice' ? 'voice' : req.body.type === 'text' ? 'text' : null
     if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
     if (!type) { res.status(400).json({ message: 'A channel is either text or voice' }); return }
@@ -244,7 +245,7 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     // alongside a valid category must not leave the category moved.
     let name: string | undefined
     if (wantsName) {
-      name = String(req.body.name ?? '').trim()
+      name = wellFormed(String(req.body.name ?? '').trim())
       if (!name || name.length > 100) { res.status(400).json({ message: 'Give the channel a name' }); return }
     }
 
@@ -268,7 +269,7 @@ export const updateChannel = async (req: Request, res: Response, next: NextFunct
     if (req.body.topic !== undefined) {
       // Empty string clears it. Stored as null so "no topic" is one value
       // rather than two the header would have to test for separately.
-      const t = req.body.topic === null ? null : String(req.body.topic).slice(0, 1024).trim()
+      const t = req.body.topic === null ? null : wellFormed(String(req.body.topic).slice(0, 1024).trim())
       overview.topic = t ? t : null
     }
     if (req.body.slowmode  !== undefined) overview.slowmode  = clamp(req.body.slowmode,  0, MAX_SLOWMODE,   0)
@@ -516,7 +517,7 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       authorName:       sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:     sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
-      content:          content.trim(),
+      content:          wellFormed(content.trim()),
       mentionsEveryone,
       // Persist only the ids that survived the channel-scoped validation
       // above (replyTo.map), never the raw request-body ids. Storing `ids`
