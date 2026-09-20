@@ -15,6 +15,8 @@ import voiceRoutes    from './routes/voice'
 import gifsRoutes     from './routes/gifs'
 import serversRoutes  from './routes/servers'
 import invitesRoutes  from './routes/invites'
+import { instanceRouter } from './routes/instance'
+import { instanceDir } from './utils/instanceProfile'
 import { errorHandler, notFound } from './middleware/errorHandler'
 import { apiLimit } from './middleware/rateLimit'
 import { healthBody, healthStatus } from './utils/health'
@@ -69,6 +71,10 @@ export const createApp = () => {
     res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()')
     next()
   })
+
+  // Public and readable from any origin, so mounted BEFORE the single-origin
+  // CORS policy below. The router answers everything under /instance itself.
+  app.use('/instance', instanceRouter({ dir: instanceDir(process.env, process.cwd()) }))
 
   app.use(cors({
     origin:      config.cors.clientOrigin,

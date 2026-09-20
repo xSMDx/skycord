@@ -34,6 +34,8 @@ import { THEME_OPTS, STUDIO_OPTS, type ThemeOpt } from '@/composables/themePrese
 // Async: DevicesPage pulls in the flag stylesheet, which nobody should pay for
 // unless they open this page.
 const DevicesPage = defineAsyncComponent(() => import('@/components/settings/DevicesPage.vue'))
+import AboutInstancePage from '@/components/settings/AboutInstancePage.vue'
+import LegalPage from '@/components/settings/LegalPage.vue'
 
 const emit = defineEmits<{ close: [] }>()
 const { user: authUser, logout, authFetch, updateUser } = useAuth()
@@ -476,6 +478,15 @@ const navSections: NavSection[] = [
       { id: 'keybinds',   label: 'Keybinds'      },
     ]
   },
+  {
+    // No label: this is about the instance, not the app's settings, and it
+    // sits apart from both groups above it (owner, 2026-09-14).
+    label: '',
+    items: [
+      { id: 'about', label: 'About this instance' },
+      { id: 'legal', label: 'Legal' },
+    ]
+  },
 ]
 
 // Sub-sections per page — clicking one scrolls .sm-content to the matching
@@ -688,7 +699,7 @@ const handleSelfRevoked = () => handleLogout()
               <X :size="22" :stroke-width="1.5" />
             </button>
           </div>
-          <div v-for="section in navSections" :key="section.label" class="sm-nav-section">
+          <div v-for="(section, si) in navSections" :key="si" class="sm-nav-section">
             <div v-if="section.label" class="sm-nav-label">{{ section.label }}</div>
             <template v-for="item in section.items" :key="item.id">
               <button
@@ -1305,6 +1316,16 @@ const handleSelfRevoked = () => handleLogout()
                 </span>
               </div>
             </div>
+          </template>
+
+          <!-- ── About this instance ── -->
+          <template v-else-if="page === 'about'">
+            <AboutInstancePage />
+          </template>
+
+          <!-- ── Legal ── -->
+          <template v-else-if="page === 'legal'">
+            <LegalPage />
           </template>
 
           <!-- See measureTail(): lets the last section reach the top of the

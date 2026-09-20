@@ -144,7 +144,7 @@ server {
     }
 
     # The API. Every one of these is a path the Node server owns.
-    location ~ ^/(auth|users|messages|conversations|servers|invites|gifs|stickers|themes|voice|health) {
+    location ~ ^/(auth|users|messages|conversations|servers|invites|instance|gifs|stickers|themes|voice|health) {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host              $host;

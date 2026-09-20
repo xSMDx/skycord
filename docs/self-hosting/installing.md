@@ -59,6 +59,42 @@ sudo skycord config      # change settings, then apply them
 sudo skycord backup      # back up the database now
 ```
 
+## Your instance's profile and legal pages
+
+People who join see who runs your instance and how to reach you — on the
+sign-up page, and in **Settings › About this instance** and **Settings ›
+Legal**. The installer asks for the name, who runs it, a contact, and links to
+your terms and privacy policy; everything else is set in `.env` with
+`sudo skycord config`:
+
+| Variable | What it is |
+|---|---|
+| `INSTANCE_NAME` | The name people see (64 characters) |
+| `INSTANCE_DESCRIPTION` | A sentence or two about it (300) |
+| `INSTANCE_OPERATOR` | Who runs it (100) |
+| `INSTANCE_CONTACT` | An email address, a link, or any short text (200) |
+| `TERMS_URL`, `PRIVACY_URL`, `GUIDELINES_URL`, `COOKIES_URL`, `COPYRIGHT_URL`, `IMPRINT_URL` | Your legal documents, as links |
+| `SOURCE_URL` | Only if you have changed Skycord's code: where your version's source is |
+
+**Documents as files.** Any legal document can instead be a Markdown file in
+`/opt/skycord/instance/`: `terms.md`, `privacy.md`, `guidelines.md`,
+`cookies.md`, `copyright.md`, `imprint.md`, up to 256 KB each. Skycord shows
+them inside the app. A link wins if you set both. Replacing a file takes effect
+within a minute; no restart needed.
+
+**An icon.** `icon.png`, `icon.webp` or `icon.jpg` in the same folder, up to
+512 KB. SVG is not accepted.
+
+**The source code.** Skycord is licensed under the GNU AGPL v3, which means
+everyone using your instance is entitled to the source of the version you run.
+Settings › Legal links to it for you. If you run Skycord unchanged, the link to
+the upstream release is correct and there is nothing to do. If you change the
+code, publish your version and set `SOURCE_URL` to it.
+
+Problems with any of these are reported once when the server starts
+(`sudo skycord logs`), and never stop it: a bad link is ignored, an over-long
+name is shortened, an oversized file is skipped.
+
 ## Updating
 
 ```bash

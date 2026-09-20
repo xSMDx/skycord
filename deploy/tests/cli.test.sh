@@ -143,6 +143,35 @@ is  "-f follows"                 "$(cmd_logs -f skycord)" "compose logs --tail 1
 is  "--tail sets how much"       "$(cmd_logs --tail 50 skycord)" "compose logs --tail 50 skycord"
 no_ "rejects an unknown flag"    logs_rejects
 
+echo "instance profile"
+# The installer is not sourced whole — it would try to install things. Its
+# quoting helper is lifted out and run on its own.
+eval "$(sed -n '/^env_quote()/,/^}/p' "$ROOT/deploy/install.sh")"
+is "a plain value stays plain"        "$(env_quote 'https://example.com/terms')" "https://example.com/terms"
+is "an empty value stays empty"       "$(env_quote '')"                          ""
+is "a space is single-quoted"         "$(env_quote 'Sky Den')"                   "'Sky Den'"
+is "a # is quoted, not a comment"     "$(env_quote 'Den #1')"                    "'Den #1'"
+is "a \$ is kept literal"             "$(env_quote 'a$b')"                       "'a\$b'"
+is "an apostrophe double-quotes"      "$(env_quote "Sam's Place")"               "\"Sam's Place\""
+is "and escapes \$, \" and \\ inside" "$(env_quote "it's \$5 \"now\" \\o/")"     "\"it's \$\$5 \\\"now\\\" \\\\o/\""
+
+for var in INSTANCE_NAME INSTANCE_DESCRIPTION INSTANCE_OPERATOR INSTANCE_CONTACT \
+           TERMS_URL PRIVACY_URL GUIDELINES_URL COOKIES_URL COPYRIGHT_URL IMPRINT_URL SOURCE_URL; do
+  has "compose forwards $var" "$ROOT/deploy/compose.yaml" "$var: \${$var:-}"
+  has ".env.example documents $var" "$ROOT/.env.example" "^$var="
+done
+has "compose points the app at the folder" "$ROOT/deploy/compose.yaml" 'INSTANCE_DIR: /app/instance'
+has "compose mounts it read-only"          "$ROOT/deploy/compose.yaml" './instance:/app/instance:ro'
+has "the installer creates it"             "$ROOT/deploy/install.sh"   'SKYCORD_DIR/instance'
+has "nginx proxies /instance"              "$ROOT/docs/self-hosting/networking.md" 'invites|instance|'
+
+# The five questions sit inside the block --yes skips.
+guarded="$(awk '/^if \[ -z "\$ASSUME_YES" \]; then$/{g=1} g{print} /^fi$/{g=0}' "$ROOT/deploy/install.sh")"
+for q in 'Name for this instance' 'Who runs it' 'How people can reach you' \
+         'Link to your terms of service' 'Link to your privacy policy'; do
+  if grep -q "$q" <<<"$guarded"; then ok "--yes skips: $q"; else bad "--yes skips: $q" "not inside an ASSUME_YES block"; fi
+done
+
 echo ""
 if [ "$FAILED" = "0" ]; then echo "all good"; else echo "FAILURES"; fi
 exit "$FAILED"
