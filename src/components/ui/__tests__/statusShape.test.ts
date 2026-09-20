@@ -49,7 +49,12 @@ describe('status dots', () => {
 
   it('are all drawn by StatusDot', () => {
     const offenders = walk(SRC)
-      .filter(f => !f.endsWith(['components', 'ui', 'StatusDot.vue'].join('\\')))
+      // Compared through relative(), which normalises the separator. Joining
+      // the path with a literal backslash matched on Windows and never on
+      // Linux, so CI saw StatusDot.vue flag itself the moment `color` joined
+      // the pattern — green on the machine it was written on, red on the one
+      // that matters.
+      .filter(f => relative(f) !== 'components/ui/StatusDot.vue')
       .filter(f => PAINTS_A_STATUS.test(readFileSync(f, 'utf8')))
       .map(relative)
     expect(offenders).toEqual([])
