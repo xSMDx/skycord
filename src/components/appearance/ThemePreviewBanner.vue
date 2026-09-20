@@ -42,6 +42,7 @@ const { themePreview, keepPreview, revertPreview } = useAppearance()
 .tpb-btn.primary { color: var(--text-on-accent); background: var(--accent); }
 .tpb-btn.primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
 
-.tpb-slide-enter-active, .tpb-slide-leave-active { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+.tpb-slide-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+.tpb-slide-leave-active { transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in); }
 .tpb-slide-enter-from, .tpb-slide-leave-to { opacity: 0; transform: translate(-50%, 16px); }
 </style>

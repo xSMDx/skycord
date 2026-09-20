@@ -103,7 +103,7 @@ const style = computed(() => ({ left: `${pos.value.left}px`, top: `${pos.value.t
 /* Rises slightly toward the control it belongs to, so the motion points at the
    thing being described rather than appearing from nowhere. */
 .tip-enter-active { transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
-.tip-leave-active { transition: opacity var(--dur-1) var(--ease-out); }
+.tip-leave-active { transition: opacity var(--dur-exit) var(--ease-in); }
 .tip-enter-from { opacity: 0; transform: translateY(3px) scale(.97); }
 .tip-leave-to   { opacity: 0; }
 

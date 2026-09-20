@@ -8,6 +8,7 @@ import {
   parseBits, serializeBits, resolve, has, canManageRole,
 } from '../permissions'
 import { refreshChannelAccess } from '../sockets/visibility'
+import { wellFormed } from '../utils/wellFormed'
 
 /**
  * Roles: the first thing in this codebase to authorise on something other than
@@ -105,7 +106,7 @@ export const createRole = async (req: Request, res: Response, next: NextFunction
       res.status(409).json({ message: `A server can have at most ${MAX_ROLES} roles` }); return
     }
 
-    const name = String(req.body.name ?? '').trim() || 'new role'
+    const name = wellFormed(String(req.body.name ?? '').trim()) || 'new role'
     if (name.length > MAX_ROLE_NAME) { res.status(400).json({ message: 'That name is too long' }); return }
 
     // A new role starts from @everyone's set — never from nothing, which is a
@@ -160,7 +161,7 @@ export const updateRole = async (req: Request, res: Response, next: NextFunction
       // @everyone is the floor everything else sits on; renaming it would make
       // every mention and every permission table read as something it is not.
       if (role.isEveryone) { res.status(400).json({ message: '@everyone cannot be renamed' }); return }
-      const name = String(req.body.name).trim()
+      const name = wellFormed(String(req.body.name).trim())
       if (!name || name.length > MAX_ROLE_NAME) { res.status(400).json({ message: 'Give the role a name' }); return }
       role.name = name
     }

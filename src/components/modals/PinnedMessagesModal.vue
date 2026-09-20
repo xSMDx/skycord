@@ -14,7 +14,7 @@ const pinned = computed(() => props.messages.filter(m => m.pinned))
 <template>
   <div class="pinned">
     <div class="pinned-header">
-      <Pin :size="16" :stroke-width="2.25" style="color:#f0a500" />
+      <Pin :size="16" :stroke-width="2.25" style="color:var(--warning)" />
       <span>Pinned Messages</span>
       <button class="pinned-close" aria-label="Close" @click="emit('close')">
         <X :size="16" :stroke-width="1.5" />
@@ -27,7 +27,7 @@ const pinned = computed(() => props.messages.filter(m => m.pinned))
           <div class="pinned-empty-icon">📌</div>
           <p>This conversation doesn't have any pinned messages… yet.</p>
           <div class="pinned-tip">
-            <span style="color:#5865f2;font-weight:700">PRO TIP:</span>
+            <span style="color:var(--accent-text);font-weight:700">PRO TIP:</span>
             You can pin a message from its context menu.
           </div>
         </div>

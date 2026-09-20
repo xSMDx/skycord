@@ -61,7 +61,10 @@ const onAvatar = () => {
   else if (props.avatarOpens) emit('openProfile')
 }
 
-const DEFAULT_BANNER = '#1e1f22'
+/** The surface a card with no banner shows. A token, not the dark value
+ *  written out: this is a surface the app draws, and it has to follow the
+ *  theme like every other one. */
+const DEFAULT_BANNER = 'var(--bg-input)'
 
 const name    = computed(() => props.displayName || props.username)
 const avatarSrc = computed(() => avatarFor(props.username, props.avatar ?? null))

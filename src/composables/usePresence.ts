@@ -6,7 +6,7 @@
  * apply, and holds the raw choice locally so the picker can show "Invisible"
  * ticked while everyone else is being told you're offline.
  */
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { getSocket } from './useSocket'
 
 export type ChosenStatus = 'online' | 'idle' | 'dnd' | 'invisible'
@@ -271,6 +271,3 @@ const LABELS: Record<string, string> = {
 export const statusColor = (s: string | null | undefined) => COLORS[s ?? ''] ?? COLORS.offline
 export const statusLabel = (s: string | null | undefined) => LABELS[s ?? ''] ?? LABELS.offline
 
-/** Your own dot: shows the choice, so invisible reads as invisible to you. */
-export const selfStatusColor = computed(() => statusColor(chosenStatus.value))
-export const selfStatusLabel = computed(() => statusLabel(chosenStatus.value))

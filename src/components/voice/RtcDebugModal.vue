@@ -94,7 +94,7 @@ const lossPct = computed(() => outLossPct())
             <div class="dbg-grid">
               <Sparkline label="Available Outgoing Bitrate" :data="rtc.series.availableOutgoing"
                          :value="fmtBitrate(rtc.transport.availableOutgoingBitrate)" :fmt-tick="kbps" />
-              <Sparkline label="Ping" :data="rtc.series.ping" :value="fmtMs(rtc.transport.ping)" color="#5865f2" />
+              <Sparkline label="Ping" :data="rtc.series.ping" :value="fmtMs(rtc.transport.ping)" color="var(--accent)" />
             </div>
             <div class="dbg-rows">
               <div><span>Local Address</span><strong>{{ rtc.transport.localAddress ?? '—' }}</strong></div>
@@ -136,7 +136,7 @@ const lossPct = computed(() => outLossPct())
             <div class="dbg-grid">
               <Sparkline label="Bitrate" :data="rtc.series.outBitrate" :value="fmtBitrate(rtc.out.bitrate)" :fmt-tick="kbps" />
               <Sparkline label="Bitrate (Target)" :data="rtc.series.outTargetBitrate" :value="fmtBitrate(rtc.out.targetBitrate)" :fmt-tick="kbps" />
-              <Sparkline label="Audio Level" :data="rtc.series.outAudioLevel" :max="1" color="#23a55a"
+              <Sparkline label="Audio Level" :data="rtc.series.outAudioLevel" :max="1" color="var(--green-text)"
                          :value="rtc.out.audioLevel === null ? '—' : rtc.out.audioLevel.toFixed(3)"
                          :fmt-tick="v => v.toFixed(1)" />
               <Sparkline label="Packets Sent /s" :data="rtc.series.outPacketsSent" :value="fmtNum(last(rtc.series.outPacketsSent))" />

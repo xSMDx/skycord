@@ -544,8 +544,11 @@ const onBarLeave = (el: Element) => {
   background: var(--bg-floor); box-shadow: var(--shadow-md);
 }
 .pm-bar-text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-1); }
-.pm-bar-enter-active, .pm-bar-leave-active {
+.pm-bar-enter-active {
   transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+.pm-bar-leave-active {
+  transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in);
 }
 .pm-bar-enter-from, .pm-bar-leave-to { opacity: 0; transform: translateY(8px); }
 

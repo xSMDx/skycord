@@ -5,6 +5,7 @@ import { clearRefreshCookie, REFRESH_COOKIE } from '../utils/cookie'
 import { validateRegister, validateLogin } from '../utils/validators'
 import { PasswordReset, newResetToken, hashResetToken, RESET_TTL_MINUTES } from '../models/PasswordReset'
 import { sendEmail, emailEnabled, resetPasswordEmail } from '../utils/email'
+import { wellFormed } from '../utils/wellFormed'
 import { config } from '../config/env'
 import { Session } from '../models/Session'
 import {
@@ -34,7 +35,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       username:    username.trim(),
       email:       email.toLowerCase().trim(),
       password,
-      displayName: displayName?.trim() || username.trim(),
+      displayName: wellFormed(displayName?.trim() ?? '') || username.trim(),
     })
 
     const accessToken = signAccessToken(user._id, user.username)

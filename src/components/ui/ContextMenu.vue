@@ -73,7 +73,7 @@ const GAP = 8   // keep this far from the viewport edge
 const sliderFill = (item: { value: number; min?: number; max?: number }) => {
   const min = item.min ?? 0, max = item.max ?? 200
   const pct = max === min ? 0 : ((item.value - min) / (max - min)) * 100
-  return `linear-gradient(to right, var(--accent) 0 ${pct}%, rgba(255,255,255,.14) ${pct}% 100%)`
+  return `linear-gradient(to right, var(--accent) 0 ${pct}%, var(--track) ${pct}% 100%)`
 }
 
 // Measure AFTER render: the menu's size depends on its items, so it can only be

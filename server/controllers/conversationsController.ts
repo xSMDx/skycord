@@ -9,6 +9,7 @@ import { resolveMessages } from './messagesController'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
+import { wellFormed } from '../utils/wellFormed'
 
 // Shape a group doc into what the client's conversation list expects. The
 // client renders a fallback name from member display names when `name` is
@@ -109,7 +110,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
 
     const group = await Conversation.create({
       type:    'group',
-      name:    name?.trim() || null,
+      name:    wellFormed(name?.trim() ?? '') || null,
       owner:   userId,
       members: uniqueMembers,
       lastMessageAt: new Date(),
@@ -286,7 +287,7 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
-      content:        content.trim(),
+      content:        wellFormed(content.trim()),
       // Persist only the ids that survived scope validation above — matches
       // the channel path's persistence rule, never the raw request-body ids.
       replyToIds:     replyPreviews.map(r => r.id),
@@ -422,7 +423,7 @@ export const updateGroup = async (req: Request, res: Response, next: NextFunctio
     let nameChanged = false
     let iconChanged = false
     if (name !== undefined) {
-      const trimmed = (name ?? '').trim()
+      const trimmed = wellFormed((name ?? '').trim())
       if (trimmed.length > 100) { res.status(400).json({ message: 'Group name is too long' }); return }
       const next = trimmed || null
       nameChanged = next !== (group.name ?? null)

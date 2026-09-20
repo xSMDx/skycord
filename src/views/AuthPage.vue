@@ -117,13 +117,15 @@ const pwStrength = computed(() => {
   if (/[A-Z]/.test(p)) s++
   if (/[0-9]/.test(p)) s++
   if (/[!@#$%^&*(),.?":{}|<>]/.test(p)) s++
+  // One value per level, used for the bar AND for the label beside it, so
+  // each is the token measured for text rather than the fill of the same name.
   const map = [
     { label: '', color: '' },
-    { label: 'Very weak', color: '#ed4245' },
-    { label: 'Weak',      color: '#ed4245' },
-    { label: 'Fair',      color: '#f0a500' },
-    { label: 'Good',      color: '#5865f2' },
-    { label: 'Strong',    color: '#23a55a' },
+    { label: 'Very weak', color: 'var(--danger-text)' },
+    { label: 'Weak',      color: 'var(--danger-text)' },
+    { label: 'Fair',      color: 'var(--warning-text)' },
+    { label: 'Good',      color: 'var(--accent-text)' },
+    { label: 'Strong',    color: 'var(--green-text)' },
   ]
   return { score: s, ...map[s] }
 })
@@ -583,9 +585,11 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .switch button { color:var(--accent); font-weight:600; }
 .switch button:hover { color:var(--accent-text); text-decoration:underline; }
 
-.slide-enter-active,.slide-leave-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
+.slide-enter-active{transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-out)}
+.slide-leave-active{transition:opacity var(--dur-exit) var(--ease-in),transform var(--dur-exit) var(--ease-in)}
 .slide-enter-from{opacity:0;transform:translateX(18px)}
 .slide-leave-to{opacity:0;transform:translateX(-18px)}
-.drop-enter-active,.drop-leave-active{transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out)}
+.drop-enter-active{transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out)}
+.drop-leave-active{transition:opacity var(--dur-exit) var(--ease-in),transform var(--dur-exit) var(--ease-in)}
 .drop-enter-from,.drop-leave-to{opacity:0;transform:translateY(-6px)}
 </style>

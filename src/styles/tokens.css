@@ -61,8 +61,15 @@
   --text-strong:    #ffffff;  /* headings / strongest */
   --text-1:         #dcddde;  /* normal body */
   --text-2:         #b5bac1;  /* secondary */
-  --text-3:         #949ba4;  /* muted / labels */
-  --text-faint:     #999ca2;  /* faint / placeholders — 4.58:1 on chat, 4.99 on panel */
+  /* Both re-measured against all eight --bg-* surfaces, not the five this
+     file used to check: the composer (--bg-chatbar, --bg-chatbar-focus) and
+     --bg-input were missing from the list, and in the dark families they are
+     the LIGHTEST surfaces, so they bind for every light-on-dark value. The
+     old greys measured 3.57:1 and 3.64:1 on stripe's focused composer — and
+     --text-faint is the placeholder in the app's own message box. Lightened
+     along their own hue by the least that clears 4.6 everywhere. */
+  --text-3:         #abb1b8;  /* muted / labels — worst 4.64:1 (stripe --bg-chatbar-focus) */
+  --text-faint:     #adb0b5;  /* faint / placeholders — worst 4.61:1 (stripe --bg-chatbar-focus) */
   /* Resting icons. The same grey as --text-3 on the dark themes, one step
      darker on the light ones: a 1.5-2px stroke carries far less ink than a
      text glyph of the same colour, so on a pale ground an icon reads a step
@@ -199,9 +206,10 @@
      measures 3.97:1 on default's --bg-chat and 1.97:1 on light-dim's
      --bg-floor, so it fails as a mark in both families. Lightened toward white
      by the least that clears CONTRAST_TARGET (4.6) against every surface of
-     every dark theme: worst 4.66:1 on default --bg-chat. See
-     semanticTokens.test.ts. */
-  --green-text: #40b16f;
+     every dark theme: worst 4.63:1 on stripe's --bg-chatbar-focus. See
+     semanticTokens.test.ts. (Was #40b16f, measured against five of the eight
+     surfaces; on the three that were missing it fell to 3.69:1.) */
+  --green-text: #69c28e;
   /* onAccentText(--green) — measured, not assumed: #23a55a reads better with
      ink (6.03:1) than white (3.18:1), the reverse of the white every hand-
      written `color: #fff` beside a green background on this branch guessed.
@@ -241,11 +249,12 @@
      stopping at the least lightening that clears CONTRAST_TARGET (4.6, see
      onAccent.ts) against EVERY surface token of EVERY dark theme block —
      :root, midnight, amoled and all eight studio themes. The binding
-     case is default's own --bg-chat at 4.63:1; every other dark theme's
-     surfaces clear it with more room (stripe's --bg-raised is next-closest
-     at 4.89:1). One value serves every dark theme; none needed its own.
-     semanticTokens.test.ts proves this against the live stylesheet. */
-  --danger-text: #f27779;
+     case is stripe's --bg-chatbar-focus at 4.63:1. One value serves every
+     dark theme; none needed its own. semanticTokens.test.ts proves this
+     against the live stylesheet. (Was #f27779, measured against five of the
+     eight surfaces; on the three that were missing it fell to 3.67:1 — the
+     focused composer, which is exactly where a validation error appears.) */
+  --danger-text: #f59697;
 
   /* ── Shadows and scrim ─────────────────────────────────────────────────
      Three shadow depths, grouped by WHERE a shadow is used, not by the
@@ -329,6 +338,17 @@
   --track:   rgba(255, 255, 255, .10);
   --grabber: rgba(255, 255, 255, .22);
 
+  /* Skeleton placeholders. A raised tone, not a darker one: content arriving
+     should read as laid ON the surface rather than cut out of it.
+
+     Declared HERE, with the rest of the white-alpha family, and not beside the
+     motion tokens where they used to sit: that block is a second :root AFTER
+     the light blocks, and :root and [data-theme="light"] carry the same
+     specificity, so the later one wins. A light override written against a
+     token declared down there silently does nothing. */
+  --sk-base:  rgba(255, 255, 255, .055);
+  --sk-sheen: rgba(255, 255, 255, .11);
+
   /* ── Over arbitrary media ───────────────────────────────────────────────
      A chip, badge or icon drawn on top of a photo, a video or a
      user-chosen colour — the pencil on an avatar, the GIF badge on a
@@ -341,17 +361,42 @@
      paint a near-black icon onto whatever the member happened to upload.
      The veils were seven hand-picked alphas (.35 to .7); two steps are
      enough — resting, and hovered or badge-weight. */
+  /* The hairline around a piece of media, as --media-veil is the wash over
+     one: a flag, a theme swatch, a banner. Same reason it does not follow the
+     theme — --seam separates two surfaces the app draws, and neither side of
+     THIS edge is one. */
+  --media-edge:        rgba(0, 0, 0, .28);
   --media-veil:        rgba(0, 0, 0, .45);
   --media-veil-strong: rgba(0, 0, 0, .65);
   --on-media:          #ffffff;
 
   /* ── Toggles ────────────────────────────────────────────────────────────
-     The off track and the knob, shared by the two switches in the app
-     (Appearance and Voice & Video). Both constant across themes for the
-     same reason --on-media is: the knob has to read on the grey track AND
-     on the accent fill the track becomes when it is on, and --text-strong
-     (the obvious candidate) is near-black on the light themes, which would
-     lose the knob inside a light accent. */
+     The off track and the knob, shared by the three switches in the app
+     (Appearance, Voice & Video, and the shared settings row).
+
+     A switch has two grounds, not one: the grey track when it is off, and
+     --accent when it is on. No single knob colour can serve both, because
+     --accent is the member's and the appearance picker may set it to any
+     hue. So the knob is --toggle-knob on the track and --text-on-accent on
+     the accent — the same value onAccentText() already measures for label
+     text on that exact accent. (An earlier comment here claimed one white
+     knob covered both cases "because ink would be lost inside a light
+     accent". Measured, that was backwards: white on the dark theme's
+     #38b6f1 is 2.30:1, ink is 8.80:1.)
+
+     --toggle-off is theme-aware, unlike --on-media, because the track IS a
+     surface we control. Pinned white, the knob measured 1.78:1 on light and
+     2.10:1 on light-dim, under the 3:1 floor for a control's state, and the
+     track itself sat at 1.60:1 against its own surface. The light override
+     below carries the knob to 3.54:1 and the track's own edge to 3.04:1,
+     measured against all eight --bg-* surfaces of both light themes and
+     checked by semanticTokens.test.ts rather than stated here.
+
+     (The first attempt at that override said "3.60:1 and 3.11:1 at their
+     worst" and was measured over three surfaces, not eight — the same defect
+     this file had just been repaired for. Its real worst edge was 2.74:1, on
+     light-dim's --bg-floor. That is why the numbers are now derived by a
+     test: a worst case asserted in a comment is a worst case nobody rechecks.) */
   --toggle-off:  rgba(128, 132, 142, .5);
   --toggle-knob: #ffffff;
 
@@ -442,8 +487,8 @@ html.names-plain { --name-hover: var(--text-strong); }
   --text-strong: #060607;
   --text-1:      #2e3338;
   --text-2:      #4e5058;
-  --text-3:      #5c5e66;
-  --text-faint:  #6c6f77;   /* 5.04:1 on chat, 4.54 on panel */
+  --text-3:      #53555c;   /* worst 4.60:1 (light-dim --bg-floor) */
+  --text-faint:  #61646b;   /* worst 4.60:1 (light --bg-chatbar-focus) */
   --border:  rgba(0,0,0,.08);
   --divider: rgba(0,0,0,.06);
   --hover:        rgba(0,0,0,.06);
@@ -498,6 +543,20 @@ html.names-plain { --name-hover: var(--text-strong); }
   --seam:    rgba(0, 0, 0, .08);
   --track:   rgba(0, 0, 0, .18);
   --grabber: rgba(0, 0, 0, .28);
+
+  /* A white knob needs a darker track here: over these pale surfaces the
+     shared rgba(128,132,142,.5) left it at 1.78:1, and the track itself at
+     1.60:1. Worst across all eight surfaces of both light themes: knob
+     3.54:1 (light --bg-chat), track edge 3.04:1 (light-dim --bg-floor). */
+  --toggle-off: rgba(30, 35, 45, .54);
+
+  /* The skeleton's two greys are white-alpha, so on a pale surface they
+     resolved to nothing: every loading placeholder was blank space with no
+     shimmer, the reduced-motion flat fill included. These are the only two
+     white-alpha tokens the light blocks did not already override. Matched to
+     the dark theme's own deltas (1.19 base-to-surface, 1.18 sheen-to-base). */
+  --sk-base:  rgba(0, 0, 0, .08);
+  --sk-sheen: rgba(0, 0, 0, .15);
   --icon: var(--text-2);
   /* Presence, tuned for a pale ground. The dark values are invisible here —
      online measures 2.52:1 on Light and 1.97:1 on Light Dim, idle 1.50:1 and
@@ -543,8 +602,8 @@ html.names-plain { --name-hover: var(--text-strong); }
   --text-strong: #0a0a0b;
   --text-1:      #2e3338;
   --text-2:      #4e5058;
-  --text-3:      #5c5e66;
-  --text-faint:  #62646a;   /* 5.09:1 on chat, 4.52 on panel */
+  --text-3:      #53555c;   /* worst 4.60:1 (light-dim --bg-floor) */
+  --text-faint:  #53555a;   /* worst 4.61:1 (light-dim --bg-floor) */
   --border:  rgba(0,0,0,.1);
   --divider: rgba(0,0,0,.07);
   --hover:        rgba(0,0,0,.06);
@@ -578,6 +637,20 @@ html.names-plain { --name-hover: var(--text-strong); }
   --seam:    rgba(0, 0, 0, .08);
   --track:   rgba(0, 0, 0, .18);
   --grabber: rgba(0, 0, 0, .28);
+
+  /* A white knob needs a darker track here: over these pale surfaces the
+     shared rgba(128,132,142,.5) left it at 1.78:1, and the track itself at
+     1.60:1. Worst across all eight surfaces of both light themes: knob
+     3.54:1 (light --bg-chat), track edge 3.04:1 (light-dim --bg-floor). */
+  --toggle-off: rgba(30, 35, 45, .54);
+
+  /* The skeleton's two greys are white-alpha, so on a pale surface they
+     resolved to nothing: every loading placeholder was blank space with no
+     shimmer, the reduced-motion flat fill included. These are the only two
+     white-alpha tokens the light blocks did not already override. Matched to
+     the dark theme's own deltas (1.19 base-to-surface, 1.18 sheen-to-base). */
+  --sk-base:  rgba(0, 0, 0, .08);
+  --sk-sheen: rgba(0, 0, 0, .15);
   --icon: var(--text-2);
   /* Presence, tuned for a pale ground. The dark values are invisible here —
      online measures 2.52:1 on Light and 1.97:1 on Light Dim, idle 1.50:1 and
@@ -739,10 +812,6 @@ html.names-plain { --name-hover: var(--text-strong); }
   --ease-in:    cubic-bezier(.4, 0, 1, 1);     /* leaving, decisively        */
   --ease-inout: cubic-bezier(.4, 0, .2, 1);    /* on-screen state changes    */
 
-  /* Skeleton placeholders. A raised tone, not a darker one: content arriving
-     should read as laid ON the surface rather than cut out of it. */
-  --sk-base:  rgba(255, 255, 255, .055);
-  --sk-sheen: rgba(255, 255, 255, .11);
 }
 
 /* The in-app switch (Settings -> Appearance -> Motion) sets this attribute.

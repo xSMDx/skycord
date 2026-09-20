@@ -11,6 +11,7 @@ import { Category } from '../models/Category'
 import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf } from '../utils/access'
 import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
 import { dmConvId, canDM } from '../controllers/messagesController'
+import { wellFormed } from '../utils/wellFormed'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
 
@@ -527,7 +528,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorName:     myName,
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
-          content:        data.content.trim(),
+          content:        wellFormed(data.content.trim()),
           replyToIds:     replyTo.map(r => r.id),
         })
         const payload = {
@@ -561,7 +562,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         if (!msg)                              { ack?.({ ok: false, error: 'Not found' });   return }
         if (msg.authorId.toString() !== userId){ ack?.({ ok: false, error: 'Not allowed' }); return }
 
-        msg.content = data.content.trim()
+        msg.content = wellFormed(data.content.trim())
         msg.edited  = true
         await msg.save()
 
@@ -689,7 +690,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
         // An emoji is a handful of codepoints. Unbounded, this field accepted
         // arbitrary strings of arbitrary length straight into the document.
-        const emoji = String(data.emoji ?? '')
+        const emoji = wellFormed(String(data.emoji ?? ''))
         if (!emoji || [...emoji].length > 8) { ack?.({ ok: false, error: 'Invalid emoji' }); return }
         if (msg.reactions.length >= 40 && !msg.reactions.some(r => r.emoji === emoji)) {
           ack?.({ ok: false, error: 'Too many reactions' }); return
@@ -776,7 +777,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorName:     myName,
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
-          content:        data.content.trim(),
+          content:        wellFormed(data.content.trim()),
           replyToIds:     replyTo.map(r => r.id),
         })
 
@@ -825,7 +826,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorName:     myName,
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
-          content:        data.content.trim(),
+          content:        wellFormed(data.content.trim()),
           replyToIds:     replyTo.map(r => r.id),
         })
 
