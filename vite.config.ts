@@ -51,6 +51,7 @@ export default defineConfig(({ mode }) => {
         '/conversations': { target: api, changeOrigin: true },
         '/servers':       { target: api, changeOrigin: true },
         '/invites':       { target: api, changeOrigin: true },
+        '/instance':      { target: api, changeOrigin: true },
         '/gifs':          { target: api, changeOrigin: true },
         '/socket.io':     { target: api, changeOrigin: true, ws: true },
       }
