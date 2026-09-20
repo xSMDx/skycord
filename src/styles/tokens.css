@@ -921,3 +921,9 @@ html.names-plain { --name-hover: var(--text-strong); }
   --warning: #f0b232;
   --warning-text: #f0b232;
 }
+
+/* Discord (classic): today's Dark surfaces, unchanged. The Studio entry exists
+   for the blurple accent it carries (themePresets.ts); this block exists so
+   the id has a [data-theme] like every other preset. */
+[data-theme="discord"] {
+}

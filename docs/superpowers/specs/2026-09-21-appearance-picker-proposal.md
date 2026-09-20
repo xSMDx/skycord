@@ -1,6 +1,6 @@
 # Appearance picker (slice 6) — proposal, awaiting the owner
 
-**Status: draft.** Nothing here is built. Slice 6's only recorded scope is one line
+**Status: APPROVED by the owner 2026-09-21 — all five recommendations accepted, and built.** The questions below are kept as the record of what was decided. Slice 6's only recorded scope is one line
 in the slice index — "The iOS-model picker, `Automatic`, and Studio with Discord as
 legacy" — so every decision below is a recommendation for the owner to accept,
 change or reject. Answer each numbered question; the plan gets written from the

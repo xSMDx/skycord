@@ -15,7 +15,6 @@ export const THEME_OPTS: ThemeOpt[] = [
   { id: 'amoled',    label: 'AMOLED',    preview: { background: '#000000' } },
   { id: 'light',     label: 'Light',     preview: { background: '#ffffff' } },
   { id: 'light-dim', label: 'Light Dim', preview: { background: '#eceef0' } },
-  { id: 'custom',    label: 'Custom',    preview: { background: 'conic-gradient(from 180deg, #ff5f6d, #ffc371, #5865f2, #ff5f6d)' } },
 ]
 
 /**
@@ -40,6 +39,11 @@ export const STUDIO_OPTS: ThemeOpt[] = [
   { id: 'github',  label: 'GitHub',  accent: '#2f81f7', preview: bar('#0d1117', '#2f81f7') },
   { id: 'notion',  label: 'Notion',  accent: '#2383e2', preview: bar('#191919', '#2383e2') },
   { id: 'stoat',   label: 'Stoat',   accent: '#fd6671', preview: bar('#1a1a1c', '#fd6671') },
+  // The old look, for anyone who wants it: today's Dark surfaces with the
+  // blurple Sky replaced. Last, because it is a way back, not a recommendation.
+  { id: 'discord', label: 'Discord (classic)', accent: '#5865f2', preview: bar('#313338', '#5865f2') },
+  // A palette of your own: closer in kind to Studio than to a light or dark mode.
+  { id: 'custom',  label: 'Custom',  preview: { background: 'conic-gradient(from 180deg, #ff5f6d, #ffc371, #5865f2, #ff5f6d)' } },
 ]
 /** Every built-in preset, in the order a gallery should show them. */
 export const ALL_PRESETS: ThemeOpt[] = [...THEME_OPTS, ...STUDIO_OPTS]
