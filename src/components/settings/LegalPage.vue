@@ -11,6 +11,7 @@
 import { computed, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-vue-next'
 import LegalDocumentView from '@/components/legal/LegalDocumentView.vue'
+import OpenSourceLicences from './OpenSourceLicences.vue'
 import { useInstance, fetchLegalDocument } from '@/composables/useInstance'
 import { legalRows, sourceHref, LEGAL_TITLES, formatUpdated, type DocumentEntry } from '@/composables/legalDocs'
 import '@/styles/settingsShared.css'
@@ -19,7 +20,7 @@ const { profile, state, retry } = useInstance()
 const rows = computed(() => legalRows(profile.value))
 const source = computed(() => sourceHref(profile.value))
 
-type View = { kind: 'list' } | { kind: 'doc'; entry: DocumentEntry } | { kind: 'agpl' }
+type View = { kind: 'list' } | { kind: 'doc'; entry: DocumentEntry } | { kind: 'agpl' } | { kind: 'oss' }
 const view = ref<View>({ kind: 'list' })
 
 const openDocument = (entry: DocumentEntry) => { view.value = { kind: 'doc', entry } }
@@ -84,6 +85,10 @@ watch(view, () => { (root.value?.closest('.sm-content') as HTMLElement | null)?.
           <span class="lg-title">Source code</span>
           <ExternalLink class="lg-go" :size="16" :stroke-width="2" aria-hidden="true" />
         </a>
+        <button type="button" class="st-field lg-row" @click="view = { kind: 'oss' }">
+          <span class="lg-title">Open-source licences</span>
+          <ChevronRight class="lg-go" :size="16" :stroke-width="2.25" aria-hidden="true" />
+        </button>
       </div>
     </template>
 
@@ -96,10 +101,15 @@ watch(view, () => { (root.value?.closest('.sm-content') as HTMLElement | null)?.
         <p class="lg-docmeta">{{ profile?.name }} · Last updated {{ formatUpdated(view.entry.updated) }}</p>
         <LegalDocumentView :load="loadDoc" format="markdown" />
       </template>
-      <template v-else>
+      <template v-else-if="view.kind === 'agpl'">
         <h2 class="lg-doctitle">GNU Affero General Public License</h2>
         <p class="lg-docmeta">Version 3, the licence Skycord is released under</p>
         <LegalDocumentView :load="loadDoc" format="plain" />
+      </template>
+      <template v-else>
+        <h2 class="lg-doctitle">Open-source licences</h2>
+        <p class="lg-docmeta">The packages Skycord is built with, and their licences</p>
+        <OpenSourceLicences />
       </template>
     </template>
   </div>
