@@ -110,7 +110,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .cp-stage {
   position: relative; width: 100%; aspect-ratio: 16 / 9;
-  background: #000; border-radius: 8px; overflow: hidden;
+  background: var(--letterbox); border-radius: 8px; overflow: hidden;
 }
 /* Mirrored, because a preview of yourself that isn't mirrored reads as wrong. */
 .cp-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
