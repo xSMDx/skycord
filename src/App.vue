@@ -168,15 +168,19 @@ onMounted(async () => {
 }
 /* A loading bar's fill time, not a transition: stays a literal (durationTokens.test.ts). */
 .splash-fill {
-  height: 100%; background: var(--accent); border-radius: 2px;
-  /* Exactly 3s to match the Promise timeout — animates from left edge to right */
+  /* Full width, scaled from the left edge, rather than a growing width: the
+     bar is 120px of layout on every frame of a three-second animation
+     otherwise. The rounded cap is the track's, which clips us. */
+  width: 100%; height: 100%; background: var(--accent);
+  transform-origin: left center;
+  /* Exactly 3s to match the Promise timeout — fills from left edge to right */
   animation: bar-fill 3s cubic-bezier(.4,0,.6,1) forwards;
 }
 @keyframes bar-fill {
-  from { width: 0%; }
+  from { transform: scaleX(0); }
   /* Ease up near the end so it feels like it's "waiting" if init is slow */
-  80%  { width: 85%; }
-  to   { width: 100%; }
+  80%  { transform: scaleX(.85); }
+  to   { transform: scaleX(1); }
 }
 
 .splash-sub {

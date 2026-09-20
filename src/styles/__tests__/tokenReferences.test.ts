@@ -37,7 +37,12 @@ const rel = (file: string) => relative(SRC, file).split(sep).join('/')
 // Comments are stripped before anything is read out of a file: tokens.css
 // explains itself at length and names tokens inside those explanations, and a
 // commented-out `--foo: red;` must not count as declaring --foo.
-const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '')
+const stripComments = (s: string, path = '') => {
+  const noBlocks = s.replace(/\/\*[\s\S]*?\*\//g, '')
+  // Line comments only where the language has them. In CSS and in a template,
+  // // is part of a URL far more often than it is a comment.
+  return path.endsWith('.ts') ? noBlocks.replace(/(^|[^:])\/\/[^\n]*/g, '$1') : noBlocks
+}
 
 const TOKENS = 'styles/tokens.css'
 const tokensText = stripComments(readFileSync(resolve(SRC, 'styles/tokens.css'), 'utf8'))
@@ -52,42 +57,70 @@ describe('token references', () => {
   })
 
   const readable = [...filesUnder(SRC, '.vue'), ...filesUnder(SRC, '.css'), ...filesUnder(SRC, '.ts')]
-  const sources = readable.map(f => ({ path: rel(f), text: stripComments(readFileSync(f, 'utf8')) }))
+  const sources = readable.map(f => ({ path: rel(f), text: stripComments(readFileSync(f, 'utf8'), rel(f)) }))
 
   // Every name written anywhere in src, with the var() reads removed first so
   // that reading a name is never mistaken for writing it. What is left is a
   // CSS declaration, a template binding or a setProperty call — any one of
   // which means the name is real.
-  const written = new Set<string>()
-  for (const { text } of sources) {
-    for (const m of text.replace(/var\(\s*--[\w-]+/g, 'var(').matchAll(/(--[\w-]+)(?![\w-])/g)) {
-      written.add(m[1])
-    }
+  const writtenIn = (srcs: { path: string; text: string }[]) => {
+    const names = new Set<string>()
+    for (const { text } of srcs)
+      for (const m of text.replace(/var\(\s*--[\w-]+/g, 'var(').matchAll(/(--[\w-]+)(?![\w-])/g))
+        names.add(m[1])
+    return names
   }
-
-  it('has no var() naming a custom property nothing anywhere writes', () => {
-    const orphans: string[] = []
-
-    for (const { path, text } of sources) {
+  const orphansIn = (srcs: { path: string; text: string }[]) => {
+    const names = writtenIn(srcs)
+    const out: string[] = []
+    for (const { path, text } of srcs) {
       if (path === TOKENS) continue
       for (const m of text.matchAll(/var\(\s*(--[\w-]+)(?![\w-])/g)) {
         const name = m[1]
-        if (declared.has(name) || written.has(name)) continue
-        orphans.push(`${path}:${text.slice(0, m.index).split('\n').length}  var(${name})`)
+        if (declared.has(name) || names.has(name)) continue
+        out.push(`${path}:${text.slice(0, m.index).split('\n').length}  var(${name})`)
       }
     }
+    return out
+  }
+  const written = writtenIn(sources)
 
-    expect(orphans).toEqual([])
+  it('has no var() naming a custom property nothing anywhere writes', () => {
+    expect(orphansIn(sources)).toEqual([])
   })
 
   // The check above is only as good as its ability to see a name that is
   // missing, and the easy way to break it is to make `written` swallow
   // everything — one stray regex change and every typo becomes "written".
-  it('still reports a name nothing writes', () => {
-    const text = '.x { color: var(--definitely-not-a-token); }'
-    const found = Array.from(text.matchAll(/var\(\s*(--[\w-]+)(?![\w-])/g))
-      .map(m => m[1])
-      .filter(n => !declared.has(n) && !written.has(n))
-    expect(found).toEqual(['--definitely-not-a-token'])
+  //
+  // These run the real scan over the real sources plus one synthetic file, so
+  // any change to how `written` is built is felt here. The version this
+  // replaced filtered a synthetic string through the real sets, which meant
+  // its probe never travelled the file walk at all: `filesUnder` skips
+  // __tests__, so the name could not enter either set under ANY
+  // implementation, and the assertion held unconditionally.
+  const withExtra = (path: string, text: string) =>
+    [...sources, { path, text: stripComments(text, path) }]
+
+  it('reports a name nothing writes', () => {
+    expect(orphansIn(withExtra('synthetic.css', '.x { color: var(--definitely-not-a-token); }')))
+      .toEqual(['synthetic.css:1  var(--definitely-not-a-token)'])
+  })
+
+  it('is not silenced by a mention inside a comment', () => {
+    // The failure this catches: stripComments stops working, and a name that
+    // appears only in prose starts counting as written.
+    expect(orphansIn(withExtra('synthetic.css',
+      '/* --definitely-not-a-token is planned */\n.x { color: var(--definitely-not-a-token); }')))
+      .toEqual(['synthetic.css:2  var(--definitely-not-a-token)'])
+    expect(orphansIn(withExtra('synthetic.ts',
+      "// --definitely-not-a-token is planned\nel.style.color = 'var(--definitely-not-a-token)'")))
+      .toEqual(['synthetic.ts:2  var(--definitely-not-a-token)'])
+  })
+
+  it('accepts a name a real declaration writes', () => {
+    expect(orphansIn(withExtra('synthetic.css',
+      ':root { --definitely-not-a-token: red; }\n.x { color: var(--definitely-not-a-token); }')))
+      .toEqual([])
   })
 })

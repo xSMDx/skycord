@@ -21,6 +21,21 @@ const SRC = resolve(__dirname, '../..')
 // simply repeats. Loops are recognised by the `infinite` keyword in the same
 // declaration — by kind, not by value — so a spinner or a pulse needs no entry,
 // and a finite .26s still fails however it is written.
+// Split on top-level commas first: `animation: spin 1.2s linear infinite,
+// fadeIn .26s ease-out` is two animations, and only the first is a loop. Read
+// as one string, the single `infinite` would excuse the .26s beside it.
+const items = (value: string): string[] => {
+  const out: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === '(') depth++
+    else if (value[i] === ')') depth--
+    else if (value[i] === ',' && depth === 0) { out.push(value.slice(start, i)); start = i + 1 }
+  }
+  out.push(value.slice(start))
+  return out
+}
 const isLoop = (value: string) => /\binfinite\b/.test(value)
 
 const STAGGER = 'an offset between the members of one repeating motion, not a duration'
@@ -32,6 +47,8 @@ const ALLOWED: { file: string; selector: string; why: string }[] = [
   { file: 'components/voice/CallStage.vue', selector: '.g-wave2', why: STAGGER },
   { file: 'components/voice/IncomingCallModal.vue', selector: '.ic-ring2', why: STAGGER },
   { file: 'views/AuthPage.vue', selector: '.b1', why: STAGGER },
+  { file: 'views/AuthPage.vue', selector: '.b2', why: STAGGER },
+  { file: 'views/AuthPage.vue', selector: '.b3', why: STAGGER },
   { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(1))', why: 'the bars rise one after another: offsets, not durations' },
   { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(2))', why: 'the bars rise one after another: offsets, not durations' },
   { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(3))', why: 'the bars rise one after another: offsets, not durations' },
@@ -66,7 +83,12 @@ const cssOf = (file: string): { text: string; line: number }[] => {
 }
 
 const TIMED = /^(transition|transition-duration|transition-delay|animation|animation-duration|animation-delay)$/
-const LITERAL_TIME = /(?:^|[\s,(])(\d*\.?\d+)(ms|s)\b/
+// The leading class is what keeps this off the "20" in translateY(20px) and
+// the "1" in scale(1.05). It also, until the negative sign was added, kept the
+// whole guard off every negative time: -4s begins with a character in neither
+// branch, so animation-delay:-4s was invisible. A hand-picked -0.26s release
+// delay would have passed silently.
+const LITERAL_TIME = /(?:^|[\s,(])(-?\d*\.?\d+)(ms|s)\b/
 
 interface Offender { file: string; line: number; selector: string; declaration: string }
 
@@ -82,7 +104,8 @@ const offenders = (): Offender[] => {
         const selector = rule[1].trim().replace(/\s+/g, ' ')
         if (/^(from|to|\d+%)/.test(selector)) continue
         for (const decl of rule[2].matchAll(/([a-z-]+)\s*:\s*([^;]+)/g)) {
-          if (!TIMED.test(decl[1]) || !LITERAL_TIME.test(decl[2]) || isLoop(decl[2])) continue
+          if (!TIMED.test(decl[1])) continue
+          if (!items(decl[2]).some(item => LITERAL_TIME.test(item) && !isLoop(item))) continue
           const at = line + text.slice(0, rule.index! + rule[1].length + 1 + decl.index!).split('\n').length - 1
           found.push({ file: rel(file), line: at, selector, declaration: `${decl[1]}: ${decl[2].trim()}` })
         }
@@ -91,6 +114,35 @@ const offenders = (): Offender[] => {
   }
   return found
 }
+
+describe('the two things this guard used to be unable to see', () => {
+  // Both were found by an independent review, and both are the kind of hole
+  // that never shows up as a failure — the guard simply stops looking.
+  const sees = (value: string) => items(value).some(i => LITERAL_TIME.test(i) && !isLoop(i))
+
+  it('sees a negative time', () => {
+    // These are VALUES: the scanner has already split off the property.
+    expect(sees('-4s')).toBe(true)
+    expect(sees('-0.26s')).toBe(true)
+    expect(sees('transition: opacity -.15s var(--ease-out)')).toBe(true)
+  })
+
+  it('sees a finite animation standing beside a loop', () => {
+    expect(sees('spin 1.2s linear infinite, fadeIn .26s var(--ease-out)')).toBe(true)
+    expect(sees('spin 1.2s linear infinite')).toBe(false)
+    expect(sees('pulse 2s ease-in-out infinite alternate')).toBe(false)
+  })
+
+  it('still ignores a length, and a time that is already a token', () => {
+    expect(sees('transform var(--dur-2) var(--ease-out)')).toBe(false)
+    expect(sees('translateY(20px) scale(1.05)')).toBe(false)
+    expect(sees('cubic-bezier(.32,.72,0,1)')).toBe(false)
+  })
+
+  it('splits on top-level commas only', () => {
+    expect(items('a 1s cubic-bezier(.1,.2,.3,.4), b 2s')).toHaveLength(2)
+  })
+})
 
 describe('durations come from the motion tokens', () => {
   const all = offenders()

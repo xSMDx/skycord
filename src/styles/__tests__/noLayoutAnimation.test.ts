@@ -15,7 +15,7 @@ import { resolve, join, relative, sep } from 'path'
 // matched: it animates layout only if a layout property happens to change.
 const SRC = resolve(__dirname, '../..')
 
-const LAYOUT = /^(width|height|min-width|min-height|max-width|max-height|padding(-\w+)?|margin(-\w+)?|top|right|bottom|left|inset|flex-basis|grid-template-(rows|columns))$/
+const LAYOUT = /^(width|height|min-width|min-height|max-width|max-height|padding(-\w+)?|margin(-\w+)?|top|right|bottom|left|inset|flex-basis|gap|row-gap|column-gap|grid-template-(rows|columns))$/
 
 const filesUnder = (dir: string): string[] =>
   readdirSync(dir).flatMap(name => {
@@ -50,16 +50,33 @@ const topLevel = (value: string): string[] => {
   return parts.map(p => p.trim()).filter(Boolean)
 }
 
+/** Every word of a shorthand item, not just the first. The property may be
+ *  written last — `transition: var(--dur-2) var(--ease-out) height` is legal
+ *  CSS — and reading only `item.split(/\s+/)[0]` would miss it. */
+const namedProperties = (item: string): string[] =>
+  item.split(/\s+/).filter(Boolean).filter(word => !/^(var\(|cubic-bezier\(|steps\(|-?[\d.]|ease|linear|step-)/.test(word))
+
 const offenders = (): string[] => {
   const found: string[] = []
+  const at = (file: string, offset: number, text: string, index: number) =>
+    `${relative(SRC, file).split(sep).join('/')}:${offset + text.slice(0, index).split('\n').length}`
+
   for (const file of filesUnder(SRC)) {
     for (const { text, offset } of cssOf(file)) {
       for (const m of text.matchAll(/(?:^|[;{\s])(transition(?:-property)?)\s*:\s*([^;}]+)/g)) {
-        const properties = topLevel(m[2]).map(item => item.split(/\s+/)[0])
-        const layout = properties.filter(p => LAYOUT.test(p))
+        const layout = topLevel(m[2]).flatMap(namedProperties).filter(p => LAYOUT.test(p))
         if (!layout.length) continue
-        const line = offset + text.slice(0, m.index).split('\n').length
-        found.push(`${relative(SRC, file).split(sep).join('/')}:${line}  ${layout.join(', ')}`)
+        found.push(`${at(file, offset, text, m.index)}  ${[...new Set(layout)].join(', ')}`)
+      }
+
+      // A @keyframes body is the other half of "no animation on a layout
+      // property", and the guard used to read only transitions — so a 3s
+      // width ramp on the splash bar sat under a test named for it. Frames
+      // hold plain declarations, so the property is the declaration's own.
+      for (const kf of text.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g)) {
+        const layout = [...kf[2].matchAll(/([a-z-]+)\s*:/g)].map(d => d[1]).filter(p => LAYOUT.test(p))
+        if (!layout.length) continue
+        found.push(`${at(file, offset, text, kf.index)}  @keyframes ${kf[1]}: ${[...new Set(layout)].join(', ')}`)
       }
     }
   }
@@ -71,7 +88,21 @@ describe('no animation on a layout property', () => {
     expect(filesUnder(SRC).length).toBeGreaterThan(50)
   })
 
-  it('has no transition that animates layout', () => {
+  it('has no transition or keyframe that animates layout', () => {
     expect(offenders()).toEqual([])
+  })
+
+  it('reads keyframes, and the property wherever it sits in a shorthand', () => {
+    // Anti-vacuity. This suite has no allowlist, so nothing else here would
+    // fail if either scan quietly stopped matching — and "reads the styles it
+    // checks" counts files, not rules.
+    expect(namedProperties('var(--dur-2) var(--ease-out) height')).toContain('height')
+    expect(namedProperties('height var(--dur-2) var(--ease-out)')).toContain('height')
+    expect(namedProperties('transform var(--dur-2) cubic-bezier(.4,0,.6,1)')).not.toContain('cubic-bezier(.4,0,.6,1)')
+    expect(LAYOUT.test('gap')).toBe(true)
+    // Every @keyframes in src is found and none of them animates layout.
+    const frames = filesUnder(SRC).flatMap(f => cssOf(f))
+      .flatMap(b => [...b.text.matchAll(/@keyframes\s+([\w-]+)/g)].map(m => m[1]))
+    expect(frames.length).toBeGreaterThan(10)
   })
 })
