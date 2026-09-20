@@ -223,6 +223,10 @@
      share --text-on-green's answer: onAccentText(#248046) is white (4.94:1),
      where ink clears only 3.88:1 — below AA. */
   --text-on-green-deep: #ffffff;
+  /* Hover fills for the two greens, measured with the glyphs they carry:
+     ink on #1f9450 is 4.94:1, white on #1a6334 is 7.30:1. */
+  --green-hover:      #1f9450;
+  --green-deep-hover: #1a6334;
 
   /* Danger, destructive actions, and the "muted" state. Added because three
      different reds (#ed4245, #f23f43, #f08080) were in use across 67 sites for
@@ -369,6 +373,12 @@
   --media-veil:        rgba(0, 0, 0, .45);
   --media-veil-strong: rgba(0, 0, 0, .65);
   --on-media:          #ffffff;
+
+  /* The ground behind a call tile (which may show an avatar) and behind the
+     pixels themselves. Constant in every theme, like the rest of this block:
+     video is dark content, and a light frame fights it. */
+  --media-ground: #0b0b0f;
+  --letterbox:    #000000;
 
   /* ── Toggles ────────────────────────────────────────────────────────────
      The off track and the knob, shared by the three switches in the app
@@ -858,4 +868,56 @@ html.names-plain { --name-hover: var(--text-strong); }
     animation-duration: .8s !important;
     animation-iteration-count: infinite !important;
   }
+}
+
+/* ── The media surface ──────────────────────────────────────────────────────
+   A call is a dark room in every theme, the way a video player is. Under the
+   light themes an element with data-surface="media" gets back the dark values
+   of every token those themes change, so the rules inside it keep their
+   ordinary tokens. The dark studio themes are untouched: AMOLED stays AMOLED
+   in a call. The member's accent is never re-declared here — the appearance
+   picker sets it at runtime. mediaSurface.test.ts holds this list complete. */
+[data-theme="light"] [data-surface="media"],
+[data-theme="light-dim"] [data-surface="media"] {
+  --active-bg: rgba(255, 255, 255, .045);
+  --active-ring: rgba(255, 255, 255, .34);
+  --bg-chat: #313338;
+  --bg-chatbar: #383a40;
+  --bg-chatbar-focus: #3d3f45;
+  --bg-deep: #17191c;
+  --bg-floor: #111214;
+  --bg-input: #1e1f22;
+  --bg-panel: #2b2d31;
+  --bg-raised: #1e2024;
+  --border: rgba(255,255,255,.08);
+  --danger-text: #f59697;
+  --divider: rgba(255,255,255,.06);
+  --focus-ring: rgba(255, 255, 255, .92);
+  --grabber: rgba(255, 255, 255, .22);
+  --green-text: #69c28e;
+  --hover: rgba(255,255,255,.06);
+  --hover-strong: rgba(255,255,255,.10);
+  --icon: var(--text-3);
+  --press-veil: rgba(255, 255, 255, .09);
+  --seam: rgba(0, 0, 0, .3);
+  --shadow-drawer: -8px 0 24px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 24px 80px rgba(0, 0, 0, .7);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, .55);
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, .5);
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, .4);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, .4);
+  --sk-base: rgba(255, 255, 255, .055);
+  --sk-sheen: rgba(255, 255, 255, .11);
+  --status-dnd: var(--danger);
+  --status-offline: #80848e;
+  --status-online: var(--green);
+  --text-1: #dcddde;
+  --text-2: #b5bac1;
+  --text-3: #abb1b8;
+  --text-faint: #adb0b5;
+  --text-strong: #ffffff;
+  --toggle-off: rgba(128, 132, 142, .5);
+  --track: rgba(255, 255, 255, .10);
+  --warning: #f0b232;
+  --warning-text: #f0b232;
 }
