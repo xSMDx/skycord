@@ -7,7 +7,9 @@ import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
-import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density } from '@/composables/useAppearance'
+import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density,
+  chooseFamily, chooseVariant, chooseStudio, setAutomaticTheme } from '@/composables/useAppearance'
+import { familyOf, type DarkVariant, type LightVariant } from '@/composables/themeMode'
 import { resolveAccentHex, onAccentText, isAutoAccent, SKY_DARK, SKY_LIGHT } from '@/composables/onAccent'
 import type { SchemeName } from '@/composables/materialScheme'
 import EditFieldModal from './EditFieldModal.vue'
@@ -77,7 +79,15 @@ const loadedTheme = () => {
   return t
 }
 const previewThemeCode = () => { const t = loadedTheme(); if (t) previewTheme(t) }
-const applyThemeCode   = () => { const t = loadedTheme(); if (t) setAppearance(t) }
+// An imported theme is an explicit choice, so Automatic steps aside, and a
+// core theme becomes its family's remembered variant.
+const applyThemeCode = () => {
+  const t = loadedTheme()
+  if (!t) return
+  const fam = t.theme ? familyOf(t.theme) : null
+  setAppearance({ ...t, automatic: false,
+    ...(fam === 'light' ? { lastLight: t.theme as LightVariant } : fam === 'dark' ? { lastDark: t.theme as DarkVariant } : {}) })
+}
 const UI_FONT_KEYS   = Object.keys(UI_FONTS)
 const MONO_FONT_KEYS = Object.keys(MONO_FONTS)
 
@@ -109,8 +119,20 @@ const savedPreview = (t: SavedTheme) => {
 
 /** A theme card. Studio entries bring their accent with them. */
 const pickTheme = (t: ThemeOpt) => {
-  setAppearance(t.accent ? { theme: t.id, accent: t.accent } : { theme: t.id })
+  if (familyOf(t.id)) chooseVariant(t.id as LightVariant | DarkVariant)
+  else chooseStudio(t.id, t.accent ? { accent: t.accent } : {})
 }
+// Light / Dark / Automatic. activeFamily is null while a Studio theme or
+// Custom is on, which is also when Automatic is off by rule.
+const activeFamily = computed(() => familyOf(appearance.theme))
+const variantsOf = (f: 'light' | 'dark') => THEME_OPTS.filter(o => familyOf(o.id) === f)
+const previewOf = (id: string) => THEME_OPTS.find(o => o.id === id)?.preview ?? {}
+const labelOf = (id: string) => THEME_OPTS.find(o => o.id === id)?.label ?? id
+const autoHint = computed(() => {
+  if (!activeFamily.value) return 'Off while a Studio theme is chosen — Studio themes are dark only.'
+  if (appearance.automatic) return `Follows your system: ${labelOf(appearance.lastLight)} when it is light, ${labelOf(appearance.lastDark)} when it is dark.`
+  return 'Switch between light and dark with your system.'
+})
 const SCHEME_OPTS: { id: SchemeName; label: string }[] = [
   { id: 'off',        label: 'Off' },
   { id: 'tonalSpot',  label: 'Tonal Spot' },
@@ -984,14 +1006,32 @@ const handleSelfRevoked = () => handleLogout()
               <div class="ap-controls">
             <!-- ── Theme ── -->
             <h2 id="ap-theme" class="st-section">Theme</h2>
-            <div class="ap-cards">
+            <div class="ap-cards ap-modes">
               <button
-                v-for="t in THEME_OPTS" :key="t.id"
-                class="ap-card" :class="{ active: appearance.theme === t.id }"
-                @click="pickTheme(t)"
+                v-for="f in (['light', 'dark'] as const)" :key="f"
+                class="ap-card ap-mode" :class="{ active: activeFamily === f }" :aria-pressed="activeFamily === f"
+                @click="chooseFamily(f)"
               >
-                <span class="ap-card-preview" :style="t.preview" /><span class="ap-card-name">{{ t.label }}</span>
+                <span class="ap-card-preview ap-mode-preview" :style="previewOf(f === 'light' ? appearance.lastLight : appearance.lastDark)" />
+                <span class="ap-card-name">{{ f === 'light' ? 'Light' : 'Dark' }}</span>
               </button>
+            </div>
+            <div class="st-card ap-auto">
+              <div class="st-field">
+                <div class="st-field-left">
+                  <span class="st-field-label">Automatic</span>
+                  <span class="st-field-value muted">{{ autoHint }}</span>
+                </div>
+                <button class="ap-toggle" :class="{ on: appearance.automatic }" role="switch" :aria-checked="appearance.automatic" aria-label="Match the system's light or dark setting" @click="setAutomaticTheme(!appearance.automatic)"><span /></button>
+              </div>
+            </div>
+            <div v-if="activeFamily" class="ap-variants" role="radiogroup" :aria-label="activeFamily === 'light' ? 'Light variant' : 'Dark variant'">
+              <button
+                v-for="t in variantsOf(activeFamily)" :key="t.id"
+                class="ap-chip" :class="{ active: appearance.theme === t.id }"
+                role="radio" :aria-checked="appearance.theme === t.id"
+                @click="pickTheme(t)"
+              >{{ t.label }}</button>
             </div>
 
             <h3 class="ap-sub">Studio</h3>
@@ -1783,6 +1823,19 @@ img    { display: block; object-fit: cover; }
 .ap-card.theme-midnight .ap-card-preview { background: #1a1b1f; }
 .ap-card.theme-amoled .ap-card-preview { background: #000; }
 .ap-card-sm { min-width: 0; padding: 10px 20px; }
+/* Light / Dark: the two big choices, and the variants of whichever is on. */
+.ap-mode { min-width: 150px; }
+.ap-mode-preview { width: 132px; height: 72px; }
+.ap-auto { margin-top: 14px; }
+.ap-variants { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ap-chip {
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-panel);
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+  transition: border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.ap-chip:hover { color: var(--text-1); }
+.ap-chip.active { border-color: var(--accent); color: var(--text-strong); }
 .ap-emoji-prev { width: 32px; height: 32px; object-fit: contain; }
 .ap-emoji-native { font-size: 30px; line-height: 32px; }
 

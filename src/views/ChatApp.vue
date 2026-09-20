@@ -63,7 +63,8 @@ import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
-import { appearance, setAppearance, accentHex } from '@/composables/useAppearance'
+import { appearance, accentHex, chooseVariant, chooseStudio } from '@/composables/useAppearance'
+import { familyOf, type DarkVariant, type LightVariant } from '@/composables/themeMode'
 import { resolveAccentHex } from '@/composables/onAccent'
 import { THEME_OPTS, STUDIO_OPTS, ALL_PRESETS, type ThemeOpt } from '@/composables/themePresets'
 import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/useSavedThemes'
@@ -3141,7 +3142,7 @@ const discoverTab = ref<'servers' | 'themes'>('servers')
 
 /** Studio presets carry their accent; the built-ins leave it alone. */
 const pickPreset = (t: ThemeOpt) =>
-  setAppearance(t.accent ? { theme: t.id, accent: t.accent } : { theme: t.id })
+  familyOf(t.id) ? chooseVariant(t.id as LightVariant | DarkVariant) : chooseStudio(t.id, t.accent ? { accent: t.accent } : {})
 
 /** A saved theme's swatch shows the surface and accent it would restore.
  *  Resolved against the SNAPSHOT's own theme, not the live one — a saved

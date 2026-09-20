@@ -7,12 +7,16 @@ import { reactive, computed } from 'vue'
 import { buildSchemeTokens, SCHEME_TOKEN_KEYS, type SchemeName } from './materialScheme'
 import { onAccentText, resolveAccentHex, isLightTheme, isAutoAccent, accentTintsOnDark, accentTintsOnLight } from './onAccent'
 import { migrateSavedAppearance, APPEARANCE_VERSION } from './appearanceMigration'
+import {
+  automaticTheme, onSystemChange, pickMode, pickStudio, pickVariant, seedVariants, setAutomatic,
+  type DarkVariant, type Family, type LightVariant, type ThemeState,
+} from './themeMode'
 
 export type Theme =
   | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
   // Studio themes — surfaces defined in tokens.css, accent in THEME_OPTS.
   | 'spotify' | 'apple' | 'linear' | 'vercel' | 'stripe' | 'github' | 'notion'
-  | 'stoat'
+  | 'stoat' | 'discord'
 export type Density = 'cozy' | 'compact' | 'roomy'
 
 export interface Appearance {
@@ -33,6 +37,9 @@ export interface Appearance {
   msgLayout:      MsgLayout        // Chat Message Display — 'compact' = single-line
   zoom:           number           // interface zoom, 50–200 (%)
   reduceMotion:   boolean          // stop app animations (see tokens.css [data-motion])
+  automatic:      boolean          // follow the OS light/dark preference (themeMode.ts)
+  lastLight:      LightVariant     // the light variant Automatic uses
+  lastDark:       DarkVariant      // the dark variant Automatic uses
 }
 
 export type EmojiPack = 'native' | 'twemoji' | 'noto'
@@ -44,7 +51,7 @@ const DEFAULTS: Appearance = {
   msgSize: 15, groupSpacing: 17, fontUi: 'Archivo', fontMono: 'Consolas',
   showSendButton: true, custom: {}, scheme: 'off', contrast: 0, emojiPack: 'native',
   underlineLinks: false, displayNameStyles: true, msgLayout: 'cozy', zoom: 100,
-  reduceMotion: false,
+  reduceMotion: false, automatic: false, lastLight: 'light', lastDark: 'default',
 }
 
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
@@ -102,6 +109,36 @@ const load = (): Partial<Appearance> => {
 }
 
 export const appearance = reactive<Appearance>({ ...DEFAULTS, ...load() })
+// A member on Midnight before Automatic existed keeps Midnight under it.
+Object.assign(appearance, seedVariants(appearance))
+
+// ── Light, Dark and Automatic ──────────────────────────────────────────────
+// `theme` is still the id applied to [data-theme]; these choose it. The rules
+// live in themeMode.ts, as pure functions with their own tests.
+const DARK_QUERY = '(prefers-color-scheme: dark)'
+const osDark = (): boolean =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(DARK_QUERY).matches
+
+const themeState = (): ThemeState => ({
+  theme: appearance.theme, automatic: appearance.automatic,
+  lastLight: appearance.lastLight, lastDark: appearance.lastDark,
+})
+const commitTheme = (next: ThemeState, extra: Partial<Appearance> = {}) =>
+  setAppearance({ theme: next.theme, automatic: next.automatic, lastLight: next.lastLight, lastDark: next.lastDark, ...extra })
+
+export const chooseFamily = (family: Family) => commitTheme(pickMode(themeState(), family))
+export const chooseVariant = (v: LightVariant | DarkVariant) => commitTheme(pickVariant(themeState(), v, osDark()))
+/** A Studio theme or Custom. `extra` carries the accent a Studio theme travels with. */
+export const chooseStudio = (id: Theme, extra: Partial<Appearance> = {}) => commitTheme(pickStudio(themeState(), id), extra)
+export const setAutomaticTheme = (on: boolean) => commitTheme(setAutomatic(themeState(), on, osDark()))
+
+if (appearance.automatic) appearance.theme = automaticTheme(themeState(), osDark())
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  window.matchMedia(DARK_QUERY).addEventListener?.('change', e => {
+    const next = onSystemChange(themeState(), e.matches)
+    if (next.theme !== appearance.theme) setAppearance({ theme: next.theme })
+  })
+}
 
 /**
  * `appearance.accent` may be the sentinel 'auto', which almost every consumer
@@ -244,7 +281,7 @@ export const setAppearance = (patch: Partial<Appearance>, persist = true) => {
   applyAppearance()
 }
 export const setCustomToken = (key: string, value: string) => {
-  setAppearance({ theme: 'custom', custom: { ...appearance.custom, [key]: value } })
+  setAppearance({ theme: 'custom', automatic: false, custom: { ...appearance.custom, [key]: value } })
 }
 
 // ── Theme sharing — serialize the themeable subset to a portable code ───────
