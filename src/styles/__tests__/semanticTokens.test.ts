@@ -138,7 +138,30 @@ const resolveHex = (block: string, name: string, seen: ReadonlySet<string> = new
   throw new Error(`--${name}: cannot resolve "${raw}" to a hex (neither a literal hex nor a var() reference)`)
 }
 
-const SURFACES = ['bg-floor', 'bg-deep', 'bg-panel', 'bg-chat', 'bg-raised']
+// Derived, not listed. A hand-written list is a claim that quietly stops
+// being true: this one said "every surface" while naming five of the eight
+// --bg-* tokens every theme declares, and the three it left out — --bg-input,
+// --bg-chatbar and --bg-chatbar-focus — were the binding ones, because in the
+// dark families they are the lightest surfaces the light-on-dark tokens land
+// on. The app's own composer placeholder measured 3.82:1 under a green test.
+// Reading them off :root the way ALL_THEMES reads the theme list means a new
+// surface is covered the day it is declared.
+const SURFACES = [...new Set(Array.from(
+  blockFor('default').matchAll(/^\s*(--bg-[\w-]+)\s*:/gm), m => m[1].slice(2)))]
+
+describe('the surfaces this suite measures against', () => {
+  it('are read off :root, and there are at least eight of them', () => {
+    expect(SURFACES).toEqual(expect.arrayContaining(
+      ['bg-floor', 'bg-deep', 'bg-panel', 'bg-chat', 'bg-raised', 'bg-input', 'bg-chatbar', 'bg-chatbar-focus']))
+    expect(SURFACES.length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('every theme declares, or inherits, each of them', () => {
+    for (const theme of ALL_THEMES)
+      for (const surface of SURFACES)
+        expect(() => resolveHex(blockFor(theme), surface), theme + ' --' + surface).not.toThrow()
+  })
+})
 
 describe('tokens.css: --danger-text clears CONTRAST_TARGET against every surface of its theme family', () => {
   for (const theme of ALL_THEMES) {
@@ -184,6 +207,27 @@ describe('tokens.css: --warning-text clears CONTRAST_TARGET against every surfac
     })
   }
 })
+
+// The two greys that carry the most words in the app after --text-1, and the
+// two this suite did not cover until the surface list was widened. --text-faint
+// is the placeholder in the message composer, which is the one place guaranteed
+// to sit on --bg-chatbar and --bg-chatbar-focus; --text-3 labels every settings
+// row and channel header. Both were under AA on those surfaces while every
+// test here was green, because the surfaces were not in the list.
+for (const token of ['text-3', 'text-faint']) {
+  describe(`tokens.css: --${token} clears CONTRAST_TARGET against every surface of its theme family`, () => {
+    for (const theme of ALL_THEMES) {
+      it(`${theme}`, () => {
+        const block = blockFor(theme)
+        const text = resolveHex(block, token)
+        for (const surface of SURFACES) {
+          const bg = resolveHex(block, surface)
+          expect(ratio(text, bg), `--${token} (${text}) vs ${theme}'s --${surface} (${bg})`).toBeGreaterThanOrEqual(CONTRAST_TARGET)
+        }
+      })
+    }
+  })
+}
 
 describe('tokens.css: --icon clears the graphical 3:1 floor against every surface', () => {
   // Resting icons are graphical objects (WCAG 1.4.11), so 3:1 is their floor.

@@ -224,10 +224,10 @@ img { display: block; object-fit: cover; }
   position: absolute; top: 14px; right: 14px; z-index: 5;
   width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-2); background: var(--media-veil);
-  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+  color: var(--on-media); background: var(--media-veil);
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.up-close:hover  { color: var(--text-strong); background: var(--media-veil-strong); }
+.up-close:hover  { background: var(--media-veil-strong); }
 .up-close:active { transform: scale(.94); }
 
 .up-state { padding: 72px 24px; text-align: center; color: var(--text-3); font-size: 14px; }

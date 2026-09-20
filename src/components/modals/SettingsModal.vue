@@ -1882,8 +1882,10 @@ img    { display: block; object-fit: cover; }
 /* Toggle */
 .ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: var(--toggle-off); position: relative; transition: background var(--dur-2) var(--ease-out); flex-shrink: 0; }
 .ap-toggle.on { background: var(--accent); }
-.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out); }
-.ap-toggle.on span { transform: translateX(18px); }
+.ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out); }
+/* On the accent the knob takes the accent's own measured ink: --toggle-knob
+   is tuned to the grey track, and the member may set any accent. */
+.ap-toggle.on span { transform: translateX(18px); background: var(--text-on-accent); }
 
 /* Scrollbar */
 /* ══ MOBILE ═══════════════════════════════════════════════════════════════
