@@ -422,14 +422,14 @@ against it.
 | — | Login copy ("Welcome back!", "community") | **Leave** — deliberate. The dead consent links remain a bug. |
 | 15 | Google Fonts remote fetch | **Self-host** the four families. |
 | 2 | Seven presets failing AA | **Adaptive on-accent text** from luminance — covers custom accents and Material-You too. |
-| 5 | Call bar / stage dark-only | **Theme everything, tiles included.** Tradeoff accepted: video reads worse on a light tile; review with real video before it lands. |
+| 5 | Call bar / stage dark-only | **Theme everything, tiles included.** Tradeoff accepted: video reads worse on a light tile; review with real video before it lands.  **DONE 2026-09-20 (slice 5)** — landed as a media surface rather than blanket theming: the bar and stage stay dark in every theme, the flyout follows it. Owner still to review against real video. |
 | 9 | Hardcoded colour | **Full sweep, and add the missing tokens** (`--danger`/`--red` do not exist today). |
 | 27 | `ChatApp.vue` at 6,352 lines | **Split only what we touch**, as findings are fixed. |
 | 16 | Server dropdown | **Add sections to the `MenuItem` model**, then section the menu. |
 | 17 | Settings "Soon" rows | **Hide until built** — see the directive change below. |
 | 19/23 | Layout animations, raw durations | **Fix both.** Bounce easings stay — treated as intentional character. |
 | 25/26 | AuthPage SVGs, `lottie-web` import | **Fix both.** Icon weight/size drift left as later polish. |
-| 18 | One red for sharing and muted | **Split them** — red stays for the live broadcast, muted goes neutral. |
+| 18 | One red for sharing and muted | **Split them** — red stays for the live broadcast, muted goes neutral.  **DONE 2026-09-20 (slice 5).** |
 | — | Host-facing copy (`start-dev.cmd`, HTTPS, DTLS-SRTP) | **Rewrite for the member**, move host detail where a host would look. |
 | — | No instance identity | **Build it** — an "about this instance" surface in Settings: who runs it, how to reach them, version. |
 
