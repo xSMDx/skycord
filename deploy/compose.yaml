@@ -34,6 +34,22 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-}
       TRUST_CF_IP: ${TRUST_CF_IP:-false}
       GEOIP: ${GEOIP:-}
+      INSTANCE_NAME: ${INSTANCE_NAME:-}
+      INSTANCE_DESCRIPTION: ${INSTANCE_DESCRIPTION:-}
+      INSTANCE_OPERATOR: ${INSTANCE_OPERATOR:-}
+      INSTANCE_CONTACT: ${INSTANCE_CONTACT:-}
+      TERMS_URL: ${TERMS_URL:-}
+      PRIVACY_URL: ${PRIVACY_URL:-}
+      GUIDELINES_URL: ${GUIDELINES_URL:-}
+      COOKIES_URL: ${COOKIES_URL:-}
+      COPYRIGHT_URL: ${COPYRIGHT_URL:-}
+      IMPRINT_URL: ${IMPRINT_URL:-}
+      SOURCE_URL: ${SOURCE_URL:-}
+      INSTANCE_DIR: /app/instance
+    # The host's legal documents and icon. Read-only: the app serves these
+    # files and never writes them.
+    volumes:
+      - ./instance:/app/instance:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
