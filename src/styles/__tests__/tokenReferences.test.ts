@@ -83,7 +83,6 @@ describe('token references', () => {
     }
     return out
   }
-  const written = writtenIn(sources)
 
   it('has no var() naming a custom property nothing anywhere writes', () => {
     expect(orphansIn(sources)).toEqual([])
