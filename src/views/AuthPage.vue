@@ -95,13 +95,15 @@ const pwStrength = computed(() => {
   if (/[A-Z]/.test(p)) s++
   if (/[0-9]/.test(p)) s++
   if (/[!@#$%^&*(),.?":{}|<>]/.test(p)) s++
+  // One value per level, used for the bar AND for the label beside it, so
+  // each is the token measured for text rather than the fill of the same name.
   const map = [
     { label: '', color: '' },
-    { label: 'Very weak', color: '#ed4245' },
-    { label: 'Weak',      color: '#ed4245' },
-    { label: 'Fair',      color: '#f0a500' },
-    { label: 'Good',      color: '#5865f2' },
-    { label: 'Strong',    color: '#23a55a' },
+    { label: 'Very weak', color: 'var(--danger-text)' },
+    { label: 'Weak',      color: 'var(--danger-text)' },
+    { label: 'Fair',      color: 'var(--warning-text)' },
+    { label: 'Good',      color: 'var(--accent-text)' },
+    { label: 'Strong',    color: 'var(--green-text)' },
   ]
   return { score: s, ...map[s] }
 })

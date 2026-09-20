@@ -3606,7 +3606,7 @@ const keyOf = (m: Message) => (m as any).dbId || String(m.id)
 const stubFromPreview = (p: { id: string; author: string; content: string }): Message => ({
   id: parseInt(p.id.slice(-8), 16) || Date.now(),
   dbId: p.id, author: p.author, authorId: '', content: p.content,
-  time: '', timestamp: 0, avatar: avatarFor(p.author), avatarColor: '#5865f2', reactions: [],
+  time: '', timestamp: 0, avatar: avatarFor(p.author), reactions: [],
 } as Message)
 
 const buildReplyGraph = (held: Message): ReplyGraph => {
@@ -4668,7 +4668,7 @@ onBeforeUnmount(() => {
           <div class="friends-list">
             <!-- Loading -->
             <div v-if="apiLoading" class="f-loading">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5865f2" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
               Loading…
             </div>
 

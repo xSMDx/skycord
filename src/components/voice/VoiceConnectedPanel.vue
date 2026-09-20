@@ -43,7 +43,11 @@ const STAGE_LABEL: Record<string, string> = {
 //   signal-medium yellow (150–250ms)
 //   signal-low    orange (>250ms) / blue while reconnecting
 //   signal-zero   red    (no route / failed)
-const GREEN = '#23a55a', YELLOW = '#f0b232', ORANGE = '#f0662c', RED = '#f23f43', BLUE = 'var(--accent)'
+const GREEN = 'var(--green-text)', YELLOW = 'var(--warning-text)', RED = 'var(--danger-text)', BLUE = 'var(--accent)'
+// Amber covers both degraded bands. A fourth colour between amber and red
+// cannot clear AA on the dark themes without becoming the red: see the
+// commit that made this change.
+const ORANGE = YELLOW
 const q = computed(() => {
   if (voice.connectStage === 'failed') return { icon: SignalZero, color: RED, label: 'Couldn’t connect' }
   if (voice.connecting) {

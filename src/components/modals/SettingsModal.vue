@@ -821,12 +821,12 @@ const handleSelfRevoked = () => handleLogout()
             <h2 id="acc-standing" class="st-section">Account Standing</h2>
             <div class="st-card">
               <div class="acc-standing">
-                <CircleCheck :size="24" :stroke-width="2.25" style="color:#23a55a; flex-shrink:0" />
+                <CircleCheck :size="24" :stroke-width="2.25" style="color:var(--green-text); flex-shrink:0" />
                 <div style="flex:1">
                   <div class="acc-standing-title">Your account is all good</div>
                   <div class="acc-standing-sub">No violations. Thanks for keeping Skycord safe 🙏</div>
                 </div>
-                <ArrowRight :size="16" :stroke-width="1.5" style="color:#949ba4;flex-shrink:0" />
+                <ArrowRight :size="16" :stroke-width="1.5" style="color:var(--icon);flex-shrink:0" />
               </div>
             </div>
 
@@ -901,7 +901,7 @@ const handleSelfRevoked = () => handleLogout()
                     <div class="pf-ctl">
                       <div class="pf-bnwrap">
                         <button
-                          class="pf-bnbox" :style="{ background: authUser?.banner ? '#1e1f22' : (bannerColor || '#1e1f22') }"
+                          class="pf-bnbox" :style="{ background: authUser?.banner ? 'var(--bg-input)' : (bannerColor || 'var(--bg-input)') }"
                           aria-label="Pick banner colour"
                           @click="showBannerPicker ? (showBannerPicker = false) : openBannerPicker()"
                         >
@@ -1342,15 +1342,15 @@ const handleSelfRevoked = () => handleLogout()
     @done="onModalDone"
   >
     <div>
-      <label class="efm-field-label">Current Password <span style="color:#ed4245">*</span></label>
+      <label class="efm-field-label">Current Password <span style="color:var(--danger-text)">*</span></label>
       <input class="efm-input" v-model="confirmPassword" type="password" autofocus />
     </div>
     <div>
-      <label class="efm-field-label">New Password <span style="color:#ed4245">*</span></label>
+      <label class="efm-field-label">New Password <span style="color:var(--danger-text)">*</span></label>
       <input class="efm-input" v-model="newPassword" type="password" />
     </div>
     <div>
-      <label class="efm-field-label">Confirm New Password <span style="color:#ed4245">*</span></label>
+      <label class="efm-field-label">Confirm New Password <span style="color:var(--danger-text)">*</span></label>
       <input class="efm-input" v-model="confirmNewPassword" type="password" @keydown.enter="onModalDone" />
     </div>
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
