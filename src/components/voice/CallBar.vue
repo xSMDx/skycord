@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="visible" ref="callbarRef" class="callbar" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': chatHidden, 'is-fs': isFullscreen, 'is-dragging': dragging }">
+  <div v-if="visible" ref="callbarRef" class="callbar" data-surface="media" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': chatHidden, 'is-fs': isFullscreen, 'is-dragging': dragging }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
@@ -537,15 +537,15 @@ onBeforeUnmount(() => {
   background: var(--accent); color: var(--text-on-accent);
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 700;
-  box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow var(--dur-2) var(--ease-out);
+  box-shadow: 0 0 0 0 transparent; transition: box-shadow var(--dur-2) var(--ease-out);
 }
 /* Clip the image to the circle on the IMAGE itself, NOT the container — the
    container must stay un-clipped so the .cb-mute badge can overhang the corner. */
 .cb-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.cb-av.speaking { box-shadow: 0 0 0 3px #23a55a; }
+.cb-av.speaking { box-shadow: 0 0 0 3px var(--green); }
 .cb-mute {
   position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px;
-  border-radius: 50%; background: #f23f43; color: #fff;
+  border-radius: 50%; background: var(--bg-chatbar); color: var(--text-2);
   display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
 }
 .cb-name { font-size: 13px; color: var(--text-1); font-weight: 600; }
@@ -561,40 +561,40 @@ onBeforeUnmount(() => {
 .cb-group:empty { display: none; }
 .cb-b {
   width: 40px; height: 40px; border-radius: 8px;
-  background: transparent; color: #fff;
+  background: transparent; color: var(--text-strong);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.cb-b:hover:not(:disabled) { background: rgba(255,255,255,.08); }
+.cb-b:hover:not(:disabled) { background: var(--hover); }
 .cb-b:disabled { opacity: .45; cursor: not-allowed; }
 /* No ugly browser focus ring — a subtle bg highlight stands in for keyboard focus */
 .cb-b:focus, .cb-chev:focus, .cb-leave:focus { outline: none; }
-.cb-b:focus-visible, .cb-chev:focus-visible { background: rgba(255,255,255,.16); }
-.cb-b.off { background: #f23f43; color: #fff; }
-.cb-b.off:hover:not(:disabled) { background: #d83c3f; }
+.cb-b:focus-visible, .cb-chev:focus-visible { background: var(--hover-strong); }
+.cb-b.off { background: var(--danger); color: var(--text-on-danger); }
+.cb-b.off:hover:not(:disabled) { background: var(--danger-hover); color: var(--text-on-danger-hover); }
 /* device-picker chevron — slim split-button next to mic/camera */
 .cb-chev {
   width: 18px; height: 40px; border-radius: 6px;
-  background: transparent; color: #b5bac1;
+  background: transparent; color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.cb-chev:hover:not(:disabled) { background: rgba(255,255,255,.08); color: #fff; }
+.cb-chev:hover:not(:disabled) { background: var(--hover); color: var(--text-strong); }
 .cb-chev:disabled { opacity: .45; cursor: not-allowed; }
 /* mic/cam + ▾ pair highlight: the split wrapper takes the hover bg so both
    halves light together (Discord behavior). Individual bg hovers inside the
    split go transparent; red .off / green .on states keep their own fills. */
 .cb-split { position: relative; display: flex; align-items: center; gap: 2px; border-radius: 8px; transition: background var(--dur-1) var(--ease-out); }
-.cb-split:hover:has(.cb-b:not(:disabled)) { background: rgba(255,255,255,.08); }
+.cb-split:hover:has(.cb-b:not(:disabled)) { background: var(--hover); }
 .cb-split .cb-b:hover:not(:disabled):not(.on):not(.off) { background: transparent; }
-.cb-split.menuopen { background: rgba(255,255,255,.08); }
+.cb-split.menuopen { background: var(--hover); }
 .cb-leave {
   width: 56px; height: 44px; border-radius: 12px; flex-shrink: 0;
-  background: #f23f43; color: #fff;
+  background: var(--danger); color: var(--text-on-danger);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out);
 }
-.cb-leave:hover { background: #d83c3f; }
+.cb-leave:hover { background: var(--danger-hover); color: var(--text-on-danger-hover); }
 
 /* ── Touch sizing ──────────────────────────────────────────────────────────
    Measured on a phone, six of the seven call controls were under 44x44: the
@@ -671,10 +671,10 @@ onBeforeUnmount(() => {
 .cb-join {
   display: flex; align-items: center; gap: 8px;
   height: 40px; padding: 0 22px; border-radius: 8px;
-  background: #23a55a; color: #fff; font-size: 14px; font-weight: 700;
+  background: var(--green); color: var(--text-on-green); font-size: 14px; font-weight: 700;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.cb-join:hover { background: #1f9450; transform: translateY(-1px); }
+.cb-join:hover { background: var(--green-hover); transform: translateY(-1px); }
 .cb-join:active { transform: scale(.96); }
 .cb-dismiss {
   width: 40px; height: 40px; border-radius: 8px;
@@ -684,8 +684,8 @@ onBeforeUnmount(() => {
 .cb-dismiss:hover { background: var(--hover-strong); }
 
 /* Active camera / screen share — green like Discord */
-.cb-b.on { background: #248046; color: #fff; }
-.cb-b.on:hover:not(:disabled) { background: #1a6334; }
+.cb-b.on { background: var(--green-deep); color: var(--text-on-green-deep); }
+.cb-b.on:hover:not(:disabled) { background: var(--green-deep-hover); }
 
 /* When video is on the stage, let the call bar grow to fill the chat column.
    The stage lives in .cb-stagewrap (positioning context for the ⛶ overlay);
@@ -737,5 +737,5 @@ onBeforeUnmount(() => {
 .callbar.is-dragging { user-select: none; }
 
 /* Theater view: whole call surface fills the screen, letterboxed on black. */
-.callbar.is-fs { background: #000; border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
+.callbar.is-fs { background: var(--letterbox); border-bottom: none; justify-content: center; padding: 24px 24px 20px; }
 </style>

@@ -395,7 +395,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 /* Camera preview — centered + wide, breathing room before the dropdown */
 .vv-cambox {
   position: relative; width: 100%; max-width: 600px; margin: 0 auto 20px;
-  background: #000; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--letterbox); border: 1px solid var(--border); border-radius: 12px;
   aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .vv-video { width: 100%; height: 100%; object-fit: cover; display: none; }

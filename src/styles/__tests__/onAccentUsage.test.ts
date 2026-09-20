@@ -99,6 +99,7 @@ describe('text on an accent background', () => {
     'components/voice/VoiceVideoSettings.vue:.vv-tog.on',        // toggle-switch track
     'components/modals/SettingsModal.vue:.ap-toggle.on',         // toggle-switch track
     'styles/settingsShared.css:.st-toggle.on',                   // toggle-switch track
+    'components/voice/CallFlyout.vue:.fly .fr-tog.on',           // toggle-switch track
     'components/modals/SettingsModal.vue:.ap-slider::-webkit-slider-thumb', // slider thumb knob
     'components/modals/SettingsModal.vue:.ap-slider::-moz-range-thumb',    // slider thumb knob
   ])

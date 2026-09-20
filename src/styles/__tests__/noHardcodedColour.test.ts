@@ -30,9 +30,6 @@ const RULED: RuledSite[] = [
   // Letterbox: not a surface but the absence of one — the ground behind
   // pixels that have not arrived yet. Black in every theme, like every video
   // player.
-  { file: 'components/voice/CameraPreviewModal.vue', selector: '.cp-stage', why: 'letterbox behind video' },
-  { file: 'components/voice/VideoTile.vue', selector: '.vtile', why: 'letterbox behind video' },
-  { file: 'components/voice/VoiceVideoSettings.vue', selector: '.vv-cambox', why: 'letterbox behind the camera preview' },
 
   // A hairline separating an arbitrary image from whatever is behind it.
   // --border follows the theme, which is exactly wrong here: the thing being
@@ -54,17 +51,6 @@ const RULED: RuledSite[] = [
   { file: 'views/AuthPage.vue', selector: '.b2', why: 'gradient partner: kept for now, accent-following is later work' },
 
 ]
-
-// The call surfaces are skipped by this sweep on purpose: slice 5 themes them
-// against real video, where a colour is judged on a moving picture rather
-// than on a static panel. Until then they keep a count of their own, which
-// may only go down.
-const DEFERRED_FILES = [
-  'components/voice/CallBar.vue',
-  'components/voice/CallStage.vue',
-  'components/voice/CallFlyout.vue',
-]
-const DEFERRED_BASELINE = 53
 
 // Same recursive walk onAccentUsage.test.ts uses (vueFiles), generalised to
 // take an extension so it can also list plain .css files. __tests__ is
@@ -371,17 +357,11 @@ describe('no hardcoded colour', () => {
 
   const isRuled = (o: FileOffender) =>
     RULED.some(r => r.file === o.file && r.selector === o.selector)
-  const isDeferred = (o: FileOffender) => DEFERRED_FILES.includes(o.file)
-
   it('has no hardcoded colour outside the ruled sites', () => {
     const unruled = offenders
-      .filter(o => !isRuled(o) && !isDeferred(o))
+      .filter(o => !isRuled(o))
       .map(o => `${o.file}:${o.line}  ${o.value}  ${o.selector}`)
     expect(unruled).toEqual([])
-  })
-
-  it('keeps the call surfaces at or below their deferred count until slice 5', () => {
-    expect(offenders.filter(isDeferred).length).toBeLessThanOrEqual(DEFERRED_BASELINE)
   })
 
   // Without this the list above would be write-only: a ruled site that gets

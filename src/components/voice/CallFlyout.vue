@@ -106,9 +106,9 @@ onBeforeUnmount(() => {
 .fly {
   position: fixed; z-index: 8001;
   min-width: 236px; max-height: 62vh; overflow: hidden auto;
-  background: var(--bg-floor); border: 1px solid rgba(255,255,255,.1);
+  background: var(--bg-floor); border: 1px solid var(--border);
   border-radius: 8px; padding: 6px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.85);
+  box-shadow: var(--shadow-md);
 }
 /* Grows from the control that opened it rather than from its own middle —
    a menu that expands out of its button reads as belonging to it. */
@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
 .fly .fr:disabled { opacity: .45; cursor: not-allowed; }
 .fly .fr:disabled:hover { background: none; color: var(--text-1); }
 .fly .fr.static, .fly .fr.static:hover { background: none; color: var(--text-1); cursor: default; }
-.fly .fr-sep   { height: 1px; background: rgba(255,255,255,.08); margin: 4px 2px; }
+.fly .fr-sep   { height: 1px; background: var(--divider); margin: 4px 2px; }
 .fly .fr-label {
   display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .4px; color: var(--text-3); padding: 6px 10px 2px;
@@ -160,16 +160,16 @@ onBeforeUnmount(() => {
   margin-top: 1px; max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .fly .fr-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
-.fly .fr-check  { color: #23a55a; flex-shrink: 0; }
+.fly .fr-check  { color: var(--green-text); flex-shrink: 0; }
 .fly .fr:hover .fr-check { color: var(--text-on-accent); }
 .fly .fr-tog {
   flex-shrink: 0; width: 38px; height: 20px; border-radius: 10px;
-  background: rgba(128,132,142,.5); position: relative; transition: background var(--dur-2) var(--ease-out); display: inline-block;
+  background: var(--toggle-off); position: relative; transition: background var(--dur-2) var(--ease-out); display: inline-block;
 }
-.fly .fr-tog.on { background: #23a55a; }
+.fly .fr-tog.on { background: var(--accent); }
 .fly .fr-tog > span {
   position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-  border-radius: 50%; background: #fff; transition: transform var(--dur-2) var(--ease-out);
+  border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out);
 }
 .fly .fr-tog.on > span { transform: translateX(18px); }
 </style>

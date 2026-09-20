@@ -235,10 +235,10 @@ button { border: none; }
   width: 72px; height: 72px; border-radius: 50%; position: relative;
   background: var(--accent); color: var(--text-on-accent);
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 700; box-shadow: 0 0 0 0 rgba(35,165,90,0); transition: box-shadow var(--dur-2) var(--ease-out);
+  font-size: 26px; font-weight: 700; box-shadow: 0 0 0 0 transparent; transition: box-shadow var(--dur-2) var(--ease-out);
 }
 .s-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.s-av.speaking { box-shadow: 0 0 0 3px #23a55a; }
+.s-av.speaking { box-shadow: 0 0 0 3px var(--green); }
 
 /* Ringing — calling them, no answer yet. Dimmed so they read as not-here-yet
    rather than present-and-silent, with two rings on an offset delay so the
@@ -247,7 +247,7 @@ button { border: none; }
 .s-av.ringing img { filter: brightness(.75); }
 .s-wave {
   position: absolute; inset: 0; border-radius: 50%;
-  border: 2px solid rgba(88,101,242,.75);
+  border: 2px solid rgba(var(--accent-rgb), .75);
   animation: s-wave 1.8s cubic-bezier(.2,.6,.35,1) infinite;
   pointer-events: none;
 }
@@ -263,7 +263,7 @@ button { border: none; }
 }
 .s-mute {
   position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%;
-  background: #f23f43; color: #fff; display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
+  background: var(--bg-chatbar); color: var(--text-2); display: flex; align-items: center; justify-content: center; border: 3px solid var(--bg-floor);
 }
 /* Capped, because the name is what sizes the tile. An avatar is 72px, but
    the tile is as wide as its longest child — so one long display name made
@@ -290,13 +290,13 @@ button { border: none; }
    the video letterboxes inside — so a share always fits, at any bar height. */
 .g-cell {
   position: relative; height: 100%; min-height: 0; border-radius: 8px; overflow: hidden;
-  background: #0b0b0f; border: 2px solid transparent; cursor: pointer;
+  background: var(--media-ground); border: 2px solid transparent; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color var(--dur-2) var(--ease-out);
 }
-.g-cell.speaking { border-color: #23a55a; }
+.g-cell.speaking { border-color: var(--green); }
 /* Grid-only hover hint: clicking focuses this tile. Suppressed in spotlight. */
-.stage--grid:not(.stage--spotlight) .g-cell:hover { box-shadow: inset 0 0 0 2px rgba(255,255,255,.22); }
+.stage--grid:not(.stage--spotlight) .g-cell:hover { box-shadow: inset 0 0 0 2px var(--active-ring); }
 
 /* ── The grid on a phone ───────────────────────────────────────────────
    auto-fit with a 200px floor needs 410px to make two columns, so on a
@@ -336,7 +336,7 @@ button { border: none; }
 .g-avwrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .g-av {
   width: 72px; height: 72px; border-radius: 50%; overflow: hidden;
-  background: rgba(0,0,0,.35); color: #fff; display: flex; align-items: center; justify-content: center;
+  background: var(--media-veil); color: var(--on-media); display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 700;
 }
 .g-av img { width: 100%; height: 100%; object-fit: cover; }
@@ -353,7 +353,7 @@ button { border: none; }
   position: absolute; top: 50%; left: 50%;
   width: 72px; height: 72px; margin: -36px 0 0 -36px;
   border-radius: 50%;
-  border: 2px solid rgba(88,101,242,.75);
+  border: 2px solid rgba(var(--accent-rgb), .75);
   animation: g-wave 1.8s cubic-bezier(.2,.6,.35,1) infinite;
   pointer-events: none;
 }
@@ -371,7 +371,7 @@ button { border: none; }
 .g-name {
   position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 6px;
   max-width: calc(100% - 16px); padding: 4px 8px; border-radius: 6px;
-  background: rgba(0,0,0,.65); color: #fff; font-size: 12px; font-weight: 600;
+  background: var(--media-veil-strong); color: var(--on-media); font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Fullscreen button — hidden until hover so it doesn't clutter a grid of tiles,
@@ -379,22 +379,22 @@ button { border: none; }
 .g-fs {
   position: absolute; right: 8px; top: 8px;
   width: 28px; height: 28px; border-radius: 6px;
-  background: rgba(0,0,0,.6); color: #fff;
+  background: var(--media-veil-strong); color: var(--on-media);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
 .g-cell:hover .g-fs, .g-cell.is-cell-fs .g-fs { opacity: 1; }
-.g-fs:hover { background: rgba(0,0,0,.85); }
+.g-fs:hover { background: var(--scrim); }
 /* A screen share already uses the top-right for its LIVE badge. */
 .g-cell:has(.g-live) .g-fs { right: 8px; top: 38px; }
 /* The fullscreened cell IS the viewport — drop the tile chrome. */
-.g-cell.is-cell-fs { border-radius: 0; border-color: transparent; background: #000; }
+.g-cell.is-cell-fs { border-radius: 0; border-color: transparent; background: var(--letterbox); }
 .g-live {
   position: absolute; right: 8px; top: 8px; padding: 2px 8px; border-radius: 6px;
-  background: #f23f43; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .04em;
+  background: var(--danger); color: var(--text-on-danger); font-size: 10px; font-weight: 800; letter-spacing: .04em;
 }
 .g-mute {
   position: absolute; right: 8px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%;
-  background: #f23f43; color: #fff; display: flex; align-items: center; justify-content: center;
+  background: var(--media-veil-strong); color: var(--on-media); display: flex; align-items: center; justify-content: center;
 }
 </style>
