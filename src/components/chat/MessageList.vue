@@ -346,7 +346,8 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
   box-shadow:var(--shadow-sm);
 }
 .ml-jump:hover{filter:brightness(1.08)}
-.jump-enter-active,.jump-leave-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.jump-enter-active{transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.jump-leave-active{transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
 .welcome{padding: 20px 16px 16px;border-bottom:1px solid var(--divider);margin-bottom: 8px}
 .ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}

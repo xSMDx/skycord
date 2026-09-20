@@ -380,8 +380,10 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
   box-sizing: border-box;
 }
 .vv-tog.on { background: var(--accent); }
-.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out); }
-.vv-tog.on span { transform: translateX(20px); }
+.vv-tog span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out); }
+/* On the accent the knob takes the accent's own measured ink: --toggle-knob
+   is tuned to the grey track, and the member may set any accent. */
+.vv-tog.on span { transform: translateX(20px); background: var(--text-on-accent); }
 
 .vv-btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }
 .vv-btn:hover { background: var(--hover); }

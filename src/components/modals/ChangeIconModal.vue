@@ -99,7 +99,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .ci-gif-overlay {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: var(--media-veil); color: var(--text-strong); font-size: 15px; font-weight: 700;
+  background: var(--media-veil-strong); color: var(--on-media); font-size: 15px; font-weight: 700;
 }
 
 .ci-error { padding: 0 18px 16px; font-size: 13px; color: var(--danger-text); }

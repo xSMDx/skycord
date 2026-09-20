@@ -112,7 +112,10 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
 .tc-name { font-size: 15px; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-sub { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 8px; }
 .tc-swatches { display: inline-flex; gap: 4px; }
-.tc-swatches i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--seam); }
+/* --media-edge, not --seam: each swatch is painted with the colour of the
+   theme it depicts, including white for Light, and a seam that follows the
+   current theme is exactly the wrong edge around it. */
+.tc-swatches i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--media-edge); }
 .tc-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .tc-preview {
   border: none; background: none; padding: 4px 2px; cursor: pointer;

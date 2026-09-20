@@ -26,7 +26,6 @@ export interface Message {
   timestamp:   number
   avatar:      string
   avatarCrop?: AvatarCrop | null
-  avatarColor: string
   kind?:       'dm' | 'group' | 'channel' | 'system'
   systemType?: SystemType
   reactions:   Reaction[]
@@ -92,7 +91,6 @@ export interface Member {
   name:        string
   avatar:      string
   avatarCrop?: AvatarCrop | null
-  avatarColor: string
   status:      Status
   role?:       Role
   joinedAt?:   string

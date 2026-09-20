@@ -37,7 +37,6 @@ const RULED: RuledSite[] = [
   // A hairline separating an arbitrary image from whatever is behind it.
   // --border follows the theme, which is exactly wrong here: the thing being
   // separated does not.
-  { file: 'components/settings/CountryFlag.vue', selector: '.cf', why: 'ring around an arbitrary flag' },
 
   // The banner's three fills are deliberately the same in every theme (see
   // --warning-deep in tokens.css), so a veil laid over one of them is too.
