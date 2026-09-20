@@ -90,9 +90,15 @@ describe('GET /instance/legal/:kind', () => {
     expect((await api().get('/instance/legal/cookies')).status).toBe(404)
   })
 
+  // Every traversal below is written so a URL parser cannot defuse it before
+  // the request is sent. A bare '%2e%2e' is a complete dot-segment, and the
+  // WHATWG parser inside supertest collapses it to '/instance/' on the client
+  // — that probe would have tested the client, not this router. Keeping the
+  // slash encoded holds the whole attempt inside one path segment, which is
+  // exactly what reaches :kind.
   it('answers 404 for an unknown kind and never lets a path through', async () => {
     writeFileSync(join(dir, 'terms.md'), '# Terms')
-    for (const path of ['/instance/legal/unknown', '/instance/legal/..%2fterms', '/instance/legal/terms.md', '/instance/legal/%2e%2e']) {
+    for (const path of ['/instance/legal/unknown', '/instance/legal/..%2fterms', '/instance/legal/terms.md', '/instance/legal/%2e%2e%2fterms', '/instance/legal/%2e%2e%2f%2e%2e%2fpackage.json']) {
       const res = await api().get(path)
       expect(res.status, path).toBe(404)
       expect(res.headers['access-control-allow-origin'], path).toBe('*')
