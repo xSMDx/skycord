@@ -5,6 +5,7 @@ import { createApp }    from './app'
 import { initSocket }   from './sockets/chatSocket'
 import { loadInstanceVoiceServers, setInstanceVoiceServers } from './config/instanceVoice'
 import { backfillSearchFields } from './utils/searchBackfill'
+import { readInstanceProfile, scanInstanceDir, instanceDir } from './utils/instanceProfile'
 
 const start = async () => {
   try { config } catch (err) {
@@ -25,6 +26,13 @@ const start = async () => {
     console.error('❌ Voice servers:', (err as Error).message)
     process.exit(1)
   }
+
+  // Once, at boot: the route stays quiet, so a bad value is not repeated in the
+  // log on every request. Nothing here stops the process — every problem has a
+  // safe fallback, which is the whole point of reporting it instead.
+  const instance = readInstanceProfile(process.env, scanInstanceDir(instanceDir(process.env, process.cwd())))
+  for (const warning of instance.warnings) console.warn('⚠ Instance profile: ' + warning)
+
   try {
     await connectDB()
   } catch (err) {

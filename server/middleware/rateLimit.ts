@@ -43,3 +43,8 @@ export const uploadLimit = make(60_000, 20, 'Too many profile updates — wait a
 
 /** Writes that create records or notify other users. */
 export const writeLimit = make(60_000, 120, 'Too many requests — wait a moment')
+
+/** The public instance profile and its files, read before sign-in by the web
+ *  client once per page load and by the desktop picker. Keyed by IP, since
+ *  nobody here is signed in. */
+export const instanceLimit = make(60_000, 120, 'Too many requests — wait a moment')
