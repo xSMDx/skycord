@@ -38,6 +38,7 @@
     "livekit-server-sdk": "^2.15.5",
     "lottie-web": "^5.13.0",
     "lucide-vue-next": "^1.0.0",
+    "markdown-it": "^15.0.2",
     "maxmind": "^5.0.7",
     "mongoose": "^8.3.1",
     "morgan": "^1.10.0",
