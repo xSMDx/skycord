@@ -33,6 +33,7 @@ import { THEME_OPTS, STUDIO_OPTS, type ThemeOpt } from '@/composables/themePrese
 // unless they open this page.
 const DevicesPage = defineAsyncComponent(() => import('@/components/settings/DevicesPage.vue'))
 import AboutInstancePage from '@/components/settings/AboutInstancePage.vue'
+import LegalPage from '@/components/settings/LegalPage.vue'
 
 const emit = defineEmits<{ close: [] }>()
 const { user: authUser, logout, authFetch, updateUser } = useAuth()
@@ -461,6 +462,7 @@ const navSections: NavSection[] = [
     label: '',
     items: [
       { id: 'about', label: 'About this instance' },
+      { id: 'legal', label: 'Legal' },
     ]
   },
 ]
@@ -1279,6 +1281,11 @@ const handleSelfRevoked = () => handleLogout()
           <!-- ── About this instance ── -->
           <template v-else-if="page === 'about'">
             <AboutInstancePage />
+          </template>
+
+          <!-- ── Legal ── -->
+          <template v-else-if="page === 'legal'">
+            <LegalPage />
           </template>
 
           <!-- See measureTail(): lets the last section reach the top of the

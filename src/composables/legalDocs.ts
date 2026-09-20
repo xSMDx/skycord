@@ -50,3 +50,24 @@ export const formatUpdated = (iso: string): string => {
   const [year, month, day] = iso.split('-').map(Number)
   return new Date(year, month - 1, day).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
+
+export interface LegalRow { entry: LegalEntry; title: string; external: boolean; updated: string | null }
+
+/** The instance's documents as Settings › Legal lists them, in the fixed order. */
+export const legalRows = (profile: InstanceProfile | null): LegalRow[] =>
+  (profile?.legal ?? []).map(entry => ({
+    entry,
+    title: LEGAL_TITLES[entry.kind],
+    external: entry.source === 'url',
+    updated: entry.source === 'document' ? formatUpdated(entry.updated) : null,
+  }))
+
+/**
+ * Where the source of the running version is. The AGPL's offer must not depend
+ * on the server answering, so with no profile — or a source that is not a web
+ * address — it falls back to the upstream repository.
+ */
+export const sourceHref = (profile: InstanceProfile | null): string => {
+  const source = profile?.source
+  return source && /^https?:\/\//i.test(source) ? source : UPSTREAM_REPO
+}
