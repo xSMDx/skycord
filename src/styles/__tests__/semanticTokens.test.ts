@@ -251,16 +251,6 @@ describe('tokens.css: the toggle track and knob clear the graphical 3:1 floor on
       const block = blockFor(theme)
       const knob = resolveHex(block, 'toggle-knob')
       const trackRaw = (/--toggle-off\s*:\s*([^;]+);/.exec(block) ?? /--toggle-off\s*:\s*([^;]+);/.exec(rootBlock))![1].trim()
-      // The dark families have never cleared the edge half of this: the
-      // shared rgba(128,132,142,.5) measures 1.65:1 at its worst (stripe's
-      // --bg-chatbar-focus) and 2.15:1 at its best, so a dark switch is a shape
-      // you can only find because you know it is there. That is a real
-      // WCAG 1.4.11 gap, older than this file, and fixing it means visibly
-      // relighting every toggle on twelve themes — the owner's call, not a
-      // test's. It is a ratchet rather than a silence: the current worst is
-      // written down, so it can improve and cannot slip.
-      const DARK_EDGE_FLOOR = 1.65
-      const light = theme === 'light' || theme === 'light-dim'
 
       for (const surface of SURFACES) {
         const bg = resolveHex(block, surface)
@@ -268,7 +258,7 @@ describe('tokens.css: the toggle track and knob clear the graphical 3:1 floor on
         expect(ratio(knob, track), `--toggle-knob (${knob}) vs the off track (${track}) on ${theme}'s --${surface}`)
           .toBeGreaterThanOrEqual(3)
         expect(ratio(track, bg), `the off track (${track}) vs ${theme}'s --${surface} (${bg}) — the control's own edge`)
-          .toBeGreaterThanOrEqual(light ? 3 : DARK_EDGE_FLOOR)
+          .toBeGreaterThanOrEqual(3)
       }
     })
   }

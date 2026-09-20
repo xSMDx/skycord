@@ -407,7 +407,14 @@
      this file had just been repaired for. Its real worst edge was 2.74:1, on
      light-dim's --bg-floor. That is why the numbers are now derived by a
      test: a worst case asserted in a comment is a worst case nobody rechecks.) */
-  --toggle-off:  rgba(128, 132, 142, .5);
+  /* Dark: a solid grey rather than the old rgba(128,132,142,.5), whose edge
+     measured 1.65:1 at worst against its own surface on the eleven dark
+     themes — a switch you could only find because you knew it was there.
+     #8a8e98 is the darkest grey in the same blue-grey tint that clears 3:1
+     both ways on every surface of every dark theme: track edge 3.06:1 (stripe
+     --bg-chatbar-focus), white knob 3.28:1. Lighter than iOS or Discord draw
+     an off switch, on purpose: those lean on the knob alone. */
+  --toggle-off:  #8a8e98;
   --toggle-knob: #ffffff;
 
   /* ── Warning, as a solid fill ───────────────────────────────────────────
@@ -916,7 +923,7 @@ html.names-plain { --name-hover: var(--text-strong); }
   --text-3: #abb1b8;
   --text-faint: #adb0b5;
   --text-strong: #ffffff;
-  --toggle-off: rgba(128, 132, 142, .5);
+  --toggle-off: #8a8e98;
   --track: rgba(255, 255, 255, .10);
   --warning: #f0b232;
   --warning-text: #f0b232;
