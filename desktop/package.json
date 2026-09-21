@@ -1,5 +1,6 @@
 {
   "name": "skycord-desktop",
+  "productName": "Skycord",
   "version": "0.20.0",
   "private": true,
   "description": "Skycord for Windows — a thin shell around your instance's own web client",
@@ -7,7 +8,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc && electron .",
-    "dist": "tsc && electron-builder"
+    "dist": "tsc && electron-builder --publish never",
+    "release": "tsc && electron-builder --publish always"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"
@@ -17,5 +19,7 @@
     "electron": "^44.4.3",
     "electron-builder": "^26.15.3",
     "typescript": "^7.0.2"
-  }
+  },
+  "author": "Skycord contributors",
+  "license": "AGPL-3.0-only"
 }

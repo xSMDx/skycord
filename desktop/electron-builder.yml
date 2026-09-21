@@ -1,0 +1,27 @@
+# Windows installer, and where updates are published. The source repo is
+# private, so installers and the update feed live in a public releases-only
+# repo (owner decision, 2026-09-21). Unsigned for now.
+appId: xyz.skycord.desktop
+productName: Skycord
+copyright: Skycord contributors — AGPL-3.0
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - "!dist/**/*.map"
+  - static/**/*
+  - package.json
+win:
+  target: nsis
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: Skycord-Setup-${version}.${ext}
+publish:
+  provider: github
+  owner: xSMDx
+  repo: skycord-desktop-releases
+  releaseType: release

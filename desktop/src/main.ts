@@ -16,6 +16,7 @@ import { lookupInstance, normaliseAddress } from './instanceAddress'
 import { readStore, writeStore } from './store'
 import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
+import { startUpdates } from './updates'
 
 const PICKER = join(app.getAppPath(), 'static', 'picker.html')
 const PICKER_URL = pathToFileURL(PICKER).href
@@ -125,6 +126,7 @@ app.whenReady().then(() => {
   const clean = origin ? normaliseAddress(origin) : null
   if (clean) openInstance(clean)
   else showPicker()
+  startUpdates(() => win)
 })
 
 app.on('window-all-closed', () => app.quit())
