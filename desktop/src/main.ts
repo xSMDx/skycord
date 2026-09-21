@@ -9,16 +9,20 @@
  * First launch shows a local picker; after that the saved instance opens
  * directly.
  */
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { lookupInstance, normaliseAddress } from './instanceAddress'
 import { readStore, writeStore } from './store'
+import { externalSafe, permissionAllowed, sameOrigin } from './rules'
+import { handleDisplayMedia } from './displayMedia'
 
 const PICKER = join(app.getAppPath(), 'static', 'picker.html')
 const PICKER_URL = pathToFileURL(PICKER).href
 
 let win: BrowserWindow | null = null
+/** The instance on screen; null while the picker is showing. */
+let current: string | null = null
 
 const createWindow = (): BrowserWindow => {
   const w = new BrowserWindow({
@@ -39,11 +43,28 @@ const createWindow = (): BrowserWindow => {
   })
   // Shown once painted, so the first frame is the app and not a white flash.
   w.once('ready-to-show', () => w.show())
+
+  // The page may move within its own origin. Anything else is a link out:
+  // web links open in the system browser, everything else is dropped.
+  const leave = (url: string) => { if (externalSafe(url)) void shell.openExternal(url) }
+  w.webContents.on('will-navigate', (event, url) => {
+    if (sameOrigin(url, current)) return
+    event.preventDefault()
+    leave(url)
+  })
+  w.webContents.on('will-redirect', (event, url) => {
+    if (current && !sameOrigin(url, current)) { event.preventDefault(); leave(url) }
+  })
+  w.webContents.setWindowOpenHandler(({ url }) => {
+    if (sameOrigin(url, current)) void w.loadURL(url)
+    else leave(url)
+    return { action: 'deny' }
+  })
   return w
 }
 
-const showPicker = () => { void win?.loadFile(PICKER) }
-const openInstance = (origin: string) => { void win?.loadURL(`${origin}/`) }
+const showPicker = () => { current = null; void win?.loadFile(PICKER) }
+const openInstance = (origin: string) => { current = origin; void win?.loadURL(`${origin}/`) }
 
 // The picker's calls are honoured only from the picker page itself. The preload
 // already withholds the API from any other page; this is the second lock.
@@ -63,7 +84,19 @@ ipcMain.handle('picker:choose', (event, origin: unknown) => {
   openInstance(clean)
 })
 
+// No page may embed another browser.
+app.on('web-contents-created', (_e, contents) => {
+  contents.on('will-attach-webview', event => event.preventDefault())
+})
+
 app.whenReady().then(() => {
+  // Permissions go to the chosen origin only, and only the ones a chat app needs.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
+    callback(permissionAllowed(permission, details.requestingUrl, current)))
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
+    permissionAllowed(permission, requestingOrigin, current))
+  handleDisplayMedia(() => win, () => current)
+
   win = createWindow()
   const origin = readStore().instanceOrigin
   const clean = origin ? normaliseAddress(origin) : null
