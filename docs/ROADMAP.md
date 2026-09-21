@@ -86,7 +86,7 @@ design before it is planned; nothing here is decided beyond what it names.
 | 5.3 | Auto-update | |
 | 5.4 | Tray and notifications | |
 | 5.5 | Voice on the desktop | Push-to-talk that works while the window is unfocused. |
-| 5.6 | **Custom screen share** | Added 2026-09-13 at the owner's request. Skycord's own source picker in place of the browser's. See below. |
+| 5.6 | **Custom screen share** | ✅ Built 2026-09-21 for v0.20.0-rc.1. Skycord's own source picker in place of the browser's. See below. |
 | 5.7 | Invite links open the app | |
 
 **Custom screen share, and why it is cheap to wire.** The web app shares through
@@ -108,6 +108,26 @@ What it can offer that the browser cannot, to be confirmed at design time:
 
 Carry over DESIGN.md's screen-share notes: name the media server in the UI, and
 keep LiveKit secrets out of client code.
+
+**What shipped (2026-09-21).** A picker window over the app: Applications and
+Entire screen tabs, live previews refreshed every 2.5 s, the app's own windows
+left out. Stream quality: Gaming (720p, 60 fps), Screenshare (source, 15 fps) or
+Custom (720p to source, 5 to 60 fps), nothing held back. The web client asks
+the app first (`skycordDesktop.pickShare`) and captures with the answer, and it
+sets LiveKit's encoding itself: left alone, LiveKit sends 1080p at 15 fps
+whatever was captured. Older web clients still get the picker, without quality.
+
+Found at design time: **system audio carries the call.** Electron accepts only
+`loopback` or `loopbackWithMute` (Chromium's own `loopbackWithoutChrome` is
+refused), so sharing audio sends everything the PC plays, voices included, and
+others hear an echo. It is offered for a whole screen only, off by default, and
+the picker says so when it is turned on. Echo-free audio needs native
+per-process capture: a later release.
+
+Not done: switching what is shared without stopping, and naming the media
+server in the picker. An older web client that cancels the picker shows
+"Couldn't start screen share": Electron's refusal reaches it as an AbortError,
+not the NotAllowedError it treats as a cancel.
 
 Done and shipped: context menus (v0.6), mobile/PWA rebuild (v0.10), profile picture and banner
 framing, landing page, call telemetry (v0.9), presence fixes (v0.10.1).

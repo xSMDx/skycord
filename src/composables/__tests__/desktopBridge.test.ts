@@ -15,6 +15,12 @@ describe('desktopBridge', () => {
     expect(desktopBridge()).toBe(bridge)
   })
 
+  it('still returns an older app’s bridge that has no share picker', () => {
+    const bridge = { platform: 'win32', changeInstance: async () => {} }
+    g.skycordDesktop = bridge
+    expect(desktopBridge()?.pickShare).toBeUndefined()
+  })
+
   it('ignores something that is not the bridge', () => {
     for (const fake of ['yes', 1, null, { platform: 'win32' }, { changeInstance: 'nope' }]) {
       g.skycordDesktop = fake
