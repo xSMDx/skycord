@@ -14,4 +14,12 @@ if (location.protocol === 'file:') {
     lookup: (address: string) => ipcRenderer.invoke('picker:lookup', address),
     choose: (origin: string) => ipcRenderer.invoke('picker:choose', origin),
   })
+} else {
+  // Only the chosen instance ever loads here: the main process pins
+  // navigation to it. Tray, notifications and push-to-talk extend this in
+  // 0.20.x.
+  contextBridge.exposeInMainWorld('skycordDesktop', {
+    platform: process.platform,
+    changeInstance: () => ipcRenderer.invoke('desktop:changeInstance'),
+  })
 }

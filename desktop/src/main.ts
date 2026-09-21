@@ -99,6 +99,14 @@ ipcMain.handle('picker:choose', (event, origin: unknown) => {
   return { restarting: false }
 })
 
+// Switch server: forget this instance and show the picker. Honoured only from
+// the instance on screen.
+ipcMain.handle('desktop:changeInstance', (event) => {
+  if (!sameOrigin(event.senderFrame?.url ?? '', current)) return
+  writeStore({ ...readStore(), instanceOrigin: undefined })
+  showPicker()
+})
+
 // No page may embed another browser.
 app.on('web-contents-created', (_e, contents) => {
   contents.on('will-attach-webview', event => event.preventDefault())
