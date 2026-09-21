@@ -25,6 +25,15 @@ export interface DesktopBridge {
    * on their own.
    */
   pickShare?(hints: { dark: boolean }): Promise<DesktopShareChoice | null>
+  /** Open the app's Servers window. Absent in app builds before it. */
+  openServers?(hints: { dark: boolean }): Promise<void>
+  /** Feed the app's own title bar. Absent in app builds before it. */
+  titleBar?: {
+    update(state: { title: string; kind: string; icon: string | null; canBack: boolean; canForward: boolean }): void
+    colors(colors: { bar: string; text: string; muted: string }): void
+  }
+  /** The title bar's back and forward. Returns a function that stops listening. */
+  onNavigate?(cb: (dir: 'back' | 'forward') => void): () => void
 }
 
 export const desktopBridge = (): DesktopBridge | null => {

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src https: http: data:">
+<title>Skycord</title>
+<script src="../dist/titlebarPage.js" defer></script>
+<style>
+  :root { color-scheme: dark; --bar: #111214; --text: #dcddde; --muted: #abb1b8; --ease: cubic-bezier(.32,.72,0,1); }
+  * { box-sizing: border-box; margin: 0; }
+  /* This page fills the window behind the app's page; only its top strip shows,
+     so everything lives in those 32px. */
+  html, body { height: 32px; overflow: hidden; }
+  /* The whole bar drags the window; only its buttons don't. */
+  body {
+    position: relative; display: flex; align-items: center;
+    background: var(--bar); color: var(--text);
+    font: 600 13px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-app-region: drag;
+    transition: background-color .2s var(--ease), color .2s var(--ease);
+  }
+  .nav { display: flex; gap: 2px; padding-left: 8px; -webkit-app-region: no-drag; }
+  .nav button {
+    width: 28px; height: 24px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px;
+    background: transparent; color: var(--text); cursor: pointer;
+    transition: background-color .12s var(--ease), opacity .12s var(--ease);
+  }
+  .nav button svg { width: 18px; height: 18px; }
+  .nav button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 12%, transparent); }
+  .nav button:active:not(:disabled) { background: color-mix(in srgb, var(--text) 18%, transparent); }
+  .nav button:disabled { color: var(--muted); opacity: .4; cursor: default; }
+  .nav button:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+  /* Centred on the window, as Discord's is, and clear of the window buttons. */
+  .title {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 320px); pointer-events: none;
+  }
+  .glyph { flex: none; width: 16px; height: 16px; display: grid; place-items: center; }
+  .glyph svg { width: 16px; height: 16px; }
+  .glyph img { width: 16px; height: 16px; border-radius: 5px; object-fit: cover; }
+  .glyph .initial {
+    width: 16px; height: 16px; display: grid; place-items: center; border-radius: 5px;
+    background: color-mix(in srgb, var(--text) 18%, transparent); font-size: 10px;
+  }
+  .text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <button type="button" id="back" aria-label="Back" title="Back (Alt+Left)" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </button>
+    <button type="button" id="forward" aria-label="Forward" title="Forward (Alt+Right)" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+  <div class="title" id="title"><span class="glyph" id="glyph"></span><span class="text" id="text">Skycord</span></div>
+</body>
+</html>

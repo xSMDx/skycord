@@ -7,6 +7,7 @@
  * `skycordShare`. Every call is checked here against the open picker too.
  */
 import { app, BrowserWindow, desktopCapturer, ipcMain, screen, type IpcMainInvokeEvent } from 'electron'
+import { centredOver } from './windowBounds'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { FRAME_RATES, PRESETS, RESOLUTIONS, parseChoice, type Remembered, type ShareChoice } from './shareQuality'
@@ -78,26 +79,12 @@ ipcMain.handle('share:choose', (event, value: unknown) => {
 
 ipcMain.handle('share:cancel', event => { fromPicker(event)?.finish(null) })
 
-/** Centred over the app, kept inside the screen it is on. */
-const boundsOver = (parent: BrowserWindow) => {
-  const p = parent.getBounds()
-  const area = screen.getDisplayMatching(p).workArea
-  const width = Math.min(SIZE.width, area.width)
-  const height = Math.min(SIZE.height, area.height)
-  const clamp = (v: number, lo: number, span: number) => Math.round(Math.min(Math.max(v, lo), lo + span))
-  return {
-    width, height,
-    x: clamp(p.x + (p.width - width) / 2, area.x, area.width - width),
-    y: clamp(p.y + (p.height - height) / 2, area.y, area.height - height),
-  }
-}
-
 export const pickShareSource = (parent: BrowserWindow, opts: PickOptions): Promise<ShareChoice | null> => {
   // One picker at a time. A second request while it is open is refused.
   if (open) { open.win.focus(); return Promise.resolve(null) }
 
   const win = new BrowserWindow({
-    ...boundsOver(parent),
+    ...centredOver(parent, SIZE),
     parent,
     modal: true,
     show: false,

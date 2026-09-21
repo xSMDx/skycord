@@ -14,7 +14,7 @@
  * finer, so it carries the call itself. The picker says so and leaves it off
  * until chosen.
  */
-import { ipcMain, session, type BrowserWindow } from 'electron'
+import { ipcMain, session, type BrowserWindow, type WebContents } from 'electron'
 import { sameOrigin } from './rules'
 import { pickShareSource, type PickOptions } from './sharePicker'
 import { readRemembered, type ShareChoice } from './shareQuality'
@@ -44,11 +44,13 @@ const pick = async (win: BrowserWindow, opts: PickOptions) => {
   return choice
 }
 
-export const handleDisplayMedia = (getWindow: () => BrowserWindow | null, getOrigin: () => string | null): void => {
+export const handleDisplayMedia = (
+  getWindow: () => BrowserWindow | null, getPage: () => WebContents | null, getOrigin: () => string | null,
+): void => {
   // Honoured only from the instance on screen.
   ipcMain.handle('desktop:pickShare', async (event, hints: unknown) => {
     const win = getWindow()
-    if (!win || event.sender !== win.webContents || !sameOrigin(event.senderFrame?.url ?? '', getOrigin())) return null
+    if (!win || event.sender !== getPage() || !sameOrigin(event.senderFrame?.url ?? '', getOrigin())) return null
     const dark = (hints as { dark?: unknown } | null)?.dark !== false
     const choice = await pick(win, { quality: true, audio: true, dark, last: readRemembered(readStore().share) })
     if (!choice) return null

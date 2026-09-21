@@ -1,6 +1,7 @@
 /**
- * What the shell remembers: which instance to open, and the last screen-share
- * settings (read back through readRemembered, never trusted as written).
+ * What the shell remembers: which instance to open, the servers saved (read
+ * back through readServers) and the last screen-share settings (through
+ * readRemembered). Neither is trusted as written.
  *
  * A small JSON file in the app's user data. A missing or unreadable file is
  * treated as "nothing chosen yet", which sends the member back to the picker
@@ -10,7 +11,7 @@ import { app } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { dirname, join } from 'path'
 
-export interface Stored { instanceOrigin?: string; share?: unknown }
+export interface Stored { instanceOrigin?: string; servers?: unknown; share?: unknown }
 
 const file = () => join(app.getPath('userData'), 'skycord.json')
 

@@ -8,14 +8,10 @@ import { computed, ref } from 'vue'
 import SkycordIcon from '@/components/SkycordIcon.vue'
 import { useInstance } from '@/composables/useInstance'
 import { aboutRows } from '@/composables/aboutInstance'
-import { desktopBridge } from '@/composables/desktopBridge'
 import '@/styles/settingsShared.css'
 
 const { profile, state, retry } = useInstance()
 const rows = computed(() => (profile.value ? aboutRows(profile.value) : []))
-
-// Inside the Windows app only: go back to its server picker.
-const desktop = desktopBridge()
 
 // A broken icon falls back to the Skycord mark rather than a broken image.
 const iconFailed = ref(false)
@@ -56,16 +52,6 @@ const iconFailed = ref(false)
         </div>
       </div>
     </div>
-
-    <div v-if="desktop" class="st-card ai-desktop">
-      <div class="st-field">
-        <div class="st-field-left">
-          <span class="st-field-label">Server</span>
-          <span class="st-field-value muted">Open a different Skycord server in this app.</span>
-        </div>
-        <button type="button" class="st-btn" @click="desktop.changeInstance()">Switch server</button>
-      </div>
-    </div>
   </template>
 
   <!-- Loading: the page's shape, quietly, so nothing jumps when it lands. -->
@@ -85,5 +71,4 @@ const iconFailed = ref(false)
 .ai-link:hover { text-decoration: underline; }
 .ai-skel { display: block; width: 40%; height: 14px; border-radius: 4px; background: var(--hover-strong); }
 .ai-failed { display: flex; align-items: center; gap: 12px; }
-.ai-desktop { margin-top: 16px; }
 </style>

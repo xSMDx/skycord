@@ -35,6 +35,8 @@ import { THEME_OPTS, STUDIO_OPTS, type ThemeOpt } from '@/composables/themePrese
 // unless they open this page.
 const DevicesPage = defineAsyncComponent(() => import('@/components/settings/DevicesPage.vue'))
 import AboutInstancePage from '@/components/settings/AboutInstancePage.vue'
+import ServersPage from '@/components/settings/ServersPage.vue'
+import { desktopBridge } from '@/composables/desktopBridge'
 import LegalPage from '@/components/settings/LegalPage.vue'
 
 const emit = defineEmits<{ close: [] }>()
@@ -476,6 +478,8 @@ const navSections: NavSection[] = [
       { id: 'appearance', label: 'Appearance'    },
       { id: 'voice',      label: 'Voice & Video' },
       { id: 'keybinds',   label: 'Keybinds'      },
+      // Only in the Windows app, which keeps the list of servers.
+      ...(desktopBridge() ? [{ id: 'servers', label: 'Servers' }] : []),
     ]
   },
   {
@@ -1316,6 +1320,11 @@ const handleSelfRevoked = () => handleLogout()
                 </span>
               </div>
             </div>
+          </template>
+
+          <!-- ── Servers (Windows app only) ── -->
+          <template v-else-if="page === 'servers'">
+            <ServersPage />
           </template>
 
           <!-- ── About this instance ── -->
