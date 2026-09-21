@@ -8,8 +8,8 @@ const shown = new Map([
 
 describe('parseChoice', () => {
   it('accepts a shown screen with its quality and audio', () => {
-    expect(parseChoice({ sourceId: 'screen:1:0', resolution: 1080, frameRate: 30, audio: true }, shown)).toEqual({
-      sourceId: 'screen:1:0', name: 'Entire screen', kind: 'screen', resolution: 1080, frameRate: 30, audio: true,
+    expect(parseChoice({ sourceId: 'screen:1:0', resolution: 1080, frameRate: 30, audio: true, hidePreview: true }, shown)).toEqual({
+      sourceId: 'screen:1:0', name: 'Entire screen', kind: 'screen', resolution: 1080, frameRate: 30, audio: true, hidePreview: true,
     })
   })
 
@@ -26,7 +26,7 @@ describe('parseChoice', () => {
   })
 
   it('falls back to the default quality for values it does not offer', () => {
-    const c = parseChoice({ sourceId: 'screen:1:0', resolution: 4320, frameRate: 144 }, shown)
+    const c = parseChoice({ sourceId: 'screen:1:0', resolution: 4320, frameRate: 5 }, shown)
     expect([c?.resolution, c?.frameRate]).toEqual([DEFAULT_QUALITY.resolution, DEFAULT_QUALITY.frameRate])
   })
 
@@ -37,11 +37,11 @@ describe('parseChoice', () => {
 
 describe('readRemembered', () => {
   it('reads back a saved choice', () => {
-    expect(readRemembered({ resolution: 1440, frameRate: 60, audio: true })).toEqual({ resolution: 1440, frameRate: 60, audio: true })
+    expect(readRemembered({ resolution: 1440, frameRate: 60, audio: true, hidePreview: true })).toEqual({ resolution: 1440, frameRate: 60, audio: true, hidePreview: true })
   })
 
   it('gives the defaults, audio off, for nothing or nonsense', () => {
-    const fallback = { ...DEFAULT_QUALITY, audio: false }
+    const fallback = { ...DEFAULT_QUALITY, audio: false, hidePreview: false }
     expect(readRemembered(undefined)).toEqual(fallback)
     expect(readRemembered({ resolution: 'huge', frameRate: -1, audio: 'yes' })).toEqual(fallback)
   })

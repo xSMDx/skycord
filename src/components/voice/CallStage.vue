@@ -4,7 +4,7 @@ import { MicOff, Monitor, Minimize2, Maximize2 } from 'lucide-vue-next'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
 import { voiceSettings } from '@/composables/useVoiceSettings'
-import { keyFor, type VideoTrackInfo } from '@/composables/useVoiceMedia'
+import { keyFor, media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { getRoom } from '@/composables/voiceRoom'
 import { userPref } from '@/composables/useVoice'
 
@@ -45,6 +45,12 @@ type Cell =
   | { kind: 'video'; key: string; name: string; speaking: boolean; source: 'camera' | 'screen'; video: VideoTrackInfo }
   | { kind: 'avatar'; key: string; name: string; speaking: boolean; muted: boolean; avatar: string; ring?: RingState }
 
+/** Your own video you've asked not to see: the camera by setting, the screen
+ *  by "Hide stream preview". Others still receive both. */
+const hiddenOwn = (v: VideoTrackInfo) => v.local && (
+  (v.source === 'camera' && !voiceSettings.showOwnCamera) ||
+  (v.source === 'screen' && media.hideOwnScreen))
+
 const cells = computed<Cell[]>(() => {
   const out: Cell[] = []
   const used = new Set<VideoTrackInfo>()
@@ -54,7 +60,7 @@ const cells = computed<Cell[]>(() => {
       // "Disable Video" on someone's tile is local-only: their stream keeps
       // flowing, you just stop rendering it.
       !(!v.local && userPref(v.participantId).videoOff) &&
-      !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera))
+      !hiddenOwn(v))
     if (mine.length) {
       for (const v of mine) {
         used.add(v)
@@ -69,7 +75,7 @@ const cells = computed<Cell[]>(() => {
   for (const v of props.videos) {
     if (!used.has(v)
         && !(!v.local && userPref(v.participantId).videoOff)
-        && !(v.local && v.source === 'camera' && !voiceSettings.showOwnCamera)) {
+        && !hiddenOwn(v)) {
       out.push({ kind: 'video', key: keyFor(v.participantId, v.source), name: v.name, speaking: false, source: v.source, video: v })
     }
   }

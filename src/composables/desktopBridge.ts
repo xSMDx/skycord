@@ -11,6 +11,8 @@ export interface DesktopShareChoice {
   resolution: number | 'source'
   frameRate: number
   audio: boolean
+  /** Don't draw your own screen share for you. Absent from older app builds. */
+  hidePreview?: boolean
 }
 
 export interface DesktopBridge {

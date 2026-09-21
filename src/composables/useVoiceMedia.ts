@@ -29,12 +29,16 @@ export interface VideoTrackInfo {
 interface MediaState {
   localCamOn:    boolean
   localScreenOn: boolean
+  /** "Hide stream preview", chosen in the Windows app's share picker: your own
+   *  screen share isn't drawn for you. Others still see it. */
+  hideOwnScreen: boolean
   videoTracks:   Map<string, VideoTrackInfo>   // key = `${identity}:${source}`
 }
 
 export const media = reactive<MediaState>({
   localCamOn: false,
   localScreenOn: false,
+  hideOwnScreen: false,
   videoTracks: new Map(),
 })
 
@@ -176,14 +180,17 @@ export const toggleScreenShare = async (): Promise<string | null> => {
   // Inside the Windows app, its own picker comes first and brings stream
   // quality and audio with it. Closing it is a choice, not a failure.
   const bridge = next ? desktopBridge() : null
+  let hideOwn = false
   if (bridge?.pickShare) {
     const choice = await bridge.pickShare(pickerHints())
     if (!choice) return null
     ;({ capture, publish } = shareOptions(choice))
+    hideOwn = choice.hidePreview === true
   }
   try {
     await room.localParticipant.setScreenShareEnabled(next, capture, publish)
     media.localScreenOn = next
+    media.hideOwnScreen = next && hideOwn
     next ? registerLocalVideo(Track.Source.ScreenShare) : unregisterLocalVideo('screen')
     return null
   } catch (e) {

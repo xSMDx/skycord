@@ -6,7 +6,7 @@ vi.mock('../voiceRoom', () => ({ getRoom: () => room }))
 vi.mock('../voicePermits', () => ({ permits: { video: true } }))
 vi.mock('../useViewport', () => ({ useViewport: () => ({ isMobile: { value: false }, isCoarse: { value: false } }) }))
 
-import { toggleScreenShare } from '../useVoiceMedia'
+import { toggleScreenShare, media } from '../useVoiceMedia'
 
 const g = globalThis as { skycordDesktop?: unknown }
 
@@ -34,6 +34,12 @@ describe('toggleScreenShare', () => {
     const [, capture, publish] = setScreenShareEnabled.mock.calls[0] as [boolean, Record<string, unknown>, Record<string, unknown>]
     expect(capture).toMatchObject({ audio: true, resolution: { width: 1920, height: 1080, frameRate: 60 } })
     expect(publish).toMatchObject({ screenShareEncoding: { maxFramerate: 60 } })
+  })
+
+  it('remembers "Hide stream preview" for the share it started', async () => {
+    g.skycordDesktop = { platform: 'win32', changeInstance: async () => {}, pickShare: async () => ({ kind: 'window', resolution: 720, frameRate: 60, audio: false, hidePreview: true }) }
+    await toggleScreenShare()
+    expect(media.hideOwnScreen).toBe(true)
   })
 
   it('shares nothing, and says nothing, when the app’s picker is closed', async () => {

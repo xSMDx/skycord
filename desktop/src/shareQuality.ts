@@ -5,7 +5,7 @@
  */
 
 export const RESOLUTIONS = [720, 1080, 1440, 'source'] as const
-export const FRAME_RATES = [5, 15, 30, 60] as const
+export const FRAME_RATES = [15, 30, 60] as const
 export type Resolution = typeof RESOLUTIONS[number]
 export type FrameRate = typeof FRAME_RATES[number]
 
@@ -24,10 +24,12 @@ export interface ShareChoice extends Quality {
   name: string
   kind: 'screen' | 'window'
   audio: boolean
+  /** Don't show the member their own stream. Others still see it. */
+  hidePreview: boolean
 }
 
 /** What the app keeps between shares. */
-export interface Remembered extends Quality { audio: boolean }
+export interface Remembered extends Quality { audio: boolean; hidePreview: boolean }
 
 const resolutionOf = (v: unknown): Resolution => RESOLUTIONS.find(r => r === v) ?? DEFAULT_QUALITY.resolution
 const frameRateOf = (v: unknown): FrameRate => FRAME_RATES.find(f => f === v) ?? DEFAULT_QUALITY.frameRate
@@ -51,11 +53,12 @@ export const parseChoice = (value: unknown, shown: ReadonlyMap<string, string>):
     resolution: resolutionOf(v.resolution),
     frameRate: frameRateOf(v.frameRate),
     audio: kind === 'screen' && v.audio === true,
+    hidePreview: v.hidePreview === true,
   }
 }
 
 /** A saved choice read back from disk, where anything may have been written. */
 export const readRemembered = (value: unknown): Remembered => {
   const v = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  return { resolution: resolutionOf(v.resolution), frameRate: frameRateOf(v.frameRate), audio: v.audio === true }
+  return { resolution: resolutionOf(v.resolution), frameRate: frameRateOf(v.frameRate), audio: v.audio === true, hidePreview: v.hidePreview === true }
 }

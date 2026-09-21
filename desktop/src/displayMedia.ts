@@ -33,6 +33,7 @@ const remember = (choice: ShareChoice, opts: PickOptions) => {
       resolution: opts.quality ? choice.resolution : last.resolution,
       frameRate: opts.quality ? choice.frameRate : last.frameRate,
       audio: opts.audio && choice.kind === 'screen' ? choice.audio : last.audio,
+      hidePreview: opts.quality ? choice.hidePreview : last.hidePreview,
     },
   })
 }
@@ -52,7 +53,7 @@ export const handleDisplayMedia = (getWindow: () => BrowserWindow | null, getOri
     const choice = await pick(win, { quality: true, audio: true, dark, last: readRemembered(readStore().share) })
     if (!choice) return null
     pending = { choice, at: Date.now() }
-    return { kind: choice.kind, resolution: choice.resolution, frameRate: choice.frameRate, audio: choice.audio }
+    return { kind: choice.kind, resolution: choice.resolution, frameRate: choice.frameRate, audio: choice.audio, hidePreview: choice.hidePreview }
   })
 
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {

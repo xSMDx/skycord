@@ -71,7 +71,9 @@ ipcMain.handle('share:sources', async event => {
 ipcMain.handle('share:choose', (event, value: unknown) => {
   const o = fromPicker(event)
   const choice = o ? parseChoice(value, o.shown) : null
-  if (o && choice) o.finish({ ...choice, audio: o.opts.audio && choice.audio })
+  // A hidden control's value is not a choice: audio only if offered, and the
+  // preview setting only where the web client asked first and can apply it.
+  if (o && choice) o.finish({ ...choice, audio: o.opts.audio && choice.audio, hidePreview: o.opts.quality && choice.hidePreview })
 })
 
 ipcMain.handle('share:cancel', event => { fromPicker(event)?.finish(null) })

@@ -13,7 +13,7 @@
     --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.18);
     --text-strong: #ffffff; --text-1: #dcddde; --text-2: #b5bac1; --text-3: #9ba1a9;
     --accent: #38b6f1; --on-accent: #0e0f11; --warn: #f0b232;
-    --switch-off: #72767d; --scroll: rgba(255,255,255,.16);
+    --menu: #111214; --scroll: rgba(255,255,255,.16);
     --lift: 0 6px 18px rgba(0,0,0,.45);
     --ease: cubic-bezier(.32,.72,0,1);
   }
@@ -23,7 +23,7 @@
     --line: rgba(0,0,0,.09); --line-strong: rgba(0,0,0,.2);
     --text-strong: #060607; --text-1: #313338; --text-2: #4e5058; --text-3: #5c5f66;
     --accent: #0a75af; --on-accent: #ffffff; --warn: #8f5500;
-    --switch-off: #80848e; --scroll: rgba(0,0,0,.2);
+    --menu: #ffffff; --scroll: rgba(0,0,0,.2);
     --lift: 0 6px 18px rgba(0,0,0,.16);
   }
   * { box-sizing: border-box; margin: 0; }
@@ -131,40 +131,65 @@
   }
   .btn:hover { filter: brightness(1.08); }
 
-  /* ── footer: stream quality and audio ── */
-  footer { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding: 14px 24px; border-top: 1px solid var(--line); }
+  /* ── footer: what the stream will be, and its settings menu ── */
+  footer { position: relative; display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 12px 20px 12px 24px; border-top: 1px solid var(--line); }
   footer[hidden], footer [hidden] { display: none; }
-  .quality { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-  .label { margin-right: 4px; color: var(--text-2); font-size: 13px; font-weight: 600; }
-  .select { position: relative; display: inline-flex; }
-  .select::after {
-    content: ""; position: absolute; top: 50%; right: 10px; width: 12px; height: 12px; margin-top: -6px;
-    background: var(--text-2); pointer-events: none;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  .summary { display: flex; flex-direction: column; min-width: 0; }
+  .summary strong { color: var(--text-strong); font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .summary span { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--surface); }
+  .seg button {
+    min-width: 44px; padding: 5px 10px; border: 0; border-radius: 6px; background: transparent;
+    color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background .12s var(--ease), color .12s var(--ease);
   }
-  select {
-    appearance: none; padding: 7px 32px 7px 12px; border: 1px solid var(--line-strong); border-radius: 8px;
-    background: var(--surface); color: var(--text-strong); font: inherit; font-size: 13px; cursor: pointer;
-    transition: border-color .12s var(--ease);
+  .seg button:hover { color: var(--text-strong); }
+  .seg button[aria-pressed="true"] { background: var(--raised); color: var(--text-strong); box-shadow: 0 1px 3px rgba(0,0,0,.22); }
+  .gear {
+    width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 9px;
+    background: var(--surface); color: var(--text-2); cursor: pointer;
+    transition: background .12s var(--ease), color .12s var(--ease);
   }
-  select:hover { border-color: var(--text-3); }
-  .audio { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-left: auto; }
-  .switch { display: flex; align-items: center; gap: 10px; color: var(--text-1); font-size: 13px; font-weight: 600; cursor: pointer; }
-  .switch svg { width: 18px; height: 18px; color: var(--text-2); }
-  .switch input {
-    appearance: none; position: relative; width: 36px; height: 20px; flex: none; border-radius: 999px;
-    background: var(--switch-off); cursor: pointer; transition: background .16s var(--ease);
+  .gear:hover, .gear[aria-expanded="true"] { background: var(--raised); color: var(--text-strong); }
+  .gear svg { width: 20px; height: 20px; transition: transform .3s var(--ease); }
+  .gear[aria-expanded="true"] svg { transform: rotate(60deg); }
+
+  /* The menu opens upward from the gear. Its submenus open to the left: the
+     gear sits at the window's right edge, where there is no room beyond. */
+  .menu, .submenu {
+    position: absolute; z-index: 10; padding: 6px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--menu); box-shadow: 0 12px 32px rgba(0,0,0,.4);
   }
-  .switch input::before {
-    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
-    background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .18s var(--ease);
+  .menu { right: 20px; bottom: calc(100% + 8px); width: 272px; transform-origin: bottom right; animation: pop .16s var(--ease); }
+  .submenu { right: calc(100% + 6px); width: 196px; transform-origin: right center; animation: pop .14s var(--ease); }
+  @keyframes pop { from { opacity: 0; transform: scale(.96); } }
+  .menu-label { padding: 6px 10px 4px; color: var(--text-3); font-size: 12px; font-weight: 600; }
+  .sep { height: 1px; margin: 5px 6px; background: var(--line); }
+  .item {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px;
+    background: transparent; color: var(--text-1); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer;
   }
-  .switch input:checked { background: var(--accent); }
-  .switch input:checked::before { transform: translateX(16px); }
-  .echo { max-width: 320px; color: var(--warn); font-size: 12px; text-align: right; }
+  .item:hover, .item[aria-expanded="true"] { background: var(--surface); color: var(--text-strong); }
+  .item:focus-visible { outline: none; background: var(--surface); color: var(--text-strong); box-shadow: inset 0 0 0 2px var(--accent); }
+  .item[aria-disabled="true"] { color: var(--text-3); cursor: default; }
+  .item[aria-disabled="true"]:hover { background: transparent; }
+  .item .text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .item .desc { color: var(--text-3); font-size: 12px; font-weight: 400; }
+  .item .desc.warn { color: var(--warn); }
+  .item .value { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .item .chev { width: 14px; height: 14px; flex: none; color: var(--text-3); }
+  .radio, .box { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border: 2px solid var(--text-3); }
+  .radio { border-radius: 50%; }
+  .box { border-radius: 5px; }
+  [aria-checked="true"] > .radio { border-color: var(--accent); }
+  [aria-checked="true"] > .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  [aria-checked="true"] > .box { border-color: var(--accent); background: var(--accent); }
+  .box svg { width: 12px; height: 12px; color: var(--on-accent); opacity: 0; }
+  [aria-checked="true"] > .box svg { opacity: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before { transition: none !important; animation: none !important; }
+    *, *::before, *::after { transition: none !important; animation: none !important; }
   }
 </style>
 </head>
@@ -187,20 +212,20 @@
   </main>
 
   <footer id="footer" hidden>
-    <div class="quality" id="quality" hidden>
-      <label class="label" for="preset">Stream quality</label>
-      <span class="select"><select id="preset"></select></span>
-      <span class="select" id="custom-res-wrap"><select id="res" aria-label="Resolution"></select></span>
-      <span class="select" id="custom-fps-wrap"><select id="fps" aria-label="Frame rate"></select></span>
+    <div class="summary" id="summary" hidden aria-live="polite">
+      <strong id="sum-mode"></strong>
+      <span id="sum-detail"></span>
     </div>
-    <div class="audio" id="audio" hidden>
-      <label class="switch">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
-        Share audio
-        <input type="checkbox" role="switch" id="audio-on" aria-describedby="echo">
-      </label>
-      <p class="echo" id="echo" hidden>Shares everything your PC plays, this call included, so others may hear an echo.</p>
+    <div class="actions">
+      <div class="seg" id="sdhd" role="group" aria-label="Quick quality" hidden>
+        <button type="button" id="sd" aria-pressed="false" title="720p">SD</button>
+        <button type="button" id="hd" aria-pressed="false" title="1080p">HD</button>
+      </div>
+      <button type="button" class="gear" id="gear" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" aria-label="Stream settings" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
     </div>
+    <div class="menu" id="menu" role="menu" aria-label="Stream settings" hidden></div>
   </footer>
 </body>
 </html>
