@@ -54,7 +54,7 @@ export const signRefreshToken = (userId: Types.ObjectId, tokenVersion: number, s
   jwt.sign(
     sid ? { sub: userId.toString(), tokenVersion, sid } : { sub: userId.toString(), tokenVersion },
     config.jwt.refreshSecret,
-    { expiresIn: config.jwt.refreshExpiresIn } as SignOptions
+    { expiresIn: Math.floor(config.jwt.refreshTtlMs / 1000) } as SignOptions
   )
 
 /** When a Session row's `expiresAt` should be set, matching the cookie that

@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:">
+<title>Share your screen</title>
+<!-- In the head, blocking: it sets the theme before the first paint. -->
+<script src="../dist/sharePage.js"></script>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #1a1b1e; --surface: #232428; --well: #111214; --raised: #2e3035;
+    --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.18);
+    --text-strong: #ffffff; --text-1: #dcddde; --text-2: #b5bac1; --text-3: #9ba1a9;
+    --accent: #38b6f1; --on-accent: #0e0f11; --warn: #f0b232;
+    --menu: #111214; --scroll: rgba(255,255,255,.16);
+    --lift: 0 6px 18px rgba(0,0,0,.45);
+    --ease: cubic-bezier(.32,.72,0,1);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #ffffff; --surface: #f2f3f5; --well: #e3e5e8; --raised: #ffffff;
+    --line: rgba(0,0,0,.09); --line-strong: rgba(0,0,0,.2);
+    --text-strong: #060607; --text-1: #313338; --text-2: #4e5058; --text-3: #5c5f66;
+    --accent: #0a75af; --on-accent: #ffffff; --warn: #8f5500;
+    --menu: #ffffff; --scroll: rgba(0,0,0,.2);
+    --lift: 0 6px 18px rgba(0,0,0,.16);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
+    background: var(--bg); color: var(--text-1);
+    font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+  svg { display: block; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ── header: the window's drag handle ── */
+  header { position: relative; padding: 18px 24px 16px; -webkit-app-region: drag; }
+  h1 { margin-right: 48px; font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--text-strong); letter-spacing: -.01em; }
+  .close {
+    position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
+    display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent;
+    color: var(--text-2); cursor: pointer; -webkit-app-region: no-drag;
+    transition: background .12s var(--ease), color .12s var(--ease);
+  }
+  .close:hover { background: var(--surface); color: var(--text-strong); }
+  .close svg { width: 18px; height: 18px; }
+
+  .tabs {
+    position: relative; display: inline-flex; margin-top: 14px; padding: 3px;
+    border-radius: 10px; background: var(--surface); -webkit-app-region: no-drag;
+  }
+  .tab {
+    position: relative; z-index: 1; padding: 6px 14px; border: 0; border-radius: 7px;
+    background: transparent; color: var(--text-2); font-weight: 600; font-size: 13px; cursor: pointer;
+    transition: color .12s var(--ease);
+  }
+  .tab:hover, .tab[aria-selected="true"] { color: var(--text-strong); }
+  .tab .count { margin-left: 6px; color: var(--text-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .slider {
+    position: absolute; top: 3px; bottom: 3px; left: 0; border-radius: 7px;
+    background: var(--raised); box-shadow: 0 1px 3px rgba(0,0,0,.22);
+  }
+  .slider.moving { transition: transform .24s var(--ease), width .24s var(--ease); }
+
+  /* ── the grid of sources ── */
+  main { overflow-y: auto; padding: 6px 24px 24px; scrollbar-gutter: stable; }
+  main::-webkit-scrollbar { width: 12px; }
+  main::-webkit-scrollbar-thumb { background: var(--scroll); border: 3px solid transparent; background-clip: content-box; border-radius: 999px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 20px 16px; }
+  .grid[hidden], .state[hidden] { display: none; }
+
+  .tile {
+    display: flex; flex-direction: column; gap: 9px; min-width: 0; padding: 0;
+    border: 0; border-radius: 12px; background: none; text-align: left; cursor: pointer;
+  }
+  .tile:focus-visible { outline-offset: 4px; }
+  .well {
+    position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden;
+    border-radius: 10px; background: var(--well);
+    transition: box-shadow .16s var(--ease), transform .16s var(--ease);
+  }
+  /* Edge and hover ring sit above the preview: a white window needs its edge. */
+  .well::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .12s var(--ease);
+  }
+  .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .tile:hover .well, .tile:focus-visible .well { box-shadow: var(--lift); }
+  .tile:hover .well::after, .tile:focus-visible .well::after { box-shadow: inset 0 0 0 2px var(--accent); }
+  .tile:active .well { transform: scale(.985); }
+  .none {
+    position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px;
+    color: var(--text-3); font-size: 12px;
+  }
+  .none[hidden] { display: none; }
+  .none img, .none svg { width: 32px; height: 32px; }
+  .pill {
+    position: absolute; left: 50%; top: 50%; padding: 7px 18px; border-radius: 999px;
+    background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,.35); pointer-events: none;
+    opacity: 0; transform: translate(-50%, -50%) scale(.92);
+    transition: opacity .14s var(--ease), transform .2s var(--ease);
+  }
+  .tile:hover .pill, .tile:focus-visible .pill { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .meta { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 2px; }
+  .ico { flex: none; width: 16px; height: 16px; color: var(--text-3); }
+  .ico img, .ico svg { width: 16px; height: 16px; }
+  .name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-1); font-weight: 500; }
+  .detail { flex: none; color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .detail:empty { display: none; }
+
+  /* loading, empty, error */
+  .skeleton { display: flex; flex-direction: column; gap: 9px; }
+  .skeleton .well, .skeleton .bar { background: linear-gradient(90deg, var(--well) 25%, var(--surface) 50%, var(--well) 75%) 0 0 / 200% 100%; animation: shimmer 1.3s linear infinite; }
+  .skeleton .bar { width: 62%; height: 12px; margin: 2px 2px 0; border-radius: 6px; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .state { display: grid; place-content: center; justify-items: center; gap: 6px; min-height: 100%; padding: 32px; text-align: center; }
+  .state svg { width: 40px; height: 40px; margin-bottom: 6px; color: var(--text-3); }
+  .state strong { color: var(--text-strong); font-size: 15px; font-weight: 600; }
+  .state p { max-width: 340px; color: var(--text-2); }
+  .state .btn { margin-top: 12px; }
+  .btn {
+    padding: 8px 16px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent);
+    font-weight: 600; font-size: 13px; cursor: pointer; transition: filter .12s var(--ease);
+  }
+  .btn:hover { filter: brightness(1.08); }
+
+  /* ── footer: what the stream will be, and its settings menu ── */
+  footer { position: relative; display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 12px 20px 12px 24px; border-top: 1px solid var(--line); }
+  footer[hidden], footer [hidden] { display: none; }
+  .summary { display: flex; flex-direction: column; min-width: 0; }
+  .summary strong { color: var(--text-strong); font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .summary span { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--surface); }
+  .seg button {
+    min-width: 44px; padding: 5px 10px; border: 0; border-radius: 6px; background: transparent;
+    color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background .12s var(--ease), color .12s var(--ease);
+  }
+  .seg button:hover { color: var(--text-strong); }
+  .seg button[aria-pressed="true"] { background: var(--raised); color: var(--text-strong); box-shadow: 0 1px 3px rgba(0,0,0,.22); }
+  .gear {
+    width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 9px;
+    background: var(--surface); color: var(--text-2); cursor: pointer;
+    transition: background .12s var(--ease), color .12s var(--ease);
+  }
+  .gear:hover, .gear[aria-expanded="true"] { background: var(--raised); color: var(--text-strong); }
+  .gear svg { width: 20px; height: 20px; transition: transform .3s var(--ease); }
+  .gear[aria-expanded="true"] svg { transform: rotate(60deg); }
+
+  /* The menu opens upward from the gear. Its submenus open to the left: the
+     gear sits at the window's right edge, where there is no room beyond. */
+  .menu, .submenu {
+    position: absolute; z-index: 10; padding: 6px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--menu); box-shadow: 0 12px 32px rgba(0,0,0,.4);
+  }
+  .menu { right: 20px; bottom: calc(100% + 8px); width: 272px; transform-origin: bottom right; animation: pop .16s var(--ease); }
+  .submenu { right: calc(100% + 6px); width: 196px; transform-origin: right center; animation: pop .14s var(--ease); }
+  @keyframes pop { from { opacity: 0; transform: scale(.96); } }
+  .menu-label { padding: 6px 10px 4px; color: var(--text-3); font-size: 12px; font-weight: 600; }
+  .sep { height: 1px; margin: 5px 6px; background: var(--line); }
+  .item {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px;
+    background: transparent; color: var(--text-1); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer;
+  }
+  .item:hover, .item[aria-expanded="true"] { background: var(--surface); color: var(--text-strong); }
+  .item:focus-visible { outline: none; background: var(--surface); color: var(--text-strong); box-shadow: inset 0 0 0 2px var(--accent); }
+  .item[aria-disabled="true"] { color: var(--text-3); cursor: default; }
+  .item[aria-disabled="true"]:hover { background: transparent; }
+  .item .text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .item .desc { color: var(--text-3); font-size: 12px; font-weight: 400; }
+  .item .desc.warn { color: var(--warn); }
+  .item .value { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .item .chev { width: 14px; height: 14px; flex: none; color: var(--text-3); }
+  .radio, .box { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border: 2px solid var(--text-3); }
+  .radio { border-radius: 50%; }
+  .box { border-radius: 5px; }
+  [aria-checked="true"] > .radio { border-color: var(--accent); }
+  [aria-checked="true"] > .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  [aria-checked="true"] > .box { border-color: var(--accent); background: var(--accent); }
+  .box svg { width: 12px; height: 12px; color: var(--on-accent); opacity: 0; }
+  [aria-checked="true"] > .box svg { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1 id="title">Share your screen</h1>
+    <div class="tabs" role="tablist" aria-labelledby="title">
+      <span class="slider" id="slider" aria-hidden="true"></span>
+      <button class="tab" role="tab" id="tab-window" aria-controls="sources" data-kind="window">Applications<span class="count" id="count-window"></span></button>
+      <button class="tab" role="tab" id="tab-screen" aria-controls="sources" data-kind="screen">Entire screen<span class="count" id="count-screen"></span></button>
+    </div>
+    <button class="close" id="close" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>
+    </button>
+  </header>
+
+  <main id="sources" role="tabpanel">
+    <div class="grid" id="grid"></div>
+    <div class="state" id="state" hidden></div>
+  </main>
+
+  <footer id="footer" hidden>
+    <div class="summary" id="summary" hidden aria-live="polite">
+      <strong id="sum-mode"></strong>
+      <span id="sum-detail"></span>
+    </div>
+    <div class="actions">
+      <div class="seg" id="sdhd" role="group" aria-label="Quick quality" hidden>
+        <button type="button" id="sd" aria-pressed="false" title="720p">SD</button>
+        <button type="button" id="hd" aria-pressed="false" title="1080p">HD</button>
+      </div>
+      <button type="button" class="gear" id="gear" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" aria-label="Stream settings" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+    <div class="menu" id="menu" role="menu" aria-label="Stream settings" hidden></div>
+  </footer>
+</body>
+</html>

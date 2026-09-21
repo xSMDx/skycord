@@ -7,6 +7,7 @@
 import { reactive, markRaw } from 'vue'
 import {
   Track,
+  type ScreenShareCaptureOptions, type TrackPublishOptions,
   type RemoteTrack, type LocalVideoTrack, type LocalTrackPublication,
   type TrackPublication, type Participant, type RemoteParticipant,
 } from 'livekit-client'
@@ -14,6 +15,8 @@ import { getRoom } from './voiceRoom'
 import { voiceSettings } from './useVoiceSettings'
 import { permits } from './voicePermits'
 import { useViewport } from './useViewport'
+import { desktopBridge } from './desktopBridge'
+import { shareOptions, pickerHints } from './shareOptions'
 
 export interface VideoTrackInfo {
   participantId: string
@@ -26,12 +29,16 @@ export interface VideoTrackInfo {
 interface MediaState {
   localCamOn:    boolean
   localScreenOn: boolean
+  /** "Hide stream preview", chosen in the Windows app's share picker: your own
+   *  screen share isn't drawn for you. Others still see it. */
+  hideOwnScreen: boolean
   videoTracks:   Map<string, VideoTrackInfo>   // key = `${identity}:${source}`
 }
 
 export const media = reactive<MediaState>({
   localCamOn: false,
   localScreenOn: false,
+  hideOwnScreen: false,
   videoTracks: new Map(),
 })
 
@@ -159,18 +166,31 @@ export const toggleScreenShare = async (): Promise<string | null> => {
   if (next && !permits.video) {
     return 'You do not have permission to share your screen in this channel'
   }
+  let capture: ScreenShareCaptureOptions = {
+    audio: voiceSettings.screenAudio,
+    resolution: SCREEN_RES,
+    // Keep the call's own audio out of the capture: hide Skycord's tab from
+    // the share picker, and drop the "share system audio" option on monitor
+    // captures (system audio always contains the call → far side hears
+    // themselves). Tab shares still offer that tab's audio, which is safe.
+    selfBrowserSurface: 'exclude',
+    systemAudio: 'exclude',
+  }
+  let publish: TrackPublishOptions | undefined
+  // Inside the Windows app, its own picker comes first and brings stream
+  // quality and audio with it. Closing it is a choice, not a failure.
+  const bridge = next ? desktopBridge() : null
+  let hideOwn = false
+  if (bridge?.pickShare) {
+    const choice = await bridge.pickShare(pickerHints())
+    if (!choice) return null
+    ;({ capture, publish } = shareOptions(choice))
+    hideOwn = choice.hidePreview === true
+  }
   try {
-    await room.localParticipant.setScreenShareEnabled(next, {
-      audio: voiceSettings.screenAudio,
-      resolution: SCREEN_RES,
-      // Keep the call's own audio out of the capture: hide Skycord's tab from
-      // the share picker, and drop the "share system audio" option on monitor
-      // captures (system audio always contains the call → far side hears
-      // themselves). Tab shares still offer that tab's audio, which is safe.
-      selfBrowserSurface: 'exclude',
-      systemAudio: 'exclude',
-    })
+    await room.localParticipant.setScreenShareEnabled(next, capture, publish)
     media.localScreenOn = next
+    media.hideOwnScreen = next && hideOwn
     next ? registerLocalVideo(Track.Source.ScreenShare) : unregisterLocalVideo('screen')
     return null
   } catch (e) {

@@ -95,6 +95,7 @@ import { stripMarkers } from '@/utils/richText'
 import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
 import EditCategoryModal from '@/components/modals/EditCategoryModal.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
+import { useDesktopTitleBar } from '@/composables/desktopTitleBar'
 
 // A /join/<code> link opened while logged out is captured by App.vue before
 // its auth check (see the comment on pendingJoinCode there) and handed down
@@ -3845,6 +3846,44 @@ onBeforeUnmount(() => {
   closeRailPreview()
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('click',   onClick)
+})
+
+// The Windows app's own title bar: this page's title, back and forward through
+// the places visited, and the theme's colours. In a browser it does nothing.
+useDesktopTitleBar({
+  place: computed(() => ({
+    view: view.value,
+    serverId: view.value === 'server' ? activeServerId.value ?? null : null,
+    channelId: view.value === 'server' ? activeChannelId.value ?? null : null,
+    dmId: view.value === 'dm' ? activeDM.value?.id ?? null : null,
+    groupId: view.value === 'group' ? activeGroup.value?.id ?? null : null,
+  })),
+  server: computed(() => (view.value === 'server' ? activeServer.value ?? null : null)),
+  go: async (p) => {
+    if (p.view === 'friends') { openFriends(); return true }
+    if (p.view === 'discover') { await openDiscover(); return true }
+    if (p.view === 'server') {
+      const srv = servers.value.find(x => x.id === p.serverId)
+      if (!srv) return false
+      await openServer(srv)
+      const ch = p.channelId ? channelsByServer.value[srv.id]?.find(c => c.id === p.channelId) : null
+      if (ch) await selectChannel(ch)
+      return true
+    }
+    if (p.view === 'dm') {
+      const dm = dmsData.value.find(d => d.id === p.dmId)
+      if (!dm) return false
+      await openDM(dm)
+      return true
+    }
+    if (p.view === 'group') {
+      const g = groupsData.value.find(x => x.id === p.groupId)
+      if (!g) return false
+      await openGroup(g)
+      return true
+    }
+    return false
+  },
 })
 </script>
 
