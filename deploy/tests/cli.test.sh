@@ -151,6 +151,7 @@ is "a plain value stays plain"        "$(env_quote 'https://example.com/terms')"
 is "an empty value stays empty"       "$(env_quote '')"                          ""
 is "a space is single-quoted"         "$(env_quote 'Sky Den')"                   "'Sky Den'"
 is "a # is quoted, not a comment"     "$(env_quote 'Den #1')"                    "'Den #1'"
+# shellcheck disable=SC2016 # single quotes on purpose: the test is that $ stays literal
 is "a \$ is kept literal"             "$(env_quote 'a$b')"                       "'a\$b'"
 is "an apostrophe double-quotes"      "$(env_quote "Sam's Place")"               "\"Sam's Place\""
 is "and escapes \$, \" and \\ inside" "$(env_quote "it's \$5 \"now\" \\o/")"     "\"it's \$\$5 \\\"now\\\" \\\\o/\""
