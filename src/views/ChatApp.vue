@@ -3859,6 +3859,7 @@ useDesktopTitleBar({
     groupId: view.value === 'group' ? activeGroup.value?.id ?? null : null,
   })),
   server: computed(() => (view.value === 'server' ? activeServer.value ?? null : null)),
+  channel: computed(() => (view.value === 'server' ? activeChannel.value ?? null : null)),
   go: async (p) => {
     if (p.view === 'friends') { openFriends(); return true }
     if (p.view === 'discover') { await openDiscover(); return true }

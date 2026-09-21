@@ -36,9 +36,10 @@ afterEach(() => { delete g.skycordDesktop; vi.unstubAllGlobals(); listeners.clea
 const mount = (go: (p: Place) => Promise<boolean>) => {
   const place = ref(at('friends'))
   const server = ref<{ name: string; img?: string } | null>(null)
+  const channel = ref<{ name: string; type: 'text' | 'voice' } | null>(null)
   const scope = effectScope()
-  scope.run(() => useDesktopTitleBar({ place: computed(() => place.value), server: computed(() => server.value), go }))
-  return { place, server, scope }
+  scope.run(() => useDesktopTitleBar({ place: computed(() => place.value), server: computed(() => server.value), channel: computed(() => channel.value), go }))
+  return { place, server, channel, scope }
 }
 const last = () => update.mock.calls.at(-1)![0]
 
@@ -48,12 +49,24 @@ describe('useDesktopTitleBar', () => {
     expect(last()).toEqual({ title: 'Friends', kind: 'friends', icon: null, canBack: false, canForward: false })
   })
 
-  it('names a server and offers back once you have moved', async () => {
-    const { place, server } = mount(async () => true)
+  it('names the channel and server, and offers back once you have moved', async () => {
+    const { place, server, channel } = mount(async () => true)
     server.value = { name: 'Sky Den', img: '/i.png' }
+    channel.value = { name: 'general', type: 'text' }
     place.value = at('server', { serverId: 's1', channelId: 'c1' })
     await nextTick()
-    expect(last()).toMatchObject({ title: 'Sky Den', icon: 'https://den.example/i.png', canBack: true })
+    expect(last()).toMatchObject({ title: '# general · Sky Den', icon: 'https://den.example/i.png', canBack: true })
+  })
+
+  it('follows a channel renamed while you are in it', async () => {
+    const { place, server, channel } = mount(async () => true)
+    server.value = { name: 'Sky Den' }
+    channel.value = { name: 'general', type: 'text' }
+    place.value = at('server', { serverId: 's1', channelId: 'c1' })
+    await nextTick()
+    channel.value = { name: 'lobby', type: 'text' }
+    await nextTick()
+    expect(last().title).toBe('# lobby · Sky Den')
   })
 
   it('back goes where you were, and forward becomes possible', async () => {

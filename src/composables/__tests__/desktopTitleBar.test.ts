@@ -63,23 +63,31 @@ describe('createNavHistory', () => {
 describe('titleOf', () => {
   const origin = 'https://den.example'
 
-  it('names a server by its name and icon, made absolute for the app', () => {
-    expect(titleOf('server', { name: 'Sky Den', img: '/uploads/i.png' }, origin))
-      .toEqual({ title: 'Sky Den', kind: 'server', icon: 'https://den.example/uploads/i.png' })
+  it('names a channel and its server, with the server’s icon made absolute for the app', () => {
+    expect(titleOf('server', { name: 'Sky Den', img: '/uploads/i.png' }, { name: 'general', type: 'text' }, origin))
+      .toEqual({ title: '# general · Sky Den', kind: 'server', icon: 'https://den.example/uploads/i.png' })
+  })
+
+  it('gives a voice channel no hash', () => {
+    expect(titleOf('server', { name: 'Sky Den' }, { name: 'Lounge', type: 'voice' }, origin).title).toBe('Lounge · Sky Den')
+  })
+
+  it('names just the server while no channel is open', () => {
+    expect(titleOf('server', { name: 'Sky Den' }, null, origin).title).toBe('Sky Den')
   })
 
   it('calls DMs and groups Direct Messages, as Discord does', () => {
-    expect(titleOf('dm', null, origin).title).toBe('Direct Messages')
-    expect(titleOf('group', null, origin).kind).toBe('dms')
+    expect(titleOf('dm', null, null, origin).title).toBe('Direct Messages')
+    expect(titleOf('group', null, null, origin).kind).toBe('dms')
   })
 
   it('has Friends and Discover', () => {
-    expect(titleOf('friends', null, origin)).toEqual({ title: 'Friends', kind: 'friends', icon: null })
-    expect(titleOf('discover', null, origin).title).toBe('Discover')
+    expect(titleOf('friends', null, null, origin)).toEqual({ title: 'Friends', kind: 'friends', icon: null })
+    expect(titleOf('discover', null, null, origin).title).toBe('Discover')
   })
 
   it('falls back to Friends for a server view with no server yet', () => {
-    expect(titleOf('server', null, origin).title).toBe('Friends')
+    expect(titleOf('server', null, null, origin).title).toBe('Friends')
   })
 })
 

@@ -40,9 +40,21 @@ const absolute = (src: string | undefined, origin: string) => {
   try { return new URL(src, origin).href } catch { return null }
 }
 
-/** What the bar says for each view. DMs and groups are "Direct Messages", as in Discord. */
-export const titleOf = (view: View, server: { name: string; img?: string } | null, origin: string): TitleInfo => {
-  if (view === 'server' && server) return { title: server.name, kind: 'server', icon: absolute(server.img, origin) }
+/**
+ * What the bar says for each view: "# general · Sky Den" in a channel (no hash
+ * for voice), the server alone before one is open, and "Direct Messages" for
+ * DMs and groups, as in Discord.
+ */
+export const titleOf = (
+  view: View,
+  server: { name: string; img?: string } | null,
+  channel: { name: string; type: 'text' | 'voice' } | null,
+  origin: string,
+): TitleInfo => {
+  if (view === 'server' && server) {
+    const title = channel ? `${channel.type === 'voice' ? '' : '# '}${channel.name} · ${server.name}` : server.name
+    return { title, kind: 'server', icon: absolute(server.img, origin) }
+  }
   if (view === 'dm' || view === 'group') return { title: 'Direct Messages', kind: 'dms', icon: null }
   if (view === 'discover') return { title: 'Discover', kind: 'discover', icon: null }
   return { title: 'Friends', kind: 'friends', icon: null }
@@ -67,6 +79,7 @@ const resolve = (token: string): string | null => {
 export const useDesktopTitleBar = (opts: {
   place: ComputedRef<Place>
   server: ComputedRef<{ name: string; img?: string } | null>
+  channel: ComputedRef<{ name: string; type: 'text' | 'voice' } | null>
   /** Go to a place; false if it no longer exists (a server left, a DM gone). */
   go(place: Place): Promise<boolean>
 }): void => {
@@ -79,12 +92,13 @@ export const useDesktopTitleBar = (opts: {
   let stepping = false
 
   const report = () => bar.update({
-    ...titleOf(opts.place.value.view, opts.server.value, location.origin),
+    ...titleOf(opts.place.value.view, opts.server.value, opts.channel.value, location.origin),
     canBack: history.canBack,
     canForward: history.canForward,
   })
   watch(opts.place, p => { if (!stepping) history.push(p); report() }, { immediate: true })
-  watch(opts.server, report)
+  // A rename, or a new icon, while you're there.
+  watch([opts.server, opts.channel], report)
 
   const step = async (dir: 'back' | 'forward') => {
     if (stepping) return
