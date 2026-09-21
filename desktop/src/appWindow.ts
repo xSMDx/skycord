@@ -21,6 +21,9 @@ export interface AppWindow {
   page: WebContents
   setTitle(state: TitleState): void
   setColors(colors: TitleColors): void
+  /** Show the window once the bar and the page have painted (or the page failed),
+   *  then call `shown` — so the launch screen hands over to a painted app. */
+  showWhenReady(shown: () => void): void
 }
 
 export const createAppWindow = (preload: string, onNavigate: (dir: 'back' | 'forward') => void): AppWindow => {
@@ -70,7 +73,9 @@ export const createAppWindow = (preload: string, onNavigate: (dir: 'back' | 'for
 
   // Keys belong to the page: give it focus whenever the window has it.
   win.on('focus', () => page.focus())
-  win.once('ready-to-show', () => { win.show(); page.focus() })
+  let barReady = false
+  let whenBarReady: (() => void) | null = null
+  win.once('ready-to-show', () => { barReady = true; whenBarReady?.() })
 
   const navigate = (dir: 'back' | 'forward') => { onNavigate(dir); page.focus() }
   ipcMain.on('titlebar:nav', (event, dir: unknown) => {
@@ -89,6 +94,23 @@ export const createAppWindow = (preload: string, onNavigate: (dir: 'back' | 'for
       state = next
       win.setTitle(next.title && next.title !== 'Skycord' ? `${next.title} - Skycord` : 'Skycord')
       push()
+    },
+    showWhenReady(shown) {
+      let pageReady = false
+      let done = false
+      const show = () => {
+        if (done || !barReady || !pageReady) return
+        done = true
+        win.show()
+        page.focus()
+        shown()
+      }
+      const ready = () => { pageReady = true; show() }
+      whenBarReady = show
+      page.once('did-finish-load', ready)
+      page.once('did-fail-load', ready)
+      // A slow server still gets a window.
+      setTimeout(() => { pageReady = true; barReady = true; show() }, 8000)
     },
     setColors(next) {
       colors = next

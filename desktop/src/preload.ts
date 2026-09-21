@@ -4,6 +4,7 @@
  *   - the local server picker gets `skycordPicker` (look up, choose, saved servers);
  *   - the local share picker gets `skycordShare` (list sources, choose one);
  *   - the local title bar gets `skycordTitleBar` (what to show, back/forward);
+ *   - the launch screen gets `skycordSplash` (what the app is doing, skip the update);
  *   - the chosen instance gets `skycordDesktop`.
  *
  * Deciding here, by the page's own URL, means an instance's web client can never
@@ -20,6 +21,11 @@ if (local && page === 'share.html') {
     sources: () => ipcRenderer.invoke('share:sources'),
     choose: (choice: unknown) => ipcRenderer.invoke('share:choose', choice),
     cancel: () => ipcRenderer.invoke('share:cancel'),
+  })
+} else if (local && page === 'splash.html') {
+  contextBridge.exposeInMainWorld('skycordSplash', {
+    onStatus: (cb: (status: unknown) => void) => { ipcRenderer.on('splash:status', (_e, s) => cb(s)) },
+    skip: () => ipcRenderer.send('splash:skip'),
   })
 } else if (local && page === 'titlebar.html') {
   contextBridge.exposeInMainWorld('skycordTitleBar', {

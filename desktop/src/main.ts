@@ -17,7 +17,8 @@ import { lookupInstance, normaliseAddress, type InstanceProfile } from './instan
 import { readStore, writeStore } from './store'
 import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
-import { startUpdates } from './updates'
+import { startUpdates, updateAtLaunch } from './updates'
+import { showSplash } from './splash'
 import { createAppWindow, type AppWindow } from './appWindow'
 import { openServersWindow, closeServersWindow } from './serversWindow'
 import { readServers, saveServer, renameServer, readdressServer, removeServer, hostOf, type SavedServer } from './servers'
@@ -199,7 +200,7 @@ app.on('web-contents-created', (_e, contents) => {
   contents.on('will-attach-webview', event => event.preventDefault())
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!primary) return
   // Permissions go to the chosen origin only, and only the ones a chat app needs.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
@@ -207,7 +208,14 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
     permissionAllowed(permission, requestingOrigin, current))
 
+  // The launch screen checks for updates first; an update found now installs
+  // before the app opens. Then it says "Starting…" until the app has painted.
+  const splash = showSplash(PRELOAD)
+  await updateAtLaunch(s => splash.status(s), cb => splash.onSkip(cb))
+  splash.status({ state: 'starting' })
+
   shellWin = createAppWindow(PRELOAD, dir => { if (current) shellWin?.page.send('desktop:nav', dir) })
+  shellWin.showWhenReady(() => splash.close())
   guard(shellWin.page)
   handleDisplayMedia(() => shellWin?.win ?? null, () => shellWin?.page ?? null, () => current)
 
