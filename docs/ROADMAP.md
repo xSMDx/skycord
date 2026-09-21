@@ -124,6 +124,19 @@ others hear an echo. It is offered for a whole screen only, off by default, and
 the picker says so when it is turned on. Echo-free audio needs native
 per-process capture: a later release.
 
+Second pass, the same day, from the owner's review: the settings moved into
+a gear menu like Discord's (Stream mode, Screen resolution, Frame rate, Share
+stream audio, Advanced > Hide stream preview), with SD/HD beside it and no Nitro
+anything. Custom frame rates are 15, 30 and 60.
+
+**Also built for rc.1 (2026-09-21):** a Discord-style title bar the app draws
+itself (page title, back/forward through places visited, the theme's colours,
+Windows' own buttons recoloured), so it appears on every server whatever its
+client; saved servers, managed in the app's own Servers window from Settings >
+Servers (switch, rename, change address, remove, add), kept out of every
+server's page so none can see the others; and logins that last 90 days since
+last use instead of 7 days since sign-in, on the web too.
+
 Not done: switching what is shared without stopping, and naming the media
 server in the picker. An older web client that cancels the picker shows
 "Couldn't start screen share": Electron's refusal reaches it as an AbortError,
