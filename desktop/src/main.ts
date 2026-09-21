@@ -14,11 +14,19 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { lookupInstance, normaliseAddress } from './instanceAddress'
 import { readStore, writeStore } from './store'
-import { externalSafe, permissionAllowed, sameOrigin } from './rules'
+import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
 
 const PICKER = join(app.getAppPath(), 'static', 'picker.html')
 const PICKER_URL = pathToFileURL(PICKER).href
+
+// A plain-http server on the network needs its origin treated as secure, or
+// the microphone is refused. Chromium reads that switch only at startup, so it
+// is set here, before the app is ready, from what was saved last time.
+const startupOrigin = normaliseAddress(readStore().instanceOrigin ?? '')
+if (startupOrigin && needsSecureOriginSwitch(startupOrigin)) {
+  app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', startupOrigin)
+}
 
 let win: BrowserWindow | null = null
 /** The instance on screen; null while the picker is showing. */
@@ -81,7 +89,14 @@ ipcMain.handle('picker:choose', (event, origin: unknown) => {
   const clean = normaliseAddress(origin)
   if (!clean) return
   writeStore({ ...readStore(), instanceOrigin: clean })
+  // A newly chosen plain-http server takes effect only after a restart. The
+  // short wait lets the picker say so before the window goes.
+  if (needsSecureOriginSwitch(clean) && clean !== startupOrigin) {
+    setTimeout(() => { app.relaunch(); app.exit(0) }, 1200)
+    return { restarting: true }
+  }
   openInstance(clean)
+  return { restarting: false }
 })
 
 // No page may embed another browser.

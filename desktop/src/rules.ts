@@ -32,3 +32,18 @@ const GRANTED = new Set(['media', 'notifications', 'clipboard-sanitized-write', 
 
 export const permissionAllowed = (permission: string, requestingUrl: string, origin: string | null): boolean =>
   GRANTED.has(permission) && sameOrigin(requestingUrl, origin)
+
+/**
+ * Whether an origin needs Chromium told to treat it as secure. Microphone and
+ * camera are only offered to secure origins; https is one, and so is localhost.
+ * A self-hosted server at http://192.168.1.5 is not — without this switch its
+ * members could not talk. The switch only takes effect at startup, which is
+ * why choosing such a server restarts the app once.
+ */
+export const needsSecureOriginSwitch = (origin: string | null): boolean => {
+  if (!origin) return false
+  let url: URL
+  try { url = new URL(origin) } catch { return false }
+  if (url.protocol !== 'http:') return false
+  return !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+}

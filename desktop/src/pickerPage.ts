@@ -6,7 +6,7 @@
 interface PickerProfile { name: string; nameIsAddress: boolean; icon: string | null; operator: string | null; version: string }
 interface PickerApi {
   lookup(address: string): Promise<{ ok: true; origin: string; profile: PickerProfile } | { ok: false; reason: string }>
-  choose(origin: string): Promise<void>
+  choose(origin: string): Promise<{ restarting: boolean } | undefined>
 }
 
 const api = (window as unknown as { skycordPicker: PickerApi }).skycordPicker
@@ -27,7 +27,12 @@ const reset = () => {
   $<HTMLInputElement>('address').focus()
 }
 
-$('hosted').addEventListener('click', () => { void api.choose(HOSTED) })
+const choose = async (origin: string) => {
+  const result = await api.choose(origin)
+  if (result?.restarting) say('Restarting once to finish connecting to this server…')
+}
+
+$('hosted').addEventListener('click', () => { void choose(HOSTED) })
 
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault()
@@ -59,6 +64,6 @@ $('form').addEventListener('submit', async (e) => {
   $<HTMLButtonElement>('go').focus()
 })
 
-$('go').addEventListener('click', () => { if (chosen) void api.choose(chosen) })
+$('go').addEventListener('click', () => { if (chosen) void choose(chosen) })
 $('back').addEventListener('click', reset)
 $<HTMLInputElement>('address').focus()

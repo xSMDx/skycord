@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sameOrigin, externalSafe, permissionAllowed } from '../rules'
+import { sameOrigin, externalSafe, permissionAllowed, needsSecureOriginSwitch } from '../rules'
 
 const ORIGIN = 'https://chat.example.com'
 
@@ -39,5 +39,17 @@ describe('permissionAllowed', () => {
   it('refuses everything else, even to the chosen origin', () => {
     for (const p of ['geolocation', 'midi', 'midiSysex', 'pointerLock', 'openExternal', 'serial', 'hid', 'usb', 'idle-detection', 'unknown'])
       expect(permissionAllowed(p, 'https://chat.example.com/', ORIGIN), p).toBe(false)
+  })
+})
+
+
+describe('needsSecureOriginSwitch', () => {
+  it('is needed for a plain-http server on the network', () => {
+    expect(needsSecureOriginSwitch('http://192.168.1.5:3001')).toBe(true)
+    expect(needsSecureOriginSwitch('http://chat.home.lan')).toBe(true)
+  })
+  it('is not needed for https, or for this machine, which is already secure', () => {
+    for (const o of ['https://chat.example.com', 'http://localhost:3001', 'http://127.0.0.1:3199', 'http://[::1]:3001', null, 'nonsense'])
+      expect(needsSecureOriginSwitch(o), String(o)).toBe(false)
   })
 })
