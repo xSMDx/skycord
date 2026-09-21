@@ -8,9 +8,9 @@ document. Where a value has a reason, the reason is given: most of these were
 arrived at by fixing something, and a token copied without its reason tends to
 get "improved" back into the bug it was fixing.
 
-> **First rule.** Skycord has **two** visual languages, not one. Using the wrong
-> one is the single most common way a new surface ends up looking off-brand.
-> See [Two surfaces](#two-surfaces) before you pick a palette.
+> **First rule.** Skycord has two surfaces, the app and the landing site, and
+> since 2026-09-21 they share **one** palette: the app's. A new surface takes
+> the app's tokens. See [Two surfaces](#two-surfaces) for how they still differ.
 
 ---
 
@@ -37,13 +37,13 @@ get "improved" back into the bug it was fixing.
 
 | | **App** (`app.skycord.xyz`) | **Landing** (`skycord.xyz`) |
 |---|---|---|
-| Feel | Discord-adjacent, quiet, dense, gets out of the way | Editorial, high-contrast, near-black, technical |
-| Ground | `#111214` → `#313338` (layered greys) | `#000000` (true black) |
-| Type | **gg sans** — humanist, invisible | **Fira Sans** + **Fira Code** — the mono is a *design element*, not just for code |
-| Text tiers | Neutral greys (`#dcddde` → `#949ba4`) | White → **Light Blurple** (`#E0E3FF`) → desaturated |
-| Themeable | Yes — 5 presets, 9 accents, custom, Material-You | No — one look, deliberately |
-| Density | Tight. Rows, not cards. | Generous. Cards and long measures. |
-| Personality | Restraint. It's a tool people live inside. | Confidence. It has ten seconds to say what this is. |
+| Feel | Discord-adjacent, quiet, dense, gets out of the way | **The app itself.** The page is a Skycord server: rail, channels, messages |
+| Ground | `#111214` → `#313338` (layered greys) | The same greys, `#111214` → `#313338` |
+| Type | **Archivo** for the UI, **Chakra Petch** for headings | The same two, plus **Fira Code** for commands and versions — all self-hosted in `landing/fonts/` |
+| Text tiers | Neutral greys (`#dcddde` → `#949ba4`) | The same greys |
+| Themeable | Yes — 5 presets, 9 accents, custom, Material-You | No — the dark default only, deliberately |
+| Density | Tight. Rows, not cards. | The app's rhythm, with a larger first screen (`#welcome`) |
+| Personality | Restraint. It's a tool people live inside. | Shows, not tells: a visitor is already inside a Skycord window |
 
 **Which do the tools use?**
 
@@ -255,27 +255,27 @@ Nine, offered in Appearance settings:
 
 ## Color — the landing site
 
-A separate, deliberately constrained palette. Four supplied colours; everything
-else is either derived (marked) or white.
+**Since 2026-09-21 the landing uses the app's palette, unchanged**: the dark
+default of `tokens.css` above, Sky accent and all. It also uses the app's
+anatomy — `skycord.xyz` is laid out as a Skycord server, with the rail,
+the channel list, messages, embeds and a file attachment for the installer —
+so the landing shows the product instead of describing it.
 
-| Token | Value | Role |
-|---|---|---|
-| `--ink` | `#000000` | Black — ground |
-| `--floor` | `#0d0d0d` | *derived* — a step off black, recessed areas |
-| `--panel` | `#1f1f1f` | Gray — cards, nav |
-| `--border` | `#2b2b2b` | *derived* — gray lifted. **Solid, not alpha**, so it reads as a drawn line |
-| `--ember` | `#5865F2` | Blurple — the accent: CTAs, live states |
-| `--ember-hi` | `#E0E3FF` | Light Blurple — hover, bright accent text |
-| `--sage` | `#E0E3FF` | Light Blurple — mono accents: uptime, specs, versions |
-| `--text` | `#ffffff` | Body copy |
-| `--dim` | `#E0E3FF` | Light Blurple — secondary copy |
-| `--faint` | `#8a8fa3` | *derived* — desaturated and dimmed so three text tiers stay separable |
+Rules that follow from it:
 
-`--faint` has to clear AA on **Gray**, not just on Black — most body copy sits
-inside a card.
+- **Tokens are copied, not reinterpreted.** The landing's `:root` block
+  repeats the app's values by name (`--bg-floor`, `--bg-panel`,
+  `--bg-chat`, `--accent` …). A change to the app's palette is a change to
+  both files.
+- **Text on Sky is ink** (`#0e0f11`), as in the app (`onAccent.ts`).
+- **Selection is a ring, not a fill**, in the channel list as in the app.
+- **No coloured glows.** Elevation is a neutral shadow; the accent never
+  becomes a halo.
 
-The landing borders are solid where the app's are alpha. On true black an alpha
-border effectively vanishes; a drawn line is the point.
+History: from 2026-08-24 the landing had its own look — "Ember" (charcoal and
+amber), then true black with Blurple `#5865F2` and Light Blurple `#E0E3FF` —
+kept apart from the app on purpose. The owner moved it onto the app's palette
+on 2026-09-21.
 
 ---
 
@@ -357,15 +357,13 @@ strong recurring signature. Use it for group labels; don't use it for content.
 
 ### Landing
 
-```css
-font: 400 16px/1.6 'Fira Sans', system-ui, sans-serif;
-```
+The app's faces, served from `landing/fonts/` (no font CDN sees who visits):
 
-- Display: `700 clamp(40px, 6vw, 68px)/1.1 'Fira Sans'`
-- Section heads: `700 clamp(32px, 4vw, 48px)/1.2`
-- **Fira Code is a design element here**, not a code font: version badges,
-  specs, uptime, dates, changelog metadata. It's what makes the landing read
-  technical. Typical: `400 13px/1.5 'Fira Code'`, or `600 11px` uppercase.
+- **Chakra Petch 700** for the `#welcome` headline, `clamp(40px, 6vw, 68px)/1.02`,
+  and each channel's "Welcome to #…" heading.
+- **Archivo 400–700** for everything else, at the app's sizes: 15px messages,
+  11px/700 uppercase category labels.
+- **Fira Code 400–500** for the install command, version tags and the site tag.
 
 ---
 

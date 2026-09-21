@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Skycord — your crew's place to talk</title>
 <meta name="description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours, or your own: the source is on GitHub." />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%235865F2' stroke-linecap='round' stroke-linejoin='round' stroke-width='16' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='12' fill='%235865F2'/%3E%3Ccircle cx='164' cy='140' r='12' fill='%235865F2'/%3E%3C/svg%3E" />
 <link rel="canonical" href="https://skycord.xyz/" />
-<meta name="theme-color" content="#000000" />
+<meta name="theme-color" content="#111214" />
 
 <!-- Most people meet this page as a link someone pasted into a chat window,
      not as a search result, so the unfurl is the first impression. Without
@@ -26,929 +26,766 @@
 <meta name="twitter:title"       content="Skycord — your crew's place to talk" />
 <meta name="twitter:description" content="Voice, video and screen share for people who already know each other. Runs on hardware you own — ours, or your own: the source is on GitHub." />
 
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet" />
+<!-- The app's own faces, served from here: no font CDN sees who visits. -->
+<link rel="preload" href="fonts/archivo-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="fonts/chakra-petch-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+
 <style>
-  /* ── Tokens ─────────────────────────────────────────── */
-  /* Recoloured to Discord's brand palette by request, 2026-08-30.
-     This replaces "Ember" (warm charcoal + amber), which was chosen precisely
-     so the landing page would NOT wear blurple — the reasoning recorded in
-     docs/superpowers/specs/2026-08-24-ember-landing-design.md was that the app
-     may look like Discord because muscle memory is binding, but the brand
-     surface doing the same reads as "clone" before a word is read. That
-     tradeoff was raised and the palette was chosen anyway; this note exists so
-     the next person finds the argument rather than re-deriving it.
-     Layout, type (Fira Sans/Code) and copy are untouched. */
+  /* This page is a Skycord server: the rail, the channel list and the
+     conversation are the app's own, in the app's own palette and type
+     (DESIGN.md, "Color — the app"). Sections are channels; content arrives
+     as messages. Without JavaScript every channel is shown in turn. */
+
+  @font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-400-normal.woff2) format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-500-normal.woff2) format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-600-normal.woff2) format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-700-normal.woff2) format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Chakra Petch'; src: url(fonts/chakra-petch-latin-600-normal.woff2) format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Chakra Petch'; src: url(fonts/chakra-petch-latin-700-normal.woff2) format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Fira Code'; src: url(fonts/fira-code-latin-400-normal.woff2) format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Fira Code'; src: url(fonts/fira-code-latin-500-normal.woff2) format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+
   :root {
-    /* Palette, supplied:
-         #5865F2 Blurple · #E0E3FF Light Blurple · #1f1f1f Gray · #000000 Black
-       Four colours cannot fill twelve roles. The four DERIVED below are marked;
-       nothing else was invented. Token names still read "ember" and "sage" —
-       they are load-bearing across ~40 rules, and renaming them is a separate
-       change from recolouring. */
-    --ink:     #000000;   /* Black — ground */
-    --floor:   #0d0d0d;   /* derived: a step off black, for recessed areas */
-    --panel:   #1f1f1f;   /* Gray — cards, nav */
-    --border:  #2b2b2b;   /* derived: gray lifted. Solid, not alpha, so it reads as a drawn line */
-    --ember:   #5865F2;   /* Blurple — the accent: CTAs, live states, the LED */
-    --ember-hi:#E0E3FF;   /* Light Blurple — hover and bright accent text */
-    --sage:    #E0E3FF;   /* Light Blurple — mono accents: uptime, specs, versions */
-    --speak:   #E0E3FF;
-    --live:    #5865F2;
-    /* White is not one of the four, but body copy needs it: with Light Blurple
-       as the top tier there is nothing brighter to sit above it, and every tier
-       below would be a tint of one hue. */
-    --text:    #ffffff;
-    --dim:     #E0E3FF;   /* Light Blurple — secondary copy */
-    /* derived: Light Blurple desaturated and dimmed so the three text tiers
-       stay separable. It has to clear AA on Gray, not just on Black — most body
-       copy sits inside a card. */
-    --faint:   #8a8fa3;
-    --green:   var(--sage);
-    --red:     var(--ember);
+    color-scheme: dark;
+    /* Surfaces — tokens.css, dark default */
+    --bg-floor:   #111214;  /* rail, darkest chrome */
+    --bg-deep:    #17191c;  /* user panel */
+    --bg-panel:   #2b2d31;  /* sidebar, embeds */
+    --bg-chat:    #313338;  /* the conversation */
+    --bg-input:   #1e1f22;  /* code, cut into the surface */
+    --bg-chatbar: #383a40;  /* composer, laid on top */
+    /* Text */
+    --text-strong: #ffffff;
+    --text-1: #dcddde;
+    --text-2: #b5bac1;
+    --text-3: #949ba4;
+    /* Accent: Sky. It lands on ink, not white (onAccent.ts). */
+    --accent: #38b6f1;
+    --accent-hover: #31a0d4;
+    --accent-rgb: 56, 182, 241;
+    --accent-text: #5bc3f3;
+    --on-accent: #0e0f11;
+    /* Semantic */
+    --green: #23a55a;
+    --green-text: #40b16f;
+    --green-rgb: 35, 165, 90;
+    --warning: #f0b232;
+    --warning-rgb: 240, 178, 50;
+    /* Lines and states — alpha, so they sit on any surface */
+    --border: rgba(255,255,255,.08);
+    --divider: rgba(255,255,255,.06);
+    --seam: rgba(0,0,0,.3);
+    --hover: rgba(255,255,255,.06);
+    --hover-strong: rgba(255,255,255,.1);
+    --active-bg: rgba(255,255,255,.045);
+    --active-ring: rgba(255,255,255,.34);
+    --focus-ring: rgba(255,255,255,.92);
+    --track: rgba(255,255,255,.1);
+    /* Type */
+    --font-ui: 'Archivo', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-display: 'Chakra Petch', 'Archivo', system-ui, sans-serif;
+    --font-mono: 'Fira Code', Consolas, Menlo, monospace;
+    /* Motion — four bands, three curves */
+    --dur-1: 120ms;
+    --dur-2: 180ms;
+    --dur-3: 240ms;
+    --dur-exit: 140ms;
+    --ease-out: cubic-bezier(.32, .72, 0, 1);
+    --ease-in: cubic-bezier(.4, 0, 1, 1);
+    --ease-inout: cubic-bezier(.4, 0, .2, 1);
+    /* Columns */
+    --rail: 72px;
+    --side: 248px;
+    --about: 300px;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
   body {
-    background: var(--ink); color: var(--text);
-    font: 400 16px/1.6 'Fira Sans', system-ui, sans-serif;
+    background: var(--bg-floor);
+    color: var(--text-1);
+    font: 400 15px/1.45 var(--font-ui);
     -webkit-font-smoothing: antialiased;
-    min-height: 100vh;
-    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
   }
-  a { color: inherit; text-decoration: none; }
-  button { font: inherit; border: none; background: none; cursor: pointer; color: inherit; }
+  ::selection { background: rgba(var(--accent-rgb), .35); color: #fff; }
+  :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  a { color: inherit; }
+  button { font: inherit; color: inherit; }
+  svg { display: block; flex: none; }
+  p { margin: 0; }
+  [hidden] { display: none !important; }
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-thumb { background: var(--track); border: 4px solid transparent; background-clip: padding-box; border-radius: 999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
 
-  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  .skip {
+    position: absolute; left: 12px; top: -48px; z-index: 100; padding: 8px 14px; border-radius: 8px;
+    background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none;
+  }
+  .skip:focus { top: 12px; }
 
-  /* ── Top bar ───────────────────────────────────────────────────────── */
-  header {
-    position: sticky; top: 0; z-index: 50;
-    background: rgba(0,0,0,.85); backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--border);
-    animation: slideDown .5s ease-out;
+  /* ── The window ───────────────────────────────────────────────── */
+  .app { display: grid; grid-template-columns: var(--rail) var(--side) minmax(0, 1fr); height: 100vh; height: 100dvh; }
+  .nav { display: contents; }
+
+  /* ── Rail ─────────────────────────────────────────────────────── */
+  .rail {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 12px 0; background: var(--bg-floor); overflow-y: auto;
   }
-  @keyframes slideDown {
-    from { transform: translateY(-100%); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+  .rail-sep { width: 32px; height: 2px; margin: 2px 0; border-radius: 1px; background: var(--border); }
+  .rail-item { position: relative; display: grid; place-items: center; }
+  /* The pill beside a rail icon: small on hover, tall when it is where you are. */
+  .rail-item::before {
+    content: ""; position: absolute; left: -12px; top: 50%; width: 4px; height: 40px; margin-top: -20px;
+    border-radius: 0 4px 4px 0; background: var(--text-strong);
+    transform: scaleY(0); transition: transform var(--dur-2) var(--ease-out);
   }
-  .bar { display: flex; align-items: center; gap: 28px; height: 64px; }
-  .mark { display: flex; align-items: center; gap: 10px; margin-right: auto; transition: opacity .2s; }
-  .mark:hover { opacity: .8; }
-  .logo-container {
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
+  .rail-item.current::before { transform: scaleY(1); }
+  .rail-btn {
+    width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%;
+    background: var(--bg-panel); color: var(--text-1); text-decoration: none;
+    transition: border-radius var(--dur-2) var(--ease-out), background-color var(--dur-1), color var(--dur-1), transform 160ms var(--ease-out);
   }
-  .logo-svg {
-    width: 100%;
-    height: 100%;
-    animation: logoPulse 2s ease-in-out infinite;
-  }
-  @keyframes logoPulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-  }
-  .logo-svg .eye {
-    animation: eyeBlink 3s ease-in-out infinite;
-    transform-origin: center;
-  }
-  @keyframes eyeBlink {
-    0%, 90%, 100% { transform: scaleY(1); }
-    93%, 97% { transform: scaleY(0.1); }
-  }
-  .mark b { font: 700 19px 'Fira Sans', 'Fira Sans', sans-serif; letter-spacing: .3px; }
-  .tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
-  .tab {
-    padding: 7px 18px; border-radius: 7px; font-size: 14px; font-weight: 600; color: var(--dim);
-    transition: all .2s cubic-bezier(.4,0,.2,1);
-    position: relative;
-  }
-  .tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
-  .tab.on { 
-    background: rgba(88,101,242,.16); 
-    color: var(--ember-hi);
-    box-shadow: 0 2px 8px rgba(88,101,242,.2);
-  }
-  .tab.on::after {
-    content: '';
-    position: absolute;
-    bottom: -4px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 20px;
-    height: 2px;
-    background: var(--ember);
-    border-radius: 2px;
-  }
-  .cta-mini {
-    padding: 9px 18px; border-radius: 9px; font-size: 14px; font-weight: 700;
-    background: var(--ember); color: #000000; 
-    transition: all .2s cubic-bezier(.4,0,.2,1);
-    box-shadow: 0 4px 12px rgba(88,101,242,.3);
-    position: relative;
-    overflow: hidden;
-  }
-  .cta-mini:hover { 
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(88,101,242,.4);
+  .rail-btn:active { transform: scale(.94); transition-duration: 0ms; }
+  .rail-btn svg { width: 24px; height: 24px; }
+  .rail-home { background: var(--accent); color: var(--on-accent); border-radius: 16px; }
+  .rail-home svg { width: 30px; height: 30px; }
+  @media (hover: hover) and (pointer: fine) {
+    .rail-item:hover::before { transform: scaleY(.5); }
+    .rail-item.current:hover::before { transform: scaleY(1); }
+    .rail-btn:hover { border-radius: 16px; background: var(--accent); color: var(--on-accent); }
   }
 
-  /* ── Panels ─────────────────────────────────────────────────── */
-  .panel { display: none; }
-  .panel.on { display: block; animation: fadeIn .4s ease-out; }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+  .tip {
+    position: fixed; z-index: 90; padding: 8px 12px; border-radius: 6px; pointer-events: none;
+    background: var(--bg-floor); color: var(--text-strong); font: 600 14px/1.2 var(--font-ui); white-space: nowrap;
+    box-shadow: 0 8px 16px rgba(0,0,0,.28);
+    transform-origin: left center; transform: translateY(-50%) scale(.96); opacity: 0;
+    transition: opacity 125ms var(--ease-out), transform 125ms var(--ease-out);
   }
+  .tip::before {
+    content: ""; position: absolute; left: -4px; top: 50%; width: 8px; height: 8px; margin-top: -4px;
+    background: inherit; transform: rotate(45deg); border-radius: 1px;
+  }
+  .tip[data-state="open"] { opacity: 1; transform: translateY(-50%) scale(1); }
+  /* Once one tip is open, the next comes at once: moving along the rail is scanning, not waiting. */
+  .tip[data-instant] { transition-duration: 0ms; }
 
-  /* ── Hero ──────────────────────────────────────────────────────────── */
-  .hero { 
-    padding: 100px 0 50px; 
-    text-align: center; 
-    position: relative; 
-    overflow: hidden;
+  /* ── Channel sidebar ──────────────────────────────────────────── */
+  .side { display: flex; flex-direction: column; min-height: 0; background: var(--bg-panel); border-top-left-radius: 8px; }
+  .guild {
+    flex: none; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+    box-shadow: 0 1px 0 var(--seam); color: var(--text-strong); font: 600 15px/1 var(--font-ui);
   }
-  .hero::before {
-    content: ''; 
-    position: absolute; 
-    inset: -40% -20% auto; 
-    height: 130%;
-    background:
-      radial-gradient(560px 300px at 30% 20%, rgba(88,101,242,.2), transparent 65%),
-      radial-gradient(480px 280px at 72% 12%, rgba(224,227,255,.1), transparent 60%),
-      radial-gradient(600px 400px at 50% 50%, rgba(124,92,191,.05), transparent 70%);
-    pointer-events: none;
-    animation: pulse 8s ease-in-out infinite;
+  .guild .tag {
+    margin-left: auto; padding: 3px 6px; border-radius: 4px; background: rgba(var(--accent-rgb), .14);
+    color: var(--accent-text); font: 500 11px/1 var(--font-mono);
   }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .8; }
+  .channels { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 16px; }
+  .cat {
+    margin: 18px 8px 4px; color: var(--text-2);
+    font: 700 11px/1.2 var(--font-ui); letter-spacing: .4px; text-transform: uppercase;
   }
+  .ch {
+    display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px; margin: 1px 0;
+    border-radius: 6px; color: var(--text-3); font: 500 15px/1 var(--font-ui); text-decoration: none;
+    transition: background-color var(--dur-1), color var(--dur-1);
+  }
+  .ch svg { width: 20px; height: 20px; color: var(--text-3); }
+  .ch .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* Where you are: a hairline ring and a neutral lift, not a fill (DESIGN.md). */
+  .ch[aria-current="page"] { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); color: var(--text-strong); }
+  .ch[aria-current="page"] svg { color: var(--text-2); }
+  @media (hover: hover) and (pointer: fine) {
+    .ch:hover { background: var(--hover); color: var(--text-1); }
+  }
+  .new {
+    margin-left: auto; padding: 3px 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent);
+    font: 700 10px/1 var(--font-ui); letter-spacing: .4px; text-transform: uppercase;
+  }
+  .vc-members { margin: 0 0 4px; padding: 0; list-style: none; }
+  .vm { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 34px; color: var(--text-3); font-size: 14px; }
+  .vm .av { position: relative; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 11px/1 var(--font-ui); }
+  /* The speaking ring, as in a real call: drawn on a pseudo-element so only opacity moves. */
+  .vm .av::after {
+    content: ""; position: absolute; inset: -3px; border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--green); opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
+  }
+  .vm.speaking .av::after { opacity: 1; }
+  .vm.speaking { color: var(--text-1); }
+
+  .me {
+    flex: none; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 8px 0 10px;
+    background: var(--bg-deep);
+  }
+  .me .av { position: relative; width: 32px; height: 32px; border-radius: 50%; background: var(--bg-chatbar); display: grid; place-items: center; color: var(--text-2); }
+  .me .av svg { width: 18px; height: 18px; }
+  .me .who { min-width: 0; line-height: 1.2; }
+  .me .who b { display: block; color: var(--text-strong); font-weight: 600; font-size: 14px; }
+  .me .who span { color: var(--text-3); font-size: 12px; }
+  .me .btn { margin-left: auto; height: 32px; padding: 0 12px; font-size: 13px; }
+
+  /* ── The conversation ─────────────────────────────────────────── */
+  .chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-chat); }
+  .chat-head {
+    flex: none; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+    box-shadow: 0 1px 0 var(--seam); position: relative; z-index: 2;
+  }
+  .chat-head .hash { width: 24px; height: 24px; color: var(--text-3); }
+  .chat-head .name { color: var(--text-strong); font: 600 16px/1 var(--font-ui); white-space: nowrap; }
+  .chat-head .topic {
+    min-width: 0; margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--border);
+    color: var(--text-3); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .menu-btn {
+    display: none; width: 36px; height: 36px; margin-left: -8px; border: 0; border-radius: 8px; place-items: center;
+    background: transparent; color: var(--text-2); cursor: pointer;
+  }
+  .menu-btn svg { width: 22px; height: 22px; }
+  .scroller { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; }
+  .channel { padding: 8px 0 12px; }
+  html:not(.js) .channel + .channel { border-top: 1px solid var(--divider); }
+
+  /* The top of a channel, as the app draws it */
+  .ch-welcome { margin: 24px 16px 20px; display: grid; justify-items: start; gap: 8px; }
+  .ch-icon {
+    width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center;
+    background: #41434a; color: var(--text-strong);
+  }
+  .ch-icon svg { width: 40px; height: 40px; }
+  .ch-welcome h2 {
+    margin: 6px 0 0; color: var(--text-strong);
+    font: 700 clamp(26px, 3.2vw, 32px)/1.1 var(--font-display); letter-spacing: -.005em;
+  }
+  .ch-welcome > p { max-width: 62ch; color: var(--text-2); }
+  .ch-welcome [tabindex="-1"]:focus { outline: none; }
+
+  /* #welcome's top is the page's first viewport */
+  .hero { margin-top: clamp(24px, 6vh, 64px); gap: 14px; }
+  .server-icon {
+    width: 84px; height: 84px; border-radius: 26px; display: grid; place-items: center;
+    background: var(--accent); color: var(--on-accent); box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  }
+  .server-icon svg { width: 52px; height: 52px; }
   .hero h1 {
-    position: relative;
-    font: 700 clamp(40px, 6vw, 68px)/1.1 'Fira Sans', 'Fira Sans', sans-serif;
-    letter-spacing: -.5px;
-    animation: fadeUp .6s ease-out;
+    margin: 6px 0 0; color: var(--text-strong); max-width: 14ch;
+    font: 700 clamp(40px, 6vw, 68px)/1.02 var(--font-display); letter-spacing: -.02em; text-wrap: balance;
   }
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+  .hero .lede { max-width: 56ch; color: var(--text-1); font-size: 17px; line-height: 1.5; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px;
+    border: 0; border-radius: 8px; cursor: pointer; text-decoration: none; white-space: nowrap;
+    font: 600 14px/1 var(--font-ui);
+    transition: background-color var(--dur-1), color var(--dur-1), transform 160ms var(--ease-out);
   }
-  /* Flat ember, no gradient clip — Ember has one accent and it is opaque.
-     (A background-clip:text over background:none renders invisible text,
-     which is also why this could not stay a token swap.) */
-  .hero h1 em { font-style: normal; color: var(--ember); }
-  .selfhost {
-    margin-top: 14px;
-    font: 400 13px/1.5 'Fira Code', monospace;
-    color: var(--sage);
-  }
-  /* The global `a { color: inherit }` plus no underline would leave this link
-     visually identical to the sentence around it. Underline is the affordance;
-     colour alone would not be one for a reader who cannot separate the two. */
-  .selfhost a {
-    color: var(--text);
-    border-bottom: 1px solid rgba(88,101,242,.55);
-    transition: border-color .2s, color .2s;
-  }
-  .selfhost a:hover { color: var(--ember-hi); border-bottom-color: var(--ember-hi); }
-  .hero p.sub {
-    position: relative; 
-    margin: 20px auto 35px; 
-    max-width: 560px;
-    color: var(--dim); 
-    font-size: 18px;
-    animation: fadeUp .6s ease-out .2s both;
-  }
-  .cta {
-    position: relative; 
-    display: inline-block;
-    padding: 16px 42px; 
-    border-radius: 12px; 
-    font-size: 17px; 
-    font-weight: 700;
-    background: var(--ember); 
-    color: #000000;
-    box-shadow: 0 8px 34px rgba(88,101,242,.4);
-    transition: all .25s cubic-bezier(.4,0,.2,1);
-    animation: fadeUp .6s ease-out .4s both;
-    overflow: hidden;
-  }
-  .cta:hover { 
-    transform: translateY(-3px); 
-    box-shadow: 0 14px 44px rgba(88,101,242,.5);
-  }
-  .cta small { 
-    display: block; 
-    font-weight: 500; 
-    font-size: 12px; 
-    opacity: .8;
-    margin-top: 2px;
+  /* Press lands on pointer-down; only the release eases (DESIGN.md, Motion rule 3). */
+  .btn:active { transform: scale(.97); transition-duration: 0ms; }
+  .btn svg { width: 18px; height: 18px; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: #4e5058; color: var(--text-strong); }
+  .btn.ghost { background: transparent; color: var(--text-1); box-shadow: inset 0 0 0 1px var(--border); }
+  @media (hover: hover) and (pointer: fine) {
+    .btn.primary:hover { background: var(--accent-hover); }
+    .btn.secondary:hover { background: #5c5e66; }
+    .btn.ghost:hover { background: var(--hover); color: var(--text-strong); }
   }
 
-  /* ── Signature: the call stage ─────────────────────────────────────── */
-  /* ── The machine in the closet ─────────────────────────────────────
-     The hero visual is not a fake app screenshot — it is the thing the
-     product is actually about: an old tower with one warm light on,
-     running the place your friends talk. Nobody else in this category
-     can honestly use this image. */
-  .stage {
-    display: flex; align-items: center; justify-content: center; gap: 44px;
-    max-width: 640px; margin: 64px auto 0; padding: 36px 32px;
-    background: var(--floor);
-    border: 1px solid var(--border); border-radius: 16px;
-    /* The one shadow on the page. */
-    box-shadow: 0 30px 80px rgba(0,0,0,.55);
+  /* Messages */
+  .msg {
+    position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 16px;
+    margin-top: 16px; padding: 2px 48px 2px 16px;
   }
-  .machine {
-    flex-shrink: 0;
-    width: 120px; height: 190px;
-    background: var(--panel);
-    border: 1px solid var(--border); border-radius: 10px;
-    position: relative; padding: 16px 14px;
+  .msg.cont { margin-top: 0; padding-top: 1px; padding-bottom: 1px; }
+  .msg.cont > .av, .msg.cont > .msg-body > header { display: none; }
+  .msg.cont > .msg-body { grid-column: 2; }
+  @media (hover: hover) and (pointer: fine) {
+    .msg:hover { background: rgba(0,0,0,.07); }
   }
-  /* The LED. The one moving thing in the hero, and it moves like a
-     machine breathing, not like an alert. */
-  .m-led {
-    display: block; width: 8px; height: 8px; border-radius: 50%;
-    background: var(--ember);
-    box-shadow: 0 0 10px 2px rgba(88,101,242,.55);
-    animation: m-breathe 3.2s ease-in-out infinite;
+  .msg > .av {
+    width: 40px; height: 40px; margin-top: 2px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent); color: var(--on-accent);
   }
-  @keyframes m-breathe {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: .45; box-shadow: 0 0 5px 1px rgba(88,101,242,.3); }
+  .msg > .av svg { width: 26px; height: 26px; }
+  .msg-body { min-width: 0; }
+  .msg-body > header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  .author { color: var(--text-strong); font-weight: 600; font-size: 15px; }
+  .msg time { color: var(--text-3); font-size: 12px; }
+  .msg-body p { margin-top: 2px; max-width: 72ch; }
+  .msg-body p + p { margin-top: 6px; }
+  .msg-body ul { margin: 6px 0 2px; padding-left: 20px; max-width: 70ch; }
+  .msg-body li + li { margin-top: 3px; }
+  .msg-body li::marker { color: var(--text-3); }
+  .msg-body a:not(.btn):not(.file-name) { color: var(--accent); text-decoration: none; }
+  .msg-body a:not(.btn):not(.file-name):hover { text-decoration: underline; text-underline-offset: 3px; }
+  .msg-body b, .msg-body strong { color: var(--text-strong); font-weight: 600; }
+  .msg-body code {
+    font: 500 .88em/1 var(--font-mono); padding: .15em .4em; border-radius: 4px;
+    background: var(--bg-input); color: var(--text-1);
   }
-  .m-slot {
-    display: block; height: 6px; border-radius: 3px;
-    background: var(--ink); border: 1px solid var(--border);
-    margin-top: 14px;
-  }
-  .m-slot.short { width: 60%; }
-  .m-vents {
-    position: absolute; left: 14px; right: 14px; bottom: 14px;
-    display: flex; flex-direction: column; gap: 5px;
-  }
-  .m-vents i {
-    display: block; height: 2px; border-radius: 1px;
-    background: var(--border);
-  }
-  .m-caption {
-    display: flex; flex-direction: column; gap: 10px;
-    font: 400 14px/1.6 'Fira Code', monospace;
-    color: var(--sage); text-align: left;
-  }
-  .m-caption b { color: var(--text); font-weight: 600; }
+  .only-wide { display: inline; }
+  .only-narrow { display: none; }
 
-  @keyframes wig   { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 45% { transform: rotate(11deg); } 70% { transform: rotate(-6deg); } }
-  .mark:hover .logo-container { animation: wig .5s ease; }
+  /* Code, cut into the surface, with a copy button */
+  .code { position: relative; max-width: 660px; margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); }
+  .code pre { margin: 0; padding: 12px 96px 12px 14px; overflow-x: auto; color: var(--text-1); font: 400 13.5px/1.65 var(--font-mono); }
+  .code pre code { padding: 0; background: none; font: inherit; }
+  .code .prompt { color: var(--text-3); user-select: none; }
+  .copy {
+    position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+    border: 0; border-radius: 6px; background: var(--bg-chatbar); color: var(--text-1); cursor: pointer; font: 600 12px/1 var(--font-ui);
+    transition: background-color var(--dur-1), transform 160ms var(--ease-out);
+  }
+  .copy:active { transform: scale(.96); transition-duration: 0ms; }
+  .copy svg { width: 15px; height: 15px; }
+  .copy .copy-label, .copy svg { transition: filter var(--dur-2) var(--ease-inout), opacity var(--dur-2) var(--ease-inout); }
+  /* The label change crossfades through a slight blur, so it reads as one button changing its mind. */
+  .copy.swap .copy-label, .copy.swap svg { filter: blur(2px); opacity: .35; }
+  .copy.done { color: var(--green-text); }
+  @media (hover: hover) and (pointer: fine) { .copy:hover { background: #41434a; } }
 
-  /* ── Features grid ─────────────────────────────────────────────────── */
-  .feats { padding: 96px 0 90px; }
-  .feats h2 {
-    font: 700 15px 'Fira Code', monospace; 
-    letter-spacing: .16em; 
-    text-transform: uppercase;
-    color: var(--faint); 
-    margin-bottom: 28px;
-    position: relative;
-    display: inline-block;
+  /* The installer, as a file attachment */
+  .file {
+    display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+    max-width: 480px; margin-top: 8px; padding: 12px 12px 12px 14px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel);
   }
-  .feats h2::after {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 0;
-    width: 40px;
-    height: 3px;
-    background: var(--ember);
-    border-radius: 2px;
+  .file-icon { color: var(--accent); }
+  .file-icon svg { width: 40px; height: 40px; }
+  .file-name { color: var(--accent); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+  .file-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .file-meta { margin-top: 2px; color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .file-get {
+    width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2);
+    transition: background-color var(--dur-1), color var(--dur-1), transform 160ms var(--ease-out);
   }
-  /* Mono, because these are readings rather than prose — and Fira Code
-     is already being fetched for the changelog. */
-  .shipping {
-    margin: 18px 0 0;
-    font-family: 'Fira Code', ui-monospace, SFMono-Regular, monospace;
-    font-size: 12.5px;
-    letter-spacing: .01em;
-    color: rgba(255,255,255,.42);
-  }
-  .shipping a { color: rgba(255,255,255,.62); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.18); }
-  .shipping a:hover { color: #fff; border-bottom-color: var(--ember); }
+  .file-get:active { transform: scale(.94); transition-duration: 0ms; }
+  .file-get svg { width: 22px; height: 22px; }
+  @media (hover: hover) and (pointer: fine) { .file-get:hover { background: var(--hover-strong); color: var(--text-strong); } }
+  .dl-status { min-height: 0; margin-top: 6px; color: var(--green-text); font-size: 13px; }
+  .dl-status:empty { display: none; }
 
-  /* One card carries more weight than the other eight so the grid has a
-     first read instead of nine equal voices. It is the flagship and already
-     sits first, so this is weight, not reordering. */
-  .grid .card.lead { grid-column: span 2; }
+  .note {
+    display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; max-width: 560px; margin-top: 8px; padding: 10px 12px;
+    border: 1px solid rgba(var(--warning-rgb), .28); border-radius: 8px; background: rgba(var(--warning-rgb), .08);
+  }
+  .note svg { width: 20px; height: 20px; margin-top: 1px; color: var(--warning); }
 
-  .grid { 
-    display: grid; 
-    grid-template-columns: repeat(3, 1fr); 
-    gap: 16px; 
+  /* Embeds: features and roadmap cards */
+  .embeds { display: grid; gap: 8px; margin-top: 8px; max-width: 1040px; }
+  @media (min-width: 1100px) { .embeds.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .embed { min-width: 0; padding: 12px 16px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
+  .embed-head { display: flex; align-items: center; gap: 10px; }
+  .embed-head .ic { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 8px; background: rgba(var(--accent-rgb), .14); color: var(--accent-text); }
+  .embed-head .ic svg { width: 18px; height: 18px; }
+  .embed h3 { margin: 0; color: var(--text-strong); font: 600 15px/1.3 var(--font-ui); }
+  .embed > p { margin-top: 8px; color: var(--text-2); font-size: 14px; }
+  .embed ul { margin: 8px 0 0; padding-left: 18px; color: var(--text-1); font-size: 14px; }
+  .embed li + li { margin-top: 3px; }
+  .embed li::marker { color: var(--text-3); }
+  .stage-chip {
+    margin-left: auto; flex: none; padding: 4px 7px; border-radius: 4px;
+    font: 700 10px/1 var(--font-ui); letter-spacing: .4px; text-transform: uppercase;
   }
-  .card {
-    background: var(--floor); 
-    border: 1px solid var(--border); 
-    border-radius: 14px;
-    padding: 24px 22px; 
-    transition: all .3s cubic-bezier(.4,0,.2,1);
-    position: relative;
-    overflow: hidden;
-  }
-  .card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--ember);
-    transform: scaleX(0);
-    transition: transform .3s ease;
-  }
-  .card:hover::before {
-    transform: scaleX(1);
-  }
-  .card:hover { 
-    border-color: rgba(88,101,242,.4); 
-    transform: translateY(-4px);
-    box-shadow: 0 12px 32px rgba(0,0,0,.4);
-  }
-  .card .ic {
-    width: 42px; 
-    height: 42px; 
-    border-radius: 12px; 
-    margin-bottom: 16px;
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    background: rgba(88,101,242,.13); 
-    color: var(--ember);
-    transition: all .3s cubic-bezier(.4,0,.2,1);
-  }
-  .card:hover .ic { 
-    background: var(--ember); 
-    color: #000000;
-    transform: rotate(-5deg) scale(1.1);
-  }
-  /*
-   * These are Feather/Lucide icons, and that family draws a dot as a
-   * zero-length <line>. A zero-length line only paints if the cap is round —
-   * with the default butt cap it covers 0.01 x 2 units, which is nothing. That
-   * is why the smiley had no eyes and the phone had no home button.
-   *
-   * Set here rather than on each path so an icon cannot be added later that
-   * forgets to opt in.
-   */
-  .card .ic svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; }
-  .card h3 { 
-    font: 600 16px/1.3 'Fira Sans', sans-serif; 
-    margin-bottom: 8px;
-  }
-  .card p { 
-    font-size: 13.5px; 
-    color: var(--dim); 
-    line-height: 1.6;
-  }
-  .card .features-list {
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .card .features-list li {
-    font-size: 12.5px;
-    color: var(--dim);
-    padding-left: 16px;
-    position: relative;
-    list-style: none;
-  }
-  .card .features-list li::before {
-    content: '•';
-    position: absolute;
-    left: 0;
-    color: var(--ember);
-    font-weight: bold;
-  }
+  .stage-chip.now { background: rgba(var(--accent-rgb), .16); color: var(--accent-text); }
+  .stage-chip.next { background: var(--hover-strong); color: var(--text-1); }
+  .stage-chip.idea { background: var(--hover); color: var(--text-2); }
+  .stage-chip.shipped { background: rgba(var(--green-rgb), .16); color: var(--green-text); }
 
-  /* ── Roadmap page ─────────────────────────────────────────────────── */
-  .roadmap-hero {
-    padding: 60px 0 40px;
-    text-align: center;
-    position: relative;
+  /* Dividers between days, or between stages of the roadmap */
+  .day { display: flex; align-items: center; gap: 10px; margin: 24px 16px 4px; color: var(--text-3); font: 600 12px/1 var(--font-ui); }
+  .day::before, .day::after { content: ""; flex: 1; height: 1px; background: var(--divider); }
+
+  /* Releases */
+  .rel-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  .ver { padding: 3px 6px; border-radius: 4px; background: rgba(var(--accent-rgb), .14); color: var(--accent-text); font: 500 12px/1 var(--font-mono); }
+  .rel-title { color: var(--text-strong); font-weight: 600; }
+  .changes { margin: 8px 0 0; padding: 0; list-style: none; max-width: 76ch; }
+  .changes li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 3px 0; color: var(--text-1); font-size: 14px; }
+  .kind { justify-self: start; padding: 3px 6px; border-radius: 4px; font: 700 10px/1 var(--font-ui); letter-spacing: .4px; text-transform: uppercase; }
+  .kind.add { background: rgba(var(--green-rgb), .16); color: var(--green-text); }
+  .kind.imp { background: rgba(var(--accent-rgb), .16); color: var(--accent-text); }
+  .kind.fix { background: rgba(var(--warning-rgb), .16); color: var(--warning); }
+  .more {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 4px 0; border: 0; background: none; cursor: pointer;
+    color: var(--accent); font: 600 13px/1 var(--font-ui);
   }
-  .roadmap-hero h1 {
-    font: 700 clamp(32px, 4vw, 48px)/1.2 'Fira Sans', 'Fira Sans', sans-serif;
-    margin-bottom: 16px;
+  .more svg { width: 14px; height: 14px; transition: transform var(--dur-2) var(--ease-out); }
+  .more[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .more:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Someone is typing — then the last word of #welcome */
+  .typing { display: flex; align-items: center; gap: 8px; height: 22px; margin: 6px 16px 0 72px; color: var(--text-2); font-size: 13px; }
+  .typing b { color: var(--text-1); font-weight: 600; }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-2); animation: dot 1.2s var(--ease-inout) infinite; }
+  .dots i:nth-child(2) { animation-delay: .15s; }
+  .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+  html:not(.js) .typing { display: none; }
+
+  /* The composer: you can't talk here, but this is where you would */
+  .composer {
+    flex: none; display: flex; align-items: center; gap: 12px; min-height: 52px; margin: 0 16px 20px; padding: 8px 8px 8px 16px;
+    border-radius: 8px; background: var(--bg-chatbar); color: var(--text-3);
   }
-  .roadmap-hero p {
-    color: var(--dim);
-    font-size: 16px;
-    max-width: 600px;
-    margin: 0 auto;
+  .composer p { min-width: 0; }
+  .composer .btn { margin-left: auto; flex: none; height: 36px; }
+
+  /* Channel switch: the messages arrive, briefly staggered — never on a keyboard switch */
+  .arriving :is(.ch-welcome, .msg, .day) {
+    animation: arrive var(--dur-3) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 32ms);
   }
-  .roadmap-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    padding: 40px 0 60px;
+  @keyframes arrive { from { opacity: 0; transform: translateY(6px); } }
+  .later-in { animation: arrive var(--dur-3) var(--ease-out) both; }
+
+  /* ── About (wide screens): where a member list would be ─────────── */
+  .about { display: none; min-height: 0; overflow-y: auto; background: var(--bg-panel); }
+  .card { margin: 16px; border-radius: 10px; overflow: hidden; background: var(--bg-deep); }
+  .card-banner { height: 72px; background: linear-gradient(135deg, var(--accent) 0%, #2883ae 100%); }
+  .card-mark {
+    width: 72px; height: 72px; margin: -38px 0 0 14px; border-radius: 22px; display: grid; place-items: center;
+    background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 6px var(--bg-deep);
   }
-  .roadmap-card {
-    background: var(--floor);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    transition: all .3s ease;
-    position: relative;
-    overflow: hidden;
-    cursor: pointer;
+  .card-mark svg { width: 44px; height: 44px; }
+  .card-body { padding: 10px 16px 16px; }
+  .card-name { margin: 4px 0 0; color: var(--text-strong); font: 700 20px/1.2 var(--font-display); }
+  .card-tag { margin-top: 2px; color: var(--text-2); font-size: 14px; }
+  .card-sec { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider); }
+  .card-sec h3 { margin: 0 0 6px; color: var(--text-2); font: 700 11px/1.2 var(--font-ui); letter-spacing: .4px; text-transform: uppercase; }
+  .card-row {
+    display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px; margin: 0 -8px;
+    border-radius: 6px; color: var(--text-1); font-size: 14px; text-decoration: none;
+    transition: background-color var(--dur-1);
   }
-  .roadmap-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 32px rgba(0,0,0,.4);
-  }
-  .roadmap-card.now {
-    border-color: rgba(88,101,242,.4);
-    background: linear-gradient(135deg, rgba(88,101,242,.15) 0%, var(--floor) 100%);
-    border-left: 4px solid var(--ember);
-  }
-  .roadmap-card.next {
-    border-color: rgba(88,101,242,.28);
-    background: linear-gradient(135deg, rgba(88,101,242,.06) 0%, var(--floor) 100%);
-    border-left: 4px solid rgba(88,101,242,.5);
-  }
-  .roadmap-card.idea {
-    border-color: rgba(224,227,255,.45);
-    background: linear-gradient(135deg, rgba(224,227,255,.08) 0%, var(--floor) 100%);
-    border-left: 4px solid var(--sage);
-  }
-  /* Shipped. Recedes rather than announcing itself — the palette is one accent
-     on black by choice, so there is no green to reach for and a finished thing
-     should sit quieter than the ones still being argued about. It stays on the
-     page instead of vanishing: a roadmap that silently deletes what it
-     delivered reads as a roadmap that never promised it. */
-  .roadmap-card.shipped {
-    border-color: rgba(224,227,255,.18);
-    background: linear-gradient(135deg, rgba(224,227,255,.03) 0%, var(--floor) 100%);
-    border-left: 4px solid rgba(224,227,255,.3);
-  }
-  .roadmap-card .status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 6px;
-    font: 600 11px/1.5 'Fira Code', monospace;
-    letter-spacing: .05em;
-    margin-bottom: 16px;
-  }
-  .roadmap-card.now .status {
-    background: rgba(88,101,242,.2);
-    color: var(--ember-hi);
-  }
-  .roadmap-card.next .status {
-    background: rgba(88,101,242,.14);
-    color: var(--dim);
-  }
-  .roadmap-card.idea .status {
-    background: rgba(224,227,255,.16);
-    color: var(--faint);
-  }
-  .roadmap-card.shipped .status {
-    background: rgba(224,227,255,.08);
-    color: var(--faint);
-  }
-  .roadmap-card h3 {
-    font: 700 20px 'Fira Sans', 'Fira Sans', sans-serif;
-    margin-bottom: 12px;
-  }
-  .roadmap-card .card-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height .4s ease;
-  }
-  .roadmap-card.expanded .card-content {
-    max-height: 500px;
-  }
-  .roadmap-card ul {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-top: 12px;
-  }
-  .roadmap-card li {
-    color: var(--dim);
-    font-size: 14px;
-    line-height: 1.5;
-    padding-left: 20px;
-    position: relative;
-  }
-  .roadmap-card li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 8px;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ember);
-  }
-  .roadmap-card.next li::before {
-    background: rgba(88,101,242,.5);
-  }
-  .roadmap-card.idea li::before {
-    background: var(--sage);
-  }
-  .roadmap-card.shipped li::before {
-    background: rgba(224,227,255,.3);
-  }
-  .expand-icon {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 24px;
-    height: 24px;
-    transition: transform .3s ease;
-  }
-  .roadmap-card.expanded .expand-icon {
-    transform: rotate(180deg);
+  .card-row svg { width: 18px; height: 18px; color: var(--text-3); }
+  .card-row span { margin-left: auto; color: var(--text-3); font-size: 12px; }
+  @media (hover: hover) and (pointer: fine) { .card-row:hover { background: var(--hover); color: var(--text-strong); } }
+  .facts { margin: 0; padding: 0; list-style: none; }
+  .facts li { display: flex; gap: 8px; padding: 4px 0; color: var(--text-1); font-size: 14px; }
+  .facts li svg { width: 16px; height: 16px; margin-top: 2px; color: var(--green-text); }
+  .shipping { color: var(--text-2); font-size: 14px; }
+  .shipping a { color: var(--accent); text-decoration: none; }
+  .shipping a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .legal { margin: 0 16px 16px; color: var(--text-3); font-size: 12px; }
+  .legal a { color: var(--text-2); }
+
+  @media (min-width: 1280px) {
+    .app { grid-template-columns: var(--rail) var(--side) minmax(0, 1fr) var(--about); }
+    .about { display: block; }
   }
 
-  /* ── Changelog page ───────────────────────────────────────────────── */
-  .changelog-hero {
-    padding: 60px 0 40px;
-    text-align: center;
-    position: relative;
-  }
-  .changelog-hero h1 {
-    font: 700 clamp(32px, 4vw, 48px)/1.2 'Fira Sans', 'Fira Sans', sans-serif;
-    margin-bottom: 16px;
-  }
-  .changelog-hero p {
-    color: var(--dim);
-    font-size: 16px;
-    max-width: 600px;
-    margin: 0 auto;
-  }
-  .changelog-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 40px 0 60px;
-  }
-  .release {
-    background: var(--floor);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 20px;
-    transition: all .3s ease;
-    cursor: pointer;
-    position: relative;
-  }
-  .release:hover {
-    border-color: rgba(88,101,242,.4);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,.3);
-  }
-  .release-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .release-version {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .version-badge {
-    padding: 4px 12px;
-    background: rgba(88,101,242,.15);
-    color: var(--ember-hi);
-    border-radius: 6px;
-    font: 600 14px 'Fira Code', monospace;
-  }
-  .release-date {
-    color: var(--faint);
-    font: 400 13px 'Fira Code', monospace;
-  }
-  .release-title {
-    font: 700 18px 'Fira Sans', 'Fira Sans', sans-serif;
-    margin-bottom: 16px;
-    color: var(--text);
-  }
-  .release-items {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height .4s ease;
-  }
-  .release.expanded .release-items {
-    max-height: 1000px;
-  }
-  .release-items li {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    font-size: 14px;
-    color: #c8cbd8;
-    line-height: 1.5;
-  }
-  .change-type {
-    flex-shrink: 0;
-    min-width: 72px;
-    text-align: center;
-    font: 600 10.5px/1.9 'Fira Code', monospace;
-    letter-spacing: .05em;
-    border-radius: 5px;
-    padding: 0 8px;
-  }
-  .change-type.added { background: rgba(224,227,255,.14); color: #4ade80; }
-  .change-type.improved { background: rgba(88,101,242,.14); color: var(--ember-hi); }
-  .change-type.fixed { background: rgba(88,101,242,.12); color: #f87171; }
-  .release .expand-icon {
-    position: absolute;
-    top: 24px;
-    right: 24px;
-    width: 24px;
-    height: 24px;
-    transition: transform .3s ease;
-  }
-  .release.expanded .expand-icon {
-    transform: rotate(180deg);
+  /* ── Phones: the channel list becomes a drawer ─────────────────── */
+  .scrim { display: none; }
+  @media (max-width: 767px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .nav {
+      position: fixed; z-index: 40; inset: 0 auto 0 0; display: flex; width: min(88vw, 340px);
+      background: var(--bg-floor); box-shadow: 8px 0 24px rgba(0,0,0,.35);
+      transform: translateX(-100%); visibility: hidden;
+      transition: transform var(--dur-exit) var(--ease-in), visibility 0s linear var(--dur-exit);
+    }
+    .nav.open { transform: none; visibility: visible; transition: transform var(--dur-3) var(--ease-out), visibility 0s; }
+    .rail { width: var(--rail); flex: none; }
+    .side { flex: 1; min-width: 0; border-top-left-radius: 0; }
+    .scrim {
+      display: block; position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.55);
+      opacity: 0; pointer-events: none; transition: opacity var(--dur-exit) var(--ease-in);
+    }
+    .scrim.show { opacity: 1; pointer-events: auto; transition: opacity var(--dur-3) var(--ease-out); }
+    .menu-btn { display: grid; }
+    .chat-head .topic { display: none; }
+    .msg { padding-right: 16px; column-gap: 12px; }
+    .ch-welcome { margin-top: 16px; }
+    .hero h1 { font-size: clamp(38px, 11vw, 52px); }
+    .composer { margin: 0 12px 12px; }
+    .composer p { font-size: 13px; }
+    .only-wide { display: none; }
+    .only-narrow { display: inline; }
+    .typing { margin-left: 68px; }
+    .changes li { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   }
 
-  /* ── Footer ────────────────────────────────────────────────────────── */
-  footer { 
-    border-top: 1px solid var(--border); 
-    padding: 26px 0 34px; 
-    color: var(--faint); 
-    font-size: 13px;
-  }
-  footer .wrap { display: flex; align-items: center; gap: 8px; }
-  footer a { 
-    color: var(--dim); 
-    transition: all .3s;
-  }
-  footer a:hover { color: var(--text); }
-  footer .sp { margin-left: auto; }
-
-  /* ── Responsive + a11y ─────────────────────────────────────────────── */
-  :focus-visible { 
-    outline: 2px solid var(--ember); 
-    outline-offset: 2px; 
-    border-radius: 6px; 
-  }
-  /* On a phone the tabs ARE the navigation, and they render at 33px against
-     the 44px a thumb is aimed at. Scoped to coarse pointers so the desktop
-     header keeps its tighter density rather than being padded out for a
-     problem it does not have. */
-  @media (pointer: coarse) {
-    .tabs .tab { min-height: 44px; }
-    .mark      { min-height: 44px; }
-    footer .wrap a { display: inline-flex; align-items: center; min-height: 44px; }
-  }
   @media (prefers-reduced-motion: reduce) {
-    * { animation: none !important; transition: none !important; }
-  }
-  @media (max-width: 860px) {
-    .grid { grid-template-columns: 1fr 1fr; }
-    .stage { flex-direction: column; gap: 24px; padding: 28px 20px; }
-    .m-caption { text-align: center; }
-    .hero { padding-top: 60px; }
-    .roadmap-grid { grid-template-columns: 1fr; }
-  }
-  @media (max-width: 560px) {
-    .grid { grid-template-columns: 1fr; }
-    .grid .card.lead { grid-column: auto; }
-    .bar { gap: 12px; }
-    .cta-mini { display: none; }
-    .hero { padding-top: 40px; }
-    .tab { padding: 7px 10px; font-size: 12px; }
-    .hero h1 { font-size: 36px; }
-    .hero p.sub { font-size: 16px; }
-    .feats { padding: 60px 0; }
-    .release-header { flex-direction: column; align-items: flex-start; }
-  }
-  @media (max-width: 400px) {
-    .mark b { display: none; }
+    *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+    .dots i { animation: none; opacity: .6; }
   }
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to the conversation</a>
 
-<header>
-  <div class="wrap bar">
-    <a class="mark" id="mark" href="#features">
-      <div class="logo-container">
-        <svg class="logo-svg" viewBox="0 0 256 256" fill="none">
-          <path stroke="#5865F2" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
-            d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>
-          <circle class="eye" cx="92" cy="140" r="12" fill="#5865F2"/>
-          <circle class="eye" cx="164" cy="140" r="12" fill="#5865F2"/>
-        </svg>
-      </div>
-      <b>skycord</b>
-    </a>
-    <nav class="tabs" role="tablist" aria-label="Page sections">
-      <button class="tab on" id="t-features"  role="tab" aria-controls="p-features"  aria-selected="true"  tabindex="0">Features</button>
-      <button class="tab"    id="t-roadmap"   role="tab" aria-controls="p-roadmap"   aria-selected="false" tabindex="-1">Roadmap</button>
-      <button class="tab"    id="t-changelog" role="tab" aria-controls="p-changelog" aria-selected="false" tabindex="-1">Changelog</button>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mark" viewBox="0 0 256 256"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/><circle cx="92" cy="140" r="13" fill="currentColor"/><circle cx="164" cy="140" r="13" fill="currentColor"/></symbol>
+    <symbol id="i-hash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M10 3.5 8 20.5M16 3.5l-2 17M4.5 8.5h16M3.5 15.5h16"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M11 5 6.5 9H3.5v6h3L11 19zM15.5 9a4.5 4.5 0 0 1 0 6M18.5 6a8.5 8.5 0 0 1 0 12"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3.5v12M7 11l5 5 5-5M4.5 20.5h15"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></g></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5a9.5 9.5 0 0 0-3 18.5c.5.1.7-.2.7-.5v-1.8c-2.7.6-3.2-1.2-3.2-1.2-.4-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.1-.2-4.4-1.1-4.4-4.7 0-1 .4-1.9 1-2.6-.1-.2-.4-1.2.1-2.5 0 0 .8-.3 2.6 1a9 9 0 0 1 4.8 0c1.8-1.3 2.6-1 2.6-1 .5 1.3.2 2.3.1 2.5.6.7 1 1.6 1 2.6 0 3.7-2.3 4.5-4.4 4.7.3.3.7.9.7 1.8v2.7c0 .3.2.6.7.5A9.5 9.5 0 0 0 12 2.5z"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="7" rx="2"/><rect x="3.5" y="13" width="17" height="7" rx="2"/><path d="M7.5 7.5h.01M7.5 16.5h.01"/></g></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></g></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2h.01"/></g></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-file" viewBox="0 0 40 40"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9.5 4.5H24l9 9v22a2.5 2.5 0 0 1-2.5 2.5h-21A2.5 2.5 0 0 1 7 35.5V7a2.5 2.5 0 0 1 2.5-2.5z"/><path d="M24 4.5v9h9"/></g><g transform="translate(11.5 16.8) scale(.066)"><path fill="none" stroke="currentColor" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/><circle cx="92" cy="140" r="17" fill="currentColor"/><circle cx="164" cy="140" r="17" fill="currentColor"/></g></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></g></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <div class="nav" id="nav">
+    <nav class="rail" aria-label="Skycord">
+      <div class="rail-item current"><a class="rail-btn rail-home" href="#welcome" data-ch="welcome" aria-label="Skycord home" data-tip="Skycord"><svg><use href="#i-mark"/></svg></a></div>
+      <span class="rail-sep" aria-hidden="true"></span>
+      <div class="rail-item"><a class="rail-btn" href="https://app.skycord.xyz" aria-label="Open Skycord in your browser" data-tip="Open Skycord in your browser"><svg><use href="#i-globe"/></svg></a></div>
+      <div class="rail-item"><a class="rail-btn" href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest" data-dl aria-label="Download for Windows" data-tip="Download for Windows"><svg><use href="#i-download"/></svg></a></div>
+      <div class="rail-item"><a class="rail-btn" href="https://github.com/xSMDx/skycord" rel="noopener" aria-label="Skycord's source on GitHub" data-tip="Source on GitHub"><svg><use href="#i-github"/></svg></a></div>
     </nav>
-    <a class="cta-mini" href="https://app.skycord.xyz">Open Skycord</a>
+
+    <aside class="side" aria-label="Channels">
+      <header class="guild"><span>skycord.xyz</span><span class="tag" aria-label="official site">site</span></header>
+      <nav class="channels" aria-label="Channels">
+        <div class="cat">Start here</div>
+        <a class="ch" href="#welcome" data-ch="welcome"><svg aria-hidden="true"><use href="#i-hash"/></svg><span class="label">welcome</span></a>
+        <a class="ch" href="#download" data-ch="download"><svg aria-hidden="true"><use href="#i-hash"/></svg><span class="label">download</span></a>
+        <div class="cat">About</div>
+        <a class="ch" href="#features" data-ch="features"><svg aria-hidden="true"><use href="#i-hash"/></svg><span class="label">features</span></a>
+        <a class="ch" href="#host-your-own" data-ch="host-your-own"><svg aria-hidden="true"><use href="#i-hash"/></svg><span class="label">host-your-own</span></a>
+        <div class="cat">Updates</div>
+        <a class="ch" href="#roadmap" data-ch="roadmap"><svg aria-hidden="true"><use href="#i-hash"/></svg><span class="label">roadmap</span></a>
+        <a class="ch" href="#changelog" data-ch="changelog"><svg aria-hidden="true"><use href="#i-hash"/></svg><span class="label">changelog</span><span class="new" id="changelog-new" hidden>New</span></a>
+        <div class="cat">Voice</div>
+        <a class="ch" href="https://app.skycord.xyz"><svg aria-hidden="true"><use href="#i-volume"/></svg><span class="label">Lounge</span></a>
+        <ul class="vc-members" aria-label="An example voice channel">
+          <li class="vm"><span class="av" style="background:#5865f2" aria-hidden="true">A</span>Ada</li>
+          <li class="vm"><span class="av" style="background:#23a55a" aria-hidden="true">M</span>Max</li>
+          <li class="vm"><span class="av" style="background:#e67e22" aria-hidden="true">K</span>Kai</li>
+        </ul>
+      </nav>
+      <footer class="me">
+        <span class="av" aria-hidden="true"><svg><use href="#i-user"/></svg></span>
+        <span class="who"><b>You</b><span>not signed in</span></span>
+        <a class="btn primary" href="https://app.skycord.xyz">Open</a>
+      </footer>
+    </aside>
   </div>
-</header>
+  <div class="scrim" id="scrim"></div>
 
-<!-- ── FEATURES ─────────────────────────────────────────────────────── -->
-<main id="p-features" class="panel on" role="tabpanel" aria-labelledby="t-features">
-  <section class="hero">
-    <div class="wrap">
-      <h1>Your crew's<br/>place to <em>talk</em>.</h1>
-      <p class="sub">Voice, video and screen share for people who already know each
-      other. Runs on hardware you own — ours, or your own: the source is on GitHub.</p>
-      <a class="cta" href="https://app.skycord.xyz">Open Skycord<small>runs in your browser — no install</small></a>
-      <p class="selfhost">Open source, AGPL. <a href="https://github.com/xSMDx/sykord" rel="noopener">Run your own instance</a>.</p>
-      <p class="shipping" id="shipping"></p>
+  <main class="chat" id="main">
+    <header class="chat-head">
+      <button class="menu-btn" id="menu-btn" type="button" aria-label="Channels" aria-controls="nav" aria-expanded="false"><svg><use href="#i-menu"/></svg></button>
+      <svg class="hash" aria-hidden="true"><use href="#i-hash"/></svg>
+      <span class="name" id="head-name">welcome</span>
+      <span class="topic" id="head-topic">Your crew's place to talk.</span>
+    </header>
 
-      <div class="stage" aria-hidden="true">
-        <div class="machine">
-          <span class="m-led"></span>
-          <span class="m-slot"></span>
-          <span class="m-slot short"></span>
-          <div class="m-vents"><i></i><i></i><i></i><i></i></div>
+    <div class="scroller" id="scroller">
+
+      <!-- ── #welcome ─────────────────────────────────────────── -->
+      <section class="channel" id="welcome" data-topic="Your crew's place to talk." aria-labelledby="welcome-title">
+        <div class="ch-welcome hero">
+          <div class="server-icon" aria-hidden="true"><svg><use href="#i-mark"/></svg></div>
+          <h1 id="welcome-title" tabindex="-1">Your crew's place to talk.</h1>
+          <p class="lede">Text and voice channels, DMs, video calls and screen share, for people who already know each other. On our server, or on one you run yourself.</p>
+          <div class="actions">
+            <a class="btn primary" data-dl href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest"><svg aria-hidden="true"><use href="#i-download"/></svg>Download for Windows</a>
+            <a class="btn secondary" href="https://app.skycord.xyz"><svg aria-hidden="true"><use href="#i-globe"/></svg>Open in your browser</a>
+            <a class="btn ghost" href="#host-your-own" data-ch="host-your-own"><svg aria-hidden="true"><use href="#i-server"/></svg>Host your own</a>
+          </div>
         </div>
-        <div class="m-caption">
-          <span>uptime <b>214 days</b></span>
-          <span><b>8 friends</b> connected</span>
-          <span>your hardware</span>
+        <article class="msg">
+          <span class="av" aria-hidden="true"><svg><use href="#i-mark"/></svg></span>
+          <div class="msg-body">
+            <header><span class="author">Skycord</span></header>
+            <p>Skycord is where your crew talks: servers with text and voice channels, direct messages and group chats, and calls with video and screen share.</p>
+          </div>
+        </article>
+        <article class="msg cont"><div class="msg-body"><p>It works the way you'd expect. Servers down the left, channels beside them, the conversation in the middle. Nothing to learn.</p></div></article>
+        <article class="msg cont"><div class="msg-body"><p>Run it yourself if you like: an old laptop in a cupboard is enough. Your hardware, your data, no company in the middle.</p></div></article>
+        <article class="msg cont"><div class="msg-body"><p>Open source under the AGPL, <a href="https://github.com/xSMDx/skycord" rel="noopener">on GitHub</a>. No ads, no upsell.</p></div></article>
+        <div class="typing" id="typing" aria-hidden="true" hidden><span class="dots"><i></i><i></i><i></i></span><span><b>Skycord</b> is typing…</span></div>
+        <article class="msg cont" id="welcome-ps"><div class="msg-body"><p>PS: this page is a Skycord server. <span class="only-wide">Pick a channel on the left.</span><span class="only-narrow">The channels are behind the menu at the top.</span></p></div></article>
+      </section>
+
+      <!-- ── #download ────────────────────────────────────────── -->
+      <section class="channel" id="download" data-topic="Skycord for Windows." aria-labelledby="download-title">
+        <div class="ch-welcome">
+          <div class="ch-icon" aria-hidden="true"><svg><use href="#i-hash"/></svg></div>
+          <h2 id="download-title" tabindex="-1">Welcome to #download</h2>
+          <p>Skycord for Windows: your servers in one app, and the screen-share tools a browser can't give you.</p>
         </div>
+        <article class="msg">
+          <span class="av" aria-hidden="true"><svg><use href="#i-mark"/></svg></span>
+          <div class="msg-body">
+            <header><span class="author">Skycord</span><time id="dl-date"></time></header>
+            <p>The Windows app is out as a release candidate. Here it is:</p>
+            <div class="file">
+              <span class="file-icon" aria-hidden="true"><svg><use href="#i-file"/></svg></span>
+              <div>
+                <a class="file-name" data-dl data-dl-name href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest">Skycord for Windows</a>
+                <div class="file-meta" data-dl-meta>The latest release, on GitHub</div>
+              </div>
+              <a class="file-get" data-dl href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest" aria-label="Download for Windows"><svg aria-hidden="true"><use href="#i-download"/></svg></a>
+            </div>
+            <p class="dl-status" id="dl-status" role="status" aria-live="polite"></p>
+          </div>
+        </article>
+        <article class="msg cont"><div class="msg-body">
+          <p>What it adds over the browser:</p>
+          <ul>
+            <li>Its own screen-share picker: a window or a whole screen, and the stream quality you want</li>
+            <li>A list of servers, yours and your friends', and switching between them in a click</li>
+            <li>It stays signed in, and updates itself when there's a new version</li>
+          </ul>
+        </div></article>
+        <article class="msg cont"><div class="msg-body">
+          <div class="note">
+            <svg aria-hidden="true"><use href="#i-warn"/></svg>
+            <p>Windows may say it protected your PC: the installer isn't code-signed yet. Choose <b>More info</b>, then <b>Run anyway</b>.</p>
+          </div>
+        </div></article>
+        <article class="msg cont"><div class="msg-body"><p>Not on Windows? Skycord runs in your browser, <a href="https://app.skycord.xyz">right here</a>, with nothing to install. Mac and Linux apps aren't made yet.</p></div></article>
+      </section>
+
+      <!-- ── #features ────────────────────────────────────────── -->
+      <section class="channel" id="features" data-topic="What's inside." aria-labelledby="features-title">
+        <div class="ch-welcome">
+          <div class="ch-icon" aria-hidden="true"><svg><use href="#i-hash"/></svg></div>
+          <h2 id="features-title" tabindex="-1">Welcome to #features</h2>
+          <p>Everything that's in Skycord today, in the browser and the app alike.</p>
+        </div>
+        <article class="msg">
+          <span class="av" aria-hidden="true"><svg><use href="#i-mark"/></svg></span>
+          <div class="msg-body">
+            <header><span class="author">Skycord</span></header>
+            <p>Here's what's inside:</p>
+            <div class="embeds two">
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></span><h3>Video calls &amp; screen share</h3></div><p>Turn on your camera or share a screen mid-call. Sharing never loops the call's own audio back at your friends.</p><ul><li>Big screen mode with spotlighted streams</li><li>Fullscreen and hide-chat options</li><li>Screen share with LIVE badge</li><li>Camera preview before going live</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span><h3>Voice calls &amp; controls</h3></div><p>Instant speaking rings, noise suppression, and full control over your audio setup.</p><ul><li>RNNoise noise filtering</li><li>Input sensitivity as noise gate</li><li>Per-person volume controls</li><li>Live device switching without rejoining</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span><h3>Connection monitoring</h3></div><p>Real-time diagnostics so you always know what's happening with your call.</p><ul><li>Live ping graph and packet loss stats</li><li>Debug panel for codec and bitrate info</li><li>Signal meter with color indicators</li><li>Save diagnostics for bug reports</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></span><h3>Customization &amp; themes</h3></div><p>Make Skycord yours with themes you can share and apply instantly.</p><ul><li>Theme sharing in chat</li><li>Custom banners with GIF support</li><li>Custom status with timers</li><li>Profile page with all your settings</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/></svg></span><h3>Groups &amp; conversations</h3></div><p>Rich chat features with full control over your conversations.</p><ul><li>Group DMs with invite links</li><li>Pin and mute conversations</li><li>Reply threads and pins</li><li>Right-click menus everywhere</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></span><h3>Fun &amp; expression</h3></div><p>Express yourself with stickers, GIFs, and reactions.</p><ul><li>Custom stickers and emoji</li><li>GIF search</li><li>Emoji reactions</li><li>Rich text formatting</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg></span><h3>Channels &amp; servers</h3></div><p>Make a server for your crew, and give every topic its own room.</p><ul><li>Text and voice channels, grouped in categories</li><li>Invite links — including straight into a voice channel</li><li>Member list with live presence</li><li>Timed statuses that expire on their own</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><h3>Security &amp; privacy</h3></div><p>Your conversations are yours, with security hardening throughout.</p><ul><li>Security hardening</li><li>Privacy controls</li><li>Encrypted calls coming soon</li><li>Self-host it yourself</li></ul></section>
+              <section class="embed"><div class="embed-head"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span><h3>Quick actions</h3></div><p>Everything you need, right where you expect it.</p><ul><li>Quick switcher</li><li>Jump to present button</li><li>Right-click context menus</li><li>Back to call button</li></ul></section>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ── #host-your-own ───────────────────────────────────── -->
+      <section class="channel" id="host-your-own" data-topic="Run it on a machine you already own." aria-labelledby="host-title">
+        <div class="ch-welcome">
+          <div class="ch-icon" aria-hidden="true"><svg><use href="#i-hash"/></svg></div>
+          <h2 id="host-title" tabindex="-1">Welcome to #host-your-own</h2>
+          <p>Run Skycord on a machine you already own. Your crew signs in; only you ever see a terminal.</p>
+        </div>
+        <article class="msg">
+          <span class="av" aria-hidden="true"><svg><use href="#i-mark"/></svg></span>
+          <div class="msg-body">
+            <header><span class="author">Skycord</span></header>
+            <p>One command on a fresh Linux server, and you have your own Skycord on HTTPS:</p>
+            <div class="code">
+              <pre><code>curl -fsSL https://skycord.xyz/install.sh | sudo bash</code></pre>
+              <button class="copy" type="button" data-copy><svg aria-hidden="true"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+            </div>
+            <p>It asks for the address people will use and an email for certificate notices. Everything else it works out or generates.</p>
+          </div>
+        </article>
+        <article class="msg cont"><div class="msg-body">
+          <p>Rather read it first? That's the point of it being one short script:</p>
+          <div class="code">
+            <pre><code>curl -fsSL https://skycord.xyz/install.sh -o install.sh
+less install.sh
+sudo bash install.sh</code></pre>
+            <button class="copy" type="button" data-copy><svg aria-hidden="true"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+          </div>
+        </div></article>
+        <article class="msg cont"><div class="msg-body"><p>Updates are one command too, <code>sudo skycord update</code>, and an update that doesn't come up healthy puts the last version back by itself.</p></div></article>
+        <article class="msg cont"><div class="msg-body"><p>An old laptop is enough. The database runs on processors from before 2011, so the machine in your cupboard can host your crew, up to a hundred people a server.</p></div></article>
+        <article class="msg cont"><div class="msg-body"><p>Domains, certificates, backups and the rest are in <a href="https://github.com/xSMDx/skycord/tree/main/docs/self-hosting" rel="noopener">the self-hosting guide</a>.</p></div></article>
+      </section>
+
+      <!-- ── #roadmap ─────────────────────────────────────────── -->
+      <section class="channel" id="roadmap" data-topic="What's being built." aria-labelledby="roadmap-title">
+        <div class="ch-welcome">
+          <div class="ch-icon" aria-hidden="true"><svg><use href="#i-hash"/></svg></div>
+          <h2 id="roadmap-title" tabindex="-1">Welcome to #roadmap</h2>
+          <p>What's being built now, what's next, and what's being looked at.</p>
+        </div>
+        <div id="roadmap-feed"></div>
+        <noscript><p class="ch-welcome">The roadmap needs JavaScript to show.</p></noscript>
+      </section>
+
+      <!-- ── #changelog ───────────────────────────────────────── -->
+      <section class="channel" id="changelog" data-topic="Everything that shipped." aria-labelledby="changelog-title">
+        <div class="ch-welcome">
+          <div class="ch-icon" aria-hidden="true"><svg><use href="#i-hash"/></svg></div>
+          <h2 id="changelog-title" tabindex="-1">Welcome to #changelog</h2>
+          <p class="shipping" id="shipping">Every release, newest first.</p>
+        </div>
+        <div id="changelog-feed"></div>
+        <noscript><p class="ch-welcome">The changelog needs JavaScript to show.</p></noscript>
+      </section>
+    </div>
+
+    <div class="composer">
+      <p>This is skycord.xyz. To talk with your crew, open Skycord.</p>
+      <a class="btn primary" href="https://app.skycord.xyz">Open Skycord</a>
+    </div>
+  </main>
+
+  <aside class="about" aria-label="About Skycord">
+    <div class="card">
+      <div class="card-banner" aria-hidden="true"></div>
+      <div class="card-mark" aria-hidden="true"><svg><use href="#i-mark"/></svg></div>
+      <div class="card-body">
+        <h2 class="card-name">Skycord</h2>
+        <p class="card-tag">Your crew's place to talk.</p>
+        <div class="card-sec">
+          <h3>Get it</h3>
+          <a class="card-row" data-dl href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest"><svg aria-hidden="true"><use href="#i-download"/></svg>Windows app<span data-dl-version>latest</span></a>
+          <a class="card-row" href="https://app.skycord.xyz"><svg aria-hidden="true"><use href="#i-globe"/></svg>In your browser<span>no install</span></a>
+          <a class="card-row" href="#host-your-own" data-ch="host-your-own"><svg aria-hidden="true"><use href="#i-server"/></svg>On your own server<span>one command</span></a>
+        </div>
+        <div class="card-sec">
+          <h3>Good to know</h3>
+          <ul class="facts">
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg>Open source, AGPL</li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg>No ads, no upsell</li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg>Runs on hardware you already own</li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg>Built for crews: up to 100 a server</li>
+          </ul>
+        </div>
+        <div class="card-sec">
+          <h3>Latest</h3>
+          <p class="shipping" id="shipping-card">Every release is in <a href="#changelog" data-ch="changelog">#changelog</a>.</p>
         </div>
       </div>
     </div>
-  </section>
-
-  <section class="feats" id="features">
-    <div class="wrap">
-      <h2>What's inside</h2>
-      <div class="grid">
-        <div class="card lead">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
-          <h3>Video calls &amp; screen share</h3>
-          <p>Turn on your camera or share a screen mid-call. Sharing never loops the call's own audio back at your friends.</p>
-          <ul class="features-list">
-            <li>Big screen mode with spotlighted streams</li>
-            <li>Fullscreen and hide-chat options</li>
-            <li>Screen share with LIVE badge</li>
-            <li>Camera preview before going live</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-          <h3>Voice calls &amp; controls</h3>
-          <p>Instant speaking rings, noise suppression, and full control over your audio setup.</p>
-          <ul class="features-list">
-            <li>RNNoise noise filtering</li>
-            <li>Input sensitivity as noise gate</li>
-            <li>Per-person volume controls</li>
-            <li>Live device switching without rejoining</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <h3>Connection monitoring</h3>
-          <p>Real-time diagnostics so you always know what's happening with your call.</p>
-          <ul class="features-list">
-            <li>Live ping graph and packet loss stats</li>
-            <li>Debug panel for codec and bitrate info</li>
-            <li>Signal meter with color indicators</li>
-            <li>Save diagnostics for bug reports</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></div>
-          <h3>Customization &amp; themes</h3>
-          <p>Make Skycord yours with themes you can share and apply instantly.</p>
-          <ul class="features-list">
-            <li>Theme sharing in chat</li>
-            <li>Custom banners with GIF support</li>
-            <li>Custom status with timers</li>
-            <li>Profile page with all your settings</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/></svg></div>
-          <h3>Groups &amp; conversations</h3>
-          <p>Rich chat features with full control over your conversations.</p>
-          <ul class="features-list">
-            <li>Group DMs with invite links</li>
-            <li>Pin and mute conversations</li>
-            <li>Reply threads and pins</li>
-            <li>Right-click menus everywhere</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
-          <h3>Fun &amp; expression</h3>
-          <p>Express yourself with stickers, GIFs, and reactions.</p>
-          <ul class="features-list">
-            <li>Custom stickers and emoji</li>
-            <li>GIF search</li>
-            <li>Emoji reactions</li>
-            <li>Rich text formatting</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg></div>
-          <h3>Channels &amp; servers</h3>
-          <p>Make a server for your crew, and give every topic its own room.</p>
-          <ul class="features-list">
-            <li>Text and voice channels, grouped in categories</li>
-            <li>Invite links — including straight into a voice channel</li>
-            <li>Member list with live presence</li>
-            <li>Timed statuses that expire on their own</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-          <h3>Security &amp; privacy</h3>
-          <p>Your conversations are yours, with security hardening throughout.</p>
-          <ul class="features-list">
-            <li>Security hardening</li>
-            <li>Privacy controls</li>
-            <li>Encrypted calls coming soon</li>
-            <li>Self-host it yourself</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-          <h3>Quick actions</h3>
-          <p>Everything you need, right where you expect it.</p>
-          <ul class="features-list">
-            <li>Quick switcher</li>
-            <li>Jump to present button</li>
-            <li>Right-click context menus</li>
-            <li>Back to call button</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-</main>
-
-<!-- ── ROADMAP ─────────────────────────────────────────────────────── -->
-<main id="p-roadmap" class="panel" role="tabpanel" aria-labelledby="t-roadmap">
-  <section class="roadmap-hero">
-    <div class="wrap">
-      <h1>Roadmap</h1>
-      <p>What's being built, roughly in order. No dates — it ships when it's good.</p>
-    </div>
-  </section>
-  
-  <section class="roadmap-content">
-    <div class="wrap">
-      <div class="roadmap-grid" id="roadmap-grid"></div>
-    </div>
-  </section>
-</main>
-
-<!-- ── CHANGELOG ───────────────────────────────────────────────────── -->
-<main id="p-changelog" class="panel" role="tabpanel" aria-labelledby="t-changelog">
-  <section class="changelog-hero">
-    <div class="wrap">
-      <h1>Changelog</h1>
-      <p>Every update, big and small. Here's what's new and what's fixed.</p>
-    </div>
-  </section>
-  
-  <section class="changelog-content">
-    <div class="wrap">
-      <div class="changelog-container" id="changelog-container"></div>
-    </div>
-  </section>
-</main>
-
-<footer>
-  <div class="wrap">
-    <span>skycord</span><span>·</span><a href="https://app.skycord.xyz">open the app</a>
-    <span>·</span><a href="https://github.com/xSMDx/sykord" rel="noopener">source on GitHub</a>
-    <span class="sp">built by SMD</span>
-  </div>
-</footer>
+    <p class="legal">skycord.xyz · <a href="https://github.com/xSMDx/skycord" rel="noopener">source</a> · <a href="https://app.skycord.xyz">open the app</a></p>
+  </aside>
+</div>
 
 <script>
-// Roadmap data
-const ROADMAP = [
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  root.classList.add('js');
+  var REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var LATEST = 'https://github.com/xSMDx/skycord-desktop-releases/releases/latest';
+
+  /* ── Content that changes: the roadmap and every release ─────────── */
+  var ROADMAP = [
   {
     stage: 'now', label: 'Building now', title: 'Channels & servers',
     items: [
@@ -975,20 +812,20 @@ const ROADMAP = [
     ]
   },
   {
-    stage: 'next', label: 'Next up', title: 'One-command install',
+    stage: 'shipped', label: 'Live now', title: 'One-command install',
     items: [
-      'Self-hosting works today, and takes about twenty minutes of following a guide',
-      'One command instead: the app, the database, and the voice server together',
-      'Sensible defaults, so the secure setup is the one you get without reading anything',
-      'Updates that are one command too, not a list of steps to remember'
+      'One command on a fresh Linux server: the app, the database, and the voice server together — live now',
+      'Sensible defaults, so the secure setup is the one you get without reading anything — live now',
+      'Updates that are one command too, and a broken update puts the last version back by itself — live now'
     ]
   },
   {
-    stage: 'next', label: 'Next up', title: 'Desktop app',
+    stage: 'now', label: 'Building now', title: 'Desktop app',
     items: [
-      'A real desktop app instead of a browser tab',
-      'Add other people’s servers and switch between them, like TeamSpeak — your friend hosts his, you host yours, one app for both',
-      'Your own screen-share picker, and push-to-talk that works unfocused',
+      'A real desktop app instead of a browser tab — for Windows, in testing now',
+      'Add other people’s servers and switch between them, like TeamSpeak — your friend hosts his, you host yours, one app for both — live now',
+      'Your own screen-share picker, with the stream quality you choose — live now',
+      'Push-to-talk that works while the app is in the background',
       'Per-app audio capture, so sharing a game does not echo the call back'
     ]
   },
@@ -1052,9 +889,8 @@ const ROADMAP = [
   }
 ];
 
-// Changelog data
-const RELEASES = [
-  {
+// Changelog data];
+  var RELEASES = [{
     v: 'v0.19.0', date: 'Sep 11, 2026', time: '21:40 UTC+2', title: 'Search, and scrolling all the way back',
     items: [
       ['add', 'Search. The box at the top right of a server searches all of it; in a direct message or a group it searches that conversation. Type words, put a phrase in quotes to keep it together, or put a minus in front of a word to leave it out. Words match whole and ignore case and accents, so 10 finds #10 but not #110, and cafe finds Café'],
@@ -1431,144 +1267,257 @@ const RELEASES = [
   }
 ];
 
-// Render roadmap
-document.getElementById('roadmap-grid').innerHTML = ROADMAP.map(function(r) {
-  return '<div class="roadmap-card ' + r.stage + '" onclick="toggleCard(this)">' +
-    '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-      '<polyline points="6 9 12 15 18 9"></polyline>' +
-    '</svg>' +
-    '<div class="status">' + r.label + '</div>' +
-    '<h3>' + r.title + '</h3>' +
-    '<div class="card-content">' +
-      '<ul>' + r.items.map(function(item) {
-        return '<li>' + item + '</li>';
-      }).join('') + '</ul>' +
-    '</div>' +
-  '</div>';
-}).join('');
+  var AV = '<span class="av" aria-hidden="true"><svg><use href="#i-mark"/></svg></span>';
+  var CHEVRON = '<svg aria-hidden="true"><use href="#i-chevron"/></svg>';
+  var KIND = { add: 'Added', imp: 'Improved', fix: 'Fixed' };
+  var STAGES = [['now', 'Building now'], ['next', 'Next up'], ['idea', 'Being looked at'], ['shipped', 'Live now']];
 
-// Render changelog
-const CHIP = { add: 'Added', imp: 'Improved', fix: 'Fixed' };
-document.getElementById('changelog-container').innerHTML = RELEASES.map(function(r) {
-  return '<div class="release" role="button" tabindex="0" aria-expanded="false">' +
-    '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-      '<polyline points="6 9 12 15 18 9"></polyline>' +
-    '</svg>' +
-    '<div class="release-header">' +
-      '<div class="release-version">' +
-        '<span class="version-badge">' + r.v + '</span>' +
-        '<span class="release-date">' + r.date + (r.time ? ' · ' + r.time : '') + '</span>' +
-      '</div>' +
-    '</div>' +
-    '<h3 class="release-title">' + r.title + '</h3>' +
-    '<ul class="release-items">' +
-      r.items.map(function(item) {
-        return '<li>' +
-          '<span class="change-type ' + item[0] + '">' + CHIP[item[0]] + '</span>' +
-          '<span>' + item[1] + '</span>' +
-        '</li>';
-      }).join('') +
-    '</ul>' +
-  '</div>';
-}).join('');
+  // Roadmap: one divider per stage, one embed per card, as messages from Skycord.
+  (function renderRoadmap() {
+    var feed = $('#roadmap-feed');
+    if (!feed) return;
+    feed.innerHTML = STAGES.map(function (st) {
+      var cards = ROADMAP.filter(function (r) { return r.stage === st[0]; });
+      if (!cards.length) return '';
+      return '<div class="day"><span>' + st[1] + '</span></div>' +
+        '<article class="msg">' + AV + '<div class="msg-body"><header><span class="author">Skycord</span></header>' +
+          '<div class="embeds two">' + cards.map(function (r) {
+            return '<section class="embed"><div class="embed-head"><h3>' + r.title + '</h3>' +
+              '<span class="stage-chip ' + r.stage + '">' + r.label + '</span></div>' +
+              '<ul>' + r.items.map(function (i) { return '<li>' + i + '</li>'; }).join('') + '</ul></section>';
+          }).join('') + '</div></div></article>';
+    }).join('');
+  })();
 
-// Toggle functions
-function toggleCard(el) {
-  el.classList.toggle('expanded');
-}
+  // Changelog: a message per release, newest open, the rest behind "Show".
+  (function renderChangelog() {
+    var feed = $('#changelog-feed');
+    if (!feed || !RELEASES.length) return;
+    feed.innerHTML = RELEASES.map(function (r, n) {
+      var id = 'rel-' + n;
+      var open = n === 0;
+      return '<article class="msg">' + AV + '<div class="msg-body">' +
+        '<header><span class="author">Skycord</span><time>' + r.date + (r.time ? ' at ' + r.time : '') + '</time></header>' +
+        '<div class="rel-head"><span class="ver">' + r.v + '</span><span class="rel-title">' + r.title + '</span></div>' +
+        '<ul class="changes" id="' + id + '"' + (open ? '' : ' hidden') + '>' + r.items.map(function (c) {
+          return '<li><span class="kind ' + c[0] + '">' + KIND[c[0]] + '</span><span>' + c[1] + '</span></li>';
+        }).join('') + '</ul>' +
+        '<button class="more" type="button" aria-controls="' + id + '" aria-expanded="' + open + '" data-count="' + r.items.length + '">' +
+          '<span>' + (open ? 'Hide changes' : 'Show ' + r.items.length + ' change' + (r.items.length === 1 ? '' : 's')) + '</span>' + CHEVRON + '</button>' +
+      '</div></article>';
+    }).join('');
+    feed.addEventListener('click', function (e) {
+      var b = e.target.closest('.more');
+      if (!b) return;
+      var list = document.getElementById(b.getAttribute('aria-controls'));
+      var open = b.getAttribute('aria-expanded') !== 'true';
+      list.hidden = !open;
+      b.setAttribute('aria-expanded', String(open));
+      var n = Number(b.dataset.count);
+      b.firstChild.textContent = open ? 'Hide changes' : 'Show ' + n + ' change' + (n === 1 ? '' : 's');
+    });
 
-function toggleRelease(el) {
-  // aria-expanded has to move with the class or a screen reader announces a
-  // collapsed card that is actually open.
-  el.setAttribute('aria-expanded', el.classList.toggle('expanded') ? 'true' : 'false');
-}
+    var newest = RELEASES[0], oldest = RELEASES[RELEASES.length - 1];
+    var weeks = Math.max(1, Math.round((new Date(newest.date) - new Date(oldest.date)) / 604800000));
+    var line = RELEASES.length + ' releases in ' + weeks + ' weeks. The latest is ' + newest.v + ', ' + newest.date + '.';
+    $('#shipping').textContent = line;
+    $('#shipping-card').innerHTML = '<a href="#changelog" data-ch="changelog">' + newest.v + '</a>, ' + newest.date + '. ' +
+      RELEASES.length + ' releases in ' + weeks + ' weeks.';
+    // "New" beside #changelog for two weeks after a release.
+    if (Date.now() - new Date(newest.date) < 14 * 864e5) $('#changelog-new').hidden = false;
+  })();
 
-// Delegated, because the cards are rendered after this runs.
-document.addEventListener('click', function (e) {
-  const r = e.target.closest('.release');
-  if (r) toggleRelease(r);
-});
-document.addEventListener('keydown', function (e) {
-  if (e.key !== 'Enter' && e.key !== ' ') return;
-  const r = e.target.closest('.release');
-  if (!r) return;
-  e.preventDefault();          // Space would scroll the page instead
-  toggleRelease(r);
-});
+  /* ── Channels ─────────────────────────────────────────────────────── */
+  var sections = $$('.channel');
+  var names = sections.map(function (s) { return s.id; });
+  var current = null;
+  var nav = $('#nav'), scrim = $('#scrim'), menuBtn = $('#menu-btn'), main = $('#main');
 
-/*
- * Read off RELEASES rather than typed in, so it cannot drift into a lie the
- * next time you ship. For a project with no logos to show, evidence that it
- * is still moving is the honest substitute — and it surfaces the changelog,
- * which is otherwise behind a tab most visitors never press.
- */
-(function shippingLine() {
-  const el = document.getElementById('shipping');
-  if (!el || typeof RELEASES === 'undefined' || !RELEASES.length) return;
-  const newest = RELEASES[0], oldest = RELEASES[RELEASES.length - 1];
-  const weeks = Math.max(1, Math.round(
-    (new Date(newest.date) - new Date(oldest.date)) / 604800000));
-  el.innerHTML = '<a href="#changelog">' + RELEASES.length + ' releases in ' + weeks +
-    ' weeks</a> · latest ' + newest.v + ', ' + newest.date;
-})();
-
-// Tab navigation
-const PANELS = ['features', 'roadmap', 'changelog'];
-
-// The CSS reduced-motion rule kills animations and transitions, but a
-// scrollTo with behavior:'smooth' is script, not CSS, and ignores it.
-const REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-function show(which, focusTab) {
-  if (PANELS.indexOf(which) === -1) which = 'features';
-
-  PANELS.forEach(function (p) {
-    const on = p === which;
-    const panel = document.getElementById('p-' + p);
-    const tab = document.getElementById('t-' + p);
-    panel.classList.toggle('on', on);
-    tab.classList.toggle('on', on);
-    tab.setAttribute('aria-selected', on ? 'true' : 'false');
-    // Roving tabindex: the tablist is one stop, arrows move between tabs.
-    tab.tabIndex = on ? 0 : -1;
-    if (on && focusTab) tab.focus();
-  });
-
-  if (location.hash !== '#' + which) {
-    history.replaceState(null, '', '#' + which);
+  function nameFromHash() {
+    var h = decodeURIComponent(location.hash.slice(1));
+    return names.indexOf(h) >= 0 ? h : 'welcome';
   }
 
-  window.scrollTo({ top: 0, behavior: REDUCE.matches ? 'auto' : 'smooth' });
-}
+  function arrive(sec) {
+    $$('.ch-welcome, .msg, .day', sec).forEach(function (el, i) { el.style.setProperty('--i', Math.min(i, 9)); });
+    sec.classList.remove('arriving');
+    void sec.offsetWidth;
+    sec.classList.add('arriving');
+    clearTimeout(sec._arrive);
+    sec._arrive = setTimeout(function () { sec.classList.remove('arriving'); }, 900);
+  }
 
-PANELS.forEach(function (p, i) {
-  const tab = document.getElementById('t-' + p);
-  tab.addEventListener('click', function () { show(p); });
-  tab.addEventListener('keydown', function (e) {
-    let next = null;
-    if (e.key === 'ArrowRight')     next = (i + 1) % PANELS.length;
-    else if (e.key === 'ArrowLeft') next = (i - 1 + PANELS.length) % PANELS.length;
-    else if (e.key === 'Home')      next = 0;
-    else if (e.key === 'End')       next = PANELS.length - 1;
-    if (next === null) return;
+  function show(name, how) {
+    var sec = document.getElementById(name);
+    if (!sec) return;
+    if (name !== current) {
+      current = name;
+      sections.forEach(function (s) { s.hidden = s !== sec; });
+      $$('[data-ch]').forEach(function (a) {
+        if (a.dataset.ch === name && a.classList.contains('ch')) a.setAttribute('aria-current', 'page');
+        else a.removeAttribute('aria-current');
+      });
+      $('#head-name').textContent = name;
+      $('#head-topic').textContent = sec.dataset.topic || '';
+      document.title = name === 'welcome' ? "Skycord — your crew's place to talk" : '#' + name + ' · Skycord';
+      $('#scroller').scrollTop = 0;
+      // Messages arrive on a pointer switch. A keyboard switch is repeated work: no motion.
+      if (how === 'pointer' && !REDUCE.matches) arrive(sec);
+    }
+    closeNav(false);
+    if (how !== 'initial') {
+      var h = sec.querySelector('h1, h2');
+      if (h) h.focus({ preventScroll: true });
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-ch]');
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    show(PANELS[next], true);
+    var name = a.dataset.ch;
+    if (location.hash.slice(1) !== name) history.pushState(null, '', name === 'welcome' ? location.pathname + location.search : '#' + name);
+    show(name, e.detail === 0 ? 'keyboard' : 'pointer');
   });
-});
+  window.addEventListener('popstate', function () { show(nameFromHash(), 'keyboard'); });
+  show(nameFromHash(), 'initial');
 
-document.getElementById('mark').addEventListener('click', function (e) {
-  e.preventDefault();
-  show('features');
-});
+  /* ── The drawer, on phones ────────────────────────────────────────── */
+  function openNav() {
+    nav.classList.add('open');
+    scrim.classList.add('show');
+    menuBtn.setAttribute('aria-expanded', 'true');
+    main.inert = true;
+    var here = $('.channels [aria-current]') || $('.channels a');
+    if (here) setTimeout(function () { here.focus(); }, 30);
+  }
+  function closeNav(returnFocus) {
+    if (!nav.classList.contains('open')) return;
+    nav.classList.remove('open');
+    scrim.classList.remove('show');
+    menuBtn.setAttribute('aria-expanded', 'false');
+    main.inert = false;
+    if (returnFocus) menuBtn.focus();
+  }
+  menuBtn.addEventListener('click', function () { nav.classList.contains('open') ? closeNav(true) : openNav(); });
+  scrim.addEventListener('click', function () { closeNav(true); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(true); });
 
-// Handle hash on load
-const fromHash = function() {
-  const h = location.hash.slice(1);
-  if (PANELS.indexOf(h) !== -1) show(h);
-};
+  /* ── Rail tooltips ────────────────────────────────────────────────── */
+  var tip = document.createElement('div');
+  tip.className = 'tip';
+  tip.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(tip);
+  var tipTimer = 0, lastClose = 0;
+  function openTip(el) {
+    clearTimeout(tipTimer);
+    var instant = tip.dataset.state === 'open' || Date.now() - lastClose < 400;
+    var go = function () {
+      tip.textContent = el.dataset.tip;
+      var r = el.getBoundingClientRect();
+      tip.style.left = Math.round(r.right + 14) + 'px';
+      tip.style.top = Math.round(r.top + r.height / 2) + 'px';
+      tip.toggleAttribute('data-instant', instant);
+      tip.dataset.state = 'open';
+    };
+    if (instant) go(); else tipTimer = setTimeout(go, 280);
+  }
+  function closeTip() {
+    clearTimeout(tipTimer);
+    if (tip.dataset.state === 'open') { tip.dataset.state = 'closed'; lastClose = Date.now(); }
+  }
+  $$('.rail-btn[data-tip]').forEach(function (el) {
+    el.addEventListener('mouseenter', function () { if (window.matchMedia('(hover: hover)').matches) openTip(el); });
+    el.addEventListener('mouseleave', closeTip);
+    el.addEventListener('focus', function () { openTip(el); });
+    el.addEventListener('blur', closeTip);
+  });
+  window.addEventListener('scroll', closeTip, true);
 
-fromHash();
-window.addEventListener('hashchange', fromHash);
+  /* ── Copy the install command ─────────────────────────────────────── */
+  $$('[data-copy]').forEach(function (b) {
+    var label = $('.copy-label', b), icon = $('use', b);
+    function say(text, done) {
+      b.classList.add('swap');
+      setTimeout(function () {
+        label.textContent = text;
+        icon.setAttribute('href', done ? '#i-check' : '#i-copy');
+        b.classList.toggle('done', !!done);
+        b.classList.remove('swap');
+      }, REDUCE.matches ? 0 : 110);
+    }
+    b.addEventListener('click', function () {
+      var text = $('code', b.parentNode).textContent;
+      var copied = navigator.clipboard && window.isSecureContext ? navigator.clipboard.writeText(text) : Promise.reject();
+      copied.then(function () { say('Copied', true); }, function () {
+        // No clipboard: select the text so Ctrl+C does it.
+        var range = document.createRange();
+        range.selectNodeContents($('code', b.parentNode));
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        say('Press Ctrl+C', false);
+      });
+      clearTimeout(b._reset);
+      b._reset = setTimeout(function () { say('Copy', false); }, 1800);
+    });
+  });
+
+  /* ── The installer, live from GitHub ──────────────────────────────── */
+  var direct = false;
+  fetch('https://api.github.com/repos/xSMDx/skycord-desktop-releases/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (rel) {
+      if (!rel || !rel.assets) return;
+      var exe = rel.assets.filter(function (a) { return /\.exe$/i.test(a.name); })[0];
+      if (!exe) return;
+      direct = true;
+      var mb = Math.max(1, Math.round(exe.size / 1048576));
+      var version = String(rel.tag_name || '').replace(/^v/, '');
+      $$('a[data-dl]').forEach(function (a) { a.href = exe.browser_download_url; });
+      $$('[data-dl-name]').forEach(function (e) { e.textContent = exe.name; });
+      $$('[data-dl-meta]').forEach(function (e) { e.textContent = mb + ' MB · Windows 10 and 11, 64-bit'; });
+      $$('[data-dl-version]').forEach(function (e) { e.textContent = version; });
+      $$('.rail-btn[data-dl]').forEach(function (e) { e.dataset.tip = 'Download for Windows · ' + version; });
+      var when = rel.published_at ? new Date(rel.published_at) : null;
+      if (when && !isNaN(when)) {
+        var t = $('#dl-date');
+        t.dateTime = rel.published_at;
+        t.textContent = when.toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' });
+      }
+    })
+    .catch(function () { /* The links still lead to the latest release on GitHub. */ });
+
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-dl]');
+    if (!a || !direct) return;
+    var status = $('#dl-status');
+    status.textContent = 'Your download has started. Open the file when it finishes.';
+    clearTimeout(status._t);
+    status._t = setTimeout(function () { status.textContent = ''; }, 8000);
+  });
+
+  /* ── A little life in the sidebar ─────────────────────────────────── */
+  // The Lounge is an example: someone speaks now and then, as in a real call.
+  var members = $$('.vm');
+  setInterval(function () {
+    if (document.hidden || REDUCE.matches || !members.length) return;
+    var m = members[Math.floor(Math.random() * members.length)];
+    m.classList.add('speaking');
+    setTimeout(function () { m.classList.remove('speaking'); }, 700 + Math.random() * 1500);
+  }, 2400);
+
+  // The last word in #welcome is typed in, once, on a first visit to it.
+  (function typeTheLastWord() {
+    var ps = $('#welcome-ps'), typing = $('#typing');
+    if (!ps || !typing || REDUCE.matches || current !== 'welcome') return;
+    ps.hidden = true;
+    typing.hidden = false;
+    setTimeout(function () {
+      typing.hidden = true;
+      ps.hidden = false;
+      ps.classList.add('later-in');
+    }, 1600);
+  })();
+})();
 </script>
 </body>
 </html>
