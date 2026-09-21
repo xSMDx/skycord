@@ -24,4 +24,6 @@ publish:
   provider: github
   owner: xSMDx
   repo: skycord-desktop-releases
-  releaseType: release
+  # A draft: the workflow creates it first and publishes it once every file is
+  # uploaded (see .github/workflows/desktop-release.yml).
+  releaseType: draft

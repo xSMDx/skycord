@@ -28,9 +28,35 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
       - name: Version from the tag
+        id: version
         shell: bash
-        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version --allow-same-version
-      - name: Build and publish
+        run: |
+          v="${GITHUB_REF_NAME#desktop-v}"
+          npm version "$v" --no-git-tag-version --allow-same-version
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+      # electron-builder uploads its files in parallel, and each creates the
+      # release if it can't find one. Two creations race and GitHub refuses the
+      # second ("Published releases must have a valid tag") after the first has
+      # already published a release holding half the files (rc.1, 2026-09-21).
+      # So the release exists as a draft before electron-builder starts, it only
+      # uploads into it, and the release goes public once every file is there.
+      - name: Draft the release
+        shell: bash
+        run: |
+          gh release list -R "$REPO" --json tagName --jq '.[].tagName' | grep -qx "v$V" ||
+            gh release create "v$V" -R "$REPO" --draft --title "Skycord for Windows $V"               --notes "Download **Skycord-Setup-$V.exe** below and run it. Installed copies update themselves."
+        env:
+          GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+          V: ${{ steps.version.outputs.v }}
+          REPO: xSMDx/skycord-desktop-releases
+      - name: Build and upload
         run: npm run release
         env:
           GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+      - name: Publish the release
+        shell: bash
+        run: gh release edit "v$V" -R "$REPO" --draft=false --latest
+        env:
+          GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+          V: ${{ steps.version.outputs.v }}
+          REPO: xSMDx/skycord-desktop-releases
