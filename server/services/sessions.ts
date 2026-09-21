@@ -17,6 +17,9 @@ import { lookupCountry } from '../utils/geoip'
 /** How stale `lastSeenAt` may get before a refresh bothers to write. */
 const TOUCH_AFTER_MS = 5 * 60 * 1000
 
+/** How old a refresh cookie gets before a refresh replaces it. */
+export const RENEW_AFTER_MS = 24 * 60 * 60 * 1000
+
 /**
  * Record a new signed-in device and hand its cookie to the browser.
  *
@@ -70,11 +73,24 @@ export const touchSession = async (req: Request, sid: string): Promise<boolean> 
     row.ip = ip
     row.country = await lookupCountry(ip)
   }
-  // The row's life is tied to the cookie's, and refresh does not mint a new
-  // cookie — so this must NOT be extended here, or a session would outlive the
-  // credential naming it and sit in the list as a device that cannot come back.
+  // The row's end moves only together with a new cookie, in renewSession. Not
+  // here: a session would outlive the credential naming it and sit in the list
+  // as a device that cannot come back.
   await row.save()
   return true
+}
+
+/**
+ * Keep a login that is in use alive: a new cookie, and the device's end moved
+ * with it, so a login lasts the refresh lifetime since last use rather than
+ * since sign-in. Same device, same sid. The row is written first, for the
+ * reason given at startSession.
+ */
+export const renewSession = async (
+  res: Response, userId: Types.ObjectId, tokenVersion: number, sid: string,
+): Promise<void> => {
+  await Session.updateOne({ sid }, { expiresAt: refreshExpiryDate() })
+  setRefreshCookie(res, signRefreshToken(userId, tokenVersion, sid))
 }
 
 /**

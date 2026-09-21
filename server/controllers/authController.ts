@@ -9,7 +9,7 @@ import { wellFormed } from '../utils/wellFormed'
 import { config } from '../config/env'
 import { Session } from '../models/Session'
 import {
-  startSession, touchSession, adoptLegacySession, revokeOtherSessions,
+  startSession, touchSession, renewSession, RENEW_AFTER_MS, adoptLegacySession, revokeOtherSessions,
 } from '../services/sessions'
 
 // ── Register ─────────────────────────────────────────────────────────────
@@ -119,6 +119,11 @@ export const refresh = async (req: Request, res: Response, next: NextFunction): 
         clearRefreshCookie(res)
         res.status(401).json({ message: 'This device was signed out' })
         return
+      }
+      // A login lasts while it is used: once the cookie is a day old, the next
+      // refresh replaces it. At most daily, so a device writes once a day.
+      if (Date.now() - (payload.iat ?? 0) * 1000 > RENEW_AFTER_MS) {
+        await renewSession(res, user._id, user.tokenVersion, payload.sid)
       }
     } else {
       // A cookie from before sessions existed. Adopt it rather than reject it

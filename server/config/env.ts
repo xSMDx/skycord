@@ -1,4 +1,5 @@
 import dotenv from 'dotenv'
+import { durationMs } from '../utils/duration'
 dotenv.config()
 
 const req = (key: string): string => {
@@ -7,6 +8,14 @@ const req = (key: string): string => {
   return v
 }
 const opt = (key: string, fallback: string): string => process.env[key] ?? fallback
+
+/**
+ * How long a login lasts since the device was last used. Refresh renews it,
+ * at most daily (services/sessions.ts), so this is an idle limit, not a
+ * lifetime. The cookie, the token and the device row all take it from here,
+ * so they cannot disagree about when a login ends.
+ */
+const REFRESH_TTL_MS = durationMs(opt('JWT_REFRESH_EXPIRES_IN', '90d'), 90 * 24 * 60 * 60 * 1000)
 
 export const config = {
   port:    parseInt(opt('PORT', '3001'), 10),
@@ -27,11 +36,11 @@ export const config = {
     accessSecret:     req('JWT_ACCESS_SECRET'),
     refreshSecret:    req('JWT_REFRESH_SECRET'),
     accessExpiresIn:  opt('JWT_ACCESS_EXPIRES_IN',  '15m'),
-    refreshExpiresIn: opt('JWT_REFRESH_EXPIRES_IN', '7d'),
+    refreshTtlMs:     REFRESH_TTL_MS,
   },
   cookie: {
     domain: opt('COOKIE_DOMAIN', 'localhost'),
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+    maxAge: REFRESH_TTL_MS,
   },
   cors: {
     clientOrigin: opt('CLIENT_ORIGIN', 'http://localhost:5173'),
