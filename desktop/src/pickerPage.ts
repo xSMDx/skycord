@@ -67,3 +67,13 @@ $('form').addEventListener('submit', async (e) => {
 $('go').addEventListener('click', () => { if (chosen) void choose(chosen) })
 $('back').addEventListener('click', reset)
 $<HTMLInputElement>('address').focus()
+
+// Sent back here because the saved server didn't answer: say so, and leave its
+// address in the box so trying again is one press.
+const unreachable = new URLSearchParams(location.search).get('unreachable')
+if (unreachable) {
+  let host = unreachable
+  try { host = new URL(unreachable).host } catch { /* shown as given */ }
+  $<HTMLInputElement>('address').value = unreachable
+  say(`Couldn’t reach ${host}. Press Check to try again, or choose a different server.`, true)
+}

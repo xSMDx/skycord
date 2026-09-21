@@ -29,6 +29,12 @@ if (startupOrigin && needsSecureOriginSwitch(startupOrigin)) {
   app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', startupOrigin)
 }
 
+// One Skycord at a time. A second launch (a shortcut, or the Jump List's
+// Switch server) hands its arguments to the one running and exits.
+const primary = app.requestSingleInstanceLock()
+if (!primary) app.quit()
+const SWITCH = '--switch-server'
+
 let win: BrowserWindow | null = null
 /** The instance on screen; null while the picker is showing. */
 let current: string | null = null
@@ -64,6 +70,14 @@ const createWindow = (): BrowserWindow => {
   w.webContents.on('will-redirect', (event, url) => {
     if (current && !sameOrigin(url, current)) { event.preventDefault(); leave(url) }
   })
+  // A server that doesn't answer must not leave a blank window. Back to the
+  // picker, which says so. The saved server stays, so the next launch retries.
+  w.webContents.on('did-fail-load', (_e, code, _description, url, isMainFrame) => {
+    if (!isMainFrame || code === -3 /* aborted, not failed */ || !current || !sameOrigin(url, current)) return
+    const origin = current
+    current = null
+    void w.loadFile(PICKER, { query: { unreachable: origin } })
+  })
   w.webContents.setWindowOpenHandler(({ url }) => {
     if (sameOrigin(url, current)) void w.loadURL(url)
     else leave(url)
@@ -74,10 +88,12 @@ const createWindow = (): BrowserWindow => {
 
 const showPicker = () => { current = null; void win?.loadFile(PICKER) }
 const openInstance = (origin: string) => { current = origin; void win?.loadURL(`${origin}/`) }
+/** Forget the saved server and show the picker. */
+const switchServer = () => { writeStore({ ...readStore(), instanceOrigin: undefined }); showPicker() }
 
 // The picker's calls are honoured only from the picker page itself. The preload
 // already withholds the API from any other page; this is the second lock.
-const fromPicker = (event: IpcMainInvokeEvent): boolean => event.senderFrame?.url === PICKER_URL
+const fromPicker = (event: IpcMainInvokeEvent): boolean => event.senderFrame?.url.split(/[?#]/)[0] === PICKER_URL
 
 ipcMain.handle('picker:lookup', (event, address: unknown) => {
   if (!fromPicker(event) || typeof address !== 'string') return { ok: false, reason: 'Not allowed.' }
@@ -104,8 +120,14 @@ ipcMain.handle('picker:choose', (event, origin: unknown) => {
 // the instance on screen.
 ipcMain.handle('desktop:changeInstance', (event) => {
   if (!sameOrigin(event.senderFrame?.url ?? '', current)) return
-  writeStore({ ...readStore(), instanceOrigin: undefined })
-  showPicker()
+  switchServer()
+})
+
+app.on('second-instance', (_e, argv) => {
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
+  if (argv.includes(SWITCH)) switchServer()
 })
 
 // No page may embed another browser.
@@ -114,6 +136,7 @@ app.on('web-contents-created', (_e, contents) => {
 })
 
 app.whenReady().then(() => {
+  if (!primary) return
   // Permissions go to the chosen origin only, and only the ones a chat app needs.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
     callback(permissionAllowed(permission, details.requestingUrl, current)))
@@ -124,8 +147,22 @@ app.whenReady().then(() => {
   win = createWindow()
   const origin = readStore().instanceOrigin
   const clean = origin ? normaliseAddress(origin) : null
-  if (clean) openInstance(clean)
+  if (process.argv.includes(SWITCH)) switchServer()
+  else if (clean) openInstance(clean)
   else showPicker()
+
+  // Right-click the taskbar icon for Switch server. It works whatever the
+  // server's web client is: one too old to have the button, or one that's down.
+  if (process.platform === 'win32') {
+    app.setUserTasks([{
+      program: process.execPath,
+      arguments: app.isPackaged ? SWITCH : `"${app.getAppPath()}" ${SWITCH}`,
+      iconPath: process.execPath,
+      iconIndex: 0,
+      title: 'Switch server',
+      description: 'Choose a different Skycord server',
+    }])
+  }
   startUpdates(() => win)
 })
 
