@@ -22,6 +22,7 @@
     --accent: #0a75af; --on-accent: #ffffff; --danger: #b8282d; --danger-solid: #da373c; --ok: #1a7f45;
     --scroll: rgba(0,0,0,.2);
   }
+  /* Type: four steps, 12 / 15 / 19 / 24. Between close sizes, colour does the work. */
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; }
   body {
@@ -40,7 +41,7 @@
   :root[data-mode="manage"] .bar {
     position: relative; display: flex; align-items: center; padding: 16px 24px 8px; -webkit-app-region: drag;
   }
-  .bar h1 { font-size: 18px; font-weight: 600; color: var(--text-strong); letter-spacing: -.01em; }
+  .bar h1 { font-size: 19px; font-weight: 600; color: var(--text-strong); letter-spacing: -.01em; }
   .close {
     position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; display: grid; place-items: center;
     border: 0; border-radius: 8px; background: transparent; color: var(--text-2); cursor: pointer; -webkit-app-region: no-drag;
@@ -52,11 +53,11 @@
   :root[data-mode="manage"] .card { max-width: none; padding: 4px 24px 24px; overflow-y: auto; }
   :root[data-mode="manage"] .card::-webkit-scrollbar { width: 12px; }
   :root[data-mode="manage"] .card::-webkit-scrollbar-thumb { background: var(--scroll); border: 3px solid transparent; background-clip: content-box; border-radius: 999px; }
-  .heading { font-size: 22px; font-weight: 700; color: var(--text-strong); }
+  .heading { font-size: 24px; font-weight: 700; color: var(--text-strong); }
   :root[data-mode="manage"] .heading { display: none; }
   .lede { margin: 6px 0 24px; color: var(--text-2); }
-  :root[data-mode="manage"] .lede { margin: 0 0 20px; font-size: 14px; }
-  .section { margin: 20px 0 10px; color: var(--text-3); font-size: 13px; font-weight: 600; }
+  :root[data-mode="manage"] .lede { margin: 0 0 20px; }
+  .section { margin: 20px 0 10px; color: var(--text-3); font-size: 12px; font-weight: 600; }
   .section:first-child { margin-top: 0; }
 
   /* saved servers */
@@ -67,7 +68,7 @@
   }
   .mark {
     flex: none; width: 40px; height: 40px; display: grid; place-items: center; overflow: hidden; border-radius: 11px;
-    background: var(--raised); color: var(--text-strong); font-weight: 700; font-size: 16px;
+    background: var(--raised); color: var(--text-strong); font-weight: 700; font-size: 15px;
   }
   .mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .mark.hosted { color: #5865f2; }
@@ -75,8 +76,8 @@
   .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .who strong, .who span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .who strong { color: var(--text-strong); font-weight: 600; font-size: 15px; }
-  .who span { color: var(--text-3); font-size: 13px; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; color: var(--text-2); font-size: 13px; font-weight: 600; }
+  .who span { color: var(--text-3); font-size: 12px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; color: var(--text-2); font-size: 12px; font-weight: 600; }
   .badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
   .icon-btn {
     flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px;
@@ -88,7 +89,7 @@
   .server.editing, .server.confirming { display: block; padding: 14px; }
   .edit { display: grid; gap: 10px; }
   .edit label { display: grid; gap: 4px; color: var(--text-3); font-size: 12px; font-weight: 600; }
-  .confirm p { color: var(--text-1); font-size: 14px; }
+  .confirm p { color: var(--text-1); }
   .confirm strong { color: var(--text-strong); }
   .confirm .row, .edit .row { margin-top: 12px; }
   .edit .row { margin-top: 2px; }
@@ -101,7 +102,7 @@
   }
   .choice:hover { border-color: var(--line-strong); background: var(--raised); }
   .choice strong { display: block; color: var(--text-strong); font-weight: 600; }
-  .choice span { color: var(--text-3); font-size: 13px; }
+  .choice span { color: var(--text-3); font-size: 12px; }
   form.add { display: flex; gap: 8px; }
   input {
     flex: 1; min-width: 0; width: 100%; padding: 10px 12px; border-radius: 10px;
@@ -114,11 +115,11 @@
   }
   .btn:hover { filter: brightness(1.08); }
   .btn:disabled { opacity: .6; cursor: default; }
-  .btn.small { padding: 7px 12px; border-radius: 8px; font-size: 13px; }
+  .btn.small { padding: 7px 12px; border-radius: 8px; font-size: 12px; }
   .btn.quiet { background: transparent; color: var(--text-2); }
   .btn.quiet:hover { background: var(--raised); color: var(--text-strong); filter: none; }
   .btn.danger { background: var(--danger-solid); color: #ffffff; }
-  .msg { min-height: 22px; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+  .msg { min-height: 22px; margin-top: 10px; font-size: 12px; color: var(--text-2); }
   .msg:empty { min-height: 0; margin: 0; }
   .add + .msg:empty { min-height: 22px; margin-top: 10px; }
   .msg.err { color: var(--danger); }
