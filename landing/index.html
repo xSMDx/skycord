@@ -889,8 +889,43 @@ sudo bash install.sh</code></pre>
   }
 ];
 
-// Changelog data];
+// Changelog data
   var RELEASES = [{
+    v: 'v0.20.0', date: 'Sep 21, 2026', time: '17:25 UTC+2', title: 'Skycord for Windows, and a new coat of paint',
+    items: [
+      ['add', 'Skycord for Windows, as a release candidate. It is in <a href="#download" data-ch="download">#download</a>: one installer, and it keeps itself up to date from then on'],
+      ['add', 'The app keeps a list of servers, yours and your friends’, and switches between them from Settings › Servers. The list lives in the app, so no server can see which others you use'],
+      ['add', 'Its own screen-share picker: a window or a whole screen, the stream quality (Gaming, Screenshare, or your own resolution and frame rate), and the sound of your whole PC when you share the whole screen. That sound includes the call itself, and the picker says so'],
+      ['add', 'A title bar that belongs to Skycord: where you are — Friends, Direct Messages, or # channel and server — and back and forward through where you have been, with Alt+Left and Alt+Right too'],
+      ['imp', 'Signing in lasts. A login now runs for 90 days since you last used it, on the web and in the app, instead of ending seven days after you signed in however often you came back. A server set up by hand from an older .env.example still says 7d there: change it to 90d, or delete the line'],
+      ['add', 'Light, Dark and Automatic at the top of Appearance. Automatic follows your system and remembers which light and which dark you like; the studio themes sit below them'],
+      ['imp', 'Skycord’s colour is Sky now: buttons, links, mentions and the things you select. The light themes use a deeper Sky that stays readable. If you had picked Blurple yourself, you keep it, and an Automatic swatch brings the default back'],
+      ['imp', 'Text on a coloured button is measured, not assumed: it picks dark or light by contrast, so every accent stays readable. Yellow buttons were close to unreadable before'],
+      ['imp', 'Skycord’s own typefaces, Archivo and Chakra Petch, now load from your server instead of from Google'],
+      ['add', 'Status is a shape as well as a colour: a dot for online, a crescent for idle, a bar for Do Not Disturb and a ring for offline, so nobody has to tell green from red'],
+      ['fix', 'When your microphone cannot go live, Skycord says why: no access, none plugged in, in use by another app, or a channel you can only listen in. A refused unmute no longer shows an open microphone'],
+      ['add', 'Settings › About this instance says who runs the server you are on and how to reach them. Settings › Legal holds its documents, next to Skycord’s licence, its source, and the licences of everything the app bundles'],
+      ['add', 'Signing up names the server you are joining and links its documents, and every document can be read before you sign in. Hosts set all of it in the installer or in .env'],
+      ['imp', 'Calls stay dark in the light themes, so video is not framed in white, and a muted microphone no longer wears the same red as going live'],
+      ['fix', 'Searching the member list filters it, menus are grouped under names, and Home in the server rail works from the keyboard'],
+      ['fix', 'Safari before 16.4 showed a blank page; it loads again. Avatars, server icons and flags that fail to load fall back instead of showing as broken, and a server named with an emoji or a “<” no longer breaks its icon'],
+      ['imp', 'A lighter first load: the animation library arrives only when something animates, and nothing animates a layout property any more'],
+      ['imp', 'skycord.xyz is a Skycord server now. You are reading this in one']
+    ]
+  },
+  {
+    v: 'v0.19.1', date: 'Sep 12, 2026', time: '10:26 UTC+2', title: 'One command to host your own',
+    items: [
+      ['add', 'One command installs a server: <code>curl -fsSL https://skycord.xyz/install.sh | sudo bash</code> on a fresh Linux machine. It asks for the address people will use and an email for certificate notices, and works out or generates everything else'],
+      ['add', 'It sets up the whole thing: Skycord itself, MongoDB 4.4 with a password and reachable only by Skycord, LiveKit for voice and video on a single UDP port, and Caddy, which gets and renews the HTTPS certificate on its own'],
+      ['add', 'Updates are one command too. <code>sudo skycord update</code> takes a backup first, and if the new version does not come up healthy it puts the previous one back by itself. <code>sudo skycord auto-update on</code> does it every night'],
+      ['add', 'Everyday commands for hosts: <code>status</code> shows the version, health, disk, the last backup and whether an update is waiting; <code>logs</code> follows what it is doing; <code>config</code> changes settings; <code>backup</code> and <code>restore</code> do what they say'],
+      ['add', 'It fits around what you already run: a web server of your own (Skycord then listens on 127.0.0.1 and prints the block to paste into it), an existing MongoDB or LiveKit, or no voice at all'],
+      ['imp', 'Every release is rehearsed before it goes out: a fresh machine installs it, updates to it and rolls a broken update back, and only then is it published'],
+      ['imp', 'The self-hosting guides were rewritten around the installer, and the manual steps are still there for anyone who wants them']
+    ]
+  },
+  {
     v: 'v0.19.0', date: 'Sep 11, 2026', time: '21:40 UTC+2', title: 'Search, and scrolling all the way back',
     items: [
       ['add', 'Search. The box at the top right of a server searches all of it; in a direct message or a group it searches that conversation. Type words, put a phrase in quotes to keep it together, or put a minus in front of a word to leave it out. Words match whole and ignore case and accents, so 10 finds #10 but not #110, and cafe finds Café'],
