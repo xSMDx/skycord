@@ -1,13 +1,39 @@
-# Skycord
+<p align="center">
+  <img src="desktop/build/icon.png" width="88" height="88" alt="">
+</p>
 
-Voice, video and screen share for people who already know each other.
+<h1 align="center">Skycord</h1>
+
+<p align="center">
+  Voice, video and screen share for people who already know each other.
+</p>
+
+<p align="center">
+  <a href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest"><b>Download for Windows</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://app.skycord.xyz"><b>Open in your browser</b></a>
+  &nbsp;·&nbsp;
+  <a href="#install"><b>Host your own</b></a>
+</p>
 
 A self-hostable place for a friend group to talk. It looks like Discord on
 purpose — muscle memory is binding, and a chat app that makes you relearn where
 things are is a chat app nobody switches to. What is different is where it
 runs: your hardware, your database, no company in the middle.
 
-**Open the app:** [app.skycord.xyz](https://app.skycord.xyz) ·
+## Get Skycord
+
+**On Windows 10 or 11 (64-bit):**
+[download the installer](https://github.com/xSMDx/skycord-desktop-releases/releases/latest)
+— the `.exe` under *Assets* — and run it. After that it keeps itself up to date.
+The installer is not signed yet, so Windows may stop it with *"Windows protected
+your PC"*: choose **More info**, then **Run anyway**. Right now it is a release
+candidate; if something breaks, [open an issue](https://github.com/xSMDx/skycord/issues).
+
+**In a browser:** [app.skycord.xyz](https://app.skycord.xyz). Nothing to install.
+
+**On your own server:** one command on a Linux machine. See [Install](#install).
+
 **Site, roadmap and changelog:** [skycord.xyz](https://skycord.xyz)
 
 **Docs:** [Self-hosting](./docs/self-hosting/) ·
@@ -24,19 +50,22 @@ This is a young project, run by one person, and it is honest about what it is
 not. **It works, and it is not finished.**
 
 **What works today:** servers with text and voice channels grouped into
-categories, DMs and group DMs, voice and video calls with screen share
-(LiveKit), invite links, replies, reactions, pins, edits, custom statuses,
-presence, themes, a phone layout, and a keyboard-driven quick switcher.
+categories, roles and permissions (private channels and categories included),
+DMs and group DMs, voice and video calls with screen share (LiveKit), moderation
+in voice (server mute, deafen and disconnect), search across a server or a
+conversation with its whole history, invite links, replies, reactions, pins,
+edits, custom statuses, presence, themes, a phone layout, a keyboard-driven
+quick switcher, and a Windows app.
 
 **What is not built yet, and will affect you:**
 
 | | |
 |---|---|
-| **Roles and permissions** | Every server is owner-vs-member. There are no moderators, no per-channel permissions, no bans. |
-| **Server Settings** | No UI for server-level configuration. Renaming, icons and publishing to Discover are not reachable yet. |
 | **End-to-end encryption** | Designed in detail, not built. Messages are stored as plaintext in your database. Do not treat this as a private-messaging tool. |
-| **Notifications** | No push, no per-server notification settings. |
-| **Moderation tools** | None beyond removing a member. |
+| **Notifications** | No push notifications and no per-server notification settings, in the browser or in the Windows app. |
+| **Bans** | You can kick someone but not ban them, so nothing stops them coming back through an invite. |
+| **File uploads** | Nothing can be attached to a message yet. Links and GIFs work. |
+| **Custom emoji, audit log** | Not built. |
 
 If you need any of those, this is not ready for you yet. If you want a small
 private place for a group that already trusts each other, it does that well.
@@ -158,6 +187,7 @@ server/        Express + Socket.IO + Mongoose
   models/      Mongoose schemas
 docs/          ROADMAP.md, PRODUCT.md, and design specs
 landing/       the marketing page (separate static deploy)
+desktop/       the Windows app (Electron)
 ```
 
 `docs/` is worth reading before contributing — the specs record *why* decisions
