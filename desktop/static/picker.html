@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src https: http: data:">
+<title>Skycord</title>
+<style>
+  :root {
+    --bg: #111214; --panel: #1e2024; --raised: #2b2d31; --line: rgba(255,255,255,.08);
+    --text-strong: #ffffff; --text-1: #dcddde; --text-2: #b5bac1; --text-3: #abb1b8;
+    --accent: #38b6f1; --on-accent: #0e0f11; --danger: #f59697;
+    --ease: cubic-bezier(.32,.72,0,1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid; place-items: center; padding: 24px;
+    background: var(--bg); color: var(--text-1);
+    font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  .card { width: 100%; max-width: 440px; }
+  h1 { font-size: 22px; font-weight: 700; color: var(--text-strong); }
+  .lede { margin: 6px 0 24px; color: var(--text-2); }
+  .choice {
+    display: flex; align-items: center; gap: 14px; width: 100%;
+    padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel); color: inherit; font: inherit; text-align: left; cursor: pointer;
+    transition: border-color .12s var(--ease), background .12s var(--ease);
+  }
+  .choice:hover { border-color: rgba(255,255,255,.2); background: var(--raised); }
+  .choice:focus-visible, input:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .choice strong { display: block; color: var(--text-strong); font-weight: 600; }
+  .choice span { color: var(--text-3); font-size: 13px; }
+  .or { margin: 20px 0 10px; color: var(--text-3); font-size: 13px; }
+  form { display: flex; gap: 8px; }
+  input {
+    flex: 1; min-width: 0; padding: 11px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text-strong); font: inherit;
+  }
+  input::placeholder { color: var(--text-3); }
+  .btn {
+    padding: 11px 16px; border-radius: 10px; border: none; cursor: pointer; font: inherit; font-weight: 600;
+    background: var(--accent); color: var(--on-accent); transition: filter .12s var(--ease);
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .btn.quiet { background: transparent; color: var(--text-2); }
+  .msg { min-height: 22px; margin-top: 10px; font-size: 13px; }
+  .msg.err { color: var(--danger); }
+  .found { display: none; margin-top: 18px; padding: 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+  .found.on { display: block; }
+  .who { display: flex; align-items: center; gap: 12px; }
+  .who .mark { width: 44px; height: 44px; border-radius: 12px; flex: none; overflow: hidden; background: var(--raised); }
+  .who .mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .who strong { display: block; color: var(--text-strong); font-size: 16px; }
+  .who span { color: var(--text-3); font-size: 13px; }
+  .row { display: flex; gap: 8px; margin-top: 14px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>Choose a server</h1>
+    <p class="lede">Skycord runs on the hosted server, or on one you or a friend runs.</p>
+
+    <button class="choice" id="hosted" type="button">
+      <div><strong>skycord.xyz</strong><span>The hosted server</span></div>
+    </button>
+
+    <p class="or">Or enter your own server's address</p>
+    <form id="form">
+      <input id="address" type="text" inputmode="url" autocomplete="url" spellcheck="false"
+             placeholder="chat.example.com" aria-label="Server address" required>
+      <button class="btn" id="check" type="submit">Check</button>
+    </form>
+    <p class="msg" id="msg" role="status" aria-live="polite"></p>
+
+    <section class="found" id="found" aria-live="polite">
+      <div class="who">
+        <div class="mark" id="mark"></div>
+        <div><strong id="name"></strong><span id="meta"></span></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="go" type="button">Continue</button>
+        <button class="btn quiet" id="back" type="button">Use a different address</button>
+      </div>
+    </section>
+  </main>
+  <script src="../dist/pickerPage.js"></script>
+</body>
+</html>

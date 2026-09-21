@@ -1,0 +1,36 @@
+# The Windows app's release. A tag like desktop-v0.20.0 builds the installer on
+# Windows and publishes it, with the update feed, to the public releases-only
+# repo — the source repo stays private (owner decision, 2026-09-21).
+#
+# DESKTOP_RELEASES_TOKEN is a fine-grained token with Contents: read and write
+# on xSMDx/skycord-desktop-releases and nothing else.
+name: Desktop release
+
+on:
+  push:
+    tags: ['desktop-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - name: Version from the tag
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version --allow-same-version
+      - name: Build and publish
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}

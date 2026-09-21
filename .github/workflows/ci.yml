@@ -49,6 +49,10 @@ jobs:
         run: npx vitest run src/
       - name: Server tests
         run: npx vitest run server/
+      # The desktop shell's pure modules (address handling, the security
+      # rules). They import nothing from Electron, so they run here without it.
+      - name: Desktop tests
+        run: npx vitest run desktop/src
 
   scripts:
     name: Deploy scripts
