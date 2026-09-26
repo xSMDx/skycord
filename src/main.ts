@@ -18,6 +18,10 @@ import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
 import App from './App.vue'
 import { applyAppearance } from './composables/useAppearance'
+// Importing this for its side effect: the module sets up the watcher that
+// writes data-motion. Pulled in here, next to the appearance restore, so the
+// attribute is in place before the first frame rather than after.
+import './composables/usePerformance'
 import { installLongPress } from './composables/useLongPress'
 import { isNavigationKey } from './composables/inputModality'
 import { vTip } from './directives/vTip'

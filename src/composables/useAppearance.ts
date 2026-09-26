@@ -164,10 +164,9 @@ export const applyAppearance = () => {
   if (a.density === 'cozy') delete root.dataset.density
   else root.dataset.density = a.density
 
-  // Motion. Absent rather than "on" when enabled, so the attribute exists only
-  // when it is doing something and the OS preference stays the default path.
-  if (a.reduceMotion) root.dataset.motion = 'off'
-  else delete root.dataset.motion
+  // Motion: usePerformance owns `data-motion` now (it also has to fold in the
+  // performance level, not just this switch), so applyAppearance no longer
+  // writes it — two writers of one attribute means whoever ran last wins.
 
   // Clear any inline surface/text overrides (custom + scheme), then re-apply
   // whichever mode is active. Inline vars win over the [data-theme] stylesheet.

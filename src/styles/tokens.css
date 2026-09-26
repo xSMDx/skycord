@@ -840,6 +840,15 @@ html.names-plain { --name-hover: var(--text-strong); }
    It only ever ADDS reduction. Someone whose OS asks for less motion still
    gets less motion with this switched off — an app has no business overriding
    an accessibility setting made at the system level. */
+/* Balanced: the bands, halved. Still alive, half the work. Off stays off. */
+:root[data-motion="reduced"] {
+  --dur-1: 60ms;
+  --dur-2: 90ms;
+  --dur-3: 120ms;
+  --dur-4: 170ms;
+  --dur-exit: 70ms;
+}
+
 :root[data-motion="off"] {
   --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; --dur-exit: 1ms;
 }
