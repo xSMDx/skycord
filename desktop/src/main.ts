@@ -78,11 +78,18 @@ const showPicker = (query?: Record<string, string>) => {
   void shellWin?.page.loadFile(PICKER, query ? { query } : undefined)
 }
 
+// A server's page is checked with the server on every load. Sent without
+// Cache-Control (nginx's default), Chromium guesses its freshness from
+// Last-Modified, a tenth of its age, so after a deploy the app went on opening
+// the old client from its cache for up to a day. max-age=0 asks every time: a
+// 304 when nothing changed, the new page when it did. Hashed assets stay cached.
+const FRESH: Electron.LoadURLOptions = { extraHeaders: 'Cache-Control: max-age=0\n' }
+
 const openInstance = (origin: string) => {
   current = origin
   shellWin?.setTitle(titleFor(origin))
   shellWin?.setColors(DEFAULT_COLORS)
-  void shellWin?.page.loadURL(`${origin}/`)
+  void shellWin?.page.loadURL(`${origin}/`, FRESH)
 }
 
 /** Open a server: save it, remember it, and load it — or restart first, for a
@@ -129,7 +136,7 @@ const guard = (page: WebContents) => {
     showPicker({ unreachable: current })
   })
   page.setWindowOpenHandler(({ url }) => {
-    if (sameOrigin(url, current)) void page.loadURL(url)
+    if (sameOrigin(url, current)) void page.loadURL(url, FRESH)
     else leave(url)
     return { action: 'deny' }
   })
