@@ -6,9 +6,9 @@
  */
 import { reactive, watch } from 'vue'
 import {
-  Room, RoomEvent, Track,
-  type RemoteTrack, type RemoteParticipant, type Participant, type LocalAudioTrack,
-  type LocalParticipant,
+  Room, RoomEvent, Track, VideoQuality,
+  type RemoteTrack, type RemoteTrackPublication, type RemoteParticipant, type Participant,
+  type LocalAudioTrack, type LocalParticipant,
 } from 'livekit-client'
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
 import { micFailureReason, micIsLive, micAfterToggle, type MicState } from './micState'
@@ -16,6 +16,8 @@ import { holdPresence } from './usePresence'
 import { useAuth } from './useAuth'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
+import { qualityFor } from './callLimits'
+import { perf } from './usePerformance'
 import {
   emitCallJoin, emitCallLeave, getSocket, callServerMoved,
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
@@ -388,10 +390,60 @@ const syncParticipants = () => {
   voice.participants = list
 }
 
+// ── Call limits: incoming video quality + pause-when-hidden ────────────────
+// Both apply only to REMOTE video publications: your own outgoing camera is
+// untouched, and audio is never in scope, at any level — publishMic and the
+// audio track lifecycle above don't participate in any of this.
+const QUALITY = { high: VideoQuality.HIGH, medium: VideoQuality.MEDIUM, low: VideoQuality.LOW } as const
+
+const applyQuality = (pub: RemoteTrackPublication) => {
+  const q = qualityFor(perf.incomingVideo)
+  // null = leave it to adaptiveStream's own judgement, which is what 'auto' means.
+  if (q) pub.setVideoQuality(QUALITY[q])
+}
+
+const remoteVideoPubs = (r: Room) => [...r.remoteParticipants.values()]
+  .flatMap(p => [...p.videoTrackPublications.values()])
+
+const applyQualityToAll = () => {
+  const r = getRoom(); if (!r) return
+  for (const pub of remoteVideoPubs(r)) applyQuality(pub)
+}
+watch(() => perf.incomingVideo, applyQualityToAll)
+
+/**
+ * Video is expensive and unwatched while the window is hidden; audio never
+ * pauses. The setting is folded into `hidden` itself rather than an early
+ * `if (!perf.pauseVideoWhenHidden) return` — that would leave tiles paused
+ * after the level drops back to Full while the window is STILL hidden, since
+ * nothing else would fire until the next visibilitychange. Folding it in means
+ * turning the switch off resumes video immediately, on the same code path.
+ */
+const applyHiddenPause = () => {
+  const r = getRoom(); if (!r) return
+  const hidden = perf.pauseVideoWhenHidden && document.visibilityState === 'hidden'
+  for (const pub of remoteVideoPubs(r)) pub.setEnabled(!hidden)
+}
+// Module-scoped and permanent, like the watchers elsewhere in this file:
+// useVoice is a singleton for the app's whole lifetime, not a resource created
+// per call, and both functions above already no-op via getRoom() when there is
+// no active room — so there is nothing to tear down between calls. Guarded for
+// the tests that import this module under Node, where `document` is absent.
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', applyHiddenPause)
+watch(() => perf.pauseVideoWhenHidden, applyHiddenPause)
+
 const wireRoom = (r: Room) => {
-  r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
-    if (track.kind === Track.Kind.Video) addRemoteVideo(track, participant)
-    else attachTrack(track, participant.identity)
+  r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
+    if (track.kind === Track.Kind.Video) {
+      addRemoteVideo(track, participant)
+      applyQuality(pub)
+      // A track that subscribes while the window is already hidden (a late
+      // camera-on, or the tail of an initial join) must start paused too, not
+      // just tracks that were already live when visibility last changed.
+      applyHiddenPause()
+    } else {
+      attachTrack(track, participant.identity)
+    }
     syncParticipants()
   })
   r.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant) => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
 
 // useVoice.ts pulls in the full mic processing chain (micChain -> the RNNoise
 // wasm/AudioWorklet package), which only exists in a browser. voiceRoomName
@@ -9,8 +9,36 @@ vi.mock('../micChain', () => ({ createMicChainProcessor: () => ({}) }))
 // Same story: usePresence reads localStorage at module load (idle-timeout
 // setting), which doesn't exist in vitest's node environment.
 vi.mock('../usePresence', () => ({ applySelfPresence: () => {}, holdPresence: () => {} }))
+// Task 5 wired useVoice.ts to usePerformance for the call-limits switches,
+// which pulls in useAppearance for the motion rule, which pulls in
+// materialScheme → @material/material-color-utilities — same dependency
+// usePerformance.test.ts already stubs, for the same reason (its published
+// ESM uses extensionless relative imports Vite resolves and bare Node does
+// not). Nothing here exercises Material You.
+vi.mock('../materialScheme', () => ({ SCHEME_TOKEN_KEYS: [], buildSchemeTokens: () => ({}) }))
 
-import { voiceRoomName } from '../useVoice'
+let voiceRoomName: typeof import('../useVoice').voiceRoomName
+
+// usePerformance (now reached through useVoice.ts) writes `data-motion` on
+// <html> via a watcher that fires immediately at module load, and reads
+// localStorage/matchMedia while restoring saved state — none of which exist
+// in vitest's node environment. Stub them, then load the module under test
+// dynamically so it evaluates after the stubs are in place (a static import
+// is hoisted ahead of this file's own code, stubs or not).
+beforeAll(async () => {
+  globalThis.localStorage = { getItem: () => null, setItem: () => {} } as unknown as Storage
+  const inertEl = () => ({ style: {}, setAttribute() {}, removeAttribute() {} })
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    createElement: inertEl,
+    querySelector: () => null,
+    head: inertEl(),
+    addEventListener() {}, removeEventListener() {},
+  } as unknown as Document
+  globalThis.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia
+
+  ;({ voiceRoomName } = await import('../useVoice'))
+})
 
 // Pins the client's copy of the room-naming rule. There are two more copies of
 // this exact rule server-side — roomFor (server/controllers/voiceController.ts)

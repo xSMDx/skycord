@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll } from 'vitest'
 
 // Same reasoning as voiceRoomName.test.ts: useVoice.ts pulls in the mic
 // processing chain (RNNoise wasm/AudioWorklet) and usePresence (reads
@@ -9,8 +9,38 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { vi } from 'vitest'
 vi.mock('../micChain', () => ({ createMicChainProcessor: () => ({}) }))
 vi.mock('../usePresence', () => ({ applySelfPresence: () => {}, holdPresence: () => {} }))
+// Task 5 wired useVoice.ts to usePerformance for the call-limits switches,
+// which pulls in useAppearance for the motion rule, which pulls in
+// materialScheme → @material/material-color-utilities — same dependency
+// usePerformance.test.ts already stubs, for the same reason (its published
+// ESM uses extensionless relative imports Vite resolves and bare Node does
+// not). Nothing here exercises Material You.
+vi.mock('../materialScheme', () => ({ SCHEME_TOKEN_KEYS: [], buildSchemeTokens: () => ({}) }))
 
-import { voice, isConnectedVoiceRoom } from '../useVoice'
+let voice: typeof import('../useVoice').voice
+let isConnectedVoiceRoom: typeof import('../useVoice').isConnectedVoiceRoom
+
+// usePerformance (now reached through useVoice.ts) writes `data-motion` on
+// <html> via a watcher that fires immediately at module load, and reads
+// localStorage/matchMedia while restoring saved state — none of which exist
+// in vitest's node environment. Stub them, then load the module under test
+// dynamically so it evaluates after the stubs are in place (a static import
+// is hoisted ahead of this file's own code, stubs or not).
+beforeAll(async () => {
+  globalThis.localStorage = { getItem: () => null, setItem: () => {} } as unknown as Storage
+  const inertEl = () => ({ style: {}, setAttribute() {}, removeAttribute() {} })
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    createElement: inertEl,
+    querySelector: () => null,
+    head: inertEl(),
+    addEventListener() {}, removeEventListener() {},
+  } as unknown as Document
+  globalThis.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia
+
+  const m = await import('../useVoice')
+  ;({ voice, isConnectedVoiceRoom } = m)
+})
 
 /**
  * Pins fix #3 from the whole-branch review: the sidebar's speaking lookup

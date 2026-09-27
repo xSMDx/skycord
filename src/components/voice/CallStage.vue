@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { MicOff, Monitor, Minimize2, Maximize2 } from 'lucide-vue-next'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
@@ -7,6 +7,8 @@ import { voiceSettings } from '@/composables/useVoiceSettings'
 import { keyFor, media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { getRoom } from '@/composables/voiceRoom'
 import { userPref } from '@/composables/useVoice'
+import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
+import { perf } from '@/composables/usePerformance'
 
 /** Dialling state of a tile that belongs to someone who hasn't joined yet. */
 type RingState = 'ringing' | 'no-answer'
@@ -35,6 +37,31 @@ const initial  = (n: string) => (n || '?').charAt(0).toUpperCase()
 // Whose tile is this? A video cell knows its participant directly; an avatar
 // cell's key IS the participant id.
 const localId    = computed(() => getRoom()?.localParticipant.identity ?? '')
+
+// ── Call limits: which tiles get a cell when capped ─────────────────────────
+// Recency for visibleTiles' "whoever spoke most recently" tie-break —
+// `speaking` alone is a snapshot, and someone who just stopped talking would
+// otherwise look identical to someone who never has.
+const lastSpokeAt = reactive<Record<string, number>>({})
+watch(() => props.tiles, tiles => {
+  const now = Date.now()
+  for (const t of tiles) if (t.speaking) lastSpokeAt[t.id] = now
+}, { immediate: true })
+
+const candidates = computed<TileCandidate[]>(() => props.tiles.map(t => ({
+  id: t.id,
+  isSelf: t.id === localId.value,
+  speaking: t.speaking,
+  hasVideo: props.videos.some(v => v.participantId === t.id),
+  lastSpokeAt: lastSpokeAt[t.id] ?? 0,
+})))
+const visibleIds = computed(() => new Set(visibleTiles(candidates.value, perf.maxCallTiles)))
+// Left out of the grid, not out of the call: still connected, still audible —
+// rendered as a row of names below the grid rather than just vanishing, or
+// capping tiles would read as people leaving.
+const hiddenTiles = computed(() => props.tiles.filter(t => !visibleIds.value.has(t.id)))
+const hiddenIds   = computed(() => new Set(hiddenTiles.value.map(t => t.id)))
+
 const cellOwner  = (c: Cell) => c.kind === 'video' ? c.video.participantId : c.key
 const cellAvatar = (c: Cell) => c.kind === 'avatar' ? c.avatar
   : (props.tiles.find(t => t.id === c.video.participantId)?.avatar ?? '')
@@ -55,6 +82,7 @@ const cells = computed<Cell[]>(() => {
   const out: Cell[] = []
   const used = new Set<VideoTrackInfo>()
   for (const t of props.tiles) {
+    if (!visibleIds.value.has(t.id)) continue
     const mine = props.videos.filter(v =>
       v.participantId === t.id &&
       // "Disable Video" on someone's tile is local-only: their stream keeps
@@ -71,9 +99,12 @@ const cells = computed<Cell[]>(() => {
     }
   }
   // Videos whose participant hasn't landed in `tiles` yet (presence lag):
-  // render them anyway rather than dropping them invisibly.
+  // render them anyway rather than dropping them invisibly. A participant who
+  // HAS landed but lost the cap is different — their video is excluded here
+  // too, or the cap would do nothing for them.
   for (const v of props.videos) {
     if (!used.has(v)
+        && !hiddenIds.value.has(v.participantId)
         && !(!v.local && userPref(v.participantId).videoOff)
         && !hiddenOwn(v)) {
       out.push({ kind: 'video', key: keyFor(v.participantId, v.source), name: v.name, speaking: false, source: v.source, video: v })
@@ -173,8 +204,12 @@ onBeforeUnmount(() => {
   <!-- Layout 2/3: rectangular grid — or spotlight when a tile is focused.
        One loop the whole time: entering spotlight only restyles the same cells
        (the focused one becomes .is-main, the rest .is-thumb), so VideoTile nodes
-       are never remounted and the video never flashes. -->
-  <div v-else class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight, 'no-strip': inSpotlight && !showFilmstrip }"
+       are never remounted and the video never flashes.
+       Wrapped in stage-shell (rather than the grid being the component root)
+       so the capped-out row below has somewhere to sit that isn't itself a
+       grid cell subject to the tile-sizing rules. -->
+  <div v-else class="stage-shell">
+  <div class="stage stage--grid" :class="{ 'stage--spotlight': inSpotlight, 'no-strip': inSpotlight && !showFilmstrip }"
     :style="{ '--cols': renderCells.length <= 2 ? 1 : 2 }">
     <div
       v-for="c in renderCells" :key="c.key"
@@ -221,6 +256,15 @@ onBeforeUnmount(() => {
         {{ c.name }}<template v-if="c.kind === 'avatar' && c.ring"> · {{ c.ring === 'ringing' ? 'ringing…' : 'no answer' }}</template>
       </span>
     </div>
+  </div>
+  <!-- People still on the call, just not spending a tile right now — never
+       rendered as if they'd left: same room, same audio, just no video slot. -->
+  <div v-if="hiddenTiles.length" class="stage-hidden">
+    <span class="stage-hidden-names" :title="hiddenTiles.map(t => t.name).join(', ')">
+      {{ hiddenTiles.map(t => t.name).join(', ') }}
+    </span>
+    <span class="stage-hidden-count">+{{ hiddenTiles.length }} not shown to save memory — still in the call</span>
+  </div>
   </div>
 </template>
 
@@ -282,15 +326,27 @@ button { border: none; }
   max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Layout 2 — rectangular grid */
+/* Layout 2 — rectangular grid, plus the capped-out row beneath it. Column,
+   not the grid itself, so the row gets its own space instead of being laid
+   out as one more (equally-sized) grid track. */
+.stage-shell { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
 .stage--grid {
-  display: grid; gap: 10px; padding: 8px; width: 100%; height: 100%; min-height: 0;
+  display: grid; gap: 10px; padding: 8px; width: 100%; min-height: 0;
+  /* flex-basis 0, not the grid's own height:100% — that would claim the whole
+     shell before stage-hidden got a chance to ask for its row. */
+  flex: 1 1 0;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   /* Rows share the stage's height, so tiles always FIT the call bar no matter
      how short you drag it — the video letterboxes instead of overflowing. */
   grid-auto-rows: minmax(0, 1fr);
   align-content: stretch; justify-content: center; overflow: hidden;
 }
+.stage-hidden {
+  flex: 0 0 auto; display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 12px 8px; font-size: 12px; color: var(--text-2); overflow: hidden;
+}
+.stage-hidden-names { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.stage-hidden-count { flex: 0 0 auto; margin-left: auto; font-weight: 600; color: var(--text-1); white-space: nowrap; }
 /* No aspect-ratio: it derives height from width and so OVERRIDES the grid row,
    making tiles taller than a short call bar. Cells fill their row instead and
    the video letterboxes inside — so a share always fits, at any bar height. */
