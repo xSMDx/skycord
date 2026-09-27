@@ -46,18 +46,50 @@ what reaches the wire. `scripts/make-test-audio.mjs` builds the inputs: white
 noise, and the same noise under twelve seconds of real speech from the Windows
 synthesiser.
 
-DeepFilterNet against no filter, same input, 2026-09-28:
+All four modes, same input, 2026-09-28. RMS of the published track; the
+browser's own filter is off in every mode except Standard, so these do not
+overlap.
 
-| Input | Off | DeepFilterNet | Change |
-|---|---|---|---|
-| Noise only | 0.06935 | 0.00439 | **−24.0 dB** |
-| Speech + noise, the gaps | 0.06885 | 0.00433 | **−24.0 dB** |
-| Speech + noise, **the speech** | 0.14175 | 0.09581 | **−3.4 dB** |
+**Broadband noise, no speech** — how much steady noise each one removes:
 
-−24.0 dB is exactly the configured attenuation limit. The noise floor drops by
-the full amount while speech drops 3.4 dB, so the signal-to-noise ratio
-improves by about **21 dB**. That difference is the whole point: a filter that
-merely muted would take both down together.
+| Mode | RMS | vs off |
+|---|---|---|
+| Off | 0.06928 | — |
+| Standard | 0.00751 | −19.3 dB |
+| RNNoise | 0.03381 | −6.2 dB |
+| **DeepFilterNet** | **0.00438** | **−24.0 dB** |
+
+**Speech over the same noise** — the gaps between words against the words
+themselves. The first column is what a listener stops hearing; the second is
+what they must keep hearing:
+
+| Mode | Gaps | vs off | Speech | vs off |
+|---|---|---|---|---|
+| Off | 0.06871 | — | 0.14062 | — |
+| Standard | 0.00710 | −19.7 dB | 0.11259 | −1.9 dB |
+| RNNoise | 0.00047 | −43.3 dB | 0.12061 | −1.3 dB |
+| **DeepFilterNet** | **0.00433** | **−24.0 dB** | **0.11240** | **−1.9 dB** |
+
+−24.0 dB is exactly the configured attenuation limit, and DeepFilterNet hits it
+on every measurement. Speech costs 1.9 dB, the same as the browser's filter, so
+roughly **22 dB of signal-to-noise** is bought for almost nothing audible. That
+gap is the whole point: a filter that merely muted would take both columns down
+together.
+
+### What the numbers say about the other two
+
+- **RNNoise gates rather than suppresses.** It takes the gaps down 43 dB —
+  further than anything else, to near digital silence — but leaves 6.2 dB
+  under continuous noise. It is deciding when you are talking, more than
+  cleaning what you send.
+- **The browser's own filter is better than its billing.** −19.3 dB on steady
+  noise for no download and no extra CPU. Standard remains the right default.
+
+**One input is not a verdict.** This is synthetic broadband noise. RNNoise is
+built for narrowband steady sound — a fan, a hum — and may well do better on
+one than this suggests, so nothing here justifies rewriting its description in
+Settings. What it does establish is that DeepFilterNet is consistent where the
+others are not.
 
 ### Two traps in measuring this
 
