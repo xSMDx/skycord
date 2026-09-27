@@ -35,6 +35,11 @@ const LEVELS = {
               shell: { skycordTitleBar: true, hardwareAcceleration: true, heapCapMb: null, imageTrimMinutes: null } },
   light:    { page: { level: 'light', overrides: {}, dismissedSuggestion: true },
               shell: { skycordTitleBar: false, hardwareAcceleration: false, heapCapMb: 192, imageTrimMinutes: 1 } },
+  // Light in every way except the graphics card, so that one switch can be
+  // priced on its own: disableHardwareAcceleration does not remove the GPU
+  // process, it only puts it in software mode, so its worth is unknown.
+  'light-gpu': { page: { level: 'light', overrides: { hardwareAcceleration: true }, dismissedSuggestion: true },
+              shell: { skycordTitleBar: false, hardwareAcceleration: true, heapCapMb: 192, imageTrimMinutes: 1 } },
 }
 /** The idle phase is where growth shows, so it is long by default — but a
  *  diagnostic run needs to fail fast rather than after twenty minutes. */

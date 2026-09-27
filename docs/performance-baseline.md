@@ -113,3 +113,48 @@ Balanced saves **almost nothing**.
 - A session with a dozen conversations, to give eviction something to do.
 - `disableHardwareAcceleration` measured on its own: it leaves a software GPU
   process alive, so its share of Light's saving is unknown.
+
+---
+
+## 2026-09-27 · does eviction pay? No, not at this size
+
+The earlier runs could not answer this: the probe account's server had three
+channels, so there was nothing to evict. It now has a bench server of **12
+channels with 120 messages each — 1,390 messages seeded** — and the scripted
+session opens every one of them and scrolls each back five pages, which loads
+essentially all of that history into memory at once.
+
+| Session | Max | Light |
+|---|---|---|
+| 3 channels | 398 MB | 233 MB |
+| **12 channels, 1,390 messages** | **394 MB** | **232 MB** |
+
+**Holding a dozen conversations costs nothing measurable.** Max with twelve
+channels open came in 4 MB *below* Max with three — inside the run-to-run
+noise. Light's saving is the same 41% it was, and it is still the process-level
+switches doing all of it.
+
+### What that means for the eviction work
+
+- **It does not save memory, and the plan's own rule says a switch worth under
+  5 MB does not ship.** A message is a small JavaScript object; 1,390 of them
+  are a rounding error beside a Chromium renderer. Nothing in the UI may claim
+  that dropping conversations saves anything, because on this evidence it does
+  not.
+- **The code stays anyway, and unclaimed.** Before it, `useMessages` grew
+  without any bound at all — every conversation ever opened, every page ever
+  scrolled back, held until reload. An unbounded structure is a correctness
+  problem whatever today's number says, and the cap is small, tested, and off
+  entirely at Max.
+- **The crew's report is still unexplained.** "It grows over hours" is real and
+  it is not the message store. The next suspects are decoded images and GIFs,
+  video, and Chromium's own baseline — the things Light's process switches
+  happen to cut.
+
+### What would actually settle it
+
+1,390 messages is not a long-lived server. Months of real use is tens of
+thousands, and the API's write limit of 120 a minute makes seeding that through
+it impossible — an honest test means writing messages straight into MongoDB and
+re-running this pair. Until someone does that, eviction is a bound, not a
+saving.
