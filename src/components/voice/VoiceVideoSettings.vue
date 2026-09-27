@@ -10,9 +10,16 @@ import { useApi, type WireMyVoiceServer } from '@/composables/useApi'
 const { voiceSettings, setVoiceSettings, resetVoiceSettings } = useVoiceSettings()
 
 const NOISE_MODES = [
-  { value: 'off'      as const, label: 'None',     hint: 'Send your mic through untouched.' },
-  { value: 'standard' as const, label: 'Standard', hint: "Your browser's built-in filter. Good for most setups." },
-  { value: 'rnnoise'  as const, label: 'RNNoise',  hint: 'Stronger AI filter — kills fans, keyboards and hum, but can chew background music.' },
+  { value: 'off'        as const, label: 'None',           hint: 'Send your mic through untouched.' },
+  { value: 'standard'   as const, label: 'Standard',       hint: "Your browser's built-in filter. Good for most setups." },
+  { value: 'rnnoise'    as const, label: 'RNNoise',        hint: 'Stronger AI filter — kills fans, keyboards and hum, but can chew background music.' },
+  {
+    value: 'deepfilter' as const, label: 'DeepFilterNet 3',
+    hint: 'The strongest filter — best on keyboards, clatter and echoey rooms. '
+        + 'One-off download of about 10MB the first time you turn it on, more '
+        + "processor work than RNNoise, and about 40ms more delay on your voice. "
+        + "Doesn't remove other people's voices — only noise.",
+  },
 ]
 const { applyOutput, voice, toggleDeafen } = useVoice()
 
@@ -34,6 +41,7 @@ const micLevel   = ref(0)
 let micStream: MediaStream | null = null
 let micCtx: AudioContext | null = null
 let rnNode: Awaited<ReturnType<typeof createRnnoiseNode>> | null = null
+let dfNode: AudioWorkletNode | null = null
 let volNode: GainNode | null = null    // input-volume stage (live-updated)
 let gateNode: GainNode | null = null   // sensitivity gate
 const micOpen = ref(false)             // is the gate currently passing audio?
@@ -58,7 +66,7 @@ const startMicTest = async () => {
     // requested NO suppression at all).
     micStream = await navigator.mediaDevices.getUserMedia({ audio: micCaptureOptions() })
     await refreshDevices()
-    // 48kHz because RNNoise assumes it; harmless for the other modes.
+    // 48kHz because both models assume it; harmless for the other modes.
     micCtx = new AudioContext({ sampleRate: 48000 })
     await micCtx.resume()              // some browsers start suspended — fixes the dead meter
     const src = micCtx.createMediaStreamSource(micStream)
@@ -66,8 +74,8 @@ const startMicTest = async () => {
     gain.gain.value = voiceSettings.inputVolume / 100
     const analyser = micCtx.createAnalyser()
     analyser.fftSize = 1024
-    // Run the monitor through RNNoise when it's selected, so what you hear here
-    // is what the call actually sends.
+    // Run the monitor through whichever model is selected, so what you hear
+    // here is what the call actually sends — the same chain a real call runs.
     if (voiceSettings.noiseMode === 'rnnoise') {
       try {
         rnNode = await createRnnoiseNode(micCtx)
@@ -75,6 +83,19 @@ const startMicTest = async () => {
         rnNode.connect(gain)
       } catch (e) {
         console.warn('[mic-test] RNNoise unavailable, monitoring raw input', e)
+        src.connect(gain)
+      }
+    } else if (voiceSettings.noiseMode === 'deepfilter') {
+      try {
+        // Dynamic import: DeepFilterNet's wasm is a multi-megabyte download
+        // that must never be pulled in by opening Settings — only by actually
+        // testing or calling with this mode selected.
+        const { createDeepFilterNode } = await import('@/composables/deepFilterProcessor')
+        dfNode = await createDeepFilterNode(micCtx)
+        src.connect(dfNode)
+        dfNode.connect(gain)
+      } catch (e) {
+        console.warn('[mic-test] DeepFilterNet unavailable, monitoring raw input', e)
         src.connect(gain)
       }
     } else {
@@ -120,6 +141,10 @@ const stopMicTest = () => {
   micStream?.getTracks().forEach(t => t.stop()); micStream = null
   try { rnNode?.disconnect(); rnNode?.destroy() } catch { /* ignore */ }
   rnNode = null
+  // DeepFilterNet's worklet frees with the AudioContext (see micChain.ts) —
+  // disconnect is all that's needed here too.
+  try { dfNode?.disconnect() } catch { /* ignore */ }
+  dfNode = null
   try { gateNode?.disconnect(); volNode?.disconnect() } catch { /* ignore */ }
   gateNode = null; volNode = null
   micCtx?.close().catch(() => {}); micCtx = null

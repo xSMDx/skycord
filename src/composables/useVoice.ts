@@ -25,7 +25,7 @@ import {
 } from './useSocket'
 import {
   voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded,
-  effectiveInputMode,
+  effectiveInputMode, noiseNodeFor,
 } from './useVoiceSettings'
 import { permits, setPermits, resetPermits } from './voicePermits'
 import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia, media } from './useVoiceMedia'
@@ -576,25 +576,29 @@ const applyMicChainNow = async () => {
   const room = getRoom(); if (!room) return
   const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined
   if (!mic) return
-  const want    = micChainNeeded()
-  const wantRnn = voiceSettings.noiseMode === 'rnnoise'
-  const current = mic.getProcessor() as MicChainProcessor | undefined
-  const has     = current?.name === 'mic-chain'
+  const want     = micChainNeeded()
+  const wantNode = noiseNodeFor(voiceSettings.noiseMode)
+  const current  = mic.getProcessor() as MicChainProcessor | undefined
+  const has      = current?.name === 'mic-chain'
   try {
     if (want && has) {
-      // Adding or removing RNNoise changes the shape of the graph, so that one
-      // needs a rebuild. Slider moves are just parameter changes — updating in
-      // place avoids a rebuild's brief gap in the outgoing audio.
-      if (current!.usesRnnoise !== wantRnn) await mic.setProcessor(createMicChainProcessor(wantRnn))
+      // Switching between RNNoise, DeepFilterNet and neither changes the
+      // shape of the graph, so that needs a rebuild. Slider moves are just
+      // parameter changes — updating in place avoids a rebuild's brief gap
+      // in the outgoing audio.
+      if (current!.noiseNode !== wantNode) await mic.setProcessor(createMicChainProcessor(wantNode))
       else current!.update()
     }
-    else if (want && !has) await mic.setProcessor(createMicChainProcessor(wantRnn))
+    else if (want && !has) await mic.setProcessor(createMicChainProcessor(wantNode))
     else if (!want && has) await mic.stopProcessor()
   } catch (e) {
     console.warn('[voice] mic chain unavailable — publishing the raw capture', e)
-    // Only the RNNoise leg can realistically fail (wasm/worklet load). Fall back
-    // to the browser filter rather than leaving the user on a dead processor.
-    if (wantRnn) setVoiceSettings({ noiseMode: 'standard' })
+    // Only a model leg can realistically fail (wasm/worklet load — DeepFilterNet's
+    // in particular is a large download that can fail offline or on a slow
+    // link). Fall back to the browser filter rather than leaving the user on
+    // a dead processor: a call nobody can hear you in is the one outcome
+    // worse than losing the fancy filter.
+    if (wantNode !== 'off') setVoiceSettings({ noiseMode: 'standard' })
     try { await mic.stopProcessor() } catch { /* ignore */ }
     // Re-apply capture constraints so the browser filter actually comes back on.
     try { await publishMic(room.localParticipant) } catch { /* ignore */ }

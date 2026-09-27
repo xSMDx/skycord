@@ -1,7 +1,11 @@
 /**
  * The microphone processing chain, as a LiveKit audio TrackProcessor.
  *
- *   mic ─▶ [RNNoise] ─▶ mic-gate (sensitivity + input volume) ─▶ published
+ *   mic ─▶ [model] ─▶ mic-gate (sensitivity + input volume) ─▶ published
+ *
+ * "model" is RNNoise, DeepFilterNet 3, or nothing — see NoiseNodeKind in
+ * useVoiceSettings.ts. Both models take the same position in the graph, one
+ * at a time; they are never stacked.
  *
  * Why a processor: LiveKit hands us the raw capture and publishes whatever we
  * put in `processedTrack`, so mute, push-to-talk, device switching and the
@@ -16,7 +20,7 @@
 import { Track } from 'livekit-client'
 import type { TrackProcessor, AudioProcessorOptions } from 'livekit-client'
 import { createRnnoiseNode } from './rnnoiseProcessor'
-import { voiceSettings, gateThreshold, effectiveInputMode } from './useVoiceSettings'
+import { voiceSettings, gateThreshold, effectiveInputMode, type NoiseNodeKind } from './useVoiceSettings'
 
 // Lives in /public, so it ships to dist untouched and is fetchable by URL —
 // which is the only thing addModule() accepts. Absolute because the app is
@@ -24,18 +28,19 @@ import { voiceSettings, gateThreshold, effectiveInputMode } from './useVoiceSett
 const GATE_WORKLET_URL = '/mic-gate-worklet.js'
 
 export interface MicChainProcessor extends TrackProcessor<Track.Kind.Audio, AudioProcessorOptions> {
-  /** Whether this instance was built with RNNoise in the graph. Changing the
-   *  noise mode changes the graph shape, so it needs a rebuild; the sliders
-   *  don't, and go through update() instead. */
-  readonly usesRnnoise: boolean
+  /** Which model (if any) this instance was built with. Changing it changes
+   *  the graph shape, so it needs a rebuild; the sliders don't, and go
+   *  through update() instead. */
+  readonly noiseNode: NoiseNodeKind
   /** Push the current settings onto the live graph — no rebuild, no audio gap. */
   update(): void
 }
 
-export const createMicChainProcessor = (usesRnnoise: boolean): MicChainProcessor => {
+export const createMicChainProcessor = (noiseNode: NoiseNodeKind): MicChainProcessor => {
   let ctx:    AudioContext | null = null
   let source: MediaStreamAudioSourceNode | null = null
   let rn:     Awaited<ReturnType<typeof createRnnoiseNode>> | null = null
+  let df:     AudioWorkletNode | null = null
   let gate:   AudioWorkletNode | null = null
   let dest:   MediaStreamAudioDestinationNode | null = null
 
@@ -53,17 +58,21 @@ export const createMicChainProcessor = (usesRnnoise: boolean): MicChainProcessor
   const teardown = async () => {
     try { source?.disconnect() } catch { /* ignore */ }
     try { rn?.disconnect(); rn?.destroy() } catch { /* ignore */ }
+    // DeepFilterNet's worklet has no destroy message — its wasm memory lives
+    // in this context's own AudioWorkletGlobalScope, so closing ctx below
+    // reclaims it. Nothing to free explicitly, unlike RNNoise's node.
+    try { df?.disconnect() } catch { /* ignore */ }
     try { gate?.disconnect() } catch { /* ignore */ }
     try { dest?.disconnect() } catch { /* ignore */ }
-    source = null; rn = null; gate = null; dest = null
+    source = null; rn = null; df = null; gate = null; dest = null
     if (ctx) { const c = ctx; ctx = null; try { await c.close() } catch { /* ignore */ } }
   }
 
   const build = async (opts: AudioProcessorOptions) => {
     try {
-      // 48kHz because RNNoise assumes it; harmless for the gate-only path, and
-      // owning the context beats borrowing LiveKit's (which may run at another
-      // rate and would pitch-shift the output).
+      // 48kHz because both models assume it; harmless for the gate-only path,
+      // and owning the context beats borrowing LiveKit's (which may run at
+      // another rate and would pitch-shift the output).
       ctx = new AudioContext({ sampleRate: 48000 })
       await ctx.audioWorklet.addModule(GATE_WORKLET_URL)
       source = ctx.createMediaStreamSource(new MediaStream([opts.track]))
@@ -74,7 +83,15 @@ export const createMicChainProcessor = (usesRnnoise: boolean): MicChainProcessor
       dest = ctx.createMediaStreamDestination()
 
       let head: AudioNode = source
-      if (usesRnnoise) { rn = await createRnnoiseNode(ctx); head.connect(rn); head = rn }
+      if (noiseNode === 'rnnoise') {
+        rn = await createRnnoiseNode(ctx); head.connect(rn); head = rn
+      } else if (noiseNode === 'deepfilter') {
+        // Dynamic import: this pulls in a multi-megabyte wasm, so it must
+        // never be reached unless the mode is actually selected — see
+        // deepFilterProcessor.ts.
+        const { createDeepFilterNode } = await import('./deepFilterProcessor')
+        df = await createDeepFilterNode(ctx); head.connect(df); head = df
+      }
       head.connect(gate)
       gate.connect(dest)
 
@@ -91,7 +108,7 @@ export const createMicChainProcessor = (usesRnnoise: boolean): MicChainProcessor
 
   const processor: MicChainProcessor = {
     name: 'mic-chain',
-    usesRnnoise,
+    noiseNode,
     update: applyParams,
     async init(opts) { await build(opts) },
     // Fired on device switch — rebuild the graph around the new mic track.

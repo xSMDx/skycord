@@ -8,10 +8,24 @@ import { permits } from './voicePermits'
 
 export type InputMode = 'voice' | 'ptt'
 
-// 'standard' = the browser's own suppression (the long-standing default).
-// 'rnnoise'  = WASM model in the mic pipeline; Skycord turns the browser filter
-//              OFF in that mode so the two can't double-process each other.
-export type NoiseMode = 'off' | 'standard' | 'rnnoise'
+// 'standard'   = the browser's own suppression (the long-standing default).
+// 'rnnoise'    = WASM model in the mic pipeline; Skycord turns the browser
+//                filter OFF in that mode so the two can't double-process
+//                each other.
+// 'deepfilter' = DeepFilterNet 3, a stronger WASM model for the noise RNNoise
+//                is weakest on (clatter, keyboards, reverberant rooms) — a
+//                fourth mode alongside RNNoise, never a replacement for it.
+//                Same double-processing rule as RNNoise.
+export type NoiseMode = 'off' | 'standard' | 'rnnoise' | 'deepfilter'
+
+// Which model, if any, needs a place in the mic graph. 'standard' and 'off'
+// both leave the graph alone — 'standard' lets the browser filter the raw
+// capture on its own, outside anything this app builds. Centralised here
+// (rather than duplicated as a boolean in micChain/useVoice) because it's the
+// one place a third mode would otherwise be missed.
+export type NoiseNodeKind = 'off' | 'rnnoise' | 'deepfilter'
+export const noiseNodeFor = (mode: NoiseMode): NoiseNodeKind =>
+  mode === 'rnnoise' || mode === 'deepfilter' ? mode : 'off'
 
 export interface VoiceSettings {
   inputDeviceId:    string   // '' = system default
@@ -97,7 +111,7 @@ export const gateThreshold = () => (voiceSettings.sensitivity / 100) * 0.5
 // off, no gate and unity gain gets the raw capture — no AudioContext, no
 // worklet, nothing to fail.
 export const micChainNeeded = () =>
-  voiceSettings.noiseMode === 'rnnoise' ||
+  noiseNodeFor(voiceSettings.noiseMode) !== 'off' ||
   voiceSettings.sensitivity > 0 ||
   voiceSettings.inputVolume !== 100
 
@@ -109,8 +123,8 @@ export const micCaptureOptions = () => ({
   // through raw — audible as "noise only in my left ear".
   channelCount: 1,
   echoCancellation: voiceSettings.echoCancellation,
-  // In 'rnnoise' mode the browser filter is deliberately off — RNNoise does the
-  // work downstream, and stacking both degrades the voice.
+  // In 'rnnoise' or 'deepfilter' mode the browser filter is deliberately off —
+  // a model does the work downstream, and stacking both degrades the voice.
   noiseSuppression: voiceSettings.noiseMode === 'standard',
   autoGainControl: true,
 })
