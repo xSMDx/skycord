@@ -15,6 +15,8 @@ let PERF_LEVELS: Record<PerfLevel, PerfSwitches>
 let resolve: (level: PerfLevel, overrides: Partial<PerfSwitches>) => PerfSwitches
 let suggestsLight: (totalMemoryGb: number | undefined) => boolean
 let restartNeeded: (applied: Pick<PerfSwitches, 'skycordTitleBar' | 'hardwareAcceleration' | 'heapCapMb'> | null) => boolean
+let encodeOverrides: (o: Partial<PerfSwitches>) => Record<string, unknown>
+let decodeOverrides: (raw: unknown) => Partial<PerfSwitches>
 
 // The repo's Vitest runs in the node environment (no jsdom), but the module
 // under test — and useAppearance, which it imports for the motion rule —
@@ -38,7 +40,36 @@ beforeAll(async () => {
   globalThis.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia
 
   const m = await import('../usePerformance')
-  ;({ PERF_LEVELS, resolve, suggestsLight, restartNeeded } = m)
+  ;({ PERF_LEVELS, resolve, suggestsLight, restartNeeded, encodeOverrides, decodeOverrides } = m)
+})
+
+describe('overrides that survive storage', () => {
+  /** JSON.parse(JSON.stringify(…)) is exactly what localStorage does to them. */
+  const roundTrip = (o: Partial<PerfSwitches>) => decodeOverrides(JSON.parse(JSON.stringify(encodeOverrides(o))))
+
+  it('keeps "no limit" a number rather than letting JSON turn it into null', () => {
+    expect(roundTrip({ keepConversations: Infinity })).toEqual({ keepConversations: Infinity })
+    expect(roundTrip({ maxCallTiles: Infinity })).toEqual({ maxCallTiles: Infinity })
+  })
+
+  it('carries ordinary values through untouched', () => {
+    expect(roundTrip({ maxCallTiles: 4, animatedMedia: 'tap', hardwareAcceleration: false }))
+      .toEqual({ maxCallTiles: 4, animatedMedia: 'tap', hardwareAcceleration: false })
+  })
+
+  it('keeps null for the two switches whose off is null', () => {
+    expect(roundTrip({ heapCapMb: null, imageTrimMinutes: null })).toEqual({ heapCapMb: null, imageTrimMinutes: null })
+  })
+
+  it('drops keys that are not switches, and values of the wrong shape', () => {
+    expect(decodeOverrides({ maxCallTiles: 'lots', animatedMedia: 7, nonsense: true, motion: 'off' }))
+      .toEqual({ motion: 'off' })
+  })
+
+  it('treats a corrupt store as no overrides at all', () => {
+    expect(decodeOverrides(null)).toEqual({})
+    expect(decodeOverrides('not an object')).toEqual({})
+  })
 })
 
 describe('levels', () => {

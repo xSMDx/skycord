@@ -70,12 +70,45 @@ const KEY = 'sykord_perf'
 interface PerfState { level: PerfLevel; overrides: Partial<PerfSwitches>; dismissedSuggestion: boolean }
 const DEFAULT_STATE: PerfState = { level: 'full', overrides: {}, dismissedSuggestion: false }
 
+/**
+ * JSON has no Infinity, and two switches use it for "no limit". Left alone,
+ * choosing "keep every conversation" as an override saves as null and comes
+ * back as a number field holding null. It travels as a string instead.
+ */
+const encode = (v: unknown) => (typeof v === 'number' && !Number.isFinite(v) ? 'Infinity' : v)
+const decode = (v: unknown) => (v === 'Infinity' ? Infinity : v)
+
+/** The two switches whose "off" is null rather than a number. */
+const nullable = (k: keyof PerfSwitches) => k === 'imageTrimMinutes' || k === 'heapCapMb'
+
+export const encodeOverrides = (o: Partial<PerfSwitches>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, encode(v)]))
+
+/**
+ * Junk never becomes live config. The file is editable by anything running as
+ * the user, and a level's switches are read by name all over the app, so an
+ * override survives only when its key is real and its value is the shape the
+ * Light level uses for it — Light being the one level with no nulls to compare
+ * against.
+ */
+export const decodeOverrides = (raw: unknown): Partial<PerfSwitches> => {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, unknown> = {}
+  for (const [k, rawValue] of Object.entries(raw as Record<string, unknown>)) {
+    if (!(k in PERF_LEVELS.light)) continue
+    const key = k as keyof PerfSwitches
+    const value = decode(rawValue)
+    if (value === null && nullable(key)) { out[key] = null; continue }
+    if (typeof value === typeof PERF_LEVELS.light[key]) out[key] = value
+  }
+  return out as Partial<PerfSwitches>
+}
+
 const load = (): PerfState => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}')
     const level: PerfLevel = raw.level === 'balanced' || raw.level === 'light' ? raw.level : 'full'
-    const overrides = raw.overrides && typeof raw.overrides === 'object' ? raw.overrides : {}
-    return { level, overrides, dismissedSuggestion: raw.dismissedSuggestion === true }
+    return { level, overrides: decodeOverrides(raw.overrides), dismissedSuggestion: raw.dismissedSuggestion === true }
   } catch { return { ...DEFAULT_STATE } }
 }
 
@@ -83,7 +116,9 @@ export const perfState = reactive<PerfState>(load())
 export const perf = reactive<PerfSwitches>(resolve(perfState.level, perfState.overrides))
 
 const save = () => localStorage.setItem(KEY, JSON.stringify({
-  level: perfState.level, overrides: perfState.overrides, dismissedSuggestion: perfState.dismissedSuggestion,
+  level: perfState.level,
+  overrides: encodeOverrides(perfState.overrides),
+  dismissedSuggestion: perfState.dismissedSuggestion,
 }))
 
 const apply = () => { Object.assign(perf, resolve(perfState.level, perfState.overrides)); save() }
