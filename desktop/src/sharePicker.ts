@@ -10,7 +10,8 @@ import { app, BrowserWindow, desktopCapturer, ipcMain, screen, type IpcMainInvok
 import { centredOver } from './windowBounds'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
-import { FRAME_RATES, PRESETS, RESOLUTIONS, parseChoice, type Remembered, type ShareChoice } from './shareQuality'
+import { FRAME_RATES, PRESETS, RESOLUTIONS, audioCopy, parseChoice, type Remembered, type ShareChoice } from './shareQuality'
+import { pidForSource, supportsPerAppAudio } from './shareAudio'
 import { toTiles } from './shareSources'
 
 const SHARE = join(app.getAppPath(), 'static', 'share.html')
@@ -41,7 +42,15 @@ const fromPicker = (event: IpcMainInvokeEvent): Open | null =>
 
 ipcMain.handle('share:init', event => {
   const o = fromPicker(event)
-  return o ? { quality: o.opts.quality, audio: o.opts.audio, last: o.opts.last, presets: PRESETS, resolutions: RESOLUTIONS, frameRates: FRAME_RATES } : null
+  if (!o) return null
+  // The page is a plain script and cannot import shareQuality, so every line
+  // it might show is rendered here and it picks one.
+  const perAppAudio = supportsPerAppAudio()
+  return {
+    quality: o.opts.quality, audio: o.opts.audio, last: o.opts.last,
+    perAppAudio, audioCopy: audioCopy(perAppAudio),
+    presets: PRESETS, resolutions: RESOLUTIONS, frameRates: FRAME_RATES,
+  }
 })
 
 ipcMain.handle('share:sources', async event => {
@@ -74,7 +83,12 @@ ipcMain.handle('share:choose', (event, value: unknown) => {
   const choice = o ? parseChoice(value, o.shown) : null
   // A hidden control's value is not a choice: audio only if offered, and the
   // preview setting only where the web client asked first and can apply it.
-  if (o && choice) o.finish({ ...choice, audio: o.opts.audio && choice.audio, hidePreview: o.opts.quality && choice.hidePreview })
+  if (!o || !choice) return
+  const audio = o.opts.audio && choice.audio
+  // The pid is resolved here, not taken from the page: the page only ever
+  // names a source, and which process that source belongs to is ours to say.
+  const pid = audio && choice.kind === 'window' ? pidForSource(choice.sourceId) : null
+  o.finish({ ...choice, audio, pid, hidePreview: o.opts.quality && choice.hidePreview })
 })
 
 ipcMain.handle('share:cancel', event => { fromPicker(event)?.finish(null) })

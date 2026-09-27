@@ -15,7 +15,11 @@
   interface Init {
     quality: boolean
     audio: boolean
-    last: Quality & { audio: boolean; hidePreview: boolean }
+    last: Quality & { windowAudio: boolean; screenAudio: boolean; hidePreview: boolean }
+    /** Whether this Windows can capture one application's sound. */
+    perAppAudio: boolean
+    /** Rendered in the main process; `{app}` is filled in here. */
+    audioCopy: { windowOn: string; windowOff: string; screenOn: string; screenOff: string }
     presets: Record<string, Quality>
     resolutions: Res[]
     frameRates: number[]
@@ -43,7 +47,9 @@
 
   let settings: Init = {
     quality: false, audio: false,
-    last: { resolution: 720, frameRate: 60, audio: false, hidePreview: false },
+    last: { resolution: 720, frameRate: 60, windowAudio: true, screenAudio: false, hidePreview: false },
+    perAppAudio: false,
+    audioCopy: { windowOn: '', windowOff: '', screenOn: '', screenOff: '' },
     presets: {}, resolutions: [], frameRates: [],
   }
   let tab: Kind = 'window'
@@ -86,17 +92,20 @@
     if (fpsValue) fpsValue.textContent = fpsLabel(q.frameRate)
     setChecked('hide-preview', hidePreview)
 
-    // Audio is the whole PC's sound, so it only makes sense with a whole screen.
+    // Sound follows what you share: a window sends its application, a whole
+    // screen sends everything except this call. The lines come rendered from
+    // the main process — this page cannot import the module that writes them.
     const audioItem = document.getElementById('audio-item')
     if (audioItem) {
-      const off = tab === 'window'
+      const off = tab === 'window' && !settings.perAppAudio
       audioItem.setAttribute('aria-disabled', String(off))
       audioItem.setAttribute('aria-checked', String(!off && audio))
-      const desc = $('audio-desc')
-      desc.textContent = off ? 'Entire screen only'
-        : audio ? 'Includes this call, so others may hear an echo'
-        : 'Everything your PC plays'
-      desc.classList.toggle('warn', !off && audio)
+      const key = tab === 'window'
+        ? (audio ? 'windowOn' : 'windowOff')
+        : (audio ? 'screenOn' : 'screenOff')
+      $('audio-desc').textContent = settings.audioCopy[key]
+      // Nothing here is a warning any more: the call is never sent back.
+      $('audio-desc').classList.remove('warn')
     }
   }
 
@@ -289,6 +298,10 @@
   const selectTab = (kind: Kind, focus = false) => {
     if (kind !== tab) document.querySelector('main')!.scrollTop = 0
     tab = kind
+    // Audio is remembered per kind: a window sends one app, a screen sends
+    // everything except this call, and wanting the first is not wanting the
+    // second. Each tab restores its own answer.
+    audio = kind === 'window' ? settings.last.windowAudio : settings.last.screenAudio
     for (const k of ['window', 'screen'] as const) {
       const b = tabButton(k)
       b.setAttribute('aria-selected', String(k === kind))
@@ -442,7 +455,6 @@
     if (init) settings = init
     q = { resolution: settings.last.resolution, frameRate: settings.last.frameRate }
     custom = !presetOf(q)
-    audio = settings.last.audio
     hidePreview = settings.last.hidePreview
     setupMenu()
     syncFooter()

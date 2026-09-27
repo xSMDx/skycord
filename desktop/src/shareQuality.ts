@@ -48,6 +48,35 @@ export interface Remembered extends Quality {
 const resolutionOf = (v: unknown): Resolution => RESOLUTIONS.find(r => r === v) ?? DEFAULT_QUALITY.resolution
 const frameRateOf = (v: unknown): FrameRate => FRAME_RATES.find(f => f === v) ?? DEFAULT_QUALITY.frameRate
 
+/**
+ * What the picker says beneath "Share stream audio".
+ *
+ * It states what leaves the machine, every time, because that is the thing
+ * worth being sure about. A window share admits it sends the whole
+ * application; a screen share promises only that the call is left out.
+ *
+ * It cannot name the application: this line is read in the gear menu, and the
+ * picker has no selection to name — clicking a tile is what chooses it.
+ */
+export const audioLine = (kind: 'screen' | 'window', on: boolean, supported: boolean): string => {
+  if (kind === 'window' && !supported) return 'Your version of Windows cannot share one app’s sound'
+  if (!on) return 'No sound goes with this share'
+  return kind === 'window'
+    ? 'Sends the app’s own sound — but all of it, every window and tab it has'
+    : 'Sends everything your PC plays, except this call'
+}
+
+/**
+ * Every line the picker might show, rendered once for the page to index. The
+ * page is a plain script and cannot import this module.
+ */
+export const audioCopy = (supported: boolean) => ({
+  windowOn: audioLine('window', true, supported),
+  windowOff: audioLine('window', false, supported),
+  screenOn: audioLine('screen', true, supported),
+  screenOff: audioLine('screen', false, supported),
+})
+
 const pidOf = (v: unknown): number | null =>
   typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null
 
