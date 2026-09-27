@@ -90,9 +90,40 @@ exited chain does not survive. It does not affect this feature — the walk neve
 targets anything more than a step or two from the window's own process — but
 anyone extending it should not assume arbitrary depth.
 
-**Still needs a person:** whether a real Chrome tab's sound is captured when
-Chrome is the target, whether the published track sounds untouched by echo
-cancellation, and whether audio and video stay in sync over several minutes.
+### End to end, in the real app
+
+`desktop/scripts/share-audio-probe.mjs` drives the packaged shell through an
+actual share: sign in, join a voice channel, open the picker, choose a window
+that is playing a tone, and then measure what was published. It patches
+`RTCPeerConnection` from outside rather than adding a hook to the app, so what
+it reports is what really went on the wire.
+
+| Link | Result |
+|---|---|
+| Picker offers audio for a window | Present, enabled, default **on** |
+| The choice carries a resolved pid | Yes, from the walk |
+| Native capture starts | `captured = true` |
+| The page receives the MessagePort | Yes |
+| The helper process runs while sharing | 1 process |
+| **A track is published carrying the sound** | **peak 0.03** |
+
+**The chain is lossless.** The same window captured straight from the addon
+peaks at 0.0300; through the utility process, the port, the worklet and
+LiveKit it arrives at 0.03. Nothing attenuates it, which also means nothing in
+the path is applying microphone processing to it.
+
+Two bugs only this probe could have found, both since fixed:
+
+- `webContents.postMessage` delivers to `ipcRenderer`, not to the page's
+  `message` event, so the port stopped dead in the preload. The preload now
+  forwards it with `window.postMessage`, which is the only way a MessagePort
+  crosses into an isolated world.
+- The picker page still sent `audio: tab === 'screen' && audio` when choosing,
+  so a window's answer was always `false` however the switch was set.
+
+**Still needs a person:** whether a real Chrome tab's sound is captured with
+Chrome as the target, whether it sounds right to an ear at the far end, and
+whether audio and video stay in sync over several minutes of a real call.
 
 ## Building the addon
 

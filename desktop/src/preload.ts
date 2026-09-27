@@ -81,4 +81,17 @@ if (local && page === 'share.html') {
   // The shell asks when the window has been hidden a while. Only the renderer
   // can drop its own decoded images, and only webFrame reaches them.
   ipcRenderer.on('desktop:trimCache', () => webFrame.clearCache())
+
+  /**
+   * Hand the shared application's audio port through to the page.
+   *
+   * `webContents.postMessage` delivers to ipcRenderer, not to the page's own
+   * `message` event, so without this the port arrives in the preload and stops
+   * there. Re-posting it with window.postMessage carries the MessagePort
+   * across the isolated-world boundary, which is the only way the page can
+   * receive one.
+   */
+  ipcRenderer.on('share-audio-port', event => {
+    window.postMessage('share-audio-port', '*', event.ports)
+  })
 }

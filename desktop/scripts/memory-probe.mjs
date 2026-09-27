@@ -12,7 +12,7 @@ import { createRequire } from 'module'
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { join } from 'path'
-const { _electron } = createRequire('H:/projects/sykord-wt/desktop/desktop/package.json')('playwright')
+const { _electron } = createRequire('H:/projects/sykord-wt/desktop/desktop/package.json')('playwright-core')
 
 const env = Object.fromEntries(readFileSync(new URL('./.probe.env', import.meta.url), 'utf8')
   .split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))

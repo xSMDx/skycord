@@ -410,7 +410,10 @@
   const share = (sourceId: string) => {
     if (sharing) return
     sharing = true
-    void api.choose({ sourceId, resolution: q.resolution, frameRate: q.frameRate, audio: tab === 'screen' && audio, hidePreview })
+    // Both kinds can carry sound now — a window sends its application, a
+    // screen sends everything except this call. The main process is what
+    // decides whether the machine can honour it.
+    void api.choose({ sourceId, resolution: q.resolution, frameRate: q.frameRate, audio, hidePreview })
       .finally(() => { sharing = false })
   }
 
