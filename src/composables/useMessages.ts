@@ -241,24 +241,26 @@ const sendDM = (
     }
 
     if (!Number.isFinite(keep)) return
-    // Per kind, not pooled: a DM opened once must not get pushed out by a
-    // burst of channel-hopping, so each of dm/group/channel keeps its own
-    // `keep` most-recently-touched conversations.
+    // One pool across DMs, groups and channels: the setting says how many
+    // conversations may sit in memory, and a person reading a channel is not
+    // also reading three DMs. Counting each kind separately would keep three
+    // times what Light promises. A dropped conversation costs one refetch when
+    // it is opened again, which is the trade the level states.
+    const loaded: { key: string; kind: ConvKind; id: string; at: number }[] = []
     for (const kind of ['dm', 'group', 'channel'] as ConvKind[]) {
-      const loaded: { key: string; id: string; at: number }[] = []
       for (const [id, list] of Object.entries(listFor(kind).value)) {
         if (!list.length) continue
         const key = metaKey(kind, id)
-        if (key !== currentKey) loaded.push({ key, id, at: touched[key] ?? 0 })
+        if (key !== currentKey) loaded.push({ key, kind, id, at: touched[key] ?? 0 })
       }
-      const spare = Math.max(0, keep - (current?.kind === kind ? 1 : 0))
-      loaded.sort((a, b) => b.at - a.at)
-      for (const gone of loaded.slice(spare)) {
-        evicted += listFor(kind).value[gone.id]?.length ?? 0
-        listFor(kind).value[gone.id] = []
-        delete windowMeta.value[gone.key]
-        delete touched[gone.key]
-      }
+    }
+    const spare = Math.max(0, keep - (current ? 1 : 0))
+    loaded.sort((a, b) => b.at - a.at)
+    for (const gone of loaded.slice(spare)) {
+      evicted += listFor(gone.kind).value[gone.id]?.length ?? 0
+      listFor(gone.kind).value[gone.id] = []
+      delete windowMeta.value[gone.key]
+      delete touched[gone.key]
     }
   }
 

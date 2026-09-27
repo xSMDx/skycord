@@ -82,10 +82,25 @@ describe('eviction', () => {
     expect(m.getChannelMessages('c1')).toHaveLength(10)
   })
 
-  it('leaves the other kinds alone when a channel is evicted', () => {
+  it('counts every kind in one pool, so a recent DM outlives an older channel', () => {
+    // The setting promises a number of conversations, not a number per kind:
+    // counting dm, group and channel separately would keep three times it.
+    for (const id of ['c1', 'c2', 'c3']) { m.initChannel(id, many(10)); m.touchConversation('channel', id) }
     m.initDM('d1', many(10)); m.touchConversation('dm', 'd1')
-    for (const id of ['c1', 'c2', 'c3', 'c4']) { m.initChannel(id, many(10)); m.touchConversation('channel', id) }
+    m.initChannel('c4', many(10)); m.touchConversation('channel', 'c4')
     m.evict({ kind: 'channel', id: 'c4' })
-    expect(m.getDMMessages('d1')).toHaveLength(10)
+    expect(m.getChannelMessages('c4')).toHaveLength(10)  // being read
+    expect(m.getDMMessages('d1')).toHaveLength(10)       // opened most recently
+    expect(m.getChannelMessages('c1')).toHaveLength(0)   // oldest in the pool
+  })
+
+  it('drops nothing while the pool is under the limit, whatever the kinds', () => {
+    m.initChannel('c1', many(10)); m.touchConversation('channel', 'c1')
+    m.initChannel('c2', many(10)); m.touchConversation('channel', 'c2')
+    m.initGroup('g1', many(10)); m.touchConversation('group', 'g1')
+    m.evict({ kind: 'group', id: 'g1' })
+    expect(m.getChannelMessages('c1')).toHaveLength(10)
+    expect(m.getChannelMessages('c2')).toHaveLength(10)
+    expect(m.getGroupMessages('g1')).toHaveLength(10)
   })
 })
