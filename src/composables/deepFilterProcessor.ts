@@ -29,6 +29,90 @@ import dfWorkletUrl from '@lofcz/deepfilternet-web/worklet?url'
 
 const PROCESSOR_NAME = 'deepfilternet-processor'
 
+/**
+ * How far the model may turn down what it decides is not speech.
+ *
+ * The package defaults to 100 dB, which is not suppression but erasure: measured
+ * here, a signal it judged non-speech came back as exact digital silence. That is
+ * the wrong failure for this app. The model decides what a voice is, and it will
+ * sometimes be wrong — a quiet microphone, a heavy accent, a cheap headset, someone
+ * speaking through a fan. At 100 dB that person simply does not exist on the call
+ * and cannot tell why; at 24 dB they are faint and audible, and can hear themselves
+ * being cut and switch the mode off. Loud enough to matter, never a mute.
+ *
+ * Measured on this build: 0 dB passes audio through untouched, 6 dB halves it,
+ * 100 dB silences it — so this number is the whole behaviour of the mode.
+ */
+const ATTENUATION_DB = 24
+
+/**
+ * The package's worklet is given a text decoder on the way in.
+ *
+ * Its wasm-bindgen glue builds a `new TextDecoder(...)` at module top level, and
+ * an AudioWorkletGlobalScope is not required to have one — the spec gives worklets
+ * a deliberately small global scope. Where it is missing the module throws before
+ * `registerProcessor` runs, the node can never be constructed, and the mode falls
+ * back to whatever was on before.
+ *
+ * Honest about what is known: this was reported in one Chromium during
+ * development and did NOT reproduce in the one measured here, where the
+ * unpatched worklet registers fine. The shim is kept because the app ships its
+ * own Chromium through Electron and upgrades it on its own schedule, and the
+ * cost is one fetch of a small file at the moment the mode is first switched on.
+ * Rather than patch node_modules (which a reinstall undoes) or wait on
+ * upstream, the source is fetched, given a decoder, and registered from a blob.
+ * The decoder only ever handles the glue's own strings — wasm-bindgen uses it
+ * for error text and symbol names, never for audio — so a small correct UTF-8
+ * reader is enough. Delete all of this once the package ships a worklet that
+ * does not assume a window.
+ */
+const TEXT_CODEC_SHIM = `
+globalThis.TextDecoder ??= class {
+  decode(input) {
+    if (!input) return ''
+    const b = input instanceof Uint8Array ? input : new Uint8Array(input.buffer ?? input, input.byteOffset ?? 0, input.byteLength ?? input.length)
+    let out = ''
+    for (let i = 0; i < b.length;) {
+      const c = b[i++]
+      if (c < 0x80) { out += String.fromCharCode(c); continue }
+      if (c < 0xe0) { out += String.fromCharCode(((c & 0x1f) << 6) | (b[i++] & 0x3f)); continue }
+      if (c < 0xf0) { out += String.fromCharCode(((c & 0x0f) << 12) | ((b[i++] & 0x3f) << 6) | (b[i++] & 0x3f)); continue }
+      const cp = (((c & 0x07) << 18) | ((b[i++] & 0x3f) << 12) | ((b[i++] & 0x3f) << 6) | (b[i++] & 0x3f)) - 0x10000
+      out += String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 0x3ff))
+    }
+    return out
+  }
+}
+globalThis.TextEncoder ??= class {
+  encode(s = '') {
+    const out = []
+    for (const ch of s) {
+      let cp = ch.codePointAt(0)
+      if (cp < 0x80) out.push(cp)
+      else if (cp < 0x800) out.push(0xc0 | (cp >> 6), 0x80 | (cp & 0x3f))
+      else if (cp < 0x10000) out.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f))
+      else out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f))
+    }
+    return new Uint8Array(out)
+  }
+}
+`
+
+/** The patched worklet, fetched and blobbed once per session. */
+let workletUrl: Promise<string> | null = null
+const getWorkletUrl = () => {
+  if (!workletUrl) {
+    workletUrl = fetch(dfWorkletUrl)
+      .then(r => {
+        if (!r.ok) throw new Error(`DeepFilterNet worklet fetch failed (${r.status})`)
+        return r.text()
+      })
+      .then(src => URL.createObjectURL(new Blob([TEXT_CODEC_SHIM, src], { type: 'text/javascript' })))
+      .catch(e => { workletUrl = null; throw e })
+  }
+  return workletUrl
+}
+
 // Compiled once per session and reused across calls/devices, same reasoning
 // as rnnoiseProcessor's wasmBinary cache: the model doesn't change between
 // them, and re-fetching ~10MB on every mode toggle or device switch would be
@@ -57,17 +141,15 @@ const getWasmModule = () => {
  * The context MUST be 48kHz; DeepFilterNet, like RNNoise, assumes it.
  */
 export const createDeepFilterNode = async (ctx: AudioContext): Promise<AudioWorkletNode> => {
-  const [module] = await Promise.all([
-    getWasmModule(),
-    ctx.audioWorklet.addModule(dfWorkletUrl),
-  ])
+  const [module, url] = await Promise.all([getWasmModule(), getWorkletUrl()])
+  await ctx.audioWorklet.addModule(url)
   const node = new AudioWorkletNode(ctx, PROCESSOR_NAME, {
     numberOfInputs: 1, numberOfOutputs: 1,
     // The worklet's ring buffer only ever reads/writes one channel; matching
     // RNNoise's belt-and-braces downmix so a stereo device can't leave one
     // channel unprocessed.
     channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers',
-    processorOptions: { wasmModule: module, attenuationLimit: 100 },
+    processorOptions: { wasmModule: module, attenuationLimit: ATTENUATION_DB },
   })
   return node
 }
