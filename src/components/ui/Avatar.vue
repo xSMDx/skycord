@@ -18,7 +18,7 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import type { Crop } from '@/composables/useCrop'
 import { isAnimated, cropLayout } from '@/composables/useCrop'
-import { useGifBurst, hasHover, motionAllowed, freezeFrame } from '@/composables/useGifPlayback'
+import { useGifBurst, useTapToPlay, hasHover, motionAllowed, tapOnly, playbackPolicy, freezeFrame } from '@/composables/useGifPlayback'
 import { defaultAvatar } from '@/composables/useAvatar'
 import { serverIconFor } from '@/composables/useServers'
 
@@ -43,6 +43,7 @@ const props = withDefaults(defineProps<{
 
 const animated = computed(() => isAnimated(props.src))
 const { bursting } = useGifBurst()
+const { played, play } = useTapToPlay()
 
 /** Frozen first frame. null when we couldn't make one (cross-origin GIF). */
 const poster = ref<string | null>(null)
@@ -56,17 +57,23 @@ const loadPoster = async () => {
 onMounted(loadPoster)
 watch(() => props.src, loadPoster)
 
+const reason = computed(() => playbackPolicy({
+  animated: animated.value, alwaysAnimate: props.alwaysAnimate,
+  reduced: !motionAllowed, tapOnly: tapOnly.value, hasHover,
+}))
+
 /**
  * Show the live image when it should be moving, the poster when it shouldn't.
  * With no poster (cross-origin) there is nothing to fall back TO, so it plays
  * — a broken picture would be worse than an unwanted animation.
  */
 const playing = computed(() => {
-  if (!animated.value) return true
-  if (props.alwaysAnimate) return true
-  if (!motionAllowed) return false          // reduced motion: never
-  if (!poster.value) return true            // no still to show
-  return hasHover ? hovering.value : bursting.value
+  if (reason.value === 'always') return true
+  if (reason.value === 'never') return false          // reduced motion: never
+  if (!poster.value) return true                      // no still to show
+  if (reason.value === 'hover') return hovering.value
+  if (reason.value === 'burst') return bursting.value
+  return played.value                                 // 'tap'
 })
 
 /**
@@ -141,7 +148,13 @@ const imgStyle = computed(() => {
     @pointerenter="hovering = true"
     @pointerleave="hovering = false"
   >
-    <img ref="el" :src="shownSrc" :alt="alt" :style="imgStyle" draggable="false" @load="measure" @error="failed = true" />
+    <!-- A tap is the only way this ever plays, so it must be a real,
+         keyboard-reachable control — not a click handler on the img. Every
+         other reason (hover, burst, always, never) leaves the img bare. -->
+    <button v-if="reason === 'tap'" type="button" class="av-btn" :aria-label="`Play ${alt}`" @click="play">
+      <img ref="el" :src="shownSrc" alt="" :style="imgStyle" draggable="false" @load="measure" @error="failed = true" />
+    </button>
+    <img v-else ref="el" :src="shownSrc" :alt="alt" :style="imgStyle" draggable="false" @load="measure" @error="failed = true" />
     <slot />
   </span>
 </template>
@@ -159,5 +172,9 @@ const imgStyle = computed(() => {
   object-fit: cover;                /* frames a null-crop image by itself */
   display: block;
   user-select: none; -webkit-user-drag: none;
+}
+.av-btn {
+  display: block; width: 100%; height: 100%;
+  padding: 0; border: none; background: none; cursor: pointer;
 }
 </style>

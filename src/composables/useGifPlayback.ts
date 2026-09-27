@@ -17,11 +17,21 @@
  * not a timer each. Thirty independent timers would fire at thirty different
  * moments and turn the list into a flicker; firing together reads as a single
  * deliberate beat, and costs one interval instead of thirty.
+ *
+ * Below Full, the performance level adds one more reason to hold still: tap.
+ * A tap is a deliberate look, same as a hover, so it earns the same one-shot
+ * burst — see useTapToPlay. Below Full also means the shared timer above
+ * never starts (see useGifBurst): a touch device that will never show a
+ * burst has no reason to pay for the wake-up that drives one.
  */
-import { ref, onBeforeUnmount } from 'vue'
+import { computed, ref, onBeforeUnmount, type Ref } from 'vue'
+import { perf } from './usePerformance'
 
-/** How long a burst runs. Most avatar GIFs loop in about this. */
-const BURST_MS = 4000
+/** How long a burst runs. Most avatar GIFs loop in about this. Exported so a
+ *  caller keying its own per-item tap state (the GIF picker's grid, one
+ *  component serving many cells) reverts on the same beat as everything
+ *  else, rather than inventing its own number. */
+export const BURST_MS = 4000
 /**
  * Gap between bursts. The user's range, jittered per cycle rather than fixed:
  * a metronome is more noticeable than an irregular beat, and a fixed period
@@ -40,6 +50,41 @@ export const bursting = ref(false)
 /** Hover exists — a mouse or trackpad, not a finger. */
 export const hasHover = typeof window !== 'undefined'
   && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
+
+/** The level's answer, read where a component needs it. */
+export const tapOnly = computed(() => perf.animatedMedia === 'tap')
+
+export type PlaybackReason = 'always' | 'hover' | 'burst' | 'tap' | 'never'
+
+/**
+ * Why an animated image would play, in one place, so the components only ask
+ * "which reason applies to me?".
+ *
+ * Reduced motion outranks everything: a person who asked for stillness does not
+ * get motion back because a performance level allows it. The level can only
+ * take motion away, never add it.
+ */
+export const playbackPolicy = (o: {
+  animated: boolean; alwaysAnimate: boolean; reduced: boolean; tapOnly: boolean; hasHover: boolean
+}): PlaybackReason => {
+  if (!o.animated || o.alwaysAnimate) return 'always'
+  if (o.reduced) return 'never'
+  if (o.tapOnly) return 'tap'
+  return o.hasHover ? 'hover' : 'burst'
+}
+
+/** One image's "somebody tapped it": plays a single burst, then holds still again. */
+export const useTapToPlay = (): { played: Ref<boolean>; play: () => void } => {
+  const played = ref(false)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const play = () => {
+    played.value = true
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => { played.value = false }, BURST_MS)
+  }
+  onBeforeUnmount(() => { if (timer) clearTimeout(timer) })
+  return { played, play }
+}
 
 let subscribers = 0
 let burstTimer: ReturnType<typeof setTimeout> | null = null
@@ -62,8 +107,10 @@ const scheduleBurst = () => {
  * when called from a component.
  */
 export const useGifBurst = () => {
-  // Hover devices never need the timer, and reduced-motion never plays at all.
-  if (hasHover || reduced) return { bursting: ref(false) }
+  // Hover devices never need the timer, reduced-motion never plays at all, and
+  // tap-only levels never show an unprompted burst — so the wake-up that would
+  // drive one is exactly the background cost this feature exists to remove.
+  if (hasHover || reduced || tapOnly.value) return { bursting: ref(false) }
 
   subscribers++
   if (subscribers === 1) scheduleBurst()

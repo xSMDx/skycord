@@ -11,7 +11,7 @@
  */
 import { computed, ref, watch, onMounted } from 'vue'
 import { isIdentityCrop, isAnimated, cropLayout, type Crop } from '@/composables/useCrop'
-import { useGifBurst, hasHover, motionAllowed, freezeFrame } from '@/composables/useGifPlayback'
+import { useGifBurst, useTapToPlay, hasHover, motionAllowed, tapOnly, playbackPolicy, freezeFrame } from '@/composables/useGifPlayback'
 
 const props = withDefaults(defineProps<{
   src: string
@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<{
 
 const animated = computed(() => isAnimated(props.src))
 const { bursting } = useGifBurst()
+const { played, play } = useTapToPlay()
 const poster = ref<string | null>(null)
 const hovering = ref(false)
 
@@ -34,11 +35,18 @@ const loadPoster = async () => {
 onMounted(loadPoster)
 watch(() => props.src, loadPoster)
 
+const reason = computed(() => playbackPolicy({
+  animated: animated.value, alwaysAnimate: props.alwaysAnimate,
+  reduced: !motionAllowed, tapOnly: tapOnly.value, hasHover,
+}))
+
 const playing = computed(() => {
-  if (!animated.value || props.alwaysAnimate) return true
-  if (!motionAllowed) return false
+  if (reason.value === 'always') return true
+  if (reason.value === 'never') return false
   if (!poster.value) return true      // cross-origin: nothing to freeze to
-  return hasHover ? hovering.value : bursting.value
+  if (reason.value === 'hover') return hovering.value
+  if (reason.value === 'burst') return bursting.value
+  return played.value                 // 'tap'
 })
 const shownSrc = computed(() => (playing.value || !poster.value) ? props.src : poster.value)
 
@@ -80,7 +88,19 @@ const safeStyle = computed(() => {
 </script>
 
 <template>
+  <!-- A tap is the only way this ever plays, so it must be a real, keyboard-
+       reachable control — not a click handler on the img. Every other reason
+       (hover, burst, always, never) leaves the markup exactly as it was. -->
+  <button v-if="reason === 'tap'" type="button" class="anim-img-btn" :aria-label="`Play ${alt}`" @click="play">
+    <img
+      class="anim-img"
+      ref="el"
+      :src="shownSrc" alt="" :style="safeStyle" draggable="false"
+      @load="measure"
+    />
+  </button>
   <img
+    v-else
     class="anim-img"
     ref="el"
     :src="shownSrc" :alt="alt" :style="safeStyle" draggable="false"
@@ -95,5 +115,9 @@ const safeStyle = computed(() => {
   width: 100%; height: 100%;
   object-fit: cover; display: block;
   user-select: none; -webkit-user-drag: none;
+}
+.anim-img-btn {
+  display: block; width: 100%; height: 100%;
+  padding: 0; border: none; background: none; cursor: pointer;
 }
 </style>
