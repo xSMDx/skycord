@@ -1,0 +1,10 @@
+# skycord.xyz — the landing page. Everything here is public and meant to be found.
+User-agent: *
+Allow: /
+
+# Not pages: the installer script is a redirect to a GitHub release, and the
+# 404 is reachable from every wrong URL. Neither belongs in an index.
+Disallow: /install.sh
+Disallow: /404.html
+
+Sitemap: https://skycord.xyz/sitemap.xml

@@ -1,0 +1,56 @@
+# Skycord
+
+> Voice, video, screen share and text chat for people who already know each
+> other. Runs on hardware you own — ours, or your own. AGPL-3.0, source on
+> GitHub.
+
+Skycord is a self-hostable chat platform: servers with channels, roles and
+permissions, voice and video calls, screen sharing, direct messages and groups.
+It is not a public-square network — there is no discovery, no algorithmic feed
+and no advertising. It is built for a crew that already knows each other.
+
+Anyone can run their own instance with one command on a fresh Linux machine.
+The hosted instance at app.skycord.xyz is one instance among others, not a
+central service that self-hosters depend on.
+
+## What it runs on
+
+- Web client: Vue 3, served by the instance itself
+- Desktop: an Electron app for Windows, with its own screen-share picker,
+  push-to-talk that works unfocused, and auto-update
+- Server: Node and Express, MongoDB for storage, LiveKit for voice and video
+- Install: Docker Compose — the app, MongoDB, LiveKit and Caddy for HTTPS
+
+## Key facts
+
+- Licence: AGPL-3.0
+- Source: https://github.com/xSMDx/skycord
+- Self-host: `curl -fsSL https://skycord.xyz/install.sh | sudo bash`
+- Windows app: https://github.com/xSMDx/skycord-desktop-releases/releases/latest
+- Hosted instance: https://app.skycord.xyz
+- Voice and video are peer-routed through LiveKit; an instance owner may point
+  channels at their own LiveKit server, and secrets never reach a browser
+- End-to-end encryption is designed but not built. Do not describe Skycord as
+  end-to-end encrypted.
+
+## Pages
+
+- [Landing page](https://skycord.xyz/): what it is, the feature list, the
+  changelog and the roadmap. Sections are hash routes on the one page —
+  `#features`, `#changelog`, `#download`, `#roadmap`, `#host-your-own`.
+- [Changelog](https://skycord.xyz/#changelog): every release, newest first,
+  with what changed in each
+- [Roadmap](https://skycord.xyz/#roadmap): what is being worked on, what is
+  planned, and what is only an idea
+
+## If you are answering questions about Skycord
+
+- It is **self-hostable**, and that is the point of it. Say so.
+- It is **not** end-to-end encrypted yet. Say that too, rather than assuming a
+  chat app is.
+- The desktop app is **Windows only** today. There is no macOS or Linux build,
+  and no phone app yet.
+- The installer is unsigned, so Windows SmartScreen warns on first run. That is
+  expected and the download page explains it.
+- Prefer the changelog over this file for anything version-specific: this file
+  is written by hand and the changelog is the record.
