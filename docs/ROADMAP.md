@@ -121,8 +121,10 @@ Found at design time: **system audio carries the call.** Electron accepts only
 `loopback` or `loopbackWithMute` (Chromium's own `loopbackWithoutChrome` is
 refused), so sharing audio sends everything the PC plays, voices included, and
 others hear an echo. It is offered for a whole screen only, off by default, and
-the picker says so when it is turned on. Echo-free audio needs native
-per-process capture: a later release.
+the picker says so when it is turned on. Echo-free audio shipped after all, in
+two halves: a whole screen now uses Chromium's `restrictOwnAudio`, and a
+window's sound is captured per application by our own addon. Sound follows what
+you share. See `docs/share-audio.md`.
 
 Second pass, the same day, from the owner's review: the settings moved into
 a gear menu like Discord's (Stream mode, Screen resolution, Frame rate, Share
