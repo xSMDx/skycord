@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
+import { useInstance } from '@/composables/useInstance'
+import { inviteBase } from '@/composables/inviteLink'
 import type { Group, Friend } from '@/types'
 import StatusDot from '@/components/ui/StatusDot.vue'
 
@@ -12,6 +14,7 @@ const props = defineProps<{ group: Group; friends: Friend[] }>()
 const emit  = defineEmits<{ close: []; added: [group: Group] }>()
 
 const { addGroupMembers, createGroupInvite } = useApi()
+const { profile } = useInstance()
 
 const search    = ref('')
 const selected  = ref<Set<string>>(new Set())
@@ -86,7 +89,7 @@ const copyLink = async () => {
 onMounted(async () => {
   try {
     const res = await createGroupInvite(props.group.id)
-    inviteUrl.value = `${location.origin}/invite/${res.code}`
+    inviteUrl.value = `${inviteBase(profile.value?.address, location.origin)}/invite/${res.code}`
   } catch { /* invite link optional — friend checkboxes still work */ }
 })
 </script>

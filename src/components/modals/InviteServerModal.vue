@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue'
 import { X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useApi } from '@/composables/useApi'
+import { useInstance } from '@/composables/useInstance'
+import { inviteBase } from '@/composables/inviteLink'
 import type { WireInvite } from '@/composables/useApi'
 
 const props = defineProps<{ serverId: string; serverName: string; canManage: boolean }>()
@@ -22,7 +24,8 @@ const expiry  = ref<'24h' | '7d' | 'never'>('24h')
 // claimed by GROUP invites (MessageItem.vue matches it and renders a
 // GroupInviteCard), and the two codes come from different collections, so a
 // shared path would risk a genuine collision between them.
-const linkFor = (code: string) => `${location.origin}/join/${code}`
+const { profile } = useInstance()
+const linkFor = (code: string) => `${inviteBase(profile.value?.address, location.origin)}/join/${code}`
 
 const load = async () => {
   if (!props.canManage) return   // listing needs Manage Server (403 otherwise)

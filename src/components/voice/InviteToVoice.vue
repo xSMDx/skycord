@@ -27,6 +27,8 @@ import AnchoredPanel from '@/components/ui/AnchoredPanel.vue'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import Avatar from '@/components/ui/Avatar.vue'
 import { useApi } from '@/composables/useApi'
+import { useInstance } from '@/composables/useInstance'
+import { inviteBase } from '@/composables/inviteLink'
 
 export interface InvitePerson {
   id:          string
@@ -70,7 +72,8 @@ const inviteCode = (): Promise<string> => {
   return invitePromise
 }
 
-const linkFor = (code: string) => `${location.origin}/join/${code}`
+const { profile } = useInstance()
+const linkFor = (code: string) => `${inviteBase(profile.value?.address, location.origin)}/join/${code}`
 
 const nameOf = (p: InvitePerson) => p.displayName || p.username
 
