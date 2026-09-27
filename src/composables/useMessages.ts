@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import type { Message } from '@/types'
+import { perf } from './usePerformance'
 
 const dmMessages     = ref<Record<string, Message[]>>({})
 const serverMessages = ref<Record<string, Message[]>>({})
@@ -28,6 +29,11 @@ export interface HistoryWindowMeta {
 const windowMeta = ref<Record<string, HistoryWindowMeta>>({})
 const metaKey = (kind: ConvKind, id: string) => `${kind}:${id}`
 const FRESH: HistoryWindowMeta = Object.freeze({ hasOlder: false, live: true, awayCount: 0 })
+
+/** When each conversation was last opened, for the least-recently-used limit. */
+const touched: Record<string, number> = {}
+let touchClock = 0
+let evicted = 0
 
 const makeId  = () => Date.now() + Math.floor(Math.random() * 1000)
 const fmtTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -211,6 +217,53 @@ const sendDM = (
     const m = list.find(m => m.id === msgId); if (m) { m.content = content; m.edited = true }
   }
 
+  const touchConversation = (kind: ConvKind, id: string) => { touched[metaKey(kind, id)] = ++touchClock }
+
+  /** Trim each conversation to the cap, then drop the least recently opened
+   *  ones beyond the limit. The conversation on screen is never touched: its
+   *  messages are what the person is reading. */
+  const evict = (current: { kind: ConvKind; id: string } | null) => {
+    const currentKey = current ? metaKey(current.kind, current.id) : ''
+    const cap = perf.messagesPerConversation
+    const keep = perf.keepConversations
+
+    if (Number.isFinite(cap)) {
+      for (const kind of ['dm', 'group', 'channel'] as ConvKind[]) {
+        const store = listFor(kind)
+        for (const [id, list] of Object.entries(store.value)) {
+          if (list.length <= cap) continue
+          store.value[id] = list.slice(list.length - cap)
+          const key = metaKey(kind, id)
+          windowMeta.value[key] = { ...windowOf(kind, id), hasOlder: true }
+          evicted += list.length - cap
+        }
+      }
+    }
+
+    if (!Number.isFinite(keep)) return
+    // Per kind, not pooled: a DM opened once must not get pushed out by a
+    // burst of channel-hopping, so each of dm/group/channel keeps its own
+    // `keep` most-recently-touched conversations.
+    for (const kind of ['dm', 'group', 'channel'] as ConvKind[]) {
+      const loaded: { key: string; id: string; at: number }[] = []
+      for (const [id, list] of Object.entries(listFor(kind).value)) {
+        if (!list.length) continue
+        const key = metaKey(kind, id)
+        if (key !== currentKey) loaded.push({ key, id, at: touched[key] ?? 0 })
+      }
+      const spare = Math.max(0, keep - (current?.kind === kind ? 1 : 0))
+      loaded.sort((a, b) => b.at - a.at)
+      for (const gone of loaded.slice(spare)) {
+        evicted += listFor(kind).value[gone.id]?.length ?? 0
+        listFor(kind).value[gone.id] = []
+        delete windowMeta.value[gone.key]
+        delete touched[gone.key]
+      }
+    }
+  }
+
+  const evictedCount = () => evicted
+
   return {
     dmMessages, serverMessages, groupMessages,
     initDM, initChannel, initGroup,
@@ -220,5 +273,6 @@ const sendDM = (
     toggleDMReaction, toggleChannelReaction,
     pinMessage, deleteMessage, editMessage,
     windowMeta, windowOf, setWindow, prependOlder, appendNewer, holdIfAway,
+    touchConversation, evict, evictedCount,
   }
 }

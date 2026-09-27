@@ -159,6 +159,7 @@ const {
   toggleDMReaction, toggleChannelReaction,
   deleteMessage, editMessage,
   windowOf, setWindow, prependOlder, appendNewer, holdIfAway,
+  touchConversation, evict,
 } = useMessages()
 
 // ── Servers & channels ───────────────────────────────────────────────────
@@ -2018,6 +2019,10 @@ const openGroup = async (group: Group) => {
   setActiveGroup(group.id)
   setActiveChannel(null)
   await loadGroupHistory(group.id)
+  // After, not before: evicting first could drop the conversation being
+  // opened, since it isn't "current" from the store's point of view until now.
+  touchConversation('group', group.id)
+  evict({ kind: 'group', id: group.id })
 }
 
 /**
@@ -2037,6 +2042,10 @@ const selectChannel = async (ch: Channel) => {
   openChannel(ch.id)
   setActiveChannel(ch.id)
   await loadChannelHistory(ch.id)
+  // After, not before: evicting first could drop the conversation being
+  // opened, since it isn't "current" from the store's point of view until now.
+  touchConversation('channel', ch.id)
+  evict({ kind: 'channel', id: ch.id })
 }
 
 // CreateChannelModal's `created` emit — select the channel the user just
@@ -2509,6 +2518,10 @@ const openDM = async (dm: DM) => {
   setActiveChannel(null)
   // Load history from DB
   await loadDMHistory(dm.id)
+  // After, not before: evicting first could drop the conversation being
+  // opened, since it isn't "current" from the store's point of view until now.
+  touchConversation('dm', dm.id)
+  evict({ kind: 'dm', id: dm.id })
 }
 
 // ── Context menus ───────────────────────────────────────────────────────────

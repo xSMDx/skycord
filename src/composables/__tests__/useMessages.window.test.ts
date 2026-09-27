@@ -1,6 +1,38 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { useMessages } from '../useMessages'
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
 import type { Message } from '@/types'
+
+// useMessages now imports usePerformance (for the eviction caps), which pulls
+// in useAppearance for the motion rule, which pulls in materialScheme →
+// @material/material-color-utilities, whose published ESM uses extensionless
+// relative imports Vite resolves and bare Node does not. Nothing here
+// exercises Material You, so the dependency is stubbed rather than made
+// loadable for the sake of this file. Same reason as usePerformance.test.ts.
+vi.mock('../materialScheme', () => ({
+  SCHEME_TOKEN_KEYS: [],
+  buildSchemeTokens: () => ({}),
+}))
+
+let useMessages: typeof import('../useMessages').useMessages
+
+// The repo's Vitest runs in the node environment (no jsdom), but usePerformance
+// (via useAppearance) touches browser globals at load time (localStorage,
+// document, matchMedia). A static top-level import would evaluate before
+// stubs could be installed — ES module imports are hoisted ahead of the rest
+// of the module body — so the module under test is loaded dynamically once
+// the stubs are in place.
+beforeAll(async () => {
+  globalThis.localStorage = { getItem: () => null, setItem: () => {} } as unknown as Storage
+  const inertEl = () => ({ style: {}, setAttribute() {}, removeAttribute() {} })
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    createElement: inertEl,
+    querySelector: () => null,
+    head: inertEl(),
+  } as unknown as Document
+  globalThis.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia
+
+  ;({ useMessages } = await import('../useMessages'))
+})
 
 const msg = (dbId: string, content = dbId): Message => ({
   id: parseInt(dbId.slice(-6), 16), dbId, author: 'a', authorId: 'u1', content,
@@ -9,8 +41,9 @@ const msg = (dbId: string, content = dbId): Message => ({
 const ids = (list: Message[]) => list.map(m => m.dbId)
 
 describe('history windows', () => {
-  const s = useMessages()
+  let s: ReturnType<typeof useMessages>
   beforeEach(() => {
+    s = useMessages()
     s.dmMessages.value = {}; s.serverMessages.value = {}; s.groupMessages.value = {}
     s.windowMeta.value = {}
   })
