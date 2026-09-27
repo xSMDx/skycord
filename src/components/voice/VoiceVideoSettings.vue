@@ -14,11 +14,16 @@ const NOISE_MODES = [
   { value: 'standard'   as const, label: 'Standard',       hint: "Your browser's built-in filter. Good for most setups." },
   { value: 'rnnoise'    as const, label: 'RNNoise',        hint: 'Stronger AI filter — kills fans, keyboards and hum, but can chew background music.' },
   {
-    value: 'deepfilter' as const, label: 'DeepFilterNet 3',
+    // Beta: measured at 24dB of suppression for 1.9dB of speech, which is the
+    // best of the four — but measured against synthesised speech and synthetic
+    // noise, not against real people in real rooms. Saying so is what lets
+    // someone try it knowing to listen, and report back if their voice suffers.
+    value: 'deepfilter' as const, label: 'DeepFilterNet 3', beta: true,
     hint: 'The strongest filter — best on keyboards, clatter and echoey rooms. '
         + 'One-off download of about 10MB the first time you turn it on, more '
         + "processor work than RNNoise, and about 40ms more delay on your voice. "
-        + "Doesn't remove other people's voices — only noise.",
+        + "Doesn't remove other people's voices — only noise. "
+        + 'Still being tested — if your voice sounds thin or drops out, tell us and switch back to RNNoise.',
   },
 ]
 const { applyOutput, voice, toggleDeafen } = useVoice()
@@ -311,7 +316,10 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
         :checked="voiceSettings.noiseMode === o.value"
         @change="setVoiceSettings({ noiseMode: o.value })"
       />
-      <span><strong>{{ o.label }}</strong><em>{{ o.hint }}</em></span>
+      <span>
+        <strong>{{ o.label }}<span v-if="o.beta" class="vv-beta">Beta</span></strong>
+        <em>{{ o.hint }}</em>
+      </span>
     </label>
     <div class="vv-toggle-row">
       <div class="vv-toggle-text"><span class="vv-label">Echo Cancellation</span><span class="vv-hint">Cancel echo from your speakers.</span></div>
@@ -395,6 +403,16 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-radio input { accent-color: var(--accent); width: 16px; height: 16px; }
 .vv-radio span { display: flex; flex-direction: column; }
 .vv-radio strong { font-size: 14px; color: var(--text-1); }
+/* Same badge as Devices' "This device", so a label reads as a label here too.
+ * Scoped to .vv-radio because `.vv-radio span` above matches this span too and
+ * would otherwise make it a flex column — a block, on its own line. */
+.vv-radio .vv-beta {
+  display: inline-block; margin-left: 7px; vertical-align: 1px;
+  font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--accent-text);
+  background: rgba(var(--accent-rgb), .18);
+  padding: 3px 7px; border-radius: 4px;
+}
 .vv-radio em { font-style: normal; font-size: 12px; color: var(--text-3); }
 
 .vv-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; }
