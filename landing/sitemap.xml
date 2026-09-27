@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One URL, and that is not an oversight.
+
+  skycord.xyz is a single page whose sections are hash routes (#features,
+  #changelog, #download, #roadmap, #host-your-own). Search engines do not treat
+  a fragment as a separate URL, so listing them here would pad the file with
+  entries that are ignored at best and flagged at worst.
+
+  If those sections ever become real paths, they belong here — one <url> each,
+  with their own lastmod.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://skycord.xyz/</loc>
+    <lastmod>2026-09-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
