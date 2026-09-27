@@ -34,6 +34,17 @@ export interface DesktopBridge {
   }
   /** The title bar's back and forward. Returns a function that stops listening. */
   onNavigate?(cb: (dir: 'back' | 'forward') => void): () => void
+  /**
+   * The three switches Chromium only reads at startup, plus the memory readout.
+   * Absent in app builds from before Task 7.
+   */
+  performance?: {
+    /** The page decides; the shell stores it for the next start. */
+    level(level: string, switches: unknown): void
+    memory(): Promise<{ privateMb: number; workingSetMb: number } | null>
+    applied(): Promise<{ skycordTitleBar: boolean; hardwareAcceleration: boolean; heapCapMb: number | null } | null>
+    restart(): void
+  }
 }
 
 export const desktopBridge = (): DesktopBridge | null => {

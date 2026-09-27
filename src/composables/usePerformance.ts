@@ -11,6 +11,7 @@
  */
 import { reactive, computed, watch } from 'vue'
 import { appearance } from './useAppearance'
+import { desktopBridge } from './desktopBridge'
 
 export type PerfLevel = 'full' | 'balanced' | 'light'
 
@@ -121,7 +122,19 @@ const save = () => localStorage.setItem(KEY, JSON.stringify({
   dismissedSuggestion: perfState.dismissedSuggestion,
 }))
 
-const apply = () => { Object.assign(perf, resolve(perfState.level, perfState.overrides)); save() }
+const apply = () => {
+  Object.assign(perf, resolve(perfState.level, perfState.overrides))
+  save()
+  // Absent on the web; the desktop shell stores these for its next start.
+  desktopBridge()?.performance?.level(perfState.level, {
+    skycordTitleBar: perf.skycordTitleBar,
+    hardwareAcceleration: perf.hardwareAcceleration,
+    heapCapMb: perf.heapCapMb,
+    // Not a restart switch, but the shell reads it from the same payload to
+    // know when to trim the renderer's decoded-image cache.
+    imageTrimMinutes: perf.imageTrimMinutes,
+  })
+}
 
 export const setPerfLevel = (level: PerfLevel) => { perfState.level = level; perfState.overrides = {}; apply() }
 export const setPerfOverride = <K extends keyof PerfSwitches>(key: K, value: PerfSwitches[K]) => {

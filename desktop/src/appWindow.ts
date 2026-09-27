@@ -7,6 +7,11 @@
  * client only feeds it: the page title, back/forward, and its theme's colours.
  * Windows' own minimise, maximise and close sit over its right end
  * (titleBarOverlay), recoloured to match; maximise keeps Snap Layouts.
+ *
+ * Light turns the bar off (perf.ts, `skycordTitleBar`): the plain Windows
+ * frame instead, one process fewer, and no local page to draw. The returned
+ * shape — `win`, `page`, `setTitle`, `setColors`, `showWhenReady` — is the
+ * same either way, so `main.ts` never has to know which one it got.
  */
 import { app, BrowserWindow, WebContentsView, ipcMain, type WebContents } from 'electron'
 import { join } from 'path'
@@ -26,7 +31,60 @@ export interface AppWindow {
   showWhenReady(shown: () => void): void
 }
 
-export const createAppWindow = (preload: string, onNavigate: (dir: 'back' | 'forward') => void): AppWindow => {
+/** The plain Windows frame: no Skycord bar to draw, no `WebContentsView`, the
+ *  page is the window's own `webContents`. One process fewer, for Light. */
+const createFramedWindow = (preload: string, onNavigate: (dir: 'back' | 'forward') => void): AppWindow => {
+  let state: TitleState = { title: 'Skycord', kind: 'app', icon: null, canBack: false, canForward: false }
+  const secure = { contextIsolation: true, nodeIntegration: false, sandbox: true, preload }
+
+  const win = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 940,
+    minHeight: 560,
+    show: false,
+    title: 'Skycord',
+    frame: true,
+    webPreferences: secure,
+  })
+  const page = win.webContents
+
+  const navigate = (dir: 'back' | 'forward') => { onNavigate(dir); page.focus() }
+  // The mouse's own back and forward buttons.
+  win.on('app-command', (_e, cmd) => {
+    if (cmd === 'browser-backward') navigate('back')
+    if (cmd === 'browser-forward') navigate('forward')
+  })
+
+  return {
+    win,
+    page,
+    setTitle(next) {
+      state = next
+      win.setTitle(next.title && next.title !== 'Skycord' ? `${next.title} - Skycord` : 'Skycord')
+    },
+    // No bar, nothing to recolour.
+    setColors() {},
+    showWhenReady(shown) {
+      let done = false
+      const show = () => {
+        if (done) return
+        done = true
+        win.show()
+        page.focus()
+        shown()
+      }
+      page.once('did-finish-load', show)
+      page.once('did-fail-load', show)
+      // A slow server still gets a window.
+      setTimeout(show, 8000)
+    },
+  }
+}
+
+/** Skycord's own title bar: a local page drawn above the instance's page,
+ *  which sits below it in its own `WebContentsView`. */
+const createBarredWindow = (preload: string, onNavigate: (dir: 'back' | 'forward') => void): AppWindow => {
   let state: TitleState = { title: 'Skycord', kind: 'app', icon: null, canBack: false, canForward: false }
   let colors = DEFAULT_COLORS
   const secure = { contextIsolation: true, nodeIntegration: false, sandbox: true, preload }
@@ -120,3 +178,6 @@ export const createAppWindow = (preload: string, onNavigate: (dir: 'back' | 'for
     },
   }
 }
+
+export const createAppWindow = (preload: string, onNavigate: (dir: 'back' | 'forward') => void, skycordTitleBar: boolean): AppWindow =>
+  skycordTitleBar ? createBarredWindow(preload, onNavigate) : createFramedWindow(preload, onNavigate)

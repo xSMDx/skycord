@@ -10,7 +10,7 @@
  * Deciding here, by the page's own URL, means an instance's web client can never
  * reach the local pages' calls. The main process checks every call's sender too.
  */
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 
 const local = location.protocol === 'file:'
 const page = location.pathname.split('/').pop()
@@ -66,5 +66,16 @@ if (local && page === 'share.html') {
       ipcRenderer.on('desktop:nav', listener)
       return () => { ipcRenderer.removeListener('desktop:nav', listener) }
     },
+    performance: {
+      // The page decides; the shell stores it for the next start.
+      level: (level: string, switches: unknown) => ipcRenderer.send('desktop:perf', { level, switches }),
+      memory: () => ipcRenderer.invoke('desktop:perfMemory'),
+      applied: () => ipcRenderer.invoke('desktop:perfApplied'),
+      restart: () => ipcRenderer.send('desktop:perfRestart'),
+    },
   })
+
+  // The shell asks when the window has been hidden a while. Only the renderer
+  // can drop its own decoded images, and only webFrame reaches them.
+  ipcRenderer.on('desktop:trimCache', () => webFrame.clearCache())
 }

@@ -11,7 +11,7 @@ import { app } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { dirname, join } from 'path'
 
-export interface Stored { instanceOrigin?: string; servers?: unknown; share?: unknown }
+export interface Stored { instanceOrigin?: string; servers?: unknown; share?: unknown; perf?: unknown }
 
 const file = () => join(app.getPath('userData'), 'skycord.json')
 

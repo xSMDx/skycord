@@ -20,6 +20,7 @@ import { handleDisplayMedia } from './displayMedia'
 import { startUpdates, updateAtLaunch } from './updates'
 import { showSplash } from './splash'
 import { createAppWindow, type AppWindow } from './appWindow'
+import { readShellPerf, flagsFor, readTrimMinutes, type ShellPerf } from './perf'
 import { openServersWindow, closeServersWindow } from './serversWindow'
 import { readServers, saveServer, renameServer, readdressServer, removeServer, hostOf, type SavedServer } from './servers'
 import { DEFAULT_COLORS, parseColors, parseTitleState, type TitleState } from './titleState'
@@ -36,6 +37,13 @@ if (startupOrigin && needsSecureOriginSwitch(startupOrigin)) {
   app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', startupOrigin)
 }
 
+// Chromium reads these at startup only, so they come from what was saved last
+// time; changing them in Settings asks for a restart rather than lying.
+const shellPerf = readShellPerf(readStore().perf)
+const perfFlags = flagsFor(shellPerf)
+if (perfFlags.disableHardwareAcceleration) app.disableHardwareAcceleration()
+if (perfFlags.jsFlags) app.commandLine.appendSwitch('js-flags', perfFlags.jsFlags)
+
 // One Skycord at a time. A second launch (a shortcut, or the Jump List's
 // Switch server) hands its arguments to the one running and exits.
 const primary = app.requestSingleInstanceLock()
@@ -45,6 +53,18 @@ const SWITCH = '--switch-server'
 let shellWin: AppWindow | null = null
 /** The instance on screen; null while the picker is showing. */
 let current: string | null = null
+
+// Hidden and idle: let the page drop its decoded images. Never
+// session.clearCache(), which would throw away the HTTP cache the next start
+// depends on — that cache is what keeps the app from re-downloading itself.
+let trimMinutes = readTrimMinutes(readStore().perf)
+let trimTimer: ReturnType<typeof setTimeout> | null = null
+const cancelTrim = () => { if (trimTimer) { clearTimeout(trimTimer); trimTimer = null } }
+const armTrim = () => {
+  cancelTrim()
+  if (trimMinutes === null) return
+  trimTimer = setTimeout(() => shellWin?.page.send('desktop:trimCache'), trimMinutes * 60_000)
+}
 
 // ── saved servers ──
 const servers = () => readServers(readStore().servers)
@@ -193,6 +213,27 @@ ipcMain.on('desktop:titleColors', (event, value: unknown) => {
   const c = fromInstance(event) ? parseColors(value) : null
   if (c) shellWin!.setColors(c)
 })
+ipcMain.on('desktop:perf', (event, payload: unknown) => {
+  if (!fromInstance(event)) return
+  const p = payload as { switches?: unknown } | null
+  const next = readShellPerf(p?.switches)
+  trimMinutes = readTrimMinutes(p?.switches)
+  // imageTrimMinutes isn't a restart switch, but it's saved alongside the three
+  // that are, so the next launch arms the trim timer without the page having
+  // to visit Settings again first.
+  writeStore({ ...readStore(), perf: { ...next, imageTrimMinutes: trimMinutes } })
+})
+ipcMain.handle('desktop:perfApplied', (event): ShellPerf | null => fromInstance(event) ? shellPerf : null)
+ipcMain.handle('desktop:perfMemory', (event) => {
+  if (!fromInstance(event)) return null
+  const metrics = app.getAppMetrics()
+  const sum = (pick: (m: Electron.ProcessMetric) => number) => metrics.reduce((t, m) => t + pick(m), 0)
+  return {
+    privateMb: Math.round(sum(m => m.memory.privateBytes ?? 0) / 1024),
+    workingSetMb: Math.round(sum(m => m.memory.workingSetSize) / 1024),
+  }
+})
+ipcMain.on('desktop:perfRestart', (event) => { if (!fromInstance(event)) return; app.relaunch(); app.exit(0) })
 
 app.on('second-instance', (_e, argv) => {
   const w = shellWin?.win
@@ -221,10 +262,14 @@ app.whenReady().then(async () => {
   await updateAtLaunch(s => splash.status(s), cb => splash.onSkip(cb))
   splash.status({ state: 'starting' })
 
-  shellWin = createAppWindow(PRELOAD, dir => { if (current) shellWin?.page.send('desktop:nav', dir) })
+  shellWin = createAppWindow(PRELOAD, dir => { if (current) shellWin?.page.send('desktop:nav', dir) }, shellPerf.skycordTitleBar)
   shellWin.showWhenReady(() => splash.close())
   guard(shellWin.page)
   handleDisplayMedia(() => shellWin?.win ?? null, () => shellWin?.page ?? null, () => current)
+  shellWin.win.on('hide', armTrim)
+  shellWin.win.on('blur', armTrim)
+  shellWin.win.on('show', cancelTrim)
+  shellWin.win.on('focus', cancelTrim)
 
   // Servers used before the list existed join it.
   if (startupOrigin && !servers().some(s => s.origin === startupOrigin)) {

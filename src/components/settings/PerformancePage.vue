@@ -13,18 +13,7 @@ import {
   dismissSuggestion, suggestsLight, restartNeeded, type PerfLevel,
 } from '@/composables/usePerformance'
 
-/**
- * Task 7 adds `window.skycordDesktop.performance`; typed here, ahead of that
- * bridge existing, so this page compiles today and starts working the moment
- * it lands — every call below is optional-chained, so a build without it
- * simply resolves to `undefined` instead of throwing.
- */
-interface DesktopPerfBridge {
-  memory(): Promise<{ privateMb: number; workingSetMb: number }>
-  applied(): Promise<{ skycordTitleBar: boolean; hardwareAcceleration: boolean; heapCapMb: number | null }>
-  restart(): void
-}
-const desktop = desktopBridge() as (DesktopBridge & { performance?: DesktopPerfBridge }) | null
+const desktop: DesktopBridge | null = desktopBridge()
 
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
   { id: 'full', name: 'Full', line: 'Everything on. The default.' },
