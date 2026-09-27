@@ -27,6 +27,11 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
+      # Ahead of the build, so a native failure is reported where it happened
+      # rather than from inside electron-builder. windows-latest carries the
+      # MSVC toolchain this needs.
+      - name: Build the audio capture addon
+        run: npm run build:native
       - name: Version from the tag
         id: version
         shell: bash

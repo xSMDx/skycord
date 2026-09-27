@@ -12,6 +12,11 @@ files:
   - "!dist/**/*.map"
   - static/**/*
   - package.json
+  - native/index.js
+  - native/build/Release/*.node
+# A .node cannot be loaded from inside an asar, so the addon is unpacked.
+asarUnpack:
+  - native/build/Release/*.node
 win:
   target: nsis
   icon: build/icon.ico

@@ -49,3 +49,6 @@ voice-servers.json
 # Performance-mode memory probe: real credentials and per-run samples.
 desktop/scripts/.probe.env
 desktop/.probe/
+
+# Native addon build output — compiled from source, never committed.
+desktop/native/build/

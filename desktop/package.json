@@ -8,17 +8,20 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc && electron .",
-    "dist": "tsc && electron-builder --publish never",
-    "release": "tsc && electron-builder --publish always",
-    "icon": "electron scripts/render-icon.cjs"
+    "dist": "npm run build:native && tsc && electron-builder --publish never",
+    "release": "npm run build:native && tsc && electron-builder --publish always",
+    "icon": "electron scripts/render-icon.cjs",
+    "build:native": "node-gyp rebuild --directory=native"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "node-addon-api": "^8.9.2"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
     "electron": "^44.4.3",
     "electron-builder": "^26.15.3",
+    "node-gyp": "^13.0.2",
     "typescript": "^7.0.2"
   },
   "author": "Skycord contributors",
