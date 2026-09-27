@@ -21,8 +21,18 @@ export const shareOptions = (c: DesktopShareChoice): { capture: ScreenShareCaptu
   return {
     capture: {
       audio: c.audio,
-      // Games move and documents don't: which one the encoder keeps under strain.
-      contentHint: frameRate >= 30 ? 'motion' : 'detail',
+      /**
+       * Only a 60 fps share is called motion.
+       *
+       * `motion` tells the encoder that smooth movement matters more than
+       * pixels, so under any strain it keeps the frame rate and scales the
+       * picture down — which is exactly the "it keeps going blurry" people
+       * report while sharing a screen at 30 fps. Detail keeps the resolution
+       * and drops frames instead, which is what you want for anything with
+       * text in it. 60 fps is only ever chosen for games, where the opposite
+       * is true.
+       */
+      contentHint: frameRate > 30 ? 'motion' : 'detail',
       ...(height
         ? { resolution: { width: Math.round(height * 16 / 9), height, frameRate } }
         // Source: no size cap. LiveKit types `video` narrowly but hands it to
@@ -31,6 +41,22 @@ export const shareOptions = (c: DesktopShareChoice): { capture: ScreenShareCaptu
     },
     publish: {
       screenShareEncoding: { maxBitrate: Math.round(AT_30[height ?? 'source'] * FPS_SHARE[frameRate]), maxFramerate: frameRate },
+      /**
+       * One layer, and keep its size.
+       *
+       * Simulcast publishes the share two or three times at different sizes,
+       * and every viewer's client then picks one by how big the tile is on
+       * their screen. In a call that tile is small, so the small layer is what
+       * everyone got — and it changed under them whenever the layout did. A
+       * screen share has one right answer: the size it was captured at.
+       *
+       * `maintain-resolution` is the same bargain for the encoder itself:
+       * when the machine or the connection cannot keep up, drop frames, never
+       * pixels. A share that stutters is readable; a share that goes soft is
+       * not.
+       */
+      simulcast: false,
+      degradationPreference: 'maintain-resolution',
     },
   }
 }

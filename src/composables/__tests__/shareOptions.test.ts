@@ -7,6 +7,8 @@ describe('shareOptions', () => {
     expect(capture.resolution).toEqual({ width: 1280, height: 720, frameRate: 60 })
     expect(capture.contentHint).toBe('motion')
     expect(publish.screenShareEncoding).toEqual({ maxBitrate: 4_000_000, maxFramerate: 60 })
+    expect(publish.simulcast).toBe(false)
+    expect(publish.degradationPreference).toBe('maintain-resolution')
   })
 
   it('Screenshare: no size cap at 15 fps, told to keep the detail', () => {
@@ -43,5 +45,23 @@ describe('pickerHints', () => {
 
   it('opens it dark in the default, the dark variants and the studio themes', () => {
     for (const t of [undefined, 'midnight', 'amoled', 'discord']) expect(pickerHints(root(t)).dark, String(t)).toBe(true)
+  })
+})
+
+describe('the share that stopped going blurry', () => {
+  it('calls a 30 fps share detail, not motion — motion is what scaled the picture down', () => {
+    expect(shareOptions({ kind: 'screen', resolution: 1080, frameRate: 30, audio: false }).capture.contentHint).toBe('detail')
+  })
+
+  it('keeps motion for the 60 fps case, which is only ever a game', () => {
+    expect(shareOptions({ kind: 'window', resolution: 720, frameRate: 60, audio: false }).capture.contentHint).toBe('motion')
+  })
+
+  it('publishes one layer, so no viewer can be served a smaller one', () => {
+    for (const frameRate of [15, 30, 60] as const) {
+      const { publish } = shareOptions({ kind: 'screen', resolution: 1080, frameRate, audio: false })
+      expect(publish.simulcast).toBe(false)
+      expect(publish.degradationPreference).toBe('maintain-resolution')
+    }
   })
 })

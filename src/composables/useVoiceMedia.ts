@@ -176,7 +176,14 @@ export const toggleScreenShare = async (): Promise<string | null> => {
     selfBrowserSurface: 'exclude',
     systemAudio: 'exclude',
   }
-  let publish: TrackPublishOptions | undefined
+  /**
+   * The browser's own picker has no quality controls, but the publish side
+   * still needs the two settings that stop a share going soft: one layer, so
+   * no viewer's client can ask for a smaller copy because its tile is small,
+   * and frames given up before pixels when the machine is struggling. The
+   * app's picker replaces this wholesale, with a bitrate to match its choice.
+   */
+  let publish: TrackPublishOptions | undefined = { simulcast: false, degradationPreference: 'maintain-resolution' }
   // Inside the Windows app, its own picker comes first and brings stream
   // quality and audio with it. Closing it is a choice, not a failure.
   const bridge = next ? desktopBridge() : null

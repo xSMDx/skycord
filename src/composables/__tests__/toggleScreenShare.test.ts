@@ -23,7 +23,10 @@ describe('toggleScreenShare', () => {
     const [on, capture, publish] = setScreenShareEnabled.mock.calls[0]
     expect(on).toBe(true)
     expect(capture).toMatchObject({ selfBrowserSurface: 'exclude', systemAudio: 'exclude' })
-    expect(publish).toBeUndefined()
+    // The browser's picker chooses the capture; the publish side still pins the
+    // two settings that keep a share sharp — one layer, and frames given up
+    // before pixels.
+    expect(publish).toEqual({ simulcast: false, degradationPreference: 'maintain-resolution' })
   })
 
   it('inside the Windows app, asks its picker first and shares with what was chosen', async () => {
