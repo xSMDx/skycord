@@ -16,8 +16,7 @@ import {
 const desktop: DesktopBridge | null = desktopBridge()
 
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
-  { id: 'full', name: 'Full', line: 'Everything on. The default.' },
-  { id: 'balanced', name: 'Balanced', line: 'Keeps three conversations in memory, four cameras at once, pictures that wait for a tap, and less motion.' },
+  { id: 'max', name: 'Max', line: 'Everything on. The default.' },
   { id: 'light', name: 'Light', line: 'One conversation, two cameras, no motion, the plain Windows title bar, and the graphics card off. Best on an old machine, and video may look worse.' },
 ]
 
@@ -40,7 +39,7 @@ const heapMb = computed(() => {
 })
 const deviceGb = computed(() => (navigator as { deviceMemory?: number }).deviceMemory)
 const offerLight = computed(() =>
-  perfState.level === 'full' && !perfState.dismissedSuggestion && suggestsLight(deviceGb.value))
+  perfState.level === 'max' && !perfState.dismissedSuggestion && suggestsLight(deviceGb.value))
 const needsRestart = computed(() => restartNeeded(applied.value))
 const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
 </script>

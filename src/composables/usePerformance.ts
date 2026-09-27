@@ -13,7 +13,7 @@ import { reactive, computed, watch } from 'vue'
 import { appearance } from './useAppearance'
 import { desktopBridge } from './desktopBridge'
 
-export type PerfLevel = 'full' | 'balanced' | 'light'
+export type PerfLevel = 'max' | 'light'
 
 export interface PerfSwitches {
   /** Conversations kept in memory at once; the open one is never evicted. */
@@ -36,17 +36,11 @@ export interface PerfSwitches {
 }
 
 export const PERF_LEVELS: Record<PerfLevel, PerfSwitches> = {
-  full: {
+  max: {
     keepConversations: Infinity, messagesPerConversation: Infinity,
     animatedMedia: 'play', imageTrimMinutes: null,
     maxCallTiles: Infinity, incomingVideo: 'auto', pauseVideoWhenHidden: false,
     motion: 'full', skycordTitleBar: true, hardwareAcceleration: true, heapCapMb: null,
-  },
-  balanced: {
-    keepConversations: 3, messagesPerConversation: 200,
-    animatedMedia: 'tap', imageTrimMinutes: 5,
-    maxCallTiles: 4, incomingVideo: '720p', pauseVideoWhenHidden: true,
-    motion: 'reduced', skycordTitleBar: true, hardwareAcceleration: true, heapCapMb: null,
   },
   light: {
     keepConversations: 1, messagesPerConversation: 100,
@@ -69,7 +63,7 @@ export const suggestsLight = (totalMemoryGb: number | undefined): boolean =>
 const KEY = 'sykord_perf'
 
 interface PerfState { level: PerfLevel; overrides: Partial<PerfSwitches>; dismissedSuggestion: boolean }
-const DEFAULT_STATE: PerfState = { level: 'full', overrides: {}, dismissedSuggestion: false }
+const DEFAULT_STATE: PerfState = { level: 'max', overrides: {}, dismissedSuggestion: false }
 
 /**
  * JSON has no Infinity, and two switches use it for "no limit". Left alone,
@@ -108,7 +102,9 @@ export const decodeOverrides = (raw: unknown): Partial<PerfSwitches> => {
 const load = (): PerfState => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}')
-    const level: PerfLevel = raw.level === 'balanced' || raw.level === 'light' ? raw.level : 'full'
+    // Balanced measured at 3 MB against Max and was withdrawn; anyone left on it
+    // returns to Max rather than silently losing GIFs and cameras to Light.
+    const level: PerfLevel = raw.level === 'light' ? 'light' : 'max'
     return { level, overrides: decodeOverrides(raw.overrides), dismissedSuggestion: raw.dismissedSuggestion === true }
   } catch { return { ...DEFAULT_STATE } }
 }

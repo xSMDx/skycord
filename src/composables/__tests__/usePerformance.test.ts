@@ -73,26 +73,23 @@ describe('overrides that survive storage', () => {
 })
 
 describe('levels', () => {
-  it('keeps everything at full', () => {
-    expect(PERF_LEVELS.full.keepConversations).toBe(Infinity)
-    expect(PERF_LEVELS.full.messagesPerConversation).toBe(Infinity)
-    expect(PERF_LEVELS.full.animatedMedia).toBe('play')
-    expect(PERF_LEVELS.full.skycordTitleBar).toBe(true)
-    expect(PERF_LEVELS.full.hardwareAcceleration).toBe(true)
+  it('keeps everything at max', () => {
+    expect(PERF_LEVELS.max.keepConversations).toBe(Infinity)
+    expect(PERF_LEVELS.max.messagesPerConversation).toBe(Infinity)
+    expect(PERF_LEVELS.max.animatedMedia).toBe('play')
+    expect(PERF_LEVELS.max.skycordTitleBar).toBe(true)
+    expect(PERF_LEVELS.max.hardwareAcceleration).toBe(true)
   })
 
-  it('trades progressively more at balanced and light', () => {
-    expect(PERF_LEVELS.balanced.keepConversations).toBe(3)
-    expect(PERF_LEVELS.balanced.messagesPerConversation).toBe(200)
-    expect(PERF_LEVELS.balanced.maxCallTiles).toBe(4)
+  it('trades real things at light', () => {
     expect(PERF_LEVELS.light.keepConversations).toBe(1)
     expect(PERF_LEVELS.light.messagesPerConversation).toBe(100)
     expect(PERF_LEVELS.light.maxCallTiles).toBe(2)
   })
 
   it('only light gives up the Skycord title bar and the graphics card', () => {
-    expect(PERF_LEVELS.balanced.skycordTitleBar).toBe(true)
-    expect(PERF_LEVELS.balanced.hardwareAcceleration).toBe(true)
+    expect(PERF_LEVELS.max.skycordTitleBar).toBe(true)
+    expect(PERF_LEVELS.max.hardwareAcceleration).toBe(true)
     expect(PERF_LEVELS.light.skycordTitleBar).toBe(false)
     expect(PERF_LEVELS.light.hardwareAcceleration).toBe(false)
     expect(PERF_LEVELS.light.heapCapMb).toBe(192)
@@ -101,7 +98,7 @@ describe('levels', () => {
 
 describe('resolve', () => {
   it('is the level when nothing is overridden', () => {
-    expect(resolve('balanced', {})).toEqual(PERF_LEVELS.balanced)
+    expect(resolve('max', {})).toEqual(PERF_LEVELS.max)
   })
 
   it('lets one switch be overridden without touching the rest', () => {

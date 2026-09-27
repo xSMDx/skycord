@@ -23,6 +23,28 @@ if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
 const label = (process.argv[process.argv.indexOf('--label') + 1] || 'run').replace(/[^a-z0-9-]/gi, '')
 const wait = ms => new Promise(r => setTimeout(r, ms))
 
+/**
+ * Which performance level to measure. The level lives in two places and both
+ * have to be set before the thing they control runs: the page's own
+ * localStorage, read when the client boots, and the shell's skycord.json, read
+ * before Chromium starts (the graphics card, the heap ceiling and the title bar
+ * cannot change after that). A cold profile has neither, so the run seeds both.
+ */
+const LEVELS = {
+  max:      { page: { level: 'max', overrides: {}, dismissedSuggestion: true },
+              shell: { skycordTitleBar: true, hardwareAcceleration: true, heapCapMb: null, imageTrimMinutes: null } },
+  light:    { page: { level: 'light', overrides: {}, dismissedSuggestion: true },
+              shell: { skycordTitleBar: false, hardwareAcceleration: false, heapCapMb: 192, imageTrimMinutes: 1 } },
+}
+/** The idle phase is where growth shows, so it is long by default — but a
+ *  diagnostic run needs to fail fast rather than after twenty minutes. */
+const idleMs = Number(process.env.PROBE_IDLE_MS || 20 * 60_000)
+const levelName = process.argv[process.argv.indexOf('--level') + 1]
+const level = LEVELS[levelName] ?? LEVELS.max
+if (levelName && !LEVELS[levelName]) {
+  console.error(`--level must be one of: ${Object.keys(LEVELS).join(', ')}`); process.exit(1)
+}
+
 const appDir = fileURLToPath(new URL('..', import.meta.url))
 // No trailing separator on profileDir: Playwright quotes every arg for
 // CreateProcess, and a path ending in "\" right before the closing quote
@@ -30,7 +52,7 @@ const appDir = fileURLToPath(new URL('..', import.meta.url))
 // command line — the app then exits before app.whenReady with no output at
 // all. join() never leaves a trailing separator, so this is safe.
 const probeDir = join(appDir, '.probe')
-const profileDir = join(probeDir, 'profile')
+const profileDir = join(probeDir, 'profile-' + label)
 
 // The profile must be COLD on every run, not just present. A run that
 // reuses the same directory inherits whatever session cookie the previous
@@ -41,12 +63,14 @@ const profileDir = join(probeDir, 'profile')
 // a warm HTTP cache or warm profile would flatter whichever run reuses it,
 // for reasons that have nothing to do with what's being measured. So wipe
 // it before every run. Do not "optimise" this back into a reused directory.
-rmSync(profileDir, { recursive: true, force: true })
+// Windows keeps file handles for a moment after a process exits, and a
+// chained run would otherwise fail to clear the one before it.
+rmSync(profileDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
 // First launch shows the server picker unless a server is already saved.
 // Writing the store directly into a scratch profile points the shell at the
 // dev stack without ever touching the picker UI.
 mkdirSync(profileDir, { recursive: true })
-writeFileSync(join(profileDir, 'skycord.json'), JSON.stringify({ instanceOrigin: origin }))
+writeFileSync(join(profileDir, 'skycord.json'), JSON.stringify({ instanceOrigin: origin, perf: level.shell }))
 
 const app = await _electron.launch({ args: ['.', `--user-data-dir=${profileDir}`], cwd: appDir })
 // Electron's getAppMetrics() reports memory.workingSetSize/privateBytes in
@@ -60,7 +84,18 @@ const sample = async (phase) => {
   const rows = metrics.map(m => ({ type: m.type, ws: Math.round((m.memory?.workingSetSize ?? 0) / 1024), priv: Math.round((m.memory?.privateBytes ?? 0) / 1024) }))
   samples.push({ t: Date.now(), phase, total_ws: rows.reduce((s, r) => s + r.ws, 0), total_priv: rows.reduce((s, r) => s + r.priv, 0), rows })
 }
-const every10s = setInterval(() => sample('tick'), 10_000)
+let died = false
+app.on('close', () => { died = true })
+const every10s = setInterval(() => sample('tick').catch(() => {}), 10_000)
+/** The idle phase is the point of the run, so it waits in short steps and
+ *  gives up the moment the app is gone — a dead app samples nothing, and
+ *  twenty minutes of that looks exactly like a healthy idle in the log. */
+const idle = async (ms) => {
+  for (let left = ms; left > 0; left -= 5_000) {
+    if (died) throw new Error('the app exited during the run — nothing after this point was measured')
+    await wait(Math.min(5_000, left))
+  }
+}
 
 try {
   const page = await (async () => {
@@ -101,6 +136,17 @@ try {
     // is what proves sign-in happened.
     await page.waitForSelector('nav.rail .ri:not(.home)', { timeout: 30_000 })
   } // else: already signed in (only possible if the profile wipe above is ever removed) — nothing to do.
+
+  // The page keeps its level in localStorage, which a cold profile does not
+  // have, so it boots at Full whatever the shell was told. Seed it and reload:
+  // eviction, tile caps and the rest are read live, but reloading is what makes
+  // the measured session start the way a real one at this level would.
+  await page.evaluate(([key, value]) => localStorage.setItem(key, value),
+    ['sykord_perf', JSON.stringify(level.page)])
+  await page.reload()
+  await page.waitForSelector('nav.rail .ri:not(.home)', { timeout: 30_000 })
+  console.log(`level: ${levelName ?? 'max'}`)
+
   await sample('signed-in')
   await page.click('nav.rail .ri:not(.home)')
   // Channel rows render as `.ch-item`, with the clickable control being the
@@ -128,8 +174,8 @@ try {
     await sample('scrolled')
   }
   await sample('channels-open')
-  await wait(20 * 60_000)
-  await sample('idle-20m')
+  await idle(idleMs)
+  await sample('idle')
 } finally {
   clearInterval(every10s)
 }

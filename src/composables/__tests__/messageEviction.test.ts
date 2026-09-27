@@ -14,6 +14,7 @@ vi.mock('../materialScheme', () => ({
 
 let useMessages: typeof import('../useMessages').useMessages
 let setPerfLevel: typeof import('../usePerformance').setPerfLevel
+let setPerfOverride: typeof import('../usePerformance').setPerfOverride
 
 beforeAll(async () => {
   globalThis.localStorage = { getItem: () => null, setItem: () => {} } as unknown as Storage
@@ -27,7 +28,7 @@ beforeAll(async () => {
   globalThis.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as unknown as typeof matchMedia
 
   ;({ useMessages } = await import('../useMessages'))
-  ;({ setPerfLevel } = await import('../usePerformance'))
+  ;({ setPerfLevel, setPerfOverride } = await import('../usePerformance'))
 })
 
 const msg = (n: number): Message => ({
@@ -42,11 +43,15 @@ describe('eviction', () => {
   beforeEach(() => {
     m = useMessages()
     for (const id of ['c1', 'c2', 'c3', 'c4']) m.initChannel(id, [])
-    setPerfLevel('balanced')
+    // Driven by the switches themselves, not by whichever levels exist today:
+    // this is the eviction rule under test, not the shape of the Settings page.
+    setPerfLevel('light')
+    setPerfOverride('messagesPerConversation', 200)
+    setPerfOverride('keepConversations', 3)
   })
 
   it('keeps every message at full', () => {
-    setPerfLevel('full')
+    setPerfLevel('max')
     m.initChannel('c1', many(500))
     m.evict({ kind: 'channel', id: 'c1' })
     expect(m.getChannelMessages('c1')).toHaveLength(500)
