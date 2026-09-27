@@ -7,9 +7,9 @@
       "defines": [ "NAPI_DISABLE_CPP_EXCEPTIONS", "NOMINMAX", "UNICODE", "_UNICODE" ],
       "conditions": [
         [ "OS=='win'", {
-          "libraries": [ "-lmmdevapi.lib", "-lole32.lib", "-lavrt.lib" ],
+          "libraries": [ "-lmmdevapi.lib", "-lole32.lib", "-luser32.lib" ],
           "msvs_settings": {
-            "VCCLCompilerTool": { "ExceptionHandling": 1, "AdditionalOptions": [ "/std:c++17" ] }
+            "VCCLCompilerTool": { "ExceptionHandling": 1 }
           }
         } ]
       ]

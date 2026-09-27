@@ -14,7 +14,9 @@
 #include <audioclient.h>
 #include <audioclientactivationparams.h>
 #include <mmdeviceapi.h>
+#include <mmreg.h>
 #include <tlhelp32.h>
+#include <wrl/client.h>
 #include <wrl/implements.h>
 #include <atomic>
 #include <thread>
@@ -37,11 +39,15 @@ std::thread       g_thread;
 Napi::ThreadSafeFunction g_tsfn;
 
 // ActivateAudioInterfaceAsync answers on another thread; this waits for it.
+//
+// FtmBase is a base class, not a RuntimeClassFlags value — it makes the
+// handler free-threaded, which activation requires. Putting it in the flags
+// does not compile.
 class ActivationHandler
-    : public RuntimeClass<RuntimeClassFlags<ClassicCom | FtmBase>,
+    : public RuntimeClass<RuntimeClassFlags<ClassicCom>, FtmBase,
                           IActivateAudioInterfaceCompletionHandler> {
  public:
-  HRESULT ActivateCompleted(IActivateAudioInterfaceAsyncOperation* op) override {
+  HRESULT STDMETHODCALLTYPE ActivateCompleted(IActivateAudioInterfaceAsyncOperation* op) override {
     HRESULT hr = S_OK;
     ComPtr<IUnknown> unknown;
     if (SUCCEEDED(op->GetActivateResult(&hr, &unknown)) && SUCCEEDED(hr)) {

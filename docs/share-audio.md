@@ -63,6 +63,37 @@ offers nothing finer than a process tree, and the picker says so.
   signal distinguishing this from an application that is simply quiet, so there
   is no runtime detection. The walk is what keeps it rare.
 
+## What has been verified, and what has not
+
+Measured on Windows 11 (build 28000) with MSVC 14.44, 2026-09-27:
+
+| Claim | Result |
+|---|---|
+| The addon compiles and loads | Yes, clean, no warnings |
+| `processTable` reports real parents and creation times | 382 processes |
+| The walk collapses a browser to one root | Chrome 37 processes → 1; Edge 35 → 1 |
+| Chunk format and cadence | 3840 bytes, ~99.7/s — exactly 10 ms |
+| A silent application still yields chunks | Yes, at amplitude 0 |
+| Real audio is captured from a named process | Peak 0.27 |
+| An unrelated process tree stays silent | 0.0000 across repeated runs |
+| **A child's audio reaches a parent target** | **Yes — peak 0.22 targeting a parent that plays nothing** |
+
+That last row is the premise the whole `processWalk` design rests on: we aim at
+Chrome's browser process expecting to capture the audio service, which is its
+child. It was tested directly rather than assumed.
+
+**One unexplained result.** Targeting `explorer.exe`, which is a distant
+ancestor of the test player (six levels up, through the terminal), captured
+silence. One level down works; six levels through a chain of shells did not.
+Windows appears to resolve the tree at capture time in a way a long or partly
+exited chain does not survive. It does not affect this feature — the walk never
+targets anything more than a step or two from the window's own process — but
+anyone extending it should not assume arbitrary depth.
+
+**Still needs a person:** whether a real Chrome tab's sound is captured when
+Chrome is the target, whether the published track sounds untouched by echo
+cancellation, and whether audio and video stay in sync over several minutes.
+
 ## Building the addon
 
 `npm run build:native` in `desktop/`, which `dist` and `release` depend on. It
