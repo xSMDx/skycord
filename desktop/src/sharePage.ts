@@ -267,11 +267,23 @@
   // ── tabs ──
   const tabButton = (kind: Kind) => $<HTMLButtonElement>(`tab-${kind}`)
 
+  /** The width the slider is laid out at: the wider tab. Re-read every time,
+   *  because a tab grows when its count arrives, and written only when it
+   *  actually changes — so a move is a transform, never a relayout. */
+  let sliderBase = 0
+
   const placeSlider = () => {
     const b = tabButton(tab)
     const slider = $('slider')
-    slider.style.width = `${b.offsetWidth}px`
-    slider.style.transform = `translateX(${b.offsetLeft}px)`
+    const base = Math.max(tabButton('window').offsetWidth, tabButton('screen').offsetWidth)
+    if (base && base !== sliderBase) {
+      sliderBase = base
+      slider.style.width = `${base}px`
+    }
+    if (!sliderBase) return
+    // Always ≤ 1, since the base is the wider tab: the corner radius tightens a
+    // little on the narrower one rather than stretching into an oval.
+    slider.style.transform = `translateX(${b.offsetLeft}px) scaleX(${b.offsetWidth / sliderBase})`
   }
 
   const selectTab = (kind: Kind, focus = false) => {

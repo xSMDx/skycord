@@ -65,8 +65,14 @@
   .slider {
     position: absolute; top: 3px; bottom: 3px; left: 0; border-radius: 7px;
     background: var(--raised); box-shadow: 0 1px 3px rgba(0,0,0,.22);
+    /* Width is set once, to the wider tab, and never animated: animating it
+       would relayout the tab strip on every frame of the move. The travel and
+       the resize are both carried by the transform, which the compositor can
+       do on its own. Scaling only ever shrinks, so the corner radius tightens
+       slightly rather than stretching into an oval. */
+    transform-origin: left center;
   }
-  .slider.moving { transition: transform .24s var(--ease), width .24s var(--ease); }
+  .slider.moving { transition: transform .24s var(--ease); }
 
   /* ── the grid of sources ── */
   main { overflow-y: auto; padding: 6px 24px 24px; scrollbar-gutter: stable; }
