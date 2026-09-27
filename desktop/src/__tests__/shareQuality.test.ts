@@ -9,7 +9,7 @@ const shown = new Map([
 describe('parseChoice', () => {
   it('accepts a shown screen with its quality and audio', () => {
     expect(parseChoice({ sourceId: 'screen:1:0', resolution: 1080, frameRate: 30, audio: true, hidePreview: true }, shown)).toEqual({
-      sourceId: 'screen:1:0', name: 'Entire screen', kind: 'screen', resolution: 1080, frameRate: 30, audio: true, hidePreview: true,
+      sourceId: 'screen:1:0', name: 'Entire screen', kind: 'screen', resolution: 1080, frameRate: 30, audio: true, pid: null, hidePreview: true,
     })
   })
 
@@ -21,8 +21,19 @@ describe('parseChoice', () => {
     for (const bad of [null, undefined, 'screen:1:0', 7, { sourceId: 5 }]) expect(parseChoice(bad, shown)).toBeNull()
   })
 
-  it('never carries audio with a window: Windows can only loop back the whole system', () => {
-    expect(parseChoice({ sourceId: 'window:42:0', resolution: 720, frameRate: 30, audio: true }, shown)?.audio).toBe(false)
+  it('carries audio with a window now that one app can be captured', () => {
+    expect(parseChoice({ sourceId: 'window:42:0', resolution: 720, frameRate: 30, audio: true, pid: 913 }, shown))
+      .toMatchObject({ kind: 'window', audio: true, pid: 913 })
+  })
+
+  it('ignores a pid that is not a positive integer', () => {
+    for (const bad of [0, -1, 1.5, '913', null, undefined]) {
+      expect(parseChoice({ sourceId: 'window:42:0', resolution: 720, frameRate: 30, audio: true, pid: bad }, shown)?.pid).toBeNull()
+    }
+  })
+
+  it('never carries a pid for a whole screen: there is no single app to capture', () => {
+    expect(parseChoice({ sourceId: 'screen:1:0', resolution: 720, frameRate: 30, audio: true, pid: 913 }, shown)?.pid).toBeNull()
   })
 
   it('falls back to the default quality for values it does not offer', () => {
@@ -37,13 +48,28 @@ describe('parseChoice', () => {
 
 describe('readRemembered', () => {
   it('reads back a saved choice', () => {
-    expect(readRemembered({ resolution: 1440, frameRate: 60, audio: true, hidePreview: true })).toEqual({ resolution: 1440, frameRate: 60, audio: true, hidePreview: true })
+    expect(readRemembered({ resolution: 1440, frameRate: 60, windowAudio: true, screenAudio: false, hidePreview: true }))
+      .toEqual({ resolution: 1440, frameRate: 60, windowAudio: true, screenAudio: false, hidePreview: true })
   })
 
-  it('gives the defaults, audio off, for nothing or nonsense', () => {
-    const fallback = { ...DEFAULT_QUALITY, audio: false, hidePreview: false }
-    expect(readRemembered(undefined)).toEqual(fallback)
-    expect(readRemembered({ resolution: 'huge', frameRate: -1, audio: 'yes' })).toEqual(fallback)
+  it('splits an older single audio flag across both kinds', () => {
+    expect(readRemembered({ resolution: 1080, frameRate: 30, audio: true }))
+      .toMatchObject({ windowAudio: true, screenAudio: true })
+  })
+
+  it('defaults to sound for a window and silence for a screen', () => {
+    expect(readRemembered({})).toMatchObject({ windowAudio: true, screenAudio: false })
+    expect(readRemembered(undefined)).toMatchObject({ windowAudio: true, screenAudio: false })
+  })
+
+  it('prefers the split flags over the old one when both are present', () => {
+    expect(readRemembered({ audio: true, windowAudio: false, screenAudio: false }))
+      .toMatchObject({ windowAudio: false, screenAudio: false })
+  })
+
+  it('gives the default quality for nonsense', () => {
+    expect(readRemembered({ resolution: 'huge', frameRate: -1, audio: 'yes' }))
+      .toEqual({ ...DEFAULT_QUALITY, windowAudio: true, screenAudio: false, hidePreview: false })
   })
 })
 

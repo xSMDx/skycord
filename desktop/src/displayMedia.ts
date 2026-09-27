@@ -32,7 +32,8 @@ const remember = (choice: ShareChoice, opts: PickOptions) => {
     share: {
       resolution: opts.quality ? choice.resolution : last.resolution,
       frameRate: opts.quality ? choice.frameRate : last.frameRate,
-      audio: opts.audio && choice.kind === 'screen' ? choice.audio : last.audio,
+      windowAudio: opts.audio && choice.kind === 'window' ? choice.audio : last.windowAudio,
+      screenAudio: opts.audio && choice.kind === 'screen' ? choice.audio : last.screenAudio,
       hidePreview: opts.quality ? choice.hidePreview : last.hidePreview,
     },
   })

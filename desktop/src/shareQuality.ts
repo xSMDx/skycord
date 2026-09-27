@@ -24,20 +24,37 @@ export interface ShareChoice extends Quality {
   name: string
   kind: 'screen' | 'window'
   audio: boolean
+  /**
+   * The application to capture sound from, for a window share. Null for a
+   * screen (there is no single app) and null when the pid could not be
+   * resolved, which means the share goes out without sound.
+   */
+  pid: number | null
   /** Don't show the member their own stream. Others still see it. */
   hidePreview: boolean
 }
 
-/** What the app keeps between shares. */
-export interface Remembered extends Quality { audio: boolean; hidePreview: boolean }
+/**
+ * What the app keeps between shares. Audio is remembered per kind because the
+ * two mean different things: a window sends one app, a screen sends everything
+ * except Skycord, and it is reasonable to want the first and not the second.
+ */
+export interface Remembered extends Quality {
+  windowAudio: boolean
+  screenAudio: boolean
+  hidePreview: boolean
+}
 
 const resolutionOf = (v: unknown): Resolution => RESOLUTIONS.find(r => r === v) ?? DEFAULT_QUALITY.resolution
 const frameRateOf = (v: unknown): FrameRate => FRAME_RATES.find(f => f === v) ?? DEFAULT_QUALITY.frameRate
 
+const pidOf = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null
+
 /**
- * The picker page's answer, checked. The id must be one the picker was shown,
- * and audio only comes with a whole screen: Windows can loop back only the
- * entire system's sound, never one window's.
+ * The picker page's answer, checked. The id must be one the picker was shown.
+ * A window may now carry audio — one application's sound, captured by pid —
+ * and a screen may not carry a pid, because it is not one application.
  */
 export const parseChoice = (value: unknown, shown: ReadonlyMap<string, string>): ShareChoice | null => {
   if (!value || typeof value !== 'object') return null
@@ -52,13 +69,28 @@ export const parseChoice = (value: unknown, shown: ReadonlyMap<string, string>):
     kind,
     resolution: resolutionOf(v.resolution),
     frameRate: frameRateOf(v.frameRate),
-    audio: kind === 'screen' && v.audio === true,
+    audio: v.audio === true,
+    pid: kind === 'window' ? pidOf(v.pid) : null,
     hidePreview: v.hidePreview === true,
   }
 }
 
-/** A saved choice read back from disk, where anything may have been written. */
+/**
+ * A saved choice read back from disk, where anything may have been written.
+ *
+ * Before per-app audio there was one `audio` flag, and it meant one thing:
+ * "send the system's sound with a whole-screen share". So it restores
+ * `screenAudio` and nothing else. It says nothing at all about a window,
+ * which could not carry sound when it was written — a window therefore takes
+ * the new default rather than inheriting an answer to a different question.
+ */
 export const readRemembered = (value: unknown): Remembered => {
   const v = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  return { resolution: resolutionOf(v.resolution), frameRate: frameRateOf(v.frameRate), audio: v.audio === true, hidePreview: v.hidePreview === true }
+  return {
+    resolution: resolutionOf(v.resolution),
+    frameRate: frameRateOf(v.frameRate),
+    windowAudio: typeof v.windowAudio === 'boolean' ? v.windowAudio : true,
+    screenAudio: typeof v.screenAudio === 'boolean' ? v.screenAudio : v.audio === true,
+    hidePreview: v.hidePreview === true,
+  }
 }
