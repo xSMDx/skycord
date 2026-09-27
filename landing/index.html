@@ -853,9 +853,8 @@ sudo bash install.sh</code></pre>
   {
     stage: 'idea', label: 'Being looked at', title: 'Quality of life',
     items: [
-      'Sharper screen share — it currently softens when the tile is small',
-      'A noise filter that copes with clatter and echoey rooms — the current one is strongest on steady sound like fans and hum',
       'Filtering out other people talking near you — a different, harder problem than noise, and not solved yet',
+      'Screen-share sound from one app instead of the whole PC, so sharing audio no longer sends the call back as an echo',
       'Link previews in chat',
       'Jump straight to any message from a link'
     ]
@@ -891,12 +890,17 @@ sudo bash install.sh</code></pre>
 
 // Changelog data
   var RELEASES = [{
-    v: 'v0.20.0', date: 'Sep 21, 2026', time: '17:25 UTC+2', title: 'Skycord for Windows, and a new coat of paint',
+    v: 'v0.20.0', date: 'Sep 27, 2026', time: '20:45 UTC+2', title: 'Skycord for Windows, and a new coat of paint',
     items: [
       ['add', 'Skycord for Windows, as a release candidate. It is in <a href="#download" data-ch="download">#download</a>: one installer, and it keeps itself up to date from then on'],
       ['add', 'The app keeps a list of servers, yours and your friends’, and switches between them from Settings › Servers. The list lives in the app, so no server can see which others you use'],
       ['add', 'Its own screen-share picker: a window or a whole screen, the stream quality (Gaming, Screenshare, or your own resolution and frame rate), and the sound of your whole PC when you share the whole screen. That sound includes the call itself, and the picker says so'],
+      ['fix', 'A screen share that stops going blurry. Three things were doing it, all on the sending side: everything from 30 fps up was published as “motion”, which tells the encoder to keep the frame rate and shrink the picture under any strain; the share went out in two sizes at once, and because a share tile is small in a call, every viewer was handed the small one; and under real strain the encoder was still free to choose. Now only 60 fps counts as motion, one size goes out, and the resolution is held. A share that stutters can be read — a share that goes soft cannot'],
       ['add', 'A title bar that belongs to Skycord: where you are — Friends, Direct Messages, or # channel and server — and back and forward through where you have been, with Alt+Left and Alt+Right too'],
+      ['add', 'Settings › Performance, for a machine that is feeling its age. Max is everything as it was. Light turns the graphics card off, holds a call to two camera tiles at 360p, waits for a tap before animated pictures move, and uses the plain Windows title bar — measured at 41% less memory on the machine it was built on. Most of that one saving is the graphics card, and the drawing moves to the processor instead, so video can look worse and the fan can work harder. Advanced sets each switch by hand, and the page says which ones wait for a restart'],
+      ['add', 'A third noise filter: DeepFilterNet 3, the strongest of them, and the one that copes with keyboards, clatter and echoey rooms rather than only steady sound like fans. It downloads about 10MB the first time you turn it on, asks more of your processor than RNNoise, and adds about 40ms to your voice. RNNoise stays, and stays the lighter one'],
+      ['fix', 'An invite you copy carries the address of the server you are on, so it works for the person you send it to'],
+      ['fix', 'The app asks your server for its page every time it opens, instead of trusting a copy it kept. An update reaches you now rather than the next time the cache happens to give up'],
       ['imp', 'Signing in lasts. A login now runs for 90 days since you last used it, on the web and in the app, instead of ending seven days after you signed in however often you came back. A server set up by hand from an older .env.example still says 7d there: change it to 90d, or delete the line'],
       ['add', 'Light, Dark and Automatic at the top of Appearance. Automatic follows your system and remembers which light and which dark you like; the studio themes sit below them'],
       ['imp', 'Skycord’s colour is Sky now: buttons, links, mentions and the things you select. The light themes use a deeper Sky that stays readable. If you had picked Blurple yourself, you keep it, and an Automatic swatch brings the default back'],
