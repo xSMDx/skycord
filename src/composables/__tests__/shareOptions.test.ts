@@ -65,3 +65,26 @@ describe('the share that stopped going blurry', () => {
     }
   })
 })
+
+describe('shareOptions: which sound goes out, and from where', () => {
+  const screen = { kind: 'screen' as const, resolution: 1080 as const, frameRate: 30, audio: true }
+  const window = { kind: 'window' as const, resolution: 1080 as const, frameRate: 30, audio: true, pid: 913 }
+
+  it('lets LiveKit capture the sound of a whole screen', () => {
+    expect(shareOptions(screen).capture.audio).toBe(true)
+  })
+
+  it('asks Chromium to leave this app out of a screen share’s sound', () => {
+    const capture = shareOptions(screen).capture as { restrictOwnAudio?: boolean }
+    expect(capture.restrictOwnAudio).toBe(true)
+  })
+
+  it('never lets LiveKit capture a window’s sound: that track is built here', () => {
+    expect(shareOptions(window).capture.audio).toBe(false)
+  })
+
+  it('does not ask for the restriction when no screen sound was wanted', () => {
+    const capture = shareOptions({ ...screen, audio: false }).capture as { restrictOwnAudio?: boolean }
+    expect(capture.restrictOwnAudio).toBeUndefined()
+  })
+})

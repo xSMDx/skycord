@@ -18,9 +18,17 @@ const FPS_SHARE: Record<number, number> = { 5: 0.3, 15: 0.6, 30: 1, 60: 1.6 }
 export const shareOptions = (c: DesktopShareChoice): { capture: ScreenShareCaptureOptions; publish: TrackPublishOptions } => {
   const frameRate = FPS_SHARE[c.frameRate] ? c.frameRate : 30
   const height = typeof c.resolution === 'number' && AT_30[c.resolution] ? c.resolution : null
-  return {
-    capture: {
-      audio: c.audio,
+  const capture = {
+      /**
+       * Only a whole screen's sound comes through LiveKit's own capture, and
+       * it asks Chromium to leave this app out of it: `restrictOwnAudio`
+       * selects the loopback device that excludes our own process tree, so
+       * the call is no longer sent back to the people in it. A window's sound
+       * is captured natively, per application, and published as its own track
+       * — Chromium cannot capture one application at all.
+       */
+      audio: c.kind === 'screen' && c.audio,
+      ...(c.kind === 'screen' && c.audio ? { restrictOwnAudio: true } : {}),
       /**
        * Only a 60 fps share is called motion.
        *
@@ -38,7 +46,11 @@ export const shareOptions = (c: DesktopShareChoice): { capture: ScreenShareCaptu
         // Source: no size cap. LiveKit types `video` narrowly but hands it to
         // getDisplayMedia as given, so the frame rate travels this way.
         : { video: { frameRate } as unknown as ScreenShareCaptureOptions['video'] }),
-    },
+    // LiveKit's type predates the constraint; getDisplayMedia takes it as given.
+  } as ScreenShareCaptureOptions & { restrictOwnAudio?: boolean }
+
+  return {
+    capture,
     publish: {
       screenShareEncoding: { maxBitrate: Math.round(AT_30[height ?? 'source'] * FPS_SHARE[frameRate]), maxFramerate: frameRate },
       /**

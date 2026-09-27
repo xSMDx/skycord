@@ -11,6 +11,11 @@ export interface DesktopShareChoice {
   resolution: number | 'source'
   frameRate: number
   audio: boolean
+  /**
+   * The application whose sound is being captured, for a window share. Null
+   * for a screen, and null in app builds before per-app audio.
+   */
+  pid?: number | null
   /** Don't draw your own screen share for you. Absent from older app builds. */
   hidePreview?: boolean
 }
@@ -25,6 +30,8 @@ export interface DesktopBridge {
    * on their own.
    */
   pickShare?(hints: { dark: boolean }): Promise<DesktopShareChoice | null>
+  /** Stop capturing a shared app's sound. Absent in builds before it. */
+  stopShareAudio?(): void
   /** Open the app's Servers window. Absent in app builds before it. */
   openServers?(hints: { dark: boolean }): Promise<void>
   /** Feed the app's own title bar. Absent in app builds before it. */

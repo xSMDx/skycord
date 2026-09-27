@@ -19,6 +19,7 @@ import { sameOrigin } from './rules'
 import { pickShareSource, type PickOptions } from './sharePicker'
 import { readRemembered, type ShareChoice } from './shareQuality'
 import { readStore, writeStore } from './store'
+import { startShareAudio, stopShareAudio } from './shareAudio'
 
 /** How long a choice made in advance waits for its getDisplayMedia. */
 const PENDING_MS = 20_000
@@ -56,7 +57,24 @@ export const handleDisplayMedia = (
     const choice = await pick(win, { quality: true, audio: true, dark, last: readRemembered(readStore().share) })
     if (!choice) return null
     pending = { choice, at: Date.now() }
-    return { kind: choice.kind, resolution: choice.resolution, frameRate: choice.frameRate, audio: choice.audio, hidePreview: choice.hidePreview }
+    // A window's sound is captured natively. Start it before the page
+    // publishes, so the track is fed from its first block — and report
+    // failure by clearing `audio`, which is how the page knows to say the
+    // share went out silent.
+    const captured = choice.kind === 'window' && choice.audio && choice.pid !== null
+      ? await startShareAudio(choice.pid, event.sender)
+      : false
+    return {
+      kind: choice.kind, resolution: choice.resolution, frameRate: choice.frameRate,
+      audio: choice.kind === 'screen' ? choice.audio : captured,
+      pid: choice.pid, hidePreview: choice.hidePreview,
+    }
+  })
+
+  // The page tells us when it stops sharing. A page that goes away stops too,
+  // because the helper is killed with the window that owns it.
+  ipcMain.on('desktop:shareAudioStop', event => {
+    if (event.sender === getPage()) stopShareAudio()
   })
 
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {

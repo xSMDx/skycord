@@ -69,6 +69,24 @@ export const startShareAudioTrack = async (
   return track
 }
 
+/**
+ * The port arrives from the main process as a page message, which may land
+ * before or after the share starts, so it is kept until asked for.
+ */
+let waiting: MessagePort | null = null
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (event: MessageEvent) => {
+    if (event.data === 'share-audio-port' && event.ports[0]) waiting = event.ports[0]
+  })
+}
+
+/** The track for the port the app sent, if it sent one. */
+export const takeShareAudioTrack = async (): Promise<MediaStreamTrack | null> => {
+  const port = waiting
+  waiting = null
+  return port ? startShareAudioTrack(port) : null
+}
+
 /** Tear everything down. Safe whether or not a share is running. */
 export const stopShareAudioTrack = async (): Promise<void> => {
   const l = live

@@ -17,6 +17,7 @@ import { permits } from './voicePermits'
 import { useViewport } from './useViewport'
 import { desktopBridge } from './desktopBridge'
 import { shareOptions, pickerHints } from './shareOptions'
+import { takeShareAudioTrack, stopShareAudioTrack } from './shareAudioTrack'
 
 export interface VideoTrackInfo {
   participantId: string
@@ -188,9 +189,14 @@ export const toggleScreenShare = async (): Promise<string | null> => {
   // quality and audio with it. Closing it is a choice, not a failure.
   const bridge = next ? desktopBridge() : null
   let hideOwn = false
+  // The app clears `audio` when it wanted to capture an application's sound
+  // and could not. A pid with no audio is exactly that case, and the only
+  // way the page learns of it.
+  let audioRefused = false
   if (bridge?.pickShare) {
     const choice = await bridge.pickShare(pickerHints())
     if (!choice) return null
+    audioRefused = choice.kind === 'window' && typeof choice.pid === 'number' && !choice.audio
     ;({ capture, publish } = shareOptions(choice))
     hideOwn = choice.hidePreview === true
   }
@@ -199,9 +205,23 @@ export const toggleScreenShare = async (): Promise<string | null> => {
     media.localScreenOn = next
     media.hideOwnScreen = next && hideOwn
     next ? registerLocalVideo(Track.Source.ScreenShare) : unregisterLocalVideo('screen')
+    if (next) {
+      // A window's sound is its own track, captured natively and published
+      // beside the video rather than inside it.
+      const audioTrack = await takeShareAudioTrack()
+      if (audioTrack) await room.localParticipant.publishTrack(audioTrack, { source: Track.Source.ScreenShareAudio })
+    } else {
+      await stopShareAudioTrack()
+      // `bridge` is only read when starting, so ask for it again here.
+      desktopBridge()?.stopShareAudio?.()
+    }
+    // The share is never refused over sound. The video was the point.
+    if (audioRefused) return "Couldn't capture that app's sound — sharing video only"
     return null
   } catch (e) {
     console.warn('[voice-media] screen share toggle cancelled/failed', e)
+    await stopShareAudioTrack()
+    desktopBridge()?.stopShareAudio?.()
     media.localScreenOn = room.localParticipant.isScreenShareEnabled
     // Cancelling the OS picker rejects with NotAllowedError — that's a user
     // choice, not a failure; stay silent. Anything else deserves a toast.

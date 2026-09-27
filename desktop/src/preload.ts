@@ -53,6 +53,9 @@ if (local && page === 'share.html') {
     // Opens the share picker before the page captures. Resolves with the
     // stream settings chosen, or null if the member closed it.
     pickShare: (hints?: { dark?: boolean }) => ipcRenderer.invoke('desktop:pickShare', { dark: hints?.dark !== false }),
+    // Ends the native capture of a shared app's sound. Send, not invoke:
+    // stopping is never refused and nothing waits on the answer.
+    stopShareAudio: () => ipcRenderer.send('desktop:shareAudioStop'),
     // Opens the app's Servers window.
     openServers: (hints?: { dark?: boolean }) => ipcRenderer.invoke('desktop:openServers', { dark: hints?.dark !== false }),
     // Feeds the app's title bar: what the page is, and its theme's colours.
