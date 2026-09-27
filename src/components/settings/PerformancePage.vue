@@ -17,7 +17,7 @@ const desktop: DesktopBridge | null = desktopBridge()
 
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
   { id: 'max', name: 'Max', line: 'Everything on. The default.' },
-  { id: 'light', name: 'Light', line: 'One conversation, two cameras, no motion, the plain Windows title bar, and the graphics card off. Best on an old machine, and video may look worse.' },
+  { id: 'light', name: 'Light', line: 'Two cameras, no motion, the plain Windows title bar, and the graphics card off. Measured at 41% less memory than Max on this machine. Best on an old one, and video may look worse.' },
 ]
 
 const memory = ref<{ privateMb: number; workingSetMb: number } | null>(null)
@@ -95,7 +95,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Conversations kept in memory</span>
-        <span class="st-field-value">Fewer means less memory, and a short wait when you go back to one.</span>
+        <span class="st-field-value">Measured, this saves nothing on a normal history — it is a limit, not a saving. Going back to one waits a moment while it loads again.</span>
       </div>
       <select :value="String(perf.keepConversations)" @change="setPerfOverride('keepConversations', Number(($event.target as HTMLSelectElement).value))">
         <option value="Infinity">Every one</option><option value="3">Three</option><option value="1">Just this one</option>
@@ -105,7 +105,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Messages kept per conversation</span>
-        <span class="st-field-value">Scrolling up loads the rest again.</span>
+        <span class="st-field-value">A limit rather than a saving, on the evidence so far. Scrolling up loads the rest again.</span>
       </div>
       <select :value="String(perf.messagesPerConversation)" @change="setPerfOverride('messagesPerConversation', Number(($event.target as HTMLSelectElement).value))">
         <option value="Infinity">All of them</option><option value="200">200</option><option value="100">100</option>
