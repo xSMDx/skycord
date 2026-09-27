@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, reactive } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { Search, X } from 'lucide-vue-next'
 import ModalBase from './ModalBase.vue'
 import { useGifs, gifPreviewUrl, gifFullUrl, GIF_SETUP_DOC } from '@/composables/useGifs'
-import { tapOnly, BURST_MS } from '@/composables/useGifPlayback'
 
 const emit = defineEmits<{ select: [url: string]; close: [] }>()
 
@@ -19,28 +18,13 @@ watch(search, q => {
 onMounted(() => fetchGifs(''))
 
 /**
- * A search result is cross-origin KLIPY content, so there is no still to
- * freeze it to (see freezeFrame) — the grid's own "hold still" is showing
- * the small `preview` rendition instead of the full one, which is real
- * bandwidth and decode cost saved across dozens of results at once. One
- * `useTapToPlay` per cell isn't possible — cells come and go with every
- * search — so which ids are mid-burst is tracked here instead, keyed by id.
+ * The grid shows KLIPY's small rendition at every level, as it always has.
+ * Both renditions are animated — cross-origin, so freezeFrame cannot still
+ * them either — and a result's only interaction is picking it, which closes
+ * the modal. There is nothing here for a performance level to hold back that
+ * the grid was not already doing.
  */
-const played = reactive(new Set<string>())
-const timers = new Map<string, ReturnType<typeof setTimeout>>()
-
-const playCell = (id: string) => {
-  played.add(id)
-  const existing = timers.get(id)
-  if (existing) clearTimeout(existing)
-  timers.set(id, setTimeout(() => { played.delete(id); timers.delete(id) }, BURST_MS))
-}
-onBeforeUnmount(() => { timers.forEach(t => clearTimeout(t)); timers.clear() })
-
-const gifSrc = (gif: any) => (tapOnly.value && !played.has(gif.id)) ? gifPreviewUrl(gif) : gifFullUrl(gif)
-
 const pick = (gif: any) => {
-  playCell(gif.id)
   const url = gifFullUrl(gif)
   if (url) emit('select', url)
 }
@@ -82,7 +66,7 @@ const pick = (gif: any) => {
             v-for="gif in gifs" :key="gif.id"
             class="gp-cell" @click="pick(gif)"
           >
-            <img :src="gifSrc(gif)" :alt="gif.title || 'GIF'" loading="lazy" />
+            <img :src="gifPreviewUrl(gif)" :alt="gif.title || 'GIF'" loading="lazy" />
           </button>
         </div>
       </div>
