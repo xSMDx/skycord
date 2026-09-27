@@ -100,9 +100,16 @@ ApplicationLoopback sample. Lives at `desktop/native/`.
 ```
 start(rootPid: number, onChunk: (buf: Buffer) => void): boolean
 stop(): void
-rootPidForWindow(hwnd: number): number | null
 supported(): boolean            // false below Windows 10 build 19041
+pidForWindow(hwnd: number): number | null
+processTable(): { pid, parentPid, exe, createdAt }[]
 ```
+
+The addon reports facts and never decides. The walk itself is
+`rootOfApp(pid, table)` in `desktop/src/processWalk.ts` — ordinary
+TypeScript, unit-tested against hand-written process tables, with no
+Windows and no native build needed to exercise it. Native code is the part
+that cannot be tested cheaply, so as little as possible lives there.
 
 Chunks are 10 ms: 480 frames, 2 channels, 32-bit float, 3840 bytes. 48 kHz
 fixed — the same rate the mic chain and RNNoise already assume.
@@ -140,6 +147,12 @@ Volume is 384 KB/s at 100 messages a second. On a dedicated port this never
 competes with ordinary IPC, and a slow main process cannot stutter the audio.
 
 ### 4. The track — `AudioWorklet` → `MediaStreamAudioDestinationNode`
+
+A classic script at `public/share-audio-worklet.js`, following the pattern
+`public/mic-gate-worklet.js` already sets: `addModule()` fetches a plain file
+by absolute URL, so it cannot be bundled. It is tested by evaluating that very
+file against stubbed worklet globals, so the test covers the artifact that
+ships rather than a copy of it.
 
 The worklet holds a ring buffer of 6 chunks (60 ms) and writes silence when it
 underruns, which is what a late chunk must sound like — a gap, not a stall.
