@@ -33,7 +33,6 @@ const FRESH: HistoryWindowMeta = Object.freeze({ hasOlder: false, live: true, aw
 /** When each conversation was last opened, for the least-recently-used limit. */
 const touched: Record<string, number> = {}
 let touchClock = 0
-let evicted = 0
 
 const makeId  = () => Date.now() + Math.floor(Math.random() * 1000)
 const fmtTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -235,7 +234,6 @@ const sendDM = (
           store.value[id] = list.slice(list.length - cap)
           const key = metaKey(kind, id)
           windowMeta.value[key] = { ...windowOf(kind, id), hasOlder: true }
-          evicted += list.length - cap
         }
       }
     }
@@ -257,14 +255,11 @@ const sendDM = (
     const spare = Math.max(0, keep - (current ? 1 : 0))
     loaded.sort((a, b) => b.at - a.at)
     for (const gone of loaded.slice(spare)) {
-      evicted += listFor(gone.kind).value[gone.id]?.length ?? 0
       listFor(gone.kind).value[gone.id] = []
       delete windowMeta.value[gone.key]
       delete touched[gone.key]
     }
   }
-
-  const evictedCount = () => evicted
 
   return {
     dmMessages, serverMessages, groupMessages,
@@ -275,6 +270,6 @@ const sendDM = (
     toggleDMReaction, toggleChannelReaction,
     pinMessage, deleteMessage, editMessage,
     windowMeta, windowOf, setWindow, prependOlder, appendNewer, holdIfAway,
-    touchConversation, evict, evictedCount,
+    touchConversation, evict,
   }
 }
