@@ -17,7 +17,7 @@ const desktop: DesktopBridge | null = desktopBridge()
 
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
   { id: 'max', name: 'Max', line: 'Everything on. The default.' },
-  { id: 'light', name: 'Light', line: 'Two cameras, no motion, the plain Windows title bar, and the graphics card off. Measured at 41% less memory than Max on this machine. Best on an old one, and video may look worse.' },
+  { id: 'light', name: 'Light', line: 'Two cameras, no motion, the plain Windows title bar, and the graphics card off — that last one does most of the work. Measured at 41% less memory than Max on this machine. Best on an old one, and video may look worse.' },
 ]
 
 const memory = ref<{ privateMb: number; workingSetMb: number } | null>(null)
@@ -172,7 +172,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
       <div class="st-field">
         <div class="st-field-left">
           <span class="st-field-label">Use the graphics card</span>
-          <span class="st-field-value">Off removes a process and can make video worse. Takes effect on restart.</span>
+          <span class="st-field-value">Off is where most of Light's saving comes from — measured at 135 MB less on this machine. The drawing moves to the processor instead, so video can look worse and the fan can work harder. Takes effect on restart.</span>
         </div>
         <input type="checkbox" :checked="perf.hardwareAcceleration" @change="setPerfOverride('hardwareAcceleration', ($event.target as HTMLInputElement).checked)">
       </div>

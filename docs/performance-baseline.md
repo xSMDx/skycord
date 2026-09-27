@@ -111,8 +111,8 @@ Balanced saves **almost nothing**.
 
 - A Full run on the production build that completes.
 - A session with a dozen conversations, to give eviction something to do.
-- `disableHardwareAcceleration` measured on its own: it leaves a software GPU
-  process alive, so its share of Light's saving is unknown.
+- ~~`disableHardwareAcceleration` measured on its own~~ — answered below: it is
+  worth 135 MB, most of Light.
 
 ---
 
@@ -158,3 +158,61 @@ thousands, and the API's write limit of 120 a minute makes seeding that through
 it impossible — an honest test means writing messages straight into MongoDB and
 re-running this pair. Until someone does that, eviction is a bound, not a
 saving.
+
+---
+
+## 2026-09-27 · the graphics card, priced on its own
+
+The one switch left unaccounted for. `disableHardwareAcceleration` does not
+remove the GPU process — it puts it in software mode — so how much of Light's
+saving it actually buys was unknown. Measured as a matched pair: Light in every
+respect, differing only in that switch, same scripted session, cold profile,
+five-minute idle each.
+
+| Light, graphics card | Private | Working set |
+|---|---|---|
+| **off** (software) | **217 MB** | 825 MB |
+| on | 352 MB | 888 MB |
+
+**135 MB private.** Where it sits, at the last sample:
+
+| Process | Card off | Card on |
+|---|---|---|
+| GPU | 19 MB | **111 MB** |
+| Utility (the third one, appears with the call) | 14 MB | **60 MB** |
+| Renderer | 83 MB | 78 MB |
+| Browser | 77 MB | 78 MB |
+
+So it is the graphics stack and nothing else: 92 MB in the GPU process, 46 MB
+in the utility that comes up with the call, and the renderer and browser
+unchanged within noise.
+
+### What that settles
+
+- **The switch earns its place in Light many times over.** Light saves about
+  162 MB over Max; 135 MB of that is this one line. Every other switch in Light
+  — the title bar, the heap ceiling, the tile caps, eviction — shares the
+  remaining 27 MB between them.
+- **It is the honest headline for Light.** The page now says so rather than
+  letting the tier's saving read as the sum of its in-page trims, which it is
+  not.
+- **Working set moves much less than private** — 63 MB against 135 MB — because
+  a hardware GPU process's private bytes include driver allocations that never
+  showed in its working set. Task Manager's default column is working set, so a
+  user watching that will see roughly half the improvement this table reports.
+  Private is still the right number to compare levels by; it is just not the
+  number on their screen.
+- **It is a trade, not a free win.** The drawing moves to the processor. This
+  harness measures memory and says nothing about the CPU cost, which on an old
+  machine is exactly the thing the user was trying to protect. Anyone who
+  revisits this tier should measure frame times before widening the switch's
+  reach.
+
+### The earlier attempt, and why the idle is five minutes here
+
+A first `light-gpu` run with the full twenty-minute idle died during the
+scrolling phase and produced nothing. The `died` guard only covers `idle()`, so
+the run hung rather than failing. Rather than extend the guard and spend another
+fifty minutes, the pair above was re-run with a five-minute idle on **both**
+sides — the comparison only needs the two to match, and these numbers are not
+comparable with the twenty-minute runs above.
