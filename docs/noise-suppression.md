@@ -29,14 +29,49 @@ If a model fails to load, the chain falls back to the browser filter and says
 so. A call nobody can hear you in is the one outcome worse than losing the
 fancy filter.
 
-## Attenuation is 24 dB, not 100
+## Attenuation is 12 dB, not 100 — and not 24
 
 The package defaults to 100 dB, which is not suppression but erasure —
 measured here, a signal it judged non-speech came back as exact digital
 silence. The model decides what a voice is, and it will sometimes be wrong: a
 quiet microphone, a heavy accent, a cheap headset, someone speaking through a
 fan. At 100 dB that person simply does not exist on the call and cannot tell
-why. At 24 dB they are faint and audible.
+why.
+
+It shipped at 24 dB, chosen by reasoning and validated at 1.9 dB of speech
+loss. **That validation was wrong, and the way it was wrong is the lesson.**
+
+The test signal was a synthesised voice: loud, clean, perfectly articulated,
+no breath, no room tone — the easiest input a speech model will ever meet.
+The owner tried the real thing and could barely hear himself. A harder signal
+reproduced it immediately:
+
+| Input | Speech peaks | Body of the voice |
+|---|---|---|
+| Synthesised voice, moderate noise | −1.9 dB | −1.9 dB |
+| **Quieter voice, heavier noise** | **−9.8 dB** | **−24.0 dB** |
+
+On real-shaped input the model is unsure far more often, and every unsure
+moment cost the full 24 dB. Nothing here can make the model right more often.
+What it can do is make being wrong cheaper: at 12 dB a mistake costs a quarter
+of what it did, and the body of that same quiet voice returns four times
+louder.
+
+| At 12 dB | Result |
+|---|---|
+| Quiet voice, body | −12.0 dB (was −24.0) |
+| Quiet voice, peaks | −7.8 dB (was −9.8) |
+| Synthesised voice, peaks | −1.6 dB (was −1.9) |
+| Noise removed | −12.0 dB (was −24.0) |
+
+The price is noise: a quarter of it left instead of a sixteenth. That is still
+twice what RNNoise manages on steady sound, and the mode exists for clatter
+and rooms rather than for hiss.
+
+**A number chosen this way is still a guess at what sounds right.** Nothing
+above measures whether a voice sounds *good*, only how loud it is. If 12 is
+still too much, the honest next step is a strength control rather than another
+round of picking a constant.
 
 ## Measured
 
