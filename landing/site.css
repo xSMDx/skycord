@@ -379,6 +379,12 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 @media (max-width: 900px) {
   .links { display: none; }
   .feat-in, .sh-in { grid-template-columns: minmax(0, 1fr); gap: 34px; }
+  /* The flipped sections need naming again here, not because the rule above
+     is wrong but because `.feat[data-flip="1"] .feat-in` outranks `.feat-in`
+     and a media query adds no specificity. Without this, three of the seven
+     feature sections stayed two-column on a phone: 173px of prose beside a
+     136px demo, with the controls clipped out of the card. */
+  .feat[data-flip="1"] .feat-in { grid-template-columns: minmax(0, 1fr); }
   .feat[data-flip="1"] .feat-copy { order: 0; }
   .win-body { grid-template-columns: 50px 150px 1fr; }
 }
