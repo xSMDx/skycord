@@ -79,13 +79,19 @@ profile, twenty-minute idle.
 | Level | Private | Working set | Processes |
 |---|---|---|---|
 | Full (dev-server run, for reference) | 401 MB | 797 MB | 7 |
-| Full (production build) | *run failed, exit 1* | — | — |
+| Full (production build) | *this run failed, exit 1 — re-run later at 398 MB* | — | — |
 | Balanced | 396 MB | 1060 MB | 7 |
 | **Light** | **236 MB** | 631 MB | 6 |
 
 An earlier production Full run, before the harness was fixed, measured **399 MB
 private / 800 MB working set**. Taking that as Full, Light saves **41%**, and
 Balanced saves **almost nothing**.
+
+**Since confirmed.** That 399 MB was a fallback from a run that failed, which
+is a weak thing to rest a headline on. Two later production Full runs completed
+and agree with it: **398 MB** (`prod2-max`, three channels) and **394 MB**
+(`many-max`, twelve channels). The 41% stands on completed measurements now,
+not on the pre-fix number.
 
 ### What this does and does not show
 
@@ -109,8 +115,10 @@ Balanced saves **almost nothing**.
 
 ### Still owed before any switch is called earned
 
-- A Full run on the production build that completes.
-- A session with a dozen conversations, to give eviction something to do.
+- ~~A Full run on the production build that completes~~ — done: `prod2-max`
+  at 398 MB and `many-max` at 394 MB.
+- ~~A session with a dozen conversations, to give eviction something to do~~ —
+  done, and it showed eviction does not pay at this size. See below.
 - ~~`disableHardwareAcceleration` measured on its own~~ — answered below: it is
   worth 135 MB, most of Light.
 
