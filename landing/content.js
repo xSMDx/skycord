@@ -106,6 +106,15 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.20.1', date: 'Sep 28, 2026', time: '13:47 UTC+2', title: 'The noise filter stops eating your voice',
+    items: [
+      ['fix', 'DeepFilterNet was cutting far too hard, and on some voices you could barely hear yourself. It shipped turning down whatever it judged not to be speech by 24dB, a figure checked against a synthesised voice — loud, clean and perfectly articulated, which is the easiest thing a speech model ever hears. A real voice on a real microphone is the hard case: measured against a quieter voice in more noise, the same setting cost 9.8dB at the peaks and the full 24dB through the body of the voice, because the model is unsure far more often on real input. The model being unsure is not something we can fix. How much it costs when it is, is: it now turns down by 12dB, so a wrong guess costs a quarter of what it did and a quiet voice comes back four times louder. Less noise is removed in exchange — a quarter of it left instead of a sixteenth, still twice what RNNoise manages on steady sound'],
+      ['imp', 'DeepFilterNet is marked Beta, in Settings and here, and says what to listen for: if your voice sounds thin or drops out, switch back to RNNoise and tell us. It is measured, not finished, and the measuring used a synthesised voice — which is exactly how the fault above got shipped in the first place'],
+      ['imp', 'A new skycord.xyz. The site shows the app doing each thing it describes rather than listing it, the Roadmap and the Changelog are their own pages now instead of sections, and a wrong address gets a real page and a real 404 instead of the front page pretending to be found'],
+      ['fix', 'The filter’s one-off download is about 12MB, not the 10MB both the app and this page promised. The package documents 10.2MB compressed a way the server does not compress it'],
+    ]
+  },
+  {
     v: 'v0.20.0', date: 'Sep 27, 2026', time: '20:45 UTC+2', title: 'Skycord for Windows, and a new coat of paint',
     items: [
       ['add', 'Skycord for Windows, as a release candidate. It is in <a href="#download" data-ch="download">#download</a>: one installer, and it keeps itself up to date from then on'],
