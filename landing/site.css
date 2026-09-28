@@ -1,0 +1,413 @@
+/* ── Skycord, the site ─────────────────────────────────────────────────
+   A marketing page, not the app. Brand colours and type come from the
+   app's tokens so the two feel like one product; motion curves are the
+   strong custom set — the built-in CSS easings are too weak to read as
+   intentional. */
+
+@font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-400-normal.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-500-normal.woff2) format('woff2'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-600-normal.woff2) format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Archivo'; src: url(fonts/archivo-latin-700-normal.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Chakra Petch'; src: url(fonts/chakra-petch-latin-600-normal.woff2) format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Chakra Petch'; src: url(fonts/chakra-petch-latin-700-normal.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Fira Code'; src: url(fonts/fira-code-latin-400-normal.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Fira Code'; src: url(fonts/fira-code-latin-500-normal.woff2) format('woff2'); font-weight: 500; font-display: swap; }
+
+:root {
+  color-scheme: dark;
+
+  /* Ground. Deeper than the app, because a page needs more range than a
+     chrome does — the app never has to make a hero feel like a hero. */
+  --ink:     #0a0b0d;
+  --surface: #101216;
+  --raised:  #171a1f;
+  --panel:   #1e2127;
+  --sunk:    #0d0f12;
+
+  --text-strong: #ffffff;
+  --text-1: #dcddde;
+  --text-2: #b5bac1;
+  --text-3: #8b929b;
+
+  /* The app's accent, and the rule that it lands on ink, not white. */
+  --accent: #38b6f1;
+  --accent-hover: #31a0d4;
+  --accent-text: #5bc3f3;
+  --accent-rgb: 56, 182, 241;
+  --on-accent: #0e0f11;
+
+  --green: #23a55a;
+  --green-rgb: 35, 165, 90;
+  --warning: #f0b232;
+
+  --border: rgba(255,255,255,.09);
+  --divider: rgba(255,255,255,.06);
+  --hover: rgba(255,255,255,.06);
+  --hover-strong: rgba(255,255,255,.1);
+  --seam: rgba(0,0,0,.45);
+
+  --font-ui: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Chakra Petch', 'Archivo', system-ui, sans-serif;
+  --font-mono: 'Fira Code', Consolas, Menlo, monospace;
+
+  /* Motion. The built-ins lack punch; these are the strong variants. */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 160ms;
+  --dur-ui:    200ms;
+  --dur-panel: 260ms;
+  --dur-reveal: 620ms;          /* marketing tier: allowed to breathe */
+
+  --shell: 1180px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--ink); color: var(--text-1);
+  font: 400 16px/1.65 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  /* `clip`, never `hidden`: overflow-x: hidden makes body a scroll
+     container, which silently kills position: sticky on the top bar.
+     clip contains the same overflow without creating one. */
+  overflow-x: clip;
+}
+a { color: inherit; text-decoration: none; }
+button { font: inherit; border: none; background: none; color: inherit; cursor: pointer; }
+svg { display: block; }
+.ic { width: 18px; height: 18px; flex: none; }
+
+.skip {
+  position: absolute; left: -9999px; top: 8px; z-index: 100;
+  padding: 10px 16px; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent); font-weight: 600;
+}
+.skip:focus { left: 16px; }
+
+.shell { width: 100%; max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
+
+/* ── Type ──────────────────────────────────────────────────────────── */
+h1, h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+h1 { font-size: clamp(46px, 8.2vw, 88px); }
+h2 { font-size: clamp(34px, 4.6vw, 56px); }
+h1 em { font-style: normal; color: var(--accent-text); transition: color var(--dur-panel) var(--ease-out); }
+
+.lede { margin-top: 22px; font-size: clamp(17px, 1.6vw, 20px); color: var(--text-2); max-width: 46ch; }
+.meta { margin-top: 18px; font-size: 13px; color: var(--text-3); }
+
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 18px;
+  font: 600 12px/1 var(--font-ui);
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent-text);
+  transition: color var(--dur-panel) var(--ease-out);
+}
+.eyebrow .ic { width: 15px; height: 15px; }
+
+.ticks { list-style: none; margin-top: 24px; display: grid; gap: 11px; }
+.ticks li { position: relative; padding-left: 28px; color: var(--text-2); font-size: 15px; }
+.ticks li::before {
+  content: ''; position: absolute; left: 0; top: .52em;
+  width: 15px; height: 8px;
+  border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg) translateY(-1px);
+  transition: border-color var(--dur-panel) var(--ease-out);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  height: 44px; padding: 0 20px; border-radius: 8px;
+  font: 600 15px/1 var(--font-ui);
+  transition: transform var(--dur-press) var(--ease-out),
+              background-color var(--dur-ui) ease,
+              border-color var(--dur-ui) ease,
+              color var(--dur-ui) ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn.big { height: 56px; padding: 0 28px; font-size: 16px; border-radius: 10px; }
+.btn.pill { height: 40px; padding: 0 20px; border-radius: 999px; background: var(--text-strong); color: var(--ink); }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.ghost { background: var(--panel); color: var(--text-strong); border: 1px solid var(--border); }
+
+@media (hover: hover) and (pointer: fine) {
+  .btn.primary:hover { background: var(--accent-hover); }
+  .btn.ghost:hover { background: var(--raised); border-color: var(--hover-strong); }
+  .btn.pill:hover { background: #e9eaec; }
+}
+
+.cta-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+.cta-row.center { justify-content: center; }
+
+/* ── Top bar ───────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(10,11,13,.72);
+  backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-panel) ease, background-color var(--dur-panel) ease;
+}
+.topbar.stuck { border-bottom-color: var(--border); background: rgba(10,11,13,.9); }
+.bar { display: flex; align-items: center; gap: 30px; height: 68px; }
+.brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.brand b { font: 700 19px/1 var(--font-display); letter-spacing: -.01em; color: var(--text-strong); }
+.brand-mark { width: 32px; height: 32px; color: var(--accent); transition: color var(--dur-panel) var(--ease-out); }
+.brand-mark svg { width: 100%; height: 100%; }
+.brand-mark .eyes { transition: transform 260ms var(--ease-out); }
+.brand-mark .eye { transform-box: fill-box; transform-origin: center; }
+.brand-mark.blink .eye { animation: catBlink 180ms steps(1, end); }
+@keyframes catBlink { 0%, 99% { transform: scaleY(.12); } 100% { transform: scaleY(1); } }
+.brand-mark.boop svg { animation: catBoop 420ms var(--ease-out); }
+@keyframes catBoop {
+  0% { transform: scale(1); } 35% { transform: scale(.86) rotate(-6deg); }
+  70% { transform: scale(1.06) rotate(4deg); } 100% { transform: scale(1); }
+}
+
+.links { display: flex; gap: 26px; font-size: 15px; font-weight: 500; color: var(--text-2); }
+.links a { position: relative; padding: 4px 0; transition: color var(--dur-ui) ease; }
+.links a::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--accent); border-radius: 2px;
+  transform: scaleX(0); transform-origin: left;
+  transition: transform var(--dur-ui) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .links a:hover { color: var(--text-strong); }
+  .links a:hover::after { transform: scaleX(1); }
+}
+
+/* ── Hero ──────────────────────────────────────────────────────────── */
+.hero {
+  position: relative; overflow: hidden;
+  padding: clamp(60px, 9vw, 110px) 0 clamp(70px, 9vw, 120px);
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(var(--accent-rgb), .20) 0%, transparent 60%),
+    linear-gradient(180deg, #0f1319 0%, var(--ink) 74%);
+}
+.hero-in { position: relative; z-index: 2; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.hero .lede { margin-left: auto; margin-right: auto; }
+
+.floaters { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.fl { position: absolute; border-radius: 50%; filter: blur(1px); opacity: .5; will-change: transform; }
+.fl-a { left: 7%;  top: 16%; width: 78px;  height: 78px;  background: radial-gradient(circle at 32% 30%, #6ad2ff, #2b7fb5); }
+.fl-b { right: 9%; top: 11%; width: 54px;  height: 54px;  background: radial-gradient(circle at 34% 30%, #ffd08a, #c77d2a); }
+.fl-c { right: 15%; top: 52%; width: 104px; height: 104px; background: radial-gradient(circle at 30% 28%, #a58cff, #5b43c9); opacity: .34; }
+.fl-d { left: 13%; top: 58%; width: 44px;  height: 44px;  background: radial-gradient(circle at 34% 30%, #6ee7b0, #2b8f66); }
+
+/* The product shot */
+.shot { position: relative; width: 100%; margin-top: clamp(46px, 6vw, 78px); }
+.shot-glow {
+  position: absolute; left: 50%; top: 10%; width: 78%; height: 78%;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), .30), transparent 72%);
+  filter: blur(46px); z-index: 0;
+  transition: background var(--dur-panel) var(--ease-out);
+}
+.win {
+  position: relative; z-index: 1;
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  background: var(--sunk);
+  box-shadow: 0 34px 90px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.03) inset;
+}
+.win-bar {
+  display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px;
+  background: var(--raised); border-bottom: 1px solid var(--divider);
+}
+.win-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a3f47; }
+.win-bar i:nth-child(1) { background: #e0685f; }
+.win-bar i:nth-child(2) { background: #e1b04a; }
+.win-bar i:nth-child(3) { background: #5cbf6d; }
+.win-bar span { margin-left: 8px; font-size: 12px; color: var(--text-3); }
+.win-body { display: grid; grid-template-columns: 58px 190px 1fr; height: clamp(300px, 40vw, 396px); text-align: left; }
+
+.w-rail { background: var(--ink); padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.w-guild {
+  width: 38px; height: 38px; border-radius: 13px;
+  background: var(--panel); color: var(--text-2);
+  display: grid; place-items: center; font: 600 14px/1 var(--font-ui);
+  transition: border-radius var(--dur-ui) var(--ease-out), background-color var(--dur-ui) ease;
+}
+.w-guild svg { width: 24px; height: 24px; }
+.w-guild.on { background: var(--accent); color: var(--on-accent); border-radius: 12px; }
+.w-side { background: var(--surface); padding: 12px 8px; border-right: 1px solid var(--divider); }
+.w-guildname { font: 700 13px/1 var(--font-display); color: var(--text-strong); padding: 4px 8px 12px; }
+.w-cat { font: 600 10px/1 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); padding: 10px 8px 6px; }
+.w-ch {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; border-radius: 5px; font-size: 13px; color: var(--text-3);
+}
+.w-ch svg { width: 15px; height: 15px; }
+.w-ch.on { background: var(--hover-strong); color: var(--text-strong); }
+.w-vc { list-style: none; padding: 3px 0 0 16px; display: grid; gap: 4px; }
+.w-vm { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); transition: color var(--dur-ui) ease; }
+.w-vm.speaking { color: var(--text-1); }
+.w-av { position: relative; width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; font: 600 10px/1 var(--font-ui); color: #fff; flex: none; }
+.w-vm .w-av::after {
+  content: ''; position: absolute; inset: -2.5px; border-radius: 50%;
+  border: 2px solid var(--green); opacity: 0;
+  transition: opacity 140ms ease, transform 140ms var(--ease-out);
+  transform: scale(.9);
+}
+.w-vm.speaking .w-av::after { opacity: 1; transform: scale(1); }
+
+.w-chat { background: var(--surface); display: flex; flex-direction: column; min-width: 0; }
+.w-head { display: flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-bottom: 1px solid var(--divider); color: var(--text-3); }
+.w-head svg { width: 16px; height: 16px; }
+.w-head b { font-size: 14px; color: var(--text-strong); }
+.w-msgs { flex: 1; padding: 14px; display: flex; flex-direction: column; justify-content: flex-end; gap: 13px; overflow: hidden; }
+.w-msg { display: grid; grid-template-columns: 30px 1fr; gap: 10px; }
+.w-msg .w-av { width: 30px; height: 30px; font-size: 12px; }
+.w-who { font: 600 13px/1.2 var(--font-ui); color: var(--text-strong); }
+.w-t { font-size: 10px; color: var(--text-3); }
+.w-msg p { margin-top: 2px; font-size: 13px; color: var(--text-1); }
+/* Arriving messages are added one at a time, so a transition retargets
+   cleanly where a keyframe would restart. */
+.w-msg.new { opacity: 0; transform: translateY(8px); }
+.w-msg { transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out); }
+.w-composer { margin: 0 14px 14px; height: 38px; border-radius: 7px; background: var(--panel); display: flex; align-items: center; padding: 0 13px; font-size: 12px; color: var(--text-3); }
+
+/* ── Marquee band ──────────────────────────────────────────────────── */
+.band {
+  overflow: hidden; padding: 20px 0;
+  background: var(--accent);
+  border-block: 1px solid rgba(0,0,0,.2);
+  transition: background-color var(--dur-panel) var(--ease-out);
+}
+.band-track { display: flex; width: max-content; animation: marquee 26s linear infinite; }
+.band-run { display: flex; align-items: center; gap: 46px; padding-right: 46px; }
+.band-run span {
+  font: 700 clamp(30px, 4.4vw, 52px)/1 var(--font-display);
+  text-transform: uppercase; letter-spacing: -.01em; color: var(--on-accent);
+}
+.band-run svg { width: clamp(26px, 3.4vw, 40px); height: clamp(26px, 3.4vw, 40px); color: var(--on-accent); opacity: .62; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+.band:hover .band-track { animation-play-state: paused; }
+
+/* ── Feature sections ──────────────────────────────────────────────── */
+.feat { padding: clamp(60px, 7vw, 96px) 0; }
+.feat:nth-child(odd) { background: var(--ink); }
+.feat:nth-child(even) { background: var(--surface); }
+.feat-in {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  gap: clamp(32px, 5vw, 72px);
+  align-items: center;
+}
+/* The demo always takes the WIDER track. `order` alone reorders the
+   content but leaves the track sizes where they are, which handed the
+   copy the wide column on every flipped section. Swap the template. */
+.feat[data-flip="1"] .feat-in { grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr); }
+.feat[data-flip="1"] .feat-copy { order: 2; }
+.feat-copy p { margin-top: 18px; color: var(--text-2); font-size: 16px; max-width: 44ch; }
+
+/* The media should carry the section, not sit in it. Cards were 87–168px
+   shorter than the copy beside them, which read as an unfinished column. */
+.feat-demo .demo { min-height: 340px; display: flex; flex-direction: column; }
+.feat-demo .demo-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+
+/* ── Self-host ─────────────────────────────────────────────────────── */
+.selfhost { padding: clamp(64px, 8vw, 108px) 0; background: var(--raised); }
+.sh-in { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: clamp(32px, 5vw, 70px); align-items: center; }
+.selfhost p { margin-top: 18px; color: var(--text-2); max-width: 44ch; }
+.term { position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--sunk); box-shadow: 0 22px 60px -22px rgba(0,0,0,.8); }
+.term-bar { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; background: var(--panel); border-bottom: 1px solid var(--divider); }
+.term-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a3f47; }
+.term-bar span { margin-left: 8px; font: 400 12px/1 var(--font-mono); color: var(--text-3); }
+/* The button is centred on the command, so it anchors to the body — not
+   to `.term`, whose top 34px is the title bar and would pull the centre
+   up by half the bar. */
+.term-main { position: relative; }
+/* Right padding reserves the button's lane so a long command never runs
+   underneath it. */
+.term-body { padding: 22px 106px 22px 18px; overflow-x: auto; }
+.term-body code { font: 400 13.5px/1.7 var(--font-mono); color: var(--text-1); white-space: pre; }
+.term-body .p { color: var(--accent-text); user-select: none; transition: color var(--dur-panel) var(--ease-out); }
+.term-copy {
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 32px; padding: 0 12px; border-radius: 7px;
+  background: var(--panel); border: 1px solid var(--border);
+  font: 500 12px/1 var(--font-ui); color: var(--text-2);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, color var(--dur-ui) ease;
+}
+/* The centring translate has to survive the press, or it jumps. */
+.term-copy:active { transform: translateY(-50%) scale(0.97); }
+.term-copy.done { color: var(--green); }
+@media (hover: hover) and (pointer: fine) { .term-copy:hover { background: var(--raised); color: var(--text-strong); } }
+
+/* ── Closing ───────────────────────────────────────────────────────── */
+.end {
+  padding: clamp(78px, 10vw, 128px) 0; text-align: center;
+  background:
+    radial-gradient(90% 120% at 50% 110%, rgba(var(--accent-rgb), .22) 0%, transparent 62%),
+    var(--ink);
+}
+.end .meta { margin-top: 20px; }
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+.foot { padding: 34px 0; background: var(--sunk); border-top: 1px solid var(--divider); }
+.foot-in { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+.foot nav { display: flex; gap: 22px; flex-wrap: wrap; font-size: 14px; color: var(--text-3); }
+@media (hover: hover) and (pointer: fine) { .foot nav a:hover { color: var(--text-1); } }
+.foot-note { margin-left: auto; font-size: 13px; color: var(--text-3); }
+
+/* ── Scroll reveal ─────────────────────────────────────────────────── */
+/* Transitions, not keyframes: a reveal can be retargeted if the user
+   scrolls back before it finishes. */
+.js .reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity var(--dur-reveal) var(--ease-out), transform var(--dur-reveal) var(--ease-out);
+  transition-delay: var(--d, 0ms);
+}
+.js .reveal.seen { opacity: 1; transform: none; }
+
+/* ── Responsive ────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  /* The floaters live in the hero's side margins. Below this there are
+     no side margins, so they land on the copy instead. */
+  .floaters { display: none; }
+}
+@media (max-width: 900px) {
+  .links { display: none; }
+  .feat-in, .sh-in { grid-template-columns: minmax(0, 1fr); gap: 34px; }
+  .feat[data-flip="1"] .feat-copy { order: 0; }
+  .win-body { grid-template-columns: 50px 150px 1fr; }
+}
+@media (max-width: 560px) {
+  .shell { padding: 0 16px; }
+  .win-body { grid-template-columns: 46px 1fr; height: 300px; }
+  .w-chat { display: none; }
+  .cta-row .btn { width: 100%; }
+  .foot-note { margin-left: 0; width: 100%; }
+
+  /* The install command is the point of this whole section, and at 375px it
+     ran 389px wide inside a 341px scroller — cut off mid-URL, readable only
+     by dragging it sideways. Wrap it and put the copy button underneath,
+     so the command can be read and taken without a gesture. */
+  .term-body { padding: 16px 16px 14px; }
+  .term-body code { white-space: pre-wrap; word-break: break-word; }
+  .term-copy { position: static; transform: none; width: 100%; margin-top: 12px; justify-content: center; }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────── */
+/* Fewer and gentler, not zero: opacity still carries comprehension,
+   movement and looping motion go. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .js .reveal { opacity: 1; transform: none; transition: none; }
+  .band-track { animation: none; }
+  .fl { display: none; }
+  .brand-mark.blink .eye, .brand-mark.boop svg { animation: none; }
+  .brand-mark .eyes { transition: none; }
+  .w-msg { transition: opacity 200ms ease; }
+  .w-msg.new { transform: none; }
+}

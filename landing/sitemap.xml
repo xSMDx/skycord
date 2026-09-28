@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  One URL, and that is not an oversight.
+  Three URLs, where there used to be one.
 
-  skycord.xyz is a single page whose sections are hash routes (#features,
-  #changelog, #download, #roadmap, #host-your-own). Search engines do not treat
-  a fragment as a separate URL, so listing them here would pad the file with
-  entries that are ignored at best and flagged at worst.
-
-  If those sections ever become real paths, they belong here — one <url> each,
-  with their own lastmod.
+  The old page was a single document whose sections were hash routes, and a
+  fragment is not a URL a crawler will index. The redesign gives Roadmap and
+  Changelog real paths, so they are real pages and belong here. The homepage's
+  own sections (#features, #selfhost) are still fragments and still do not.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -16,5 +13,17 @@
     <lastmod>2026-09-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://skycord.xyz/changelog/</loc>
+    <lastmod>2026-09-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://skycord.xyz/roadmap/</loc>
+    <lastmod>2026-09-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
 </urlset>

@@ -1,0 +1,263 @@
+/* ── Live demos ────────────────────────────────────────────────────────
+   Each demo plays itself, driven by a simulated cursor, until a real
+   pointer enters — then the ghost withdraws and it is ordinary UI. */
+
+.demo {
+  position: relative; isolation: isolate;
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 22px 60px -26px rgba(0,0,0,.85);
+  overflow: hidden;
+}
+.demo-head {
+  display: flex; align-items: center; gap: 9px;
+  padding: 12px 16px; border-bottom: 1px solid var(--divider);
+  font: 500 13px/1.2 var(--font-ui); color: var(--text-2);
+}
+.demo-head .ic { width: 16px; height: 16px; color: var(--accent-text); transition: color var(--dur-panel) var(--ease-out); }
+.demo-head .ic svg { width: 100%; height: 100%; }
+.demo-head b { color: var(--text-1); font-weight: 600; }
+.demo-head .hint {
+  margin-left: auto; font-size: 11px; color: var(--text-3);
+  opacity: 0; transition: opacity var(--dur-ui) var(--ease-out);
+}
+.demo:hover .demo-head .hint { opacity: 1; }
+.demo-body { padding: 22px; }
+
+/* ── Ghost cursor ──────────────────────────────────────────────────── */
+.gcursor {
+  position: absolute; left: 0; top: 0; width: 22px; height: 22px;
+  pointer-events: none; z-index: 40; opacity: 0;
+  transform: translate3d(-100px, -100px, 0) scale(.8);
+  transition: opacity var(--dur-ui) var(--ease-out);
+  will-change: transform;
+}
+.gcursor.in { opacity: 1; }
+.gcursor svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+
+.ripple {
+  position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  border-radius: 50%; background: rgba(var(--accent-rgb), .55);
+  pointer-events: none; z-index: 39;
+  animation: rippleOut 460ms var(--ease-out) forwards;
+}
+@keyframes rippleOut {
+  from { transform: scale(.4); opacity: .8; }
+  to   { transform: scale(4.2); opacity: 0; }
+}
+
+/* ── Shared: segmented control ─────────────────────────────────────── */
+.seg {
+  display: flex; gap: 4px; padding: 4px;
+  background: var(--sunk); border-radius: 9px; border: 1px solid var(--divider);
+}
+.seg-b {
+  flex: 1; height: 34px; border-radius: 6px;
+  font: 500 12.5px/1 var(--font-ui); color: var(--text-3);
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.seg-b:active { transform: scale(0.97); }
+/* Beta, on the control itself: the prose says it, but the thing you click
+   is where the claim is actually being made. */
+.seg-beta {
+  display: inline-block; margin-left: 6px; padding: 2px 5px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  background: rgba(56, 182, 241, .18); color: var(--accent-text);
+}
+.seg-b.on .seg-beta { background: rgba(0, 0, 0, .22); color: inherit; }
+.seg-b.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+@media (hover: hover) and (pointer: fine) { .seg-b:not(.on):hover { background: var(--hover); color: var(--text-1); } }
+
+/* ── Demo: screen share ────────────────────────────────────────────── */
+.sh-bar { display: flex; align-items: center; gap: 12px; }
+.sh-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 14px; border-radius: 7px;
+  background: var(--raised); border: 1px solid var(--border);
+  font: 500 13px/1 var(--font-ui); color: var(--text-1);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease;
+}
+.sh-btn:active { transform: scale(0.97); }
+.sh-btn.live { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.sh-btn .ic { width: 16px; height: 16px; }
+.sh-state { font-size: 12px; color: var(--text-3); }
+
+.sh-picker {
+  margin-top: 12px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--sunk); overflow: hidden;
+  transform-origin: top left;          /* it belongs to the button above it */
+  transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out);
+}
+.sh-picker[data-open="false"] { opacity: 0; transform: scale(.96) translateY(-4px); pointer-events: none; height: 0; margin: 0; border-width: 0; }
+.sh-picker-head { padding: 9px 12px; font: 600 11px/1 var(--font-ui); letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--divider); }
+.sh-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px; }
+.sh-opt {
+  display: grid; gap: 7px; justify-items: center; padding: 9px 6px; border-radius: 7px;
+  font: 500 11.5px/1 var(--font-ui); color: var(--text-2);
+  transition: background-color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.sh-opt:active { transform: scale(0.97); }
+.sh-opt.picked { background: rgba(var(--accent-rgb), .16); color: var(--accent-text); }
+@media (hover: hover) and (pointer: fine) { .sh-opt:hover { background: var(--hover); } }
+.sh-thumb { width: 100%; aspect-ratio: 16/10; border-radius: 6px; }
+.sh-game { background: linear-gradient(135deg, #3a2d5c, #7b4bb5 55%, #d06a9a); }
+.sh-browser { background: linear-gradient(135deg, #1d2c3d, #35688f); }
+.sh-screen { background: linear-gradient(135deg, #22262c, #3a4048); }
+
+.sh-stage { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 9px; margin-top: 16px; height: 156px; }
+.sh-tile {
+  position: relative; border-radius: 8px; background: var(--sunk);
+  border: 1px solid var(--divider); overflow: hidden;
+  display: grid; place-items: end start;
+  transition: border-color var(--dur-panel) var(--ease-out), background var(--dur-panel) var(--ease-out);
+}
+.sh-tile[data-live="true"] { border-color: var(--accent); background: linear-gradient(135deg, #3a2d5c, #7b4bb5 55%, #d06a9a); }
+.sh-tile-name { padding: 6px 8px; font: 500 11px/1 var(--font-ui); color: var(--text-2); }
+.sh-tile[data-live="true"] .sh-tile-name { color: #fff; }
+.sh-live {
+  position: absolute; top: 7px; right: 7px;
+  padding: 2px 7px; border-radius: 4px;
+  background: #e24d4d; color: #fff;
+  font: 700 9px/1.6 var(--font-ui); letter-spacing: .08em;
+  opacity: 0; transform: scale(.9);
+  transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out);
+}
+.sh-tile[data-live="true"] .sh-live { opacity: 1; transform: none; }
+.sh-small { background: var(--raised); }
+
+/* ── Demo: voice ───────────────────────────────────────────────────── */
+.wave { border-radius: 9px; background: var(--sunk); border: 1px solid var(--divider); padding: 8px; margin-bottom: 14px; }
+.wave canvas { display: block; width: 100%; height: 132px; }
+.nf-note { margin-top: 11px; font-size: 12px; color: var(--text-3); }
+.nf-note b { color: var(--accent-text); font-weight: 600; transition: color var(--dur-panel) var(--ease-out); }
+
+/* ── Demo: themes ──────────────────────────────────────────────────── */
+.swatches { display: flex; gap: 13px; flex-wrap: wrap; }
+.sw {
+  position: relative; width: 50px; height: 50px; border-radius: 50%;
+  border: 2px solid transparent; background: var(--sw);
+  transition: transform var(--dur-ui) var(--ease-out), border-color var(--dur-ui) var(--ease-out);
+}
+.sw:active { transform: scale(0.95); }
+.sw[aria-pressed="true"] { border-color: var(--text-strong); transform: scale(1.05); }
+@media (hover: hover) and (pointer: fine) { .sw:hover { transform: scale(1.09); } }
+.sw::after {
+  content: ''; position: absolute; inset: 0; margin: auto;
+  width: 14px; height: 8px;
+  border-left: 2.5px solid var(--on-accent); border-bottom: 2.5px solid var(--on-accent);
+  transform: rotate(-45deg) scale(.4); transform-origin: center;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out), transform var(--dur-ui) var(--ease-out);
+}
+.sw[aria-pressed="true"]::after { opacity: 1; transform: rotate(-45deg) scale(1); }
+.sw-name { margin-top: 15px; font: 500 12px/1 var(--font-ui); color: var(--text-3); }
+.sw-name b { color: var(--accent-text); font-weight: 600; transition: color var(--dur-panel) var(--ease-out); }
+.theme-proof { display: flex; align-items: center; gap: 13px; margin-top: 16px; flex-wrap: wrap; }
+.theme-proof .btn-proof {
+  padding: 9px 17px; border-radius: 7px; background: var(--accent); color: var(--on-accent);
+  font: 600 13px/1 var(--font-ui);
+  transition: background-color var(--dur-panel) var(--ease-out), color var(--dur-panel) var(--ease-out);
+}
+.theme-proof .link-proof { font-size: 12.5px; color: var(--accent-text); transition: color var(--dur-panel) var(--ease-out); }
+
+/* ── Demo: performance ─────────────────────────────────────────────── */
+.gauge { margin-top: 20px; display: grid; gap: 13px; }
+.gauge-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-3); }
+.gauge-v { color: var(--text-1); font-weight: 500; }
+.gauge-v b { font-variant-numeric: tabular-nums; color: var(--accent-text); transition: color var(--dur-panel) var(--ease-out); }
+.gauge-bar { height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; border: 1px solid var(--divider); }
+/* scaleX rather than width: transform skips layout and paint. */
+.gauge-bar i {
+  display: block; height: 100%; width: 100%; transform-origin: left;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  transition: transform 520ms var(--ease-in-out), background var(--dur-panel) var(--ease-out);
+}
+
+/* ── Demo: reactions ───────────────────────────────────────────────── */
+.rx-msg { position: relative; display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 9px 10px; border-radius: 8px; transition: background-color 140ms ease; }
+.rx-msg.hot { background: var(--hover); }
+.rx-msg .av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 600 15px/1 var(--font-ui); color: #fff; }
+.rx-msg .author { font: 600 14px/1.2 var(--font-ui); color: var(--text-strong); }
+.rx-msg time { margin-left: 8px; font-size: 11px; color: var(--text-3); }
+.rx-msg p { margin-top: 3px; font-size: 14px; color: var(--text-1); }
+.rx-actions {
+  position: absolute; top: -13px; right: 10px;
+  display: flex; gap: 2px; padding: 2px;
+  background: var(--raised); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 3px 10px var(--seam);
+  opacity: 0; transform: translateY(4px) scale(.96); pointer-events: none;
+  transform-origin: bottom right;
+  transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out);
+}
+.rx-msg.hot .rx-actions { opacity: 1; transform: none; pointer-events: auto; }
+.rx-act { width: 30px; height: 30px; border-radius: 5px; display: grid; place-items: center; font-size: 15px; transition: background-color 140ms ease, transform var(--dur-press) var(--ease-out); }
+.rx-act:active { transform: scale(0.94); }
+@media (hover: hover) and (pointer: fine) { .rx-act:hover { background: var(--hover-strong); } }
+.rx-list { display: flex; gap: 6px; margin-top: 8px; min-height: 26px; flex-wrap: wrap; }
+.rx-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px;
+  border: 1px solid transparent; border-radius: 8px; background: rgba(255,255,255,.045);
+  font: 500 13px/1 var(--font-ui); color: var(--text-2);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease;
+}
+.rx-chip:active { transform: scale(0.95); }
+.rx-chip.mine { background: rgba(var(--accent-rgb), .16); border-color: var(--accent); color: var(--accent-text); }
+.rx-chip .n { font-variant-numeric: tabular-nums; }
+.rx-chip.pop { animation: chipPop 380ms var(--ease-out); }
+@keyframes chipPop {
+  0%   { transform: scale(.85); opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.rx-chip .n.bump { animation: numBump 300ms var(--ease-out); }
+@keyframes numBump { 0% { transform: scale(1); } 45% { transform: scale(1.45); } 100% { transform: scale(1); } }
+
+/* ── Demo: connection ──────────────────────────────────────────────── */
+.net-top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.net-pill {
+  padding: 4px 11px; border-radius: 99px;
+  font: 600 11px/1.5 var(--font-ui); letter-spacing: .06em; text-transform: uppercase;
+  background: rgba(var(--green-rgb), .18); color: #4ec97f;
+  transition: background-color var(--dur-panel) ease, color var(--dur-panel) ease;
+}
+.net-pill.fair { background: rgba(240,178,50,.18); color: var(--warning); }
+.net-pill.poor { background: rgba(226,77,77,.18); color: #f07171; }
+.net-stat { font-size: 12.5px; color: var(--text-3); }
+.net-stat b { color: var(--text-1); font-variant-numeric: tabular-nums; font-weight: 600; }
+.net-graph { border-radius: 9px; background: var(--sunk); border: 1px solid var(--divider); padding: 8px; }
+.net-graph canvas { display: block; width: 100%; height: 118px; }
+.net-btn {
+  margin-top: 12px; height: 34px; padding: 0 13px; border-radius: 7px;
+  background: var(--raised); border: 1px solid var(--border);
+  font: 500 12.5px/1 var(--font-ui); color: var(--text-2);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease;
+}
+.net-btn:active { transform: scale(0.97); }
+.net-debug {
+  margin-top: 10px; display: grid; gap: 7px; overflow: hidden;
+  border: 1px solid var(--divider); border-radius: 8px; background: var(--sunk); padding: 11px 13px;
+  transform-origin: top;
+  transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out);
+}
+.net-debug[data-open="false"] { opacity: 0; transform: scaleY(.9) translateY(-6px); height: 0; padding: 0 13px; margin: 0; border-width: 0; pointer-events: none; }
+.net-debug div { display: flex; justify-content: space-between; font: 400 11.5px/1 var(--font-mono); }
+.net-debug span { color: var(--text-3); }
+.net-debug b { color: var(--text-1); font-weight: 500; }
+
+/* ── Reduced motion ────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .gcursor, .ripple { display: none !important; }
+  .rx-chip.pop, .rx-chip .n.bump { animation: none; }
+  .gauge-bar i { transition: none; }
+}
+
+/* ── Touch targets ─────────────────────────────────────────────────── */
+/* On a phone these controls are the demo — they are meant to be poked, not
+   just watched. At 30–34px they were below the 44px a fingertip needs, so
+   they grow where there is a finger and stay compact where there is a
+   pointer. Height only: the demos' widths and canvases are untouched. */
+@media (max-width: 560px) {
+  .seg-b { height: 44px; }
+  .rx-act { width: 40px; height: 40px; font-size: 17px; }
+  .rx-actions { gap: 4px; top: -22px; }
+}
