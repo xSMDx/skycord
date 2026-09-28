@@ -5,9 +5,25 @@
  * only to read facts — the process table and a window's pid. Capture itself
  * happens in the helper, and audio never passes through this process.
  */
-import { MessageChannelMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron'
+/**
+ * Types only, and the values fetched inside the one function that needs them.
+ *
+ * A static `import … from 'electron'` makes this module unloadable anywhere
+ * electron is not installed — which includes CI, where only the root
+ * package's dependencies are installed and the test suite imports this file
+ * for its pure helpers. Every other desktop module under test already avoids
+ * electron at module scope; this one broke that and turned the whole suite
+ * red while passing locally, where desktop/node_modules happens to exist.
+ *
+ * `resolveRootPid`, `pidForSource` and `supportsPerAppAudio` need nothing
+ * from electron. Only `startShareAudio` does, and by then the app is running.
+ */
+import type { UtilityProcess, WebContents } from 'electron'
 import { join } from 'path'
 import { rootOfApp, type ProcRow } from './processWalk'
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const electron = (): typeof import('electron') => require('electron')
 
 export interface CaptureAddon {
   supported: () => boolean
@@ -54,6 +70,7 @@ let helper: UtilityProcess | null = null
  */
 export const startShareAudio = async (pid: number, page: WebContents): Promise<boolean> => {
   stopShareAudio()
+  const { utilityProcess, MessageChannelMain } = electron()
   const child = utilityProcess.fork(join(__dirname, 'shareAudioHelper.js'), [], { serviceName: 'skycord-share-audio' })
   helper = child
 
