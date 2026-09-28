@@ -27,10 +27,11 @@ const arg = (name, fallback) => {
   return i > 0 ? process.argv[i + 1] : fallback
 }
 const MODES = arg('--modes', 'off,rnnoise,deepfilter').split(',')
+const SENS = Number(arg('--sensitivity', '0'))
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const appDir = fileURLToPath(new URL('..', import.meta.url))
 const audio = join(appDir, '.probe', 'audio')
-for (const f of ['noise-only.wav', 'speech-plus-noise.wav']) {
+for (const f of (process.env.PROBE_WAVS||'noise-only.wav,speech-plus-noise.wav').split(',')) {
   if (!existsSync(join(audio, f))) { console.error(`missing ${f} — run scripts/make-test-audio.mjs first`); process.exit(1) }
 }
 
@@ -93,8 +94,8 @@ const run = async (mode, wav) => {
     // close over the quiet parts and be credited to the suppressor.
     await page.evaluate(m => {
       const cur = JSON.parse(localStorage.getItem('sykord_voice') || '{}')
-      localStorage.setItem('sykord_voice', JSON.stringify({ ...cur, noiseMode: m, sensitivity: 0, echoCancellation: false }))
-    }, mode)
+      localStorage.setItem('sykord_voice', JSON.stringify({ ...cur, noiseMode: m.mode, sensitivity: m.sens, echoCancellation: false }))
+    }, { mode, sens: SENS })
     await page.reload()
     await page.waitForSelector('nav.rail .ri:not(.home)', { timeout: 30_000 })
 
@@ -162,7 +163,7 @@ const run = async (mode, wav) => {
 
 const dB = (a, b) => (a > 0 && b > 0 ? (20 * Math.log10(b / a)).toFixed(1) : 'n/a')
 const results = {}
-for (const wav of ['noise-only.wav', 'speech-plus-noise.wav']) {
+for (const wav of (process.env.PROBE_WAVS||'noise-only.wav,speech-plus-noise.wav').split(',')) {
   console.log(`\n=== ${wav} ===`)
   results[wav] = {}
   for (const mode of MODES) {

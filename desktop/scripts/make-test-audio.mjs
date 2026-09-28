@@ -75,5 +75,16 @@ const lead = RATE  // a second of noise alone at the front, to measure against
 for (let i = 0; i < speech.length && lead + i < mixed.length; i++) mixed[lead + i] += speech[i] * 0.8
 writeWav(join(out, 'speech-plus-noise.wav'), mixed)
 
-console.log(`wrote ${SECONDS}s of noise-only.wav and speech-plus-noise.wav to ${out}`)
+// 3. The hard case: a quieter voice under heavier noise.
+//
+//    A synthesised voice is the easiest input a speech model will ever see —
+//    loud, clean, perfectly articulated, no breath, no room. Passing on that
+//    says little about a real person on a real microphone. This is the closest
+//    a synthetic test gets to the hard case, and it is where over-suppression
+//    should show up if it is going to.
+const quiet = noise(SECONDS, 0.18)
+for (let i = 0; i < speech.length && lead + i < quiet.length; i++) quiet[lead + i] += speech[i] * 0.3
+writeWav(join(out, 'quiet-speech.wav'), quiet)
+
+console.log(`wrote ${SECONDS}s of noise-only.wav, speech-plus-noise.wav and quiet-speech.wav to ${out}`)
 console.log(`speech is ${(speech.length / RATE).toFixed(1)}s, starting at 1.0s`)

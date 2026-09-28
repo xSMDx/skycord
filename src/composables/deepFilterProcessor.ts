@@ -37,13 +37,26 @@ const PROCESSOR_NAME = 'deepfilternet-processor'
  * the wrong failure for this app. The model decides what a voice is, and it will
  * sometimes be wrong — a quiet microphone, a heavy accent, a cheap headset, someone
  * speaking through a fan. At 100 dB that person simply does not exist on the call
- * and cannot tell why; at 24 dB they are faint and audible, and can hear themselves
- * being cut and switch the mode off. Loud enough to matter, never a mute.
+ * and cannot tell why. Loud enough to matter, never a mute.
  *
  * Measured on this build: 0 dB passes audio through untouched, 6 dB halves it,
  * 100 dB silences it — so this number is the whole behaviour of the mode.
+ *
+ * **Why 12 and not 24.** It shipped at 24, validated against a synthesised voice
+ * that cost only 1.9 dB of speech. That signal flattered the model: loud, clean,
+ * perfectly articulated, no breath and no room. The owner tried it with a real
+ * voice and could barely hear himself, which a harder test then reproduced — a
+ * quieter voice under heavier noise lost 9.8 dB at the peaks and the full 24 dB
+ * through the body of the voice, because the model is unsure far more often on
+ * real input than on speech synthesis.
+ *
+ * The model being wrong is not fixable here. What is fixable is the cost of it
+ * being wrong: 12 dB makes a mistake a quarter as expensive as 24 dB, and the
+ * body of that same quiet voice comes back four times louder. The price is
+ * paid in noise removed — 12 dB instead of 24 — which is still a quarter of
+ * the noise left, and twice what RNNoise manages on steady sound.
  */
-const ATTENUATION_DB = 24
+const ATTENUATION_DB = 12
 
 /**
  * The package's worklet is given a text decoder on the way in.
