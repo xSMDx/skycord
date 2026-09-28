@@ -20,7 +20,7 @@ const NOISE_MODES = [
     // someone try it knowing to listen, and report back if their voice suffers.
     value: 'deepfilter' as const, label: 'DeepFilterNet 3', beta: true,
     hint: 'The strongest filter — best on keyboards, clatter and echoey rooms. '
-        + 'One-off download of about 10MB the first time you turn it on, more '
+        + 'One-off download of about 12MB the first time you turn it on, more '
         + "processor work than RNNoise, and about 40ms more delay on your voice. "
         + "Doesn't remove other people's voices — only noise. "
         + 'Still being tested — if your voice sounds thin or drops out, tell us and switch back to RNNoise.',
