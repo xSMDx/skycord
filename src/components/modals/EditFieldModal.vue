@@ -84,6 +84,12 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 /* Shared field styles, used by whatever the parent slots in */
 :deep(.efm-field-label) { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-2); margin-bottom: 6px; display: block; }
+/* The required marker. It was an inline style attribute, and colour was the
+   only thing saying "required" — the field carried no `required` attribute,
+   so nothing reached anyone not reading the hue. The inputs are marked
+   `required` now and this asterisk is decoration, hidden from the
+   accessibility tree so it is not read as punctuation mid-label. */
+:deep(.efm-req) { color: var(--danger-text); }
 :deep(.efm-input) {
   width: 100%; background: var(--bg-input); border: 1px solid transparent; border-radius: 4px;
   padding: 8px 10px; font-size: 14px; color: var(--text-strong); outline: none;

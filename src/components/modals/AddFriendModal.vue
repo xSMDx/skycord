@@ -65,6 +65,7 @@ const avatarUrl = (u: ApiUser) => avatarFor(u.username, u.avatar)
             <input
               v-model="query"
               type="text"
+              aria-label="Find someone by username"
               placeholder="You can add friends with their username"
               autofocus
             />

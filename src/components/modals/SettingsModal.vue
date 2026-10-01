@@ -1384,13 +1384,13 @@ const handleSelfRevoked = () => handleLogout()
     @done="onModalDone"
   >
     <div>
-      <label class="efm-field-label">Username</label>
-      <input class="efm-input" v-model="editVal" @keydown.enter="onModalDone" autofocus />
+      <label class="efm-field-label" for="ef-username">Username</label>
+      <input id="ef-username" class="efm-input" v-model="editVal" @keydown.enter="onModalDone" autofocus />
       <p class="efm-hint">Please only use numbers, letters, underscores, or periods.</p>
     </div>
     <div>
-      <label class="efm-field-label">Current Password</label>
-      <input class="efm-input" v-model="confirmPassword" type="password" @keydown.enter="onModalDone" />
+      <label class="efm-field-label" for="ef-username-pw">Current Password</label>
+      <input id="ef-username-pw" class="efm-input" v-model="confirmPassword" type="password" @keydown.enter="onModalDone" />
     </div>
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
   </EditFieldModal>
@@ -1404,12 +1404,12 @@ const handleSelfRevoked = () => handleLogout()
     @done="onModalDone"
   >
     <div>
-      <label class="efm-field-label">Email</label>
-      <input class="efm-input" v-model="editVal" type="email" @keydown.enter="onModalDone" autofocus />
+      <label class="efm-field-label" for="ef-email">Email</label>
+      <input id="ef-email" class="efm-input" v-model="editVal" type="email" @keydown.enter="onModalDone" autofocus />
     </div>
     <div>
-      <label class="efm-field-label">Current Password</label>
-      <input class="efm-input" v-model="confirmPassword" type="password" @keydown.enter="onModalDone" />
+      <label class="efm-field-label" for="ef-email-pw">Current Password</label>
+      <input id="ef-email-pw" class="efm-input" v-model="confirmPassword" type="password" @keydown.enter="onModalDone" />
     </div>
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
   </EditFieldModal>
@@ -1423,8 +1423,8 @@ const handleSelfRevoked = () => handleLogout()
     @done="onModalDone"
   >
     <div>
-      <label class="efm-field-label">Display Name</label>
-      <input class="efm-input" v-model="editVal" @keydown.enter="onModalDone" autofocus />
+      <label class="efm-field-label" for="ef-display">Display Name</label>
+      <input id="ef-display" class="efm-input" v-model="editVal" @keydown.enter="onModalDone" autofocus />
     </div>
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
   </EditFieldModal>
@@ -1438,16 +1438,16 @@ const handleSelfRevoked = () => handleLogout()
     @done="onModalDone"
   >
     <div>
-      <label class="efm-field-label">Current Password <span style="color:var(--danger-text)">*</span></label>
-      <input class="efm-input" v-model="confirmPassword" type="password" autofocus />
+      <label class="efm-field-label" for="ef-pw-current">Current Password <span class="efm-req" aria-hidden="true">*</span></label>
+      <input id="ef-pw-current" class="efm-input" v-model="confirmPassword" type="password" required autofocus />
     </div>
     <div>
-      <label class="efm-field-label">New Password <span style="color:var(--danger-text)">*</span></label>
-      <input class="efm-input" v-model="newPassword" type="password" />
+      <label class="efm-field-label" for="ef-pw-new">New Password <span class="efm-req" aria-hidden="true">*</span></label>
+      <input id="ef-pw-new" class="efm-input" v-model="newPassword" type="password" required />
     </div>
     <div>
-      <label class="efm-field-label">Confirm New Password <span style="color:var(--danger-text)">*</span></label>
-      <input class="efm-input" v-model="confirmNewPassword" type="password" @keydown.enter="onModalDone" />
+      <label class="efm-field-label" for="ef-pw-confirm">Confirm New Password <span class="efm-req" aria-hidden="true">*</span></label>
+      <input id="ef-pw-confirm" class="efm-input" v-model="confirmNewPassword" type="password" required @keydown.enter="onModalDone" />
     </div>
     <p v-if="saveErr" class="efm-err">{{ saveErr }}</p>
   </EditFieldModal>

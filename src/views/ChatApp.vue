@@ -4080,8 +4080,8 @@ useDesktopTitleBar({
       @done="submitRenameChannel"
     >
       <div>
-        <label class="efm-field-label">Channel Name</label>
-        <input class="efm-input" v-model="renameChannelVal" autofocus @keydown.enter="submitRenameChannel" />
+        <label class="efm-field-label" for="rename-channel">Channel Name</label>
+        <input id="rename-channel" class="efm-input" v-model="renameChannelVal" autofocus @keydown.enter="submitRenameChannel" />
       </div>
       <p v-if="renameChannelErr" class="efm-err">{{ renameChannelErr }}</p>
     </EditFieldModal>
@@ -4099,7 +4099,7 @@ useDesktopTitleBar({
       @done="submitCreateCategory"
     >
       <div>
-        <label class="efm-field-label">Category Name</label>
+        <label class="efm-field-label" for="create-category">Category Name</label>
         <input class="efm-input" v-model="createCategoryVal" maxlength="100" placeholder="New Category"
           autofocus @keydown.enter="submitCreateCategory" />
       </div>

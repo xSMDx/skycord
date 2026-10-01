@@ -74,9 +74,9 @@ const traits = reactive<string[]>(['', '', '', '', ''])
 
       <hr class="st-hr" />
 
-      <label class="st-label">Icon</label>
+      <span id="sp-icon-h" class="st-label">Icon</span>
       <p class="st-hint">Square, and at least 512×512 if you have it that big.</p>
-      <div class="st-actions">
+      <div class="st-actions" role="group" aria-labelledby="sp-icon-h">
         <button class="st-btn st-btn--primary" :disabled="!isOwner">
           <ImageIcon :size="15" :stroke-width="2" /> Change icon
         </button>
@@ -85,7 +85,7 @@ const traits = reactive<string[]>(['', '', '', '', ''])
 
       <hr class="st-hr" />
 
-      <label class="st-label">Banner colour</label>
+      <span class="st-label">Banner colour</span>
       <p class="st-hint">Sits behind the icon on your invite card.</p>
       <div class="sp-swatches" role="radiogroup" aria-label="Banner colour">
         <button
@@ -100,15 +100,15 @@ const traits = reactive<string[]>(['', '', '', '', ''])
 
       <hr class="st-hr" />
 
-      <label class="st-label">
+      <span id="sp-traits-h" class="st-label">
         Traits <span class="st-tbd">TBD</span>
-      </label>
+      </span>
       <p class="st-hint">
         Up to five words for what this server is about. Nothing stores these
         yet, so anything typed here is lost on close — the field is here to show
         the shape, not to be used.
       </p>
-      <div class="sp-traits">
+      <div class="sp-traits" role="group" aria-labelledby="sp-traits-h">
         <div v-for="(_, i) in traits" :key="i" class="sp-trait">
           <Smile :size="15" :stroke-width="2" class="sp-trait-ic" />
           <input v-model="traits[i]" class="sp-trait-in" maxlength="24" disabled placeholder="—" />
