@@ -33,17 +33,36 @@ const bind = (el: TipEl, binding: DirectiveBinding) => {
   // A tooltip that survives the click it described just sits there covering
   // whatever the click revealed.
   const press = () => hideTip()
+  /*
+   * Focus shows the tip for keyboard users, and only for them.
+   *
+   * A click fires `pointerdown` and then `focus` on the same element, so
+   * binding `enter` to focus directly undid `press` a moment after it ran:
+   * every mouse click re-raised the tooltip it had just dismissed, over the
+   * menu or popover the click had opened. The comment above said that must
+   * not happen while the code made it happen, on roughly every button in the
+   * app — the voice popover's "Voice Settings" row sat under an "Input
+   * device" tip in the audit screenshots.
+   *
+   * `data-input` is already maintained on <html> by main.ts for the focus
+   * ring, and answers exactly the right question: was this focus reached by
+   * pointer or by key?
+   */
+  const focusEnter = () => {
+    if (document.documentElement.dataset.input === 'pointer') return
+    enter()
+  }
 
   el.addEventListener('mouseenter', enter)
   el.addEventListener('mouseleave', leave)
-  el.addEventListener('focus', enter)
+  el.addEventListener('focus', focusEnter)
   el.addEventListener('blur', leave)
   el.addEventListener('pointerdown', press)
 
   state.cleanup = () => {
     el.removeEventListener('mouseenter', enter)
     el.removeEventListener('mouseleave', leave)
-    el.removeEventListener('focus', enter)
+    el.removeEventListener('focus', focusEnter)
     el.removeEventListener('blur', leave)
     el.removeEventListener('pointerdown', press)
   }

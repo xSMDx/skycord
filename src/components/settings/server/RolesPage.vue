@@ -407,7 +407,7 @@ const removeFromRole = (m: ServerMember) => {
 
             <hr class="st-hr" />
 
-            <label class="st-label">Role colour</label>
+            <span class="st-label">Role colour</span>
             <p class="st-hint">
               Members show the colour of their highest role that has one. Leave
               it unset and they inherit the colour of the next role down.

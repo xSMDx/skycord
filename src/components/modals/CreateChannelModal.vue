@@ -82,8 +82,8 @@ const submit = async () => {
 
       <!-- Type toggle -->
       <div class="ccm-body">
-        <label class="ccm-label">Channel Type</label>
-        <div class="ccm-type-row">
+        <span id="ccm-type-h" class="ccm-label">Channel Type</span>
+        <div class="ccm-type-row" role="group" aria-labelledby="ccm-type-h">
           <button
             class="ccm-type-btn" :class="{ active: type === 'text' }"
             @click="type = 'text'"
