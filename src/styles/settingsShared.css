@@ -61,6 +61,31 @@
   transition: border-color var(--dur-2) var(--ease-out);
 }
 .st-input:focus { border-color: var(--accent); }
+
+/*
+ * A dropdown.
+ *
+ * The Performance page shipped six bare <select> elements with no class at
+ * all, so they rendered in the browser's own light chrome against a dark
+ * panel — the Advanced disclosure was broken, so nobody had seen them.
+ *
+ * The native arrow is kept rather than replaced with a background-image
+ * chevron: DESIGN.md allows no custom SVG for a shape Lucide already has, and
+ * a data-URI arrow would be exactly that. `color-scheme: dark` is what makes
+ * the arrow and the popup list the browser draws match the panel they sit on.
+ */
+.st-select {
+  color-scheme: dark;
+  padding: 7px 10px; max-width: 200px;
+  background: var(--bg-input);
+  border: 1px solid transparent; border-radius: var(--edge-md, 6px);
+  font-size: 13px; font-family: inherit; color: var(--text-1);
+  cursor: pointer; outline: none;
+  transition: border-color var(--dur-2) var(--ease-out);
+}
+.st-select:hover { border-color: var(--border); }
+.st-select:focus-visible { border-color: var(--accent); }
+.st-select:disabled { opacity: .55; cursor: not-allowed; }
 .st-input:disabled { opacity: .55; cursor: not-allowed; }
 .st-input::placeholder { color: var(--text-faint); }
 .st-area { resize: vertical; min-height: 84px; line-height: 1.5; }
@@ -119,7 +144,39 @@
 /* The shape Account and Profile are built from — "USERNAME / devicetest /
    [Edit]". Lives here rather than in one component so both surfaces read the
    same and a third one does not invent a fourth variant. */
+/* Cards had no separation of any kind — not here, and not from a gap on any
+   parent — so every settings page with more than one of them rendered them
+   butted together as a single slab. Performance showed it worst with three in
+   a row, but Devices has four and Legal and Updates three each. */
 .st-card { background: var(--bg-panel); border-radius: 10px; overflow: hidden; }
+/* Adjacent cards only. Most pages put a .st-section heading between theirs and
+   are already spaced by its margins; a blanket margin-bottom added 12px to
+   those as well. This targets the case that was actually broken — two cards
+   with nothing in between, which rendered as one slab. */
+.st-card + .st-card { margin-top: 12px; }
+
+/*
+ * A disclosure heading.
+ *
+ * Not .st-field-label, which is `display: block` — on a <summary> that removes
+ * the disclosure marker outright. The Performance page's "Advanced" used it and
+ * rendered as a cramped label with no triangle, no padding and nothing to say
+ * it could open. The native marker stays hidden, as it is on the licences list,
+ * and the affordance is a chevron the page supplies: a shape the rest of the
+ * app already uses, which rotates to say which way it is going.
+ */
+.st-summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 20px; cursor: pointer; list-style: none;
+  font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--text-3);
+  transition: color var(--dur-1) var(--ease-out);
+}
+.st-summary::-webkit-details-marker { display: none; }
+.st-summary:hover { color: var(--text-2); }
+.st-summary-ico { flex: none; transition: transform var(--dur-2) var(--ease-out); }
+details[open] > .st-summary .st-summary-ico { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .st-summary-ico { transition: none; } }
 .st-field {
   display: flex; align-items: center; justify-content: space-between; gap: 18px;
   padding: 16px 20px;
@@ -137,6 +194,16 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .st-field-value.muted { color: var(--text-3); }
+/*
+ * The same row, with the text allowed to wrap.
+ *
+ * The single line above is right for a short value — an email, a device name
+ * — but several pages put a sentence or three of explanation in this slot,
+ * and `white-space: nowrap` cut them off mid-word. Not even with an ellipsis:
+ * the element is `display: flex`, which stops `text-overflow` applying at
+ * all, so the Performance page was simply losing the ends of its sentences.
+ */
+.st-field-value.prose { display: block; white-space: normal; overflow: visible; }
 
 /* ── "Not built yet" ───────────────────────────────────────────────────── */
 /* Shown rather than hidden: a marker that says "not yet" reads as a plan,

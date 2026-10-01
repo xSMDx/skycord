@@ -7,6 +7,7 @@
  * on the machine, and the readout below shows the truth for this one.
  */
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { ChevronRight } from 'lucide-vue-next'
 import { desktopBridge, type DesktopBridge } from '@/composables/desktopBridge'
 import {
   perf, perfState, setPerfLevel, setPerfOverride, clearPerfOverrides,
@@ -49,7 +50,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">This machine has little memory</span>
-        <span class="st-field-value">Light trades some looks for room to breathe. You can change it back any time.</span>
+        <span class="st-field-value prose">Light trades some looks for room to breathe. You can change it back any time.</span>
       </div>
       <button type="button" class="st-btn" @click="setPerfLevel('light')">Use Light</button>
       <button type="button" class="st-btn" @click="dismissSuggestion()">No thanks</button>
@@ -72,7 +73,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Restart to finish</span>
-        <span class="st-field-value">The title bar, the graphics card and the memory ceiling only change when Skycord starts.</span>
+        <span class="st-field-value prose">The title bar, the graphics card and the memory ceiling only change when Skycord starts.</span>
       </div>
       <button type="button" class="st-btn" @click="desktop?.performance?.restart()">Restart now</button>
     </div>
@@ -82,22 +83,25 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Memory in use</span>
-        <span class="st-field-value" v-if="memory">{{ memory.privateMb }} MB, across every part of the app</span>
-        <span class="st-field-value" v-else-if="heapMb !== null">{{ heapMb }} MB of the page's own memory. A browser tab costs more than this on top.</span>
-        <span class="st-field-value" v-else>This browser does not say.</span>
+        <span class="st-field-value prose" v-if="memory">{{ memory.privateMb }} MB, across every part of the app</span>
+        <span class="st-field-value prose" v-else-if="heapMb !== null">{{ heapMb }} MB of the page's own memory. A browser tab costs more than this on top.</span>
+        <span class="st-field-value prose" v-else>This browser does not say.</span>
       </div>
     </div>
   </div>
 
   <details class="st-card">
-    <summary class="st-field-label">Advanced</summary>
+    <summary class="st-summary">
+      <ChevronRight class="st-summary-ico" :size="14" :stroke-width="2.25" />
+      Advanced
+    </summary>
 
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Conversations kept in memory</span>
-        <span class="st-field-value">Measured, this saves nothing on a normal history — it is a limit, not a saving. Going back to one waits a moment while it loads again.</span>
+        <span class="st-field-value prose">Measured, this saves nothing on a normal history — it is a limit, not a saving. Going back to one waits a moment while it loads again.</span>
       </div>
-      <select :value="String(perf.keepConversations)" @change="setPerfOverride('keepConversations', Number(($event.target as HTMLSelectElement).value))">
+      <select class="st-select" :value="String(perf.keepConversations)" @change="setPerfOverride('keepConversations', Number(($event.target as HTMLSelectElement).value))">
         <option value="Infinity">Every one</option><option value="3">Three</option><option value="1">Just this one</option>
       </select>
     </div>
@@ -105,9 +109,9 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Messages kept per conversation</span>
-        <span class="st-field-value">A limit rather than a saving, on the evidence so far. Scrolling up loads the rest again.</span>
+        <span class="st-field-value prose">A limit rather than a saving, on the evidence so far. Scrolling up loads the rest again.</span>
       </div>
-      <select :value="String(perf.messagesPerConversation)" @change="setPerfOverride('messagesPerConversation', Number(($event.target as HTMLSelectElement).value))">
+      <select class="st-select" :value="String(perf.messagesPerConversation)" @change="setPerfOverride('messagesPerConversation', Number(($event.target as HTMLSelectElement).value))">
         <option value="Infinity">All of them</option><option value="200">200</option><option value="100">100</option>
       </select>
     </div>
@@ -115,9 +119,9 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Animated pictures</span>
-        <span class="st-field-value">Waiting for a tap stops a wall of GIFs decoding at once.</span>
+        <span class="st-field-value prose">Waiting for a tap stops a wall of GIFs decoding at once.</span>
       </div>
-      <select :value="perf.animatedMedia" @change="setPerfOverride('animatedMedia', ($event.target as HTMLSelectElement).value as 'play' | 'tap')">
+      <select class="st-select" :value="perf.animatedMedia" @change="setPerfOverride('animatedMedia', ($event.target as HTMLSelectElement).value as 'play' | 'tap')">
         <option value="play">Play on their own</option><option value="tap">Wait for a tap</option>
       </select>
     </div>
@@ -125,9 +129,9 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Cameras shown at once in a call</span>
-        <span class="st-field-value">The rest become names. Everyone still hears everyone.</span>
+        <span class="st-field-value prose">The rest become names. Everyone still hears everyone.</span>
       </div>
-      <select :value="String(perf.maxCallTiles)" @change="setPerfOverride('maxCallTiles', Number(($event.target as HTMLSelectElement).value))">
+      <select class="st-select" :value="String(perf.maxCallTiles)" @change="setPerfOverride('maxCallTiles', Number(($event.target as HTMLSelectElement).value))">
         <option value="Infinity">All of them</option><option value="4">Four</option><option value="2">Two</option>
       </select>
     </div>
@@ -135,9 +139,9 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Incoming video quality</span>
-        <span class="st-field-value">Lower is easier to decode on an old machine.</span>
+        <span class="st-field-value prose">Lower is easier to decode on an old machine.</span>
       </div>
-      <select :value="perf.incomingVideo" @change="setPerfOverride('incomingVideo', ($event.target as HTMLSelectElement).value as 'auto' | '720p' | '360p')">
+      <select class="st-select" :value="perf.incomingVideo" @change="setPerfOverride('incomingVideo', ($event.target as HTMLSelectElement).value as 'auto' | '720p' | '360p')">
         <option value="auto">Automatic</option><option value="720p">Up to 720p</option><option value="360p">Up to 360p</option>
       </select>
     </div>
@@ -145,17 +149,21 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Pause video when the window is hidden</span>
-        <span class="st-field-value">Sound always keeps going.</span>
+        <span class="st-field-value prose">Sound always keeps going.</span>
       </div>
-      <input type="checkbox" :checked="perf.pauseVideoWhenHidden" @change="setPerfOverride('pauseVideoWhenHidden', ($event.target as HTMLInputElement).checked)">
+      <button
+        class="st-toggle" :class="{ on: perf.pauseVideoWhenHidden }"
+        role="switch" :aria-checked="perf.pauseVideoWhenHidden" aria-label="Pause video when the window is hidden"
+        @click="setPerfOverride('pauseVideoWhenHidden', !perf.pauseVideoWhenHidden)"
+      ><span /></button>
     </div>
 
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Motion</span>
-        <span class="st-field-value">Your own reduce-motion setting always wins over this.</span>
+        <span class="st-field-value prose">Your own reduce-motion setting always wins over this.</span>
       </div>
-      <select :value="perf.motion" @change="setPerfOverride('motion', ($event.target as HTMLSelectElement).value as 'full' | 'reduced' | 'off')">
+      <select class="st-select" :value="perf.motion" @change="setPerfOverride('motion', ($event.target as HTMLSelectElement).value as 'full' | 'reduced' | 'off')">
         <option value="full">Full</option><option value="reduced">Less</option><option value="off">None</option>
       </select>
     </div>
@@ -164,25 +172,33 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
       <div class="st-field">
         <div class="st-field-left">
           <span class="st-field-label">Skycord's title bar</span>
-          <span class="st-field-value">Turning it off uses the plain Windows one and saves a whole process. Takes effect on restart.</span>
+          <span class="st-field-value prose">Turning it off uses the plain Windows one and saves a whole process. Takes effect on restart.</span>
         </div>
-        <input type="checkbox" :checked="perf.skycordTitleBar" @change="setPerfOverride('skycordTitleBar', ($event.target as HTMLInputElement).checked)">
+        <button
+        class="st-toggle" :class="{ on: perf.skycordTitleBar }"
+        role="switch" :aria-checked="perf.skycordTitleBar" aria-label="Skycord's title bar"
+        @click="setPerfOverride('skycordTitleBar', !perf.skycordTitleBar)"
+      ><span /></button>
       </div>
 
       <div class="st-field">
         <div class="st-field-left">
           <span class="st-field-label">Use the graphics card</span>
-          <span class="st-field-value">Off is where most of Light's saving comes from — measured at 135 MB less on this machine. The drawing moves to the processor instead, so video can look worse and the fan can work harder. Takes effect on restart.</span>
+          <span class="st-field-value prose">Off is where most of Light's saving comes from — measured at 135 MB less on this machine. The drawing moves to the processor instead, so video can look worse and the fan can work harder. Takes effect on restart.</span>
         </div>
-        <input type="checkbox" :checked="perf.hardwareAcceleration" @change="setPerfOverride('hardwareAcceleration', ($event.target as HTMLInputElement).checked)">
+        <button
+          class="st-toggle" :class="{ on: perf.hardwareAcceleration }"
+          role="switch" :aria-checked="perf.hardwareAcceleration" aria-label="Use the graphics card"
+          @click="setPerfOverride('hardwareAcceleration', !perf.hardwareAcceleration)"
+        ><span /></button>
       </div>
 
       <div class="st-field">
         <div class="st-field-left">
           <span class="st-field-label">Memory ceiling</span>
-          <span class="st-field-value">A cap makes the app tidy up sooner instead of holding on. Takes effect on restart.</span>
+          <span class="st-field-value prose">A cap makes the app tidy up sooner instead of holding on. Takes effect on restart.</span>
         </div>
-        <select :value="String(perf.heapCapMb ?? 0)" @change="setPerfOverride('heapCapMb', Number(($event.target as HTMLSelectElement).value) || null)">
+        <select class="st-select" :value="String(perf.heapCapMb ?? 0)" @change="setPerfOverride('heapCapMb', Number(($event.target as HTMLSelectElement).value) || null)">
           <option value="0">No cap</option><option value="256">256 MB</option><option value="192">192 MB</option>
         </select>
       </div>
@@ -191,7 +207,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
     <div class="st-field" v-if="overridden">
       <div class="st-field-left">
         <span class="st-field-label">You have changed some switches by hand</span>
-        <span class="st-field-value">Putting them back leaves the level as it was.</span>
+        <span class="st-field-value prose">Putting them back leaves the level as it was.</span>
       </div>
       <button type="button" class="st-btn" @click="clearPerfOverrides()">Back to the level</button>
     </div>

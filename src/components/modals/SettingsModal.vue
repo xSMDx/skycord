@@ -1224,7 +1224,7 @@ const handleSelfRevoked = () => handleLogout()
               <div class="st-field">
                 <div class="st-field-left">
                   <span class="st-field-label">Reduce motion</span>
-                  <span class="st-field-value muted">
+                  <span class="st-field-value muted prose">
                     Turn off animations and transitions. Worth trying if the app
                     feels sluggish on an older machine, or if movement bothers you.
                   </span>
