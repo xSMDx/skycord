@@ -89,3 +89,29 @@ the only way back.
 
   Once `latest` has moved or the notes are up, that stops being true, and the
   next number is the only way forward.
+
+## After any deploy or nginx change
+
+```bash
+node scripts/smoke.mjs
+```
+
+It walks the URLs that have actually broken and names the one that is wrong.
+Every check in it is a real outage, and each went unnoticed because the surface
+being worked on looked fine:
+
+- `/reset-password` 404'd for three days — a `sed` with no line address rewrote
+  the SPA fallback in all three nginx server blocks. Reset emails sent
+  correctly and every link was dead.
+- `/share-audio-worklet.js` 404'd — the deploy copied two paths by name, so
+  nothing else at the root of `dist/` shipped. Screen-share audio failed
+  silently and degraded to "video without sound".
+- `/servers` must be **401, not 200**. A missing nginx proxy prefix falls
+  through to the SPA, so the client gets 200 plus index.html — which looks
+  exactly like a working API until `res.json()` throws into a catch block.
+- `/server/index.js` must be **403**. Copying `dist/*` once published the whole
+  compiled backend to the public web root.
+
+**A status code alone is a weak signal on a single-page app**, where every
+unknown path returns 200 and the shell. The checks assert on content wherever
+that matters. Run it against another host with `--app <url> --landing <url>`.
