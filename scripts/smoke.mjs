@@ -2,7 +2,8 @@
 /**
  * Walk the URLs that have actually broken, and say which one is wrong.
  *
- *   node scripts/smoke.mjs                      # production
+ *   node scripts/smoke.mjs                      # production, from the deploy host
+ *   node scripts/smoke.mjs --skip-bundle-check   # from a dev machine
  *   node scripts/smoke.mjs --app http://localhost:3050 --landing http://localhost:4190
  *
  * Every check here is a real outage from the week of 2026-09-28, and each one
@@ -20,11 +21,19 @@
  *     throws, and the feature renders empty — indistinguishable from working.
  *   - `/server/index.js` must be 403. Copying `dist/*` once published the
  *     whole compiled backend to the public web root.
+ *   - Every one of the above passed on 1 October while production was serving
+ *     a build from days earlier: `npm run build` had died on `vite: not
+ *     found` (the install had pruned devDependencies) and the rsync that
+ *     followed shipped the stale `dist/` anyway. Sixteen green checks, and
+ *     not one line of that day's work was live. Run from a checkout, this now
+ *     compares the bundle production serves against the one `dist/` holds.
  *
  * A status code alone is a weak signal on a single-page app, where every
  * unknown path returns 200 and the shell. Where that matters, these checks
  * assert on content as well.
  */
+import { readFileSync } from 'fs'
+
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(name)
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback
@@ -70,6 +79,43 @@ const checks = [
     why: 'the landing returns a real 404, not the homepage pretending' },
 ]
 
+
+/*
+ * Did the build we just made actually reach production?
+ *
+ * Only possible from a checkout that has built: `dist/index.html` names the
+ * bundle this tree produces, and the served page names the one the web root
+ * holds. When they differ, the deploy copied something older — which is a
+ * silent failure, because every check above passes on any build at all.
+ */
+/** Vite's hashed entry, as it appears in both index.html files. */
+const BUNDLE = /assets\/index-[A-Za-z0-9_.-]+\.js/
+
+const localBundle = () => {
+  // On a developer's machine your dist/ is almost never what production
+  // serves, and a failure there is noise people learn to ignore — which is
+  // how a real one would get ignored too.
+  if (process.argv.includes('--skip-bundle-check')) return null
+  try {
+    return BUNDLE.exec(readFileSync('dist/index.html', 'utf8'))?.[0] ?? null
+  } catch { return null }   // not a checkout, or never built: skip rather than fail
+}
+
+/** 'ok' | 'stale' | 'skipped' — skipped is not a pass, and must not read like one. */
+const checkFreshness = async () => {
+  const want = localBundle()
+  if (!want) {
+    console.log('skip  app  bundle freshness (no built dist/, or --skip-bundle-check)')
+    return 'skipped'
+  }
+  const { body } = await get(`${APP}/`)
+  const served = BUNDLE.exec(body)?.[0] ?? '(none)'
+  if (served === want) { console.log('ok    app  serving the bundle this checkout built'); return 'ok' }
+  console.log(`FAIL  app  serving ${served}, this checkout built ${want}
+        why: the deploy shipped an older dist/ — check whether the build step actually succeeded`)
+  return 'stale'
+}
+
 const get = async (url) => {
   const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT) })
   const body = await res.text().catch(() => '')
@@ -98,5 +144,12 @@ for (const c of checks) {
   console.log(line)
 }
 
-console.log(failed ? `\n${failed} of ${checks.length} checks failed.` : `\nAll ${checks.length} checks passed.`)
+const freshness = await checkFreshness()
+if (freshness === 'stale') failed++
+
+console.log(failed
+  ? `\n${failed} check${failed === 1 ? '' : 's'} failed.`
+  : freshness === 'ok'
+    ? `\nAll ${checks.length} checks passed, and production is serving this build.`
+    : `\nAll ${checks.length} checks passed. Whether production runs THIS build was not checked.`)
 process.exit(failed ? 1 : 0)

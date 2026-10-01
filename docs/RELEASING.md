@@ -97,12 +97,24 @@ does not apply to it. The sequence is:
 
 ```bash
 cd ~/sykord && git checkout -- package-lock.json && git pull origin main
-npm install && npm run build
+npm install --include=dev && npm run build
 sudo rsync -a --delete --exclude 'server' ~/sykord/dist/ /var/www/app.<host>/
 sudo rsync -a --delete ~/sykord/landing/ /var/www/<host>/
 pm2 restart sykord-api && pm2 save
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+**`--include=dev` is not optional on that host.** It has `NODE_ENV=production`
+and `omit=dev` in its npm config, so a plain `npm install` deletes every
+devDependency — which is where `vite` and `tsc` live. The build then dies on
+`vite: not found`, and because the rsync is a separate command it runs anyway
+and ships the `dist/` already sitting there. On 1 October that put a build
+several days old back into production while the landing page, which needs no
+build, deployed the new changelog alongside it: the site advertised features
+the app did not have, and all sixteen smoke checks passed.
+
+**Run the whole thing as one chain, or read the build's output before the
+rsync.** A failed build must never reach the copy step.
 
 **`--exclude 'server'` is not optional.** `dist/` contains the compiled
 backend; copying it wholesale once published the full server source on the
@@ -121,6 +133,12 @@ Then run the smoke check below. Verify by content, never by status code.
 ```bash
 node scripts/smoke.mjs
 ```
+
+Run it **from `~/sykord` on the deploy host**, where it can compare the bundle
+production serves against the one `dist/` holds — that comparison is the only
+check here that catches a deploy which copied nothing new. From a developer's
+machine pass `--skip-bundle-check`, since your `dist/` is never what
+production serves.
 
 It walks the URLs that have actually broken and names the one that is wrong.
 Every check in it is a real outage, and each went unnoticed because the surface
