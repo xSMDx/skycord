@@ -106,6 +106,13 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.20.3', date: 'Oct 2, 2026', time: '01:14 UTC+2', title: 'A blip is not a hang-up',
+    items: [
+      ['fix', 'People vanishing from a voice channel while still being in the call. Who is sitting in a channel and who you can see on the call screen came from two different places — the server’s own list, and the call itself — and only one of them noticed a brief network drop. Lose your connection for a second and the server took you out of the channel for everybody, while the call carried on and you stayed audible: a list of five people next to a call with eight in it. Your connection coming back now puts you back where you were, with your mute and deafen intact'],
+      ['fix', 'A “Call ended” notice appearing in a DM or group while the call was still going on. Losing your connection for a second was read as hanging up, and the end of the call was written into the conversation for good — where nothing takes it back. Restarting the server did it to every call at once, each of which then carried straight on under a message saying it had finished. The server now waits to see whether anyone comes back before deciding a call is over. Leaving a call yourself, or being disconnected from one by a moderator, still ends it straight away'],
+    ]
+  },
+  {
     v: 'v0.20.2', date: 'Oct 1, 2026', time: '13:45 UTC+2', title: 'The app can tell you what it is',
     items: [
       ['fix', 'The Windows app stopped updating itself. It gave the download eight seconds at launch and then walked away from it, so the installer landed in a cache folder and was never applied — every launch, with nothing on screen to say so. One person ran a version eight days old while two releases shipped past them, and tested a feature three times on a build that did not contain it. The app no longer waits for anything at startup: an update downloads in the background while you use it, and installs when you press Restart'],
@@ -113,8 +120,6 @@
       ['add', 'A notice when an update is ready, which waits for an answer instead of fading away, and never appears while you are in a call'],
       ['add', 'A debug page, for when something is wrong and nobody can see why. Tap the server icon in Settings › About this instance seven times. It shows the app version, whether the screen-share components loaded, and what the updater last did, and copies the lot to your clipboard in one press — nothing on it is private'],
       ['imp', 'The launch screen no longer reports an update check it is not waiting for. It appears and gets out of the way'],
-      ['fix', 'People vanishing from a voice channel while still being in the call. Who is sitting in a channel and who you can see on the call screen came from two different places — the server’s own list, and the call itself — and only one of them noticed a brief network drop. Lose your connection for a second and the server took you out of the channel for everybody, while the call carried on and you stayed audible: a list of five people next to a call with eight in it. Your connection coming back now puts you back where you were, with your mute and deafen intact'],
-      ['fix', 'A “Call ended” notice appearing in a DM or group while the call was still going on. Losing your connection for a second was read as hanging up, and the end of the call was written into the conversation for good — where nothing takes it back. Restarting the server did it to every call at once, each of which then carried straight on under a message saying it had finished. The server now waits to see whether anyone comes back before deciding a call is over. Leaving a call yourself, or being disconnected from one by a moderator, still ends it straight away'],
     ]
   },
   {
