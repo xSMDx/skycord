@@ -19,14 +19,45 @@ import { Server } from '../models/Server'
 import { Message } from '../models/Message'
 import { Conversation } from '../models/Conversation'
 import { roomFor } from '../controllers/voiceController'
+import {
+  callEndPending, cancelAllCallEnds, dropFromCall,
+  fixCallVoiceServer, getCallVoiceServer,
+} from '../sockets/chatSocket'
 import { dmConvId } from '../controllers/messagesController'
+
+/*
+ * The grace period before an emptied room's call is declared over, shortened
+ * for these tests. Twenty seconds is the shipped default and nothing here
+ * could wait for it under a twenty-second test timeout. It has to comfortably
+ * clear connectSocket's own 350ms setup wait, because a reconnect in these
+ * tests costs that much before it can emit anything at all.
+ *
+ * Read by the server per scheduled end rather than captured at import, so
+ * setting it here needs no ordering against the imports above.
+ */
+const GRACE_MS = 1200
+process.env.CALL_END_GRACE_MS = String(GRACE_MS)
+
+/** Wait until a scheduled call end has certainly either fired or not. */
+const pastGrace = () => new Promise(r => setTimeout(r, GRACE_MS + 400))
+
+const callEndedCount = () => Message.countDocuments({ content: 'Call ended' })
 
 let sockets: { url: string; close: () => Promise<void> }
 const open: ClientSocket[] = []
 
 beforeAll(async () => { await connectDb(); sockets = await withSocketServer() })
 afterAll(async () => { await sockets.close(); await disconnectDb() })
-beforeEach(async () => { open.splice(0).forEach(s => s.disconnect()); await resetDb() })
+beforeEach(async () => {
+  open.splice(0).forEach(s => s.disconnect())
+  // Those disconnects schedule call ends on the server — which is the whole
+  // behaviour under test here. Let the handlers run, then drop every pending
+  // one: a timer surviving into the next test would write "Call ended" into
+  // ITS database and corrupt a message count that has nothing to do with it.
+  await new Promise(r => setTimeout(r, 50))
+  cancelAllCallEnds()
+  await resetDb()
+})
 
 const track = (s: ClientSocket) => { open.push(s); return s }
 
@@ -482,7 +513,8 @@ describe('coming back after a dropped socket', () => {
 
     // Await the drop's own broadcast before listening for the rejoin's, or
     // the next call:state to arrive is the empty one this disconnect causes.
-    // The drop also posts "Call ended" — see the note below this test.
+    // The drop writes nothing at all now — see the grace-period tests below,
+    // which is what makes the count read just after it stable rather than racy.
     const cleared = nextEvent(bSock, 'call:state')
     aSock.disconnect()
     expect((await cleared).userIds).toEqual([])
@@ -500,14 +532,211 @@ describe('coming back after a dropped socket', () => {
   })
 
   /*
-   * Not fixed here, and worth naming: the drop above also posts "Call ended"
-   * into the conversation, because leaveCall sees the room empty and cannot
-   * tell a hang-up from a hiccup. The call did not end — a is still in the
-   * LiveKit room throughout, and comes straight back. Closing that needs a
-   * grace period before the room is declared over, which is a change to when
-   * occupancy is removed rather than to how it is restored, so it is kept
-   * separate from this fix.
+   * The other half, closed here: leaveCall used to see the room empty and
+   * declare the call over, because it could not tell a hang-up from a hiccup.
+   * The call had not ended — a is in the LiveKit room throughout and comes
+   * straight back — but "Call ended" was already in everybody's history, and
+   * nothing takes a Message back. Occupancy still goes the instant the socket
+   * does; only the conclusion waits.
    */
+
+  it('says nothing in the conversation while the call could still come back', async () => {
+    const a = await register(), b = await register()
+    const room = roomFor('dm', b.id, a.id)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+
+    const started = nextEvent(bSock, 'dm:receive')
+    aSock.emit('call:join', { conversationId: b.id, kind: 'dm' })
+    expect((await started).content).toBe(`${a.username} started a call`)
+
+    // The blip. Occupancy is gone at once — the sidebars have to stay honest
+    // about who is there — but the room is only pending, not over.
+    const cleared = nextEvent(bSock, 'call:state')
+    aSock.disconnect()
+    expect((await cleared).userIds).toEqual([])
+    expect(callEndPending(room)).toBe(true)
+    expect(await callEndedCount()).toBe(0)
+
+    const back = nextEvent(bSock, 'call:state')
+    const aAgain = track(await connectSocket(sockets.url, a.token))
+    aAgain.emit('call:rejoin', { conversationId: b.id, kind: 'dm' })
+    expect((await back).userIds).toEqual([a.id])
+    expect(callEndPending(room)).toBe(false)
+
+    // The point: not merely deferred past the assertion above, cancelled.
+    await pastGrace()
+    expect(await callEndedCount()).toBe(0)
+  })
+
+  it('still ends the call once nobody comes back', async () => {
+    // The guard against "fixing" this by never ending a call again: a grace
+    // period that silently swallowed the message would pass every test above.
+    const a = await register(), b = await register()
+    const room = roomFor('dm', b.id, a.id)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+
+    const started = nextEvent(bSock, 'dm:receive')
+    aSock.emit('call:join', { conversationId: b.id, kind: 'dm' })
+    await started
+
+    // Listened for only now that "started a call" has landed — registered any
+    // earlier, this would resolve with that message instead of the end.
+    // b stays listening throughout, so this also proves the message reaches
+    // the open DM rather than only landing in the database.
+    const ended = nextEvent(bSock, 'dm:receive', GRACE_MS + 3000)
+    // `disconnect()` is a client-side call; waiting for the occupancy the
+    // server broadcasts in response is what proves its handler has run, and
+    // the grace period only starts there.
+    const cleared = nextEvent(bSock, 'call:state')
+    aSock.disconnect()
+    expect((await cleared).userIds).toEqual([])
+    expect(callEndPending(room)).toBe(true)
+
+    expect((await ended).content).toBe('Call ended')
+    expect(await callEndedCount()).toBe(1)
+    expect(callEndPending(room)).toBe(false)
+  })
+
+  it('ends nothing when a restart takes every socket in the call at once', async () => {
+    // The case this was found through: one `pm2 restart` severs every socket in
+    // the instance, so every room empties within the same tick and every client
+    // reconnects to the new process a moment later. A single deploy used to
+    // announce the end of every call on the instance.
+    const a = await register(), b = await register()
+    const group = await Conversation.create({
+      type: 'group', owner: a.id, members: [a.id, b.id], lastMessageAt: new Date(),
+    })
+    const groupId = group._id.toString()
+    const room = `group:${groupId}`
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    aSock.emit('call:join', { conversationId: groupId, kind: 'group' })
+    bSock.emit('call:join', { conversationId: groupId, kind: 'group' })
+    await new Promise(r => setTimeout(r, 150))
+
+    aSock.disconnect()
+    bSock.disconnect()
+    await new Promise(r => setTimeout(r, 150))
+    expect(callEndPending(room)).toBe(true)
+
+    const aAgain = track(await connectSocket(sockets.url, a.token))
+    const bAgain = track(await connectSocket(sockets.url, b.token))
+    aAgain.emit('call:rejoin', { conversationId: groupId, kind: 'group' })
+    bAgain.emit('call:rejoin', { conversationId: groupId, kind: 'group' })
+    await new Promise(r => setTimeout(r, 150))
+
+    expect(callEndPending(room)).toBe(false)
+    await pastGrace()
+    expect(await callEndedCount()).toBe(0)
+    // One "started a call", from the real start. The call never stopped, so it
+    // never restarted either.
+    expect(await Message.countDocuments({ systemType: 'call' })).toBe(1)
+  })
+
+  it('hangs up at once when somebody actually leaves', async () => {
+    // The contrast that gives the grace period its meaning. `call:leave` is a
+    // person deciding; nothing about it is in doubt, so nothing waits.
+    const a = await register(), b = await register()
+    const room = roomFor('dm', b.id, a.id)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    aSock.emit('call:join', { conversationId: b.id, kind: 'dm' })
+    await nextEvent(bSock, 'call:state')
+
+    const ended = nextEvent(bSock, 'dm:receive')
+    aSock.emit('call:leave', { conversationId: b.id, kind: 'dm' })
+    expect((await ended).content).toBe('Call ended')
+    // Never scheduled, rather than scheduled and beaten to it.
+    expect(callEndPending(room)).toBe(false)
+  })
+
+  it('lets a moderator end a call at once, with no grace period', async () => {
+    /*
+     * dropFromCall is the moderated path, and a moderator removing the last
+     * person is not a blip: somebody has decided they are out, and there is
+     * nobody to come back. It only ever sees a voice channel, which has no
+     * text history for a message to land in, so what is observable is the
+     * room's media server being let go — immediately here, and only after the
+     * grace period on the dropped-socket path below.
+     */
+    const a = await register()
+    const { voice } = await seed(a)
+    const room = roomFor('channel', voice.id, a.id)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    await nextEvent(aSock, 'call:state')
+    fixCallVoiceServer(room, 'vs-moderated')
+    expect(getCallVoiceServer(room)).toBe('vs-moderated')
+
+    expect(dropFromCall(room, a.id)).toBe(true)
+    expect(getCallVoiceServer(room)).toBeUndefined()
+    expect(callEndPending(room)).toBe(false)
+  })
+
+  it('keeps the media server a dropped call settled on until the grace period runs out', async () => {
+    /*
+     * The pin is what stops two people in one DM minting tokens against two
+     * different LiveKit servers and hearing silence. Releasing it the moment
+     * the last socket dropped would do exactly that: whoever dropped may still
+     * be in the LiveKit room on the old server, and the next person to join
+     * would be free to land on another and be split off from them.
+     */
+    const a = await register(), b = await register()
+    const room = roomFor('dm', b.id, a.id)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    track(await connectSocket(sockets.url, b.token))
+    aSock.emit('call:join', { conversationId: b.id, kind: 'dm' })
+    await new Promise(r => setTimeout(r, 150))
+    fixCallVoiceServer(room, 'vs-dropped')
+
+    aSock.disconnect()
+    await new Promise(r => setTimeout(r, 150))
+    expect(callEndPending(room)).toBe(true)
+    expect(getCallVoiceServer(room)).toBe('vs-dropped')
+
+    await pastGrace()
+    expect(getCallVoiceServer(room)).toBeUndefined()
+  })
+
+  it('treats a plain join during the grace period as joining, not starting', async () => {
+    /*
+     * A client that gave up on reconnecting and came back through the front
+     * door, or somebody else arriving while the call is pending. Either way
+     * the room was never really empty — whoever dropped may still be in the
+     * LiveKit room — so there is no second "started a call" to post, no end to
+     * conclude, and the media server the call settled on is kept, not released.
+     */
+    const a = await register(), b = await register()
+    const room = roomFor('dm', b.id, a.id)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    aSock.emit('call:join', { conversationId: b.id, kind: 'dm' })
+    await nextEvent(bSock, 'call:state')
+    fixCallVoiceServer(room, 'vs-resumed')
+
+    aSock.disconnect()
+    await new Promise(r => setTimeout(r, 150))
+    expect(callEndPending(room)).toBe(true)
+
+    const joined = nextEvent(bSock, 'call:state')
+    bSock.emit('call:join', { conversationId: a.id, kind: 'dm' })
+    expect((await joined).userIds).toEqual([b.id])
+
+    expect(callEndPending(room)).toBe(false)
+    expect(getCallVoiceServer(room)).toBe('vs-resumed')
+    await pastGrace()
+    expect(await callEndedCount()).toBe(0)
+    expect(await Message.countDocuments({ systemType: 'call' })).toBe(1)
+  })
 
   it('refuses a rejoin from somebody who was never allowed in', async () => {
     // Coming back from a blip is not a way in: the same gate as call:join.

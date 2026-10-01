@@ -57,7 +57,6 @@ const statesFor = (room: string): Record<string, VoiceMemberState> | undefined =
   if (!m || m.size === 0) return undefined
   return Object.fromEntries(m)
 }
-const callStartedAt = new Map<string, number>()
 
 /**
  * Which media server a DM or group call settled on: room -> VoiceServer id,
@@ -85,6 +84,116 @@ const callVoiceServer = new Map<string, string | null>()
  *  test for `undefined` rather than falsiness. */
 export const getCallVoiceServer = (room: string): string | null | undefined =>
   callVoiceServer.get(room)
+
+/**
+ * How long a room sits EMPTY before the call in it is declared over.
+ *
+ * A socket dying is not a hang-up, and the two were being treated as the same
+ * event. Taking the person out of occupancy the moment their socket goes is
+ * right and stays immediate — every sidebar reads occupancy, and a row for
+ * somebody who is not there is the wrong a user notices first. But "the last
+ * occupant left, so the call is over" is a second and much larger claim, and a
+ * dropped socket is no evidence for it: the LiveKit connection is a separate
+ * connection to a separate service and survives the blip untouched, so the
+ * person is still in the call, still audible, still a tile on everyone's
+ * stage, and `call:rejoin` puts them back within seconds.
+ *
+ * Concluding it immediately wrote "Call ended" into the conversation's
+ * permanent history for every network hiccup — and one `pm2 restart` severs
+ * every socket at once, so a single deploy announced the end of every DM and
+ * group call on the instance, each of which then carried straight on with the
+ * message still sitting in everybody's history.
+ *
+ * Long enough to cover Socket.IO's reconnect backoff and a deploy's downtime;
+ * short enough that somebody who really did close their laptop stops showing
+ * as in a call while anyone still cares.
+ */
+const CALL_END_GRACE_MS = 20_000
+
+/**
+ * Read per schedule rather than captured once, so it can be shortened: the
+ * tests cannot wait twenty seconds under a twenty-second timeout, and an
+ * instance whose users are mostly on flaky mobile networks may want longer.
+ * Documented in .env.example. A missing or nonsensical value means the
+ * default above, which is the only value any deployment needs to think about.
+ */
+const callEndGraceMs = (): number => {
+  // Tested for emptiness BEFORE Number(), which reads '' as 0 — and .env.example
+  // ships the key present and blank, so that would hand every stock install a
+  // grace period of nothing and quietly restore the behaviour this removes.
+  // An explicit 0 is still honoured: it is the deliberate way to opt out.
+  const raw = process.env.CALL_END_GRACE_MS
+  if (!raw) return CALL_END_GRACE_MS
+  const ms = Number(raw)
+  return Number.isFinite(ms) && ms >= 0 ? ms : CALL_END_GRACE_MS
+}
+
+/** Rooms that emptied through a dropped socket and whose end has not been
+ *  concluded yet. One timer per room — re-entering the room cancels it. */
+const pendingCallEnd = new Map<string, NodeJS.Timeout>()
+
+/** Who a "Call ended" message is attributed to: the occupant whose leaving
+ *  emptied the room. Passed around because the write can happen a grace period
+ *  after the socket that knew these two values is gone. */
+type CallAuthor = { id: string; name: string }
+
+/**
+ * Whether a room is inside its grace period — its call is still live, it has
+ * simply lost every socket that was watching it.
+ *
+ * Exported for the tests, which assert on this directly: the absence of a
+ * "Call ended" message proves nothing on its own, since it may simply not have
+ * been written yet.
+ */
+export const callEndPending = (room: string): boolean => pendingCallEnd.has(room)
+
+/** Stop a pending end. Every path that puts somebody INTO a room calls this:
+ *  an occupied room is self-evidently not one whose call is over. */
+const cancelCallEnd = (room: string): void => {
+  const timer = pendingCallEnd.get(room)
+  if (!timer) return
+  clearTimeout(timer)
+  pendingCallEnd.delete(room)
+}
+
+/**
+ * Abandon every pending end without concluding any of them.
+ *
+ * Called from the shutdown path in server/index.ts. The timers are unref'd, so
+ * an immediate exit would already skip them, but `httpServer.close()` waits
+ * for open connections to end and a grace period can expire inside that wait.
+ * A call this process is about to stop tracking is not a call that ended — on
+ * a restart the clients come back to the NEW process and rejoin, so a parting
+ * message from this one is exactly the bug the grace period exists to remove.
+ */
+export const cancelAllCallEnds = (): void => {
+  for (const timer of pendingCallEnd.values()) clearTimeout(timer)
+  pendingCallEnd.clear()
+}
+
+/**
+ * Drop the occupancy and per-member state of a room that has just emptied.
+ *
+ * Immediate on every path, whatever is then decided about the CALL. Every
+ * surface reads these two together, so state outliving its occupant renders a
+ * ghost row.
+ */
+const forgetEmptyRoom = (room: string): void => {
+  activeCalls.delete(room)
+  voiceStates.delete(room)
+}
+
+/**
+ * Let go of a room that is empty for good: the next call in it is free to
+ * settle on a different media server, and no end is pending on it any more.
+ *
+ * Separate from the "Call ended" message because the two have different
+ * audiences and one path wants only this half — see dropFromCall.
+ */
+const releaseCallRoom = (room: string): void => {
+  cancelCallEnd(room)
+  callVoiceServer.delete(room)
+}
 
 /** How many people are in a call room right now, and whether a given user is
  *  already one of them. Occupancy is the only thing a user limit can be checked
@@ -224,6 +333,71 @@ export const broadcastCallState = (room: string): void => {
 }
 
 /**
+ * Write "Call ended" into the conversation the room belongs to.
+ *
+ * Module level rather than a closure over the socket that triggered it,
+ * because the write can happen a grace period after that socket is gone — so
+ * there is no `userId`/`username` in scope by then, and the author has to be
+ * carried in. Derives the conversation straight from the room name for the
+ * same reason: the leaver's own closure state is not available to be trusted.
+ */
+const postCallEnded = async (room: string, author: CallAuthor) => {
+  const io = _io
+  if (!io) return
+  // The other half of the no-system-message rule: a voice channel has no
+  // text history to announce into, and the DM branch below would parse
+  // `voice:<id>` into a garbage conversationId rather than refusing it.
+  if (room.startsWith('voice:')) return
+  try {
+    const isGroup = room.startsWith('group:')
+    const conversationId = isGroup ? room.slice(6) : room.slice(3)
+    const msg = await Message.create({
+      conversationId, kind: 'system', systemType: 'call',
+      authorId: author.id, authorName: author.name, authorAvatar: null, content: 'Call ended',
+    })
+    const payload = {
+      _id: msg._id.toString(), conversationId, kind: 'system', systemType: 'call',
+      authorId: author.id, authorName: author.name, authorAvatar: null, content: 'Call ended',
+      reactions: [], pinned: false, edited: false, replyTo: null,
+      createdAt: msg.createdAt.toISOString(),
+    }
+    if (isGroup) io.to(room).emit('group:receive', payload)
+    else { const [a, b] = conversationId.split('_'); io.to(`user:${a}`).to(`user:${b}`).emit('dm:receive', payload) }
+  } catch (err) { console.error('[WS] postCallEnded', err) }
+}
+
+/**
+ * Conclude, after the grace period, that the call in an emptied room is over.
+ *
+ * Scheduled only from the dropped-socket path. A deliberate `call:leave` and a
+ * moderator's eviction both end the call on the spot — they are evidence about
+ * the person, not about the network — and only a socket vanishing leaves the
+ * question genuinely open.
+ */
+const scheduleCallEnd = (room: string, author: CallAuthor): void => {
+  cancelCallEnd(room)
+  const timer = setTimeout(() => {
+    pendingCallEnd.delete(room)
+    // Belt and braces: every path that re-enters a room cancels this timer, so
+    // arriving here with occupants would be a bug — and the cost of being
+    // wrong is a message in somebody's history that nothing ever takes back.
+    if ((activeCalls.get(room)?.size ?? 0) > 0) return
+    releaseCallRoom(room)
+    void postCallEnded(room, author)
+  }, callEndGraceMs())
+  /*
+   * Unref'd deliberately, and not only so a pending end cannot hold a
+   * shutdown open for the whole grace period: a process on its way out must
+   * NOT write "Call ended". `pm2 restart` is the case that matters — every
+   * socket drops, every room empties, and the clients come back to the new
+   * process and rejoin there. See cancelAllCallEnds, which closes the window
+   * where the exit is slow enough for a grace period to expire inside it.
+   */
+  timer.unref?.()
+  pendingCallEnd.set(room, timer)
+}
+
+/**
  * Remove somebody from a call from OUTSIDE their own socket.
  *
  * The ordinary path is `call:leave`, which only ever deletes the caller's own
@@ -231,6 +405,12 @@ export const broadcastCallState = (room: string): void => {
  * having evicted a participant does not tell this process anything, so without
  * it the person would sit in every sidebar as a ghost occupant until their
  * socket happened to disconnect.
+ *
+ * Emptying a room THIS way ends the call immediately, with no grace period. A
+ * moderator removing the last person is not a network blip — it is the one
+ * case where somebody has decided the person is out, and there is nobody left
+ * to come back. The grace period exists because a dropped socket is no
+ * evidence a call ended; an eviction is precisely that evidence.
  */
 export const dropFromCall = (room: string, userId: string): boolean => {
   const set = activeCalls.get(room)
@@ -239,8 +419,17 @@ export const dropFromCall = (room: string, userId: string): boolean => {
   const st = voiceStates.get(room)
   if (st) { st.delete(userId); if (st.size === 0) voiceStates.delete(room) }
   if (set.size === 0) {
-    activeCalls.delete(room); callStartedAt.delete(room); voiceStates.delete(room)
-    callVoiceServer.delete(room)
+    forgetEmptyRoom(room)
+    /*
+     * The room is released but nothing is announced, which is also why this
+     * needs no author. Every caller derives the room from a channel — and
+     * voiceRoomOfUser, which the other one asks, answers for `voice:` rooms
+     * only — so this path only ever sees a voice channel, and a voice channel
+     * has no text history for a system message to land in. A caller that ever
+     * brings a dm: or group: room here has to decide who the message is from
+     * before it can be written.
+     */
+    releaseCallRoom(room)
   }
   broadcastCallState(room)
   return true
@@ -933,38 +1122,27 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       else { const [a, b] = conversationId.split('_'); io.to(`user:${a}`).to(`user:${b}`).emit('dm:receive', payload) }
     }
 
-    // Posted when the last participant leaves, mirroring "X started a call".
-    // Derives the conversation straight from the room name (the leaver may already
-    // be disconnecting, so we can't rely on per-call closure state here).
-    const postCallEnded = async (room: string) => {
-      // The other half of the no-system-message rule: a voice channel has no
-      // text history to announce into, and the DM branch below would parse
-      // `voice:<id>` into a garbage conversationId rather than refusing it.
-      if (room.startsWith('voice:')) return
-      try {
-        const isGroup = room.startsWith('group:')
-        const conversationId = isGroup ? room.slice(6) : room.slice(3)
-        const msg = await Message.create({
-          conversationId, kind: 'system', systemType: 'call',
-          authorId: userId, authorName: username, authorAvatar: null, content: 'Call ended',
-        })
-        const payload = {
-          _id: msg._id.toString(), conversationId, kind: 'system', systemType: 'call',
-          authorId: userId, authorName: username, authorAvatar: null, content: 'Call ended',
-          reactions: [], pinned: false, edited: false, replyTo: null,
-          createdAt: msg.createdAt.toISOString(),
-        }
-        if (isGroup) io.to(room).emit('group:receive', payload)
-        else { const [a, b] = conversationId.split('_'); io.to(`user:${a}`).to(`user:${b}`).emit('dm:receive', payload) }
-      } catch (err) { console.error('[WS] postCallEnded', err) }
-    }
+    // Who a "Call ended" from this socket is attributed to. Captured once,
+    // because the write may happen a grace period after this socket is gone.
+    const me: CallAuthor = { id: userId, name: username }
 
-    // No membership check here, deliberately: this only ever deletes the
-    // CALLER's own id from the room's Set (`set.has(userId)` guards that), so
-    // it cannot forge or evict anyone else's occupancy. Once call:join is
-    // guarded above, a caller can only ever be in a room they were let into,
-    // so there is nothing left for a leave-side check to catch.
-    const leaveCall = (room: string) => {
+    /**
+     * Take this socket's user out of a call room.
+     *
+     * No membership check here, deliberately: this only ever deletes the
+     * CALLER's own id from the room's Set (`set.has(userId)` guards that), so
+     * it cannot forge or evict anyone else's occupancy. Once call:join is
+     * guarded above, a caller can only ever be in a room they were let into,
+     * so there is nothing left for a leave-side check to catch.
+     *
+     * `cause` is the whole of the difference between ending the call now and
+     * ending it after a grace period, and it is a required argument so that a
+     * third caller has to say which it is rather than inherit a default.
+     * A `call:leave` is a person deciding to leave. A `disconnect` is a socket
+     * vanishing, which says nothing at all about whether the person is still
+     * in the LiveKit room — usually they are, and are back in seconds.
+     */
+    const leaveCall = (room: string, cause: 'hang-up' | 'socket-lost') => {
       const set = activeCalls.get(room)
       if (!set || !set.has(userId)) return
       set.delete(userId)
@@ -974,9 +1152,15 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       if (st) { st.delete(userId); if (st.size === 0) voiceStates.delete(room) }
       joinedCallRooms.delete(room)
       if (set.size === 0) {
-        activeCalls.delete(room); callStartedAt.delete(room); voiceStates.delete(room)
-        callVoiceServer.delete(room)
-        void postCallEnded(room)
+        // Occupancy goes at once whichever this was. The sidebars have to stay
+        // honest about who is there, and only the CALL's fate is in question.
+        forgetEmptyRoom(room)
+        if (cause === 'hang-up') {
+          releaseCallRoom(room)
+          void postCallEnded(room, me)
+        } else {
+          scheduleCallEnd(room, me)
+        }
       }
       broadcastCall(room)
     }
@@ -1024,18 +1208,30 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const room = callRoom(data.kind, data.conversationId)
       let set = activeCalls.get(room)
       const wasEmpty = !set || set.size === 0
+      /*
+       * A room inside its grace period is not an empty room: its call is still
+       * live, it has just lost every socket that was watching it. So somebody
+       * arriving now is joining that call rather than starting a new one, and
+       * two things follow. No second "X started a call" — the conversation was
+       * told once and nothing has contradicted it. And the media server the
+       * call settled on is KEPT rather than released, because whoever dropped
+       * may still be sitting in the LiveKit room on it, and letting the new
+       * arrival land somewhere else would split the call in two.
+       *
+       * The ordinary reconnect never reaches here — it uses call:rejoin. This
+       * is the client that gave up and came back in through the front door.
+       */
+      const resuming = callEndPending(room)
+      cancelCallEnd(room)
       if (!set) { set = new Set(); activeCalls.set(room, set) }
       set.add(userId)
       joinedCallRooms.add(room)
-      if (wasEmpty) {
-        callStartedAt.set(room, Date.now())
-        // No "X started a call" for a voice channel: there is no text history
-        // there to read it in, so the Message would only ever be dead weight in
-        // a conversation nobody can open. Narrowing here is also what keeps
-        // postCallSystem's signature honest.
-        if (data.kind !== 'channel') {
-          await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
-        }
+      // No "X started a call" for a voice channel: there is no text history
+      // there to read it in, so the Message would only ever be dead weight in
+      // a conversation nobody can open. Narrowing here is also what keeps
+      // postCallSystem's signature honest.
+      if (wasEmpty && !resuming && data.kind !== 'channel') {
+        await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
       }
       broadcastCall(room)
     })
@@ -1065,16 +1261,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // The same gate as call:join: coming back from a blip is not a way in.
       if (!await canJoinCall(data.kind, data.conversationId, userId)) return
       const room = callRoom(data.kind, data.conversationId)
+      // The evidence the grace period was waiting for, arriving before
+      // anything was written down. A room whose last occupant is back is not a
+      // room whose call ended, so the pending conclusion is dropped — and
+      // dropped before the broadcast below, so no surface ever sees a call
+      // that is both occupied and on its way out.
+      cancelCallEnd(room)
       let set = activeCalls.get(room)
       if (!set) { set = new Set(); activeCalls.set(room, set) }
       const wasPresent = set.has(userId)
       set.add(userId)
       joinedCallRooms.add(room)
-      // A call that lost every occupant to one dropped socket lost its start
-      // time with them, and an occupied room with no start time is a state
-      // nothing else here produces. Restore one, but never overwrite a live
-      // one: the call did not restart, somebody's socket did.
-      if (!callStartedAt.has(room)) callStartedAt.set(room, Date.now())
       // Tell the caller either way: it may have reconnected before its own
       // `chan:` membership was restored, and a client missing itself from the
       // list is the same fault seen from the other side.
@@ -1087,7 +1284,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     socket.on('call:leave', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
-      leaveCall(callRoom(data.kind, data.conversationId))
+      leaveCall(callRoom(data.kind, data.conversationId), 'hang-up')
     })
 
     // ── Presence ───────────────────────────────────────────────────────────
@@ -1148,7 +1345,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       try {
         console.log(`[WS] - ${username}`)
         // Drop out of any calls this socket was in so presence doesn't go stale.
-        for (const room of [...joinedCallRooms]) leaveCall(room)
+        // 'socket-lost', not 'hang-up': this fires for a closed tab AND for a
+        // network blip, and nothing here can tell them apart — so the call is
+        // left standing for a grace period rather than declared over.
+        for (const room of [...joinedCallRooms]) leaveCall(room, 'socket-lost')
         // Only go offline once the user's LAST socket closes — otherwise closing
         // one of two tabs (or a refresh) would falsely mark them offline.
         if (presence.removeSocket(userId, socket.id)) {
