@@ -113,6 +113,7 @@
       ['add', 'A notice when an update is ready, which waits for an answer instead of fading away, and never appears while you are in a call'],
       ['add', 'A debug page, for when something is wrong and nobody can see why. Tap the server icon in Settings › About this instance seven times. It shows the app version, whether the screen-share components loaded, and what the updater last did, and copies the lot to your clipboard in one press — nothing on it is private'],
       ['imp', 'The launch screen no longer reports an update check it is not waiting for. It appears and gets out of the way'],
+      ['fix', 'People vanishing from a voice channel while still being in the call. Who is sitting in a channel and who you can see on the call screen came from two different places — the server’s own list, and the call itself — and only one of them noticed a brief network drop. Lose your connection for a second and the server took you out of the channel for everybody, while the call carried on and you stayed audible: a list of five people next to a call with eight in it. Your connection coming back now puts you back where you were, with your mute and deafen intact'],
     ]
   },
   {
