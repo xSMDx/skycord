@@ -1747,6 +1747,19 @@ const filteredFriends = computed(() => {
       )
     : apiFriends.value
 })
+/**
+ * The rows the Friends tab actually draws.
+ *
+ * The tab filter used to live inline in the `v-for`, with the empty state
+ * guarding on `filteredFriends` instead — two expressions that had to agree
+ * and did not. Friends who were all offline left the guard false and the
+ * Online tab rendered nothing, with no empty state. One source, so the list
+ * and the "is it empty" question can never disagree again.
+ */
+const shownFriends = computed(() =>
+  friendsTab.value === 'online'
+    ? filteredFriends.value.filter(f => f.status !== 'offline')
+    : filteredFriends.value)
 
 // Unified Direct Messages list — 1:1 DMs and group DMs share one list, sorted
 // by most recent activity (Discord-style). Groups are not a separate section.
@@ -4765,21 +4778,32 @@ useDesktopTitleBar({
               </div>
               <div class="f-section-label">
                 {{ friendsTab==='online'
-                  ? `Online — ${filteredFriends.filter(f=>f.status!=='offline').length}`
-                  : `All Friends — ${filteredFriends.length}` }}
+                  ? `Online — ${shownFriends.length}`
+                  : `All Friends — ${shownFriends.length}` }}
               </div>
-              <!-- Empty state -->
-              <div v-if="filteredFriends.length===0" class="f-empty">
+              <!--
+                Empty state.
+
+                Guarded on the rows THIS tab renders, not on the friend list.
+                It used to read `filteredFriends.length === 0`, so having
+                friends who were all offline left the guard false and the
+                Online tab drew nothing at all: a blank pane under a lone
+                "Online — 0". That also made "Nobody is online" unreachable —
+                it could only fire when there were no friends to be online.
+              -->
+              <div v-if="shownFriends.length===0" class="f-empty">
                 <div class="f-empty-icon"><UsersRound :size="40" :stroke-width="1.5"/></div>
                 <p>{{ friendSearch ? 'No matches' : friendsTab === 'online' ? 'Nobody is online' : 'No friends yet' }}</p>
-                <span>Click <strong>Add Friend</strong> to find people on Skycord</span>
+                <span v-if="friendSearch">Try a different name.</span>
+                <span v-else-if="friendsTab === 'online' && filteredFriends.length">They'll show up here when they come online.</span>
+                <span v-else>Click <strong>Add Friend</strong> to find people on Skycord</span>
                 <button class="f-empty-btn" @click.stop="showAddFriend=true">
                   <UserPlus :size="16" :stroke-width="1.5"/> Add Friend
                 </button>
               </div>
               <!-- Friend rows -->
               <div
-                v-for="f in (friendsTab==='online' ? filteredFriends.filter(x=>x.status!=='offline') : filteredFriends)"
+                v-for="f in shownFriends"
                 :key="f.id" class="f-row"
                 @click.stop="showUserProfile = f.id"
                 @contextmenu="openUserMenu($event, f)"
