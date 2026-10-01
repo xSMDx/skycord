@@ -2,7 +2,7 @@ import { createServer } from 'http'
 import { config }       from './config/env'
 import { connectDB }    from './config/database'
 import { createApp }    from './app'
-import { initSocket }   from './sockets/chatSocket'
+import { initSocket, cancelAllCallEnds } from './sockets/chatSocket'
 import { loadInstanceVoiceServers, setInstanceVoiceServers } from './config/instanceVoice'
 import { backfillSearchFields } from './utils/searchBackfill'
 import { readInstanceProfile, scanInstanceDir, instanceDir } from './utils/instanceProfile'
@@ -75,6 +75,13 @@ const start = async () => {
 
   const shutdown = async (sig: string) => {
     console.log(`\n${sig} — shutting down...`)
+    // Before anything waits: a room that emptied moments ago is inside its
+    // grace period, and httpServer.close() below waits for open connections,
+    // which is long enough for one of them to expire. A call this process is
+    // about to stop tracking has not ended — on a restart the clients
+    // reconnect to the NEW process and rejoin there — so a parting
+    // "Call ended" would be the very thing the grace period exists to stop.
+    cancelAllCallEnds()
     httpServer.close(async () => {
       const m = await import('mongoose')
       await m.default.disconnect()
