@@ -1,25 +1,23 @@
 /**
- * The launch screen: a small window with the Skycord mark and what the app is
- * doing — checking for updates, downloading one, installing it, starting. It
- * stays until the app's own window has something to show, then hands over.
+ * The launch screen: a small window with the Skycord mark, shown until the
+ * app's own window has something to show.
+ *
+ * It used to report the update check — "Checking for updates…", a progress
+ * bar, and a "Continue without updating" button — because launch waited for
+ * one. Launch no longer waits: the check runs in the background and Settings ›
+ * Updates is where it is reported. With nothing left to say, the window says
+ * one thing and says it in static HTML.
  */
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
-import type { UpdateStatus } from './updates'
 
 const SPLASH = join(app.getAppPath(), 'static', 'splash.html')
 
-export type SplashStatus = UpdateStatus | { state: 'starting' }
-
 export interface Splash {
-  status(s: SplashStatus): void
-  onSkip(cb: () => void): void
   close(): void
 }
 
 export const showSplash = (preload: string): Splash => {
-  let last: SplashStatus = { state: 'starting' }
-  let skip = () => {}
   const win = new BrowserWindow({
     width: 300,
     height: 340,
@@ -35,18 +33,10 @@ export const showSplash = (preload: string): Splash => {
   })
   win.webContents.on('will-navigate', e => e.preventDefault())
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  win.webContents.on('did-finish-load', () => win.webContents.send('splash:status', last))
   win.once('ready-to-show', () => win.show())
   void win.loadFile(SPLASH)
 
-  ipcMain.on('splash:skip', event => { if (!win.isDestroyed() && event.sender === win.webContents) skip() })
-
   return {
-    status(s) {
-      last = s
-      if (!win.isDestroyed()) win.webContents.send('splash:status', s)
-    },
-    onSkip(cb) { skip = cb },
     close() { if (!win.isDestroyed()) win.close() },
   }
 }

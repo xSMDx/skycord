@@ -17,7 +17,7 @@ import { lookupInstance, normaliseAddress, type InstanceProfile } from './instan
 import { readStore, writeStore } from './store'
 import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
-import { startUpdates, updateAtLaunch } from './updates'
+import { startUpdates } from './updates'
 import { showSplash } from './splash'
 import { createAppWindow, type AppWindow } from './appWindow'
 import { readShellPerf, flagsFor, readTrimMinutes, type ShellPerf } from './perf'
@@ -256,11 +256,10 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
     permissionAllowed(permission, requestingOrigin, current))
 
-  // The launch screen checks for updates first; an update found now installs
-  // before the app opens. Then it says "Starting…" until the app has painted.
+  // The launch screen no longer waits for an update. A check runs in
+  // startUpdates below, downloads in the background, and installs when
+  // someone presses Restart — see updates.ts for why the gate was removed.
   const splash = showSplash(PRELOAD)
-  await updateAtLaunch(s => splash.status(s), cb => splash.onSkip(cb))
-  splash.status({ state: 'starting' })
 
   shellWin = createAppWindow(PRELOAD, dir => { if (current) shellWin?.page.send('desktop:nav', dir) }, shellPerf.skycordTitleBar)
   shellWin.showWhenReady(() => splash.close())
@@ -291,7 +290,7 @@ app.whenReady().then(async () => {
       description: 'Choose a different Skycord server',
     }])
   }
-  startUpdates(() => shellWin?.win ?? null)
+  startUpdates(() => shellWin?.page ?? null)
 })
 
 app.on('window-all-closed', () => app.quit())
