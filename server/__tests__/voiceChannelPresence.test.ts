@@ -384,3 +384,143 @@ describe('the DM and group call paths still work', () => {
     expect(payload.serverId).toBe(server.id)
   })
 })
+
+/*
+ * A reconnect must put the person back, and must not announce anything.
+ *
+ * Presence and media are two connections to two services. A dropped socket
+ * makes this process run leaveCall for every room it held, so every sidebar
+ * loses that person at once — while their LiveKit connection carries on
+ * untouched, leaving them audible and still a tile on everyone's call
+ * stage. Socket.IO then reconnects with a NEW socket whose joinedCallRooms
+ * is empty, and nothing refilled it: the two views disagreed until the
+ * person left for real. One `pm2 restart` did it to every call at once.
+ */
+describe('coming back after a dropped socket', () => {
+  it('puts the person back in the occupancy their socket took with it', async () => {
+    const a = await register(), b = await register()
+    const { voice } = await seed(a, b)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+
+    const joined = nextEvent(bSock, 'call:state')
+    aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    expect((await joined).userIds).toEqual([a.id])
+
+    // The blip. a is still in the LiveKit room throughout — nothing here
+    // can see that, which is the whole reason this gap existed.
+    const cleared = nextEvent(bSock, 'call:state')
+    aSock.disconnect()
+    expect((await cleared).userIds).toEqual([])
+
+    const back = nextEvent(bSock, 'call:state')
+    const aAgain = track(await connectSocket(sockets.url, a.token))
+    aAgain.emit('call:rejoin', { conversationId: voice.id, kind: 'channel' })
+    expect((await back).userIds).toEqual([a.id])
+  })
+
+  it('answers the rejoining socket directly, so it is never the one missing itself', async () => {
+    // The handlers are registered synchronously but the chan: joins are in
+    // the async setup, so a broadcast alone can reach this socket before it
+    // is listening to the room it was broadcast to.
+    const a = await register()
+    const { voice } = await seed(a)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    aSock.disconnect()
+
+    const aAgain = track(await connectSocket(sockets.url, a.token))
+    const self = nextEvent(aAgain, 'call:state')
+    aAgain.emit('call:rejoin', { conversationId: voice.id, kind: 'channel' })
+    const payload = await self
+    expect(payload.room).toBe(`voice:${voice.id}`)
+    expect(payload.userIds).toEqual([a.id])
+  })
+
+  it('leaves again when the second socket goes too, rather than sticking', async () => {
+    const a = await register(), b = await register()
+    const { voice } = await seed(a, b)
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    aSock.disconnect()
+
+    const back = nextEvent(bSock, 'call:state')
+    const aAgain = track(await connectSocket(sockets.url, a.token))
+    aAgain.emit('call:rejoin', { conversationId: voice.id, kind: 'channel' })
+    expect((await back).userIds).toEqual([a.id])
+
+    // joinedCallRooms is per socket: without the rejoin adding the room to
+    // the NEW socket's set, this disconnect would clean up nothing and a
+    // would be a permanent ghost.
+    const gone = nextEvent(bSock, 'call:state')
+    aAgain.disconnect()
+    expect((await gone).userIds).toEqual([])
+  })
+
+  it('does not announce the call a second time', async () => {
+    // A voice channel has no history to announce into, so this is the DM
+    // and group case: after an API restart, every call in the instance
+    // rejoining would post "X started a call" all over again.
+    const a = await register(), b = await register()
+    const group = await Conversation.create({
+      type: 'group', owner: a.id, members: [a.id, b.id], lastMessageAt: new Date(),
+    })
+    const groupId = group._id.toString()
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    aSock.emit('group:subscribe', { groupId })
+    bSock.emit('group:subscribe', { groupId })
+
+    const started = nextEvent(bSock, 'group:receive')
+    aSock.emit('call:join', { conversationId: groupId, kind: 'group' })
+    expect((await started).content).toBe(`${a.username} started a call`)
+
+    // Await the drop's own broadcast before listening for the rejoin's, or
+    // the next call:state to arrive is the empty one this disconnect causes.
+    // The drop also posts "Call ended" — see the note below this test.
+    const cleared = nextEvent(bSock, 'call:state')
+    aSock.disconnect()
+    expect((await cleared).userIds).toEqual([])
+    const before = await Message.countDocuments()
+
+    const back = nextEvent(bSock, 'call:state')
+    const aAgain = track(await connectSocket(sockets.url, a.token))
+    aAgain.emit('call:rejoin', { conversationId: groupId, kind: 'group' })
+    expect((await back).userIds).toEqual([a.id])
+
+    // The rejoin itself writes nothing at all, and the conversation is told
+    // about this call starting exactly once however many blips it survives.
+    expect(await Message.countDocuments()).toBe(before)
+    expect(await Message.countDocuments({ content: `${a.username} started a call` })).toBe(1)
+  })
+
+  /*
+   * Not fixed here, and worth naming: the drop above also posts "Call ended"
+   * into the conversation, because leaveCall sees the room empty and cannot
+   * tell a hang-up from a hiccup. The call did not end — a is still in the
+   * LiveKit room throughout, and comes straight back. Closing that needs a
+   * grace period before the room is declared over, which is a change to when
+   * occupancy is removed rather than to how it is restored, so it is kept
+   * separate from this fix.
+   */
+
+  it('refuses a rejoin from somebody who was never allowed in', async () => {
+    // Coming back from a blip is not a way in: the same gate as call:join.
+    const a = await register(), outsider = await register()
+    const { voice } = await seed(a)
+
+    const oSock = track(await connectSocket(sockets.url, outsider.token))
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    let seen = false
+    aSock.on('call:state', () => { seen = true })
+
+    oSock.emit('call:rejoin', { conversationId: voice.id, kind: 'channel' })
+    await new Promise(r => setTimeout(r, 120))
+    expect(seen).toBe(false)
+  })
+})

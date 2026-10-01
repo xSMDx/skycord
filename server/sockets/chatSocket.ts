@@ -182,16 +182,30 @@ export const getIO = (): IOServer | null => _io
  * this fan-out would drift, and the symptom would be one surface showing a
  * person in a channel they had left.
  */
-export const broadcastCallState = (room: string): void => {
-  const io = _io
-  if (!io) return
+/**
+ * One room's occupancy and state, shaped for `call:state`.
+ *
+ * Split out because `call:rejoin` answers the socket that asked as well as
+ * telling the room: a socket that has just reconnected may not be back in
+ * `chan:<id>` yet — the handlers are registered synchronously but the room
+ * joins are in the async setup below — so a broadcast alone can arrive before
+ * it is listening, and it would be the one client missing itself from the
+ * list. Two builders of this payload would be two chances to drift.
+ */
+const callStatePayload = (room: string) => {
   const userIds = [...(activeCalls.get(room) ?? [])]
   // serverId only means anything for a voice room, and only when we know
   // it — see channelServer. The client uses it to attribute occupancy to
   // a server whose channel list it has not fetched.
   const serverId = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
   const states = statesFor(room)
-  const payload = { room, userIds, ...(serverId ? { serverId } : {}), ...(states ? { states } : {}) }
+  return { room, userIds, ...(serverId ? { serverId } : {}), ...(states ? { states } : {}) }
+}
+
+export const broadcastCallState = (room: string): void => {
+  const io = _io
+  if (!io) return
+  const payload = callStatePayload(room)
   if (room.startsWith('voice:')) {
     // Occupancy is server-wide news: everyone should see who is sitting in
     // a voice channel without being in it. Every member joined the socket
@@ -1023,6 +1037,51 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
         }
       }
+      broadcastCall(room)
+    })
+
+    /**
+     * Put somebody back in the occupancy their socket took with it.
+     *
+     * A dropped socket empties this person out of every call: the disconnect
+     * handler runs `leaveCall` for each room it held, and every sidebar in
+     * the instance loses them at once. Their LiveKit connection is a separate
+     * connection to a separate service and survives the blip untouched — they
+     * are still in the call, still audible, still a tile on everyone's stage.
+     * Socket.IO then reconnects with a NEW socket whose `joinedCallRooms` is
+     * empty, and nothing used to refill it. The stage and the sidebar
+     * disagreed from that moment until the person left for real.
+     *
+     * A single `pm2 restart` severs every socket at once, so one deploy could
+     * empty every voice channel in the instance while every call carried on.
+     *
+     * Deliberately NOT a flag on `call:join`. The two differ in what they must
+     * not do: a rejoin is not the start of a call, so it posts no "X started a
+     * call" — after an API restart that would announce every call in the
+     * instance a second time, in everybody's history.
+     */
+    socket.on('call:rejoin', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+      if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
+      // The same gate as call:join: coming back from a blip is not a way in.
+      if (!await canJoinCall(data.kind, data.conversationId, userId)) return
+      const room = callRoom(data.kind, data.conversationId)
+      let set = activeCalls.get(room)
+      if (!set) { set = new Set(); activeCalls.set(room, set) }
+      const wasPresent = set.has(userId)
+      set.add(userId)
+      joinedCallRooms.add(room)
+      // A call that lost every occupant to one dropped socket lost its start
+      // time with them, and an occupied room with no start time is a state
+      // nothing else here produces. Restore one, but never overwrite a live
+      // one: the call did not restart, somebody's socket did.
+      if (!callStartedAt.has(room)) callStartedAt.set(room, Date.now())
+      // Tell the caller either way: it may have reconnected before its own
+      // `chan:` membership was restored, and a client missing itself from the
+      // list is the same fault seen from the other side.
+      socket.emit('call:state', callStatePayload(room))
+      // Already listed — a second tab, or a duplicate rejoin. Nothing changed
+      // for anyone else, so nothing is fanned out to them.
+      if (wasPresent) return
       broadcastCall(room)
     })
 

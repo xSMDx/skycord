@@ -19,7 +19,8 @@ import { getRoom, setRoom } from './voiceRoom'
 import { qualityFor } from './callLimits'
 import { perf } from './usePerformance'
 import {
-  emitCallJoin, emitCallLeave, getSocket, callServerMoved,
+  emitCallJoin, emitCallLeave, emitCallRejoin, getSocket, callServerMoved,
+  connected as socketConnected,
   soundCallJoin, soundCallLeave, soundUserJoin, soundUserLeave,
   soundMute, soundUnmute, soundDeafen, soundUndeafen,
 } from './useSocket'
@@ -261,17 +262,50 @@ watch(() => voice.connected, held => holdPresence(held), { immediate: true })
  *
  * Only while connected. The server ignores state from someone not in a call,
  * and emitting on the way out would be a payload that describes nothing.
- * Reconnecting re-sends, because the socket that held it is gone; the server
- * drops a duplicate rather than fanning it out again.
+ *
+ * This comment used to claim a reconnect re-sends. It did not: the watcher
+ * below fires on the four things it reads, and a dropped socket changes none
+ * of them, so a restored occupant came back with their flags cleared. The
+ * reconnect watcher further down calls `reportVoiceState` for exactly that,
+ * which is why the body is a named function and not inline. The server drops
+ * a duplicate rather than fanning it out again.
  */
+const reportVoiceState = () => {
+  getSocket()?.emit('voice:state', {
+    muted: voice.localMuted, deafened: voice.localDeafened, sharing: media.localScreenOn,
+  })
+}
+
 watch(
   () => [voice.connected, voice.localMuted, voice.localDeafened, media.localScreenOn] as const,
-  ([connected, muted, deafened, sharing]) => {
-    if (!connected) return
-    getSocket()?.emit('voice:state', { muted, deafened, sharing })
-  },
+  ([connected]) => { if (connected) reportVoiceState() },
   { immediate: true },
 )
+
+/**
+ * Put ourselves back in the call the moment the socket is back.
+ *
+ * The media and the presence are two separate connections to two separate
+ * services, and only one of them notices a blip. A dropped socket makes the
+ * server run `leaveCall` for every room we held, so every sidebar in the
+ * instance loses us at once — while LiveKit carries on and we stay audible
+ * and keep our tile on everyone's stage. Socket.IO reconnects with a new
+ * socket, and before this nothing told the server we were still here: the
+ * two views disagreed until we left for real. A single API restart did it to
+ * everybody in a call simultaneously.
+ *
+ * The state goes with it. The watcher above only fires when one of the four
+ * things it reads changes, and a reconnect changes none of them — so without
+ * this line a restored occupant came back with their mute, deafen and
+ * screen-share flags cleared.
+ */
+watch(socketConnected, (up, wasUp) => {
+  if (!up || wasUp) return
+  if (!voice.connected || !voice.activeConvId || !voice.activeKind) return
+  emitCallRejoin(voice.activeConvId, voice.activeKind)
+  reportVoiceState()
+})
+
 export const voiceRoomName = (kind: 'dm' | 'group' | 'channel', convId: string, myId: string) =>
   kind === 'channel' ? `voice:${convId}`
   : kind === 'group' ? `group:${convId}`
