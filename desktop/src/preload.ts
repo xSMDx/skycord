@@ -4,7 +4,7 @@
  *   - the local server picker gets `skycordPicker` (look up, choose, saved servers);
  *   - the local share picker gets `skycordShare` (list sources, choose one);
  *   - the local title bar gets `skycordTitleBar` (what to show, back/forward);
- *   - the launch screen gets `skycordSplash` (what the app is doing, skip the update);
+ *   - the launch screen gets nothing (it is static);
  *   - the chosen instance gets `skycordDesktop`.
  *
  * Deciding here, by the page's own URL, means an instance's web client can never
@@ -23,10 +23,9 @@ if (local && page === 'share.html') {
     cancel: () => ipcRenderer.invoke('share:cancel'),
   })
 } else if (local && page === 'splash.html') {
-  contextBridge.exposeInMainWorld('skycordSplash', {
-    onStatus: (cb: (status: unknown) => void) => { ipcRenderer.on('splash:status', (_e, s) => cb(s)) },
-    skip: () => ipcRenderer.send('splash:skip'),
-  })
+  // Nothing. The launch screen is static HTML and asks the main process for
+  // nothing — but it still needs its own branch, or it would fall through to
+  // the picker's surface below.
 } else if (local && page === 'titlebar.html') {
   contextBridge.exposeInMainWorld('skycordTitleBar', {
     onState: (cb: (state: unknown) => void) => { ipcRenderer.on('titlebar:state', (_e, s) => cb(s)) },
@@ -56,6 +55,20 @@ if (local && page === 'share.html') {
     // Ends the native capture of a shared app's sound. Send, not invoke:
     // stopping is never refused and nothing waits on the answer.
     stopShareAudio: () => ipcRenderer.send('desktop:shareAudioStop'),
+    // Updating. The page reads the state, subscribes to it, and asks for the
+    // two things a person can decide: check now, and restart into it.
+    updates: {
+      state: () => ipcRenderer.invoke('desktop:updateState'),
+      onChange: (cb: (s: unknown) => void) => {
+        const h = (_e: unknown, s: unknown) => cb(s)
+        ipcRenderer.on('desktop:updateState', h)
+        return () => { ipcRenderer.off('desktop:updateState', h) }
+      },
+      check: () => ipcRenderer.send('desktop:updateCheck'),
+      install: () => ipcRenderer.send('desktop:updateInstall'),
+    },
+    // Versions and capability facts, for the Debug page and a bug report.
+    about: () => ipcRenderer.invoke('desktop:about'),
     // Opens the app's Servers window.
     openServers: (hints?: { dark?: boolean }) => ipcRenderer.invoke('desktop:openServers', { dark: hints?.dark !== false }),
     // Feeds the app's title bar: what the page is, and its theme's colours.

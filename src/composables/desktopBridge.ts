@@ -20,6 +20,36 @@ export interface DesktopShareChoice {
   hidePreview?: boolean
 }
 
+/**
+ * What the app knows about updating itself. Mirrors desktop/src/updateState.ts,
+ * duplicated for the same reason DesktopShareChoice is: the web client cannot
+ * import from desktop/, which is a separate project with its own tsconfig.
+ */
+export type UpdatePhase = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'
+export interface UpdateState {
+  phase: UpdatePhase
+  /** The version being offered or downloaded; '' when there is none. */
+  version: string
+  /** 0–100. */
+  percent: number
+  bytesPerSecond: number
+  /** Epoch ms of the last completed check. 0 = never. */
+  lastCheckedAt: number
+  error: string
+}
+
+/** Versions and capability facts. Mirrors desktop/src/about.ts. */
+export interface AboutFacts {
+  app: string
+  electron: string
+  chromium: string
+  node: string
+  platform: string
+  osVersion: string
+  addonLoaded: boolean
+  perAppAudio: boolean
+}
+
 export interface DesktopBridge {
   platform: string
   /** Close this server and go back to the app's server picker. */
@@ -52,6 +82,15 @@ export interface DesktopBridge {
     applied(): Promise<{ skycordTitleBar: boolean; hardwareAcceleration: boolean; heapCapMb: number | null } | null>
     restart(): void
   }
+  /** Update state and control. Absent in app builds before this. */
+  updates?: {
+    state(): Promise<UpdateState | null>
+    onChange(cb: (s: UpdateState) => void): () => void
+    check(): void
+    install(): void
+  }
+  /** Versions and capability facts. Absent in app builds before this. */
+  about?(): Promise<AboutFacts | null>
 }
 
 export const desktopBridge = (): DesktopBridge | null => {

@@ -12,6 +12,8 @@ import { useEdgeSwipe }                     from '@/composables/useEdgeSwipe'
 import { useMessages, type ConvKind }       from '@/composables/useMessages'
 import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireChannel, type WireServer , type WireCategory, type HistoryCursor, type HistoryPage, type SearchScope } from '@/composables/useApi'
 import { avatarFor } from '@/composables/useAvatar'
+import { useUpdates } from '@/composables/useUpdates'
+import { shouldPrompt } from '@/composables/updatePrompt'
 import { useSearch, type SearchHit } from '@/composables/useSearch'
 import type { SuggestMember, SuggestChannel } from '@/composables/searchSuggest'
 import SearchField        from '@/components/search/SearchField.vue'
@@ -413,6 +415,26 @@ const showToast = (msg: string) => {
   if (_toastT) clearTimeout(_toastT)
   _toastT = setTimeout(() => { toast.value = '' }, 3500)
 }
+
+/*
+ * "An update is ready" — the one prompt the app raises on its own.
+ *
+ * Not the toast above: that clears itself after three and a half seconds,
+ * and an update that reached the disk and was never applied is exactly the
+ * failure this is here to end. It waits for an answer, once per version, and
+ * never while you are in a call — a prompt over a conversation is one people
+ * learn to dismiss without reading.
+ */
+const { state: updateState, install: installUpdate } = useUpdates()
+const updateReady = ref('')
+let promptedVersion = ''
+// Watches the call too: an update that lands mid-call must still be offered
+// once the call ends, and nothing about the update itself changes then.
+watch([updateState, () => voice.connected], ([s, inCall]) => {
+  if (!shouldPrompt(s, promptedVersion, inCall)) return
+  promptedVersion = s.version
+  updateReady.value = s.version
+}, { immediate: true })
 
 // Hidden conversations (Close/Hide) — persisted so they stay hidden across
 // reloads but remain restorable via Find Conversation.
@@ -4114,6 +4136,16 @@ useDesktopTitleBar({
       <Transition name="toast-pop">
         <div v-if="toast" class="app-toast">{{ toast }}</div>
       </Transition>
+
+      <!-- An update that reached the disk and was never applied is the failure
+           this ends, so unlike the toast it waits for an answer. -->
+      <Transition name="toast-pop">
+        <div v-if="updateReady" class="app-update" role="status">
+          <span class="app-update-text">Skycord {{ updateReady }} is ready to install.</span>
+          <button type="button" class="app-update-btn primary" @click="installUpdate()">Restart now</button>
+          <button type="button" class="app-update-btn" @click="updateReady = ''">Later</button>
+        </div>
+      </Transition>
     </Teleport>
 
     <!--
@@ -5532,6 +5564,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .toast-pop-enter-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
 .toast-pop-leave-active{transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
+
+/* The update prompt. Same place and same entrance as the toast, but it stays
+   until it is answered. */
+.app-update{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 32px));flex-wrap:wrap;justify-content:center;background:var(--bg-raised);color:var(--text-1);border:1px solid var(--border);font-size:14px;padding:10px 12px 10px 16px;border-radius:10px;box-shadow:var(--shadow-md)}
+.app-update-text{font-weight:600}
+.app-update-btn{border:0;border-radius:6px;padding:7px 12px;background:transparent;color:var(--text-2);font:inherit;font-weight:600;cursor:pointer;transition:background var(--dur-1) var(--ease-out),color var(--dur-1) var(--ease-out)}
+.app-update-btn:hover{background:var(--hover);color:var(--text-1)}
+.app-update-btn:active{transform:scale(.97)}
+.app-update-btn.primary{background:var(--accent);color:var(--text-on-accent)}
+.app-update-btn.primary:hover{background:var(--accent-hover);color:var(--text-on-accent)}
 
 
 /* Search results hide with the member list when a call takes the pane. */

@@ -106,6 +106,16 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.20.2', date: 'Oct 1, 2026', time: '13:45 UTC+2', title: 'The app can tell you what it is',
+    items: [
+      ['fix', 'The Windows app stopped updating itself. It gave the download eight seconds at launch and then walked away from it, so the installer landed in a cache folder and was never applied — every launch, with nothing on screen to say so. One person ran a version eight days old while two releases shipped past them, and tested a feature three times on a build that did not contain it. The app no longer waits for anything at startup: an update downloads in the background while you use it, and installs when you press Restart'],
+      ['add', 'Settings › Updates: what version you are on, what the updater is doing, a progress bar while it downloads, and a Restart button when it is ready. It also says when it last checked, and says so when there is nothing to do — an updater that has quietly given up should not look the same as one with no news'],
+      ['add', 'A notice when an update is ready, which waits for an answer instead of fading away, and never appears while you are in a call'],
+      ['add', 'A debug page, for when something is wrong and nobody can see why. Tap the server icon in Settings › About this instance seven times. It shows the app version, whether the screen-share components loaded, and what the updater last did, and copies the lot to your clipboard in one press — nothing on it is private'],
+      ['imp', 'The launch screen no longer reports an update check it is not waiting for. It appears and gets out of the way'],
+    ]
+  },
+  {
     v: 'v0.20.1', date: 'Sep 28, 2026', time: '13:47 UTC+2', title: 'The noise filter stops eating your voice',
     items: [
       ['fix', 'DeepFilterNet was cutting far too hard, and on some voices you could barely hear yourself. It shipped turning down whatever it judged not to be speech by 24dB, a figure checked against a synthesised voice — loud, clean and perfectly articulated, which is the easiest thing a speech model ever hears. A real voice on a real microphone is the hard case: measured against a quieter voice in more noise, the same setting cost 9.8dB at the peaks and the full 24dB through the body of the voice, because the model is unsure far more often on real input. The model being unsure is not something we can fix. How much it costs when it is, is: it now turns down by 12dB, so a wrong guess costs a quarter of what it did and a quiet voice comes back four times louder. Less noise is removed in exchange — a quarter of it left instead of a sixteenth, still twice what RNNoise manages on steady sound'],

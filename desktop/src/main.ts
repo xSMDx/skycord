@@ -12,12 +12,14 @@
  */
 import { app, ipcMain, session, shell, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { join } from 'path'
+import { release } from 'os'
 import { pathToFileURL } from 'url'
 import { lookupInstance, normaliseAddress, type InstanceProfile } from './instanceAddress'
 import { readStore, writeStore } from './store'
 import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
-import { startUpdates, updateAtLaunch } from './updates'
+import { startUpdates, currentUpdateState, checkForUpdatesNow, installUpdateNow } from './updates'
+import { aboutFacts } from './about'
 import { showSplash } from './splash'
 import { createAppWindow, type AppWindow } from './appWindow'
 import { readShellPerf, flagsFor, readTrimMinutes, type ShellPerf } from './perf'
@@ -235,6 +237,26 @@ ipcMain.handle('desktop:perfMemory', (event) => {
 })
 ipcMain.on('desktop:perfRestart', (event) => { if (!fromInstance(event)) return; app.relaunch(); app.exit(0) })
 
+ipcMain.handle('desktop:updateState', event => (fromInstance(event) ? currentUpdateState() : null))
+ipcMain.on('desktop:updateCheck', event => { if (fromInstance(event)) checkForUpdatesNow() })
+ipcMain.on('desktop:updateInstall', event => { if (fromInstance(event)) installUpdateNow() })
+ipcMain.handle('desktop:about', event => {
+  if (!fromInstance(event)) return null
+  let addon = { supported: () => false, loaded: false }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const a = require('../native') as { supported: () => boolean }
+    addon = { supported: () => a.supported(), loaded: true }
+  } catch { /* stays not-loaded, which is itself a fact worth reporting */ }
+  return aboutFacts({
+    appVersion: app.getVersion(),
+    versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+    platform: process.platform,
+    osVersion: release(),
+    addon,
+  })
+})
+
 app.on('second-instance', (_e, argv) => {
   const w = shellWin?.win
   if (!w) return
@@ -256,11 +278,10 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
     permissionAllowed(permission, requestingOrigin, current))
 
-  // The launch screen checks for updates first; an update found now installs
-  // before the app opens. Then it says "Starting…" until the app has painted.
+  // The launch screen no longer waits for an update. A check runs in
+  // startUpdates below, downloads in the background, and installs when
+  // someone presses Restart — see updates.ts for why the gate was removed.
   const splash = showSplash(PRELOAD)
-  await updateAtLaunch(s => splash.status(s), cb => splash.onSkip(cb))
-  splash.status({ state: 'starting' })
 
   shellWin = createAppWindow(PRELOAD, dir => { if (current) shellWin?.page.send('desktop:nav', dir) }, shellPerf.skycordTitleBar)
   shellWin.showWhenReady(() => splash.close())
@@ -291,7 +312,7 @@ app.whenReady().then(async () => {
       description: 'Choose a different Skycord server',
     }])
   }
-  startUpdates(() => shellWin?.win ?? null)
+  startUpdates(() => shellWin?.page ?? null)
 })
 
 app.on('window-all-closed', () => app.quit())

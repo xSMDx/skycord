@@ -90,6 +90,32 @@ the only way back.
   Once `latest` has moved or the notes are up, that stops being true, and the
   next number is the only way forward.
 
+## Deploying the public instance (the pm2 host)
+
+The public instance is a manual install, not a container, so `skycord update`
+does not apply to it. The sequence is:
+
+```bash
+cd ~/sykord && git checkout -- package-lock.json && git pull origin main
+npm install && npm run build
+sudo rsync -a --delete --exclude 'server' ~/sykord/dist/ /var/www/app.<host>/
+sudo rsync -a --delete ~/sykord/landing/ /var/www/<host>/
+pm2 restart sykord-api && pm2 save
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**`--exclude 'server'` is not optional.** `dist/` contains the compiled
+backend; copying it wholesale once published the full server source on the
+public web root.
+
+**Use rsync, not `cp` of named paths.** The old step copied `dist/assets` and
+`dist/index.html` by name, so every other file Vite emits at the root — the
+audio worklet, `licenses.json` — silently never deployed. The worklet 404'd in
+production for days while screen sharing degraded quietly to "video without
+sound", with nothing in any log to say so.
+
+Then run the smoke check below. Verify by content, never by status code.
+
 ## After any deploy or nginx change
 
 ```bash
