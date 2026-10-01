@@ -55,6 +55,20 @@ if (local && page === 'share.html') {
     // Ends the native capture of a shared app's sound. Send, not invoke:
     // stopping is never refused and nothing waits on the answer.
     stopShareAudio: () => ipcRenderer.send('desktop:shareAudioStop'),
+    // Updating. The page reads the state, subscribes to it, and asks for the
+    // two things a person can decide: check now, and restart into it.
+    updates: {
+      state: () => ipcRenderer.invoke('desktop:updateState'),
+      onChange: (cb: (s: unknown) => void) => {
+        const h = (_e: unknown, s: unknown) => cb(s)
+        ipcRenderer.on('desktop:updateState', h)
+        return () => { ipcRenderer.off('desktop:updateState', h) }
+      },
+      check: () => ipcRenderer.send('desktop:updateCheck'),
+      install: () => ipcRenderer.send('desktop:updateInstall'),
+    },
+    // Versions and capability facts, for the Debug page and a bug report.
+    about: () => ipcRenderer.invoke('desktop:about'),
     // Opens the app's Servers window.
     openServers: (hints?: { dark?: boolean }) => ipcRenderer.invoke('desktop:openServers', { dark: hints?.dark !== false }),
     // Feeds the app's title bar: what the page is, and its theme's colours.
