@@ -11,7 +11,8 @@ export const dmConvId = (a: string, b: string) => [a, b].sort().join('_')
 let _socket: Socket | null = null
 /** The live socket, for modules that need to emit outside a component. */
 export const getSocket = (): Socket | null => _socket
-const connected   = ref(false)
+/** Exported so useVoice can re-announce a live call the moment it is back. */
+export const connected   = ref(false)
 
 /**
  * Three-state connection status for the UI.
@@ -204,6 +205,12 @@ import { soundMessage, soundNotification } from './useSounds'
 // presence too, not just the component that opened the call.
 export const emitCallJoin  = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:join',  { conversationId, kind })
 export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:leave', { conversationId, kind })
+/**
+ * Occupancy only, after a socket came back. A separate event from call:join
+ * because it must not announce the call a second time — see chatSocket's
+ * call:rejoin for why that distinction is load-bearing.
+ */
+export const emitCallRejoin = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:rejoin', { conversationId, kind })
 
 /**
  * Bind the OS online/offline events exactly once.
