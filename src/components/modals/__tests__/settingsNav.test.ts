@@ -6,7 +6,7 @@ import { resolve } from 'path'
 // SettingsModal cannot be mounted in the node environment, so this reads its
 // source: the nav list, and the template branch each page renders in.
 const src = readFileSync(resolve(__dirname, '../SettingsModal.vue'), 'utf8')
-const navBlock = /const navSections: NavSection\[\] = \[([\s\S]*?)\n\]/.exec(src)?.[1] ?? ''
+const navBlock = /const navSections = computed<NavSection\[\]>\(\(\) => \[([\s\S]*?)\n\]\)/.exec(src)?.[1] ?? ''
 const navIds  = [...navBlock.matchAll(/id:\s*'([\w-]+)'/g)].map(m => m[1])
 const pageIds = [...src.matchAll(/<template v-(?:else-)?if="page === '([\w-]+)'">/g)].map(m => m[1])
 

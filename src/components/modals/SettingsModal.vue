@@ -37,6 +37,9 @@ const DevicesPage = defineAsyncComponent(() => import('@/components/settings/Dev
 import AboutInstancePage from '@/components/settings/AboutInstancePage.vue'
 import ServersPage from '@/components/settings/ServersPage.vue'
 import PerformancePage from '@/components/settings/PerformancePage.vue'
+import UpdatesPage from '@/components/settings/UpdatesPage.vue'
+import DebugPage from '@/components/settings/DebugPage.vue'
+import { debugUnlocked } from '@/composables/debugUnlock'
 import { desktopBridge } from '@/composables/desktopBridge'
 import LegalPage from '@/components/settings/LegalPage.vue'
 
@@ -464,7 +467,9 @@ const KEYBINDS: { keys: string[]; label: string }[] = [
   { keys: ['Esc'],              label: 'Close what is open' },
 ]
 
-const navSections: NavSection[] = [
+// Computed, not a constant: the Debug entry appears the moment the icon in
+// About this instance has been tapped seven times.
+const navSections = computed<NavSection[]>(() => [
   {
     label: '',
     items: [
@@ -482,6 +487,8 @@ const navSections: NavSection[] = [
       { id: 'performance', label: 'Performance'  },
       // Only in the Windows app, which keeps the list of servers.
       ...(desktopBridge() ? [{ id: 'servers', label: 'Servers' }] : []),
+      // Only in the app: a browser updates by reloading.
+      ...(desktopBridge() ? [{ id: 'updates', label: 'Updates' }] : []),
     ]
   },
   {
@@ -491,9 +498,11 @@ const navSections: NavSection[] = [
     items: [
       { id: 'about', label: 'About this instance' },
       { id: 'legal', label: 'Legal' },
+      // Seven taps on the Skycord icon in About this instance.
+      ...(debugUnlocked.value ? [{ id: 'debug', label: 'Debug' }] : []),
     ]
   },
-]
+])
 
 // Sub-sections per page — clicking one scrolls .sm-content to the matching
 // anchor rather than navigating away, matching Discord's in-page sub-nav. A page
@@ -535,7 +544,7 @@ if (props.initialPage && props.initialPage !== 'account') mobileDetail.value = t
 watch(isMobile, m => { if (!m) mobileDetail.value = false })
 
 const currentPageLabel = computed(() => {
-  for (const s of navSections) {
+  for (const s of navSections.value) {
     const hit = s.items.find(i => i.id === page.value)
     if (hit) return hit.label
   }
@@ -1332,6 +1341,16 @@ const handleSelfRevoked = () => handleLogout()
           <!-- ── Servers (Windows app only) ── -->
           <template v-else-if="page === 'servers'">
             <ServersPage />
+          </template>
+
+          <!-- ── Updates (app only) ── -->
+          <template v-else-if="page === 'updates'">
+            <UpdatesPage />
+          </template>
+
+          <!-- ── Debug (seven taps on the icon in About this instance) ── -->
+          <template v-else-if="page === 'debug'">
+            <DebugPage />
           </template>
 
           <!-- ── About this instance ── -->
