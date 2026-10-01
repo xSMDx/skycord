@@ -94,7 +94,7 @@ const remove = async (row: WireVoiceServer) => {
            media server can record what crosses it, and a person joining a call
            deserves to know that is a thing rather than discover it. -->
       <p class="vs-callout">
-        <Info class="vs-callout-icon" :size="15" :stroke-width="2.25" />
+        <Info class="vs-callout-icon" :size="16" :stroke-width="2.25" />
         <!-- One span, not bare text: the callout is a flex container, so every
              loose text node would become its own flex item and pick up the gap. -->
         <span>
@@ -216,12 +216,15 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    bar down the side: an icon is a shape as well as a colour, so it still reads
    to someone who cannot separate the hues. */
 .vs-callout {
-  display: flex; align-items: flex-start; gap: 9px;
-  padding: 11px 13px; margin-bottom: 18px;
+  /* 8/12, not the 9/13 this shipped with: the 2px grid governs gaps and
+     horizontal padding. The 11px vertical stays — it is what makes the box an
+     even height against a 13px line box. See DESIGN.md § the 2px grid. */
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 11px 12px; margin-bottom: 18px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--edge-lg);
-  font-size: 12.5px; line-height: 1.55; color: var(--text-2);
+  font-size: 13px; line-height: 1.55; color: var(--text-2);
 }
 .vs-callout-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 .vs-error { font-size: 13px; color: var(--danger-text); margin-bottom: 12px; }

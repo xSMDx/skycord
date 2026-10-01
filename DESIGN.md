@@ -241,15 +241,17 @@ the surface rather than cut out of it.
 
 ### Accent presets
 
-Nine, offered in Appearance settings:
+Ten, offered in Appearance settings. **Sky is the default** and was missing from
+this table until 2026-10-01 — the one accent the whole product is built around
+was the one the contract did not list.
 
 | Name | Hex | | Name | Hex |
 |---|---|---|---|---|
-| Blurple | `#5865f2` | | Red | `#ed4245` |
-| Green | `#23a55a` | | Orange | `#e67e22` |
-| Teal | `#1abc9c` | | Yellow | `#f0b232` |
-| Blue | `#3498db` | | Purple | `#9b59b6` |
-| Pink | `#eb459e` | | | |
+| **Sky** (default) | `#38b6f1` | | Red | `#ed4245` |
+| Blurple | `#5865f2` | | Orange | `#e67e22` |
+| Green | `#23a55a` | | Yellow | `#f0b232` |
+| Teal | `#1abc9c` | | Purple | `#9b59b6` |
+| Blue | `#3498db` | | Pink | `#eb459e` |
 
 ---
 
@@ -349,11 +351,22 @@ Sizes in practice — there is no `--font-size-N` scale, and deliberately so:
 | 14px | Standard body, inputs, buttons |
 | 13px | Secondary copy, hints |
 | 12px | Labels, metadata |
-| 11px / 700 / uppercase / `.4px` tracking | Section labels, category headers |
+| 12px / 700 / uppercase / `.4px`–`.5px` tracking | Section labels, category headers |
 | 9–10px / 700 / uppercase | Badges, chips |
 
-The uppercase label style (11px, 700, `letter-spacing: .4px`, `--text-2`) is a
+The uppercase label style (12px, 700, `letter-spacing: .4px`, `--text-2`) is a
 strong recurring signature. Use it for group labels; don't use it for content.
+
+It was 11px until 2026-09-14, when the settings surfaces moved to 12px because
+at 11px uppercase the display face barely read as itself beside field labels set
+in the UI face (owner). The change shipped in `settingsShared.css` and was never
+written back here, so this document specified a size the app had stopped using —
+corrected 2026-10-01. Two tracking values are in use and both are correct: `.5px`
+on `.st-section`, `.4px` on the denser `.st-label` and `.st-field-label`.
+
+**Field labels inside a settings card use `--text-3`, not `--text-2`.** They sit
+beside a value that must out-rank them; a section label has nothing competing
+with it. Both are the same signature at different weights of attention.
 
 ### Landing
 
@@ -377,6 +390,14 @@ removed about a third of the distinct values.
 
 Two values are off-grid on purpose: **1px** is a hairline, not spacing, and
 **999px** is the pill idiom.
+
+**Vertical padding inside a control is the third exception, and it is arithmetic
+rather than taste.** A control's height is `padding + line-box + padding`, and a
+14px/600 line box is odd, so an even total needs odd padding: `.btn`'s `9px`
+makes 38px, `.input`'s `9px` makes 36px. The rule governs the gaps between
+things, the radii and the icon sizes — the places a reader can see the number.
+Where odd padding does not buy an even height it is simply a stray, and the
+`.callout` carried three of them until 2026-10-01.
 
 ### Radii
 
@@ -722,19 +743,19 @@ a long name refuses to shrink and pushes the row's actions off the edge.
 
 ```css
 .callout {
-  display: flex; align-items: flex-start; gap: 9px;
-  padding: 11px 13px;
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 11px 12px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--edge-lg);
-  font-size: 12.5px; line-height: 1.55; color: var(--text-2);
+  font-size: 13px; line-height: 1.55; color: var(--text-2);
 }
 .callout-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 ```
 
 ```html
 <p class="callout">
-  <Info class="callout-icon" :size="15" :stroke-width="2.25" />
+  <Info class="callout-icon" :size="16" :stroke-width="2.25" />
   <span>Everyone in the call is told which server they are on.</span>
 </p>
 ```
