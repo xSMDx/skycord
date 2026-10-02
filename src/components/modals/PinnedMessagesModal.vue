@@ -23,9 +23,9 @@ const pinned = computed(() => props.messages.filter(m => m.pinned))
 
     <div class="pinned-body">
       <template v-if="pinned.length === 0">
-        <div class="pinned-empty">
-          <div class="pinned-empty-icon">📌</div>
-          <p>This conversation doesn't have any pinned messages… yet.</p>
+        <div class="empty-pane pinned-empty">
+          <div class="empty-pane-icon"><Pin :size="32" :stroke-width="1.5" /></div>
+          <p class="empty-pane-note">This conversation doesn't have any pinned messages… yet.</p>
           <div class="pinned-tip">
             <span style="color:var(--accent-text);font-weight:700">PRO TIP:</span>
             You can pin a message from its context menu.
@@ -74,12 +74,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .pinned-close:hover { background: var(--hover); color: var(--text-strong); }
 
 .pinned-body { flex: 1; overflow: hidden auto; padding: 8px; }
-.pinned-empty {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 32px 20px; gap: 12px;
-}
-.pinned-empty-icon { font-size: 48px; }
-.pinned-empty p { font-size: 14px; color: var(--text-3); line-height: 1.5; }
+.pinned-empty { justify-content: flex-start; }
 .pinned-tip { font-size: 13px; color: var(--text-3); line-height: 1.5; }
 
 .pinned-msg {

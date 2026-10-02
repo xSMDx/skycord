@@ -291,7 +291,7 @@ const onBarLeave = (el: Element) => {
                 <span class="pm-cand-name">{{ c.label }}</span>
               </button>
             </li>
-            <li v-if="!candidates.length" class="pm-empty">Nothing left to add.</li>
+            <li v-if="!candidates.length" class="empty pm-empty">Nothing left to add.</li>
           </ul>
         </div>
 
@@ -460,7 +460,7 @@ const onBarLeave = (el: Element) => {
 @media (hover: hover) and (pointer: fine) { .pm-cand:hover { background: var(--hover); } }
 .pm-cand:active { transform: scale(.99); }
 .pm-cand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-empty { font-size: 13px; color: var(--text-faint); padding: 8px 9px; }
+.pm-empty { padding: 8px 9px; }
 
 .pm-group { display: flex; flex-direction: column; gap: 8px; }
 .pm-group-label {

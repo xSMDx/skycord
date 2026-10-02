@@ -778,12 +778,35 @@ which puts a space before the full stop. That shipped once.
 
 ### Empty state
 
+Two scales, because an empty region and an empty pane are not the same
+problem. Both are real classes in `src/style.css`, which is the point: this
+pattern was documented here and then retyped twenty-two times under
+twenty-two local names, drifting a little each time — 13px here and 12px
+there, `--text-3` here and `--text-faint` there, a title at 600 in one pane
+and 700 in the next.
+
 ```css
-.empty { font-size: 13px; color: var(--text-3); padding: 16px 0; }
+/* A region inside something else: a list with no results, a section with
+   nothing in it yet. The CALLER supplies padding — each of these sits in a
+   differently-padded container, and that is the part that may vary. */
+.empty { font-size: 13px; line-height: 1.45; color: var(--text-3); }
+
+/* A whole pane with nothing in it: a centred column. */
+.empty-pane       { gap: 8px; padding: 48px 24px; color: var(--text-3); }
+.empty-pane-icon  { color: var(--text-3); opacity: .55; }
+.empty-pane-title { font-size: 16px; font-weight: 600; color: var(--text-1); }
+.empty-pane-note  { font-size: 13px; line-height: 1.5; max-width: 44ch; }
 ```
 
 Empty states state the fact and, where there is one, the next action —
-"None yet. Calls use this instance's own voice server." Never an illustration.
+"None yet. Calls use this instance's own voice server."
+
+**Never an illustration.** An icon is not an illustration: `.empty-pane`
+carries one from the same Lucide set as the rest of the app, dimmed so it
+reads as a marker rather than as art. What the rule forbids is anything
+drawn specially for an empty state — a spot illustration, a mascot, or an
+emoji standing in for an icon, which is what the pinned messages pane
+shipped (📌) until 2026-10-02.
 
 ---
 

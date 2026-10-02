@@ -105,9 +105,9 @@ const select = (emoji: string) => {
               >{{ emoji }}</button>
             </div>
           </div>
-          <div v-if="filtered.length === 0" class="rp-empty">
-            <div>🔍</div>
-            <p>No emoji found for "{{ search }}"</p>
+          <div v-if="filtered.length === 0" class="empty-pane rp-empty">
+            <div class="empty-pane-icon"><Search :size="28" :stroke-width="1.5" /></div>
+            <p class="empty-pane-note">No emoji found for "{{ search }}"</p>
           </div>
         </div>
     </div>
@@ -176,12 +176,8 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .rp-emoji-btn:hover { background: var(--hover-strong); transform: scale(1.25); }
 .rp-emoji-btn:active { transform: scale(.9); }
 
-.rp-empty {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 8px; padding: 32px 20px; color: var(--text-faint); text-align: center;
-}
+.rp-empty { padding: 32px 20px; }
 .rp-empty div { font-size: 36px; }
-.rp-empty p   { font-size: 14px; }
 
 .rp-grid-wrap::-webkit-scrollbar { width: 4px; }
 .rp-grid-wrap::-webkit-scrollbar-track { background: transparent; }

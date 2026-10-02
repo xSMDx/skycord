@@ -117,7 +117,7 @@ const onFocusOut = (e: FocusEvent) => {
           <span v-if="o.soon" class="sp-soon">Soon</span>
           <Check v-else-if="picked(o.value)" class="sp-check" :size="16" :stroke-width="2.5" aria-hidden="true" />
         </li>
-        <li v-if="!list.length" class="sp-empty" role="presentation">No matches</li>
+        <li v-if="!list.length" class="empty sp-empty" role="presentation">No matches</li>
       </ul>
     </div>
   </div>
@@ -196,5 +196,5 @@ const onFocusOut = (e: FocusEvent) => {
   background: var(--hover-strong); color: var(--text-3);
 }
 .sp-check { margin-left: auto; flex: none; color: var(--accent); }
-.sp-empty { padding: 8px; font-size: 13px; color: var(--text-3); }
+.sp-empty { padding: 8px; }
 </style>

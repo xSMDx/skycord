@@ -578,14 +578,14 @@ const removeFromRole = (m: ServerMember) => {
                     <Plus :size="14" :stroke-width="2.25" class="rl-cand-add" />
                   </button>
                 </li>
-                <li v-if="!candidates.length" class="rl-empty">
+                <li v-if="!candidates.length" class="empty rl-empty">
                   <template v-if="pickQuery.trim()">Nobody matches “{{ pickQuery.trim() }}”.</template>
                   <template v-else>
                     Nobody left to add. Members whose highest role is at or above
                     yours are not listed — their roles are not yours to change.
                   </template>
                 </li>
-                <li v-if="hiddenCandidates" class="rl-empty">
+                <li v-if="hiddenCandidates" class="empty rl-empty">
                   {{ hiddenCandidates }} more — keep typing to narrow it down.
                 </li>
               </ul>
@@ -746,7 +746,7 @@ const removeFromRole = (m: ServerMember) => {
    column of fifty identical glyphs is noise. */
 .rl-cand-add { color: var(--text-faint); flex: none; opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
 .rl-cand:hover .rl-cand-add, .rl-cand:focus-visible .rl-cand-add { opacity: 1; }
-.rl-empty { padding: 8px; font-size: 13px; color: var(--text-3); line-height: 1.45; }
+.rl-empty { padding: 8px; }
 
 .rl-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .rl-member {

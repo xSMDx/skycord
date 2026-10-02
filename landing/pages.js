@@ -76,33 +76,54 @@
 
   function renderChangelog(host) {
     var data = window.SKYCORD_RELEASES || [];
-    host.innerHTML = data.map(function (r, n) {
-      var id = 'rel-' + n, open = n === 0;
-      return '<article class="rel">' +
-        '<div class="rel-top"><span class="ver">' + r.v + '</span>' +
-        '<span class="rel-title">' + r.title + '</span>' +
-        '<span class="rel-date">' + r.date + (r.time ? ' · ' + r.time : '') + '</span></div>' +
-        '<button class="rel-toggle" type="button" aria-expanded="' + open + '" aria-controls="' + id + '">' +
-          '<span>' + (open ? 'Hide' : 'Show') + ' ' + r.items.length + ' change' + (r.items.length === 1 ? '' : 's') + '</span>' +
-          '<svg aria-hidden="true"><use href="#i-chevron"/></svg>' +
-        '</button>' +
-        '<ul class="changes" id="' + id + '"' + (open ? '' : ' hidden') + '>' +
-          r.items.map(function (c) {
-            return '<li><span class="kind ' + c[0] + '">' + KIND[c[0]] + '</span><span>' + c[1] + '</span></li>';
-          }).join('') +
-        '</ul></article>';
-    }).join('');
+
+    host.innerHTML = '<ol class="log">' + data.map(function (r, n) {
+      var id = 'rel-' + n, open = n === 0, count = r.items.length;
+      return '<li class="rel"' + (open ? ' data-open' : '') + '>' +
+        '<span class="rel-node" aria-hidden="true"></span>' +
+        '<div class="rel-rail">' +
+          '<span class="ver">' + r.v + '</span>' +
+          '<time class="rel-date">' + r.date + (r.time ? '<span class="rel-time"><br>' + r.time + '</span>' : '') + '</time>' +
+        '</div>' +
+        '<div class="rel-main">' +
+          '<h2 class="rel-title">' + r.title + '</h2>' +
+          '<div class="changes-wrap"><div>' +
+            '<ul class="changes" id="' + id + '">' +
+              r.items.map(function (c) {
+                return '<li class="ch"><span class="kind ' + c[0] + '">' + KIND[c[0]] +
+                       '</span><p>' + c[1] + '</p></li>';
+              }).join('') +
+            '</ul>' +
+          '</div></div>' +
+          '<button class="rel-toggle" type="button" aria-expanded="' + open + '" aria-controls="' + id + '">' +
+            '<svg aria-hidden="true"><use href="#i-chevron"/></svg>' +
+            '<span>' + label(open, count) + '</span>' +
+          '</button>' +
+        '</div>' +
+      '</li>';
+    }).join('') + '</ol>';
+
+    // The intro says what the page holds, rather than restating its title.
+    var lede = $('#changelog-lede');
+    if (lede && data.length) {
+      lede.textContent = data.length + ' releases, newest first. Every one of them is a thing ' +
+                         'that was wrong, or missing, and now is not.';
+    }
 
     host.addEventListener('click', function (e) {
       var b = e.target.closest('.rel-toggle');
       if (!b) return;
-      var list = document.getElementById(b.getAttribute('aria-controls'));
-      var open = b.getAttribute('aria-expanded') === 'true';
-      b.setAttribute('aria-expanded', String(!open));
-      list.hidden = open;
-      var n = list.children.length;
-      $('span', b).textContent = (open ? 'Show' : 'Hide') + ' ' + n + ' change' + (n === 1 ? '' : 's');
+      var rel = b.closest('.rel');
+      var open = b.getAttribute('aria-expanded') !== 'true';
+      b.setAttribute('aria-expanded', String(open));
+      if (open) rel.setAttribute('data-open', ''); else rel.removeAttribute('data-open');
+      var n = document.getElementById(b.getAttribute('aria-controls')).children.length;
+      $('span', b).textContent = label(open, n);
     });
+  }
+
+  function label(open, n) {
+    return (open ? 'Hide' : 'Show') + ' ' + n + ' change' + (n === 1 ? '' : 's');
   }
 
   function mount() {
