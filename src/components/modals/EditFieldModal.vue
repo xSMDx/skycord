@@ -60,7 +60,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .efm-title { font-size: 18px; font-weight: 700; color: var(--text-strong); }
 .efm-desc  { font-size: 13px; color: var(--text-2); margin-top: 4px; line-height: 1.4; }
 .efm-x {
-  color: var(--text-3); width: 28px; height: 28px; border-radius: 6px;
+  color: var(--text-3); width: 28px; height: 28px; border-radius: var(--edge-md);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); flex-shrink: 0;
 }
@@ -73,7 +73,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   padding: 20px; margin-top: 4px;
 }
 .efm-btn {
-  padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-strong);
+  padding: 8px 18px; border-radius: var(--edge-md); font-size: 13px; font-weight: 600; color: var(--text-strong);
   background: transparent; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .efm-btn:hover { background: var(--hover); }
@@ -91,7 +91,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    accessibility tree so it is not read as punctuation mid-label. */
 :deep(.efm-req) { color: var(--danger-text); }
 :deep(.efm-input) {
-  width: 100%; background: var(--bg-input); border: 1px solid transparent; border-radius: 4px;
+  width: 100%; background: var(--bg-input); border: 1px solid transparent; border-radius: var(--edge-sm);
   padding: 8px 10px; font-size: 14px; color: var(--text-strong); outline: none;
   font-family: inherit; transition: border-color var(--dur-1) var(--ease-out);
 }

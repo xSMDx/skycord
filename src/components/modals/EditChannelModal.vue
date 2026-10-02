@@ -367,7 +367,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .ec-tab {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 7px 10px; border-radius: 4px; text-align: left;
+  padding: 7px 10px; border-radius: var(--edge-sm); text-align: left;
   font-size: 14px; color: var(--text-2);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -377,7 +377,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ec-tab.soon { color: var(--text-3); cursor: default; }
 .ec-soon {
   font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
-  padding: 2px 5px; border-radius: 4px; background: var(--hover); color: var(--text-3);
+  padding: 2px 5px; border-radius: var(--edge-sm); background: var(--hover); color: var(--text-3);
 }
 
 .ec-body { flex: 1; min-width: 0; padding: 22px 24px; overflow: hidden auto; position: relative; }
@@ -396,7 +396,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .ec-input {
   width: 100%; padding: 10px 12px; margin-bottom: 6px;
-  background: var(--bg-input); border: 1px solid transparent; border-radius: 6px;
+  background: var(--bg-input); border: 1px solid transparent; border-radius: var(--edge-md);
   font-size: 14px; color: var(--text-1); outline: none;
   transition: border-color var(--dur-2) var(--ease-out);
 }
@@ -414,7 +414,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .ec-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .ec-btn {
-  padding: 9px 18px; border-radius: 6px; font-size: 14px; font-weight: 600;
+  padding: 9px 18px; border-radius: var(--edge-md); font-size: 14px; font-weight: 600;
   color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }

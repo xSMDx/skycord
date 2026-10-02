@@ -380,7 +380,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .pp-row {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 8px 10px; border-radius: 6px; font-size: 14px; color: var(--text-1);
+  padding: 8px 10px; border-radius: var(--edge-md); font-size: 14px; color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out);
 }
 .pp-row:hover:not(:disabled) { background: var(--hover-strong); }
@@ -399,12 +399,12 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
    full-width hover; the chevron is a sibling so both stay valid buttons. */
 .pp-splitrow { display: flex; align-items: stretch; }
 .pp-splitrow .pp-row { flex: 1; min-width: 0; }
-.pp-chev-btn { flex: none; display: flex; align-items: center; padding: 0 8px; background: none; border: none; cursor: pointer; color: var(--text-2); border-radius: 4px; }
+.pp-chev-btn { flex: none; display: flex; align-items: center; padding: 0 8px; background: none; border: none; cursor: pointer; color: var(--text-2); border-radius: var(--edge-sm); }
 .pp-chev-btn:hover { background: var(--hover-strong); }
 .pp-chev-btn svg { transition: transform var(--dur-2) var(--ease-out); }
 .pp-chev-btn.open svg { transform: rotate(90deg); }
 .pp-dur {
-  display: block; width: 100%; padding: 8px 10px; border-radius: 4px;
+  display: block; width: 100%; padding: 8px 10px; border-radius: var(--edge-sm);
   background: none; border: none; cursor: pointer;
   font-size: 13.5px; color: var(--text-2); text-align: left;
 }
@@ -417,5 +417,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .pp-chev { margin-left: auto; color: var(--icon); transition: transform var(--dur-1) var(--ease-out); }
 .pp-chev.open { transform: rotate(90deg); }
 .pp-sub { display: flex; flex-direction: column; gap: 2px; }
-.pp-note { font-size: 12.5px; color: var(--text-3); padding: 8px 10px; background: var(--hover); border-radius: 6px; }
+.pp-note { font-size: 12.5px; color: var(--text-3); padding: 8px 10px; background: var(--hover); border-radius: var(--edge-md); }
 </style>

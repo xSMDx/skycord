@@ -24,7 +24,7 @@ const { themePreview, keepPreview, revertPreview } = useAppearance()
   display: flex; align-items: center; gap: 14px;
   padding: 12px 14px 12px 18px;
   background: var(--bg-floor); border: 1px solid var(--border);
-  border-radius: 12px; box-shadow: var(--shadow-md);
+  border-radius: var(--edge-xl); box-shadow: var(--shadow-md);
   max-width: min(560px, calc(100vw - 32px));
 }
 .tpb-dot {
@@ -34,7 +34,7 @@ const { themePreview, keepPreview, revertPreview } = useAppearance()
 .tpb-text { font-size: 14px; color: var(--text-1); flex: 1; min-width: 0; }
 .tpb-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .tpb-btn {
-  padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  padding: 8px 16px; border-radius: var(--edge-lg); font-size: 14px; font-weight: 600;
   cursor: pointer; transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .tpb-btn.ghost { color: var(--text-2); background: var(--hover); }

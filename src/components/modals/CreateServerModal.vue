@@ -122,7 +122,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   letter-spacing: .02em; color: var(--text-3); margin-bottom: 8px;
 }
 .csm-input {
-  width: 100%; padding: 10px 12px; border-radius: 4px;
+  width: 100%; padding: 10px 12px; border-radius: var(--edge-sm);
   border: 1px solid transparent; background: var(--bg-input);
   color: var(--text-strong); font-size: 15px; transition: border-color var(--dur-1) var(--ease-out);
 }
@@ -135,13 +135,13 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   padding: 16px 20px; border-top: 1px solid var(--divider);
 }
 .csm-cancel {
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out);
 }
 .csm-cancel:hover { background: var(--hover); }
 .csm-create {
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

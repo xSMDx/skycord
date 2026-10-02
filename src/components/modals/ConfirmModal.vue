@@ -85,7 +85,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 /* Cancel is deliberately the quieter of the two — no fill, so the confirm
    button (accent or danger) is the one that reads as the default action. */
 .cfm-cancel {
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out);
 }
@@ -93,7 +93,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cfm-cancel:disabled { opacity: .5; cursor: not-allowed; }
 
 .cfm-confirm {
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

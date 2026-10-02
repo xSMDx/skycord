@@ -242,7 +242,7 @@ const onBeforeEnter = (el: Element) => {
 .modal:focus { outline: none; }
 .modal {
   background: var(--bg-panel);
-  border-radius: 12px;
+  border-radius: var(--edge-xl);
   width: 480px;
   max-width: 95vw;
   max-height: 90vh;

@@ -36,7 +36,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .ac {
-  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: 8px;
+  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: var(--edge-lg);
   box-shadow: var(--shadow-md); overflow: hidden;
 }
 .ac-header {
@@ -46,7 +46,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ac-list { max-height: 280px; overflow: hidden auto; padding: 0 6px 6px; }
 .ac-item {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 8px 8px; border-radius: 6px; transition: background var(--dur-1) var(--ease-out);
+  padding: 8px 8px; border-radius: var(--edge-md); transition: background var(--dur-1) var(--ease-out);
 }
 .ac-item.active { background: rgba(var(--accent-rgb),.22); }
 .ac-icon {

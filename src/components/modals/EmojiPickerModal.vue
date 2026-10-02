@@ -357,7 +357,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 
 .picker-search {
   display: flex; align-items: center; gap: 8px;
-  margin: 8px; background: var(--bg-input); border-radius: 6px;
+  margin: 8px; background: var(--bg-input); border-radius: var(--edge-md);
   padding: 8px 10px; border: 1px solid var(--border);
   flex-shrink: 0; transition: border-color var(--dur-2) var(--ease-out);
 }
@@ -373,7 +373,7 @@ img    { display: block; width: 100%; object-fit: cover; }
   border-bottom: 1px solid var(--divider);
 }
 .cat-btn {
-  width: 28px; height: 28px; border-radius: 6px; font-size: 16px;
+  width: 28px; height: 28px; border-radius: var(--edge-md); font-size: 16px;
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out); opacity: .7;
 }
@@ -384,7 +384,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 .cat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); margin-bottom: 6px; padding: 0 4px; }
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 1px; }
 .emoji-btn {
-  width: 34px; height: 34px; border-radius: 6px; font-size: 20px;
+  width: 34px; height: 34px; border-radius: var(--edge-md); font-size: 20px;
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -395,12 +395,12 @@ img    { display: block; width: 100%; object-fit: cover; }
 .gif-grid-wrap { padding: 8px; }
 .gif-masonry { columns: 2; gap: 6px; }
 .gif-item {
-  break-inside: avoid; margin-bottom: 6px; border-radius: 6px; overflow: hidden;
+  break-inside: avoid; margin-bottom: 6px; border-radius: var(--edge-md); overflow: hidden;
   cursor: pointer; transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
   background: var(--hover);
 }
 .gif-item:hover { opacity: .85; transform: scale(1.02); }
-.gif-item img { border-radius: 6px; width: 100%; height: auto; display: block; }
+.gif-item img { border-radius: var(--edge-md); width: 100%; height: auto; display: block; }
 .gif-attribution {
   text-align: center; font-size: 10px; color: var(--text-faint);
   padding: 6px 0 2px; letter-spacing: .2px;

@@ -484,22 +484,22 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 }
 
 .logo-row { display:flex; align-items:center; gap: 10px; justify-content:center; margin-bottom: 24px; }
-.logo-box { width:42px;height:42px; background:var(--accent); border-radius: 12px; display:flex; align-items:center; justify-content:center; color:var(--text-on-accent); box-shadow:0 4px 18px rgba(var(--accent-rgb),.4); }
+.logo-box { width:42px;height:42px; background:var(--accent); border-radius: var(--edge-xl); display:flex; align-items:center; justify-content:center; color:var(--text-on-accent); box-shadow:0 4px 18px rgba(var(--accent-rgb),.4); }
 /* Chakra Petch ships 500/600/700 only — 700 explicit, not 800 synthesised. */
 .logo-name { font-family: var(--font-display); font-size:22px; font-weight:700; color: var(--text-strong); letter-spacing:-.4px; }
 
-.tabs { display:flex; position:relative; background:var(--bg-input); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
-.tab { flex:1; padding: 8px; border-radius: 6px; font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition: color var(--dur-2) var(--ease-out); }
+.tabs { display:flex; position:relative; background:var(--bg-input); border-radius: var(--edge-lg); padding: 4px; margin-bottom: 20px; }
+.tab { flex:1; padding: 8px; border-radius: var(--edge-md); font-size:13px; font-weight:600; color:var(--text-faint); position:relative; z-index:1; transition: color var(--dur-2) var(--ease-out); }
 .tab.active { color: var(--text-strong); }
-.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:var(--bg-panel); border-radius: 6px; transition: transform var(--dur-2) var(--ease-inout); box-shadow:var(--shadow-xs); }
+.tab-slider { position:absolute; top:3px; left:3px; bottom:3px; width:calc(50% - 3px); background:var(--bg-panel); border-radius: var(--edge-md); transition: transform var(--dur-2) var(--ease-inout); box-shadow:var(--shadow-xs); }
 .tab-slider.right { transform:translateX(100%); }
 
-.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--danger-rgb), .12); border:1px solid rgba(var(--danger-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--danger-text); font-size:13px; }
+.err-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--danger-rgb), .12); border:1px solid rgba(var(--danger-rgb), .3); border-radius: var(--edge-lg); padding: 10px 14px; margin-bottom: 14px; color:var(--danger-text); font-size:13px; }
 
 /* The success twin of .err-banner. Green rather than red because these two
    appear in the same slot and a reset confirmation that is styled like a
    failure gets read as one. */
-.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--green-rgb), .12); border:1px solid rgba(var(--green-rgb), .3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color:var(--green-text); font-size:13px; line-height:1.45; }
+.ok-banner { display:flex; align-items:center; gap: 8px; background:rgba(var(--green-rgb), .12); border:1px solid rgba(var(--green-rgb), .3); border-radius: var(--edge-lg); padding: 10px 14px; margin-bottom: 14px; color:var(--green-text); font-size:13px; line-height:1.45; }
 
 .form-title { font-size:21px; font-weight:800; color: var(--text-strong); margin-bottom: 4px; }
 .form-sub   { font-size:13px; color:var(--text-faint); margin-bottom: 18px; }
@@ -517,7 +517,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .inp-wrap {
   display:flex; align-items:center;
-  background:var(--bg-input); border:1.5px solid var(--border); border-radius: 8px;
+  background:var(--bg-input); border:1.5px solid var(--border); border-radius: var(--edge-lg);
   transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   overflow:hidden;
 }
@@ -534,7 +534,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .inp-wrap input { flex:1; min-width:0; padding: 10px 6px 10px 0; font-size:14px; color:var(--text-1); }
 .inp-wrap input::placeholder { color:var(--text-faint); }
 
-.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-3); border-radius: 6px; margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
+.eye { width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text-3); border-radius: var(--edge-md); margin-right: 2px; flex-shrink:0; transition: color var(--dur-1) var(--ease-out); }
 .eye:hover { color:var(--text-2); }
 
 /* ── Phone ────────────────────────────────────────────────────────────────
@@ -565,7 +565,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
 .submit {
   width:100%; padding: 12px; margin-top: 4px;
   background:var(--accent); color:var(--text-on-accent);
-  font-size:15px; font-weight:700; border-radius: 8px;
+  font-size:15px; font-weight:700; border-radius: var(--edge-lg);
   transition: background var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   box-shadow:0 4px 16px rgba(var(--accent-rgb),.35);
   display:flex; align-items:center; justify-content:center; gap: 8px;

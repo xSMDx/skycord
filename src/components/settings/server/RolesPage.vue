@@ -695,14 +695,14 @@ const removeFromRole = (m: ServerMember) => {
 }
 .rl-tab.on { color: var(--text-strong); border-bottom-color: var(--text-strong); }
 .rl-tabnum {
-  font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: var(--edge-pill);
   background: var(--hover-strong); color: var(--text-2);
 }
 
 /* ── Colour swatches ── */
 .rl-swatches { display: flex; flex-wrap: wrap; gap: 9px; }
 .rl-swatch {
-  width: 40px; height: 40px; border-radius: 8px; border: none; cursor: pointer; padding: 0;
+  width: 40px; height: 40px; border-radius: var(--edge-lg); border: none; cursor: pointer; padding: 0;
   box-shadow: inset 0 0 0 1px var(--border);
   transition: box-shadow var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -729,12 +729,12 @@ const removeFromRole = (m: ServerMember) => {
 .rl-mem-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .rl-mem-search { flex: 1; margin-bottom: 0; }
 
-.rl-picker { background: var(--bg-input); border-radius: 8px; padding: 10px; margin-bottom: 16px; }
+.rl-picker { background: var(--bg-input); border-radius: var(--edge-lg); padding: 10px; margin-bottom: 16px; }
 .rl-pick-search { max-width: none; margin-bottom: 8px; }
 .rl-cands { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
 .rl-cand {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 6px 8px; border: 0; border-radius: 6px; background: none;
+  padding: 6px 8px; border: 0; border-radius: var(--edge-md); background: none;
   color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -751,7 +751,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .rl-member {
   display: flex; align-items: center; gap: 12px;
-  padding: 8px 10px; border-radius: 8px;
+  padding: 8px 10px; border-radius: var(--edge-lg);
   transition: background var(--dur-1) var(--ease-out);
 }
 .rl-member:hover { background: var(--hover); }
@@ -762,7 +762,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-member-crown { color: var(--warning); flex: none; }
 .rl-member-x {
   display: grid; place-items: center; width: 28px; height: 28px; flex: none;
-  border: 0; border-radius: 6px; background: none; color: var(--text-faint); cursor: pointer;
+  border: 0; border-radius: var(--edge-md); background: none; color: var(--text-faint); cursor: pointer;
   opacity: 0;
   transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
               background var(--dur-1) var(--ease-out);
@@ -778,7 +778,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-soon {
   display: inline-block; margin-left: 8px; vertical-align: 1px;
   font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
-  padding: 2px 6px; border-radius: 4px;
+  padding: 2px 6px; border-radius: var(--edge-sm);
   background: var(--hover-strong); color: var(--text-3);
 }
 /* Warmer than "Soon": this one is a live gap, not a roadmap note. */

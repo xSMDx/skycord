@@ -197,12 +197,12 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-link-label { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-2); }
 .is-link-row { display: flex; gap: 10px; }
 .is-link {
-  flex: 1; padding: 8px 12px; border-radius: 6px;
+  flex: 1; padding: 8px 12px; border-radius: var(--edge-md);
   background: var(--bg-input); border: none;
   font-size: 14px; color: var(--text-1); outline: none;
 }
 .is-copy {
-  padding: 0 22px; border-radius: 4px;
+  padding: 0 22px; border-radius: var(--edge-sm);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
@@ -215,7 +215,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-expiry-row { display: flex; gap: 10px; }
 .is-expiry-btn {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  padding: 10px 12px; border-radius: 6px;
+  padding: 10px 12px; border-radius: var(--edge-md);
   background: var(--bg-input); color: var(--text-2);
   border: 1px solid transparent; font-size: 14px; font-weight: 600;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
@@ -225,7 +225,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .is-expiry-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .is-mint {
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }

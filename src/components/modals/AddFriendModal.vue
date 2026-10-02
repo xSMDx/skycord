@@ -143,7 +143,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-search {
   display: flex; align-items: center; gap: 10px;
   background: var(--bg-raised); border: 1.5px solid var(--border);
-  border-radius: 8px; padding: 10px 14px;
+  border-radius: var(--edge-lg); padding: 10px 14px;
   transition: border-color var(--dur-2) var(--ease-out);
 }
 .af-search:focus-within { border-color: var(--accent); }
@@ -161,7 +161,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .af-user {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px; border-radius: 8px; cursor: default;
+  padding: 10px 12px; border-radius: var(--edge-lg); cursor: default;
   transition: background var(--dur-1) var(--ease-out);
 }
 .af-user:hover { background: var(--hover); }
@@ -178,7 +178,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .af-send-btn {
   display: flex; align-items: center; gap: 6px;
-  padding: 8px 14px; border-radius: 6px;
+  padding: 8px 14px; border-radius: var(--edge-md);
   font-size: 13px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); white-space: nowrap; flex-shrink: 0;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);

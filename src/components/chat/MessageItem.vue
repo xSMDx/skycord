@@ -276,7 +276,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg:hover .msg-ts{color:var(--text-faint)}
 .msg-body{flex:1;min-width:0;padding-top: 4px}
 .reply-previews{display:flex;flex-direction:column;gap: 1px;margin-bottom: 4px}
-.reply-preview{display:flex;align-items:center;gap: 6px;margin-left: 6px;font-size:13px;color:var(--text-3);overflow:hidden;position:relative;padding-left: 14px;cursor:pointer;border-radius: 4px;transition: background var(--dur-1) var(--ease-out);width:fit-content;max-width:100%}
+.reply-preview{display:flex;align-items:center;gap: 6px;margin-left: 6px;font-size:13px;color:var(--text-3);overflow:hidden;position:relative;padding-left: 14px;cursor:pointer;border-radius: var(--edge-sm);transition: background var(--dur-1) var(--ease-out);width:fit-content;max-width:100%}
 .reply-preview:hover{background:var(--hover)}
 .reply-preview:active{background:var(--press-veil)}
 .reply-preview::before{content:'';position:absolute;left:0;top:50%;width:10px;height:12px;border-left:2px solid var(--border);border-top:2px solid var(--border);border-radius: 6px 0 0 0}
@@ -302,9 +302,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    layout mistake. Discord does not cap this either, so it is a deliberate
    departure — revert by deleting the max-width alone. */
 .msg-text{font-size:var(--msg-font-size, 15px);line-height:1.5;color:var(--text-1);word-break:break-word;max-width:80ch}
-.msg-gif{max-width:320px;max-height:240px;border-radius: 8px;display:block;cursor:pointer}
+.msg-gif{max-width:320px;max-height:240px;border-radius: var(--edge-lg);display:block;cursor:pointer}
 .msg-text.jumbo{font-size:42px;line-height:1.25}
-.msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding: 0 4px;border-radius: 4px;cursor:pointer;font-weight:500}
+.msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding: 0 4px;border-radius: var(--edge-sm);cursor:pointer;font-weight:500}
 .msg-text :deep(.emoji){width:1.35em;height:1.35em;vertical-align:-.28em;margin: 0 .02em;object-fit:contain;display:inline-block}
 .msg-text :deep(.msg-link){color:var(--text-link);text-decoration:var(--link-decoration, none);word-break:break-all}
 .msg-text :deep(.msg-link):hover{text-decoration:underline}
@@ -322,13 +322,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-text :deep(em){font-style:italic}
 .msg-text :deep(u){text-decoration:underline}
 .msg-text :deep(s){text-decoration:line-through;color:var(--text-3)}
-.msg-text :deep(.mention-all){color: var(--mention-all-fg);background:var(--mention-all-bg);padding: 0 4px;border-radius: 4px;font-weight:600}
-.msg-text :deep(.msg-time-token){background:var(--time-token-bg);color:var(--time-token-fg);padding: 0 4px;border-radius: 4px;font-weight:500;cursor:default}
+.msg-text :deep(.mention-all){color: var(--mention-all-fg);background:var(--mention-all-bg);padding: 0 4px;border-radius: var(--edge-sm);font-weight:600}
+.msg-text :deep(.msg-time-token){background:var(--time-token-bg);color:var(--time-token-fg);padding: 0 4px;border-radius: var(--edge-sm);font-weight:500;cursor:default}
 .msg-text :deep(.msg-bq){border-left:3px solid var(--border);padding: 1px 0 1px 10px;margin: 2px 0;color:var(--text-2)}
-.msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid var(--border);border-radius: 6px;padding: 8px 10px;margin: 4px 0;font-family: var(--font-mono);font-size:13px;color:var(--text-1);white-space:pre-wrap;word-break:break-word}
-.msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:var(--bg-input);padding: 1px 4px;border-radius: 4px;color:var(--text-1)}
+.msg-text :deep(.msg-cb){display:block;background:var(--bg-input);border:1px solid var(--border);border-radius: var(--edge-md);padding: 8px 10px;margin: 4px 0;font-family: var(--font-mono);font-size:13px;color:var(--text-1);white-space:pre-wrap;word-break:break-word}
+.msg-text :deep(.ic){font-family: var(--font-mono);font-size:13px;background:var(--bg-input);padding: 1px 4px;border-radius: var(--edge-sm);color:var(--text-1)}
 .edit-wrap{display:flex;flex-direction:column;gap: 4px}
-.edit-input{width:100%;padding: 8px 12px;border-radius: 8px;background:var(--bg-chatbar);border:1.5px solid rgba(var(--accent-rgb),.6);font-size:15px;color:var(--text-1);outline:none;font-family:inherit}
+.edit-input{width:100%;padding: 8px 12px;border-radius: var(--edge-lg);background:var(--bg-chatbar);border:1.5px solid rgba(var(--accent-rgb),.6);font-size:15px;color:var(--text-1);outline:none;font-family:inherit}
 .edit-hint{font-size:12px;color:var(--text-faint)}
 .el{color:var(--accent);font-size:12px;font-weight:600}
 .el:hover{text-decoration:underline}
@@ -358,14 +358,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    it still works and :focus-within still reveals it. */
 .msg-actions{
   position:absolute;right:10px;top:-16px;background:var(--bg-panel);
-  border:1px solid var(--border);border-radius: 8px;
+  border:1px solid var(--border);border-radius: var(--edge-lg);
   display:flex;gap: 1px;padding: 4px;box-shadow:var(--shadow-sm);z-index:10;
   opacity:0;pointer-events:none;transform:translateY(2px);
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .msg-actions.shown,
 .msg:focus-within .msg-actions{opacity:1;pointer-events:auto;transform:none}
-.ap{width:28px;height:28px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.ap{width:28px;height:28px;border-radius: var(--edge-md);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 /* 1.15 was the largest hover scale in the app, on a 28px button, in a bar that
    has just faded in — three pieces of motion stacked on one gesture. The tint
    and colour change carry the hover; :active below carries the press. */

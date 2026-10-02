@@ -1542,7 +1542,7 @@ img    { display: block; object-fit: cover; }
 /* ── Profile page ── */
 .pf-sub { font-size: 13.5px; color: var(--text-3); margin: -6px 0 20px; }
 .pf-err {
-  padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 13px;
+  padding: 10px 14px; margin-bottom: 14px; border-radius: var(--edge-lg); font-size: 13px;
   background: rgba(var(--danger-rgb), .14); border: 1px solid rgba(var(--danger-rgb), .32); color: var(--danger-text);
 }
 /*
@@ -1587,7 +1587,7 @@ img    { display: block; object-fit: cover; }
 .pf-bnbox {
   /* 16:5, matching .pc-banner and the crop window. A preview in a different
      shape is not a preview. */
-  width: 100%; aspect-ratio: 16 / 5; border-radius: 8px; cursor: pointer;
+  width: 100%; aspect-ratio: 16 / 5; border-radius: var(--edge-lg); cursor: pointer;
   border: 1px solid var(--seam); transition: filter var(--dur-1) var(--ease-out);
 }
 .pf-bnbox:hover { filter: brightness(1.25); }
@@ -1604,14 +1604,14 @@ img    { display: block; object-fit: cover; }
 .pf-pop-leave-to   .pf-pop-panel { opacity: 0; transform: scale(.94); }
 .pf-pop-panel {
   position: fixed; z-index: 1401;
-  background: var(--bg-floor); border-radius: 8px; padding: 14px;
+  background: var(--bg-floor); border-radius: var(--edge-lg); padding: 14px;
   box-shadow: var(--shadow-lg);
 }
 
 
 .pf-textarea {
   width: 100%; background: var(--bg-input); border: 1px solid var(--seam);
-  border-radius: 6px; padding: 10px 12px; color: var(--text-1);
+  border-radius: var(--edge-md); padding: 10px 12px; color: var(--text-1);
   font: inherit; font-size: 14.5px; line-height: 1.5; resize: vertical; min-height: 74px;
 }
 .pf-textarea:focus { outline: none; border-color: var(--accent); }
@@ -1667,7 +1667,7 @@ img    { display: block; object-fit: cover; }
 }
 .sm-nav-item {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
+  width: 100%; text-align: left; padding: 10px 12px; border-radius: var(--edge-lg);
   font-size: 16px; color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .sm-nav-item:hover { background: var(--hover); color: var(--text-strong); }
@@ -1713,7 +1713,7 @@ img    { display: block; object-fit: cover; }
 }
 .sm-nav-subitem {
   display: block; width: 100%; text-align: left;
-  padding: 7px 10px; border-radius: 6px;
+  padding: 7px 10px; border-radius: var(--edge-md);
   font-size: 13.5px; font-weight: 500; color: var(--text-3);
   /* Weight is deliberately NOT part of the active state. The scroll-spy
      retargets this on almost every scroll frame, and a weight change re-lays
@@ -1764,7 +1764,7 @@ img    { display: block; object-fit: cover; }
 /* Account page */
 .acc-banner {
   display: flex; align-items: center; gap: 16px;
-  margin-bottom: 24px; padding: 20px; border-radius: 12px;
+  margin-bottom: 24px; padding: 20px; border-radius: var(--edge-xl);
   position: relative; overflow: hidden; background: rgba(var(--accent-rgb),.08);
 }
 .acc-banner-bg {
@@ -1780,7 +1780,7 @@ img    { display: block; object-fit: cover; }
 .acc-av-names { z-index: 1; }
 .acc-display  { display: block; font-size: 20px; font-weight: 800; color: var(--text-strong); }
 .acc-tag      { font-size: 13px; color: var(--text-3); }
-.acc-save-msg { padding: 10px 14px; background: rgba(var(--green-rgb), .15); border: 1px solid rgba(var(--green-rgb), .3); border-radius: 8px; color: var(--green-text); font-size: 13px; margin-bottom: 14px; }
+.acc-save-msg { padding: 10px 14px; background: rgba(var(--green-rgb), .15); border: 1px solid rgba(var(--green-rgb), .3); border-radius: var(--edge-lg); color: var(--green-text); font-size: 13px; margin-bottom: 14px; }
 
 /* The lift on hover went the way of the others tonight: hover announces that
    a thing is interactive, press answers that it heard you. These buttons had
@@ -1790,7 +1790,7 @@ img    { display: block; object-fit: cover; }
 .st-field.soon { opacity: .5; }
 .st-field.soon .st-btn { cursor: not-allowed; }
 
-.st-field-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+.st-field-arrow { color: var(--text-3); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: var(--edge-md); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
 .st-field-arrow:hover { background: var(--hover); color: var(--text-strong); }
 /* A whole row that navigates. It is a <button> so it is reachable and
    announced as one control rather than as a div with a clickable arrow inside;
@@ -1854,7 +1854,7 @@ img    { display: block; object-fit: cover; }
   font-size: 13px; font-weight: 600; color: var(--text-1);
 }
 .ap-card.active { border-color: var(--accent); }
-.ap-card-preview { width: 72px; height: 44px; border-radius: 6px; background: var(--bg-chat); border: 1px solid var(--hover); }
+.ap-card-preview { width: 72px; height: 44px; border-radius: var(--edge-md); background: var(--bg-chat); border: 1px solid var(--hover); }
 .ap-card.theme-midnight .ap-card-preview { background: #1a1b1f; }
 .ap-card.theme-amoled .ap-card-preview { background: #000; }
 .ap-card-sm { min-width: 0; padding: 10px 20px; }
@@ -1864,7 +1864,7 @@ img    { display: block; object-fit: cover; }
 .ap-auto { margin-top: 14px; }
 .ap-variants { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .ap-chip {
-  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  padding: 6px 14px; border-radius: var(--edge-pill); cursor: pointer;
   border: 1px solid var(--border); background: var(--bg-panel);
   font-size: 13px; font-weight: 600; color: var(--text-2);
   transition: border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
@@ -1892,7 +1892,7 @@ img    { display: block; object-fit: cover; }
 .ap-prev-name { font-weight: 600; color: var(--text-strong); }
 .ap-prev-time { font-size: 11px; color: var(--text-faint); }
 .ap-prev-text { display: block; color: var(--text-1); line-height: 1.4; }
-.ap-prev-text code { background: var(--bg-input); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+.ap-prev-text code { background: var(--bg-input); padding: 1px 6px; border-radius: var(--edge-sm); font-size: 13px; }
 
 /* Compact: single line — [time] Name text, no avatar */
 .ap-preview.prev-compact .ap-prev-msg { align-items: baseline; gap: 8px; margin-top: 4px !important; padding: 1px 0; }
@@ -1907,7 +1907,7 @@ img    { display: block; object-fit: cover; }
 /* Custom token pickers */
 .ap-tokens { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .ap-token { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
-.ap-token input { width: 32px; height: 32px; border: none; border-radius: 8px; background: none; cursor: pointer; padding: 0; }
+.ap-token input { width: 32px; height: 32px; border: none; border-radius: var(--edge-lg); background: none; cursor: pointer; padding: 0; }
 .ap-hint { width: 100%; font-size: 12px; color: var(--text-faint); margin-top: 2px; }
 .ap-hint strong { color: var(--text-2); }
 .ap-reset { margin-left: 10px; font-size: 11px; font-weight: 600; color: var(--accent); text-transform: none; letter-spacing: 0; cursor: pointer; }
@@ -1944,14 +1944,14 @@ img    { display: block; object-fit: cover; }
    --accent (the --fill % is bound inline per slider). */
 .ap-slider {
   -webkit-appearance: none; appearance: none;
-  width: 100%; max-width: 560px; height: 6px; border-radius: 999px; cursor: pointer;
+  width: 100%; max-width: 560px; height: 6px; border-radius: var(--edge-pill); cursor: pointer;
   margin: 4px 0 16px;
   background:
     linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat,
     var(--bg-input);
 }
-.ap-slider::-webkit-slider-runnable-track { -webkit-appearance: none; height: 6px; background: transparent; border-radius: 999px; }
-.ap-slider::-moz-range-track { height: 6px; background: transparent; border-radius: 999px; }
+.ap-slider::-webkit-slider-runnable-track { -webkit-appearance: none; height: 6px; background: transparent; border-radius: var(--edge-pill); }
+.ap-slider::-moz-range-track { height: 6px; background: transparent; border-radius: var(--edge-pill); }
 .ap-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
@@ -1976,20 +1976,20 @@ img    { display: block; object-fit: cover; }
 .ap-hint-under { margin: 12px 0 4px; }
 .ap-share-input {
   width: 100%; max-width: 680px; resize: vertical; min-height: 46px;
-  background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--edge-lg);
   padding: 10px 12px; color: var(--text-1); font-family: var(--font-mono); font-size: 12.5px;
   word-break: break-all;
 }
 .ap-share-input:focus { outline: none; border-color: var(--accent); }
 .ap-share-err { font-size: 12px; color: var(--danger-text); margin: 6px 0 2px; }
 .ap-name-input {
-  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--edge-md);
   padding: 8px 12px; color: var(--text-1); font-size: 14px; min-width: 180px;
 }
 .ap-name-input:focus { outline: none; border-color: var(--accent); }
 
 /* Toggle */
-.ap-toggle { width: 42px; height: 24px; border-radius: 12px; background: var(--toggle-off); position: relative; transition: background var(--dur-2) var(--ease-out); flex-shrink: 0; }
+.ap-toggle { width: 42px; height: 24px; border-radius: var(--edge-xl); background: var(--toggle-off); position: relative; transition: background var(--dur-2) var(--ease-out); flex-shrink: 0; }
 .ap-toggle.on { background: var(--accent); }
 .ap-toggle span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--toggle-knob); transition: transform var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out); }
 /* On the accent the knob takes the accent's own measured ink: --toggle-knob
@@ -2074,7 +2074,7 @@ img    { display: block; object-fit: cover; }
 .sm-mhead-btn {
   display: flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px;
-  color: var(--text-2); border-radius: 8px; flex-shrink: 0;
+  color: var(--text-2); border-radius: var(--edge-lg); flex-shrink: 0;
 }
 .sm-mhead-btn:active { background: var(--hover); color: var(--text-strong); }
 
@@ -2133,7 +2133,7 @@ img    { display: block; object-fit: cover; }
 .ap-saved-row { display: flex; align-items: center; gap: 8px; }
 .ap-saved-main {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
-  padding: 8px 12px; border-radius: 8px; background: var(--bg-panel);
+  padding: 8px 12px; border-radius: var(--edge-lg); background: var(--bg-panel);
   color: var(--text-1); font-size: 14px; text-align: left;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

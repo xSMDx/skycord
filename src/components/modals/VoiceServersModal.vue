@@ -240,7 +240,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .vs-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .vs-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px; border-radius: 8px;
+  padding: 12px 14px; border-radius: var(--edge-lg);
   background: var(--bg-input); border: 1px solid var(--border);
 }
 .vs-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -248,7 +248,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .vs-name { font-size: 14px; font-weight: 600; color: var(--text-strong); }
 .vs-badge {
   font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
-  padding: 2px 6px; border-radius: 4px;
+  padding: 2px 6px; border-radius: var(--edge-sm);
   background: rgba(var(--accent-rgb), .18); color: var(--accent);
 }
 .vs-url, .vs-key {
@@ -258,7 +258,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .vs-row-acts { display: flex; gap: 4px; flex-shrink: 0; }
 .vs-mini {
-  width: 30px; height: 30px; border-radius: 6px;
+  width: 30px; height: 30px; border-radius: var(--edge-md);
   display: flex; align-items: center; justify-content: center; color: var(--text-3);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -268,7 +268,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .vs-add {
   display: flex; align-items: center; gap: 6px;
-  padding: 9px 14px; border-radius: 6px;
+  padding: 9px 14px; border-radius: var(--edge-md);
   font-size: 13px; font-weight: 600; color: var(--text-2);
   border: 1px dashed var(--border); width: 100%; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
@@ -282,7 +282,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .vs-input {
   width: 100%; padding: 9px 12px; margin-bottom: 8px;
-  background: var(--bg-input); border: 1px solid transparent; border-radius: 6px;
+  background: var(--bg-input); border: 1px solid transparent; border-radius: var(--edge-md);
   font-size: 14px; color: var(--text-1); outline: none;
   transition: border-color var(--dur-2) var(--ease-out);
 }
@@ -295,7 +295,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .vs-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .vs-btn {
-  padding: 9px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--text-1);
+  padding: 9px 18px; border-radius: var(--edge-md); font-size: 14px; font-weight: 600; color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .vs-btn:hover { background: var(--hover); }

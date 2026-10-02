@@ -169,7 +169,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   color: var(--text-2);
 }
 .eg-input {
-  align-self: stretch; padding: 10px 12px; border-radius: 6px;
+  align-self: stretch; padding: 10px 12px; border-radius: var(--edge-md);
   background: var(--bg-input); border: 1px solid transparent;
   font-size: 15px; color: var(--text-1); outline: none;
   transition: border-color var(--dur-2) var(--ease-out);
@@ -187,7 +187,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .eg-cancel { font-size: 14px; font-weight: 600; color: var(--text-1); padding: 8px 4px; }
 .eg-cancel:hover { text-decoration: underline; }
 .eg-save {
-  padding: 8px 28px; border-radius: 4px;
+  padding: 8px 28px; border-radius: var(--edge-sm);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }

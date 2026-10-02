@@ -145,7 +145,7 @@ const onOutside = (e: PointerEvent) => {
   position: fixed;
   z-index: 1300;              /* above ProfilePopout (1200), below modals */
   background: var(--bg-panel);
-  border-radius: 8px;
+  border-radius: var(--edge-lg);
   box-shadow: var(--shadow-md);
   padding: 6px;
   max-height: 60vh;

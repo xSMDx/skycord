@@ -46,13 +46,13 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .tt {
   width: 320px; background: var(--bg-panel); border: 1px solid var(--seam);
-  border-radius: 8px; box-shadow: var(--shadow-md); padding: 12px;
+  border-radius: var(--edge-lg); box-shadow: var(--shadow-md); padding: 12px;
 }
 .tt-header { display: flex; flex-direction: column; gap: 1px; margin-bottom: 10px; }
 .tt-title { font-size: 14px; font-weight: 700; color: var(--text-strong); }
 .tt-note  { font-size: 12px; color: var(--text-3); }
 .tt-when {
-  width: 100%; padding: 8px 10px; border-radius: 6px; margin-bottom: 8px;
+  width: 100%; padding: 8px 10px; border-radius: var(--edge-md); margin-bottom: 8px;
   background: var(--bg-input); border: 1px solid transparent; color: var(--text-1); outline: none;
   font: inherit; color-scheme: dark;
 }
@@ -60,7 +60,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .tt-list { display: flex; flex-direction: column; gap: 2px; }
 .tt-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 8px 10px; border-radius: 6px; transition: background var(--dur-1) var(--ease-out);
+  padding: 8px 10px; border-radius: var(--edge-md); transition: background var(--dur-1) var(--ease-out);
 }
 .tt-row:hover { background: rgba(var(--accent-rgb),.18); }
 .tt-preview { font-size: 13.5px; color: var(--text-strong); }

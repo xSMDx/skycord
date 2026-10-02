@@ -177,14 +177,14 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .ig-search-row { display: flex; gap: 10px; padding: 16px 20px 0; }
 .ig-search {
-  flex: 1; padding: 8px 12px; border-radius: 6px;
+  flex: 1; padding: 8px 12px; border-radius: var(--edge-md);
   background: var(--bg-input); border: 1px solid transparent;
   font-size: 14px; color: var(--text-1); outline: none; transition: border-color var(--dur-2) var(--ease-out);
 }
 .ig-search:focus { border-color: var(--accent); }
 .ig-search::placeholder { color: var(--text-faint); }
 .ig-add {
-  padding: 0 22px; border-radius: 4px;
+  padding: 0 22px; border-radius: var(--edge-sm);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
@@ -196,7 +196,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-list { padding: 8px 12px; max-height: 280px; overflow: hidden auto; margin-top: 4px; }
 .ig-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 8px 8px; border-radius: 6px; cursor: pointer; transition: background var(--dur-1) var(--ease-out);
+  padding: 8px 8px; border-radius: var(--edge-md); cursor: pointer; transition: background var(--dur-1) var(--ease-out);
 }
 .ig-item:hover { background: var(--hover); }
 .ig-item.selected { background: rgba(var(--accent-rgb),.12); }
@@ -211,7 +211,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); }
 .ig-tag  { display: block; font-size: 12px; color: var(--text-3); }
 .ig-checkbox {
-  width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0;
+  width: 20px; height: 20px; border-radius: var(--edge-sm); flex-shrink: 0;
   border: 2px solid var(--text-faint); display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
@@ -228,12 +228,12 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-link-label { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-2); }
 .ig-link-row { display: flex; gap: 10px; }
 .ig-link {
-  flex: 1; padding: 8px 12px; border-radius: 6px;
+  flex: 1; padding: 8px 12px; border-radius: var(--edge-md);
   background: var(--bg-panel); border: none;
   font-size: 14px; color: var(--text-1); outline: none;
 }
 .ig-copy {
-  padding: 0 22px; border-radius: 4px;
+  padding: 0 22px; border-radius: var(--edge-sm);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }

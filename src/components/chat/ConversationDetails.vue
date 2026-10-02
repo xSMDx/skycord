@@ -288,7 +288,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   display: flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px;
   border: none; background: none; cursor: pointer;
-  color: var(--text-2); border-radius: 8px;
+  color: var(--text-2); border-radius: var(--edge-lg);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .cd-icon:active { background: var(--hover); color: var(--text-1); }

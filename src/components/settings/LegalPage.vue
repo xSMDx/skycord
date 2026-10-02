@@ -127,11 +127,11 @@ watch(view, () => { (root.value?.closest('.sm-content') as HTMLElement | null)?.
 .lg-sub { font-size: 13px; color: var(--text-3); }
 .lg-go { flex: none; color: var(--icon); }
 .lg-sky { margin-top: 28px; }
-.lg-skel { display: block; width: 40%; height: 14px; border-radius: 4px; background: var(--hover-strong); }
+.lg-skel { display: block; width: 40%; height: 14px; border-radius: var(--edge-sm); background: var(--hover-strong); }
 .lg-failed { display: flex; align-items: center; gap: 12px; }
 .lg-back {
   display: inline-flex; align-items: center; gap: 4px; margin: 0 0 12px; padding: 4px 8px 4px 4px;
-  border: none; border-radius: 6px; background: none; font: inherit; font-size: 14px; font-weight: 600;
+  border: none; border-radius: var(--edge-md); background: none; font: inherit; font-size: 14px; font-weight: 600;
   color: var(--text-2); cursor: pointer;
 }
 .lg-back:hover { background: var(--hover); color: var(--text-strong); }

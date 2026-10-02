@@ -226,7 +226,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-header-text p  { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
 .rt-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .rt-zoom-btn {
-  width: 28px; height: 28px; border-radius: 6px;
+  width: 28px; height: 28px; border-radius: var(--edge-md);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -266,7 +266,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   position: absolute;
   width: 200px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--edge-lg);
   background: var(--bg-raised);
   border: 1px solid var(--hover);
   cursor: pointer;
@@ -288,18 +288,18 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
-.rt-card-gif { display: block; max-width: 100%; max-height: 90px; border-radius: 6px; object-fit: cover; }
+.rt-card-gif { display: block; max-width: 100%; max-height: 90px; border-radius: var(--edge-md); object-fit: cover; }
 
 /* Context menu */
 .rt-ctx-overlay { position: fixed; inset: 0; z-index: 2100; }
 .rt-ctx {
   position: absolute; min-width: 168px;
-  background: var(--bg-floor); border: 1px solid var(--seam); border-radius: 8px;
+  background: var(--bg-floor); border: 1px solid var(--seam); border-radius: var(--edge-lg);
   padding: 6px; box-shadow: var(--shadow-lg);
 }
 .rt-ctx-item {
   display: block; width: 100%; text-align: left;
-  padding: 8px 10px; border-radius: 6px;
+  padding: 8px 10px; border-radius: var(--edge-md);
   font-size: 13.5px; font-weight: 500; color: var(--text-2);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -307,7 +307,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .rt-card-badge {
   display: inline-block; margin-top: 6px;
   font-size: 9.5px; font-weight: 700; color: var(--accent-text);
-  background: rgba(var(--accent-rgb),.18); padding: 1px 6px; border-radius: 4px;
+  background: rgba(var(--accent-rgb),.18); padding: 1px 6px; border-radius: var(--edge-sm);
   letter-spacing: .3px; text-transform: uppercase;
 }
 
@@ -318,5 +318,5 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .rt-body::-webkit-scrollbar { height: 6px; width: 6px; }
 .rt-body::-webkit-scrollbar-track { background: transparent; }
-.rt-body::-webkit-scrollbar-thumb { background: var(--track); border-radius: 4px; }
+.rt-body::-webkit-scrollbar-thumb { background: var(--track); border-radius: var(--edge-sm); }
 </style>

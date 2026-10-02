@@ -85,6 +85,6 @@ const onMarkTap = () => {
 .ai-desc { margin: 4px 0 0; font-size: 14px; color: var(--text-2); line-height: 1.5; }
 .ai-link { color: var(--text-link); text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
 .ai-link:hover { text-decoration: underline; }
-.ai-skel { display: block; width: 40%; height: 14px; border-radius: 4px; background: var(--hover-strong); }
+.ai-skel { display: block; width: 40%; height: 14px; border-radius: var(--edge-sm); background: var(--hover-strong); }
 .ai-failed { display: flex; align-items: center; gap: 12px; }
 </style>

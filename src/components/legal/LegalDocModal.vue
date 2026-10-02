@@ -45,7 +45,7 @@ const load = () => fetchLegalDocument(props.entry.href)
 .ldm-title { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-strong); }
 .ldm-meta { margin: 4px 0 0; font-size: 12.5px; color: var(--text-3); }
 .ldm-close {
-  flex: none; width: 32px; height: 32px; border-radius: 6px; border: none; background: none;
+  flex: none; width: 32px; height: 32px; border-radius: var(--edge-md); border: none; background: none;
   display: flex; align-items: center; justify-content: center; color: var(--icon); cursor: pointer;
 }
 .ldm-close:hover { background: var(--hover); color: var(--text-strong); }

@@ -107,7 +107,7 @@ onBeforeUnmount(() => {
   position: fixed; z-index: 8001;
   min-width: 236px; max-height: 62vh; overflow: hidden auto;
   background: var(--bg-floor); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px;
+  border-radius: var(--edge-lg); padding: 6px;
   box-shadow: var(--shadow-md);
 }
 /* Grows from the control that opened it rather than from its own middle —
@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
 .fly .fr {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; padding: 8px 10px; border: none; background: none; text-align: left;
-  font-size: 13.5px; font-weight: 500; color: var(--text-1); border-radius: 6px;
+  font-size: 13.5px; font-weight: 500; color: var(--text-1); border-radius: var(--edge-md);
   cursor: pointer; box-sizing: border-box;
 }
 .fly .fr:hover { background: var(--accent); color: var(--text-on-accent); }
