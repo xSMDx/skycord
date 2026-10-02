@@ -14,6 +14,8 @@ import { dmConvId, canDM } from '../controllers/messagesController'
 import { wellFormed } from '../utils/wellFormed'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
+import { MusicRooms } from './musicState'
+import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape } from '../utils/musicLimits'
 
 // Presence (who holds a socket, who is away) lives in server/state/presence.ts
 // so the User model can derive a wire-safe status without importing this file,
@@ -28,6 +30,47 @@ export const getOnlineUserIds = presence.onlineUserIds
 // members who AREN'T in the room yet see "a call is happening / who's in it"
 // (header Join state + "In a call" badges) without joining the LiveKit room.
 const activeCalls   = new Map<string, Set<string>>()
+
+/**
+ * Music channels, per voice room.
+ *
+ * Module-level and not per-socket, for the same reason activeCalls is: the
+ * facts belong to the room, and every socket in it reads the same ones.
+ * `onClosed` is where the music service will be told to stop decoding; until
+ * that exists it only tells the room, which is the half that is testable now.
+ */
+/** Shared across sockets: the limit is per member, not per connection. */
+const musicCaps = capsFromEnv()
+const musicRate = new ActionRate(musicCaps)
+// Bounded: without this the map keeps a row for everyone who ever queued.
+setInterval(() => musicRate.sweep(), 60_000).unref?.()
+
+export const musicRooms = new MusicRooms(
+  musicCaps,
+  (room) => broadcastMusic(room),
+)
+
+/**
+ * Always the full list, never a delta — see broadcastCallState.
+ *
+ * The audience is worked out the same way, because the room name here is a
+ * LIVEKIT room and not a Socket.IO one. Emitting to `voice:<id>` reaches
+ * nobody: every member joined `chan:<id>` for that channel at connect, which
+ * is a deliberately different string. A first version of this emitted to the
+ * LiveKit name and silently told no one — caught by the tests, and the exact
+ * confusion the voice suite warns about at the top of its own file.
+ */
+const musicAudience = (io: IOServer, room: string) => {
+  if (room.startsWith('voice:')) return io.to(`chan:${room.slice(6)}`)
+  if (room.startsWith('group:')) return io.to(room)
+  const [a, b] = room.slice(3).split('_')
+  return io.to(`user:${a}`).to(`user:${b}`)
+}
+
+const broadcastMusic = (room: string): void => {
+  const io = getIO(); if (!io) return
+  musicAudience(io, room).emit('music:state', musicRooms.view(room))
+}
 
 /**
  * What each occupant of a voice room is doing: muted, deafened, sharing.
@@ -1146,6 +1189,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const set = activeCalls.get(room)
       if (!set || !set.has(userId)) return
       set.delete(userId)
+      // Leaving the call leaves its music too. Not a teardown: the channel
+      // keeps its own grace period, so coming straight back finds it playing.
+      if (musicRooms.forget(userId).includes(room)) broadcastMusic(room)
       // State outliving its occupant would render a ghost row: every client
       // reads occupancy and state together.
       const st = voiceStates.get(room)
@@ -1285,6 +1331,81 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     socket.on('call:leave', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       leaveCall(callRoom(data.kind, data.conversationId), 'hang-up')
+    })
+
+    // ── Music channels ─────────────────────────────────────────────────────
+    /**
+     * Several music streams inside one voice channel, each member tuned to at
+     * most one, everybody still talking.
+     *
+     * One gate serves all of them, and it is the same shape as the call
+     * handlers': the member must be IN the call right now, checked against
+     * `activeCalls` on the server rather than asserted by the client. A member
+     * who left, or who never joined, cannot queue, skip or close anything —
+     * and since v1 has no roles, this membership check is the whole of the
+     * permission model. What limits the damage is the caps, not who you are.
+     */
+    const musicGate = (data: unknown): { room: string } | null => {
+      const d = data as { conversationId?: string; kind?: string } | null
+      if (!d?.conversationId) return null
+      if (d.kind !== 'dm' && d.kind !== 'group' && d.kind !== 'channel') return null
+      const room = callRoom(d.kind, d.conversationId)
+      if (!activeCalls.get(room)?.has(userId)) return null
+      return { room }
+    }
+
+    /** Refusals go to the asker alone; nobody else needs to see them fail. */
+    const musicRefuse = (reason: string) => socket.emit('music:error', { reason })
+
+    socket.on('music:create', (data: { conversationId: string; kind: string; name: string; url: string }) => {
+      const gate = musicGate(data); if (!gate) return
+      if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+      const name = checkChannelName(data?.name)
+      if (!name.ok) return musicRefuse(name.reason)
+      const url = checkUrlShape(data?.url)
+      if (!url.ok) return musicRefuse(url.reason)
+      const made = musicRooms.create(gate.room, String(data.name).trim(), String(data.url).trim(), userId)
+      if (!made.ok) return musicRefuse(made.reason)
+      broadcastMusic(gate.room)
+    })
+
+    socket.on('music:queue', (data: { conversationId: string; kind: string; channelId: string; url: string }) => {
+      const gate = musicGate(data); if (!gate) return
+      if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+      const url = checkUrlShape(data?.url)
+      if (!url.ok) return musicRefuse(url.reason)
+      const r = musicRooms.queue(gate.room, String(data?.channelId ?? ''), String(data.url).trim(), userId)
+      if (!r.ok) return musicRefuse(r.reason)
+      broadcastMusic(gate.room)
+    })
+
+    socket.on('music:skip', (data: { conversationId: string; kind: string; channelId: string }) => {
+      const gate = musicGate(data); if (!gate) return
+      const r = musicRooms.skip(gate.room, String(data?.channelId ?? ''))
+      if (!r.ok) return musicRefuse(r.reason)
+      broadcastMusic(gate.room)
+    })
+
+    socket.on('music:close', (data: { conversationId: string; kind: string; channelId: string }) => {
+      const gate = musicGate(data); if (!gate) return
+      const r = musicRooms.close(gate.room, String(data?.channelId ?? ''))
+      if (!r.ok) return musicRefuse(r.reason)
+      broadcastMusic(gate.room)
+    })
+
+    /**
+     * Tune in, or out with null.
+     *
+     * Not rate limited: this is the one music action a member does while
+     * simply using the feature, and it is free — it moves a name between two
+     * sets. The rate limit is on the actions that cost a fetch.
+     */
+    socket.on('music:listen', (data: { conversationId: string; kind: string; channelId: string | null }) => {
+      const gate = musicGate(data); if (!gate) return
+      const id = data?.channelId == null ? null : String(data.channelId)
+      const r = musicRooms.listen(gate.room, userId, id)
+      if (!r.ok) return musicRefuse(r.reason)
+      broadcastMusic(gate.room)
     })
 
     // ── Presence ───────────────────────────────────────────────────────────
