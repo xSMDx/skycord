@@ -1,0 +1,103 @@
+/**
+ * Music channels inside a voice channel.
+ *
+ * Several streams at once in one call: two people on one, two on another,
+ * everyone still talking. A member is tuned into at most one, and that choice
+ * is theirs alone — it changes which LiveKit track they subscribe to and
+ * nothing about what anybody else hears.
+ *
+ * This owns the state and the socket traffic. The subscription itself lives
+ * in useVoice, next to the room, because that is where tracks are.
+ */
+import { reactive, computed } from 'vue'
+import { getSocket } from './useSocket'
+
+/**
+ * The music service's participant identity, and it must match the server's.
+ *
+ * Not a shared constant because the client and the server compile under
+ * different tsconfigs and have never imported from each other. The colon is
+ * what makes it safe to compare against: member identities are Mongo
+ * ObjectIds, set server-side in the LiveKit token, so no member can ever
+ * hold a name shaped like this one.
+ */
+export const MUSIC_IDENTITY = 'svc:music'
+
+export interface MusicChannelView {
+  id: string
+  name: string
+  now: { url: string; addedBy: string } | null
+  queued: number
+  listeners: string[]
+}
+
+export const music = reactive({
+  /** Every channel in the current call. */
+  channels: [] as MusicChannelView[],
+  /** The one this member is tuned into, by id, or null. */
+  listeningTo: null as string | null,
+  /** Independent of voice volume. 0–1. */
+  volume: 0.6,
+  /** The last refusal, for showing next to the control that caused it. */
+  error: '' as string,
+})
+
+export const musicChannel = computed(() =>
+  music.channels.find(c => c.id === music.listeningTo) ?? null)
+
+/** Where we are, for every emit. Set by useVoice when a call is joined. */
+let target: { conversationId: string; kind: 'dm' | 'group' | 'channel' } | null = null
+
+export const setMusicTarget = (t: typeof target): void => {
+  if (t?.conversationId === target?.conversationId && t?.kind === target?.kind) return
+  target = t
+  // Leaving a call leaves its music. The server forgets us too; this is the
+  // half the client owns, so a stale panel never outlives the call.
+  if (!t) { music.channels = []; music.listeningTo = null; music.error = '' }
+}
+
+const send = (event: string, extra: Record<string, unknown> = {}): void => {
+  if (!target) return
+  getSocket()?.emit(event, { ...target, ...extra })
+}
+
+export const createMusicChannel = (name: string, url: string): void =>
+  send('music:create', { name, url })
+
+export const queueMusic = (channelId: string, url: string): void =>
+  send('music:queue', { channelId, url })
+
+export const skipMusic = (channelId: string): void =>
+  send('music:skip', { channelId })
+
+export const closeMusicChannel = (channelId: string): void =>
+  send('music:close', { channelId })
+
+/**
+ * Tune in, or out with null.
+ *
+ * `listeningTo` is set optimistically so the row responds to the tap rather
+ * than to the round trip — a 150ms wait on a toggle reads as a broken
+ * button. The server's next `music:state` is authoritative and will correct
+ * it if the channel turned out to be gone.
+ */
+export const listenToMusic = (channelId: string | null): void => {
+  music.listeningTo = channelId
+  send('music:listen', { channelId })
+}
+
+/** Wired once, by useSocket, on every connect. */
+export const onMusicState = (payload: { channels: MusicChannelView[] }): void => {
+  music.channels = payload?.channels ?? []
+  // A channel that went away while we were listening to it leaves us tuned
+  // to nothing, rather than to an id nobody has.
+  if (music.listeningTo && !music.channels.some(c => c.id === music.listeningTo)) {
+    music.listeningTo = null
+  }
+}
+
+export const onMusicError = (payload: { reason: string }): void => {
+  music.error = payload?.reason ?? 'That did not work.'
+}
+
+export const clearMusicError = (): void => { music.error = '' }
