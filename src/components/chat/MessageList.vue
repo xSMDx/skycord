@@ -258,7 +258,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
         </div>
       </div>
     </div>
-    <div v-else-if="messages.length===0 && !isDM" class="ml-empty"><p>No messages yet. Say something! 👋</p></div>
+    <div v-else-if="messages.length===0 && !isDM" class="empty ml-empty"><p>No messages yet. Say something! 👋</p></div>
 
     <!-- v-if, not v-show: the outgoing channel's rows must leave the DOM, or
          the skeleton renders above stale content from wherever you just were. -->
@@ -358,7 +358,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .welcome h3{font-size:26px;font-weight:800;color: var(--text-strong);margin-bottom: 4px}
 .welcome p{font-size:14px;color:var(--text-3)}
 .welcome strong{color: var(--text-strong)}
-.ml-loading,.ml-empty{display:flex;align-items:center;gap: 10px;padding: 24px 16px;color:var(--text-faint);font-size:14px}
+.ml-loading,.ml-empty{ display:flex;align-items:center;gap: 10px;padding: 24px 16px; }
 .ml-sk{padding: 16px 16px 8px;display:flex;flex-direction:column;gap: 18px}
 .ml-sk-g{display:flex;gap: 14px;align-items:flex-start}
 .ml-sk-body{flex:1;min-width:0;display:flex;flex-direction:column;gap: 8px}

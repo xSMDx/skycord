@@ -5276,7 +5276,7 @@ useDesktopTitleBar({
                 </div>
               </div>
             </template>
-            <div v-if="memberQuery.trim() && !shownMembers.online.length && !shownMembers.offline.length" class="mp-empty">No one matches “{{ memberQuery.trim() }}”</div>
+            <div v-if="memberQuery.trim() && !shownMembers.online.length && !shownMembers.offline.length" class="empty mp-empty">No one matches “{{ memberQuery.trim() }}”</div>
           </div>
         </aside>
 
@@ -6340,7 +6340,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Sections read as sections when there is air between them — but only from
    the second one on, or the list starts with a hole under the search box. */
 .mp-section-label:not(:first-child){margin-top: 14px}
-.mp-empty{color: var(--text-3); font-size: 13px; padding: 12px 8px;}
+.mp-empty{ padding: 12px 8px; }
 .mp-member{display:flex;align-items:center;gap: 10px;padding: 6px 8px;border-radius: var(--edge-md);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .mp-member:hover{background:var(--hover)}
 .mp-member.mp-offline{opacity:.35}

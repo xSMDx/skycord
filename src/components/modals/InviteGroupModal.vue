@@ -139,7 +139,7 @@ onMounted(async () => {
             <svg v-if="selected.has(f.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
         </div>
-        <div v-if="addable.length === 0" class="ig-empty">No friends to add</div>
+        <div v-if="addable.length === 0" class="empty ig-empty">No friends to add</div>
       </div>
 
       <p v-if="error" class="ig-error">{{ error }}</p>
@@ -217,7 +217,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 }
 .ig-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 
-.ig-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 20px; }
+.ig-empty { text-align: center; padding: 20px; }
 .ig-error { padding: 0 20px; font-size: 13px; color: var(--danger-text); }
 
 .ig-linkbox {

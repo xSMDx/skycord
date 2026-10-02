@@ -75,7 +75,7 @@ const create = () => {
             <svg v-if="selected.has(f.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
         </div>
-        <div v-if="filtered.length === 0" class="ndm-empty">No friends found</div>
+        <div v-if="filtered.length === 0" class="empty ndm-empty">No friends found</div>
       </div>
 
       <!-- Footer -->
@@ -142,7 +142,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .ndm-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
-.ndm-empty { text-align: center; color: var(--text-faint); font-size: 14px; padding: 24px; }
+.ndm-empty { text-align: center; padding: 24px; }
 
 .ndm-footer {
   display: flex; gap: 10px; padding: 16px 20px;
