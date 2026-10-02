@@ -242,9 +242,9 @@ const select = (v: string) => { emit('select', v); emit('close') }
       </div>
 
       <div class="picker-grid">
-        <div v-if="filteredEmojis.length === 0" class="picker-empty">
-          <div>🔍</div>
-          <p>No results for "{{ search }}"</p>
+        <div v-if="filteredEmojis.length === 0" class="empty-pane picker-empty">
+          <div class="empty-pane-icon"><Search :size="28" :stroke-width="1.5" /></div>
+          <p class="empty-pane-note">No results for "{{ search }}"</p>
         </div>
         <div v-for="cat in filteredEmojis" :key="cat.id" class="cat-section">
           <div class="cat-label">{{ cat.name }}</div>
@@ -406,14 +406,10 @@ img    { display: block; width: 100%; object-fit: cover; }
   padding: 6px 0 2px; letter-spacing: .2px;
 }
 
-.picker-loading, .picker-empty {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 8px; padding: 32px 16px; color: var(--text-faint);
-  text-align: center; min-height: 180px;
-}
+.picker-loading, .picker-empty { padding: 32px 16px; min-height: 180px; }
 .picker-loading { flex-direction: row; }
 .picker-empty > div { font-size: 32px; }
-.picker-empty p    { font-size: 14px; font-weight: 600; color: var(--text-1); }
+
 .picker-empty span { font-size: 12px; line-height: 1.5; }
 /* The GIF tab's not-configured state ends in a link, which needs to look like
    one — `a { color: inherit }` is global, so without this it reads as more

@@ -186,9 +186,9 @@ const copyId = () => {
             </button>
           </div>
 
-          <div v-if="!mutuals.length" class="up-empty">
-            <p>No mutual friends yet</p>
-            <span>People you both know will show up here.</span>
+          <div v-if="!mutuals.length" class="empty-pane up-empty">
+            <p class="empty-pane-title">No mutual friends yet</p>
+            <span class="empty-pane-note">People you both know will show up here.</span>
           </div>
 
           <div v-else class="up-mutuals">
@@ -304,9 +304,7 @@ img { display: block; object-fit: cover; }
   border-bottom: 2px solid var(--accent); margin-bottom: -1px;
 }
 
-.up-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; flex: 1; color: var(--text-3); }
-.up-empty p { font-size: 15px; color: var(--text-2); }
-.up-empty span { font-size: 13px; }
+.up-empty { flex: 1; }
 
 .up-mutuals { display: flex; flex-direction: column; gap: 2px; overflow: hidden auto; }
 .up-mutual {

@@ -100,10 +100,10 @@ const avatarUrl = (u: ApiUser) => avatarFor(u.username, u.avatar)
               </button>
             </div>
           </template>
-          <div v-else class="af-empty">
-            <div class="af-empty-icon">🔍</div>
-            <p>No users found for <strong>{{ query }}</strong></p>
-            <span>Check the username and try again.</span>
+          <div v-else class="empty-pane af-empty">
+            <div class="empty-pane-icon"><Search :size="32" :stroke-width="1.5" /></div>
+            <p class="empty-pane-title">No users found for <strong>{{ query }}</strong></p>
+            <span class="empty-pane-note">Check the username and try again.</span>
           </div>
         </div>
 
@@ -186,14 +186,9 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .af-send-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
 .af-send-btn.sent { background: rgba(var(--green-rgb), .2); color: var(--green-text); cursor: default; }
 
-.af-empty {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 28px 20px; gap: 8px; text-align: center;
-}
-.af-empty-icon { font-size: 36px; }
-.af-empty p    { font-size: 15px; font-weight: 600; color: var(--text-strong); }
+.af-empty { padding: 28px 20px; }
+.af-empty p    { color: var(--text-strong); }
 .af-empty p strong { color: var(--accent); }
-.af-empty span { font-size: 13px; color: var(--text-3); }
 
 .af-hint {
   padding: 16px 20px 20px; font-size: 13px; color: var(--text-3); line-height: 1.5;

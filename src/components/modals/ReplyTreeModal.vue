@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { X, ZoomIn, ZoomOut, Expand } from 'lucide-vue-next'
+import { X, ZoomIn, ZoomOut, Expand, GitBranch } from 'lucide-vue-next'
 import type { Message, ReplyGraph } from '@/types'
 import ModalBase from './ModalBase.vue'
 import { stripMarkers } from '@/utils/richText'
@@ -153,9 +153,9 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
             Tracing the conversation…
           </div>
 
-          <div v-else-if="!graph || !graph.nodes.length" class="rt-empty">
-            <div class="rt-empty-icon">🔗</div>
-            <p>Nothing to show</p>
+          <div v-else-if="!graph || !graph.nodes.length" class="empty-pane rt-empty">
+            <div class="empty-pane-icon"><GitBranch :size="30" :stroke-width="1.5" /></div>
+            <p class="empty-pane-title">Nothing to show</p>
           </div>
 
           <div v-else class="rt-canvas-wrap">
@@ -240,13 +240,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .rt-body { flex: 1; overflow: auto; padding: 24px; position: relative; }
 
-.rt-loading, .rt-empty {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 10px; padding: 48px 16px; color: var(--text-faint); text-align: center;
-}
+.rt-loading, .rt-empty { padding: 48px 16px; }
 .rt-loading { flex-direction: row; justify-content: center; }
-.rt-empty-icon { font-size: 32px; }
-.rt-empty p { font-size: 14px; font-weight: 600; color: var(--text-1); }
 
 @keyframes spin { to { transform: rotate(360deg) } }
 .spin { animation: spin .8s linear infinite; }

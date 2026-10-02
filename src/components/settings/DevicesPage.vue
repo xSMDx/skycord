@@ -132,7 +132,7 @@ const signOutOthers = async () => {
        list. Without it the page said "Could not load your devices" and "no
        devices are signed in" one under the other — the second of which is a
        claim the page has no basis for. -->
-  <div v-else-if="!sessions.length && !error" class="st-card dv-empty">
+  <div v-else-if="!sessions.length && !error" class="st-card empty dv-empty">
     <ShieldCheck :size="20" :stroke-width="1.5" />
     <!-- Not "no OTHER devices": an empty list means this one is missing too,
          which happens on a cookie issued before sessions existed and not yet
@@ -311,11 +311,7 @@ const signOutOthers = async () => {
 .sm-modal.mobile .dv-signout { min-height: 44px; padding: 7px 16px; }
 
 /* ── Empty and loading ── */
-.dv-empty {
-  display: flex; align-items: center; gap: 10px;
-  padding: 22px 20px;
-  font-size: 14px; color: var(--text-3);
-}
+.dv-empty { padding: 22px 20px; }
 
 .dv-skel {
   background: var(--hover);

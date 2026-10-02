@@ -486,7 +486,6 @@ const { muted: micOff, deafened: deafOff, toggleMute: onToggleMute, toggleDeafen
  */
 const myVoiceServerId = computed<string | null>(() => liveVoiceChannel.value?.serverId ?? null)
 
-
 const liveVoiceChannel = computed<Channel | null>(() => {
   // A join that has permanently failed (spent all its retries — a deleted
   // channel, a server you were removed from) must stop looking "live"
@@ -2586,7 +2585,6 @@ const userMenuHandlers = {
 const openUserMenu = (e: MouseEvent, u: MenuUser, ctx: { isSelf?: boolean; isCurrentDM?: boolean } = {}) =>
   openMenu(e, userMenu(u, userMenuHandlers, ctx))
 
-
 /**
  * Right-clicking a voice-channel occupant in the sidebar.
  *
@@ -3644,7 +3642,6 @@ const handleReactionPickerSelect = async (emoji: string) => {
 const showReplyTree    = ref(false)
 const replyTreeData     = ref<ReplyGraph | null>(null)
 const replyTreeLoading = ref(false)
-
 
 // Build the connected reply graph around the held message: walk its parents
 // (via replyTo[]) and any loaded message that replies to a node, collecting a
@@ -4920,9 +4917,9 @@ useDesktopTitleBar({
 
           <!-- An empty directory is the expected state on a new instance, not
                an error, so it says what would fill it rather than apologising. -->
-          <div v-else-if="!discoverServers.length && !discoverError" class="dsc-empty">
-            <Compass :size="40" :stroke-width="1.25" class="dsc-empty-ic"/>
-            <p class="dsc-empty-t">Nothing listed yet</p>
+          <div v-else-if="!discoverServers.length && !discoverError" class="empty-pane dsc-empty">
+            <Compass :size="40" :stroke-width="1.25" class="empty-pane-icon"/>
+            <p class="empty-pane-title">Nothing listed yet</p>
             <!-- Names the one page that is missing rather than the whole
                  surface. Server Settings exists now; Access — where a server
                  would be published — does not. The endpoint behind it is
@@ -5383,10 +5380,10 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-join:hover:not(:disabled){background:var(--accent-hover)}
 .dsc-join:disabled{opacity:.6;cursor:default}
 
-.dsc-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding: 56px 24px;color:var(--text-3)}
-.dsc-empty-ic{opacity:.5;margin-bottom:14px}
-.dsc-empty-t{margin:0;font-size:16px;font-weight:600;color:var(--text-2)}
-.dsc-empty-s{margin: 6px 0 0;font-size:13px;max-width:44ch;line-height:1.5}
+.dsc-empty{ padding: 56px 24px; }
+.dsc-empty-ic{ opacity:.5;margin-bottom:14px }
+.dsc-empty-t{ margin:0; }
+.dsc-empty-s{ margin: 6px 0 0; }
 
 .dsc-skel{padding: 20px 14px;gap:10px;pointer-events:none}
 .dsc-skel-bar{height:10px;border-radius: var(--edge-sm);background:var(--hover);animation: dsc-pulse 1.4s var(--ease-out) infinite}
@@ -5599,7 +5596,6 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .app-update-btn:active{transform:scale(.97)}
 .app-update-btn.primary{background:var(--accent);color:var(--text-on-accent)}
 .app-update-btn.primary:hover{background:var(--accent-hover);color:var(--text-on-accent)}
-
 
 /* Search results hide with the member list when a call takes the pane. */
 .chat.call-expanded ~ .search-panel{display:none}
