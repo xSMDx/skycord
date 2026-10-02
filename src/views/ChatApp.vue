@@ -4791,9 +4791,9 @@ useDesktopTitleBar({
                 "Online — 0". That also made "Nobody is online" unreachable —
                 it could only fire when there were no friends to be online.
               -->
-              <div v-if="shownFriends.length===0" class="f-empty">
-                <div class="f-empty-icon"><UsersRound :size="40" :stroke-width="1.5"/></div>
-                <p>{{ friendSearch ? 'No matches' : friendsTab === 'online' ? 'Nobody is online' : 'No friends yet' }}</p>
+              <div v-if="shownFriends.length===0" class="empty-pane f-empty">
+                <div class="empty-pane-icon"><UsersRound :size="40" :stroke-width="1.5"/></div>
+                <p class="empty-pane-title">{{ friendSearch ? 'No matches' : friendsTab === 'online' ? 'Nobody is online' : 'No friends yet' }}</p>
                 <span v-if="friendSearch">Try a different name.</span>
                 <span v-else-if="friendsTab === 'online' && filteredFriends.length">They'll show up here when they come online.</span>
                 <span v-else>Click <strong>Add Friend</strong> to find people on Skycord</span>
@@ -4828,9 +4828,9 @@ useDesktopTitleBar({
             <!-- Pending tab -->
             <template v-else>
               <div class="f-section-label">Incoming — {{ pendingReqs.length }}</div>
-              <div v-if="pendingReqs.length===0" class="f-empty">
-                <div class="f-empty-icon"><Inbox :size="40" :stroke-width="1.5"/></div>
-                <p>No pending requests</p>
+              <div v-if="pendingReqs.length===0" class="empty-pane f-empty">
+                <div class="empty-pane-icon"><Inbox :size="40" :stroke-width="1.5"/></div>
+                <p class="empty-pane-title">No pending requests</p>
               </div>
               <div v-for="req in pendingReqs" :key="req._id" class="f-row"
                    @contextmenu="openUserMenu($event, req.requester)">
@@ -4858,8 +4858,9 @@ useDesktopTitleBar({
           <!-- Active Now -->
           <div class="active-now">
             <div class="an-title">Active Now</div>
-            <div v-if="!activeNow.length" class="an-empty">
-              <div class="an-empty-icon"><Moon :size="28" :stroke-width="1.5"/></div><div>It's quiet for now…</div>
+            <div v-if="!activeNow.length" class="empty-pane an-empty">
+              <div class="empty-pane-icon"><Moon :size="28" :stroke-width="1.5"/></div>
+              <div class="empty-pane-note">It's quiet for now…</div>
               <button class="an-add-btn" @click.stop="showAddFriend=true">Add friends</button>
             </div>
             <div v-for="f in activeNow" :key="f.id" class="an-item" @click.stop="showUserProfile=f.id"
@@ -6177,9 +6178,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-search input{flex:1;font-size:14px;color:var(--text-1)}
 .f-search input::placeholder{color:var(--text-faint)}
 .f-section-label{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom: 8px}
-.f-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;padding: 40px 20px;text-align:center;color:var(--text-faint)}
-.f-empty-icon{font-size:48px;margin-bottom: 4px}
-.f-empty p{font-size:16px;font-weight:700;color:var(--text-1)}
+.f-empty{padding: 40px 20px}
+/* .f-empty-icon's font-size: 48px was dead — it wraps a Lucide icon, which
+   does not read font-size. The shared .empty-pane-icon carries the rest. */
 .f-empty span{font-size:14px;line-height:1.5}
 .f-empty strong{color:var(--text-1)}
 .f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: var(--edge-md);background:var(--accent);color:var(--text-on-accent);font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
@@ -6209,7 +6210,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Active Now */
 .active-now{width:280px;flex-shrink:0;border-left:1px solid var(--divider);padding: 16px;overflow: hidden auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
-.an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
+.an-empty{padding: 32px 0}
 .an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: var(--edge-md);background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
 .an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: var(--edge-lg);background:var(--hover);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}

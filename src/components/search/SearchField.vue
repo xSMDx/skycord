@@ -294,7 +294,7 @@ defineExpose({ focus: () => input.value?.focus(), popupOpen })
             </template>
           </li>
         </ul>
-        <p v-else class="sf-empty">No matches</p>
+        <p v-else class="empty sf-empty">No matches</p>
 
         <template v-if="past.length">
           <div class="sf-head sf-head-row">
@@ -438,7 +438,7 @@ defineExpose({ focus: () => input.value?.focus(), popupOpen })
   padding: 2px 6px; border-radius: var(--edge-sm);
   background: var(--hover-strong); color: var(--text-3);
 }
-.sf-empty { margin: 0; padding: 6px 8px 10px; font-size: 13px; color: var(--text-3); }
+.sf-empty { margin: 0; padding: 6px 8px 10px; }
 
 /* ── Phone ───────────────────────────────────────────────────────────────
    The field owns its own screen there, so it is full width, touch-sized,

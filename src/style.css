@@ -112,3 +112,48 @@ button:disabled:active,
 :root[data-input="pointer"] :focus-visible {
   outline: none !important;
 }
+
+/* ── Empty states ──────────────────────────────────────────────────────
+ * DESIGN.md documents one empty-state pattern. The app had twenty-two,
+ * under twenty-two names, and they were not twenty-two different designs
+ * — they were one design retyped, drifting a little each time: 13px here
+ * and 12px there, --text-3 here and --text-faint there, a title at 600 in
+ * one pane and 700 in the next.
+ *
+ * What legitimately varies is the BOX. Each of these sits inside a
+ * differently-padded container, so padding stays with the local class.
+ * What must not vary is the type, and that is all this owns.
+ *
+ * Two scales, because an empty region and an empty page are not the same
+ * problem. A single muted line is right inside a list or a dropdown and
+ * looks broken across an 840x780 pane; the centred column is right across
+ * a pane and is far too much ceremony for four empty rows.
+ */
+
+/* A region inside something else: a list with no results, a section with
+   nothing in it yet. Padding belongs to the caller. */
+.empty {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+/* A whole pane with nothing in it. */
+.empty-pane {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 48px 24px;
+  color: var(--text-3);
+}
+/* DESIGN.md says an empty state is never an illustration, and it is right
+   — but an icon is not an illustration, it is the same Lucide set used
+   everywhere else, dimmed so it reads as a marker rather than as art. The
+   rule it actually enforces is: nothing drawn specially for this state. */
+.empty-pane-icon { color: var(--text-3); opacity: .55; margin-bottom: 6px; line-height: 0; }
+.empty-pane-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-1); }
+.empty-pane-note {
+  margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-3);
+  max-width: 44ch;   /* these are sentences, and a centred pane is wide */
+}

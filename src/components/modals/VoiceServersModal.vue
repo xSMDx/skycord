@@ -104,7 +104,7 @@ const remove = async (row: WireVoiceServer) => {
       </p>
 
       <p v-if="error" class="vs-error">{{ error }}</p>
-      <p v-if="loading" class="vs-empty">Loading…</p>
+      <p v-if="loading" class="empty vs-empty">Loading…</p>
 
       <template v-else>
         <!-- Shown FIRST, and shown even though nothing here can be changed: an
@@ -156,7 +156,7 @@ const remove = async (row: WireVoiceServer) => {
           </li>
         </ul>
 
-        <p v-else class="vs-empty">
+        <p v-else class="empty vs-empty">
           {{ instanceRows.length
             ? 'None of your own yet. Channels can use any of the above.'
             : 'None yet. Calls use this instance’s own voice server.' }}
@@ -228,7 +228,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .vs-callout-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 .vs-error { font-size: 13px; color: var(--danger-text); margin-bottom: 12px; }
-.vs-empty { font-size: 13px; color: var(--text-3); padding: 16px 0; }
+.vs-empty { padding: 16px 0; }
 
 .vs-sub {
   font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;

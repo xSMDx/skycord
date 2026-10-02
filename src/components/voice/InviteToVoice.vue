@@ -130,7 +130,7 @@ const doCopy = async () => {
   <AnchoredPanel v-if="mode === 'inline'" :anchor="anchor ?? null" placement="right" :width="240"
     @close="emit('close')">
     <div class="iv-pop">
-      <div v-if="!shown.length" class="iv-empty">No friends to invite</div>
+      <div v-if="!shown.length" class="empty iv-empty">No friends to invite</div>
       <button v-for="p in shown" :key="p.id" class="iv-row" :disabled="sending[p.id] || sent[p.id]"
         @click.stop="invite(p)">
         <span class="iv-av"><Avatar :src="p.avatar || ''" :alt="nameOf(p)" :crop="p.avatarCrop ?? null" /></span>
@@ -163,7 +163,7 @@ const doCopy = async () => {
       </div>
 
       <div class="iv-list">
-        <div v-if="!shown.length" class="iv-empty">Nobody to show</div>
+        <div v-if="!shown.length" class="empty iv-empty">Nobody to show</div>
         <div v-for="p in shown" :key="p.id" class="iv-row modal">
           <span class="iv-av"><Avatar :src="p.avatar || ''" :alt="nameOf(p)" :crop="p.avatarCrop ?? null" /></span>
           <span class="iv-name">
@@ -210,7 +210,7 @@ const doCopy = async () => {
   cursor: pointer; font-size: 13px; color: var(--text-2); text-align: left;
 }
 .iv-more:hover { background: var(--hover); color: var(--text-1); }
-.iv-empty { padding: 6px 8px; font-size: 12px; color: var(--text-faint); }
+.iv-empty { padding: 6px 8px; }
 
 /* modal */
 .iv-card { background: var(--bg-panel); border-radius: var(--edge-lg); display: flex; flex-direction: column; max-height: 78vh; }
