@@ -125,7 +125,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   transition: background var(--dur-1) var(--ease-out);
 }
 .ndm-item:hover { background: var(--hover); }
-.ndm-item.selected { background: rgba(var(--accent-rgb),.12); }
+.ndm-item.selected { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); color: var(--text-strong); }
 .ndm-avatar { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
 .ndm-avatar img { border-radius: 50%; }
 .ndm-status {

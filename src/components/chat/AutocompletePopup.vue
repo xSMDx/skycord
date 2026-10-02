@@ -48,7 +48,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   padding: 8px 8px; border-radius: var(--edge-md); transition: background var(--dur-1) var(--ease-out);
 }
-.ac-item.active { background: rgba(var(--accent-rgb),.22); }
+.ac-item.active { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); color: var(--text-strong); }
 .ac-icon {
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
   background: var(--bg-input); display: flex; align-items: center; justify-content: center;
