@@ -552,7 +552,7 @@ onBeforeUnmount(() => {
 
 /* Discord-style controls — no container shape, buttons float on the call bg */
 .cb-bar { display: flex; align-items: center; gap: 8px; }
-.cb-group { display: flex; align-items: center; gap: 2px; background: var(--bg-input); border-radius: 16px; padding: 4px; }
+.cb-group { display: flex; align-items: center; gap: 2px; background: var(--bg-input); border-radius: var(--edge-xl); padding: 4px; }
 /* One of these groups holds controls that only exist for DM and group calls.
    In a voice channel it has no children at all and rendered as a bare 10px
    pill — its own padding and nothing else — plus the 8px gap beside it. On a
@@ -622,7 +622,7 @@ onBeforeUnmount(() => {
      as a mistake rather than a layout. 44 is the touch minimum anyway; the
      extra 4px was generosity the width could not pay for. Heights stay 48,
      which costs nothing horizontally and helps the thumb. */
-  .cb-b     { width: 44px; height: 48px; border-radius: 10px; }
+  .cb-b     { width: 44px; height: 48px; border-radius: var(--edge-lg); }
   .cb-chev  { width: 24px; height: 48px; }
   .cb-leave { width: 52px; height: 48px; }
   /* Room between distinct controls, so the gap itself is a target buffer. */

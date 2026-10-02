@@ -337,7 +337,7 @@ img    { display: block; width: 100%; object-fit: cover; }
 
 .picker {
   width: 360px; background: var(--bg-panel);
-  border: 1px solid var(--border); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: var(--edge-xl);
   display: flex; flex-direction: column; overflow: hidden;
   box-shadow: var(--shadow-md);
   max-height: 420px;

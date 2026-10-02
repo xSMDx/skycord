@@ -635,7 +635,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-rank-ic { color: var(--text-3); flex: none; margin-top: 1px; }
 .rl-tbd {
   display: flex; align-items: flex-start; gap: 10px;
-  background: var(--bg-panel); border-radius: 10px;
+  background: var(--bg-panel); border-radius: var(--edge-lg);
   padding: 12px 14px; margin-bottom: 24px;
   font-size: 13px; line-height: 1.5; color: var(--text-2); max-width: 78ch;
 }
@@ -644,10 +644,10 @@ const removeFromRole = (m: ServerMember) => {
 .rl-list { width: 260px; flex: none; position: sticky; top: 0; }
 .rl-new { width: 100%; margin-bottom: 12px; }
 .rl-roles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.rl-role { border-radius: 7px; }
+.rl-role { border-radius: var(--edge-md); }
 .rl-role-btn {
   display: flex; align-items: center; gap: 9px;
-  width: 100%; padding: 9px 10px; border-radius: 7px;
+  width: 100%; padding: 9px 10px; border-radius: var(--edge-md);
   background: none; border: none; cursor: pointer; font-family: inherit;
   font-size: 14.5px; color: var(--text-2); text-align: left;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
@@ -790,7 +790,7 @@ const removeFromRole = (m: ServerMember) => {
 .rl-admin {
   display: flex; align-items: flex-start; gap: 10px;
   background: rgba(var(--danger-rgb), .10); box-shadow: inset 0 0 0 1px rgba(var(--danger-rgb), .28);
-  border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
+  border-radius: var(--edge-lg); padding: 12px 14px; margin-bottom: 20px;
   font-size: 13px; line-height: 1.55; color: var(--text-1); max-width: 78ch;
 }
 .rl-admin-ic { color: var(--danger-text); flex: none; margin-top: 1px; }

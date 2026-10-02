@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
 /* Hover popover — appears above the strip */
 .vcp-pop {
   position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px);
-  background: var(--bg-floor); border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-floor); border: 1px solid var(--border); border-radius: var(--edge-xl);
   padding: 12px; box-shadow: var(--shadow-md); z-index: 50;
   opacity: 0; transform: translateY(6px); pointer-events: none;
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);

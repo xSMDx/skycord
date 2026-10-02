@@ -353,7 +353,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .pp {
   position: fixed; z-index: 1200; width: 300px;
-  border-radius: 10px; overflow: hidden;
+  border-radius: var(--edge-xl); overflow: hidden;
   box-shadow: var(--shadow-lg);
   animation: pp-in var(--dur-1) var(--ease-out);
   /* Opens out of the avatar that spawned it, not out of its own middle. */

@@ -1848,7 +1848,7 @@ img    { display: block; object-fit: cover; }
 .ap-cards { display: flex; gap: 12px; flex-wrap: wrap; }
 .ap-card {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 10px; border-radius: 10px; cursor: pointer;
+  padding: 10px; border-radius: var(--edge-xl); cursor: pointer;
   border: 2px solid var(--border); background: var(--bg-panel);
   transition: border-color var(--dur-1) var(--ease-out); min-width: 96px;
   font-size: 13px; font-weight: 600; color: var(--text-1);
@@ -1875,7 +1875,7 @@ img    { display: block; object-fit: cover; }
 .ap-emoji-native { font-size: 30px; line-height: 32px; }
 
 /* Live preview pane */
-.ap-preview { background: var(--bg-chat); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.ap-preview { background: var(--bg-chat); border: 1px solid var(--border); border-radius: var(--edge-xl); padding: 16px; }
 .ap-prev-msg { display: flex; gap: 12px; padding: var(--row-pad-y, 2px) 0; }
 .ap-prev-ts { display: none; font-size: 11px; color: var(--text-faint); min-width: 52px; text-align: right; line-height: 1.5; }
 /* Background is the live accent (inline style, below) — the token measured
@@ -2141,6 +2141,6 @@ img    { display: block; object-fit: cover; }
   .ap-saved-main:hover { background: var(--hover-strong); }
 }
 .ap-saved-main:active { transform: scale(.99); }
-.ap-saved-chip { width: 44px; height: 28px; border-radius: 5px; flex: none; border: 1px solid var(--border); }
+.ap-saved-chip { width: 44px; height: 28px; border-radius: var(--edge-sm); flex: none; border: 1px solid var(--border); }
 .ap-saved-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

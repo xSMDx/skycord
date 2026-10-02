@@ -158,7 +158,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .pc {
   width: 340px; max-width: 100%;
-  background: var(--bg-panel); border-radius: 10px; overflow: hidden;
+  background: var(--bg-panel); border-radius: var(--edge-xl); overflow: hidden;
   box-shadow: var(--shadow-md);
 }
 /* The card IS the panel here, so it drops its own frame. Nesting a shadowed,

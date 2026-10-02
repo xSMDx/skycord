@@ -79,7 +79,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ci-body { display: flex; gap: 14px; padding: 18px; }
 .ci-card {
   position: relative; flex: 1; aspect-ratio: 1 / .8;
-  border-radius: 10px; overflow: hidden;
+  border-radius: var(--edge-xl); overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   transition: transform var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out);
 }

@@ -529,7 +529,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 
 .input-wrapper {
   display: flex; align-items: center; gap: 4px;
-  background: var(--bg-chatbar); border-radius: 10px;
+  background: var(--bg-chatbar); border-radius: var(--edge-lg);
   padding: 0 8px 0 4px;
   border: 1px solid transparent;
   transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);

@@ -218,7 +218,7 @@ const copyId = () => {
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img { display: block; object-fit: cover; }
 
-.up { position: relative; background: var(--bg-raised); border-radius: 16px; overflow: hidden; }
+.up { position: relative; background: var(--bg-raised); border-radius: var(--edge-xl); overflow: hidden; }
 /* Sits outside both columns so it never fights the banner for the corner. */
 .up-close {
   position: absolute; top: 14px; right: 14px; z-index: 5;

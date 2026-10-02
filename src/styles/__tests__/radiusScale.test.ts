@@ -4,36 +4,38 @@ import { readFileSync, readdirSync, statSync } from 'fs'
 import { resolve, join, relative, sep } from 'path'
 
 /*
- * A radius that has a token must use the token.
+ * Radii come from the scale.
  *
- * DESIGN.md defines five: 4, 6, 8, 12 and 999px. Before the sweep that added
- * this test, 41 declarations named one and roughly 330 wrote a number — so
- * the scale existed in the document and almost nowhere in the source, and the
- * next person to round a corner read the file next to them rather than the
- * contract. 252 declarations moved onto tokens in one pass, and not one
- * computed radius changed, because every one of them was already exactly a
- * token's value. This keeps that true.
+ * DESIGN.md defines five tokens. Before the sweep that added this test, 41
+ * declarations named one and roughly 330 wrote a number — so the scale
+ * existed in the document and almost nowhere in the source, and the next
+ * person to round a corner read the file next to them rather than the
+ * contract.
  *
- * Deliberately narrow. It fails only on a number a token already expresses,
- * which is a mechanical mistake with a mechanical fix. It says nothing about:
+ * Two passes fixed it. The first moved 252 declarations whose value was
+ * already exactly a token's, and nothing moved: the computed radius of all
+ * 330 elements that had one was identical afterwards. The second decided the
+ * 47 off-scale strays — 10, 14, 16, 7, 5, 3 and 22px — one at a time against
+ * what the element actually is, and those did move pixels.
  *
- *   - 50%, which makes an ellipse where 999px makes a stadium. Identical on a
- *     square avatar, different on anything else, so swapping them wholesale
- *     would be a visual change dressed up as a cleanup.
- *   - 1px and 2px, below the smallest token and used on hairlines and tiny
- *     indicators.
- *   - the off-scale strays — 10px (30 of them), 7, 5, 3, 14, 16, 18, 22 —
- *     which need a decision per site about which way to round, not a regex.
- *   - multi-value shorthands like `16px 16px 0 0`, where only some corners
- *     are rounded.
+ * Only three kinds of raw value survive, and each is a deliberate exception:
  *
- * Those are real findings in docs/UI-REVIEW.md. They are not THIS test's job,
- * and widening it to cover them would make it fail on work nobody has agreed
- * to yet.
+ *   50%      an ellipse, which is NOT what 999px makes on a non-square box.
+ *            Identical on a square avatar, different on anything else, so
+ *            swapping them wholesale would be a visual change dressed up as
+ *            a cleanup.
+ *   1px/2px  below the smallest token. Almost all of it is scrollbar thumbs
+ *            and drag handles, where 4px is visibly too round on something
+ *            4px wide.
+ *   shorthand  `16px 16px 0 0` — only some corners are rounded, which the
+ *            scale does not express.
+ *
+ * Anything else is a number where a token belongs, and this fails on it with
+ * the file, the line, and — when the value maps exactly — the replacement.
  */
 const SRC = resolve(__dirname, '../..')
 
-/** value → the token that already says it */
+/** value → the token that says it exactly */
 const TOKENISED: Record<string, string> = {
   '4px': '--edge-sm',
   '6px': '--edge-md',
@@ -41,6 +43,9 @@ const TOKENISED: Record<string, string> = {
   '12px': '--edge-xl',
   '999px': '--edge-pill',
 }
+
+/** Below the smallest token, and correct there. See the header. */
+const BELOW_SCALE = new Set(['0', '1px', '2px'])
 
 const filesUnder = (dir: string, exts: string[]): string[] =>
   readdirSync(dir).flatMap(name => {
@@ -53,18 +58,28 @@ const filesUnder = (dir: string, exts: string[]): string[] =>
 
 const rel = (file: string) => relative(SRC, file).split(sep).join('/')
 
-/** A lone value only — `16px 16px 0 0` is a different question. */
-const LONE_RADIUS = /border-radius:\s*([^;}\n"']+)/g
+/**
+ * A single-value radius only.
+ *
+ * The value is captured up to the terminator so a shorthand is captured
+ * whole and then skipped — matching only the first number would read
+ * `16px 16px 0 0` as a bare 16px and report a corner rounding that is
+ * deliberate.
+ */
+const RADIUS = /border-radius:\s*([^;}\n"']+)/g
 
 const offenders = (): string[] => {
   const out: string[] = []
   for (const file of filesUnder(SRC, ['.vue', '.css'])) {
-    const text = readFileSync(file, 'utf8')
-    text.split('\n').forEach((line, i) => {
-      for (const m of line.matchAll(LONE_RADIUS)) {
+    readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      for (const m of line.matchAll(RADIUS)) {
         const value = m[1].trim()
+        if (value.includes(' ')) continue          // shorthand: some corners only
+        if (value.startsWith('var(')) continue     // already a token
+        if (value === 'inherit' || value.endsWith('%')) continue
+        if (BELOW_SCALE.has(value)) continue
         const token = TOKENISED[value]
-        if (token) out.push(`${rel(file)}:${i + 1}  ${value} → var(${token})`)
+        out.push(`${rel(file)}:${i + 1}  ${value}${token ? ` → var(${token})` : ' is not on the scale — pick the token that fits what this element is'}`)
       }
     })
   }
@@ -76,7 +91,7 @@ describe('radius scale', () => {
     expect(filesUnder(SRC, ['.vue', '.css']).length).toBeGreaterThan(50)
   })
 
-  it('writes no radius as a number when a token already says it', () => {
+  it('writes every radius as a token, bar the documented exceptions', () => {
     expect(offenders()).toEqual([])
   })
 
@@ -85,6 +100,6 @@ describe('radius scale', () => {
     for (const file of filesUnder(SRC, ['.vue', '.css'])) {
       used += (readFileSync(file, 'utf8').match(/border-radius:\s*var\(--edge-/g) || []).length
     }
-    expect(used).toBeGreaterThan(200)
+    expect(used).toBeGreaterThan(280)
   })
 })

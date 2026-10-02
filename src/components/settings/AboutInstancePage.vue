@@ -78,7 +78,7 @@ const onMarkTap = () => {
 <style scoped>
 .ai-head { display: flex; align-items: center; gap: 14px; margin: 4px 0 18px; }
 .ai-said { margin: 6px 0 0; color: var(--accent); font-size: 13px; font-weight: 600; }
-.ai-icon { width: 56px; height: 56px; border-radius: 14px; flex: none; object-fit: cover; }
+.ai-icon { width: 56px; height: 56px; border-radius: var(--edge-xl); flex: none; object-fit: cover; }
 .ai-mark { display: flex; align-items: center; justify-content: center; background: var(--bg-panel); color: var(--accent); }
 .ai-names { min-width: 0; }
 .ai-name { margin: 0; font-size: 20px; font-weight: 700; color: var(--text-strong); overflow-wrap: anywhere; }

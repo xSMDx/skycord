@@ -103,7 +103,7 @@ const onApply   = () => { if (data.value) setAppearance(data.value) }
 }
 .tc-loading { color: var(--text-3); font-size: 13px; }
 .tc-icon {
-  width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: var(--edge-xl); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   background: var(--accent); color: var(--text-on-accent);
 }

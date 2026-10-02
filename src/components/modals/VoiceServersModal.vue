@@ -290,7 +290,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .vs-hint { font-size: 12px; line-height: 1.5; color: var(--text-3); margin-bottom: 14px; }
 .vs-hint code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
-  padding: 1px 4px; border-radius: 3px; background: var(--bg-panel);
+  padding: 1px 4px; border-radius: var(--edge-sm); background: var(--bg-panel);
 }
 
 .vs-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }

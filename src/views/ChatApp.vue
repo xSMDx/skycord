@@ -5367,11 +5367,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    reads as a banner rather than as one item in a directory. */
 .dsc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
 
-.dsc-card{position:relative;display:flex;flex-direction:column;background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
+.dsc-card{position:relative;display:flex;flex-direction:column;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--edge-xl);overflow:hidden;transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
 .dsc-card:hover{border-color:var(--active-ring);transform:translateY(-2px)}
 .dsc-banner{height:56px;flex-shrink:0}
 /* Pulled up over the banner, the way the server icon sits on a Discord card. */
-.dsc-ic{width:44px;height:44px;border-radius:14px;overflow:hidden;margin: -22px 0 0 14px;border:3px solid var(--bg-raised);background:var(--bg-panel);flex-shrink:0}
+.dsc-ic{width:44px;height:44px;border-radius: var(--edge-xl);overflow:hidden;margin: -22px 0 0 14px;border:3px solid var(--bg-raised);background:var(--bg-panel);flex-shrink:0}
 .dsc-name{font-size:15px;font-weight:700;color:var(--text-strong);padding: 8px 14px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Two lines, clamped: descriptions run to 300 chars server-side and an
    unclamped one makes every card in the row a different height. */
@@ -5388,7 +5388,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-empty-s{margin: 6px 0 0;font-size:13px;max-width:44ch;line-height:1.5}
 
 .dsc-skel{padding: 20px 14px;gap:10px;pointer-events:none}
-.dsc-skel-bar{height:10px;border-radius:5px;background:var(--hover);animation: dsc-pulse 1.4s var(--ease-out) infinite}
+.dsc-skel-bar{height:10px;border-radius: var(--edge-sm);background:var(--hover);animation: dsc-pulse 1.4s var(--ease-out) infinite}
 @keyframes dsc-pulse{0%,100%{opacity:.45}50%{opacity:.8}}
 @media (prefers-reduced-motion: reduce){.dsc-skel-bar{animation:none}.dsc-card:hover{transform:none}}
 
@@ -5415,8 +5415,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri:active .ri-icon{transform:scale(.94)}
 .ri-icon{width:44px;height:44px;border-radius: 50%;overflow:hidden;background:var(--bg-panel);transition: border-radius var(--dur-3) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);display:flex;align-items:center;justify-content:center}
 .ri-icon img{width:100%;height:100%}
-.ri:hover .ri-icon{border-radius: 16px;transform:scale(1.05)}
-.ri.active .ri-icon{border-radius: 16px;box-shadow:0 4px 16px rgba(var(--accent-rgb),.4)}
+.ri:hover .ri-icon{border-radius: var(--edge-xl);transform:scale(1.05)}
+.ri.active .ri-icon{border-radius: var(--edge-xl);box-shadow:0 4px 16px rgba(var(--accent-rgb),.4)}
 /* Home logo colour is driven by the SkycordIcon `color` prop (accent in the
    friend zone, currentColor=--text-1 in a channel), so the icon colour is NOT
    set here — only the surrounding circle's surface changes. */
@@ -5439,7 +5439,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: var(--edge-xl);background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:var(--shadow-md)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
 .rvp-ch{margin-top: 8px}
@@ -5591,7 +5591,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* The update prompt. Same place and same entrance as the toast, but it stays
    until it is answered. */
-.app-update{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 32px));flex-wrap:wrap;justify-content:center;background:var(--bg-raised);color:var(--text-1);border:1px solid var(--border);font-size:14px;padding:10px 12px 10px 16px;border-radius:10px;box-shadow:var(--shadow-md)}
+.app-update{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 32px));flex-wrap:wrap;justify-content:center;background:var(--bg-raised);color:var(--text-1);border:1px solid var(--border);font-size:14px;padding:10px 12px 10px 16px;border-radius:var(--edge-xl);box-shadow:var(--shadow-md)}
 .app-update-text{font-weight:600}
 .app-update-btn{border:0;border-radius: var(--edge-md);padding:7px 12px;background:transparent;color:var(--text-2);font:inherit;font-weight:600;cursor:pointer;transition:background var(--dur-1) var(--ease-out),color var(--dur-1) var(--ease-out)}
 .app-update-btn:hover{background:var(--hover);color:var(--text-1)}
@@ -6105,7 +6105,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Rows: a bigger avatar reads better at arm's length, and both actions go to
    full touch size. 12+40+12+name+96+12 leaves ~200px for the name at 375px,
    which fits every name tested including the longest. */
-.shell.mobile .f-row{min-height:64px;gap:12px;padding:10px 8px;border-radius:10px}
+.shell.mobile .f-row{min-height:64px;gap:12px;padding:10px 8px;border-radius:var(--edge-lg)}
 .shell.mobile .f-row:hover{background:none}
 .shell.mobile .f-row:active{background:var(--hover)}
 .shell.mobile .f-av{width:40px;height:40px}
@@ -6212,7 +6212,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
 .an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: var(--edge-md);background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
-.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:var(--hover);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: var(--edge-lg);background:var(--hover);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .an-av img{border-radius: 50%}
@@ -6329,7 +6329,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .members-panel.closed{width:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), width 0s var(--dur-exit)}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid var(--seam);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
-.mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
+.mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: var(--edge-lg);color:var(--text-3)}
 .mp-search{margin: 8px 10px;background:var(--bg-input);border-radius: var(--edge-md);display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
@@ -6472,7 +6472,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* ── Discover: section tabs + theme gallery ── */
 .dsc-tabs { display: flex; gap: 4px; margin-left: 18px; }
 .dsc-tab {
-  padding: 6px 14px; border-radius: 7px; font-size: 14px; font-weight: 500;
+  padding: 6px 14px; border-radius: var(--edge-md); font-size: 14px; font-weight: 500;
   color: var(--text-3); background: none; border: none; cursor: pointer; font-family: inherit;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
               transform var(--dur-1) var(--ease-out);
@@ -6497,7 +6497,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .dsc-theme {
   display: flex; flex-direction: column; gap: 9px; padding: 10px;
-  border-radius: 10px; background: var(--bg-panel); border: 1px solid transparent;
+  border-radius: var(--edge-lg); background: var(--bg-panel); border: 1px solid transparent;
   cursor: pointer; font-family: inherit; text-align: left;
   transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
               transform var(--dur-1) var(--ease-out);
@@ -6507,7 +6507,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 .dsc-theme:active { transform: scale(.97); }
 .dsc-theme.on { border-color: var(--accent); }
-.dsc-theme-sw { height: 76px; border-radius: 7px; border: 1px solid var(--border); }
+.dsc-theme-sw { height: 76px; border-radius: var(--edge-md); border: 1px solid var(--border); }
 .dsc-theme-name { font-size: 14px; font-weight: 500; color: var(--text-1);
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

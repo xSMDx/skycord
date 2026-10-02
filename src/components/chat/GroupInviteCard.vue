@@ -94,7 +94,7 @@ const join = async () => {
 .ic-error { display: flex; align-items: center; gap: 12px; }
 
 .ic-icon {
-  width: 44px; height: 44px; border-radius: 10px;
+  width: 44px; height: 44px; border-radius: var(--edge-xl);
   background: var(--danger); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; color: var(--text-on-danger);
 }

@@ -436,7 +436,7 @@ const onBarLeave = (el: Element) => {
 }
 
 /* ── The private card ── */
-.pm-card { background: var(--bg-panel); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
+.pm-card { background: var(--bg-panel); border-radius: var(--edge-xl); overflow: hidden; margin-bottom: 18px; }
 .pm-card-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; }
 .pm-lock { color: var(--text-2); flex: none; margin-top: 2px; }
 .pm-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -513,7 +513,7 @@ const onBarLeave = (el: Element) => {
 
 .pm-tri { display: flex; gap: 3px; flex: none; }
 .pm-tri-btn {
-  width: 30px; height: 26px; border-radius: 5px; border: none; cursor: pointer;
+  width: 30px; height: 26px; border-radius: var(--edge-sm); border: none; cursor: pointer;
   background: var(--bg-input); color: var(--text-faint);
   font-size: 13px; line-height: 1; font-family: inherit;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
@@ -540,7 +540,7 @@ const onBarLeave = (el: Element) => {
 .pm-bar {
   position: sticky; bottom: 0; z-index: 2;
   display: flex; align-items: center; gap: 10px;
-  margin-top: 20px; padding: 12px 14px; border-radius: 10px;
+  margin-top: 20px; padding: 12px 14px; border-radius: var(--edge-lg);
   background: var(--bg-floor); box-shadow: var(--shadow-md);
 }
 .pm-bar-text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-1); }

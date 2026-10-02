@@ -478,7 +478,7 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
   width:100%; max-width:488px;
   background:var(--bg-raised);
   border:1px solid var(--border);
-  border-radius: 16px; padding: 32px 36px 28px;
+  border-radius: var(--edge-xl); padding: 32px 36px 28px;
   position:relative; z-index:1;
   box-shadow:var(--shadow-lg);
 }

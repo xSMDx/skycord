@@ -350,7 +350,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .jump-leave-active{transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
 .welcome{padding: 20px 16px 16px;border-bottom:1px solid var(--divider);margin-bottom: 8px}
-.ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
+.ch-icon{width:52px;height:52px;border-radius: var(--edge-xl);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
 .ch-icon svg{stroke:var(--text-on-accent)}
 .dm-av{width:64px;height:64px;border-radius: 50%;overflow:hidden;margin-bottom: 14px;border:3px solid var(--bg-panel)}
 .group-av{display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--text-on-accent);border:none}

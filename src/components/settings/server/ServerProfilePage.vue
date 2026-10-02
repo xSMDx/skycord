@@ -210,7 +210,7 @@ const traits = reactive<string[]>(['', '', '', '', ''])
 }
 .sp-card-icon {
   width: 68px; height: 68px; margin: -34px 0 0 16px;
-  border-radius: 16px; overflow: hidden;
+  border-radius: var(--edge-xl); overflow: hidden;
   border: 4px solid var(--bg-panel); background: var(--bg-panel);
   position: relative;
 }

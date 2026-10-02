@@ -333,7 +333,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .el{color:var(--accent);font-size:12px;font-weight:600}
 .el:hover{text-decoration:underline}
 .msg-reactions{display:flex;flex-wrap:wrap;gap: 4px;margin-top: 4px}
-.rp{display:flex;align-items:center;gap: 4px;background:var(--hover);border:1px solid var(--border);border-radius: 10px;padding: 2px 8px;font-size:14px;cursor:pointer;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.rp{display:flex;align-items:center;gap: 4px;background:var(--hover);border:1px solid var(--border);border-radius: var(--edge-lg);padding: 2px 8px;font-size:14px;cursor:pointer;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .rp span{font-size:12px;font-weight:600;color:var(--text-2)}
 .rp:hover{background:var(--hover-strong)}
 /* The background change already announces the hover. The scale moved to the
@@ -341,7 +341,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .rp:active{transform:scale(.96)}
 .rp.active{background:rgba(var(--accent-rgb),.2);border-color:rgba(var(--accent-rgb),.5)}
 .rp.active span{color:var(--accent-text)}
-.rp-add{width:24px;height:24px;border-radius: 10px;background:var(--hover);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.rp-add{width:24px;height:24px;border-radius: var(--edge-lg);background:var(--hover);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-3);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .rp-add:hover{background:var(--hover-strong);color: var(--text-strong)}
 /* Hover OR keyboard focus. The toolbar used to be revealed by @mouseenter
    alone on a row that could not hold focus, so Reply, Edit, React and Delete

@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
 .fly .fr-check  { color: var(--green-text); flex-shrink: 0; }
 .fly .fr:hover .fr-check { color: var(--text-on-accent); }
 .fly .fr-tog {
-  flex-shrink: 0; width: 38px; height: 20px; border-radius: 10px;
+  flex-shrink: 0; width: 38px; height: 20px; border-radius: var(--edge-lg);
   background: var(--toggle-off); position: relative; transition: background var(--dur-2) var(--ease-out); display: inline-block;
 }
 .fly .fr-tog.on { background: var(--accent); }
