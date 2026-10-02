@@ -1,0 +1,91 @@
+# Music channels, when the stack runs them. Leave this file out of
+# COMPOSE_FILE and the feature is simply absent — the API reports it off and
+# the client shows no Music section.
+#
+# This service is the only part of Skycord that fetches a URL a member typed.
+# Everything unusual below exists because of that, and none of it is
+# decoration:
+#
+#   no database credentials   an SSRF or an RCE here reaches no data
+#   read_only root            nothing it fetches can be written and then run
+#   no-new-privileges         a bug cannot become a bigger bug
+#   cap_drop ALL              it opens no raw sockets and binds no low port
+#   tmpfs for scratch         decoding needs somewhere to write; that is all
+#   cpus / mem limits         one runaway decode cannot take the box with it
+#
+# The egress restriction is NOT here, because Compose cannot express it. See
+# the note at the bottom.
+services:
+  music:
+    image: ghcr.io/xsmdx/skycord-music:${SKYCORD_VERSION:?run the installer, or set SKYCORD_VERSION}
+    restart: unless-stopped
+    # Listed one by one rather than env_file. This container must never
+    # receive MONGO_URI, the JWT secrets or ENCRYPTION_KEY, and the surest way
+    # to guarantee that is for them not to be written here.
+    environment:
+      NODE_ENV: production
+      PORT: 3060
+      BIND_HOST: 0.0.0.0
+      # Its own LiveKit credentials. The same pair the API uses is fine — the
+      # grant in the token is what narrows it, not the key.
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      # Shared secret for the API -> music calls. Nothing else may ask this
+      # service to fetch anything.
+      MUSIC_INTERNAL_SECRET: ${MUSIC_INTERNAL_SECRET:?set MUSIC_INTERNAL_SECRET}
+      MUSIC_CHANNELS_PER_INSTANCE: ${MUSIC_CHANNELS_PER_INSTANCE:-8}
+      MUSIC_MAX_DURATION_SEC: ${MUSIC_MAX_DURATION_SEC:-1800}
+      MUSIC_MAX_BYTES: ${MUSIC_MAX_BYTES:-104857600}
+    read_only: true
+    tmpfs:
+      # Decoding needs scratch space and nothing else does. Capped, so a
+      # malicious stream cannot fill the host's memory by writing to it.
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          # One decode is cheap; eight at once on a 2010 CPU is not. This is
+          # the ceiling the per-instance channel cap is chosen against.
+          cpus: "1.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3060/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ── The egress rule, which is the actual control ──────────────────────────
+#
+# Everything above is hardening. The control that makes an SSRF bug reach
+# nothing is a firewall rule, and Compose has no syntax for one — a Docker
+# network is about who can reach WHOM inside the stack, not about where a
+# container may dial out to on the host's LAN.
+#
+# So the installer writes this, and `skycord doctor` checks it is still
+# there. On a Linux host with iptables, for the subnet this service runs in:
+#
+#   iptables -I DOCKER-USER -s <music-subnet> -d 10.0.0.0/8      -j REJECT
+#   iptables -I DOCKER-USER -s <music-subnet> -d 172.16.0.0/12   -j REJECT
+#   iptables -I DOCKER-USER -s <music-subnet> -d 192.168.0.0/16  -j REJECT
+#   iptables -I DOCKER-USER -s <music-subnet> -d 169.254.0.0/16  -j REJECT
+#   iptables -I DOCKER-USER -s <music-subnet> -d 100.64.0.0/10   -j REJECT
+#   ip6tables -I DOCKER-USER -s <music-subnet6> -d fc00::/7      -j REJECT
+#   ip6tables -I DOCKER-USER -s <music-subnet6> -d fe80::/10     -j REJECT
+#
+# DOCKER-USER, not INPUT: Docker inserts its own rules ahead of everything
+# else, and DOCKER-USER is the one chain it promises to leave alone.
+#
+# The service still refuses private addresses in code (music/src/urlGuard.ts,
+# judged on the resolved address). That is the second line. This is the first,
+# and it is the one that holds when the code has a bug — which it did, once,
+# before it was finished.
