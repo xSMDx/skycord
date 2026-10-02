@@ -76,7 +76,7 @@ const style = computed(() => ({ left: `${pos.value.left}px`, top: `${pos.value.t
   pointer-events: none;               /* never eat a click meant for the control */
   max-width: 260px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--edge-lg);
   background: var(--bg-floor);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);

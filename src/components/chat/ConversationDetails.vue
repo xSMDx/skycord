@@ -251,7 +251,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-searchfield {
   display: flex; align-items: center; gap: 8px;
   height: 44px; width: 44px; min-width: 44px;
-  padding: 0 12px; border-radius: 22px;
+  padding: 0 12px; border-radius: var(--edge-pill);
   border: 1.5px solid transparent; background: transparent;
   color: var(--text-2); cursor: pointer; overflow: hidden;
   transition: background var(--dur-3) var(--ease-out), border-color var(--dur-3) var(--ease-out);
@@ -288,7 +288,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   display: flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px;
   border: none; background: none; cursor: pointer;
-  color: var(--text-2); border-radius: 8px;
+  color: var(--text-2); border-radius: var(--edge-lg);
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .cd-icon:active { background: var(--hover); color: var(--text-1); }
@@ -348,7 +348,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
 .cd-row {
   display: flex; align-items: center; gap: 14px; width: 100%;
   min-height: 56px; padding: 0 14px;
-  border: none; border-radius: 10px; cursor: pointer;
+  border: none; border-radius: var(--edge-lg); cursor: pointer;
   background: var(--bg-raised); color: var(--text-1);
   text-align: left; transition: background var(--dur-1) var(--ease-out);
 }
@@ -365,7 +365,7 @@ if (props.startSearching) nextTick(() => inputEl.value?.focus())
   margin: 24px 4px 8px;
 }
 
-.cd-members { list-style: none; margin: 0; padding: 0; background: var(--bg-raised); border-radius: 10px; overflow: hidden; }
+.cd-members { list-style: none; margin: 0; padding: 0; background: var(--bg-raised); border-radius: var(--edge-xl); overflow: hidden; }
 .cd-members li + li { border-top: 1px solid var(--border); }
 .cd-member {
   display: flex; align-items: center; gap: 12px; width: 100%;

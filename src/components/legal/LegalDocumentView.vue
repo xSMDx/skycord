@@ -72,9 +72,9 @@ watch(() => props.load, run)
 .ld-body :deep(a) { color: var(--text-link); text-decoration: underline; }
 .ld-body :deep(code) {
   font-family: var(--font-mono); font-size: 13px;
-  background: var(--bg-input); border-radius: 4px; padding: 1px 4px;
+  background: var(--bg-input); border-radius: var(--edge-sm); padding: 1px 4px;
 }
-.ld-body :deep(pre) { background: var(--bg-input); border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+.ld-body :deep(pre) { background: var(--bg-input); border-radius: var(--edge-md); padding: 10px 12px; overflow-x: auto; }
 .ld-body :deep(pre code) { background: none; padding: 0; }
 .ld-body :deep(blockquote) { margin: 0 0 10px; padding-left: 10px; border-left: 3px solid var(--border); color: var(--text-2); }
 .ld-plain {

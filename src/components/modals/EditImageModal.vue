@@ -268,7 +268,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ei-viewport {
   position: relative;
   width: var(--st-w, 300px); height: var(--st-h, 300px);
-  border-radius: 8px; overflow: hidden; background: var(--bg-input);
+  border-radius: var(--edge-lg); overflow: hidden; background: var(--bg-input);
   cursor: grab; touch-action: none;
 }
 /* 16:5 — the same strip the profile card draws, so the preview isn't a
@@ -299,7 +299,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ei-zoom-ico { color: var(--text-2); flex-shrink: 0; }
 .ei-slider { flex: 1; accent-color: var(--accent); height: 4px; cursor: pointer; }
 .ei-rotate {
-  width: 34px; height: 34px; border-radius: 6px; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: var(--edge-md); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -309,9 +309,9 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ei-reset { font-size: 14px; font-weight: 600; color: var(--accent); }
 .ei-reset:hover { text-decoration: underline; }
 .ei-actions { display: flex; align-items: center; gap: 12px; }
-.ei-cancel { padding: 8px 18px; border-radius: 4px; font-size: 14px; font-weight: 600; color: var(--text-1); background: var(--hover); }
+.ei-cancel { padding: 8px 18px; border-radius: var(--edge-sm); font-size: 14px; font-weight: 600; color: var(--text-1); background: var(--hover); }
 .ei-cancel:hover { background: var(--hover-strong); }
-.ei-apply { padding: 8px 24px; border-radius: 4px; font-size: 14px; font-weight: 600; color: var(--text-on-accent); background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out); }
+.ei-apply { padding: 8px 24px; border-radius: var(--edge-sm); font-size: 14px; font-weight: 600; color: var(--text-on-accent); background: var(--accent); transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out); }
 .ei-apply:hover:not(:disabled) { background: var(--accent-hover); }
 .ei-apply:disabled { opacity: .5; cursor: not-allowed; }
 </style>

@@ -193,7 +193,7 @@ const doCopy = async () => {
 .iv-sep { height: 1px; margin: 4px 6px; background: var(--divider); }
 .iv-row {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 6px 8px; border-radius: 4px; background: none; border: none;
+  padding: 6px 8px; border-radius: var(--edge-sm); background: none; border: none;
   cursor: pointer; color: var(--text-2); font-size: 13.5px; text-align: left;
 }
 .iv-row:hover:not(:disabled) { background: var(--hover); color: var(--text-1); }
@@ -206,14 +206,14 @@ const doCopy = async () => {
 .iv-done { color: var(--green-text); flex: none; }
 .iv-more {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 6px 8px; border-radius: 4px; background: none; border: none;
+  padding: 6px 8px; border-radius: var(--edge-sm); background: none; border: none;
   cursor: pointer; font-size: 13px; color: var(--text-2); text-align: left;
 }
 .iv-more:hover { background: var(--hover); color: var(--text-1); }
 .iv-empty { padding: 6px 8px; font-size: 12px; color: var(--text-faint); }
 
 /* modal */
-.iv-card { background: var(--bg-panel); border-radius: 8px; display: flex; flex-direction: column; max-height: 78vh; }
+.iv-card { background: var(--bg-panel); border-radius: var(--edge-lg); display: flex; flex-direction: column; max-height: 78vh; }
 .iv-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 16px 10px; }
 .iv-head-text { flex: 1; min-width: 0; }
 .iv-head h2 { font-size: 17px; font-weight: 700; color: var(--text-strong); }
@@ -222,7 +222,7 @@ const doCopy = async () => {
 .iv-x:hover { color: var(--text-1); }
 .iv-search {
   display: flex; align-items: center; gap: 8px; margin: 0 16px 8px;
-  padding: 8px 10px; border-radius: 6px; background: var(--bg-input); color: var(--text-3);
+  padding: 8px 10px; border-radius: var(--edge-md); background: var(--bg-input); color: var(--text-3);
 }
 .iv-search input { flex: 1; font-size: 13.5px; color: var(--text-1); background: none; border: none; outline: none; }
 .iv-list { flex: 1; overflow: hidden auto; padding: 0 8px; min-height: 90px; }
@@ -233,7 +233,7 @@ const doCopy = async () => {
 .iv-display { font-size: 14px; font-weight: 600; color: var(--text-1); }
 .iv-handle { font-size: 11.5px; color: var(--text-faint); }
 .iv-btn {
-  flex: none; padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: 600;
+  flex: none; padding: 6px 14px; border-radius: var(--edge-sm); font-size: 13px; font-weight: 600;
   border: 1px solid var(--accent); background: none; color: var(--accent); cursor: pointer;
 }
 .iv-btn:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); }
@@ -242,11 +242,11 @@ const doCopy = async () => {
 .iv-foot-label { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text-3); }
 .iv-link { display: flex; gap: 8px; margin-top: 6px; }
 .iv-link input {
-  flex: 1; min-width: 0; padding: 8px 10px; border-radius: 4px; border: none;
+  flex: 1; min-width: 0; padding: 8px 10px; border-radius: var(--edge-sm); border: none;
   background: var(--bg-input); color: var(--text-1); font-size: 13px;
 }
 .iv-copy {
-  padding: 8px 18px; border-radius: 4px; border: none; cursor: pointer;
+  padding: 8px 18px; border-radius: var(--edge-sm); border: none; cursor: pointer;
   background: var(--accent); color: var(--text-on-accent); font-size: 13.5px; font-weight: 600;
 }
 .iv-copy:hover:not(:disabled) { background: var(--accent-hover); }

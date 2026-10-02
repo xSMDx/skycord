@@ -132,9 +132,9 @@ const pickFromScreen = async () => {
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 
 .cp { width: 240px; }
-.cp-sv { height: 150px; border-radius: 6px; position: relative; cursor: crosshair; margin-bottom: 12px; touch-action: none; }
+.cp-sv { height: 150px; border-radius: var(--edge-md); position: relative; cursor: crosshair; margin-bottom: 12px; touch-action: none; }
 .cp-hue {
-  height: 12px; border-radius: 6px; position: relative; cursor: pointer; margin-bottom: 14px; touch-action: none;
+  height: 12px; border-radius: var(--edge-md); position: relative; cursor: pointer; margin-bottom: 14px; touch-action: none;
   background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);
 }
 .cp-knob {
@@ -145,7 +145,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-hex {
   display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
   background: var(--bg-input); border: 1px solid var(--accent);
-  border-radius: 6px; padding: 8px 10px;
+  border-radius: var(--edge-md); padding: 8px 10px;
 }
 .cp-hex span  { color: var(--text-3); font-family: var(--font-mono); font-size: 14px; }
 .cp-hex input {
@@ -155,6 +155,6 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-eye { color: var(--text-3); display: flex; }
 .cp-eye:hover { color: var(--text-1); }
 .cp-presets { display: flex; gap: 8px; }
-.cp-presets button { width: 32px; height: 32px; border-radius: 6px; transition: transform var(--dur-1) var(--ease-out); }
+.cp-presets button { width: 32px; height: 32px; border-radius: var(--edge-md); transition: transform var(--dur-1) var(--ease-out); }
 .cp-presets button:hover { transform: translateY(-2px); }
 </style>

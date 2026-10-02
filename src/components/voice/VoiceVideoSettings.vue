@@ -368,7 +368,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 .vv-selwrap { position: relative; }
 .vv-select {
   -webkit-appearance: none; appearance: none;
-  width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--edge-md);
   padding: 10px 34px 10px 12px; color: var(--text-1); font-size: 14px; cursor: pointer;
 }
 .vv-select:focus { outline: none; border-color: var(--accent); }
@@ -386,7 +386,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
    to grow. The track stays centred and thin; only the reachable area changes. */
 .sm-modal.mobile .vv-slider { height: 44px; }
 .vv-mictest { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
-.vv-meter { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
+.vv-meter { position: relative; flex: 1; height: 8px; border-radius: var(--edge-sm); background: var(--bg-input); overflow: hidden; }
 /* Dim until the gate opens, so you can SEE when you're actually transmitting */
 /* Scaled, not resized — see MicFlyout's .mf-fill. .05s smooths a live
    signal and stays a literal. */
@@ -411,14 +411,14 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
   font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
   color: var(--accent-text);
   background: rgba(var(--accent-rgb), .18);
-  padding: 3px 7px; border-radius: 4px;
+  padding: 3px 7px; border-radius: var(--edge-sm);
 }
 .vv-radio em { font-style: normal; font-size: 12px; color: var(--text-3); }
 
 .vv-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; }
 .vv-toggle-text { display: flex; flex-direction: column; min-width: 0; }
 .vv-tog {
-  flex-shrink: 0; width: 44px; height: 24px; border-radius: 12px; border: none; padding: 0;
+  flex-shrink: 0; width: 44px; height: 24px; border-radius: var(--edge-xl); border: none; padding: 0;
   background: var(--toggle-off); position: relative; cursor: pointer; transition: background var(--dur-2) var(--ease-out);
   box-sizing: border-box;
 }
@@ -428,7 +428,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
    is tuned to the grey track, and the member may set any accent. */
 .vv-tog.on span { transform: translateX(20px); background: var(--text-on-accent); }
 
-.vv-btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }
+.vv-btn { padding: 8px 16px; border-radius: var(--edge-md); border: none; font-size: 14px; font-weight: 600; background: var(--hover-strong); color: var(--text-1); cursor: pointer; }
 .vv-btn:hover { background: var(--hover); }
 .vv-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .vv-btn.primary:hover { background: var(--accent-hover); }
@@ -438,7 +438,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 /* Camera preview — centered + wide, breathing room before the dropdown */
 .vv-cambox {
   position: relative; width: 100%; max-width: 600px; margin: 0 auto 20px;
-  background: var(--letterbox); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--letterbox); border: 1px solid var(--border); border-radius: var(--edge-xl);
   aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .vv-video { width: 100%; height: 100%; object-fit: cover; display: none; }

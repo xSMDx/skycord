@@ -79,7 +79,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ci-body { display: flex; gap: 14px; padding: 18px; }
 .ci-card {
   position: relative; flex: 1; aspect-ratio: 1 / .8;
-  border-radius: 10px; overflow: hidden;
+  border-radius: var(--edge-xl); overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   transition: transform var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out);
 }
@@ -95,7 +95,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ci-gif-badge {
   position: absolute; left: 8px; bottom: 8px;
   background: var(--media-veil-strong); color: var(--on-media); font-size: 10px; font-weight: 800;
-  padding: 2px 6px; border-radius: 4px; letter-spacing: .3px;
+  padding: 2px 6px; border-radius: var(--edge-sm); letter-spacing: .3px;
 }
 .ci-gif-overlay {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;

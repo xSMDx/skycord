@@ -83,7 +83,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .pinned-tip { font-size: 13px; color: var(--text-3); line-height: 1.5; }
 
 .pinned-msg {
-  display: flex; gap: 10px; padding: 10px; border-radius: 8px; width: 100%; text-align: left;
+  display: flex; gap: 10px; padding: 10px; border-radius: var(--edge-lg); width: 100%; text-align: left;
   transition: background var(--dur-1) var(--ease-out); cursor: pointer;
 }
 .pinned-msg:disabled { cursor: default; }

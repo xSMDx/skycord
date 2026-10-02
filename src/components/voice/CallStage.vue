@@ -351,7 +351,7 @@ button { border: none; }
    making tiles taller than a short call bar. Cells fill their row instead and
    the video letterboxes inside — so a share always fits, at any bar height. */
 .g-cell {
-  position: relative; height: 100%; min-height: 0; border-radius: 8px; overflow: hidden;
+  position: relative; height: 100%; min-height: 0; border-radius: var(--edge-lg); overflow: hidden;
   background: var(--media-ground); border: 2px solid transparent; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color var(--dur-2) var(--ease-out);
@@ -432,7 +432,7 @@ button { border: none; }
 }
 .g-name {
   position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 6px;
-  max-width: calc(100% - 16px); padding: 4px 8px; border-radius: 6px;
+  max-width: calc(100% - 16px); padding: 4px 8px; border-radius: var(--edge-md);
   background: var(--media-veil-strong); color: var(--on-media); font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -440,7 +440,7 @@ button { border: none; }
    but always visible once fullscreen (there'd be no other way back out). */
 .g-fs {
   position: absolute; right: 8px; top: 8px;
-  width: 28px; height: 28px; border-radius: 6px;
+  width: 28px; height: 28px; border-radius: var(--edge-md);
   background: var(--media-veil-strong); color: var(--on-media);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
@@ -452,7 +452,7 @@ button { border: none; }
 /* The fullscreened cell IS the viewport — drop the tile chrome. */
 .g-cell.is-cell-fs { border-radius: 0; border-color: transparent; background: var(--letterbox); }
 .g-live {
-  position: absolute; right: 8px; top: 8px; padding: 2px 8px; border-radius: 6px;
+  position: absolute; right: 8px; top: 8px; padding: 2px 8px; border-radius: var(--edge-md);
   background: var(--danger); color: var(--text-on-danger); font-size: 10px; font-weight: 800; letter-spacing: .04em;
 }
 .g-mute {

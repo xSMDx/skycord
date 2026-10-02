@@ -166,7 +166,7 @@ const traits = reactive<string[]>(['', '', '', '', ''])
   /* Five per row at any column width, which is the reference's arrangement
      and stops the last row orphaning one swatch when the pane resizes. */
   flex: 1 1 calc(20% - 8px);
-  min-width: 0; height: 48px; border-radius: 8px;
+  min-width: 0; height: 48px; border-radius: var(--edge-lg);
   border: none; cursor: pointer; padding: 0;
   /* The ring is drawn with box-shadow rather than a border so selecting one
      cannot nudge the row by two pixels. */
@@ -199,7 +199,7 @@ const traits = reactive<string[]>(['', '', '', '', ''])
 /* ── Preview ── */
 .sp-preview { width: 300px; flex-shrink: 0; position: sticky; top: 0; }
 .sp-card {
-  background: var(--bg-panel); border-radius: 12px; overflow: hidden;
+  background: var(--bg-panel); border-radius: var(--edge-xl); overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
 .sp-card-banner {
@@ -210,7 +210,7 @@ const traits = reactive<string[]>(['', '', '', '', ''])
 }
 .sp-card-icon {
   width: 68px; height: 68px; margin: -34px 0 0 16px;
-  border-radius: 16px; overflow: hidden;
+  border-radius: var(--edge-xl); overflow: hidden;
   border: 4px solid var(--bg-panel); background: var(--bg-panel);
   position: relative;
 }

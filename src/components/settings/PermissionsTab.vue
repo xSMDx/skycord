@@ -436,7 +436,7 @@ const onBarLeave = (el: Element) => {
 }
 
 /* ── The private card ── */
-.pm-card { background: var(--bg-panel); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
+.pm-card { background: var(--bg-panel); border-radius: var(--edge-xl); overflow: hidden; margin-bottom: 18px; }
 .pm-card-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; }
 .pm-lock { color: var(--text-2); flex: none; margin-top: 2px; }
 .pm-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -446,14 +446,14 @@ const onBarLeave = (el: Element) => {
 .pm-access { border-top: 1px solid var(--divider); padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
 .pm-access-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
-.pm-picker { background: var(--bg-input); border-radius: 8px; padding: 10px; }
+.pm-picker { background: var(--bg-input); border-radius: var(--edge-lg); padding: 10px; }
 .pm-search { position: relative; margin-bottom: 8px; }
 .pm-search-ic { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
 .pm-search-in { padding-left: 31px; }
 .pm-cands { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: hidden auto; }
 .pm-cand {
   display: flex; align-items: center; gap: 9px; width: 100%;
-  padding: 7px 9px; border-radius: 6px; background: none; border: none; cursor: pointer;
+  padding: 7px 9px; border-radius: var(--edge-md); background: none; border: none; cursor: pointer;
   font-family: inherit; font-size: 14px; color: var(--text-1); text-align: left;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -471,7 +471,7 @@ const onBarLeave = (el: Element) => {
 .pm-chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .pm-chip {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 5px 8px 5px 9px; border-radius: 999px;
+  padding: 5px 8px 5px 9px; border-radius: var(--edge-pill);
   background: var(--bg-input); font-size: 13px; color: var(--text-1);
 }
 .pm-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
@@ -498,7 +498,7 @@ const onBarLeave = (el: Element) => {
 .pm-adv { display: flex; gap: 24px; align-items: flex-start; margin-top: 8px; }
 .pm-adv-list { width: 190px; flex: none; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
 .pm-adv-item {
-  padding: 8px 10px; border-radius: 6px; background: none; border: none; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--edge-md); background: none; border: none; cursor: pointer;
   font-family: inherit; font-size: 14px; color: var(--text-2); text-align: left;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
@@ -513,7 +513,7 @@ const onBarLeave = (el: Element) => {
 
 .pm-tri { display: flex; gap: 3px; flex: none; }
 .pm-tri-btn {
-  width: 30px; height: 26px; border-radius: 5px; border: none; cursor: pointer;
+  width: 30px; height: 26px; border-radius: var(--edge-sm); border: none; cursor: pointer;
   background: var(--bg-input); color: var(--text-faint);
   font-size: 13px; line-height: 1; font-family: inherit;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
@@ -525,7 +525,7 @@ const onBarLeave = (el: Element) => {
 .pm-flag {
   display: inline-block; margin-left: 8px; vertical-align: 1px;
   font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
-  padding: 2px 6px; border-radius: 4px;
+  padding: 2px 6px; border-radius: var(--edge-sm);
   background: var(--hover-strong); color: var(--text-3);
 }
 .pm-unenf { background: rgba(var(--warning-rgb), .22); color: var(--warning-text); }
@@ -540,7 +540,7 @@ const onBarLeave = (el: Element) => {
 .pm-bar {
   position: sticky; bottom: 0; z-index: 2;
   display: flex; align-items: center; gap: 10px;
-  margin-top: 20px; padding: 12px 14px; border-radius: 10px;
+  margin-top: 20px; padding: 12px 14px; border-radius: var(--edge-lg);
   background: var(--bg-floor); box-shadow: var(--shadow-md);
 }
 .pm-bar-text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-1); }

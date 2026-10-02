@@ -184,7 +184,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.mf-meter { width: 100%; height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
+.mf-meter { width: 100%; height: 8px; border-radius: var(--edge-sm); background: var(--bg-input); overflow: hidden; }
 /* Scaled, not resized: a meter updates every frame, and width would lay the
    row out on every one. The gradient scales with it, exactly as it squeezed
    into a narrower width before. .05s linear is not a UI duration — it

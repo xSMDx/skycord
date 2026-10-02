@@ -77,7 +77,7 @@ const speed = computed(() => {
 </template>
 
 <style scoped>
-.up-bar { height: 6px; margin-top: 12px; overflow: hidden; border-radius: 3px; background: var(--bg-input); }
+.up-bar { height: 6px; margin-top: 12px; overflow: hidden; border-radius: var(--edge-sm); background: var(--bg-input); }
 /* scaleX, not width: animating width is a layout animation, and the repo has
    a test that says so. transform-origin pins it to the left edge. */
 .up-fill {

@@ -505,7 +505,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .reply-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 .reply-chip {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 2px 4px 2px 8px; border-radius: 12px;
+  padding: 2px 4px 2px 8px; border-radius: var(--edge-xl);
   background: rgba(var(--accent-rgb),.16); color: var(--accent-text);
   font-size: 12.5px; font-weight: 600; max-width: 180px;
 }
@@ -529,7 +529,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 
 .input-wrapper {
   display: flex; align-items: center; gap: 4px;
-  background: var(--bg-chatbar); border-radius: 10px;
+  background: var(--bg-chatbar); border-radius: var(--edge-lg);
   padding: 0 8px 0 4px;
   border: 1px solid transparent;
   transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
@@ -554,7 +554,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .input-wrapper.sending      { opacity: .7; pointer-events: none; }
 
 .input-attach {
-  width: 36px; height: 36px; border-radius: 8px;
+  width: 36px; height: 36px; border-radius: var(--edge-lg);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); flex-shrink: 0;
   transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
@@ -587,7 +587,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 
 .input-actions { display: flex; gap: 2px; }
 .input-action-btn {
-  width: 30px; height: 30px; border-radius: 6px;
+  width: 30px; height: 30px; border-radius: var(--edge-md);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -601,7 +601,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .gif-label { font-size: 11px; font-weight: 800; letter-spacing: -.3px; }
 
 .send-btn {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 32px; height: 32px; border-radius: var(--edge-lg);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-faint); background: var(--hover);
   transition: background var(--dur-1) var(--ease-out),
@@ -668,7 +668,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   .send-btn:not(.ready) { background: transparent; }
 
   /* Matching the other two so the row reads as one set of controls. */
-  .send-btn { border-radius: 6px; }
+  .send-btn { border-radius: var(--edge-md); }
 
   /* The glyph did not grow with the button: a 16px icon centred in 44px next
      to 18px icons in the same 44px looked shrunken. Set on the SVG because
@@ -684,11 +684,11 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .fmt-toolbar {
   position: fixed; z-index: 1401; transform: translateX(-50%);
   display: flex; gap: 1px; padding: 4px;
-  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: 8px;
+  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: var(--edge-lg);
   box-shadow: var(--shadow-md);
 }
 .fmt-toolbar button {
-  width: 30px; height: 30px; border-radius: 6px;
+  width: 30px; height: 30px; border-radius: var(--edge-md);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-2); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }

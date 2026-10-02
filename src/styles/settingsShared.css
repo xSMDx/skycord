@@ -118,7 +118,7 @@
 
 /* ── Toggle ────────────────────────────────────────────────────────────── */
 .st-toggle {
-  width: 42px; height: 24px; border-radius: 12px; flex-shrink: 0;
+  width: 42px; height: 24px; border-radius: var(--edge-xl); flex-shrink: 0;
   background: var(--toggle-off); position: relative; border: none; cursor: pointer;
   transition: background var(--dur-2) var(--ease-out);
 }
@@ -148,7 +148,7 @@
    parent — so every settings page with more than one of them rendered them
    butted together as a single slab. Performance showed it worst with three in
    a row, but Devices has four and Legal and Updates three each. */
-.st-card { background: var(--bg-panel); border-radius: 10px; overflow: hidden; }
+.st-card { background: var(--bg-panel); border-radius: var(--edge-xl); overflow: hidden; }
 /* Adjacent cards only. Most pages put a .st-section heading between theirs and
    are already spaced by its margins; a blanket margin-bottom added 12px to
    those as well. This targets the case that was actually broken — two cards
@@ -211,12 +211,12 @@ details[open] > .st-summary .st-summary-ico { transform: rotate(90deg); }
 .st-tbd {
   font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
   color: var(--text-3); background: var(--hover);
-  padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+  padding: 2px 6px; border-radius: var(--edge-sm); flex-shrink: 0;
 }
 .st-placeholder {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; text-align: center;
-  padding: 56px 24px; border: 1px dashed var(--border); border-radius: 10px;
+  padding: 56px 24px; border: 1px dashed var(--border); border-radius: var(--edge-lg);
   color: var(--text-3);
 }
 .st-placeholder-title { font-size: 15px; font-weight: 600; color: var(--text-2); }

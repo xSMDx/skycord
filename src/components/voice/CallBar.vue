@@ -552,7 +552,7 @@ onBeforeUnmount(() => {
 
 /* Discord-style controls — no container shape, buttons float on the call bg */
 .cb-bar { display: flex; align-items: center; gap: 8px; }
-.cb-group { display: flex; align-items: center; gap: 2px; background: var(--bg-input); border-radius: 16px; padding: 4px; }
+.cb-group { display: flex; align-items: center; gap: 2px; background: var(--bg-input); border-radius: var(--edge-xl); padding: 4px; }
 /* One of these groups holds controls that only exist for DM and group calls.
    In a voice channel it has no children at all and rendered as a bare 10px
    pill — its own padding and nothing else — plus the 8px gap beside it. On a
@@ -560,7 +560,7 @@ onBeforeUnmount(() => {
    what pushed Leave Call onto a second row. */
 .cb-group:empty { display: none; }
 .cb-b {
-  width: 40px; height: 40px; border-radius: 8px;
+  width: 40px; height: 40px; border-radius: var(--edge-lg);
   background: transparent; color: var(--text-strong);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
@@ -574,7 +574,7 @@ onBeforeUnmount(() => {
 .cb-b.off:hover:not(:disabled) { background: var(--danger-hover); color: var(--text-on-danger-hover); }
 /* device-picker chevron — slim split-button next to mic/camera */
 .cb-chev {
-  width: 18px; height: 40px; border-radius: 6px;
+  width: 18px; height: 40px; border-radius: var(--edge-md);
   background: transparent; color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
@@ -584,12 +584,12 @@ onBeforeUnmount(() => {
 /* mic/cam + ▾ pair highlight: the split wrapper takes the hover bg so both
    halves light together (Discord behavior). Individual bg hovers inside the
    split go transparent; red .off / green .on states keep their own fills. */
-.cb-split { position: relative; display: flex; align-items: center; gap: 2px; border-radius: 8px; transition: background var(--dur-1) var(--ease-out); }
+.cb-split { position: relative; display: flex; align-items: center; gap: 2px; border-radius: var(--edge-lg); transition: background var(--dur-1) var(--ease-out); }
 .cb-split:hover:has(.cb-b:not(:disabled)) { background: var(--hover); }
 .cb-split .cb-b:hover:not(:disabled):not(.on):not(.off) { background: transparent; }
 .cb-split.menuopen { background: var(--hover); }
 .cb-leave {
-  width: 56px; height: 44px; border-radius: 12px; flex-shrink: 0;
+  width: 56px; height: 44px; border-radius: var(--edge-xl); flex-shrink: 0;
   background: var(--danger); color: var(--text-on-danger);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out);
@@ -622,7 +622,7 @@ onBeforeUnmount(() => {
      as a mistake rather than a layout. 44 is the touch minimum anyway; the
      extra 4px was generosity the width could not pay for. Heights stay 48,
      which costs nothing horizontally and helps the thumb. */
-  .cb-b     { width: 44px; height: 48px; border-radius: 10px; }
+  .cb-b     { width: 44px; height: 48px; border-radius: var(--edge-lg); }
   .cb-chev  { width: 24px; height: 48px; }
   .cb-leave { width: 52px; height: 48px; }
   /* Room between distinct controls, so the gap itself is a target buffer. */
@@ -670,14 +670,14 @@ onBeforeUnmount(() => {
 .cb-join-row { display: flex; align-items: center; gap: 10px; }
 .cb-join {
   display: flex; align-items: center; gap: 8px;
-  height: 40px; padding: 0 22px; border-radius: 8px;
+  height: 40px; padding: 0 22px; border-radius: var(--edge-lg);
   background: var(--green); color: var(--text-on-green); font-size: 14px; font-weight: 700;
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .cb-join:hover { background: var(--green-hover); transform: translateY(-1px); }
 .cb-join:active { transform: scale(.96); }
 .cb-dismiss {
-  width: 40px; height: 40px; border-radius: 8px;
+  width: 40px; height: 40px; border-radius: var(--edge-lg);
   background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out);
 }

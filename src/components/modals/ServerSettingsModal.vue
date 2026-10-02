@@ -206,7 +206,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .sv-navitem {
   display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 8px 10px; border-radius: 6px;
+  width: 100%; padding: 8px 10px; border-radius: var(--edge-md);
   font-size: 15px; font-weight: 500; color: var(--text-2); text-align: left;
   background: none; border: none; cursor: pointer; font-family: inherit;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);

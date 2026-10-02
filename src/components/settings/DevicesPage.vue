@@ -261,7 +261,7 @@ const signOutOthers = async () => {
   font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
   color: var(--accent-text);
   background: rgba(var(--accent-rgb), .18);
-  padding: 3px 7px; border-radius: 4px;
+  padding: 3px 7px; border-radius: var(--edge-sm);
 }
 
 .dv-meta {
@@ -319,7 +319,7 @@ const signOutOthers = async () => {
 
 .dv-skel {
   background: var(--hover);
-  border-radius: 4px;
+  border-radius: var(--edge-sm);
   animation: dv-pulse 1.4s var(--ease-inout) infinite;
 }
 .dv-icon.dv-skel { border-radius: 50%; }

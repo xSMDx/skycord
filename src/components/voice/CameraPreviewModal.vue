@@ -110,7 +110,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 
 .cp-stage {
   position: relative; width: 100%; aspect-ratio: 16 / 9;
-  background: var(--letterbox); border-radius: 8px; overflow: hidden;
+  background: var(--letterbox); border-radius: var(--edge-lg); overflow: hidden;
 }
 /* Mirrored, because a preview of yourself that isn't mirrored reads as wrong. */
 .cp-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
@@ -121,7 +121,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 
 .cp-select {
-  width: 100%; padding: 8px 12px; border-radius: 8px;
+  width: 100%; padding: 8px 12px; border-radius: var(--edge-lg);
   background: var(--bg-input); color: var(--text-1);
   border: 1px solid var(--border); font: inherit; font-size: 14px; outline: none;
 }
@@ -131,7 +131,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .cp-always input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .cp-go {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 16px; border-radius: 8px;
+  padding: 10px 16px; border-radius: var(--edge-lg);
   background: var(--accent); color: var(--text-on-accent);
   font-size: 14px; font-weight: 600; transition: filter var(--dur-1) var(--ease-out);
 }

@@ -96,7 +96,7 @@ const create = () => {
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 
-.ndm { display: flex; flex-direction: column; background: var(--bg-panel); border-radius: 12px; }
+.ndm { display: flex; flex-direction: column; background: var(--bg-panel); border-radius: var(--edge-xl); }
 .ndm-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 0; }
 .ndm-title  { font-size: 18px; font-weight: 700; color: var(--text-strong); }
 .ndm-sub    { font-size: 13px; color: var(--text-3); margin-top: 2px; }
@@ -111,7 +111,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   display: flex; align-items: center; gap: 8px;
   margin: 16px 20px 0;
   background: var(--bg-input); border: 1.5px solid var(--border);
-  border-radius: 8px; padding: 8px 12px;
+  border-radius: var(--edge-lg); padding: 8px 12px;
   transition: border-color var(--dur-2) var(--ease-out);
 }
 .ndm-search:focus-within { border-color: var(--accent); }
@@ -121,7 +121,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-list { flex: 1; overflow: hidden auto; padding: 8px 8px; max-height: 320px; margin-top: 8px; }
 .ndm-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 8px 12px; border-radius: 8px; cursor: pointer;
+  padding: 8px 12px; border-radius: var(--edge-lg); cursor: pointer;
   transition: background var(--dur-1) var(--ease-out);
 }
 .ndm-item:hover { background: var(--hover); }
@@ -137,7 +137,7 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ndm-name  { display: block; font-size: 15px; font-weight: 600; color: var(--text-strong); }
 .ndm-tag   { display: block; font-size: 12px; color: var(--text-3); }
 .ndm-checkbox {
-  width: 20px; height: 20px; border-radius: 4px;
+  width: 20px; height: 20px; border-radius: var(--edge-sm);
   border: 2px solid var(--text-3); display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
@@ -149,14 +149,14 @@ img    { display: block; width: 100%; height: 100%; object-fit: cover; }
   border-top: 1px solid var(--divider);
 }
 .ndm-cancel {
-  flex: 1; padding: 10px; border-radius: 6px;
+  flex: 1; padding: 10px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-1);
   background: var(--hover);
   transition: background var(--dur-1) var(--ease-out);
 }
 .ndm-cancel:hover { background: var(--hover-strong); }
 .ndm-create {
-  flex: 2; padding: 10px; border-radius: 6px;
+  flex: 2; padding: 10px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

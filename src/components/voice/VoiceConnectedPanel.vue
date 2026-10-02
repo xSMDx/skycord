@@ -311,7 +311,7 @@ onBeforeUnmount(() => {
 .vcp-name { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vcp-warn { color: var(--warning-text); }
 .vcp-leave {
-  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: var(--edge-lg); flex-shrink: 0;
   background: var(--hover); color: var(--text-1);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
 
 .vcp-controls { display: flex; gap: 6px; }
 .vcp-btn {
-  flex: 1; height: 32px; border-radius: 8px;
+  flex: 1; height: 32px; border-radius: var(--edge-lg);
   background: var(--hover); color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
 /* Hover popover — appears above the strip */
 .vcp-pop {
   position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px);
-  background: var(--bg-floor); border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-floor); border: 1px solid var(--border); border-radius: var(--edge-xl);
   padding: 12px; box-shadow: var(--shadow-md); z-index: 50;
   opacity: 0; transform: translateY(6px); pointer-events: none;
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
@@ -365,7 +365,7 @@ onBeforeUnmount(() => {
 .vcp-pop-vs { align-items: center; }
 .vcp-pop-select {
   flex: 1; min-width: 0; max-width: 60%;
-  padding: 3px 6px; border-radius: 4px;
+  padding: 3px 6px; border-radius: var(--edge-sm);
   background: var(--bg-input); border: 1px solid var(--border);
   color: var(--text-1); font-size: 12px; font-weight: 600;
   outline: none; cursor: pointer;
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
 .vcp-pop-select option { background: var(--bg-panel); color: var(--text-1); }
 .vcp-pop-help { font-size: 11px; line-height: 1.45; color: var(--text-faint); margin: 10px 0 0; }
 .vcp-pop-btn {
-  width: 100%; margin-top: 10px; height: 38px; border-radius: 8px;
+  width: 100%; margin-top: 10px; height: 38px; border-radius: var(--edge-lg);
   font-weight: 600;
   background: var(--hover); color: var(--text-2); font-size: 12px;
   display: flex; align-items: center; justify-content: center; gap: 6px;

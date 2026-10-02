@@ -327,20 +327,20 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .ml-away{
   position:absolute;left:16px;right:16px;bottom:10px;z-index:5;
   display:flex;align-items:center;justify-content:space-between;gap: 12px;
-  padding: 8px 8px 8px 14px;border-radius: 8px;
+  padding: 8px 8px 8px 14px;border-radius: var(--edge-lg);
   background:var(--bg-floor);box-shadow:var(--shadow-sm);
   font-size:13px;color:var(--text-1);
 }
 .ml-away-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ml-away-btn{
   display:flex;align-items:center;gap: 6px;flex:none;
-  padding: 6px 12px;border-radius: 6px;border:none;cursor:pointer;
+  padding: 6px 12px;border-radius: var(--edge-md);border:none;cursor:pointer;
   background:var(--accent);color:var(--text-on-accent);font:inherit;font-weight:600;
 }
 .ml-jump{
   position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:5;
   display:flex;align-items:center;gap: 8px;
-  padding: 8px 14px;border-radius: 999px;border:none;cursor:pointer;
+  padding: 8px 14px;border-radius: var(--edge-pill);border:none;cursor:pointer;
   background:var(--accent);color:var(--text-on-accent);
   font:inherit;font-size:13px;font-weight:600;
   box-shadow:var(--shadow-sm);
@@ -350,7 +350,7 @@ const cancelEdit = () => { editingId.value = null; editingText.value = '' }
 .jump-leave-active{transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
 .jump-enter-from,.jump-leave-to{opacity:0;transform:translateX(-50%) translateY(6px)}
 .welcome{padding: 20px 16px 16px;border-bottom:1px solid var(--divider);margin-bottom: 8px}
-.ch-icon{width:52px;height:52px;border-radius: 14px;background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
+.ch-icon{width:52px;height:52px;border-radius: var(--edge-xl);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;margin-bottom: 12px}
 .ch-icon svg{stroke:var(--text-on-accent)}
 .dm-av{width:64px;height:64px;border-radius: 50%;overflow:hidden;margin-bottom: 14px;border:3px solid var(--bg-panel)}
 .group-av{display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--text-on-accent);border:none}

@@ -412,7 +412,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   position: fixed; z-index: 9001;
   background: var(--bg-floor);
   border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px 0; min-width: 200px; max-width: 280px;
+  border-radius: var(--edge-lg); padding: 6px 0; min-width: 200px; max-width: 280px;
   box-shadow: var(--shadow-md);
   animation: cm-pop var(--dur-1) var(--ease-out);
   outline: none;

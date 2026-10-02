@@ -121,7 +121,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 }
 .ss-input {
   width: 100%; background: var(--bg-input); border: 1px solid var(--seam);
-  border-radius: 6px; padding: 12px 12px; color: var(--text-1); font: inherit; font-size: 15px;
+  border-radius: var(--edge-md); padding: 12px 12px; color: var(--text-1); font: inherit; font-size: 15px;
 }
 .ss-input:focus { outline: none; border-color: var(--accent); }
 .ss-count { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -132,7 +132,7 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
 .ss-hint { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 
 .ss-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-.ss-btn { font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 6px; color: var(--text-strong); background: var(--hover-strong); }
+.ss-btn { font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: var(--edge-md); color: var(--text-strong); background: var(--hover-strong); }
 .ss-btn:hover { background: var(--hover-strong); }
 .ss-btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .ss-btn.primary:hover { background: var(--accent-hover); }

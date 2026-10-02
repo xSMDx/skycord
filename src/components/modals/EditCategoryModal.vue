@@ -171,7 +171,7 @@ const savePerms = async (payload: { overwrites: WireOverwrite[] }) => {
 }
 .ec-rail-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ec-tab {
-  padding: 8px 10px; border-radius: 6px; background: none; border: none; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--edge-md); background: none; border: none; cursor: pointer;
   font-family: inherit; font-size: 14.5px; color: var(--text-2); text-align: left;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
               transform var(--dur-1) var(--ease-out);
@@ -201,7 +201,7 @@ const savePerms = async (payload: { overwrites: WireOverwrite[] }) => {
 }
 .ec-input {
   width: 100%; background: var(--bg-input); border: 1px solid var(--seam);
-  border-radius: 6px; padding: 10px 12px; color: var(--text-1);
+  border-radius: var(--edge-md); padding: 10px 12px; color: var(--text-1);
   font: inherit; font-size: 15px;
 }
 .ec-input:focus { outline: none; border-color: var(--accent); }
@@ -209,7 +209,7 @@ const savePerms = async (payload: { overwrites: WireOverwrite[] }) => {
 .ec-empty { font-size: 13.5px; color: var(--text-3); }
 .ec-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .ec-btn {
-  padding: 9px 16px; border-radius: 6px; border: none; cursor: pointer;
+  padding: 9px 16px; border-radius: var(--edge-md); border: none; cursor: pointer;
   font-family: inherit; font-size: 14px; font-weight: 600;
   background: none; color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);

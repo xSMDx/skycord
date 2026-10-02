@@ -5367,18 +5367,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    reads as a banner rather than as one item in a directory. */
 .dsc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
 
-.dsc-card{position:relative;display:flex;flex-direction:column;background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
+.dsc-card{position:relative;display:flex;flex-direction:column;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--edge-xl);overflow:hidden;transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out)}
 .dsc-card:hover{border-color:var(--active-ring);transform:translateY(-2px)}
 .dsc-banner{height:56px;flex-shrink:0}
 /* Pulled up over the banner, the way the server icon sits on a Discord card. */
-.dsc-ic{width:44px;height:44px;border-radius:14px;overflow:hidden;margin: -22px 0 0 14px;border:3px solid var(--bg-raised);background:var(--bg-panel);flex-shrink:0}
+.dsc-ic{width:44px;height:44px;border-radius: var(--edge-xl);overflow:hidden;margin: -22px 0 0 14px;border:3px solid var(--bg-raised);background:var(--bg-panel);flex-shrink:0}
 .dsc-name{font-size:15px;font-weight:700;color:var(--text-strong);padding: 8px 14px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Two lines, clamped: descriptions run to 300 chars server-side and an
    unclamped one makes every card in the row a different height. */
 .dsc-desc{margin: 4px 0 0;padding: 0 14px;font-size:13px;line-height:1.4;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
 .dsc-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding: 12px 14px 14px}
 .dsc-count{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
-.dsc-join{padding: 7px 16px;border-radius:6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.dsc-join{padding: 7px 16px;border-radius: var(--edge-md);background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .dsc-join:hover:not(:disabled){background:var(--accent-hover)}
 .dsc-join:disabled{opacity:.6;cursor:default}
 
@@ -5388,7 +5388,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-empty-s{margin: 6px 0 0;font-size:13px;max-width:44ch;line-height:1.5}
 
 .dsc-skel{padding: 20px 14px;gap:10px;pointer-events:none}
-.dsc-skel-bar{height:10px;border-radius:5px;background:var(--hover);animation: dsc-pulse 1.4s var(--ease-out) infinite}
+.dsc-skel-bar{height:10px;border-radius: var(--edge-sm);background:var(--hover);animation: dsc-pulse 1.4s var(--ease-out) infinite}
 @keyframes dsc-pulse{0%,100%{opacity:.45}50%{opacity:.8}}
 @media (prefers-reduced-motion: reduce){.dsc-skel-bar{animation:none}.dsc-card:hover{transform:none}}
 
@@ -5415,15 +5415,15 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ri:active .ri-icon{transform:scale(.94)}
 .ri-icon{width:44px;height:44px;border-radius: 50%;overflow:hidden;background:var(--bg-panel);transition: border-radius var(--dur-3) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);display:flex;align-items:center;justify-content:center}
 .ri-icon img{width:100%;height:100%}
-.ri:hover .ri-icon{border-radius: 16px;transform:scale(1.05)}
-.ri.active .ri-icon{border-radius: 16px;box-shadow:0 4px 16px rgba(var(--accent-rgb),.4)}
+.ri:hover .ri-icon{border-radius: var(--edge-xl);transform:scale(1.05)}
+.ri.active .ri-icon{border-radius: var(--edge-xl);box-shadow:0 4px 16px rgba(var(--accent-rgb),.4)}
 /* Home logo colour is driven by the SkycordIcon `color` prop (accent in the
    friend zone, currentColor=--text-1 in a channel), so the icon colour is NOT
    set here — only the surrounding circle's surface changes. */
 .ri.home .ri-icon{background:var(--bg-chat);color:var(--text-1)}
 .ri.home:hover .ri-icon{background:var(--bg-panel)}
 .ri.home.active .ri-icon{background:rgba(var(--accent-rgb),.15)}
-.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
+.ri-badge{position:absolute;bottom:6px;right:8px;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: var(--edge-lg);border:2px solid var(--bg-floor);display:flex;align-items:center;justify-content:center}
 /* Voice-activity mark. Opposite corner from .ri-badge above, so a server that
    is both unread and occupied shows two marks that never touch: this one at
    x 10–28, that one at x 44–60, with the 4px pip at x 0–4 clear of both.
@@ -5439,7 +5439,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    Surfaces and shadows deliberately match TooltipLayer's `.tip`, one z-index
    below it: the two are the same gesture answered at two levels of detail, and
    they should not look like they came from different apps. */
-.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: 10px;background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:var(--shadow-md)}
+.rvp{position:fixed;z-index:9999;pointer-events:none;width:214px;padding: 10px 12px;border-radius: var(--edge-xl);background:var(--bg-floor,var(--bg-floor));border:1px solid var(--border);box-shadow:var(--shadow-md)}
 .rvp-name{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvp-sub{font-size:11.5px;color:var(--text-3);margin-top: 1px}
 .rvp-ch{margin-top: 8px}
@@ -5473,11 +5473,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sidebar.collapsed{width:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), width 0s var(--dur-exit)}
 
 .sb-search{padding: 8px 8px 4px;flex-shrink:0}
-.sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: 6px;background:var(--bg-input);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.sb-search-btn{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 10px;border-radius: var(--edge-md);background:var(--bg-input);color:var(--text-faint);font-size:13px;text-align:left;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-search-btn:hover{background:var(--bg-floor);color:var(--text-1)}
 
 .sb-nav{padding: 4px 8px}
-.sb-nav-item{display:flex;align-items:center;gap: 10px;width:100%;padding: 8px 10px;border-radius: 6px;font-size:14px;font-weight:500;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.sb-nav-item{display:flex;align-items:center;gap: 10px;width:100%;padding: 8px 10px;border-radius: var(--edge-md);font-size:14px;font-weight:500;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .sb-nav-item:hover{background:var(--hover);color:var(--text-1)}
 .sb-nav-item.active{color:var(--text-strong);outline:1px solid var(--active-ring);outline-offset:-1px}
 
@@ -5532,7 +5532,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .sb-hvoice-more{font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
 .sb-body{flex:1;overflow: hidden auto;padding: 8px 0}
 
-.dm-item{display:flex;align-items:center;gap: 10px;padding: 6px 10px;margin: 0 6px;border-radius: 6px;cursor:pointer;transition: background var(--dur-1) var(--ease-out);position:relative}
+.dm-item{display:flex;align-items:center;gap: 10px;padding: 6px 10px;margin: 0 6px;border-radius: var(--edge-md);cursor:pointer;transition: background var(--dur-1) var(--ease-out);position:relative}
 .dm-item:hover{background:var(--hover)}
 .dm-item.active{outline:1px solid var(--active-ring);outline-offset:-1px}
 .dm-av{position:relative;width:32px;height:32px;flex-shrink:0}
@@ -5541,7 +5541,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-info{flex:1;min-width:0}
 .dm-name{display:block;font-size:14px;font-weight:500;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm-last{display:block;font-size:12px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:var(--danger);color:var(--text-on-danger);font-size:11px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dm-unread{min-width:18px;height:18px;padding: 0 6px;background:var(--danger);color:var(--text-on-danger);font-size:11px;font-weight:700;border-radius: var(--edge-lg);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Muted: the count still matters, it just stops shouting. */
 .dm-unread.muted{background:var(--text-3);opacity:.6}
 .dm-pin{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
@@ -5553,7 +5553,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    reading it. */
 .dm-item:not(.active):has(.dm-muted) .dm-name{opacity:.55}
 .dm-call{width:18px;height:18px;border-radius: 50%;background:var(--green);color:var(--text-on-green);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
+.dm-x{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: var(--edge-sm);transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .dm-item:hover .dm-x{opacity:1}
 .dm-x:hover{color: var(--text-strong)}
 
@@ -5573,7 +5573,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* Edit Group pencil in header */
 .ch-edit-btn{
-  width:26px;height:26px;border-radius: 6px;flex-shrink:0;
+  width:26px;height:26px;border-radius: var(--edge-md);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
   color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -5584,16 +5584,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .icon-btn-leave:hover{background:rgba(var(--danger-rgb), .12) !important}
 
 /* @everyone toast */
-.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: 8px;box-shadow:var(--shadow-md)}
+.app-toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;background:var(--green);color: var(--text-strong);font-size:14px;font-weight:600;padding: 10px 18px;border-radius: var(--edge-lg);box-shadow:var(--shadow-md)}
 .toast-pop-enter-active{transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out)}
 .toast-pop-leave-active{transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in)}
 .toast-pop-enter-from,.toast-pop-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 
 /* The update prompt. Same place and same entrance as the toast, but it stays
    until it is answered. */
-.app-update{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 32px));flex-wrap:wrap;justify-content:center;background:var(--bg-raised);color:var(--text-1);border:1px solid var(--border);font-size:14px;padding:10px 12px 10px 16px;border-radius:10px;box-shadow:var(--shadow-md)}
+.app-update{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:1600;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 32px));flex-wrap:wrap;justify-content:center;background:var(--bg-raised);color:var(--text-1);border:1px solid var(--border);font-size:14px;padding:10px 12px 10px 16px;border-radius:var(--edge-xl);box-shadow:var(--shadow-md)}
 .app-update-text{font-weight:600}
-.app-update-btn{border:0;border-radius:6px;padding:7px 12px;background:transparent;color:var(--text-2);font:inherit;font-weight:600;cursor:pointer;transition:background var(--dur-1) var(--ease-out),color var(--dur-1) var(--ease-out)}
+.app-update-btn{border:0;border-radius: var(--edge-md);padding:7px 12px;background:transparent;color:var(--text-2);font:inherit;font-weight:600;cursor:pointer;transition:background var(--dur-1) var(--ease-out),color var(--dur-1) var(--ease-out)}
 .app-update-btn:hover{background:var(--hover);color:var(--text-1)}
 .app-update-btn:active{transform:scale(.97)}
 .app-update-btn.primary{background:var(--accent);color:var(--text-on-accent)}
@@ -5607,14 +5607,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .mp-owner{font-size:11px;color:var(--text-3)}
 .mp-invite{
   display:flex;align-items:center;justify-content:center;gap: 8px;
-  margin: 8px 12px 14px;padding: 8px 12px;border-radius: 6px;
+  margin: 8px 12px 14px;padding: 8px 12px;border-radius: var(--edge-md);
   font-size:14px;font-weight:600;color: var(--text-on-accent);
   background:var(--accent);transition: background var(--dur-1) var(--ease-out);
 }
 .mp-invite:hover{background:var(--accent-hover)}
 
 .ch-group{padding: 0 6px;margin-bottom: 4px}
-.ch-group-label{display:flex;align-items:center;gap: 4px;padding: 6px 6px;border-radius: 4px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition: color var(--dur-2) var(--ease-out);white-space:nowrap}
+.ch-group-label{display:flex;align-items:center;gap: 4px;padding: 6px 6px;border-radius: var(--edge-sm);font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;cursor:pointer;transition: color var(--dur-2) var(--ease-out);white-space:nowrap}
 .ch-group-label:hover{color:var(--text-2)}
 /* The fold control, now a real button inside the label. Transparent and
    flexed to fill, the same trick as .ch-open on a channel row — the label
@@ -5625,7 +5625,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   letter-spacing:inherit;text-transform:inherit;text-align:left;cursor:pointer;
 }
 .ch-group-toggle:focus{outline:none}
-.ch-group-toggle:focus-visible{outline:2px solid var(--active-ring);outline-offset:2px;border-radius:4px}
+.ch-group-toggle:focus-visible{outline:2px solid var(--active-ring);outline-offset:2px;border-radius: var(--edge-sm)}
 /* The name takes only the width it needs, so the chevron sits directly after
    it — `SERVER STAT ⌄`, the way the reference does it. With `flex: 1` here the
    span absorbed all the free space and threw the chevron out to the right
@@ -5664,13 +5664,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Where the drag would land. min-height keeps the headerless uncategorised
    group hittable while it is empty — during a drag it is the only visible
    thing saying "you can put this outside every category". */
-.ch-group.drop-target{outline:1px dashed var(--accent);outline-offset:1px;border-radius: 6px;background:rgba(var(--accent-rgb),.07);min-height:26px}
+.ch-group.drop-target{outline:1px dashed var(--accent);outline-offset:1px;border-radius: var(--edge-md);background:rgba(var(--accent-rgb),.07);min-height:26px}
 /* Off-screen until focused. Not display:none — that is unfocusable, and an
    unfocusable skip link is decoration. */
 .skip-link{
   position:fixed; top:8px; left:8px; z-index:10000;
   transform:translateY(-200%);
-  padding: 8px 14px; border-radius: 6px;
+  padding: 8px 14px; border-radius: var(--edge-md);
   background:var(--bg-panel); color:var(--text-strong);
   font-size:14px; font-weight:600; border:1px solid var(--active-ring);
   box-shadow:var(--shadow-md);
@@ -5702,7 +5702,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .ch-add-btn{color:var(--icon);opacity:0;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-group-label:hover .ch-add-btn,.ch-group-label:focus-within .ch-add-btn{opacity:1}
 .ch-add-btn:hover{color:var(--text-strong)}
-.ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: 6px;font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
+.ch-item{display:flex;align-items:center;gap: 8px;padding: 6px 8px;border-radius: var(--edge-md);font-size:14px;color:var(--text-3);width:100%;text-align:left;cursor:pointer;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 /* The label, now a real button rather than the row pretending to be one.
    Everything visual still belongs to .ch-item — this only has to disappear:
    no chrome of its own, inheriting colour so the row's hover and active rules
@@ -5718,7 +5718,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    noise. Keyboard focus still lands here — this styles it, it does not
    remove it (see :focus-visible below). */
 .ch-open:focus{outline:none}
-.ch-open:focus-visible{outline:2px solid var(--active-ring);outline-offset:2px;border-radius:4px}
+.ch-open:focus-visible{outline:2px solid var(--active-ring);outline-offset:2px;border-radius: var(--edge-sm)}
 /* Press feedback belongs to the ROW, not to the label.
    The global veil in style.css matches every real <button>, and .ch-open is
    one now — so a press would paint an unrounded rectangle across the label
@@ -5759,7 +5759,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    only discoverable by reading the names underneath it. */
 .ch-item.voice .ch-icon.occupied{color:var(--green)}
 .ch-item.unread{color:var(--text-2);font-weight:600}
-.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: 4px;transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
+.ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: var(--edge-sm);transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}
 .ch-icon{flex-shrink:0;color:var(--icon)}
@@ -5768,19 +5768,19 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    row again, as it always did. The occupied voice icon keeps its green. */
 .ch-item:hover .ch-icon:not(.occupied),.ch-item.active .ch-icon:not(.occupied),.ch-item.unread .ch-icon:not(.occupied){color:inherit}
 .ch-name{flex:1;overflow:hidden;text-overflow:ellipsis}
-.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;display:flex;align-items:center;justify-content:center}
+.ch-unread{min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: var(--edge-lg);display:flex;align-items:center;justify-content:center}
 /* Who is sitting in a voice channel. Indented under its row so the nesting is
    read from the left edge, and deliberately quieter than the channel name —
    these are occupants of the row above, not siblings of it. The reference also
    shows an avatar-only density for crowded servers; that needs a trigger
    (a per-server setting, or a count threshold) and is not built here. */
-.vc-invite{display:flex;align-items:center;gap: 6px;width:calc(100% - 22px);margin-left: 22px;padding: 4px 8px;border-radius: 4px;background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12.5px;text-align:left}
+.vc-invite{display:flex;align-items:center;gap: 6px;width:calc(100% - 22px);margin-left: 22px;padding: 4px 8px;border-radius: var(--edge-sm);background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12.5px;text-align:left}
 .vc-invite:hover{background:var(--hover);color:var(--text-1)}
 .vc-occ-ic{display:flex;flex-shrink:0;color:var(--text-3)}
 /* Not an icon: the reference uses a word, and a word survives being the
    only red thing in a list of grey ones. */
-.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:var(--text-on-danger);background:var(--danger);border-radius: 4px;padding: 1px 4px;line-height:1.4}
-.vc-occ{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 8px 6px 26px;border:none;background:none;border-radius: 6px;cursor:pointer;text-align:left;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.vc-live{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.4px;color:var(--text-on-danger);background:var(--danger);border-radius: var(--edge-sm);padding: 1px 4px;line-height:1.4}
+.vc-occ{display:flex;align-items:center;gap: 8px;width:100%;padding: 6px 8px 6px 26px;border:none;background:none;border-radius: var(--edge-md);cursor:pointer;text-align:left;color:var(--text-3);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .vc-occ:hover{background:var(--hover);color:var(--text-2)}
 .vc-occ-av{width:20px;height:20px;flex-shrink:0;display:flex}
 .vc-occ-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -5792,7 +5792,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* User Panel */
 .user-panel{flex-shrink:0;height:52px;background:var(--bg-deep);border-top:1px solid var(--seam);display:flex;align-items:center;justify-content:space-between;padding: 0 8px}
-.up-left{display:flex;align-items:center;gap: 8px;cursor:pointer;padding: 4px 6px;border-radius: 6px;transition: background var(--dur-2) var(--ease-out);flex:1;min-width:0}
+.up-left{display:flex;align-items:center;gap: 8px;cursor:pointer;padding: 4px 6px;border-radius: var(--edge-md);transition: background var(--dur-2) var(--ease-out);flex:1;min-width:0}
 .up-left:hover{background:var(--hover)}
 .up-av{position:relative;width:30px;height:30px;flex-shrink:0}
 .up-av-img{width:100%;height:100%;border-radius: 50%;overflow:hidden}
@@ -5815,13 +5815,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 @keyframes up-cb-pulse{0%,100%{opacity:.45}50%{opacity:1}}
 
 .up-btns{display:flex;gap: 1px;flex-shrink:0}
-.up-btn{width:30px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.up-btn{width:30px;height:30px;border-radius: var(--edge-md);display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-btn:hover{background:var(--hover);color:var(--text-1)}
 .up-btn:active{transform:scale(.88)}
 .up-btn.danger{color:var(--danger-text);background:rgba(var(--danger-rgb), .12)}
 /* relative: anchors the upward device flyout to this control pair */
 .up-split{display:flex;align-items:center;position:relative}
-.up-chev{width:14px;height:30px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
+.up-chev{width:14px;height:30px;border-radius: var(--edge-md);display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)}
 .up-chev:hover:not(:disabled){background:var(--hover);color:var(--text-1)}
 /* The chevron points down when the menu is shut and up while it is open, so
    the button says which way it will move things. It was a hardcoded
@@ -5963,7 +5963,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .ch-ident{
   display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
   gap: 1px;min-width:0;flex:1;height:100%;
-  padding: 0 4px;border-radius: 8px;text-align:left;
+  padding: 0 4px;border-radius: var(--edge-lg);text-align:left;
   transition: background var(--dur-1) var(--ease-out);
 }
 .shell.mobile .ch-ident:active{background:var(--hover)}
@@ -6003,7 +6003,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   min-width:18px;height:18px;padding: 0 6px;
   background:var(--danger);color:var(--text-on-danger);
   font-size:11px;font-weight:700;line-height:1;
-  border-radius: 8px;border:2px solid var(--bg-chat);
+  border-radius: var(--edge-lg);border:2px solid var(--bg-chat);
   pointer-events:none;
 }
 
@@ -6074,7 +6074,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* A segmented control: three equal thirds across the full width, which is the
    shape a thumb expects and the only one that fits all three labels. */
 .shell.mobile .fh-tabs{order:3;flex-basis:100%;width:100%;gap:4px}
-.shell.mobile .ftab{flex:1;min-width:0;font-size:14px;border-radius:8px;background:var(--hover)}
+.shell.mobile .ftab{flex:1;min-width:0;font-size:14px;border-radius: var(--edge-lg);background:var(--hover)}
 /* --accent-text, not the desktop rule's #8d96f8. DESIGN.md defines that token
    as "text sitting ON a translucent accent tint", which is exactly this: the
    inherited colour measures 3.85:1 over the tint and fails AA at 14px, while
@@ -6105,7 +6105,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* Rows: a bigger avatar reads better at arm's length, and both actions go to
    full touch size. 12+40+12+name+96+12 leaves ~200px for the name at 375px,
    which fits every name tested including the longest. */
-.shell.mobile .f-row{min-height:64px;gap:12px;padding:10px 8px;border-radius:10px}
+.shell.mobile .f-row{min-height:64px;gap:12px;padding:10px 8px;border-radius:var(--edge-lg)}
 .shell.mobile .f-row:hover{background:none}
 .shell.mobile .f-row:active{background:var(--hover)}
 .shell.mobile .f-av{width:40px;height:40px}
@@ -6149,7 +6149,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .m-back{
   display:flex;align-items:center;justify-content:center;
   min-width:44px;min-height:44px;margin-left: -6px;
-  color:var(--text-2);border-radius: 8px;flex-shrink:0;
+  color:var(--text-2);border-radius: var(--edge-lg);flex-shrink:0;
 }
 .m-back:active{background:var(--hover);color:var(--text-strong)}
 
@@ -6162,18 +6162,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .fh-icon{color:var(--icon);flex-shrink:0}
 .fh-title{font-size:15px;font-weight:700;color: var(--text-strong);margin-right: 4px;white-space:nowrap}
 .fh-tabs{display:flex;gap: 2px}
-.ftab{padding: 6px 12px;border-radius: 6px;font-size:13px;font-weight:500;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
+.ftab{padding: 6px 12px;border-radius: var(--edge-md);font-size:13px;font-weight:500;color:var(--text-2);transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);white-space:nowrap}
 .ftab:hover{background:var(--hover);color:var(--text-1)}
 .ftab.active{background:rgba(var(--accent-rgb),.2);color:var(--accent-text)}
 .pend-tab{position:relative}
-.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: 8px;margin-left: 4px}
-.add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: 6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
+.pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding: 0 4px;background:var(--danger);color:var(--text-on-danger);font-size:10px;font-weight:700;border-radius: var(--edge-lg);margin-left: 4px}
+.add-friend-btn{margin-left: auto;padding: 6px 14px;background:var(--accent);color:var(--text-on-accent);border-radius: var(--edge-md);font-size:13px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);white-space:nowrap}
 .add-friend-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
 
 .friends-body{flex:1;display:flex;overflow:hidden}
 .friends-list{flex:1;overflow: hidden auto;padding: 16px}
 .f-loading{display:flex;align-items:center;gap: 10px;padding: 20px;color:var(--text-faint);font-size:14px}
-.f-search{display:flex;align-items:center;gap: 8px;background:var(--bg-input);border-radius: 6px;padding: 8px 12px;margin-bottom: 16px}
+.f-search{display:flex;align-items:center;gap: 8px;background:var(--bg-input);border-radius: var(--edge-md);padding: 8px 12px;margin-bottom: 16px}
 .f-search input{flex:1;font-size:14px;color:var(--text-1)}
 .f-search input::placeholder{color:var(--text-faint)}
 .f-section-label{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom: 8px}
@@ -6182,9 +6182,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .f-empty p{font-size:16px;font-weight:700;color:var(--text-1)}
 .f-empty span{font-size:14px;line-height:1.5}
 .f-empty strong{color:var(--text-1)}
-.f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
+.f-empty-btn{margin-top: 8px;padding: 8px 18px;border-radius: var(--edge-md);background:var(--accent);color:var(--text-on-accent);font-size:14px;font-weight:600;display:flex;align-items:center;gap: 6px;transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 .f-empty-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
-.f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: 8px;border-bottom:1px solid var(--hover);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.f-row{display:flex;align-items:center;gap: 12px;padding: 10px 12px;border-radius: var(--edge-lg);border-bottom:1px solid var(--hover);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .f-row:hover{background:var(--hover);border-color:transparent}
 .f-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .f-av img{border-radius: 50%}
@@ -6210,9 +6210,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .active-now{width:280px;flex-shrink:0;border-left:1px solid var(--divider);padding: 16px;overflow: hidden auto}
 .an-title{font-size:16px;font-weight:700;color: var(--text-strong);margin-bottom: 16px}
 .an-empty{display:flex;flex-direction:column;align-items:center;gap: 8px;color:var(--text-faint);padding: 32px 0;font-size:13px;text-align:center}
-.an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: 6px;background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
+.an-add-btn{margin-top: 8px;padding: 6px 14px;border-radius: var(--edge-md);background:var(--accent);color:var(--text-on-accent);font-size:13px;font-weight:600;transition: background var(--dur-1) var(--ease-out)}
 .an-add-btn:hover{background:var(--accent-hover)}
-.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: 10px;background:var(--hover);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.an-item{display:flex;align-items:center;gap: 10px;padding: 10px;border-radius: var(--edge-lg);background:var(--hover);margin-bottom: 8px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .an-item:hover{background:var(--hover)}
 .an-av{position:relative;width:36px;height:36px;flex-shrink:0}
 .an-av img{border-radius: 50%}
@@ -6315,7 +6315,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dm-header-av img{border-radius: 50%}
 .dm-header-dot{background:var(--bg-chat);position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius: 50%;border:2px solid var(--bg-chat)}
 
-.icon-btn{width:32px;height:32px;border-radius: 6px;display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
+.icon-btn{width:32px;height:32px;border-radius: var(--edge-md);display:flex;align-items:center;justify-content:center;color:var(--icon);transition: background var(--dur-1) var(--ease-out), color var(--dur-2) var(--ease-out)}
 .icon-btn:hover{background:var(--hover);color:var(--text-1)}
 .icon-btn:active{transform:scale(.88)}
 .icon-btn.active{color:var(--accent-text);background:rgba(var(--accent-rgb),.15)}
@@ -6329,8 +6329,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .members-panel.closed{width:0;opacity:0;pointer-events:none;transition: opacity var(--dur-exit) var(--ease-in), width 0s var(--dur-exit)}
 .mp-header{height:48px;flex-shrink:0;border-bottom:1px solid var(--seam);display:flex;align-items:center;padding: 0 14px}
 .mp-header h3{font-size:13px;font-weight:700;color: var(--text-strong);display:flex;align-items:center;gap: 6px}
-.mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: 10px;color:var(--text-3)}
-.mp-search{margin: 8px 10px;background:var(--bg-input);border-radius: 6px;display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
+.mp-count{font-size:11px;background:var(--hover-strong);padding: 1px 6px;border-radius: var(--edge-lg);color:var(--text-3)}
+.mp-search{margin: 8px 10px;background:var(--bg-input);border-radius: var(--edge-md);display:flex;align-items:center;gap: 6px;padding: 6px 8px;border:1px solid transparent;transition: border-color var(--dur-2) var(--ease-out)}
 .mp-search:focus-within{border-color:rgba(var(--accent-rgb),.4)}
 .mp-search input{flex:1;font-size:13px;color:var(--text-1)}
 .mp-search input::placeholder{color:var(--text-faint)}
@@ -6340,7 +6340,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    the second one on, or the list starts with a hole under the search box. */
 .mp-section-label:not(:first-child){margin-top: 14px}
 .mp-empty{color: var(--text-3); font-size: 13px; padding: 12px 8px;}
-.mp-member{display:flex;align-items:center;gap: 10px;padding: 6px 8px;border-radius: 6px;cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
+.mp-member{display:flex;align-items:center;gap: 10px;padding: 6px 8px;border-radius: var(--edge-md);cursor:pointer;transition: background var(--dur-1) var(--ease-out)}
 .mp-member:hover{background:var(--hover)}
 .mp-member.mp-offline{opacity:.35}
 .mp-member.mp-offline:hover{opacity:.8}
@@ -6459,7 +6459,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   margin-bottom: 4px;
 }
 .cm .qr {
-  flex: 1; height: 36px; border-radius: 6px;
+  flex: 1; height: 36px; border-radius: var(--edge-md);
   display: flex; align-items: center; justify-content: center;
   background: none; border: none; cursor: pointer; color: inherit;
   font-size: 20px; line-height: 1;
@@ -6472,7 +6472,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 /* ── Discover: section tabs + theme gallery ── */
 .dsc-tabs { display: flex; gap: 4px; margin-left: 18px; }
 .dsc-tab {
-  padding: 6px 14px; border-radius: 7px; font-size: 14px; font-weight: 500;
+  padding: 6px 14px; border-radius: var(--edge-md); font-size: 14px; font-weight: 500;
   color: var(--text-3); background: none; border: none; cursor: pointer; font-family: inherit;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
               transform var(--dur-1) var(--ease-out);
@@ -6497,7 +6497,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .dsc-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .dsc-theme {
   display: flex; flex-direction: column; gap: 9px; padding: 10px;
-  border-radius: 10px; background: var(--bg-panel); border: 1px solid transparent;
+  border-radius: var(--edge-lg); background: var(--bg-panel); border: 1px solid transparent;
   cursor: pointer; font-family: inherit; text-align: left;
   transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
               transform var(--dur-1) var(--ease-out);
@@ -6507,7 +6507,7 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 .dsc-theme:active { transform: scale(.97); }
 .dsc-theme.on { border-color: var(--accent); }
-.dsc-theme-sw { height: 76px; border-radius: 7px; border: 1px solid var(--border); }
+.dsc-theme-sw { height: 76px; border-radius: var(--edge-md); border: 1px solid var(--border); }
 .dsc-theme-name { font-size: 14px; font-weight: 500; color: var(--text-1);
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

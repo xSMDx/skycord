@@ -52,7 +52,7 @@ onBeforeUnmount(soundRingStop)
 
 .ic-card {
   width: 280px; padding: 28px 24px 22px;
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--edge-xl);
   box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; align-items: center;
   animation: ic-pop var(--dur-4) cubic-bezier(.34,1.56,.64,1);

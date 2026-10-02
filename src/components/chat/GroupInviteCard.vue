@@ -85,7 +85,7 @@ const join = async () => {
 .invite-card {
   display: flex; align-items: center; gap: 12px;
   background: var(--bg-floor); border: 1px solid var(--hover);
-  border-radius: 8px; padding: 12px 16px;
+  border-radius: var(--edge-lg); padding: 12px 16px;
   margin-top: 6px; max-width: 380px;
 }
 
@@ -94,7 +94,7 @@ const join = async () => {
 .ic-error { display: flex; align-items: center; gap: 12px; }
 
 .ic-icon {
-  width: 44px; height: 44px; border-radius: 10px;
+  width: 44px; height: 44px; border-radius: var(--edge-xl);
   background: var(--danger); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; color: var(--text-on-danger);
 }
@@ -109,7 +109,7 @@ const join = async () => {
 }
 
 .ic-btn {
-  padding: 8px 16px; border-radius: 6px; border: none;
+  padding: 8px 16px; border-radius: var(--edge-md); border: none;
   font-size: 14px; font-weight: 600; cursor: pointer;
   background: var(--accent); color: var(--text-on-accent);
   transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);

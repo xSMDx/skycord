@@ -218,7 +218,7 @@ const copyId = () => {
 button { background: none; border: none; cursor: pointer; color: inherit; font: inherit; }
 img { display: block; object-fit: cover; }
 
-.up { position: relative; background: var(--bg-raised); border-radius: 16px; overflow: hidden; }
+.up { position: relative; background: var(--bg-raised); border-radius: var(--edge-xl); overflow: hidden; }
 /* Sits outside both columns so it never fights the banner for the corner. */
 .up-close {
   position: absolute; top: 14px; right: 14px; z-index: 5;
@@ -238,7 +238,7 @@ img { display: block; object-fit: cover; }
    instead of floating as a smaller card inside a larger one. */
 .up-left {
   width: 390px; flex: none; margin: 14px 0 14px 14px;
-  border-radius: 12px; overflow: hidden auto;
+  border-radius: var(--edge-xl); overflow: hidden auto;
   background: var(--bg-panel);
 }
 /* Top padding matches the left panel's margin so the tab row and the banner
@@ -255,7 +255,7 @@ img { display: block; object-fit: cover; }
 .up-anchor { position: relative; }
 .up-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  padding: 10px 18px; border-radius: var(--edge-lg); font-size: 14px; font-weight: 600;
   background: var(--hover-strong); color: var(--text-strong);
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
@@ -273,12 +273,12 @@ img { display: block; object-fit: cover; }
 
 .up-menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
-  min-width: 190px; background: var(--bg-floor); border-radius: 6px; padding: 6px;
+  min-width: 190px; background: var(--bg-floor); border-radius: var(--edge-md); padding: 6px;
   box-shadow: var(--shadow-lg);
 }
 .up-menu button {
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
-  padding: 8px 10px; border-radius: 4px; font-size: 14px; color: var(--text-2);
+  padding: 8px 10px; border-radius: var(--edge-sm); font-size: 14px; color: var(--text-2);
 }
 .up-menu button:hover { background: var(--accent); color: var(--text-on-accent); }
 .up-menu button.danger { color: var(--danger-text); }
@@ -295,7 +295,7 @@ img { display: block; object-fit: cover; }
 .up-meta-v { font-size: 14px; color: var(--text-1); }
 .up-pending {
   margin-top: 18px; font-size: 12.5px; color: var(--text-3);
-  background: var(--hover); border-radius: 8px; padding: 8px 12px;
+  background: var(--hover); border-radius: var(--edge-lg); padding: 8px 12px;
 }
 
 .up-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
@@ -311,7 +311,7 @@ img { display: block; object-fit: cover; }
 .up-mutuals { display: flex; flex-direction: column; gap: 2px; overflow: hidden auto; }
 .up-mutual {
   display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
-  padding: 8px 12px; border-radius: 8px;
+  padding: 8px 12px; border-radius: var(--edge-lg);
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .up-mutual:hover  { background: var(--hover-strong); }

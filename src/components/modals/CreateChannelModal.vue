@@ -166,7 +166,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-type-row { display: flex; gap: 10px; margin-bottom: 4px; }
 .ccm-type-btn {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px 12px; border-radius: 6px;
+  padding: 10px 12px; border-radius: var(--edge-md);
   background: var(--bg-input); color: var(--text-2);
   border: 1px solid transparent; font-size: 14px; font-weight: 600;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
@@ -177,7 +177,7 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
 .ccm-input-wrap { position: relative; display: flex; align-items: center; }
 .ccm-input-icon { position: absolute; left: 12px; color: var(--icon); pointer-events: none; }
 .ccm-input {
-  width: 100%; padding: 10px 12px; border-radius: 4px;
+  width: 100%; padding: 10px 12px; border-radius: var(--edge-sm);
   border: 1px solid transparent; background: var(--bg-input);
   color: var(--text-strong); font-size: 15px; transition: border-color var(--dur-1) var(--ease-out);
 }
@@ -193,13 +193,13 @@ input  { background: none; border: none; outline: none; color: inherit; font: in
   padding: 16px 20px; border-top: 1px solid var(--divider);
 }
 .ccm-cancel {
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-1);
   transition: background var(--dur-1) var(--ease-out);
 }
 .ccm-cancel:hover { background: var(--hover); }
 .ccm-create {
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--edge-md);
   font-size: 14px; font-weight: 600; color: var(--text-on-accent);
   background: var(--accent); transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }

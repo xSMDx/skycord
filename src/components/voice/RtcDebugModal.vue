@@ -183,7 +183,7 @@ const lossPct = computed(() => outLossPct())
 .dbg {
   position: relative; display: flex;
   width: 940px; max-width: 96vw; height: 640px; max-height: 90vh;
-  background: var(--bg-panel); border-radius: 12px; overflow: hidden;
+  background: var(--bg-panel); border-radius: var(--edge-xl); overflow: hidden;
   box-shadow: var(--shadow-lg);
   animation: dbg-in var(--dur-4) var(--ease-out);
 }
@@ -191,7 +191,7 @@ const lossPct = computed(() => outLossPct())
 
 .dbg-x {
   position: absolute; top: 12px; right: 12px; z-index: 2;
-  width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
+  width: 30px; height: 30px; border: none; border-radius: var(--edge-lg); cursor: pointer;
   background: transparent; color: var(--text-3);
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -212,7 +212,7 @@ const lossPct = computed(() => outLossPct())
 }
 .dbg-nav > button {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 8px; border: none; border-radius: 6px; cursor: pointer;
+  padding: 8px 8px; border: none; border-radius: var(--edge-md); cursor: pointer;
   background: transparent; color: var(--text-2); font-size: 13px; text-align: left;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -222,7 +222,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-navfoot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
 .dbg-act {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 8px 6px; border: none; border-radius: 6px; cursor: pointer;
+  padding: 8px 6px; border: none; border-radius: var(--edge-md); cursor: pointer;
   background: var(--hover); color: var(--text-2); font-size: 12px;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
@@ -235,7 +235,7 @@ const lossPct = computed(() => outLossPct())
 .dbg-h span { color: var(--text-faint); font-weight: 400; font-size: 12px; }
 .dbg-err {
   background: rgba(var(--danger-rgb), .12); border: 1px solid rgba(var(--danger-rgb), .3);
-  color: var(--danger-text); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
+  color: var(--danger-text); border-radius: var(--edge-lg); padding: 8px 10px; font-size: 12px; margin: 0 0 14px;
 }
 
 .dbg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-bottom: 20px; }
