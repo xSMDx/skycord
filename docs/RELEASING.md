@@ -35,8 +35,46 @@ server in the world — including skycord.xyz — takes it with `skycord update`
    ```
 
 Nothing is built or copied on the server any more, so the old traps — the
-lockfile aborting a pull, a forgotten `dist` copy, a stale bundle behind
-Cloudflare — cannot happen.
+lockfile aborting a pull, a forgotten `dist` copy — cannot happen.
+
+**A stale landing page behind Cloudflare could happen, and did on 2 October.**
+The app was already immune for a reason that did not carry over: its bundles
+are content-hashed, so every build is a new URL with nothing old at that
+address. The landing had the same handful of filenames since it was written,
+behind a four-hour TTL, so a deploy reached the origin and stayed invisible
+until the TTL expired — which reads exactly like a deploy that silently
+failed, and was diagnosed as one for a while.
+
+The landing now gets the same property, without gaining a build step:
+
+```bash
+node ~/sykord/landing/stamp-assets.mjs /var/www/skycord.xyz
+```
+
+Run it **after** the rsync, against the deployed copy, so nothing generated is
+committed. It rewrites `href="/pages.css"` to `href="/pages.css?v=56255a1f"`,
+the hash being of that file's bytes — change the file and the URL changes, so
+the CDN has no cached copy; leave it and the hash is identical, so an
+unchanged asset keeps its cache, which a timestamp would throw away on every
+deploy. It is idempotent, and `--check` exits non-zero instead of writing.
+
+**No purge is needed, and that is not an accident.** The HTML itself is
+`cf-cache-status: DYNAMIC` — Cloudflare does not cache it — so a deploy's
+fresh HTML immediately points at the new hashed URLs. Both halves have to
+hold: if the HTML ever starts being cached, stamping stops working, because
+nobody would be told the new URLs.
+
+The one gap: assets referenced from inside a stylesheet, which is the fonts
+in `site.css`'s `@font-face` rules. Changing a font does not change
+`site.css`, so its hash would not move. The fonts have not changed since they
+were added; if they ever do, purge them by hand.
+
+To tell the cache apart from the origin, add a query string — it changes the
+cache key, so the answer comes from the origin:
+
+```bash
+curl -s "https://skycord.xyz/content.js?cb=$(date +%s)" | grep -oE 'v[0-9.]+' | head -1
+```
 
 ## The one rule: a release may only add to the database
 
