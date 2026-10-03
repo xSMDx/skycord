@@ -11,7 +11,7 @@
  * stream to the music service, the normalised result streams back into
  * GridFS, and playback streams out — see server/utils/trackStore.ts.
  */
-import type { Request, Response } from 'express'
+import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import { Types } from 'mongoose'
 import { Readable } from 'stream'
 import { Track } from '../models/Track'
@@ -28,9 +28,30 @@ import {
 
 const caps = () => libraryCapsFromEnv()
 
-const me = (req: Request): Types.ObjectId => new Types.ObjectId(String((req as { userId?: string }).userId))
+/**
+ * The caller's id.
+ *
+ * `req.user.sub`, which is what verifyAccessToken puts there and what every
+ * other controller reads. This asked for `req.userId` at first, which does
+ * not exist — so `new Types.ObjectId(String(undefined))` threw, and because
+ * Express 4 does not catch a rejected promise the request simply never
+ * answered. Every route in this file hung, not only the one with the bug.
+ */
+const me = (req: Request): Types.ObjectId => new Types.ObjectId(req.user!.sub)
 
-const bad = (res: Response, reason: string, status = 400): void => { res.status(status).json({ error: reason }) }
+/**
+ * Send a thrown handler to the error middleware instead of nowhere.
+ *
+ * The rest of the codebase does this with try/catch and `next(err)` in each
+ * handler. There are a dozen here and one of them having been forgotten is
+ * exactly the failure above — a hang with no log line and no response, which
+ * is the worst thing a server can do with a bug.
+ */
+const wrap = (fn: (req: Request, res: Response) => Promise<void>): RequestHandler =>
+  (req, res, next: NextFunction) => { void fn(req, res).catch(next) }
+
+/** Errors are `{ message }` here, as everywhere else in this API. */
+const bad = (res: Response, reason: string, status = 400): void => { res.status(status).json({ message: reason }) }
 
 /** The shape the client renders. `store` and owner never leave the server. */
 const card = (t: InstanceType<typeof Track>) => ({
@@ -48,7 +69,7 @@ const card = (t: InstanceType<typeof Track>) => ({
 
 // ── tracks ──────────────────────────────────────────────────────────────────
 
-export const listTracks = async (req: Request, res: Response): Promise<void> => {
+export const listTracks = wrap(async (req: Request, res: Response): Promise<void> => {
   const owner = me(req)
   const q = String(req.query.q ?? '').trim()
 
@@ -62,7 +83,7 @@ export const listTracks = async (req: Request, res: Response): Promise<void> => 
   const tracks = await Track.find(where).sort({ createdAt: -1 }).limit(1000)
   const used = await usage(owner)
   res.json({ tracks: tracks.map(card), usage: used, caps: caps() })
-}
+})
 
 const usage = async (owner: Types.ObjectId): Promise<{ tracks: number; bytes: number }> => {
   const [agg] = await Track.aggregate<{ tracks: number; bytes: number }>([
@@ -135,7 +156,7 @@ const finishIngest = async (
   }
 }
 
-export const uploadTrack = async (req: Request, res: Response): Promise<void> => {
+export const uploadTrack = wrap(async (req: Request, res: Response): Promise<void> => {
   if (!musicConfigured()) { bad(res, 'Music is not available on this server.', 503); return }
   const owner = me(req)
 
@@ -146,9 +167,9 @@ export const uploadTrack = async (req: Request, res: Response): Promise<void> =>
 
   const answer = await musicIngestUpload(req, String(req.headers['content-type'] ?? ''))
   await finishIngest(res, owner, answer, 'upload')
-}
+})
 
-export const importTrack = async (req: Request, res: Response): Promise<void> => {
+export const importTrack = wrap(async (req: Request, res: Response): Promise<void> => {
   if (!musicConfigured()) { bad(res, 'Music is not available on this server.', 503); return }
   const owner = me(req)
 
@@ -163,9 +184,9 @@ export const importTrack = async (req: Request, res: Response): Promise<void> =>
 
   const answer = await musicIngestLink(link)
   await finishIngest(res, owner, answer, 'link', link)
-}
+})
 
-export const deleteTrack = async (req: Request, res: Response): Promise<void> => {
+export const deleteTrack = wrap(async (req: Request, res: Response): Promise<void> => {
   const owner = me(req)
   const id = String(req.params.trackId)
   if (!Types.ObjectId.isValid(id)) { bad(res, 'No such track.', 404); return }
@@ -178,7 +199,7 @@ export const deleteTrack = async (req: Request, res: Response): Promise<void> =>
   // and readers already drop entries that no longer resolve.
   await trackStore.remove(doc.store as { kind: 'gridfs'; id: Types.ObjectId }).catch(() => {})
   res.json({ ok: true })
-}
+})
 
 /**
  * Stream a track for local playback.
@@ -186,7 +207,7 @@ export const deleteTrack = async (req: Request, res: Response): Promise<void> =>
  * Range support is not a nicety here: without it an `<audio>` element cannot
  * seek, and a seek bar that does nothing is the first thing anyone notices.
  */
-export const streamTrack = async (req: Request, res: Response): Promise<void> => {
+export const streamTrack = wrap(async (req: Request, res: Response): Promise<void> => {
   const owner = me(req)
   const id = String(req.params.trackId)
   if (!Types.ObjectId.isValid(id)) { bad(res, 'No such track.', 404); return }
@@ -223,7 +244,7 @@ export const streamTrack = async (req: Request, res: Response): Promise<void> =>
     'cache-control': 'private, max-age=3600',
   })
   trackStore.open(ref).pipe(res)
-}
+})
 
 // ── playlists ───────────────────────────────────────────────────────────────
 
@@ -240,12 +261,12 @@ const playlistCard = (
   updatedAt:   p.updatedAt,
 })
 
-export const listPlaylists = async (req: Request, res: Response): Promise<void> => {
+export const listPlaylists = wrap(async (req: Request, res: Response): Promise<void> => {
   const lists = await Playlist.find({ ownerId: me(req) }).sort({ updatedAt: -1 })
   res.json({ playlists: lists.map(p => playlistCard(p)) })
-}
+})
 
-export const getPlaylist = async (req: Request, res: Response): Promise<void> => {
+export const getPlaylist = wrap(async (req: Request, res: Response): Promise<void> => {
   const owner = me(req)
   const id = String(req.params.playlistId)
   if (!Types.ObjectId.isValid(id)) { bad(res, 'No such playlist.', 404); return }
@@ -260,9 +281,9 @@ export const getPlaylist = async (req: Request, res: Response): Promise<void> =>
   const tracks = list.trackIds.map(String).map(tid => byId.get(tid)).filter(Boolean).map(t => card(t!))
 
   res.json({ playlist: playlistCard(list, tracks) })
-}
+})
 
-export const createPlaylist = async (req: Request, res: Response): Promise<void> => {
+export const createPlaylist = wrap(async (req: Request, res: Response): Promise<void> => {
   const owner = me(req)
   const body = req.body as { name?: string; description?: string }
 
@@ -278,9 +299,9 @@ export const createPlaylist = async (req: Request, res: Response): Promise<void>
     description: String(body?.description ?? '').trim().slice(0, 300),
   })
   res.status(201).json({ playlist: playlistCard(list) })
-}
+})
 
-export const renamePlaylist = async (req: Request, res: Response): Promise<void> => {
+export const renamePlaylist = wrap(async (req: Request, res: Response): Promise<void> => {
   const id = String(req.params.playlistId)
   if (!Types.ObjectId.isValid(id)) { bad(res, 'No such playlist.', 404); return }
 
@@ -295,9 +316,9 @@ export const renamePlaylist = async (req: Request, res: Response): Promise<void>
   )
   if (!list) { bad(res, 'No such playlist.', 404); return }
   res.json({ playlist: playlistCard(list) })
-}
+})
 
-export const deletePlaylist = async (req: Request, res: Response): Promise<void> => {
+export const deletePlaylist = wrap(async (req: Request, res: Response): Promise<void> => {
   const id = String(req.params.playlistId)
   if (!Types.ObjectId.isValid(id)) { bad(res, 'No such playlist.', 404); return }
   const gone = await Playlist.findOneAndDelete({ _id: id, ownerId: me(req) })
@@ -305,9 +326,9 @@ export const deletePlaylist = async (req: Request, res: Response): Promise<void>
   // Only the arrangement is deleted. The tracks are the member's own and
   // outlive any list that mentioned them.
   res.json({ ok: true })
-}
+})
 
-export const addToPlaylist = async (req: Request, res: Response): Promise<void> => {
+export const addToPlaylist = wrap(async (req: Request, res: Response): Promise<void> => {
   const owner = me(req)
   const id = String(req.params.playlistId)
   const trackId = String((req.body as { trackId?: string })?.trackId ?? '')
@@ -329,9 +350,9 @@ export const addToPlaylist = async (req: Request, res: Response): Promise<void> 
   list.trackIds.push(new Types.ObjectId(trackId))
   await list.save()
   res.json({ playlist: playlistCard(list) })
-}
+})
 
-export const removeFromPlaylist = async (req: Request, res: Response): Promise<void> => {
+export const removeFromPlaylist = wrap(async (req: Request, res: Response): Promise<void> => {
   const id = String(req.params.playlistId)
   if (!Types.ObjectId.isValid(id)) { bad(res, 'No such playlist.', 404); return }
 
@@ -346,4 +367,4 @@ export const removeFromPlaylist = async (req: Request, res: Response): Promise<v
   list.trackIds.splice(at, 1)
   await list.save()
   res.json({ playlist: playlistCard(list) })
-}
+})
