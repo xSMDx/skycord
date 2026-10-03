@@ -56,6 +56,7 @@ import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
 import MusicModal            from '@/components/music/MusicModal.vue'
+import MiniPlayer            from '@/components/music/MiniPlayer.vue'
 import { musicAvailable }    from '@/composables/useMusic'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
 import Skeleton             from '@/components/ui/Skeleton.vue'
@@ -4530,6 +4531,9 @@ useDesktopTitleBar({
             </div>
           </template>
         </div>
+        <!-- What is playing, above the voice strip: the music outlives the
+             modal, so something on screen has to say so. -->
+        <MiniPlayer @open="musicModal = true" />
         <!-- Voice connected strip + user panel -->
         <VoiceConnectedPanel
           @return-to-call="returnToCall"
@@ -4812,6 +4816,7 @@ useDesktopTitleBar({
           <!-- A dragged category held below the last one lands at the end. -->
           <div v-if="dragCategoryId && categoryDropBefore === null" class="ch-drop-line cat" aria-hidden="true" />
         </div>
+        <MiniPlayer @open="musicModal = true" />
         <VoiceConnectedPanel
           @return-to-call="returnToCall"
           @preview-camera="openCameraPreview('camera')"

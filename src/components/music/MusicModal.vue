@@ -29,9 +29,12 @@ import type { VoiceRoomChoice } from './rooms'
 import { useAuth } from '@/composables/useAuth'
 import { coverTheme, type CoverTheme } from '@/composables/coverTheme'
 import {
+  player, play, pause, toggle, step, seek, setVolume, forget,
+} from '@/composables/useMusicPlayer'
+import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
   deleteTrack, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
-  shownTracks, trackAudioUrl, clearLibraryError, clock, totalTime, megabytes,
+  shownTracks, clearLibraryError, clock, totalTime, megabytes,
   type LibTrack,
 } from '@/composables/useMusicLibrary'
 
@@ -51,105 +54,39 @@ const namingList = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 // ── local preview ───────────────────────────────────────────────────────────
-const audio = ref<HTMLAudioElement | null>(null)
-const playing = ref<LibTrack | null>(null)
-const paused = ref(true)
-const at = ref(0)
-
-const queue = computed(() => shownTracks.value)
-
-/**
- * The bytes are fetched, not handed to `<audio src>`.
+/*
+ * Playback lives in useMusicPlayer, not here.
  *
- * The stream route is behind requireAuth, which reads a Bearer header — and
- * an audio element cannot send one. It sends cookies, and the only cookie
- * here is the refresh token, which has no business authorising a resource
- * read. So pointing `src` at the route 401s on every track: nothing ever
- * played, pause looked like it worked because the icon toggled, and the
- * volume slider had nothing to act on.
- *
- * The cost is that a track downloads before it starts rather than streaming,
- * which is why the row shows it is working. A short-lived signed URL would
- * restore progressive playback; it would also put a credential in a URL, so
- * it is not worth it until a long track makes the wait annoying.
+ * This modal used to own the audio element, which is why closing it stopped
+ * the music and reopening started the track over. It is one view onto a
+ * player now; the mini player in the sidebar is another.
  */
-let objectUrl: string | null = null
-const loadingId = ref<string | null>(null)
+const playing = computed(() => player.current)
+const paused = computed(() => player.paused)
+const at = computed(() => player.at)
+const loadingId = computed(() => player.loadingId)
+const vol = computed(() => player.volume)
 
-const releaseAudio = (): void => {
-  if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
-}
+/** Play from THIS list, so next and previous follow what you are looking at. */
+const playTrack = (t: LibTrack): Promise<void> => play(t, shownTracks.value)
 
-const playTrack = async (t: LibTrack): Promise<void> => {
-  const el = audio.value
-  if (!el) return
-  // Already loaded: this is a play/pause toggle, not a new track.
-  if (playing.value?.id === t.id && objectUrl) {
-    if (paused.value) { try { await el.play() } catch { paused.value = true } }
-    else el.pause()
-    return
-  }
-
-  playing.value = t
-  loadingId.value = t.id
-  try {
-    const res = await fetch(trackAudioUrl(t.id), {
-      headers: accessToken.value ? { Authorization: `Bearer ${accessToken.value}` } : {},
-      credentials: 'include',
-    })
-    if (!res.ok) throw new Error(String(res.status))
-    const blob = await res.blob()
-    // Someone picked a different track while this one was downloading.
-    if (playing.value?.id !== t.id) return
-
-    releaseAudio()
-    objectUrl = URL.createObjectURL(blob)
-    el.src = objectUrl
-    el.volume = vol.value
-    await el.play()
-  } catch {
-    library.error = 'That track could not be played.'
-    paused.value = true
-  } finally {
-    if (loadingId.value === t.id) loadingId.value = null
-  }
-}
-
-const step = (by: 1 | -1): void => {
-  const list = queue.value
-  if (!list.length || !playing.value) return
-  const i = list.findIndex(t => t.id === playing.value!.id)
-  // Wraps, because a list that stops dead at the end is a list you have to
-  // scroll back up to restart.
-  void playTrack(list[(i + by + list.length) % list.length])
-}
-
-/**
- * Preview volume, separate from the call's.
- *
- * An <audio> element's volume is a property, not an attribute, so it cannot
- * be bound — it has to be written on each change and re-applied to every
- * new source, which is what playTrack does below.
- */
-const vol = ref(0.8)
-const setVol = (e: Event): void => {
-  vol.value = Number((e.target as HTMLInputElement).value)
-  if (audio.value) audio.value.volume = vol.value
-}
-const volIcon = computed(() => vol.value === 0 ? VolumeX : vol.value < 0.5 ? Volume1 : Volume2)
-
-const seek = (e: Event): void => {
-  const el = audio.value
-  if (!el) return
-  el.currentTime = Number((e.target as HTMLInputElement).value)
-}
+const setVol = (e: Event): void => setVolume(Number((e.target as HTMLInputElement).value))
+const onSeek = (e: Event): void => seek(Number((e.target as HTMLInputElement).value))
+const volIcon = computed(() => player.muted || player.volume === 0 ? VolumeX
+  : player.volume < 0.5 ? Volume1 : Volume2)
 
 // ── art-derived header ──────────────────────────────────────────────────────
 const theme = ref<CoverTheme | null>(null)
-const headerArt = computed<string | null>(() => {
-  const list = shownTracks.value
-  return list.find(t => t.cover)?.cover ?? null
-})
+/*
+ * The playing record's sleeve wins.
+ *
+ * It used to theme from the first track in the list that happened to have
+ * art, which meant the colour had nothing to do with what you were hearing.
+ * What is playing is the thing the room is about; the list's own art is the
+ * fallback for before anything has started.
+ */
+const headerArt = computed<string | null>(() =>
+  player.current?.cover ?? shownTracks.value.find(t => t.cover)?.cover ?? null)
 watch(headerArt, async (src) => { theme.value = await coverTheme(src) }, { immediate: true })
 
 const headerStyle = computed(() => theme.value
@@ -184,7 +121,7 @@ const listPlaying = computed(() =>
   !paused.value && !!playing.value && shownTracks.value.some(t => t.id === playing.value!.id))
 
 const playThisList = (): void => {
-  if (listPlaying.value) { audio.value?.pause(); return }
+  if (listPlaying.value) { pause(); return }
   const current = playing.value && shownTracks.value.find(t => t.id === playing.value!.id)
   const next = current ?? shownTracks.value[0]
   if (next) void playTrack(next)
@@ -236,17 +173,15 @@ const removeHere = async (t: LibTrack, index: number): Promise<void> => {
   // it means "delete it". Same glyph, genuinely different acts, so they are
   // labelled differently and the destructive one is styled as such.
   if (library.open) await removeFromPlaylist(library.open.id, index)
-  else await deleteTrack(t.id)
+  else { await deleteTrack(t.id); forget(t.id) }
 }
 
 onMounted(async () => {
   await Promise.all([loadLibrary(), loadPlaylists()])
 })
-onBeforeUnmount(() => {
-  audio.value?.pause()
-  releaseAudio()
-  if (searchTimer) clearTimeout(searchTimer)
-})
+// The player keeps going when this closes — that is the point of it living
+// elsewhere — so only this component's own timer is cleaned up here.
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 </script>
 
 <template>
@@ -503,8 +438,7 @@ onBeforeUnmount(() => {
           </button>
           <button
             class="mm-pp" :disabled="!playing"
-            :aria-label="paused ? 'Play' : 'Pause'"
-            @click="playing && playTrack(playing)"
+            :aria-label="paused ? 'Play' : 'Pause'" @click="toggle"
           >
             <component :is="paused ? Play : Pause" :size="18" :stroke-width="2.5" />
           </button>
@@ -516,7 +450,7 @@ onBeforeUnmount(() => {
           <span class="mm-time">{{ clock(at) }}</span>
           <input
             class="mm-seek" type="range" min="0" :max="playing?.durationSec || 1" :value="at"
-            step="1" aria-label="Seek" :disabled="!playing" @input="seek"
+            step="1" aria-label="Seek" :disabled="!playing" @input="onSeek"
           />
           <span class="mm-time">{{ clock(playing?.durationSec ?? 0) }}</span>
         </div>
@@ -539,12 +473,7 @@ onBeforeUnmount(() => {
       ref="fileInput" class="mm-sr" type="file"
       accept="audio/*,.mp3,.flac,.ogg,.opus,.wav,.m4a,.aac" @change="onFile"
     />
-    <audio
-      ref="audio"
-      @play="paused = false" @pause="paused = true"
-      @timeupdate="at = audio?.currentTime ?? 0"
-      @ended="step(1)"
-    />
+
   </ModalBase>
 </template>
 
