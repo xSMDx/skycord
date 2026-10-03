@@ -200,10 +200,12 @@ onBeforeUnmount(() => {
 
         <div class="mm-railhead">
           <span>Playlists</span>
-          <button class="mm-mini" aria-label="New playlist" @click="namingList = true">
-            <Plus :size="13" :stroke-width="2.5" />
-          </button>
         </div>
+        <!-- Outside the heading, because the heading is hidden on a phone
+             and this is the only way to make a playlist. -->
+        <button class="mm-mini mm-newbtn" aria-label="New playlist" @click="namingList = true">
+          <Plus :size="13" :stroke-width="2.5" />
+        </button>
 
         <form v-if="namingList" class="mm-newlist" @submit.prevent="submitList">
           <input
@@ -527,6 +529,7 @@ onBeforeUnmount(() => {
 
 /* ── left rail ───────────────────────────────────────────────────────── */
 .mm-rail {
+  position: relative;
   display: flex; flex-direction: column; gap: 2px;
   padding: 14px 10px; background: var(--bg-panel);
   border-radius: var(--edge-lg); overflow-y: auto;
@@ -573,6 +576,15 @@ onBeforeUnmount(() => {
 }
 @media (hover: hover) and (pointer: fine) { .mm-mini:hover { background: var(--hover); color: var(--text-1); } }
 .mm-lists { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+/* Sits in the heading row on a desktop, and on its own in the strip on a
+   phone, where the heading is gone. */
+.mm-newbtn { position: absolute; top: 14px; right: 10px; }
+@media (max-width: 680px) {
+  .mm-newbtn {
+    position: static; flex: 0 0 auto; width: 32px; height: 32px;
+    border-radius: 50%; background: var(--bg-input);
+  }
+}
 .mm-railempty { padding: 2px 9px; font-size: 11.5px; line-height: 1.5; color: var(--text-3); }
 
 .mm-newlist { display: flex; flex-direction: column; gap: 6px; padding: 4px 4px 8px; }
@@ -834,19 +846,116 @@ onBeforeUnmount(() => {
 
 /* ── narrow ──────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  /* The call rail goes first: on a narrow screen the library is the thing
-     you scroll and the rail is a summary, so it becomes a strip above. */
-  .mm { grid-template-columns: 180px minmax(0, 1fr); }
+  /* The call rail wraps below: on a narrow screen the library is the thing
+     you scroll and the rail is a summary. The album column is the first to
+     go — it is the one column that is never the reason you recognise a
+     track you can already see the name of. */
+  .mm { grid-template-columns: 200px minmax(0, 1fr); }
   .mm-colalbum { display: none; }
-  .mm-tr { grid-template-columns: 34px minmax(0, 1fr) 48px 72px; }
+  .mm-tr { grid-template-columns: 36px minmax(0, 1fr) 52px 64px; }
 }
+
+/*
+ * Phone.
+ *
+ * The left rail used to be display:none here, which took search, every
+ * playlist and the storage meter with it — a third of the feature, gone,
+ * on the device most people have. It becomes a horizontal strip instead:
+ * the same controls, laid along the one axis a phone has to spare.
+ */
 @media (max-width: 680px) {
-  .mm { grid-template-columns: minmax(0, 1fr); }
-  .mm-rail { display: none; }
-  .mm-art { width: 86px; height: 86px; }
-  .mm-title { font-size: 24px; }
-  .mm-footnames { width: auto; flex: 1; }
-  .mm-seek, .mm-time, .mm-only { display: none; }
+  .mm { grid-template-columns: minmax(0, 1fr); padding: 8px 8px 0; }
+
+  .mm-rail {
+    flex-direction: row; align-items: center; gap: 6px;
+    padding: 8px; overflow-x: auto; overflow-y: hidden;
+    /* Momentum, and no vertical rubber-banding fighting the sheet's own
+       drag-to-dismiss. */
+    -webkit-overflow-scrolling: touch;
+  }
+  .mm-rail::-webkit-scrollbar { display: none; }
+  .mm-search { margin-bottom: 0; flex: 0 0 150px; }
+  .mm-nav {
+    width: auto; flex: 0 0 auto; border-radius: var(--edge-pill);
+    background: var(--bg-input); padding: 8px 12px;
+  }
+  .mm-lists { flex-direction: row; gap: 6px; }
+  /* The section heading and the meter are the parts a phone can do without:
+     the chips say what they are, and nobody manages storage on a phone. */
+  .mm-railhead, .mm-railempty, .mm-space { display: none; }
+
+  .mm-head { padding: 16px 16px 14px; gap: 14px; }
+  .mm-art { width: 92px; height: 92px; }
+  .mm-title { font-size: 26px; }
+  .mm-headacts { margin-top: 10px; gap: 6px; }
+  .mm-table { padding: 0 10px 16px; }
+  /*
+   * A head band for the close button.
+   *
+   * On a desktop it floats over the top-right of the call rail, which has
+   * room for it. On a phone that corner is the playlist strip, and every
+   * attempt to share the space failed in a different way: padding is not
+   * honoured at the scroll end of an overflowing flex row, and a margin
+   * just pushed the button out of the clip so it could only be reached by
+   * scrolling. So it gets its own row — which is what every other modal in
+   * the app has, and this one only lacked because the artwork is its header.
+   */
+  .mm-shell { padding-top: 34px; }
+  .mm-x { top: 2px; right: 8px; }
+
+  /* First, not last: a strip that scrolls would otherwise hide the only way
+     to make a playlist as soon as there are a few of them. */
+  .mm-newbtn { order: -1; }
+  /* Names were truncating to four characters: a 40px thumbnail and a 86px
+     action column were spending a third of a phone screen on furniture.
+     The thumbnail shrinks and the columns give back what they do not need. */
+  .mm-tr { grid-template-columns: 36px minmax(0, 1fr) 44px 44px; gap: 8px; }
+  .mm-thumb { width: 32px; height: 32px; }
+  .mm-cell { gap: 8px; }
+  .mm-link, .mm-progress, .mm-err { margin-inline: 16px; padding-inline: 16px; }
+
+  /* Two zones, not three: what is playing, and the one control that matters.
+     A scrubber at this width is a 40px target for a three-minute track. */
+  .mm-foot { grid-template-columns: minmax(0, 1fr) auto; height: 68px; padding: 0 12px; gap: 10px; }
+  .mm-nowart { width: 44px; height: 44px; }
+  .mm-deck { flex-direction: row; gap: 0; width: auto; }
+  .mm-scrub, .mm-aside { display: none; }
+}
+
+/*
+ * Touch.
+ *
+ * Two separate problems, and only one of them is size.
+ *
+ * The row actions are revealed on hover, which is a perfectly good desktop
+ * idiom and on a touch screen means they are revealed never — deleting a
+ * track or adding it to a playlist was unreachable on a phone. Hover is a
+ * capability, so it is asked about directly rather than inferred from width.
+ */
+@media (hover: none) {
+  .mm-acts { opacity: 1; }
+  /* Same reasoning: the play affordance lives under the row number and
+     appears on hover. Without a pointer the number is all you ever see. */
+  .mm-numico { display: block; }
+  .mm-numtext { display: none; }
+}
+
+/* DESIGN.md: anything tappable is at least 40px on mobile, and components
+   scale up rather than shipping a separate mobile control. */
+@media (max-width: 768px) {
+  .mm-nav { min-height: 40px; }
+  /* The wrapper AND the field: a 40px box around a 36px input leaves four
+     pixels that look tappable and are not. */
+  .mm-search { min-height: 40px; }
+  .mm-search-in { min-height: 40px; }
+  .mm-play { padding: 12px 22px; }
+  .mm-mini, .mm-newbtn { width: 40px; height: 40px; }
+  .mm-icon, .mm-num, .mm-add { width: 40px; height: 40px; }
+  .mm-ghost { width: 44px; height: 44px; }
+  .mm-pp { width: 44px; height: 44px; }
+  .mm-row { height: 62px; }
+  /* Two 40px controls need the room, and the time column can give it. */
+  .mm-tr { grid-template-columns: 40px minmax(0, 1fr) 48px 86px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

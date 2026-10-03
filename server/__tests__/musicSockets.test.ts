@@ -13,8 +13,12 @@ import {
   app, connectDb, disconnectDb, resetDb, register, auth,
   withSocketServer, connectSocket, nextEvent, type TestUser,
 } from './helpers'
+import { Types } from 'mongoose'
+import { Readable } from 'stream'
 import { Server } from '../models/Server'
-import { cancelAllCallEnds, musicRooms } from '../sockets/chatSocket'
+import { Track } from '../models/Track'
+import { trackStore } from '../utils/trackStore'
+import { cancelAllCallEnds, musicRooms, musicTrackEnded } from '../sockets/chatSocket'
 
 let sockets: { url: string; close: () => Promise<void> }
 const open: ClientSocket[] = []
@@ -26,7 +30,10 @@ beforeEach(async () => {
   open.splice(0).forEach(s => s.disconnect())
   await new Promise(r => setTimeout(r, 50))
   cancelAllCallEnds()
-  musicRooms.cancelAllCloses()
+  // Not just the pending closes: the channels themselves, or they count
+  // against the instance-wide cap for every test after the one that made
+  // them.
+  musicRooms.clearAll()
   await resetDb()
 })
 
@@ -222,5 +229,120 @@ describe('leaving', () => {
     // straight back finds it still playing.
     expect((await nextEvent(ben, 'music:state').catch(() => null)) ?? { channels: [{}] }).toBeTruthy()
     expect(musicRooms.view(`voice:${voice.id}`).channels).toHaveLength(1)
+  })
+})
+
+describe('library tracks', () => {
+  // A library track travels as an id, never as a URL: the server checks the
+  // caller owns it and the service composes the address itself. The checks
+  // below are the ownership half, which is the only thing standing between
+  // a guessed id and somebody else's file playing to a room.
+  const giveTrack = async (owner: TestUser, title = 'Blue Monday') => {
+    const ownerId = new Types.ObjectId(owner.id)
+    const stored = await trackStore.put(Readable.from([Buffer.from('bytes')]), {
+      ownerId, mimeType: 'audio/webm',
+    })
+    const doc = await Track.create({
+      ownerId, title, artist: 'New Order', album: 'PCL',
+      durationSec: 270, bytes: stored.bytes, store: stored.ref,
+      source: 'upload', scan: 'skipped',
+    })
+    return String(doc._id)
+  }
+
+  it('starts a channel from a track you own, and shows its title', async () => {
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+    const id = await giveTrack(a, 'Temporary Secretary')
+
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'Chill', trackId: id })
+    const v = await musicStateWhere(sa, x => x.channels.length === 1)
+
+    expect(v.channels[0].name).toBe('Chill')
+    // The client renders this; a bare link has no title and a library track
+    // should never need one looked up.
+    expect(v.channels[0].now?.title).toBe('Temporary Secretary')
+    // And no URL leaks into the room for a library track.
+    expect(v.channels[0].now?.url).toBeNull()
+  })
+
+  it('refuses a track belonging to somebody else', async () => {
+    const a = await register()
+    const b = await register()
+    const { voice } = await seed(a, b)
+    const sb = await inCall(b, voice.id)
+    const theirs = await giveTrack(a, 'Private')
+
+    sb.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'Nope', trackId: theirs })
+    const err = await nextEvent(sb, 'music:error') as { reason: string }
+    expect(err.reason).toMatch(/no such track/i)
+    expect(musicRooms.channelsHere(`voice:${voice.id}`)).toBe(0)
+  })
+
+  it('says the same thing for a track that does not exist', async () => {
+    // Otherwise this is a way to find out which ids are real.
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+
+    sa.emit('music:create', {
+      conversationId: voice.id, kind: 'channel', name: 'Nope',
+      trackId: new Types.ObjectId().toHexString(),
+    })
+    const err = await nextEvent(sa, 'music:error') as { reason: string }
+    expect(err.reason).toMatch(/no such track/i)
+  })
+
+  it('refuses an id that is not an id, without asking the database', async () => {
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'Nope', trackId: 'drop table' })
+    const err = await nextEvent(sa, 'music:error') as { reason: string }
+    expect(err.reason).toMatch(/no such track/i)
+  })
+
+  it('queues a library track behind a link, and keeps both kinds straight', async () => {
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+    const id = await giveTrack(a, 'Second')
+
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'Mix', url: MP3 })
+    const made = await musicStateWhere(sa, x => x.channels.length === 1)
+    const ch = made.channels[0].id
+
+    sa.emit('music:queue', { conversationId: voice.id, kind: 'channel', channelId: ch, trackId: id })
+    const queued = await musicStateWhere(sa, x => x.channels[0]?.queued === 1)
+    expect(queued.channels[0].now?.url).toBe(MP3)
+
+    // Skipping advances onto the library track — the branch that decides
+    // whether to send a URL or an id runs again here, and used to exist in
+    // three copies.
+    sa.emit('music:skip', { conversationId: voice.id, kind: 'channel', channelId: ch })
+    const next = await musicStateWhere(sa, x => x.channels[0]?.now?.title === 'Second')
+    expect(next.channels[0].now?.url).toBeNull()
+    expect(next.channels[0].queued).toBe(0)
+  })
+
+  it('advances the queue when a track ends on its own', async () => {
+    // What the service reports over the internal endpoint. The same branch
+    // again, reached from the other direction.
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+    const id = await giveTrack(a, 'Up Next')
+
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'Mix', url: MP3 })
+    const made = await musicStateWhere(sa, x => x.channels.length === 1)
+    const ch = made.channels[0].id
+    sa.emit('music:queue', { conversationId: voice.id, kind: 'channel', channelId: ch, trackId: id })
+    await musicStateWhere(sa, x => x.channels[0]?.queued === 1)
+
+    musicTrackEnded(`voice:${voice.id}`, ch)
+    const after = await musicStateWhere(sa, x => x.channels[0]?.now?.title === 'Up Next')
+    expect(after.channels[0].queued).toBe(0)
   })
 })

@@ -257,6 +257,20 @@ export class MusicRooms {
   }
 
   /** For the shutdown path: drop every timer without concluding anything. */
+  /**
+   * Forget every room. For tests, and said plainly rather than dressed up:
+   * a running server has no reason to drop every channel at once.
+   *
+   * It exists because the cap that protects the instance is global, and a
+   * test file that leaves channels behind eventually hits it — which showed
+   * up as the ninth channel-creating test in a file failing while passing on
+   * its own, a day of someone's life if it is not written down somewhere.
+   */
+  clearAll(): void {
+    this.cancelAllCloses()
+    this.rooms.clear()
+  }
+
   cancelAllCloses(): void {
     for (const t of this.pendingClose.values()) clearTimeout(t)
     this.pendingClose.clear()
