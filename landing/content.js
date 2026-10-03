@@ -106,6 +106,18 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.20.6', date: 'Oct 3, 2026', time: '03:10 UTC+2', title: 'A way to knock the server over, closed',
+    items: [
+      ['fix', 'A fault in the library Skycord uses for its live connection \u2014 the one carrying presence, typing, and who is sitting in a voice channel \u2014 let anyone who could reach the server disrupt it without needing an account. It is fixed by an update underneath, and nothing about how you use Skycord changes. **If you host your own instance, this is worth updating for.**'],
+      ['fix', 'Three places where picking something filled the row with your accent colour instead of the normal highlight: choosing people in New Message and in Invite to Group, and the row you are on while picking a name after typing @. The accent already means hover, mentions and buttons, so a fourth meaning made those lists harder to read than the rest of the app.'],
+    ]
+  }, {
+    v: 'v0.20.5', date: 'Oct 2, 2026', time: '15:40 UTC+2', title: 'Saying the same thing the same way',
+    items: [
+      ['imp', 'The changelog page you are reading. It was a wall of grey where every release looked like every other one, and the lines of text ran about twice as wide as anyone reads comfortably. Releases now sit against a dated spine so you can find one by when it happened, and the text is set to a width you can actually track.'],
+      ['imp', 'Empty states \u2014 the message you get when a list has nothing in it \u2014 now look the same everywhere. There were twenty-two of them written separately, and they had drifted into slightly different sizes, colours and spacings. A few of them also used an emoji where every other part of the app uses a proper icon.'],
+    ]
+  }, {
     v: 'v0.20.4', date: 'Oct 2, 2026', time: '12:17 UTC+2', title: 'What the UI audit turned up',
     items: [
       ['fix', 'A tooltip staying on screen after you clicked the button it was describing, sitting on top of the menu the click had just opened. It happened on nearly every button in the app — a click both dismissed the tooltip and immediately brought it back. Tooltips now stay out of the way after a click, and still appear when you reach a button by keyboard'],
