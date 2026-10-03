@@ -23,6 +23,25 @@ import { getSocket } from './useSocket'
  */
 export const MUSIC_IDENTITY = 'svc:music'
 
+/**
+ * Off until something can actually play.
+ *
+ * Phase 1 is built either side of a gap: the API tracks music channels and
+ * the publisher can put audio into a room, but nothing joins the two. There
+ * is no entry point in music/src, no Dockerfile, and nothing calls
+ * publisher.open or publisher.play. Rendering the panel today would give
+ * every member in a call a Music section they can create channels in and
+ * hear nothing from, which is worse than not having the feature.
+ *
+ * Flip this when the service runs end to end. At that point it should stop
+ * being a constant and become a capability the SERVER reports, because
+ * whether music works depends on whether the host runs the container — not
+ * on which client build they loaded. Not the public /instance profile
+ * though: that document is unauthenticated and cached, and describes who an
+ * instance is rather than what it can do.
+ */
+export const MUSIC_ENABLED = false
+
 export interface MusicChannelView {
   id: string
   name: string
