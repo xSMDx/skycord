@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Mic, MicOff, PhoneOff, Video, VideoOff, MonitorUp, Ellipsis, ChevronDown, Phone, X, Maximize2, Minimize2 } from 'lucide-vue-next'
+import { Mic, MicOff, PhoneOff, Video, VideoOff, MonitorUp, Ellipsis, ChevronDown, Phone, X, Maximize2, Minimize2, Music2 } from 'lucide-vue-next'
 import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
+import MusicFlyout from './MusicFlyout.vue'
+import { music, musicAvailable } from '@/composables/useMusic'
 import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia, canScreenShare, type VideoTrackInfo } from '@/composables/useVoiceMedia'
@@ -69,8 +71,8 @@ const onCamera = async () => {
 }
 const onShare  = async () => { const err = await toggleScreenShare(); if (err) emit('toast', err) }
 
-const openMenu = ref<'' | 'mic' | 'cam' | 'more'>('')
-const toggleMenu = (m: 'mic' | 'cam' | 'more') => { openMenu.value = openMenu.value === m ? '' : m }
+const openMenu = ref<'' | 'mic' | 'cam' | 'more' | 'music'>('')
+const toggleMenu = (m: 'mic' | 'cam' | 'more' | 'music') => { openMenu.value = openMenu.value === m ? '' : m }
 
 const joinedHere     = computed(() => voice.connected  && voice.activeConvId     === props.convId)
 const connectingHere = computed(() => voice.connecting && voice.connectingConvId === props.convId)
@@ -447,6 +449,26 @@ onBeforeUnmount(() => {
             <MoreFlyout v-if="openMenu === 'more'" @close="openMenu = ''" @open-settings="emit('openSettings')" />
           </div>
         </div>
+
+        <!--
+          Music, in its own group rather than beside share.
+          The groups on this bar are not decoration: each holds controls that
+          belong to one thing, and music is not screen sharing. Only when the
+          instance runs the service — a control that cannot work is worse than
+          an absent one.
+        -->
+        <div v-if="musicAvailable" class="cb-group">
+          <div class="cb-split" :class="{ menuopen: openMenu === 'music' }">
+            <button
+              class="cb-b cb-music" :class="{ listening: !!music.listeningTo }"
+              v-tip="music.listeningTo ? 'Music — you are listening' : 'Music'"
+              @click="toggleMenu('music')"
+            >
+              <Music2 :size="20" :stroke-width="2.25" />
+            </button>
+            <MusicFlyout v-if="openMenu === 'music'" dir="up" @close="openMenu = ''" />
+          </div>
+        </div>
         <!-- Hide-chat and fullscreen only exist once there's something worth
              enlarging. On an audio call they were two controls that changed
              nothing visible. They live in the control row rather than floating
@@ -684,6 +706,18 @@ onBeforeUnmount(() => {
 .cb-dismiss:hover { background: var(--hover-strong); }
 
 /* Active camera / screen share — green like Discord */
+/*
+ * Listening is not the same kind of "on".
+ *
+ * `.cb-b.on` is the filled green the camera and screen share wear, and on
+ * this bar green means "other people can perceive this". Music is private:
+ * it changes nothing for anyone else in the call. So it takes the accent on
+ * the icon instead of a filled pill — the same information, honestly
+ * scaled, and the bar still answers "is music on" without being opened.
+ */
+.cb-b.listening { color: var(--accent-text); }
+.cb-b.listening:hover:not(:disabled) { color: var(--accent-text); }
+
 .cb-b.on { background: var(--green-deep); color: var(--text-on-green-deep); }
 .cb-b.on:hover:not(:disabled) { background: var(--green-deep-hover); }
 

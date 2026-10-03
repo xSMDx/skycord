@@ -64,8 +64,6 @@ import ConversationDetails    from '@/components/chat/ConversationDetails.vue'
 import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
-import MusicPanel            from '@/components/voice/MusicPanel.vue'
-import { musicAvailable }   from '@/composables/useMusic'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance, accentHex, chooseVariant, chooseStudio } from '@/composables/useAppearance'
 import { familyOf, type DarkVariant, type LightVariant } from '@/composables/themeMode'
@@ -4425,10 +4423,6 @@ useDesktopTitleBar({
             </div>
           </template>
         </div>
-        <!-- Music channels, above the connection strip: it belongs with the
-             call, and the strip below it is the call's own footer. Only
-             while connected — there is nothing to tune into otherwise. -->
-        <MusicPanel v-if="musicAvailable && voice.connected" />
         <!-- Voice connected strip + user panel -->
         <VoiceConnectedPanel
           @return-to-call="returnToCall"
@@ -4705,10 +4699,6 @@ useDesktopTitleBar({
           <!-- A dragged category held below the last one lands at the end. -->
           <div v-if="dragCategoryId && categoryDropBefore === null" class="ch-drop-line cat" aria-hidden="true" />
         </div>
-        <!-- Music channels, above the connection strip. Both sidebars get one:
-             this is the server sidebar, the other is DMs, and a call can be
-             running under either. -->
-        <MusicPanel v-if="musicAvailable && voice.connected" />
         <VoiceConnectedPanel
           @return-to-call="returnToCall"
           @preview-camera="openCameraPreview('camera')"

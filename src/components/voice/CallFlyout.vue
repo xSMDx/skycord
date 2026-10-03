@@ -22,6 +22,7 @@ const { shown, requestClose, onAfterLeave } = useDismissal(() => emit('close'))
 const root  = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 const pos   = ref<{ left: number; top: number } | null>(null)
+let ro: ResizeObserver | null = null
 
 const GAP = 12
 const EDGE = 8   // keep this clear of the viewport
@@ -49,6 +50,19 @@ const place = async () => {
   pos.value = { left, top }
 }
 
+/*
+ * Re-place whenever the panel's own size changes, not only on open.
+ * A menu that grows after it opens — a row added, a slider appearing once
+ * you are listening — keeps the top it was given, so for `dir: up` the new
+ * height spills downward over the control it belongs to. Measuring again is
+ * cheaper than predicting the final height.
+ */
+const watchSize = () => {
+  if (!panel.value || typeof ResizeObserver === 'undefined') return
+  ro = new ResizeObserver(() => { void place() })
+  ro.observe(panel.value)
+}
+
 const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose() }
 const onResize = () => { void place() }
 
@@ -65,13 +79,15 @@ const onDocPointerDown = (e: PointerEvent) => {
   requestClose()
 }
 
-onMounted(() => {
-  void place()
+onMounted(async () => {
+  await place()
+  watchSize()
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', onResize)
   document.addEventListener('pointerdown', onDocPointerDown, true)
 })
 onBeforeUnmount(() => {
+  ro?.disconnect()
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onResize)
   document.removeEventListener('pointerdown', onDocPointerDown, true)
