@@ -18,7 +18,7 @@ import { MusicRooms } from './musicState'
 import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape } from '../utils/musicLimits'
 import { musicPlay, musicPlayTrack, musicClose } from '../utils/musicService'
 import { Track as LibraryTrack } from '../models/Track'
-import type { Track as MusicSource } from './musicState'
+import type { Source as MusicSource } from './musicState'
 
 // Presence (who holds a socket, who is away) lives in server/state/presence.ts
 // so the User model can derive a wire-safe status without importing this file,
@@ -88,11 +88,10 @@ export const musicRooms = new MusicRooms(
  * any track id and have the room play a stranger's file, which is both a
  * privacy leak and a way to read a library you cannot otherwise see.
  */
-type Source = Omit<MusicSource, 'addedBy' | 'addedAt'>
 const resolveSource = async (
   data: { url?: string; trackId?: string },
   userId: string,
-): Promise<{ ok: true; value: Source } | { ok: false; reason: string }> => {
+): Promise<{ ok: true; value: MusicSource } | { ok: false; reason: string }> => {
   const trackId = String(data?.trackId ?? '').trim()
   if (trackId) {
     if (!/^[0-9a-f]{24}$/i.test(trackId)) return { ok: false, reason: 'No such track.' }
@@ -100,17 +99,26 @@ const resolveSource = async (
     // Same answer for "does not exist" and "is not yours", so this cannot be
     // used to find out which ids exist.
     if (!owned) return { ok: false, reason: 'No such track.' }
-    return { ok: true, value: { trackId, title: owned.title } }
+    return { ok: true, value: { kind: 'library', trackId, title: owned.title } }
   }
 
   const url = checkUrlShape(data?.url)
   if (!url.ok) return { ok: false, reason: url.reason }
-  return { ok: true, value: { url: String(data.url).trim() } }
+  return { ok: true, value: { kind: 'link', url: String(data.url).trim() } }
 }
 
 const startSource = (room: string, channelId: string, now: MusicSource): void => {
-  if (now.trackId) void musicPlayTrack(room, channelId, now.trackId)
-  else if (now.url) void musicPlay(room, channelId, now.url)
+  switch (now.kind) {
+    case 'library': void musicPlayTrack(room, channelId, now.trackId); break
+    case 'link':    void musicPlay(room, channelId, now.url); break
+    default: {
+      // Exhaustiveness, and it has to be written down to be true: a switch
+      // with no default compiles happily when a new kind appears and then
+      // plays silence. Assigning to never is what makes the compiler object.
+      const unhandled: never = now
+      void unhandled
+    }
+  }
 }
 
 export const musicTrackEnded = (room: string, channelId: string): void => {
@@ -1440,7 +1448,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         const made = musicRooms.create(gate.room, String(data.name).trim(), source.value, userId)
         if (!made.ok) return musicRefuse(made.reason)
         broadcastMusic(gate.room)
-        startSource(gate.room, made.id!, { ...source.value, addedBy: userId, addedAt: Date.now() })
+        startSource(gate.room, made.id!, source.value)
       })()
     })
 

@@ -24,7 +24,7 @@ const idOf = (r: { ok: boolean; id?: string }) => {
 describe('creating channels', () => {
   it('creates one and plays the first track immediately', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     const v = m.view(ROOM).channels
     expect(v).toHaveLength(1)
     expect(v[0].name).toBe('Chill')
@@ -37,30 +37,30 @@ describe('creating channels', () => {
     // auto-subscribed, the grace period below could never fire for a channel
     // nobody actually chose to hear.
     const m = make()
-    m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana')
+    m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
     expect(m.view(ROOM).channels[0].listeners).toEqual([])
   })
 
   it('refuses past the per-call cap', () => {
     const m = make()
-    for (let i = 0; i < 3; i++) m.create(ROOM, `c${i}`, { url: 'https://x/a.mp3' }, 'ana')
-    const r = m.create(ROOM, 'one too many', { url: 'https://x/a.mp3' }, 'ana')
+    for (let i = 0; i < 3; i++) m.create(ROOM, `c${i}`, { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
+    const r = m.create(ROOM, 'one too many', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
     expect(r.ok).toBe(false)
   })
 
   it('refuses past the instance cap even when this room has space', () => {
     const m = make()
-    for (let i = 0; i < 3; i++) m.create(ROOM, `c${i}`, { url: 'https://x/a.mp3' }, 'ana')
-    expect(m.create(OTHER, 'first here', { url: 'https://x/a.mp3' }, 'ben').ok).toBe(true)   // 4th overall
-    const r = m.create(OTHER, 'fifth', { url: 'https://x/a.mp3' }, 'ben')
+    for (let i = 0; i < 3; i++) m.create(ROOM, `c${i}`, { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
+    expect(m.create(OTHER, 'first here', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ben').ok).toBe(true)   // 4th overall
+    const r = m.create(OTHER, 'fifth', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ben')
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toContain('server')
   })
 
   it('counts channels across rooms, not just the one asked about', () => {
     const m = make()
-    m.create(ROOM, 'a', { url: 'https://x/a.mp3' }, 'ana')
-    m.create(OTHER, 'b', { url: 'https://x/a.mp3' }, 'ben')
+    m.create(ROOM, 'a', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
+    m.create(OTHER, 'b', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ben')
     expect(m.channelsHere(ROOM)).toBe(1)
     expect(m.channelsEverywhere()).toBe(2)
   })
@@ -69,8 +69,8 @@ describe('creating channels', () => {
 describe('queueing and skipping', () => {
   it('queues behind what is playing', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/1.mp3' }, 'ana'))
-    expect(m.queue(ROOM, id, { url: 'https://x/2.mp3' }, 'ben').ok).toBe(true)
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/1.mp3' }, 'ana'))
+    expect(m.queue(ROOM, id, { kind: 'link' as const, url: 'https://x/2.mp3' }, 'ben').ok).toBe(true)
     const v = m.view(ROOM).channels[0]
     expect(v.now?.url).toBe('https://x/1.mp3')
     expect(v.queued).toBe(1)
@@ -78,16 +78,16 @@ describe('queueing and skipping', () => {
 
   it('refuses a full queue', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/1.mp3' }, 'ana'))
-    expect(m.queue(ROOM, id, { url: 'https://x/2.mp3' }, 'ben').ok).toBe(true)
-    expect(m.queue(ROOM, id, { url: 'https://x/3.mp3' }, 'ben').ok).toBe(true)
-    expect(m.queue(ROOM, id, { url: 'https://x/4.mp3' }, 'ben').ok).toBe(false)
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/1.mp3' }, 'ana'))
+    expect(m.queue(ROOM, id, { kind: 'link' as const, url: 'https://x/2.mp3' }, 'ben').ok).toBe(true)
+    expect(m.queue(ROOM, id, { kind: 'link' as const, url: 'https://x/3.mp3' }, 'ben').ok).toBe(true)
+    expect(m.queue(ROOM, id, { kind: 'link' as const, url: 'https://x/4.mp3' }, 'ben').ok).toBe(false)
   })
 
   it('skip advances to the next track', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/1.mp3' }, 'ana'))
-    m.queue(ROOM, id, { url: 'https://x/2.mp3' }, 'ben')
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/1.mp3' }, 'ana'))
+    m.queue(ROOM, id, { kind: 'link' as const, url: 'https://x/2.mp3' }, 'ben')
     const r = m.skip(ROOM, id)
     expect(r.ok).toBe(true)
     expect(r.now?.url).toBe('https://x/2.mp3')
@@ -99,7 +99,7 @@ describe('queueing and skipping', () => {
     // Closing it under them would take the channel away mid-conversation
     // about what to play next.
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/1.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/1.mp3' }, 'ana'))
     m.listen(ROOM, 'ana', id)
     expect(m.skip(ROOM, id).now).toBeNull()
     expect(m.view(ROOM).channels).toHaveLength(1)
@@ -108,7 +108,7 @@ describe('queueing and skipping', () => {
 
   it('refuses to queue or skip a channel that is gone', () => {
     const m = make()
-    expect(m.queue(ROOM, 'nope', { url: 'https://x/a.mp3' }, 'ana').ok).toBe(false)
+    expect(m.queue(ROOM, 'nope', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana').ok).toBe(false)
     expect(m.skip(ROOM, 'nope').ok).toBe(false)
   })
 })
@@ -116,15 +116,15 @@ describe('queueing and skipping', () => {
 describe('listening', () => {
   it('tunes a member in', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     expect(m.listen(ROOM, 'ana', id).ok).toBe(true)
     expect(m.view(ROOM).channels[0].listeners).toEqual(['ana'])
   })
 
   it('moves a member between channels rather than adding them to both', () => {
     const m = make()
-    const a = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
-    const b = idOf(m.create(ROOM, 'Metal', { url: 'https://x/b.mp3' }, 'ben'))
+    const a = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
+    const b = idOf(m.create(ROOM, 'Metal', { kind: 'link' as const, url: 'https://x/b.mp3' }, 'ben'))
     m.listen(ROOM, 'ana', a)
     m.listen(ROOM, 'ana', b)
     const v = m.view(ROOM).channels
@@ -134,7 +134,7 @@ describe('listening', () => {
 
   it('null tunes out of everything', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     m.listen(ROOM, 'ana', id)
     expect(m.listen(ROOM, 'ana', null).ok).toBe(true)
     expect(m.view(ROOM).channels[0].listeners).toEqual([])
@@ -147,7 +147,7 @@ describe('listening', () => {
 
   it('several members can share a channel', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     m.listen(ROOM, 'ana', id); m.listen(ROOM, 'ben', id)
     expect(m.view(ROOM).channels[0].listeners.sort()).toEqual(['ana', 'ben'])
   })
@@ -156,7 +156,7 @@ describe('listening', () => {
 describe('the empty-channel grace period', () => {
   it('a channel nobody ever joined is torn down after the grace period', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     expect(m.closePending(ROOM, id)).toBe(true)
     vi.advanceTimersByTime(EMPTY_GRACE_MS + 10)
     expect(m.view(ROOM).channels).toHaveLength(0)
@@ -165,7 +165,7 @@ describe('the empty-channel grace period', () => {
 
   it('is cancelled the moment somebody listens', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     m.listen(ROOM, 'ana', id)
     expect(m.closePending(ROOM, id)).toBe(false)
     vi.advanceTimersByTime(EMPTY_GRACE_MS * 3)
@@ -177,7 +177,7 @@ describe('the empty-channel grace period', () => {
     // Destroying it on the instant is the bug the call-end grace period
     // exists to prevent, one layer up.
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     m.listen(ROOM, 'ana', id)
     m.listen(ROOM, 'ana', null)
     expect(m.closePending(ROOM, id)).toBe(true)
@@ -190,7 +190,7 @@ describe('the empty-channel grace period', () => {
 
   it('tears down after the window if nobody came back', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     m.listen(ROOM, 'ana', id)
     m.listen(ROOM, 'ana', null)
     vi.advanceTimersByTime(EMPTY_GRACE_MS + 10)
@@ -200,7 +200,7 @@ describe('the empty-channel grace period', () => {
 
   it('arms only once, so a flapping listener does not stack timers', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     for (let i = 0; i < 5; i++) { m.listen(ROOM, 'ana', id); m.listen(ROOM, 'ana', null) }
     vi.advanceTimersByTime(EMPTY_GRACE_MS + 10)
     expect(closed).toEqual([`${ROOM}/${id}`])   // exactly one teardown, not five
@@ -210,8 +210,8 @@ describe('the empty-channel grace period', () => {
 describe('members leaving', () => {
   it('forget drops a member from every channel and names the rooms that changed', () => {
     const m = make()
-    const a = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
-    const b = idOf(m.create(OTHER, 'Metal', { url: 'https://x/b.mp3' }, 'ben'))
+    const a = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
+    const b = idOf(m.create(OTHER, 'Metal', { kind: 'link' as const, url: 'https://x/b.mp3' }, 'ben'))
     m.listen(ROOM, 'ana', a)
     m.listen(OTHER, 'ana', b)
     const touched = m.forget('ana')
@@ -221,14 +221,14 @@ describe('members leaving', () => {
 
   it('forget names no room when the member was listening to nothing', () => {
     const m = make()
-    m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana')
+    m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
     expect(m.forget('nobody')).toEqual([])
   })
 
   it('closeRoom tears everything down at once', () => {
     const m = make()
-    const a = idOf(m.create(ROOM, 'a', { url: 'https://x/a.mp3' }, 'ana'))
-    const b = idOf(m.create(ROOM, 'b', { url: 'https://x/b.mp3' }, 'ana'))
+    const a = idOf(m.create(ROOM, 'a', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
+    const b = idOf(m.create(ROOM, 'b', { kind: 'link' as const, url: 'https://x/b.mp3' }, 'ana'))
     m.closeRoom(ROOM)
     expect(m.view(ROOM).channels).toHaveLength(0)
     expect(closed.sort()).toEqual([`${ROOM}/${a}`, `${ROOM}/${b}`].sort())
@@ -236,18 +236,18 @@ describe('members leaving', () => {
 
   it('frees the room slot so a new channel can be made after teardown', () => {
     const m = make()
-    for (let i = 0; i < 3; i++) m.create(ROOM, `c${i}`, { url: 'https://x/a.mp3' }, 'ana')
-    expect(m.create(ROOM, 'full', { url: 'https://x/a.mp3' }, 'ana').ok).toBe(false)
+    for (let i = 0; i < 3; i++) m.create(ROOM, `c${i}`, { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
+    expect(m.create(ROOM, 'full', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana').ok).toBe(false)
     vi.advanceTimersByTime(EMPTY_GRACE_MS + 10)       // all three were empty
     expect(m.channelsEverywhere()).toBe(0)
-    expect(m.create(ROOM, 'room again', { url: 'https://x/a.mp3' }, 'ana').ok).toBe(true)
+    expect(m.create(ROOM, 'room again', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana').ok).toBe(true)
   })
 })
 
 describe('shutdown', () => {
   it('cancelAllCloses concludes nothing', () => {
     const m = make()
-    const id = idOf(m.create(ROOM, 'Chill', { url: 'https://x/a.mp3' }, 'ana'))
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     m.cancelAllCloses()
     vi.advanceTimersByTime(EMPTY_GRACE_MS * 3)
     // The process is going away; a channel it stops tracking is not a channel

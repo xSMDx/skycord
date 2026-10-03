@@ -16,23 +16,30 @@ import type { MusicCaps, Check } from '../utils/musicLimits'
 import { canOpenChannel, canQueue } from '../utils/musicLimits'
 
 /**
- * One thing to play.
+ * One thing to play, and where it comes from.
  *
- * Two sources, and the difference is who chose the address. A pasted link
- * is text a member typed, and every control in music/src/urlGuard.ts exists
- * for it. A library track is an id the API resolves against a collection it
- * owns, and the address is composed by the service from its own
- * configuration — so no member-supplied text reaches the fetcher at all.
+ * Tagged, rather than two optional fields with a comment saying exactly one
+ * is set. The tag is what makes adding a third source a compile error at
+ * every place that has to learn about it — and there are more of those than
+ * is obvious, because the branch that decides how playback starts used to
+ * exist in three copies and they would have drifted.
  *
- * Exactly one of these is set.
+ * The difference between the two that exist is who chose the address. A
+ * pasted link is text a member typed, and every control in
+ * music/src/urlGuard.ts exists for it. A library track is an id the API
+ * resolves against a collection it owns, and the address is composed by the
+ * service from its own configuration, so no member-supplied text reaches
+ * the fetcher at all.
+ *
+ * A third kind would not necessarily reach the service — see
+ * docs/music-providers.md, which is about why Spotify cannot be one of
+ * these in the way people expect.
  */
-export interface Track {
-  /** A link a member pasted. Untrusted; guarded in the service. */
-  url?: string
-  /** A track in the member's library, already checked to be theirs. */
-  trackId?: string
-  /** What to show while it plays. Absent for a bare link. */
-  title?: string
+export type Source =
+  | { kind: 'link'; url: string }
+  | { kind: 'library'; trackId: string; title: string }
+
+export type Track = Source & {
   addedBy: string
   addedAt: number
 }
@@ -103,7 +110,11 @@ export class MusicRooms {
         id: c.id,
         name: c.name,
         now: c.now
-          ? { url: c.now.url ?? null, title: c.now.title ?? null, addedBy: c.now.addedBy }
+          ? {
+              url:   c.now.kind === 'link' ? c.now.url : null,
+              title: c.now.kind === 'library' ? c.now.title : null,
+              addedBy: c.now.addedBy,
+            }
           : null,
         queued: c.queue.length,
         listeners: [...c.listeners],
@@ -113,7 +124,7 @@ export class MusicRooms {
 
   // ── writing ────────────────────────────────────────────────────────────
 
-  create(room: string, name: string, source: Omit<Track, 'addedBy' | 'addedAt'>, by: string): Check & { id?: string } {
+  create(room: string, name: string, source: Source, by: string): Check & { id?: string } {
     const room_ok = canOpenChannel(
       { channelsHere: this.channelsHere(room), channelsEverywhere: this.channelsEverywhere() },
       this.caps,
@@ -139,7 +150,7 @@ export class MusicRooms {
     return { ok: true, id }
   }
 
-  queue(room: string, channelId: string, source: Omit<Track, 'addedBy' | 'addedAt'>, by: string): Check {
+  queue(room: string, channelId: string, source: Source, by: string): Check {
     const channel = this.get(room, channelId)
     if (!channel) return no('That music channel is gone.')
     const room_ok = canQueue(channel.queue.length, this.caps)
