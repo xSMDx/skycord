@@ -163,11 +163,34 @@ What that means concretely, and where this diverges from the screenshot:
   there: the music channels open in the voice channel you are in, what each is
   playing, and who is listening to each — by name, because these are people you
   know. Picking a channel to listen to is the thing you came to do.
-- **Bottom.** The transport. In a call it controls the music channel; outside a
-  call it is local preview through the browser's own audio element.
+- **Bottom.** The transport, and it previews locally — through one `<audio>`
+  element, heard by nobody else. Pushing a track to the room is a separate,
+  deliberate button, because "everyone can hear this" must never be the side
+  effect of pressing play. The bar says "Only you" next to it.
 
 Tune-in is a ring, not a fill — the selection idiom the rest of the app now
 uses. The accent in these lists already means hover.
+
+Two things the first build got wrong, both found by looking at it:
+
+The three columns were one surface divided by hairlines. They are separate
+cards on a darker base now, with a gap — a divider says "parts of one thing"
+and a gap says "three things that sit together", which is what they are. And
+the transport was a 48px flex row; it is an 88px three-zone grid, with the
+centre centred on the *bar* rather than on the space the sides leave over, so
+the play button does not move when a long title loads.
+
+**Outside a call** the right-hand column keeps its question rather than
+emptying. It lists the voice channels that currently have somebody in them,
+with their faces, and one tap joins — built from presence the client already
+holds, since the server replays occupancy for every server you belong to at
+connect. You opened this to play something for people; that is where the
+people are.
+
+**On a phone** the left rail becomes a horizontal strip rather than
+disappearing, with the add button pinned first so a scrolling strip can never
+hide the only way to make a playlist. Row actions are revealed on hover, which
+on a touch screen means never, so `@media (hover: none)` shows them.
 
 ## 5. The cue
 
@@ -184,13 +207,68 @@ only cue in the palette with a fourth note, which is what makes it identifiable
 as *music* rather than as another call event, and it is quieter than call-join
 because it is not about you.
 
-## Order of work
+## 6. Getting a library track into a call
 
-1. Store, models, caps.
-2. Ingest in the service: sniff, scan, transcode, probe.
-3. API: upload, import, list, delete, stream.
-4. The modal.
-5. The call: play from library, artwork in channel state, rosters, cue.
+The seam between "my music" and "our music", and the part with the most ways
+to get it wrong.
 
-Each step is useful before the next exists, and the modal is deliberately last
-of the big pieces because it is the one that needs everything else to be real.
+A library track never travels as a URL. The client sends a **track id**; the
+API checks the caller owns it and tells the service to play that id; the
+service composes the address from its own `API_INTERNAL_URL` and reads the
+audio back over `/internal/music/track/:id/audio`, authenticated with the
+shared secret. So the SSRF machinery a pasted link needs does not apply to
+this path at all — not because it has been checked, but because there is no
+member-supplied text on it.
+
+The ownership check is the load-bearing half. Without it a member could name
+any id and have the room play a stranger's file, and "no such track" is the
+answer for both a missing id and someone else's, so the error cannot be used
+to find out which ids are real.
+
+A queue entry is therefore one of two shapes, and three places advance a
+queue — create, skip, and the service reporting a track ended. They all go
+through one `startSource`, because three copies of that branch is three
+chances for them to disagree.
+
+## 7. Knowing whether music exists
+
+The client learns it from the **instance profile**, not from the voice token.
+The token answer only arrives once you are in a call, and a member's own
+library has nothing to do with being in one — the library button simply never
+appeared until you had joined a call, which is a strange thing to require of
+somebody who wants to upload a file.
+
+## 8. Running it
+
+Music is off unless asked for: `--music` at install, or the question the
+installer asks when voice is on. It adds `compose.music.yaml` to
+`COMPOSE_FILE`, and that one file carries *both* halves of the link — the
+service, and the two variables the app needs to know it exists. An earlier
+version had only the service, so enabling music started a container the API
+had never heard of and reported the feature off.
+
+The egress rules live in `music-firewall.sh`, applied at install and
+re-applied by a systemd unit on every boot, because iptables rules do not
+survive a restart and a control that lapses at the first reboot with nothing
+to say so is the worst shape one can take. `skycord status` reports them, and
+every command that recreates containers puts them back.
+
+Those rules exclude the container's own subnet, which is not an oversight:
+the API and the service talk over it, so blocking it would break the feature
+the rules protect. That means music can still open a socket to MongoDB — and
+what makes that acceptable is the thing the compose file already relies on,
+that this container holds no database credential. Verified with
+`docker compose config`, not by reading it.
+
+## What is not verified
+
+Written down because the alternative is remembering.
+
+- **The virus scanner's happy path.** The fail-closed case is tested — a
+  configured scanner that cannot be reached refuses the upload. An actual
+  clamd accepting a clean file, or catching an EICAR string, is not.
+- **The release rehearsal's music section.** It needs Linux, a real Docker
+  network and iptables, so it runs for the first time on the next release
+  tag. Everything else about the deploy half is covered by `cli.test.sh`.
+- **Two listeners in two different channels at once, with library tracks.**
+  The state machine covers it; a browser has only ever had one.
