@@ -190,7 +190,7 @@ const {
   clearUnread,
   loadingServerDetail,
   upsertMember, removeMember,
-  loadServers, loadServerMembers, openServer: enterServer, moveChannel,
+  loadServers, loadServerDetail, loadServerMembers, openServer: enterServer, moveChannel,
   myAccessIn, canInServer, voiceRestrictionOf, applyVoiceRestriction, refreshServerAccess,
   reorderCategories,
   reorderChannels, applyMemberRoles,
@@ -213,6 +213,7 @@ const {
   sendTypingStop,
   subscribeGroup,
   activeCalls,
+  voiceRoomServers,
   on: socketOn,
 } = useSocket()
 
@@ -1205,6 +1206,97 @@ const startVideoCall = async () => {
   openCameraPreview('video-call')
 }
 /**
+ * Voice channels with somebody already in them, for the music room's rail.
+ *
+ * The rail is about the room, so outside a call the useful question is not
+ * "what else could we show here" but "which rooms exist". You opened this
+ * to play something for people; these are where the people are.
+ *
+ * Built from the presence the sidebar already has rather than fetched:
+ * `voiceRoomOccupants` has resolved names and faces, `voiceRoomServers`
+ * says which server each room belongs to, and nothing here is knowledge the
+ * client did not already hold.
+ */
+const musicRoomChoices = computed(() => {
+  const out: { channelId: string; name: string; serverName: string
+               people: { id: string; name: string; avatar: string }[] }[] = []
+  for (const [room, people] of Object.entries(voiceRoomOccupants.value)) {
+    if (!people.length) continue
+    const channelId = room.slice('voice:'.length)
+    const serverId = voiceRoomServers.value[room]
+    const channel = (channelsByServer.value[serverId] ?? []).find(c => c.id === channelId)
+    const serverName = servers.value.find(sv => sv.id === serverId)?.name ?? ''
+    // Channel lists are fetched per server when you open one, so a room in a
+    // server you have not visited this session has no name here. Rather than
+    // print a placeholder next to a real server name — "Voice channel / 26",
+    // which says nothing twice — the server becomes the heading and the
+    // second line says what kind of thing it is.
+    out.push({
+      channelId,
+      name: channel?.name ?? serverName ?? 'Voice',
+      serverName: channel?.name ? serverName : 'Voice channel',
+      people: people.map(o => ({ id: o.id, name: o.name, avatar: o.avatar })),
+    })
+  }
+  return out.sort((a, b) => b.people.length - a.people.length)
+})
+
+/**
+ * Join a room from the music modal.
+ *
+ * Fetches the server first when its channels are not loaded. Presence
+ * arrives for every server you belong to at connect, but channel lists are
+ * fetched per server when you open one — so a room in a server you have
+ * not visited this session is visible and, without this, unclickable. It
+ * silently did nothing, which is the worst version of that bug.
+ */
+const joinFromMusic = async (channelId: string): Promise<void> => {
+  const serverId = voiceRoomServers.value[`voice:${channelId}`]
+  if (!serverId) return
+  const find = () => (channelsByServer.value[serverId] ?? []).find(c => c.id === channelId)
+  let ch = find()
+  if (!ch) {
+    try { await loadServerDetail(serverId) } catch { /* reported below */ }
+    ch = find()
+  }
+  if (!ch) { showToast('That channel could not be opened.'); return }
+
+  musicModal.value = false
+  // Enter the server first when you are not already in it. joinVoiceChannel
+  // only points the stage at a channel and connects; it does not navigate,
+  // so from the Friends view you joined the call for real and then watched
+  // a screen with no call on it. Same two-step as "return to call".
+  const srv = servers.value.find(sv => sv.id === serverId)
+  if (srv && activeServerId.value !== serverId) await openServer(srv)
+  joinVoiceChannel(ch)
+}
+
+/**
+ * Fill in who is in those rooms.
+ *
+ * resolveVoiceUser searches the server member lists it has, and those are
+ * fetched per server on open — so somebody sitting in a server you have not
+ * visited resolves to "Unknown" with an invented face. On a rail whose
+ * whole value is recognising people, that is worse than showing nothing.
+ *
+ * Only servers that actually have someone in voice, and only once each.
+ */
+const roomsResolved = new Set<string>()
+const resolveRoomPeople = async (): Promise<void> => {
+  for (const room of Object.keys(voiceRoomOccupants.value)) {
+    const sid = voiceRoomServers.value[room]
+    if (!sid || roomsResolved.has(sid)) continue
+    roomsResolved.add(sid)
+    try {
+      await Promise.all([
+        channelsByServer.value[sid] ? Promise.resolve() : loadServerDetail(sid),
+        membersByServer.value[sid] ? Promise.resolve() : loadServerMembers(sid),
+      ])
+    } catch { /* a server we cannot read just keeps its fallback name */ }
+  }
+}
+
+/**
  * Your library, as a room rather than a popover.
  *
  * Reachable from the user panel as well as from a call, because what you
@@ -1212,6 +1304,10 @@ const startVideoCall = async () => {
  * is the in-call control, not the only door.
  */
 const musicModal = ref(false)
+
+// Resolving costs a request per server, so it waits until the room is
+// actually opened rather than running for everyone on every page load.
+watch(musicModal, (open) => { if (open) void resolveRoomPeople() })
 
 const openSettings = (p: 'account' | 'profile' | 'appearance' | 'voice' = 'account') => {
   settingsPage.value = p
@@ -5324,7 +5420,10 @@ useDesktopTitleBar({
       </template>
 
     </div>
-    <MusicModal v-if="musicModal" @close="musicModal = false" />
+    <MusicModal
+      v-if="musicModal" :rooms="musicRoomChoices"
+      @close="musicModal = false" @join="joinFromMusic"
+    />
   </div>
 </template>
 

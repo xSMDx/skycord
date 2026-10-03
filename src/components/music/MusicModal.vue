@@ -25,6 +25,7 @@ import {
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import MusicCallRail from './MusicCallRail.vue'
+import type { VoiceRoomChoice } from './rooms'
 import { useAuth } from '@/composables/useAuth'
 import { coverTheme, type CoverTheme } from '@/composables/coverTheme'
 import {
@@ -34,7 +35,8 @@ import {
   type LibTrack,
 } from '@/composables/useMusicLibrary'
 
-const emit = defineEmits<{ close: [] }>()
+defineProps<{ rooms?: VoiceRoomChoice[] }>()
+const emit = defineEmits<{ close: []; join: [channelId: string] }>()
 const { accessToken } = useAuth()
 
 // The shell's own dismissal, so the leave transition plays. Emitting close
@@ -383,7 +385,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- ── right: the room ─────────────────────────────────────────── -->
-      <MusicCallRail :selected="playing" />
+      <MusicCallRail :selected="playing" :rooms="rooms ?? []" @join="emit('join', $event)" />
     </div>
 
     <!-- ── transport ──────────────────────────────────────────────────── -->

@@ -15,14 +15,16 @@
  * "our music", which is why it says what it will do rather than just "play".
  */
 import { computed, ref } from 'vue'
-import { Music2, Plus, Radio, Send, X } from 'lucide-vue-next'
+import { Music2, Plus, Radio, Send, Volume2, X } from 'lucide-vue-next'
 import { voice } from '@/composables/useVoice'
 import {
   music, createMusicChannel, queueMusic, listenToMusic, closeMusicChannel,
 } from '@/composables/useMusic'
 import type { LibTrack } from '@/composables/useMusicLibrary'
+import type { VoiceRoomChoice } from './rooms'
 
-const props = defineProps<{ selected: LibTrack | null }>()
+const props = defineProps<{ selected: LibTrack | null; rooms: VoiceRoomChoice[] }>()
+const emit = defineEmits<{ join: [channelId: string] }>()
 
 const naming = ref(false)
 const newName = ref('')
@@ -42,9 +44,13 @@ const nameOf = (id: string): string =>
  * with, so the useful sentence is the one with their names in it, and the
  * overflow only starts once a list would stop being readable.
  */
-const listeners = (ids: string[]): string => {
+const listeners = (ids: string[], known?: { id: string; name: string }[]): string => {
   if (!ids.length) return 'Nobody yet'
-  const names = ids.map(nameOf)
+  // Outside a call the names come with the room, because voice.participants
+  // only ever holds the call you are in — which is none of them.
+  const names = known
+    ? known.map(p => p.name)
+    : ids.map(nameOf)
   if (names.length <= 2) return names.join(' and ')
   return `${names[0]}, ${names[1]} and ${names.length - 2} more`
 }
@@ -70,12 +76,46 @@ const startWith = (): void => {
   <aside class="cr">
     <span class="cr-head">
       <Radio :size="13" :stroke-width="2.25" />
-      <span>In this call</span>
+      <span>{{ inCall ? 'In this call' : 'Where everyone is' }}</span>
     </span>
 
-    <p v-if="!inCall" class="cr-empty">
-      You are not in a call. Join a voice channel to play something for everyone.
-    </p>
+    <!--
+      Outside a call this rail still answers its one question — where is the
+      room — rather than filling the space with something unrelated. You
+      opened this to play something for people; these are where the people
+      are, and one click puts you in with them.
+    -->
+    <template v-if="!inCall">
+      <ul v-if="rooms.length" class="cr-list">
+        <li v-for="r in rooms" :key="r.channelId">
+          <button class="cr-room" @click="emit('join', r.channelId)">
+            <span class="cr-roomtop">
+              <Volume2 class="cr-ico" :size="14" :stroke-width="2.25" />
+              <span class="cr-names">
+                <span class="cr-name">{{ r.name }}</span>
+                <span v-if="r.serverName" class="cr-who">{{ r.serverName }}</span>
+              </span>
+              <span class="cr-join">Join</span>
+            </span>
+            <span class="cr-faces">
+              <!-- Faces rather than a count, for the same reason the in-call
+                   rows name their listeners: you recognise the people. -->
+              <img
+                v-for="p in r.people.slice(0, 5)" :key="p.id"
+                class="cr-face" :src="p.avatar" :alt="p.name" :title="p.name"
+              />
+              <span v-if="r.people.length > 5" class="cr-more">+{{ r.people.length - 5 }}</span>
+              <span class="cr-wholine">{{ listeners(r.people.map(p => p.id), r.people) }}</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+
+      <p v-else class="cr-empty">
+        Nobody is in a voice channel right now. Join one and whatever you play
+        here, everyone in it can tune into.
+      </p>
+    </template>
 
     <template v-else>
       <ul v-if="music.channels.length" class="cr-list">
@@ -161,6 +201,37 @@ const startWith = (): void => {
 .cr-empty { padding: 2px; font-size: 11.5px; line-height: 1.55; color: var(--text-3); }
 
 .cr-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+
+/* ── outside a call: the rooms ──────────────────────────────────────── */
+.cr-room {
+  display: flex; flex-direction: column; gap: 8px; width: 100%;
+  padding: 10px 11px; border: none; cursor: pointer; text-align: left;
+  background: var(--bg-input); border-radius: var(--edge-md);
+  transition: background var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cr-room:hover { background: var(--hover-strong); }
+  .cr-room:hover .cr-join { opacity: 1; }
+}
+.cr-room:active { transform: scale(.99); }
+.cr-roomtop { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cr-join {
+  flex-shrink: 0; font-size: 11px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--accent-text); opacity: .6;
+  /* Visible at rest, not revealed on hover: the card exists to be clicked,
+     and an affordance you have to find first is not one. */
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+.cr-faces { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.cr-face {
+  width: 20px; height: 20px; border-radius: 50%; object-fit: cover;
+  flex-shrink: 0; background: var(--bg-panel);
+}
+.cr-more { font-size: 10.5px; color: var(--text-3); flex-shrink: 0; }
+.cr-wholine {
+  font-size: 11px; color: var(--text-3); margin-left: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
 .cr-card {
   display: flex; align-items: center; gap: 2px;
   border-radius: var(--edge-md); background: var(--bg-input);
