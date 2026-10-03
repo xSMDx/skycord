@@ -35,7 +35,8 @@ export SKYCORD_LOCAL_FILES="$ROOT/deploy/_bundle"
 rm -rf "$SKYCORD_LOCAL_FILES"
 mkdir -p "$SKYCORD_LOCAL_FILES"
 cp "$ROOT"/deploy/compose*.yaml "$ROOT"/deploy/mongo-init.sh "$ROOT"/deploy/Caddyfile.tmpl \
-   "$ROOT"/deploy/livekit.yaml.tmpl "$ROOT"/deploy/skycord "$ROOT"/deploy/install.sh "$SKYCORD_LOCAL_FILES/"
+   "$ROOT"/deploy/livekit.yaml.tmpl "$ROOT"/deploy/skycord "$ROOT"/deploy/install.sh \
+   "$ROOT"/deploy/music-firewall.sh "$SKYCORD_LOCAL_FILES/"
 cp "$ROOT"/deploy/systemd/* "$SKYCORD_LOCAL_FILES/"
 ( cd "$SKYCORD_LOCAL_FILES" && sha256sum ./* > SHA256SUMS )
 
@@ -43,10 +44,39 @@ say "Install"
 # localhost, so Caddy issues its own certificate instead of asking Let's
 # Encrypt for one it could never get on a runner.
 sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" bash "$ROOT/deploy/install.sh" \
-  --domain localhost --email ci@example.com --version "$VERSION" --yes \
+  --domain localhost --email ci@example.com --version "$VERSION" --music --yes \
   || fail "the installer did not finish"
 
 sudo skycord status || fail "status does not work"
+
+say "Music is on, and locked in"
+# This is the only place the egress rules can actually be exercised: they
+# need Linux, a real Docker network and iptables, none of which a developer's
+# machine reliably has. Everything else about music is unit-tested; this is
+# the part that is only true on a server.
+sudo skycord status | grep -q "Music:     on, egress restricted" \
+  || { sudo skycord status; fail "status does not report music as locked down"; }
+
+# The rules themselves, not just what status says about them.
+sudo iptables -S DOCKER-USER | grep -q "skycord-music" \
+  || fail "no skycord-music rules in DOCKER-USER"
+sudo iptables -S DOCKER-USER | grep -q "169.254.0.0/16.*REJECT" \
+  || fail "the cloud metadata address is not blocked"
+# The container's own subnet must be allowed, above the rejects, or the API
+# and the decoder cannot speak and the feature is dead.
+sudo iptables -S DOCKER-USER | grep -q "skycord-music.*RETURN" \
+  || fail "the music subnet has no RETURN rule — the API would be unreachable"
+
+# The API agrees the feature is on. This is the half that was missing for a
+# while: the container ran and nothing was wired to it.
+stack exec -T skycord \
+  node -e "fetch('http://127.0.0.1:3001/instance').then(r=>r.json()).then(p=>{ if (p.music!==true) { console.error(p); process.exit(1) } })" \
+  || fail "the instance profile does not report music as available"
+
+# And the service answers, through the name the API uses for it.
+stack exec -T skycord \
+  node -e "fetch('http://music:3060/health').then(r=>{ if(!r.ok) process.exit(1) })" \
+  || fail "the API cannot reach the music service"
 
 say "The app answers, and the API is the API"
 stack exec -T skycord \

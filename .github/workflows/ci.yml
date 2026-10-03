@@ -68,7 +68,8 @@ jobs:
         # between runner images and flags different things.
         run: |
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 \
-            deploy/install.sh deploy/skycord deploy/mongo-init.sh deploy/tests/*.sh
+            deploy/install.sh deploy/skycord deploy/mongo-init.sh \
+            deploy/music-firewall.sh deploy/tests/*.sh
 
   image:
     name: Image builds

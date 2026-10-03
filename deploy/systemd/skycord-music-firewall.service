@@ -1,0 +1,26 @@
+[Unit]
+# The music container's egress rules.
+#
+# This exists because iptables rules do not survive a reboot. Applying them
+# once from the installer would leave a server protected until its first
+# restart and unprotected forever after, with nothing to say so — which is
+# the worst shape a security control can take.
+#
+# The script waits for the container, so starting beside Docker rather than
+# strictly after the stack is up is fine.
+Description=Skycord music egress rules
+Documentation=https://github.com/xSMDx/skycord
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=SKYCORD_DIR=/opt/skycord
+ExecStart=/opt/skycord/music-firewall.sh apply
+ExecStop=/opt/skycord/music-firewall.sh remove
+# Long enough for the script's own bounded wait for the container.
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

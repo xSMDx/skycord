@@ -13,10 +13,19 @@ bad()  { printf '  FAIL %s\n         %s\n' "$1" "$2"; FAILED=1; }
 is()   { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected [$3], got [$2]"; fi; }
 yes_() { if "${@:2}"; then ok "$1"; else bad "$1" "expected success"; fi; }
 no_()  { if "${@:2}"; then bad "$1" "expected failure"; else ok "$1"; fi; }
-has()  { if grep -q "$3" "$2"; then ok "$1"; else bad "$1" "missing: $3"; fi; }
-hasnt(){ if grep -q "$3" "$2"; then bad "$1" "should not contain: $3"; else ok "$1"; fi; }
+has()  { if grep -q -- "$3" "$2"; then ok "$1"; else bad "$1" "missing: $3"; fi; }
+hasnt(){ if grep -q -- "$3" "$2"; then bad "$1" "should not contain: $3"; else ok "$1"; fi; }
+# The same, ignoring comments. A compose file that NAMES a secret in a note
+# about never passing it would otherwise fail a test for not passing it.
+code_hasnt() {
+  if grep -v '^[[:space:]]*#' "$2" | grep -q -- "$3"
+    then bad "$1" "should not contain: $3"; else ok "$1"; fi
+}
 # shellcheck disable=SC2317,SC2329 # called indirectly, by yes_/no_
 quiet(){ "$@" >/dev/null 2>&1; }
+# For functions that die: a subshell keeps the exit from ending the run.
+# shellcheck disable=SC2317,SC2329 # called indirectly, by no_
+sub()  { ( "$@" ) >/dev/null 2>&1; }
 # Counting through a glob rather than counting lines of ls output.
 count(){ printf '%s' "$#"; }
 skip() { printf '  skip %s\n' "$1"; }
@@ -166,13 +175,100 @@ has "compose mounts it read-only"          "$ROOT/deploy/compose.yaml" './instan
 has "the installer creates it"             "$ROOT/deploy/install.sh"   'SKYCORD_DIR/instance'
 has "nginx proxies /instance"              "$ROOT/docs/self-hosting/networking.md" 'invites|instance|'
 
-# The five questions sit inside the block --yes skips.
+# The questions all sit inside a block --yes skips.
 guarded="$(awk '/^if \[ -z "\$ASSUME_YES" \]; then$/{g=1} g{print} /^fi$/{g=0}' "$ROOT/deploy/install.sh")"
 for q in 'Name for this instance' 'Who runs it' 'How people can reach you' \
-         'Link to your terms of service' 'Link to your privacy policy'; do
+         'Link to your terms of service' 'Link to your privacy policy' \
+         'Enable music channels'; do
   if grep -q "$q" <<<"$guarded"; then ok "--yes skips: $q"; else bad "--yes skips: $q" "not inside an ASSUME_YES block"; fi
 done
 
 echo ""
+echo "users"
+is  "defaults to thirty days"    "$(users_window)"            "30"
+is  "takes a plain number"       "$(users_window 7)"          "7"
+is  "takes --days"               "$(users_window --days 90)"  "90"
+no_ "rejects a word"             sub users_window abc
+no_ "rejects zero"               sub users_window 0
+no_ "rejects a negative"         sub users_window -1
+no_ "rejects an unknown option"  sub users_window --nope
+usage > "$SKYCORD_DIR/usage.txt"
+has "usage lists it"             "$SKYCORD_DIR/usage.txt" "skycord users"
+
+echo "music"
+# The flag, the question and the compose entry have to agree. A flag that
+# turns nothing on, or a compose file nothing adds, is the failure here.
+has "the installer documents --music"     "$ROOT/deploy/install.sh" '--music '
+has "the installer parses --music"        "$ROOT/deploy/install.sh" '--music)'
+has "the installer parses --no-music"     "$ROOT/deploy/install.sh" '--no-music)'
+has "it adds the compose file"            "$ROOT/deploy/install.sh" 'compose.music.yaml'
+# shellcheck disable=SC2016 # a literal $, on purpose: this is the heredoc
+# line that writes the value into .env, not an expansion.
+has "it writes the shared secret"         "$ROOT/deploy/install.sh" 'MUSIC_INTERNAL_SECRET=\$MUSIC_INTERNAL_SECRET'
+has "it installs the firewall script"     "$ROOT/deploy/install.sh" 'music-firewall.sh'
+has "it enables the unit"                 "$ROOT/deploy/install.sh" 'skycord-music-firewall'
+
+# Every file the installer reaches for has to be in a release, or it is
+# silently absent on a real server: install.sh guards each one with -f.
+for asset in compose.music.yaml music-firewall.sh \
+             skycord-backup.service skycord-backup.timer \
+             skycord-update.service skycord-update.timer \
+             skycord-music-firewall.service; do
+  case " $ASSETS " in
+    *" $asset "*) ok "released: $asset" ;;
+    *)            bad "released: $asset" "not in ASSETS, so fetch_release never downloads it" ;;
+  esac
+done
+
+# Both halves of the link live in the overlay. Without the app's half the
+# service runs and the API never knows it is there.
+has "music overlay sets the service url"  "$ROOT/deploy/compose.music.yaml" 'MUSIC_SERVICE_URL'
+has "music overlay sets the api url"      "$ROOT/deploy/compose.music.yaml" 'API_INTERNAL_URL'
+# The whole point of the separate container.
+code_hasnt "music never gets the database"    "$ROOT/deploy/compose.music.yaml" 'MONGO_URI'
+code_hasnt "music never gets the jwt secrets" "$ROOT/deploy/compose.music.yaml" 'JWT_ACCESS_SECRET'
+code_hasnt "music never gets the crypto key"  "$ROOT/deploy/compose.music.yaml" 'ENCRYPTION_KEY'
+
+# music_enabled reads COMPOSE_FILE, and the pattern has to survive the file
+# appearing anywhere in a colon-separated list.
+printf 'COMPOSE_FILE=compose.yaml:compose.mongo.yaml\n' > "$SKYCORD_DIR/.env"
+no_  "off when the overlay is absent"     music_enabled
+printf 'COMPOSE_FILE=compose.yaml:compose.music.yaml\n' > "$SKYCORD_DIR/.env"
+yes_ "on when the overlay is last"        music_enabled
+printf 'COMPOSE_FILE=compose.yaml:compose.music.yaml:compose.caddy.yaml\n' > "$SKYCORD_DIR/.env"
+yes_ "on when the overlay is in the middle" music_enabled
+# A file whose name merely contains the word is not the overlay.
+printf 'COMPOSE_FILE=compose.yaml:compose.musicfoo.yaml\n' > "$SKYCORD_DIR/.env"
+no_  "not fooled by a similar name"       music_enabled
+
+# Status says something only when music is on, and says plainly when the
+# rules are missing — a quiet "on" would be the dangerous answer.
+printf 'COMPOSE_FILE=compose.yaml\n' > "$SKYCORD_DIR/.env"
+is  "status is silent when music is off"  "$(music_status_line)" ""
+printf 'COMPOSE_FILE=compose.yaml:compose.music.yaml\n' > "$SKYCORD_DIR/.env"
+rm -f "$SKYCORD_DIR/music-firewall.sh"
+case "$(music_status_line)" in
+  *MISSING*) ok "status shouts when the script is gone" ;;
+  *)         bad "status shouts when the script is gone" "got: $(music_status_line)" ;;
+esac
+
+# The firewall script's own parts, without root or Docker.
+# shellcheck source=/dev/null
+if ( source "$ROOT/deploy/music-firewall.sh"
+     printf 'COMPOSE_FILE=compose.yaml:compose.music.yaml\n' > "$SKYCORD_DIR/.env"
+     music_enabled || exit 1
+     printf 'COMPOSE_FILE=compose.yaml\n' > "$SKYCORD_DIR/.env"
+     music_enabled && exit 1
+     exit 0 )
+then ok  "the firewall script agrees about when music is on"
+else bad "the firewall script agrees about when music is on" "it does not"
+fi
+
+has "the firewall excludes its own subnet" "$ROOT/deploy/music-firewall.sh" 'RETURN'
+has "the firewall blocks link-local"       "$ROOT/deploy/music-firewall.sh" '169.254.0.0/16'
+has "the firewall blocks the metadata net" "$ROOT/deploy/music-firewall.sh" '169.254'
+has "the firewall uses DOCKER-USER"        "$ROOT/deploy/music-firewall.sh" 'DOCKER-USER'
+has "the unit re-applies on boot"          "$ROOT/deploy/systemd/skycord-music-firewall.service" 'WantedBy=multi-user.target'
+
 if [ "$FAILED" = "0" ]; then echo "all good"; else echo "FAILURES"; fi
 exit "$FAILED"

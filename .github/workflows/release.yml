@@ -65,7 +65,8 @@ jobs:
         # between runner images and flags different things.
         run: |
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 \
-            deploy/install.sh deploy/skycord deploy/mongo-init.sh deploy/tests/*.sh
+            deploy/install.sh deploy/skycord deploy/mongo-init.sh \
+            deploy/music-firewall.sh deploy/tests/*.sh
 
   build:
     name: Build and push the image
@@ -205,7 +206,8 @@ jobs:
         run: |
           mkdir -p out
           cp deploy/compose*.yaml deploy/mongo-init.sh deploy/Caddyfile.tmpl \
-             deploy/livekit.yaml.tmpl deploy/skycord deploy/install.sh out/
+             deploy/livekit.yaml.tmpl deploy/skycord deploy/install.sh \
+             deploy/music-firewall.sh out/
           cp deploy/systemd/* out/
           printf '%s\n' "${GITHUB_REF_NAME}" > out/VERSION
           cd out && sha256sum ./* > SHA256SUMS

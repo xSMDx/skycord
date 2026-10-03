@@ -16,6 +16,15 @@
 # The egress restriction is NOT here, because Compose cannot express it. See
 # the note at the bottom.
 services:
+  # The app's half of the link. Both ends live in this file so that enabling
+  # music is one line in COMPOSE_FILE and disabling it leaves nothing behind
+  # — without this the service started, the API never knew it existed, and
+  # the feature reported itself off while a container sat there running.
+  skycord:
+    environment:
+      MUSIC_SERVICE_URL: http://music:3060
+      MUSIC_INTERNAL_SECRET: ${MUSIC_INTERNAL_SECRET:?set MUSIC_INTERNAL_SECRET}
+
   music:
     image: ghcr.io/xsmdx/skycord-music:${SKYCORD_VERSION:?run the installer, or set SKYCORD_VERSION}
     restart: unless-stopped
@@ -34,6 +43,15 @@ services:
       # Shared secret for the API -> music calls. Nothing else may ask this
       # service to fetch anything.
       MUSIC_INTERNAL_SECRET: ${MUSIC_INTERNAL_SECRET:?set MUSIC_INTERNAL_SECRET}
+      # Where to reach the API, for the two things that go the other way: a
+      # track finishing, and reading a library track's audio. Not a database
+      # connection and not a credential — the secret above is what makes it
+      # trusted, and this container still holds nothing that can read data.
+      API_INTERNAL_URL: http://skycord:${PORT:-3001}
+      # Library ceilings. The per-member ones are enforced in the API; these
+      # are what the service itself refuses.
+      MUSIC_CLAMD_HOST: ${MUSIC_CLAMD_HOST:-}
+      MUSIC_CLAMD_PORT: ${MUSIC_CLAMD_PORT:-3310}
       MUSIC_CHANNELS_PER_INSTANCE: ${MUSIC_CHANNELS_PER_INSTANCE:-8}
       MUSIC_MAX_DURATION_SEC: ${MUSIC_MAX_DURATION_SEC:-1800}
       MUSIC_MAX_BYTES: ${MUSIC_MAX_BYTES:-104857600}
@@ -71,19 +89,21 @@ services:
 # network is about who can reach WHOM inside the stack, not about where a
 # container may dial out to on the host's LAN.
 #
-# So the installer writes this, and `skycord doctor` checks it is still
-# there. On a Linux host with iptables, for the subnet this service runs in:
+# So it lives in `music-firewall.sh`, which the installer runs and a systemd
+# unit re-runs on every boot — iptables rules do not survive a restart, and a
+# control that quietly lapses at the first reboot is worse than none.
+# `skycord status` reports whether they are still there.
 #
-#   iptables -I DOCKER-USER -s <music-subnet> -d 10.0.0.0/8      -j REJECT
-#   iptables -I DOCKER-USER -s <music-subnet> -d 172.16.0.0/12   -j REJECT
-#   iptables -I DOCKER-USER -s <music-subnet> -d 192.168.0.0/16  -j REJECT
-#   iptables -I DOCKER-USER -s <music-subnet> -d 169.254.0.0/16  -j REJECT
-#   iptables -I DOCKER-USER -s <music-subnet> -d 100.64.0.0/10   -j REJECT
-#   ip6tables -I DOCKER-USER -s <music-subnet6> -d fc00::/7      -j REJECT
-#   ip6tables -I DOCKER-USER -s <music-subnet6> -d fe80::/10     -j REJECT
+# One thing that list of rules has to get right: the container's OWN subnet
+# is excluded, by a RETURN rule above the rejects. The API and this service
+# talk over it — the API asks for a track, the service reads that track's
+# audio back from the API's internal route — so blocking the subnet would
+# break the feature the rules exist to protect.
 #
-# DOCKER-USER, not INPUT: Docker inserts its own rules ahead of everything
-# else, and DOCKER-USER is the one chain it promises to leave alone.
+# That means this does not stop the music container reaching MongoDB, which
+# shares the subnet. What stops that mattering is the environment block
+# above: no MONGO_URI, no JWT secrets, no ENCRYPTION_KEY. An SSRF here can
+# open a socket to the database and has nothing to say to it.
 #
 # The service still refuses private addresses in code (music/src/urlGuard.ts,
 # judged on the resolved address). That is the second line. This is the first,

@@ -10,14 +10,19 @@
 # nothing, which is how deploy/tests/cli.test.sh exercises the logic.
 set -euo pipefail
 
-SKYCORD_DIR="${SKYCORD_DIR:-/opt/skycord}"
+# Exported, because music-firewall.sh is a separate script that reads it.
+export SKYCORD_DIR="${SKYCORD_DIR:-/opt/skycord}"
 SKYCORD_REPO="${SKYCORD_REPO:-xSMDx/skycord}"
 SKYCORD_CLI_VERSION="0.1.0"
 HEALTH_TIMEOUT="${SKYCORD_HEALTH_TIMEOUT:-90}"
 KEEP_NIGHTLY="${SKYCORD_KEEP_NIGHTLY:-14}"
 KEEP_UPDATE="${SKYCORD_KEEP_UPDATE:-5}"
 
-ASSETS="compose.yaml compose.mongo.yaml compose.external-proxy.yaml compose.livekit.yaml compose.caddy.yaml compose.host.yaml mongo-init.sh Caddyfile.tmpl livekit.yaml.tmpl skycord VERSION"
+ASSETS="compose.yaml compose.mongo.yaml compose.external-proxy.yaml compose.livekit.yaml compose.caddy.yaml compose.host.yaml compose.music.yaml mongo-init.sh Caddyfile.tmpl livekit.yaml.tmpl music-firewall.sh skycord VERSION"
+# The units are fetched too. They were not, and install.sh guards every use
+# of them with -f — so on a real server the nightly backup timer quietly was
+# never installed, and nothing said so.
+ASSETS="$ASSETS skycord-backup.service skycord-backup.timer skycord-update.service skycord-update.timer skycord-music-firewall.service"
 
 die()  { echo "skycord: $*" >&2; exit 1; }
 say()  { echo "$*"; }
@@ -158,6 +163,26 @@ fetch_release() {
 # ── backups ──────────────────────────────────────────────────────────────────
 mongo_in_stack() { compose ps --services 2>/dev/null | grep -qx mongo; }
 
+# Runs a snippet of JavaScript against the database, wherever it lives: in this
+# stack, or wherever MONGO_URI points. Reading it directly is deliberate — the
+# app has no admin API, and adding one would put user totals behind a route
+# that anyone could go looking for.
+mongo_eval() {
+  local js="$1" shell
+  if mongo_in_stack; then
+    # shellcheck disable=SC2016 # expanded inside the container, deliberately
+    compose exec -T mongo sh -c \
+      'mongo --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin skycord --eval "$1"' \
+      sh "$js"
+  else
+    # mongosh first: a machine new enough to be running an external database is
+    # likelier to have it than the shell Mongo 4.4 shipped with.
+    shell="$(command -v mongosh 2>/dev/null || command -v mongo 2>/dev/null || true)"
+    [ -n "$shell" ] || die "the database is not in this stack, and no mongo shell is installed here"
+    "$shell" --quiet "$(env_get MONGO_URI)" --eval "$js"
+  fi
+}
+
 # Nightly and pre-update backups are pruned separately, so a run of updates
 # cannot push out the nightly history, and nightly pruning cannot delete the
 # backup taken moments before an update.
@@ -200,6 +225,9 @@ cmd_apply() {
   apply_templates
   compose pull
   compose up -d --remove-orphans
+  # Containers were just recreated, so the rules may now point at a network
+  # that no longer exists.
+  music_firewall
 }
 
 cmd_update() {
@@ -251,7 +279,13 @@ cmd_update() {
   # Pulled first, so the running version keeps serving while the new one
   # downloads. Only then is anything replaced.
   compose pull skycord || warn "could not pull $target — using a local copy if there is one"
+  # The music image is versioned in step with the app's, so an update that
+  # pulled only one would run a new API against an old decoder.
+  if music_enabled; then
+    compose pull music || warn "could not pull the music image for $target"
+  fi
   compose up -d --remove-orphans
+  music_firewall
 
   if wait_healthy "$target"; then
     install -m 0755 "$SKYCORD_DIR/templates/skycord" /usr/local/bin/skycord
@@ -266,6 +300,7 @@ cmd_update() {
   env_set SKYCORD_VERSION "$current"
   apply_templates
   compose up -d --remove-orphans
+  music_firewall
   # The database is deliberately left alone: releases only ever add to it, so
   # the old version runs on the newer data, and restoring would throw away
   # everything written since the backup.
@@ -310,6 +345,37 @@ cmd_restore() {
   say "Restored."
 }
 
+# ── music ────────────────────────────────────────────────────────────────────
+
+music_enabled() {
+  grep -q '^COMPOSE_FILE=.*compose\.music\.yaml' "$SKYCORD_DIR/.env" 2>/dev/null
+}
+
+# Re-applied after anything that recreates containers. The subnet usually
+# survives, but a `docker compose down` takes the network with it and the
+# rules then point at a range nothing uses.
+music_firewall() {
+  music_enabled || return 0
+  [ -x "$SKYCORD_DIR/music-firewall.sh" ] || {
+    warn "music is on but music-firewall.sh is missing — egress is NOT restricted"
+    return 0
+  }
+  "$SKYCORD_DIR/music-firewall.sh" apply >/dev/null 2>&1 \
+    || warn "could not apply the music egress rules — run: sudo $SKYCORD_DIR/music-firewall.sh apply"
+}
+
+# One line for `status`. Says nothing at all when music is off.
+music_status_line() {
+  music_enabled || return 0
+  if [ ! -x "$SKYCORD_DIR/music-firewall.sh" ]; then
+    say "Music:     on — egress rules MISSING (music-firewall.sh is not installed)"
+  elif "$SKYCORD_DIR/music-firewall.sh" check >/dev/null 2>&1; then
+    say "Music:     on, egress restricted"
+  else
+    say "Music:     on — egress rules NOT in place, run: sudo systemctl restart skycord-music-firewall"
+  fi
+}
+
 cmd_status() {
   need_install
   local current latest json last
@@ -321,11 +387,44 @@ cmd_status() {
   last="$(ls -1t "$SKYCORD_DIR"/backups/*.gz 2>/dev/null | head -1 || true)"
   say "Backup:    ${last:-none yet}"
   df -h "$SKYCORD_DIR" | tail -1 | awk '{ print "Disk:      " $4 " free" }'
+  music_status_line
   latest="$(resolve_latest 2>/dev/null || true)"
   if [ -n "$latest" ] && ver_gt "$latest" "$current"; then
     say "Available: $latest — run: sudo skycord update"
   fi
   compose ps 2>/dev/null || true
+}
+
+# ── who is here ──────────────────────────────────────────────────────────────
+# Argument handling lives on its own so it can be tested without a database.
+users_window() {
+  local days=30
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --days) days="${2:-}"; shift 2 ;;
+      -*)     die "unknown option: $1" ;;
+      *)      days="$1"; shift ;;
+    esac
+  done
+  case "$days" in ''|*[!0-9]*) die "usage: skycord users [days]" ;; esac
+  [ "$days" -ge 1 ] || die "usage: skycord users [days]"
+  printf '%s' "$days"
+}
+
+cmd_users() {
+  need_install
+  local days
+  days="$(users_window "$@")"
+  # One trip to the database, not four: separate queries would disagree with
+  # each other if somebody signed up in between.
+  mongo_eval "
+    var since = new Date(Date.now() - $days * 864e5);
+    var pad = function (n) { return ('       ' + n).slice(-7); };
+    print('Users:    ' + pad(db.users.countDocuments({})));
+    print('Verified: ' + pad(db.users.countDocuments({ isVerified: true })));
+    print('Active:   ' + pad(db.users.countDocuments({ lastSeenAt: { \$gte: since } })) + '   opened it in the last $days days');
+    print('New:      ' + pad(db.users.countDocuments({ createdAt:  { \$gte: since } })) + '   joined in the last $days days');
+  "
 }
 
 cmd_logs() {
@@ -350,6 +449,8 @@ cmd_config() {
   "${EDITOR:-nano}" "$SKYCORD_DIR/.env"
   apply_templates
   compose up -d --remove-orphans
+  # Music may have just been switched on or off in that editor.
+  music_firewall
   say "Applied."
 }
 
@@ -370,6 +471,7 @@ skycord — control a Skycord server
   skycord update [version] [-y]  update, with a backup and automatic rollback
   skycord rollback               go back to the previous version
   skycord backup                 back up the database now
+  skycord users [days]           how many people are on this server (default 30)
   skycord restore <file.gz>      replace the database from a backup
   skycord logs [-f] [--tail N] [service]
                                  the logs; -f to keep following them
@@ -388,6 +490,7 @@ main() {
     update)         cmd_update "$@" ;;
     rollback)       cmd_rollback "$@" ;;
     backup)         cmd_backup "$@" ;;
+    users)          cmd_users "$@" ;;
     restore)        cmd_restore "$@" ;;
     logs)           cmd_logs "$@" ;;
     config)         cmd_config "$@" ;;

@@ -22,6 +22,9 @@ MONGO_URI_EXT=""
 LIVEKIT_URL_EXT=""
 LIVEKIT_KEY_EXT=""
 LIVEKIT_SECRET_EXT=""
+# Off unless asked for. It is a second container, a decoder and an egress
+# rule; a server that does not want music should not carry any of it.
+MUSIC="off"
 HOST_NETWORK=""
 FROM_ENV=""
 ASSUME_YES=""
@@ -62,6 +65,9 @@ Skycord installer
   --livekit-url/-key/-secret   you already run LiveKit
   --voice-external             the same, reading the details from --from-env
   --no-voice                   install without voice
+  --music                      music channels: a second container that
+                               fetches and decodes audio (off by default)
+  --no-music                   never ask about music
   --from-env FILE              take secrets from an existing .env (moving a server)
   --dir PATH                   install somewhere other than /opt/skycord
   --host-network               join this machine's own network, to reach a
@@ -83,6 +89,8 @@ while [ $# -gt 0 ]; do
     --livekit-key)    LIVEKIT_KEY_EXT="$2"; shift 2 ;;
     --livekit-secret) LIVEKIT_SECRET_EXT="$2"; shift 2 ;;
     --no-voice)       VOICE="off"; shift ;;
+    --music)          MUSIC="on"; shift ;;
+    --no-music)       MUSIC="off"; shift ;;
     --from-env)       FROM_ENV="$2"; shift 2 ;;
     --dir)            SKYCORD_DIR="$2"; shift 2 ;;
     --host-network)   HOST_NETWORK=1; shift ;;
@@ -150,6 +158,22 @@ if [ "$PROXY" = "bundled" ] && [ -z "$ASSUME_YES" ]; then
   fi
 fi
 
+if [ -z "$ASSUME_YES" ]; then
+  # Asked only when voice is on, because music plays into a voice call and
+  # is unreachable without one.
+  if [ "$VOICE" != "off" ] && [ "$MUSIC" = "off" ]; then
+    say ""
+    say "Music channels let people play audio to each other inside a voice call."
+    say "It adds a container that downloads and decodes whatever is linked, so it"
+    say "runs locked down and with no access to the database."
+    [ "$(ask 'Enable music channels? [y/N] ' n)" = "y" ] && MUSIC="on"
+  fi
+fi
+if [ "$MUSIC" = "on" ] && [ "$VOICE" = "off" ]; then
+  warn "music needs voice, and voice is off — installing without music"
+  MUSIC="off"
+fi
+
 KLIPY_API_KEY=""
 RESEND_API_KEY=""
 EMAIL_FROM=""
@@ -191,6 +215,11 @@ if [ -n "$FROM_ENV" ]; then
   say "Taking secrets from $FROM_ENV — sessions and stored voice-server secrets keep working."
 fi
 
+MUSIC_INTERNAL_SECRET="$(from_env MUSIC_INTERNAL_SECRET)"
+# Generated even when music is off, so turning it on later with
+# `skycord config` does not need a secret invented by hand — and because an
+# unset one would make compose refuse to start the whole stack.
+MUSIC_INTERNAL_SECRET="${MUSIC_INTERNAL_SECRET:-$(rand 32)}"
 JWT_ACCESS_SECRET="$(from_env JWT_ACCESS_SECRET)";  JWT_ACCESS_SECRET="${JWT_ACCESS_SECRET:-$(rand 48)}"
 JWT_REFRESH_SECRET="$(from_env JWT_REFRESH_SECRET)"; JWT_REFRESH_SECRET="${JWT_REFRESH_SECRET:-$(rand 48)}"
 ENCRYPTION_KEY="$(from_env ENCRYPTION_KEY)";         ENCRYPTION_KEY="${ENCRYPTION_KEY:-$(rand 32)}"
@@ -243,6 +272,7 @@ fi
 COMPOSE_FILE="compose.yaml"
 [ "$MONGO" = "bundled" ] && COMPOSE_FILE="$COMPOSE_FILE:compose.mongo.yaml"
 [ "$VOICE" = "bundled" ] && COMPOSE_FILE="$COMPOSE_FILE:compose.livekit.yaml"
+[ "$MUSIC" = "on" ]       && COMPOSE_FILE="$COMPOSE_FILE:compose.music.yaml"
 if [ -n "$HOST_NETWORK" ]; then
   COMPOSE_FILE="$COMPOSE_FILE:compose.host.yaml"
 elif [ "$PROXY" = "bundled" ]; then
@@ -292,6 +322,8 @@ LIVEKIT_ADMIN_URL=$LIVEKIT_ADMIN_URL
 LIVEKIT_UDP_PORT=$LIVEKIT_UDP_PORT
 LIVEKIT_TCP_PORT=7881
 
+MUSIC_INTERNAL_SECRET=$MUSIC_INTERNAL_SECRET
+
 KLIPY_API_KEY=$KLIPY_API_KEY
 RESEND_API_KEY=$RESEND_API_KEY
 EMAIL_FROM=$EMAIL_FROM
@@ -337,9 +369,13 @@ source /usr/local/bin/skycord
 fetch_release "$VERSION" "$SKYCORD_DIR/templates"
 
 install -m 0644 "$SKYCORD_DIR/templates/skycord-backup.service" /etc/systemd/system/ 2>/dev/null || true
-for unit in skycord-backup.service skycord-backup.timer skycord-update.service skycord-update.timer; do
+for unit in skycord-backup.service skycord-backup.timer skycord-update.service skycord-update.timer \
+            skycord-music-firewall.service; do
   [ -f "$SKYCORD_DIR/templates/$unit" ] && install -m 0644 "$SKYCORD_DIR/templates/$unit" "/etc/systemd/system/$unit"
 done
+if [ -f "$SKYCORD_DIR/templates/music-firewall.sh" ]; then
+  install -m 0755 "$SKYCORD_DIR/templates/music-firewall.sh" "$SKYCORD_DIR/music-firewall.sh"
+fi
 systemctl daemon-reload 2>/dev/null || true
 systemctl enable --now skycord-backup.timer 2>/dev/null || warn "could not enable the nightly backup timer"
 
@@ -357,6 +393,19 @@ if wait_healthy "$VERSION"; then
   say "Skycord is running."
 else
   warn "the app has not reported healthy yet — check: sudo skycord logs skycord"
+fi
+
+# After the stack is up, because the rules are written against the subnet
+# the music container actually landed on. Enabled as well as started, so
+# they come back after a reboot — iptables rules do not persist on their own.
+if [ "$MUSIC" = "on" ]; then
+  if systemctl enable --now skycord-music-firewall.service 2>/dev/null; then
+    say "Music channels are on, and the decoder can only reach the internet."
+  else
+    warn "music is on but its egress rules could not be applied."
+    warn "until they are, the decoder can reach this machine's network:"
+    warn "  sudo systemctl enable --now skycord-music-firewall.service"
+  fi
 fi
 
 if [ "$PROXY" = "bundled" ]; then
