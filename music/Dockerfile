@@ -16,8 +16,11 @@
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS build
 WORKDIR /src
 
-COPY music/package.json music/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+COPY music/package.json music/package-lock.json ./
+# ci, not install: the lockfile is committed, and a release image should
+# resolve to exactly what was tested rather than to whatever is newest on
+# the day it is built.
+RUN npm ci --no-audit --no-fund
 
 COPY music/src ./src
 COPY music/tsconfig.build.json ./tsconfig.json
@@ -25,7 +28,14 @@ COPY music/tsconfig.build.json ./tsconfig.json
 # includes music/__tests__ so `npm run typecheck` covers the tests, and its
 # include is written from the repo root — inside this image the sources are
 # at ./src, so it would have matched nothing and produced an empty /out.
-RUN npx --yes typescript@5 tsc --project tsconfig.json --outDir /out
+#
+# The compiler comes from the lockfile rather than from `npx --yes
+# typescript@5`, which was never going to work: npx reads the first word as
+# the binary to run, and the typescript package ships tsc and tsserver — no
+# binary called typescript. Pinning it as a devDependency also means the
+# release image compiles with the version the repo tests with, and the
+# runtime stage drops it again with --omit=dev.
+RUN npx tsc --project tsconfig.json --outDir /out
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS runtime
@@ -41,8 +51,8 @@ RUN apt-get update \
 
 # Production dependencies for the TARGET platform: @livekit/rtc-node ships a
 # native library per architecture.
-COPY music/package.json music/package-lock.json* ./
-RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY music/package.json music/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 COPY --from=build /out ./src
 

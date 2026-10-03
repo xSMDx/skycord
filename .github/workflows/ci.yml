@@ -76,12 +76,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build (amd64, not pushed)
+      - name: Build the app (amd64, not pushed)
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
           platforms: linux/amd64
           build-args: SKYCORD_VERSION=ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Scoped per image: one shared gha cache between two unrelated
+          # builds means each evicts the other's layers. Same scope names as
+          # the release workflow, so a tag build can reuse what CI warmed.
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
+
+      # The music service's Dockerfile had never once built, and nothing
+      # would have said so until a release tag tried it: this job built only
+      # the app. A tag is a bad place to find that out, so both are built.
+      - name: Build the music service (amd64, not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: music/Dockerfile
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha,scope=music
+          cache-to: type=gha,mode=max,scope=music

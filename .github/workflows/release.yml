@@ -13,6 +13,12 @@ permissions:
 env:
   # Built per job by lowercasing the owner — see the note in "Version tags".
   IMAGE_NAME: skycord
+  # The music service is its own image because it is its own container: it
+  # carries ffmpeg and a native WebRTC library, and it is the only part of
+  # the stack that fetches a URL a member typed. deploy/compose.music.yaml
+  # names it, so a release that does not build it leaves every host that
+  # enables music pulling a tag that does not exist.
+  MUSIC_IMAGE_NAME: skycord-music
 
 jobs:
   check:
@@ -82,11 +88,14 @@ jobs:
           # Docker requires lowercase. Workflow expressions have no function
           # for that, so the name is assembled here and passed on.
           IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ env.IMAGE_NAME }}"
+          MUSIC="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ env.MUSIC_IMAGE_NAME }}"
           V="${GITHUB_REF_NAME}"
           MINOR="${V%.*}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "music=$MUSIC" >> "$GITHUB_OUTPUT"
           echo "list=$IMAGE:$V,$IMAGE:$MINOR" >> "$GITHUB_OUTPUT"
+          echo "musiclist=$MUSIC:$V,$MUSIC:$MINOR" >> "$GITHUB_OUTPUT"
       - name: Build for x86-64 and ARM64
         uses: docker/build-push-action@v6
         with:
@@ -96,8 +105,59 @@ jobs:
           tags: ${{ steps.tags.outputs.list }}
           build-args: SKYCORD_VERSION=${{ steps.tags.outputs.version }}
           provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Scoped, because there are two images now. Sharing one gha cache
+          # between unrelated builds makes each evict the other's layers,
+          # which costs more than the cache saves.
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
+
+      - name: Build the music service for x86-64 and ARM64
+        uses: docker/build-push-action@v6
+        with:
+          # The repo root: the Dockerfile copies music/ from it, so that is
+          # what it expects to be given.
+          context: .
+          file: music/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.tags.outputs.musiclist }}
+          provenance: false
+          cache-from: type=gha,scope=music
+          cache-to: type=gha,mode=max,scope=music
+
+      # An image that will not start is exactly what a release must not ship,
+      # and nothing else in this workflow would notice: the rehearsal installs
+      # the default stack, and music is deliberately not in it. Cheap to check
+      # and it has already caught an empty /out and an extensionless import.
+      - name: Prove the music image starts and has its decoder
+        run: |
+          MUSIC="${{ steps.tags.outputs.music }}:${{ steps.tags.outputs.version }}"
+          docker pull -q "$MUSIC"
+
+          # ffmpeg AND ffprobe: ingest needs both, and a base-image change
+          # that dropped either would otherwise surface on a member's first
+          # upload rather than here.
+          docker run --rm --entrypoint sh "$MUSIC" -c \
+            'ffmpeg -version >/dev/null && ffprobe -version >/dev/null'
+
+          docker run -d --name music-smoke -p 3060:3060 \
+            -e LIVEKIT_URL=ws://127.0.0.1:7880 \
+            -e LIVEKIT_API_KEY=smoke \
+            -e LIVEKIT_API_SECRET=smoke-secret-not-a-real-one \
+            -e MUSIC_INTERNAL_SECRET=smoke-secret-not-a-real-one \
+            "$MUSIC"
+
+          ok=
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3060/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs music-smoke
+          docker rm -f music-smoke >/dev/null
+          if [ -z "$ok" ]; then
+            echo "::error::the music image never answered /health"
+            exit 1
+          fi
 
   rehearse:
     name: Install, update and roll back for real
@@ -134,8 +194,13 @@ jobs:
       - name: Move latest
         run: |
           IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ env.IMAGE_NAME }}"
+          MUSIC="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ env.MUSIC_IMAGE_NAME }}"
           docker buildx imagetools create \
             --tag "$IMAGE:latest" "$IMAGE:${GITHUB_REF_NAME}"
+          # Moved in the same step as the app's, so the two tags cannot end up
+          # pointing at different releases.
+          docker buildx imagetools create \
+            --tag "$MUSIC:latest" "$MUSIC:${GITHUB_REF_NAME}"
       - name: Gather the assets a server downloads
         run: |
           mkdir -p out

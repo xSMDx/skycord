@@ -7,5 +7,9 @@
   "dependencies": {
     "@livekit/rtc-node": "^1.1.0",
     "livekit-server-sdk": "^2.15.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
   }
 }
