@@ -476,16 +476,30 @@ watch(
  * and dropping the rest, which is why nobody downloads audio they are not
  * listening to and why the cost is per channel rather than per listener.
  */
-watch(() => music.listeningTo, (want) => {
+/**
+ * Subscribe to the one music track this member chose, and to no others.
+ *
+ * Swept over every publication rather than driven only by events, because
+ * TrackPublished fires only for tracks published AFTER this client joined.
+ * Music channels that were already running when you walked into the call
+ * arrive with the room, get auto-subscribed, and would never be
+ * reconsidered — so joining a call with three channels playing subscribed
+ * you to all three. Found by the live publisher test, which is the first
+ * thing in this feature that moved real audio.
+ */
+const syncMusicSubscriptions = (): void => {
   const room = getRoom()
   if (!room) return
+  const want = music.listeningTo
   room.remoteParticipants.forEach((p) => {
     if (p.identity !== MUSIC_IDENTITY) return
     p.trackPublications.forEach((pub) => {
       void (pub as RemoteTrackPublication).setSubscribed(pub.trackName === want)
     })
   })
-})
+}
+
+watch(() => music.listeningTo, syncMusicSubscriptions)
 
 const syncParticipants = () => {
   const room = getRoom()
@@ -559,7 +573,13 @@ const wireRoom = (r: Room) => {
    */
   r.on(RoomEvent.TrackPublished, (pub: RemoteTrackPublication, p: RemoteParticipant) => {
     if (p.identity !== MUSIC_IDENTITY) return
-    pub.setSubscribed(pub.trackName === music.listeningTo)
+    void pub.setSubscribed(pub.trackName === music.listeningTo)
+  })
+  // The tracks that were already playing when we arrived. They never raise
+  // TrackPublished for us, and autoSubscribe has taken all of them.
+  r.on(RoomEvent.Connected, syncMusicSubscriptions)
+  r.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
+    if (p.identity === MUSIC_IDENTITY) syncMusicSubscriptions()
   })
 
   r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
