@@ -40,14 +40,26 @@ export interface Appearance {
   automatic:      boolean          // follow the OS light/dark preference (themeMode.ts)
   lastLight:      LightVariant     // the light variant Automatic uses
   lastDark:       DarkVariant      // the dark variant Automatic uses
+  /**
+   * Where the music room takes its colour from.
+   *
+   * 'artwork' washes the header in the playing record's own colours, which
+   * is the whole character of that screen; 'accent' keeps it in the theme
+   * you chose, for anyone who finds a surface that changes per track more
+   * restless than it is pleasant. Only this one screen is affected either
+   * way — nothing else in the app takes colour from content.
+   */
+  musicColour:    MusicColour
 }
+
+export type MusicColour = 'artwork' | 'accent'
 
 export type EmojiPack = 'native' | 'twemoji' | 'noto'
 export type MsgLayout = 'cozy' | 'compact'
 
 const KEY = 'sykord_appearance'
 const DEFAULTS: Appearance = {
-  theme: 'default', accent: 'auto', density: 'cozy',
+  theme: 'default', accent: 'auto', density: 'cozy', musicColour: 'artwork',
   msgSize: 15, groupSpacing: 17, fontUi: 'Archivo', fontMono: 'Consolas',
   showSendButton: true, custom: {}, scheme: 'off', contrast: 0, emojiPack: 'native',
   underlineLinks: false, displayNameStyles: true, msgLayout: 'cozy', zoom: 100,

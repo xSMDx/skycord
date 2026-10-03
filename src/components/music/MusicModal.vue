@@ -28,6 +28,7 @@ import MusicCallRail from './MusicCallRail.vue'
 import type { VoiceRoomChoice } from './rooms'
 import { useAuth } from '@/composables/useAuth'
 import { coverTheme, type CoverTheme } from '@/composables/coverTheme'
+import { appearance } from '@/composables/useAppearance'
 import {
   player, play, pause, toggle, step, seek, setVolume, forget,
 } from '@/composables/useMusicPlayer'
@@ -89,7 +90,13 @@ const headerArt = computed<string | null>(() =>
   player.current?.cover ?? shownTracks.value.find(t => t.cover)?.cover ?? null)
 watch(headerArt, async (src) => { theme.value = await coverTheme(src) }, { immediate: true })
 
-const headerStyle = computed(() => theme.value
+/*
+ * No variables at all when the setting says accent: every rule that reads
+ * `var(--art-accent, …)` already names the theme accent as its fallback, so
+ * leaving them unset is the switch. One place decides, nothing downstream
+ * has to ask.
+ */
+const headerStyle = computed(() => (theme.value && appearance.musicColour === 'artwork')
   ? {
       '--art-wash': theme.value.wash,
       '--art-accent': theme.value.accent,
@@ -255,7 +262,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
       <!-- ── centre: the record you are looking at ───────────────────── -->
       <section class="mm-main">
-        <header class="mm-head" :class="{ themed: !!theme }">
+        <header class="mm-head" :class="{ themed: !!theme && appearance.musicColour === 'artwork' }">
           <div class="mm-art" :class="{ empty: !headerArt }">
             <img v-if="headerArt" :src="headerArt" alt="" />
             <Music2 v-else :size="38" :stroke-width="1.5" />

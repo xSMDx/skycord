@@ -84,11 +84,22 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
           :aria-label="music.listeningTo === c.id ? `Stop listening to ${c.name}` : `Listen to ${c.name}`"
           @click="toggle(c.id)"
         >
-          <Music2 class="mf-ico" :size="15" :stroke-width="2.25" />
-          <span class="mf-name">{{ c.name }}</span>
-          <span class="mf-who">
-            {{ listeners(c.listeners) }}<template v-if="c.queued"> · {{ c.queued }} queued</template>
+          <span class="mf-badge" :class="{ live: music.listeningTo === c.id }">
+            <Music2 :size="14" :stroke-width="2.25" />
           </span>
+          <span class="mf-lines">
+            <span class="mf-name">{{ c.name }}</span>
+            <!-- What is actually playing, which the row never used to say.
+                 A library track carries its title; a pasted link has none,
+                 so that case says so rather than showing a URL. -->
+            <span class="mf-now">
+              {{ c.now?.title || (c.now ? 'A linked track' : 'Nothing playing') }}
+            </span>
+            <span class="mf-who">
+              {{ listeners(c.listeners) }}<template v-if="c.queued"> · {{ c.queued }} queued</template>
+            </span>
+          </span>
+          <span class="mf-join">{{ music.listeningTo === c.id ? 'Listening' : 'Join' }}</span>
         </button>
 
         <div class="mf-acts">
@@ -156,11 +167,15 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
 </template>
 
 <style scoped>
-.mf-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+/* Wider than the mic and camera menus, because this one carries three
+   lines per row and a verb — at 236px the name, the track and the listeners
+   all truncated to nothing. Set on the CONTENT, not on .fly: that element
+   belongs to CallFlyout, so a scoped rule here never matches it. */
+.mf-list { list-style: none; display: flex; flex-direction: column; gap: 4px; min-width: 284px; }
 
 .mf-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center; border-radius: var(--edge-md);
+  display: flex; align-items: center; flex-wrap: wrap;
+  border-radius: var(--edge-md);
 }
 /*
  * Selection is a neutral fill under a hairline ring, never an accent tint.
@@ -171,13 +186,39 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
 .mf-row.on { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); }
 
 .mf-tune {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto;
-  column-gap: 8px; align-items: center; text-align: left; min-width: 0;
-  padding: 7px 10px; background: none; border: none; cursor: pointer;
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  text-align: left; padding: 9px 10px;
+  background: none; border: none; cursor: pointer;
   border-radius: var(--edge-md);
 }
-.mf-ico { grid-row: 1 / 3; color: var(--text-3); flex-shrink: 0; }
-.mf-row.on .mf-ico { color: var(--accent-text); }
+.mf-lines { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+
+/* A filled square rather than a bare glyph: at three lines the row needs an
+   anchor on the left, and it doubles as where "this one is live" is said. */
+.mf-badge {
+  flex-shrink: 0; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: var(--edge-sm);
+  background: var(--bg-panel); color: var(--text-3);
+}
+.mf-badge.live { background: rgba(var(--accent-rgb), .18); color: var(--accent-text); }
+
+.mf-now {
+  font-size: 11.5px; color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The verb. Quiet at rest so a list of channels does not shout, and it is
+   the word that tells you the row is a thing you can do. */
+.mf-join {
+  flex-shrink: 0; margin-left: auto;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+  color: var(--text-3);
+}
+.mf-row.on .mf-join { color: var(--accent-text); }
+@media (hover: hover) and (pointer: fine) {
+  .mf-row:hover .mf-join { color: var(--text-1); }
+  .mf-row.on:hover .mf-join { color: var(--accent-text); }
+}
 .mf-name {
   font-size: 13.5px; font-weight: 500; color: var(--text-1);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -205,7 +246,7 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
 }
 .mf-icon:active { transform: scale(0.94); }
 
-.mf-inline { grid-column: 1 / -1; display: flex; gap: 6px; padding: 0 8px 8px; }
+.mf-inline { flex: 1 0 100%; display: flex; gap: 6px; padding: 0 8px 8px; }
 .mf-new { display: flex; flex-direction: column; gap: 5px; padding: 4px 8px 8px; }
 .mf-new-acts { display: flex; gap: 6px; justify-content: flex-end; margin-top: 2px; }
 .mf-label {
@@ -236,7 +277,7 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
 .mf-go:active:not(:disabled), .mf-cancel:active { transform: scale(0.97); }
 
 .mf-add, .mf-lib { color: var(--text-2); }
-.mf-empty { padding: 2px 10px 6px; max-width: 230px; }
+.mf-empty { padding: 2px 10px 8px; line-height: 1.5; width: 264px; }
 .mf-err { margin: 2px 10px 6px; font-size: 12px; line-height: 1.45; color: var(--danger-text); }
 
 /* The slider needs the row's full width, which the flex row does not give it. */

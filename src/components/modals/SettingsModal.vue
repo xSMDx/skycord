@@ -1157,6 +1157,18 @@ const handleSelfRevoked = () => handleLogout()
             <div class="st-card">
               <div class="st-field">
                 <div class="st-field-left">
+                  <span class="st-field-label">Colour music from the artwork</span>
+                  <span class="st-field-value muted">The music room takes its colour from the record that is playing. Off keeps your accent.</span>
+                </div>
+                <button
+                  class="ap-toggle" :class="{ on: appearance.musicColour === 'artwork' }"
+                  role="switch" :aria-checked="appearance.musicColour === 'artwork'"
+                  aria-label="Colour music from the artwork"
+                  @click="setAppearance({ musicColour: appearance.musicColour === 'artwork' ? 'accent' : 'artwork' })"
+                ><span /></button>
+              </div>
+              <div class="st-field st-field-sep">
+                <div class="st-field-left">
                   <span class="st-field-label">Always underline links</span>
                   <span class="st-field-value muted">Make links stand out more.</span>
                 </div>
