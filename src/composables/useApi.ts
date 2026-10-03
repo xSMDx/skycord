@@ -496,6 +496,8 @@ export const useApi = () => {
       /** Imposed by a moderator, rather than never granted. */
       serverMute?:   boolean
       serverDeafen?: boolean
+      /** Whether this instance runs the music service. Absent means no. */
+      music?: boolean
     }>('/voice/token', { conversationId, kind, voiceServerId: voiceServerId || undefined })
 
   /** Every voice server the caller could be routed to, across all their servers. */

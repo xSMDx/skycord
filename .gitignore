@@ -57,3 +57,4 @@ desktop/native/build/
 # separate container and must not pull a native WebRTC binary into the app's.
 music/node_modules/
 music/dist-proof/
+music/dist/

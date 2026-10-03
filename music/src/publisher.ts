@@ -17,7 +17,7 @@ import {
 } from '@livekit/rtc-node'
 import { AccessToken, TrackSource as GrantSource } from 'livekit-server-sdk'
 import type { Readable } from 'stream'
-import { SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME, decode, frames } from './decode'
+import { SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME, decode, frames } from './decode.js'
 
 /** Must match the client's MUSIC_IDENTITY. The colon is what makes it unforgeable. */
 export const MUSIC_IDENTITY = 'svc:music'

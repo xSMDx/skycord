@@ -26,6 +26,10 @@ export const API_PREFIXES = [
   '/auth', '/users', '/messages', '/stickers', '/conversations',
   '/themes', '/voice', '/gifs', '/servers', '/invites', '/instance',
   '/health', '/socket.io',
+  // Spoken only by the music container. Listed for the same reason as the
+  // rest: without it the SPA fallback would answer the music service with a
+  // page, and its callback would fail by parsing HTML as JSON.
+  '/internal',
 ]
 
 const YEAR_MS = 31536000 * 1000

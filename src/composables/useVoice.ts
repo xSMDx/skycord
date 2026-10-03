@@ -16,7 +16,7 @@ import { holdPresence } from './usePresence'
 import { useAuth } from './useAuth'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
-import { MUSIC_IDENTITY, music, setMusicTarget } from './useMusic'
+import { MUSIC_IDENTITY, music, musicAvailable, setMusicTarget } from './useMusic'
 import { qualityFor } from './callLimits'
 import { perf } from './usePerformance'
 import {
@@ -818,8 +818,13 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       const {
         token, url, voiceServer, bitrate,
         mayPublishAudio, mayPublishVideo, voiceActivity, serverMute, serverDeafen,
+        music: musicOnThisInstance,
       } = await getVoiceToken(convId, kind, preferredVoiceServer)
       channelBitrate = typeof bitrate === 'number' ? bitrate : null
+      // Absent on an instance predating the feature, which means the same as
+      // off: the panel stays hidden rather than appearing with nothing behind
+      // it. Strictly `=== true`, so a missing field cannot read as enabled.
+      musicAvailable.value = musicOnThisInstance === true
       // `?? true` throughout: a DM carries none of these, and neither does a
       // response from a server predating them. Absent means unrestricted, and
       // the token is the thing that actually decides — reading absence as a

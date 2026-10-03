@@ -1,0 +1,30 @@
+{
+  /*
+   * Building the service, as opposed to typechecking it.
+   *
+   * Separate from the repo-root tsconfig.music.json, which includes
+   * music/__tests__ so the tests are checked too. That is right for
+   * `npm run typecheck` and wrong for a build: the tests are not shipped,
+   * and including them puts files outside rootDir, which tsc refuses.
+   *
+   * It also has to work from inside the image, where the sources are at
+   * ./src rather than music/src — hence a relative include, and hence this
+   * file living beside them rather than at the repo root.
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"]
+}

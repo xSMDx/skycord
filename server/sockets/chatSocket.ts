@@ -16,6 +16,7 @@ import * as presence from '../state/presence'
 import { config }   from '../config/env'
 import { MusicRooms } from './musicState'
 import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape } from '../utils/musicLimits'
+import { musicPlay, musicClose } from '../utils/musicService'
 
 // Presence (who holds a socket, who is away) lives in server/state/presence.ts
 // so the User model can derive a wire-safe status without importing this file,
@@ -47,8 +48,29 @@ setInterval(() => musicRate.sweep(), 60_000).unref?.()
 
 export const musicRooms = new MusicRooms(
   musicCaps,
-  (room) => broadcastMusic(room),
+  (room, channelId) => {
+    // Both halves, and in this order. Telling the room first means the panel
+    // loses the channel immediately; telling the service is what actually
+    // stops the audio, and a failure there must not stop the broadcast.
+    broadcastMusic(room)
+    void musicClose(room, channelId)
+  },
 )
+
+/**
+ * A track finished on its own: advance that channel's queue.
+ *
+ * Called by the music service over the internal endpoint, because only the
+ * service knows when audio ran out. Quietly does nothing for a channel that
+ * is already gone — the service can report an end for one the API tore down
+ * a moment earlier, and that must not resurrect it.
+ */
+export const musicTrackEnded = (room: string, channelId: string): void => {
+  if (!musicRooms.get(room, channelId)) return
+  const next = musicRooms.skip(room, channelId)
+  broadcastMusic(room)
+  if (next.ok && next.now) void musicPlay(room, channelId, next.now.url)
+}
 
 /**
  * Always the full list, never a delta — see broadcastCallState.
@@ -1367,6 +1389,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const made = musicRooms.create(gate.room, String(data.name).trim(), String(data.url).trim(), userId)
       if (!made.ok) return musicRefuse(made.reason)
       broadcastMusic(gate.room)
+      void musicPlay(gate.room, made.id!, String(data.url).trim())
     })
 
     socket.on('music:queue', (data: { conversationId: string; kind: string; channelId: string; url: string }) => {
@@ -1374,16 +1397,25 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
       const url = checkUrlShape(data?.url)
       if (!url.ok) return musicRefuse(url.reason)
-      const r = musicRooms.queue(gate.room, String(data?.channelId ?? ''), String(data.url).trim(), userId)
+      const channelId = String(data?.channelId ?? '')
+      const wasSilent = musicRooms.get(gate.room, channelId)?.now == null
+      const r = musicRooms.queue(gate.room, channelId, String(data.url).trim(), userId)
       if (!r.ok) return musicRefuse(r.reason)
+      // A channel whose queue ran dry is stopped, and nothing is going to
+      // report an end for it — so the thing just queued has to be started
+      // here or it waits for a skip that nobody will press.
+      if (wasSilent) { const next = musicRooms.skip(gate.room, channelId); if (next.ok && next.now) void musicPlay(gate.room, channelId, next.now.url) }
       broadcastMusic(gate.room)
     })
 
     socket.on('music:skip', (data: { conversationId: string; kind: string; channelId: string }) => {
       const gate = musicGate(data); if (!gate) return
-      const r = musicRooms.skip(gate.room, String(data?.channelId ?? ''))
+      const skipId = String(data?.channelId ?? '')
+      const r = musicRooms.skip(gate.room, skipId)
       if (!r.ok) return musicRefuse(r.reason)
       broadcastMusic(gate.room)
+      if (r.now) void musicPlay(gate.room, skipId, r.now.url)
+      else void musicClose(gate.room, skipId)
     })
 
     socket.on('music:close', (data: { conversationId: string; kind: string; channelId: string }) => {

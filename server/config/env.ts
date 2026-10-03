@@ -45,6 +45,15 @@ export const config = {
   cors: {
     clientOrigin: opt('CLIENT_ORIGIN', 'http://localhost:5173'),
   },
+  /**
+   * The music service, when the host runs it. Absent is the normal case:
+   * leave it unset and the feature is simply off, with no error anywhere.
+   */
+  music: {
+    url:    opt('MUSIC_SERVICE_URL', ''),
+    secret: opt('MUSIC_INTERNAL_SECRET', ''),
+    timeoutMs: parseInt(opt('MUSIC_TIMEOUT_MS', '5000'), 10),
+  },
   livekit: {
     url:       opt('LIVEKIT_URL', ''),
     /** How this server reaches its OWN LiveKit's admin API — inside the stack,

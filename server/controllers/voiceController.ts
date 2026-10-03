@@ -20,6 +20,7 @@ import {
   publishGrantFor, UNRESTRICTED_PERMITS, NO_RESTRICTION,
 } from '../utils/voiceModeration'
 import { TrackSource } from 'livekit-server-sdk'
+import { musicConfigured } from '../utils/musicService'
 
 // A LiveKit room name for a conversation. DMs use the stable sorted-pair id so
 // both participants land in the same room; groups use the group id; server
@@ -241,6 +242,11 @@ let voice
     res.json({
       token, url: voice.url, room,
       voiceServer: { id: voice.id, name: voice.name },
+      // Whether this instance can play music at all — i.e. whether the host
+      // runs the music container. Reported rather than assumed, for the same
+      // reason serverMute is below: a client that shows a control the server
+      // cannot honour makes the member think they broke something.
+      music: musicConfigured(),
       // kbps. The client caps its microphone publish at this; a channel set to
       // 32 is a channel where nobody sends 64. Absent for DMs and groups,
       // which have no channel to carry a setting.

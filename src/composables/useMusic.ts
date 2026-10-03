@@ -9,7 +9,7 @@
  * This owns the state and the socket traffic. The subscription itself lives
  * in useVoice, next to the room, because that is where tracks are.
  */
-import { reactive, computed } from 'vue'
+import { reactive, computed, ref } from 'vue'
 import { getSocket } from './useSocket'
 
 /**
@@ -40,7 +40,16 @@ export const MUSIC_IDENTITY = 'svc:music'
  * though: that document is unauthenticated and cached, and describes who an
  * instance is rather than what it can do.
  */
-export const MUSIC_ENABLED = false
+/**
+ * Whether this instance can play music, as the server reported it.
+ *
+ * Not a build-time constant: whether music works depends on whether the
+ * host runs the music container, and two members of the same instance
+ * loading different client builds must not disagree about it. Set from the
+ * voice token response when a call is joined, which is the moment it starts
+ * to matter and the last moment it could change.
+ */
+export const musicAvailable = ref(false)
 
 export interface MusicChannelView {
   id: string
