@@ -2,12 +2,17 @@
  * The music service.
  *
  * Fetches audio a member linked, decodes it, and publishes it into a LiveKit
- * room as one track per music channel. It holds no database credentials and
- * no session state: the API owns what is playing and who is listening, and
- * this owns only the audio.
+ * room as one track per music channel. It also ingests files on their way
+ * into a library: everything that touches untrusted bytes lives here.
+ *
+ * It holds no database credentials and no session state. That is the point
+ * of the split — this container has network reach and no credentials, the
+ * API has credentials and no reach — and it is why ingest hands the
+ * finished file back rather than writing it to storage itself.
  */
 import { MusicPublisher } from './publisher.js'
 import { createMusicServer } from './server.js'
+import { clamConfigFromEnv } from './clamav.js'
 
 const req = (key: string): string => {
   const v = process.env[key]
@@ -53,11 +58,26 @@ const onEnded = (room: string, channelId: string): void => {
   }).catch(e => log(`could not report the end of ${room}/${channelId}: ${String(e).slice(0, 120)}`))
 }
 
+/**
+ * Scanning is opt-in and fails closed once it is on — see clamav.ts. Said
+ * out loud at boot either way, because "I thought it was scanning" is the
+ * failure this feature would actually have.
+ */
+const clam = clamConfigFromEnv()
+log(clam
+  ? `virus scanning via clamd at ${clam.host}:${clam.port}; uploads are refused if it stops answering`
+  : 'no virus scanner configured (MUSIC_CLAMD_HOST unset) — uploads are re-encoded but not scanned')
+
 const server = createMusicServer(publisher, {
   port: num('PORT', 3060),
   host: process.env.BIND_HOST ?? '0.0.0.0',
   secret,
   maxBytes: num('MUSIC_MAX_BYTES', 100 * 1024 * 1024),
+  ingestLimits: {
+    maxBytes: num('MUSIC_MAX_BYTES', 100 * 1024 * 1024),
+    maxDurationSec: num('MUSIC_MAX_DURATION_SEC', 30 * 60),
+  },
+  clam,
   onEnded,
   log,
 })

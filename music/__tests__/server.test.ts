@@ -9,8 +9,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { AddressInfo } from 'net'
 import type { Server } from 'http'
-import { createMusicServer } from '../src/server'
-import type { MusicPublisher } from '../src/publisher'
+import { createMusicServer } from '../src/server.js'
+import type { MusicPublisher } from '../src/publisher.js'
 
 const SECRET = 'a-shared-secret-of-some-length'
 
@@ -33,7 +33,7 @@ beforeAll(async () => {
     host: '127.0.0.1',
     secret: SECRET,
     maxBytes: 1024,
-    onEnded: (room, id) => ended.push(`${room}/${id}`),
+    onEnded: (room: string, id: string) => ended.push(`${room}/${id}`),
   })
   await new Promise<void>(r => server.listening ? r() : server.once('listening', () => r()))
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`

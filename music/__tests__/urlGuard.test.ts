@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { describe, it, expect } from 'vitest'
-import { check, addressBlocked } from '../src/urlGuard'
+import { check, addressBlocked } from '../src/urlGuard.js'
 
 /**
  * The resolver is injected, so these run with no network and no DNS, and can

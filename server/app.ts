@@ -17,6 +17,7 @@ import serversRoutes  from './routes/servers'
 import invitesRoutes  from './routes/invites'
 import { instanceRouter } from './routes/instance'
 import { internalMusicRouter } from './routes/internalMusic'
+import musicRoutes     from './routes/music'
 import { instanceDir } from './utils/instanceProfile'
 import { errorHandler, notFound } from './middleware/errorHandler'
 import { apiLimit } from './middleware/rateLimit'
@@ -126,6 +127,7 @@ export const createApp = () => {
   app.use('/gifs',          gifsRoutes)
   app.use('/servers',       serversRoutes)
   app.use('/invites',       invitesRoutes)
+  app.use('/music',         musicRoutes)
   // Spoken only by the music container, authenticated by a shared secret
   // rather than a session — see the note in internalMusic.ts.
   app.use('/internal',      internalMusicRouter())

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server } from 'http'
 import type { AddressInfo } from 'net'
-import { fetchApproved, fetchFollowing, type Approved } from '../src/safeFetch'
+import { fetchApproved, fetchFollowing, type Approved } from '../src/safeFetch.js'
 
 /**
  * A real socket, against a real local server.

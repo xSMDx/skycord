@@ -1,10 +1,10 @@
 /**
  * The music service's own HTTP interface.
  *
- * Three endpoints, spoken only by the API. Node's built-in `http` rather
+ * Playback, and ingest. Spoken only by the API. Node's built-in `http` rather
  * than Express on purpose: this is the container that fetches URLs a member
  * typed, and every dependency added to it is more code running next to that
- * capability. Three routes do not need a router.
+ * capability. A handful of routes do not need a router.
  *
  * ## Who may call this
  *
@@ -19,12 +19,21 @@ import { timingSafeEqual } from 'crypto'
 import type { MusicPublisher } from './publisher.js'
 import { check } from './urlGuard.js'
 import { fetchFollowing, type Approved } from './safeFetch.js'
+import { ingest, type IngestLimits } from './ingest.js'
+import { IngestHold } from './ingestHold.js'
+import type { ClamConfig } from './clamav.js'
+import { createReadStream } from 'fs'
+import { stat } from 'fs/promises'
 
 export interface ServerConfig {
   port: number
   host?: string
   secret: string
   maxBytes: number
+  /** Ceilings for ingest. Shared with playback where they overlap. */
+  ingestLimits?: IngestLimits
+  /** Null when no scanner is configured; ingest then reports `skipped`. */
+  clam?: ClamConfig | null
   /** Told when a track finishes on its own, so the API can advance its queue. */
   onEnded?: (room: string, channelId: string) => void
   log?: (msg: string) => void
@@ -70,6 +79,26 @@ const readJson = (req: IncomingMessage, limit = 16 * 1024): Promise<unknown> =>
 
 export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Server => {
   const log = (m: string) => cfg.log?.(m)
+
+  const hold = new IngestHold()
+  hold.start()
+  const limits: IngestLimits = cfg.ingestLimits ?? {
+    maxBytes: cfg.maxBytes,
+    maxDurationSec: 30 * 60,
+  }
+
+  /**
+   * Both ways in converge here, because the bytes are equally untrusted
+   * either way: a member who uploads a file is the same member who pastes a
+   * link. The only difference is where the stream comes from.
+   */
+  const runIngest = async (src: NodeJS.ReadableStream, res: ServerResponse): Promise<void> => {
+    const out = await ingest(src as never, { limits, clam: cfg.clam ?? null })
+    if (!out.ok) return fail(res, 422, out.reason)
+    const id = hold.put(out.track, out.cleanup)
+    const { audioPath: _audioPath, ...card } = out.track
+    ok(res, { ok: true, id, track: card })
+  }
 
   /** Fetch and play, reporting the end so the API can move its queue on. */
   const start = async (room: string, channelId: string, url: string): Promise<void> => {
@@ -118,6 +147,61 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
           const b = await readJson(req) as { room?: string; channelId?: string }
           if (!b.room || !b.channelId) return fail(res, 400, 'room and channelId are required')
           await pub.close(b.room, b.channelId)
+          return ok(res)
+        }
+
+        // ── ingest ──────────────────────────────────────────────────────
+        // Raw bytes on the wire rather than multipart: there is exactly one
+        // file and no fields, so a parser would be a dependency bought for
+        // nothing in the container that most needs fewer of them.
+        if (req.method === 'POST' && url.pathname === '/ingest/upload') {
+          await runIngest(req, res)
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/ingest/link') {
+          const b = await readJson(req) as { url?: string }
+          if (!b.url) return fail(res, 400, 'url is required')
+          const target = b.url
+          const guard = async (u: string) => {
+            const r = await check(u, { anyExtension: u !== target })
+            return r.ok
+              ? { ok: true as const, value: { address: r.address, hostname: r.hostname, port: r.port, href: r.href } as Approved }
+              : { ok: false as const, reason: r.reason }
+          }
+          const got = await fetchFollowing(target, guard, { maxBytes: limits.maxBytes })
+          if (got.kind !== 'stream') {
+            return fail(res, 422, got.kind === 'error' ? got.reason : 'that link did not lead to a file')
+          }
+          await runIngest(got.body, res)
+          return
+        }
+
+        // Collection. The file is deleted once it has been handed over —
+        // the API is putting it in GridFS and a second copy here is just
+        // disk nobody is accounting for.
+        if (req.method === 'GET' && /^\/ingest\/[\w-]+\/audio$/.test(url.pathname)) {
+          const id = url.pathname.split('/')[2]
+          const h = hold.get(id)
+          if (!h) return fail(res, 404, 'that upload has expired')
+          const size = await stat(h.track.audioPath).catch(() => null)
+          if (!size) { await hold.drop(id); return fail(res, 404, 'that upload has expired') }
+          res.writeHead(200, {
+            'content-type': h.track.mimeType,
+            'content-length': String(size.size),
+          })
+          const file = createReadStream(h.track.audioPath)
+          file.pipe(res)
+          // Only on a complete hand-over. Dropping on 'close' would delete
+          // the file when the API's connection dropped mid-transfer, and
+          // its retry would find nothing.
+          file.on('end', () => { void hold.drop(id) })
+          file.on('error', () => res.destroy())
+          return
+        }
+
+        if (req.method === 'DELETE' && /^\/ingest\/[\w-]+$/.test(url.pathname)) {
+          await hold.drop(url.pathname.split('/')[2])
           return ok(res)
         }
 

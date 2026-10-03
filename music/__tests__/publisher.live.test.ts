@@ -17,7 +17,7 @@ import { readFileSync, existsSync } from 'fs'
 import { spawn } from 'child_process'
 import { Room, RoomEvent, AudioStream, type RemoteTrack, type RemoteTrackPublication, type RemoteParticipant } from '@livekit/rtc-node'
 import { AccessToken } from 'livekit-server-sdk'
-import { MusicPublisher, MUSIC_IDENTITY } from '../src/publisher'
+import { MusicPublisher, MUSIC_IDENTITY } from '../src/publisher.js'
 
 const URL_ = process.env.LIVEKIT_TEST_URL ?? 'ws://127.0.0.1:7880'
 

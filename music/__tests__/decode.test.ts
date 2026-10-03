@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { describe, it, expect } from 'vitest'
 import { Readable } from 'stream'
-import { ffmpegArgs, frames, decode, BYTES_PER_FRAME, SAMPLES_PER_FRAME, SAMPLE_RATE, CHANNELS } from '../src/decode'
+import { ffmpegArgs, frames, decode, BYTES_PER_FRAME, SAMPLES_PER_FRAME, SAMPLE_RATE, CHANNELS } from '../src/decode.js'
 
 describe('the argument vector', () => {
   it('reads the body from a pipe, never a URL or a path', () => {

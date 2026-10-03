@@ -8,11 +8,18 @@
    * `npm run typecheck` silently skipped it: tsconfig.json takes src/** and
    * tsconfig.server.json takes server/**, and vitest only strips types
    * rather than checking them. Several hundred lines went in unchecked.
+   *
+   * Module resolution matches music/tsconfig.build.json rather than being
+   * the more permissive `bundler`. That difference was not academic: under
+   * `bundler` an extensionless relative import typechecks cleanly and then
+   * fails to resolve at run time, because the built service is real ESM on
+   * Node. A green typecheck followed by a broken image is the exact failure
+   * this file was added to prevent.
    */
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "lib": ["ES2023"],
     "types": ["node"],
     "strict": true,

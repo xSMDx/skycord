@@ -38,8 +38,8 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { pipeline } from 'stream/promises'
 import { Transform, type Readable } from 'stream'
-import { sniff, SNIFF_BYTES, type AudioKind } from './sniff'
-import { scanStream, type ClamConfig, type ScanVerdict } from './clamav'
+import { sniff, SNIFF_BYTES, type AudioKind } from './sniff.js'
+import { scanStream, type ClamConfig, type ScanVerdict } from './clamav.js'
 
 export interface IngestLimits {
   maxBytes: number
@@ -148,6 +148,27 @@ export const cleanTag = (raw: unknown, max = 200): string => {
   return [...s].slice(0, max).join('')
 }
 
+/**
+ * Say a limit the way a person would.
+ *
+ * Both of these used integer division into a fixed unit, which is fine for
+ * the shipped defaults and absurd for anything smaller: a 1KB cap announced
+ * itself as "0MB at most", and a one-second cap as "0 minutes at most". An
+ * operator who tightens a limit for a reason deserves an error that names
+ * the limit they actually set.
+ */
+export const describeSize = (bytes: number): string => {
+  if (bytes >= 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))}MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`
+  return `${bytes} bytes`
+}
+
+export const describeDuration = (sec: number): string => {
+  if (sec >= 120) return `${Math.round(sec / 60)} minutes`
+  if (sec === 60) return 'a minute'
+  return `${sec} second${sec === 1 ? '' : 's'}`
+}
+
 /** Count bytes as they pass, and stop the moment the cap is crossed. */
 const capped = (max: number): { through: Transform; tooBig: () => boolean } => {
   let seen = 0, over = false
@@ -182,10 +203,7 @@ export const ingest = async (src: Readable, opts: IngestOptions): Promise<Ingest
   try {
     await pipeline(src, through, createWriteStream(rawPath))
   } catch {
-    if (tooBig()) {
-      const mb = Math.floor(opts.limits.maxBytes / (1024 * 1024))
-      return fail(`That file is too big — ${mb}MB at most.`)
-    }
+    if (tooBig()) return fail(`That file is too big — ${describeSize(opts.limits.maxBytes)} at most.`)
     return fail('That file could not be read all the way through.')
   }
 
@@ -226,8 +244,7 @@ export const ingest = async (src: Readable, opts: IngestOptions): Promise<Ingest
     return fail('That file has no playable audio in it.')
   }
   if (durationSec > opts.limits.maxDurationSec) {
-    const mins = Math.floor(opts.limits.maxDurationSec / 60)
-    return fail(`That track is too long — ${mins} minutes at most.`)
+    return fail(`That track is too long — ${describeDuration(opts.limits.maxDurationSec)} at most.`)
   }
 
   // ── 5. re-encode, so the stored bytes are ours ──────────────────────────

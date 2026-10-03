@@ -9,9 +9,11 @@
  * rather than defending against it: there is no `--` to forget, because
  * there is no user data in argv to separate from the flags.
  *
- * It is worth being explicit that this is a property of phase 1 and not of
- * the design generally. Phase 2 hands yt-dlp a URL on its command line, and
- * everything this file avoids becomes real there — see the design doc.
+ * Phase 2 keeps the property rather than spending it. Ingest runs ffmpeg
+ * over temp files, but the paths are randomUUID names in a directory we
+ * own, so there is still no member-supplied text anywhere in argv. The
+ * thing that would have broken this — handing yt-dlp a URL on its command
+ * line — was dropped for separate reasons; see docs/music-phase-2.md.
  *
  * ## Why spawn and never exec
  *

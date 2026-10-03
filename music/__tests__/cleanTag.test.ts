@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cleanTag } from '../src/ingest'
+import { cleanTag } from '../src/ingest.js'
 
 /**
  * Tag text is the one piece of an uploaded file that survives ingest intact

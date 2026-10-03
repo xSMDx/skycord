@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sniff, SNIFF_BYTES } from '../src/sniff'
+import { sniff, SNIFF_BYTES } from '../src/sniff.js'
 
 /**
  * The point of these is the rejections, not the acceptances.
