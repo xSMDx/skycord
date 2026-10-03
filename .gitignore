@@ -52,3 +52,8 @@ desktop/.probe/
 
 # Native addon build output — compiled from source, never committed.
 desktop/native/build/
+
+# The music service installs its own deps: it is a separate process in a
+# separate container and must not pull a native WebRTC binary into the app's.
+music/node_modules/
+music/dist-proof/

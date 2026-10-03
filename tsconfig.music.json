@@ -1,0 +1,28 @@
+{
+  /*
+   * The music service compiles on its own.
+   *
+   * It is a separate process in a separate container with no database
+   * credentials, so it shares neither the client's DOM lib nor the server's
+   * Mongoose types. It had no tsconfig at all until 2026-10-03, which meant
+   * `npm run typecheck` silently skipped it: tsconfig.json takes src/** and
+   * tsconfig.server.json takes server/**, and vitest only strips types
+   * rather than checking them. Several hundred lines went in unchecked.
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["music/**/*.ts"]
+}

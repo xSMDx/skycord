@@ -199,7 +199,7 @@ img { display: block; width: 100%; height: 100%; object-fit: cover; }
   padding: 8px 8px; border-radius: var(--edge-md); cursor: pointer; transition: background var(--dur-1) var(--ease-out);
 }
 .ig-item:hover { background: var(--hover); }
-.ig-item.selected { background: rgba(var(--accent-rgb),.12); }
+.ig-item.selected { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); color: var(--text-strong); }
 .ig-avatar { position: relative; width: 32px; height: 32px; flex-shrink: 0; }
 .ig-avatar img { border-radius: 50%; }
 .ig-status {

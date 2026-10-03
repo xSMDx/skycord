@@ -16,6 +16,7 @@ import { holdPresence } from './usePresence'
 import { useAuth } from './useAuth'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
+import { MUSIC_IDENTITY, music, setMusicTarget } from './useMusic'
 import { qualityFor } from './callLimits'
 import { perf } from './usePerformance'
 import {
@@ -412,6 +413,94 @@ const detachTrack = (track: RemoteTrack) => {
   if (track.sid) { audioEls.delete(track.sid); audioOwner.delete(track.sid) }
 }
 
+/*
+ * Music audio, on its own path.
+ *
+ * Deliberately not attachTrack. That one applies the per-person volume map
+ * and the deafen state, which are the wrong rules here in two ways: a music
+ * channel is not a person, so it has no entry in the volume map, and muting
+ * somebody must not silence the music they happen to be listening to
+ * alongside. Deafen DOES silence it, because deafen means "I hear nothing".
+ *
+ * A plain <audio> element with .volume is enough. A GainNode would mean
+ * routing through the AudioContext the mic chain already owns, for a
+ * multiplier an element gives for free.
+ */
+const musicEls = new Map<string, HTMLAudioElement>()
+
+const applyMusicVolume = (): void => {
+  for (const el of musicEls.values()) {
+    el.volume = music.volume
+    el.muted = voice.localDeafened
+  }
+}
+
+const attachMusicTrack = (track: RemoteTrack): void => {
+  if (track.kind !== Track.Kind.Audio || !track.sid) return
+  const el = track.attach() as HTMLAudioElement
+  el.autoplay = true
+  ;(el as any).playsInline = true
+  el.style.display = 'none'
+  document.body.appendChild(el)
+  musicEls.set(track.sid, el)
+  applyMusicVolume()
+}
+
+const detachMusicTrack = (track: RemoteTrack): void => {
+  track.detach().forEach(el => el.remove())
+  if (track.sid) musicEls.delete(track.sid)
+}
+
+watch(() => [music.volume, voice.localDeafened], applyMusicVolume)
+
+/*
+ * Music follows the call.
+ *
+ * One watcher rather than a call in every join and leave path. There are
+ * several ways into a call and several out, and the rejoin fix earlier today
+ * existed precisely because one of them had been missed — watching the state
+ * the whole app already agrees on cannot be forgotten at a new call site.
+ */
+watch(
+  () => (voice.connected && voice.activeConvId && voice.activeKind
+    ? { conversationId: voice.activeConvId, kind: voice.activeKind }
+    : null),
+  t => setMusicTarget(t),
+  { immediate: true },
+)
+
+/**
+ * Follow the member's choice of channel.
+ *
+ * Subscription is the whole mechanism: tuning in is subscribing to one track
+ * and dropping the rest, which is why nobody downloads audio they are not
+ * listening to and why the cost is per channel rather than per listener.
+ */
+/**
+ * Subscribe to the one music track this member chose, and to no others.
+ *
+ * Swept over every publication rather than driven only by events, because
+ * TrackPublished fires only for tracks published AFTER this client joined.
+ * Music channels that were already running when you walked into the call
+ * arrive with the room, get auto-subscribed, and would never be
+ * reconsidered — so joining a call with three channels playing subscribed
+ * you to all three. Found by the live publisher test, which is the first
+ * thing in this feature that moved real audio.
+ */
+const syncMusicSubscriptions = (): void => {
+  const room = getRoom()
+  if (!room) return
+  const want = music.listeningTo
+  room.remoteParticipants.forEach((p) => {
+    if (p.identity !== MUSIC_IDENTITY) return
+    p.trackPublications.forEach((pub) => {
+      void (pub as RemoteTrackPublication).setSubscribed(pub.trackName === want)
+    })
+  })
+}
+
+watch(() => music.listeningTo, syncMusicSubscriptions)
+
 const syncParticipants = () => {
   const room = getRoom()
   if (!room) { voice.participants = []; return }
@@ -419,6 +508,11 @@ const syncParticipants = () => {
   const lp = room.localParticipant
   list.push({ id: lp.identity, name: lp.name || 'You', speaking: lp.isSpeaking, muted: !lp.isMicrophoneEnabled, local: true })
   room.remoteParticipants.forEach((p: RemoteParticipant) => {
+    // The music service publishes into this room as a participant. It is not
+    // a person, and the sidebar, the stage and the member count all read this
+    // list — so without this it appears as an extra occupant in every call
+    // that has music on.
+    if (p.identity === MUSIC_IDENTITY) return
     list.push({ id: p.identity, name: p.name || p.identity, speaking: p.isSpeaking, muted: !p.isMicrophoneEnabled, local: false })
   })
   voice.participants = list
@@ -467,7 +561,31 @@ if (typeof document !== 'undefined') document.addEventListener('visibilitychange
 watch(() => perf.pauseVideoWhenHidden, applyHiddenPause)
 
 const wireRoom = (r: Room) => {
+  /*
+   * A music track arriving is not a person arriving.
+   *
+   * autoSubscribe defaults to true, so without this every member downloads
+   * every music channel in the call — five channels, five audio streams,
+   * four of them unwanted. Turning autoSubscribe off globally would mean
+   * managing microphone subscription by hand, which is a change to the voice
+   * path and not worth it for this; unsubscribing the moment a music track
+   * is published is narrower and costs only a brief window at the start.
+   */
+  r.on(RoomEvent.TrackPublished, (pub: RemoteTrackPublication, p: RemoteParticipant) => {
+    if (p.identity !== MUSIC_IDENTITY) return
+    void pub.setSubscribed(pub.trackName === music.listeningTo)
+  })
+  // The tracks that were already playing when we arrived. They never raise
+  // TrackPublished for us, and autoSubscribe has taken all of them.
+  r.on(RoomEvent.Connected, syncMusicSubscriptions)
+  r.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
+    if (p.identity === MUSIC_IDENTITY) syncMusicSubscriptions()
+  })
+
   r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
+    // Music has its own gain, so that music volume is not voice volume and
+    // muting a PERSON does not silence the music.
+    if (participant.identity === MUSIC_IDENTITY) { attachMusicTrack(track); syncParticipants(); return }
     if (track.kind === Track.Kind.Video) {
       addRemoteVideo(track, participant)
       applyQuality(pub)
@@ -481,6 +599,7 @@ const wireRoom = (r: Room) => {
     syncParticipants()
   })
   r.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant) => {
+    if (participant.identity === MUSIC_IDENTITY) { detachMusicTrack(track); syncParticipants(); return }
     if (track.kind === Track.Kind.Video) removeRemoteVideo(track, participant)
     else detachTrack(track)
     syncParticipants()

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { onMusicState, onMusicError, type MusicChannelView } from './useMusic'
 import { io, Socket } from 'socket.io-client'
 import { useAuth, silentRefresh } from './useAuth'
 import { isMuted }    from './useConvPrefs'
@@ -418,6 +419,9 @@ export const useSocket = () => {
     }) => {
       callServerMoved.value = { room: p.room, voiceServer: p.voiceServer, at: Date.now() }
     })
+
+    _socket.on('music:state', (p: { channels: MusicChannelView[] }) => onMusicState(p))
+    _socket.on('music:error', (p: { reason: string }) => onMusicError(p))
 
     _socket.on('call:state', (p: {
       room: string; userIds: string[]; serverId?: string
