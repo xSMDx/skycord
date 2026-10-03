@@ -58,14 +58,61 @@ const at = ref(0)
 
 const queue = computed(() => shownTracks.value)
 
-const playTrack = (t: LibTrack): void => {
+/**
+ * The bytes are fetched, not handed to `<audio src>`.
+ *
+ * The stream route is behind requireAuth, which reads a Bearer header — and
+ * an audio element cannot send one. It sends cookies, and the only cookie
+ * here is the refresh token, which has no business authorising a resource
+ * read. So pointing `src` at the route 401s on every track: nothing ever
+ * played, pause looked like it worked because the icon toggled, and the
+ * volume slider had nothing to act on.
+ *
+ * The cost is that a track downloads before it starts rather than streaming,
+ * which is why the row shows it is working. A short-lived signed URL would
+ * restore progressive playback; it would also put a credential in a URL, so
+ * it is not worth it until a long track makes the wait annoying.
+ */
+let objectUrl: string | null = null
+const loadingId = ref<string | null>(null)
+
+const releaseAudio = (): void => {
+  if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
+}
+
+const playTrack = async (t: LibTrack): Promise<void> => {
   const el = audio.value
   if (!el) return
-  if (playing.value?.id === t.id) { paused.value ? void el.play() : el.pause(); return }
+  // Already loaded: this is a play/pause toggle, not a new track.
+  if (playing.value?.id === t.id && objectUrl) {
+    if (paused.value) { try { await el.play() } catch { paused.value = true } }
+    else el.pause()
+    return
+  }
+
   playing.value = t
-  el.src = trackAudioUrl(t.id)
-  el.volume = vol.value
-  void el.play().catch(() => { paused.value = true })
+  loadingId.value = t.id
+  try {
+    const res = await fetch(trackAudioUrl(t.id), {
+      headers: accessToken.value ? { Authorization: `Bearer ${accessToken.value}` } : {},
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(String(res.status))
+    const blob = await res.blob()
+    // Someone picked a different track while this one was downloading.
+    if (playing.value?.id !== t.id) return
+
+    releaseAudio()
+    objectUrl = URL.createObjectURL(blob)
+    el.src = objectUrl
+    el.volume = vol.value
+    await el.play()
+  } catch {
+    library.error = 'That track could not be played.'
+    paused.value = true
+  } finally {
+    if (loadingId.value === t.id) loadingId.value = null
+  }
 }
 
 const step = (by: 1 | -1): void => {
@@ -74,7 +121,7 @@ const step = (by: 1 | -1): void => {
   const i = list.findIndex(t => t.id === playing.value!.id)
   // Wraps, because a list that stops dead at the end is a list you have to
   // scroll back up to restart.
-  playTrack(list[(i + by + list.length) % list.length])
+  void playTrack(list[(i + by + list.length) % list.length])
 }
 
 /**
@@ -112,6 +159,36 @@ const headerStyle = computed(() => theme.value
       '--art-on-accent': theme.value.onAccent,
     }
   : {})
+
+/**
+ * How full the library looks.
+ *
+ * Two megabytes of two gigabytes is scaleX(0.00097), which paints nothing —
+ * so a library with music in it showed the same empty bar as one without.
+ * A floor of 1.5% is a sliver rather than a lie: it says "something", which
+ * is the true answer, and the text beside it carries the real figure.
+ */
+const usedFraction = computed(() => {
+  const cap = library.caps?.bytesPerMember
+  if (!cap || !library.usage.bytes) return 0
+  return Math.min(1, Math.max(0.015, library.usage.bytes / cap))
+})
+
+/**
+ * The big button plays the list, and pauses it when it is already playing.
+ *
+ * It used to always start the first track, which while that track was
+ * playing meant pressing a button labelled Play and hearing the music stop.
+ */
+const listPlaying = computed(() =>
+  !paused.value && !!playing.value && shownTracks.value.some(t => t.id === playing.value!.id))
+
+const playThisList = (): void => {
+  if (listPlaying.value) { audio.value?.pause(); return }
+  const current = playing.value && shownTracks.value.find(t => t.id === playing.value!.id)
+  const next = current ?? shownTracks.value[0]
+  if (next) void playTrack(next)
+}
 
 // ── the centre pane's identity ──────────────────────────────────────────────
 const heading = computed(() => library.open?.name ?? 'All tracks')
@@ -167,6 +244,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   audio.value?.pause()
+  releaseAudio()
   if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
@@ -200,12 +278,10 @@ onBeforeUnmount(() => {
 
         <div class="mm-railhead">
           <span>Playlists</span>
+          <button class="mm-mini" aria-label="New playlist" @click="namingList = true">
+            <Plus :size="13" :stroke-width="2.5" />
+          </button>
         </div>
-        <!-- Outside the heading, because the heading is hidden on a phone
-             and this is the only way to make a playlist. -->
-        <button class="mm-mini mm-newbtn" aria-label="New playlist" @click="namingList = true">
-          <Plus :size="13" :stroke-width="2.5" />
-        </button>
 
         <form v-if="namingList" class="mm-newlist" @submit.prevent="submitList">
           <input
@@ -234,9 +310,7 @@ onBeforeUnmount(() => {
         <div class="mm-space">
           <div class="mm-bar" role="img"
                :aria-label="`${megabytes(library.usage.bytes)} of ${library.caps ? megabytes(library.caps.bytesPerMember) : ''} used`">
-            <span :style="{ transform: `scaleX(${library.caps
-              ? Math.min(1, library.usage.bytes / library.caps.bytesPerMember)
-              : 0})` }" />
+            <span :style="{ transform: `scaleX(${usedFraction})` }" />
           </div>
           <span class="mm-spacetext">
             {{ megabytes(library.usage.bytes) }}<template v-if="library.caps"> of {{ megabytes(library.caps.bytesPerMember) }}</template>
@@ -256,8 +330,12 @@ onBeforeUnmount(() => {
             <h2 class="mm-title">{{ heading }}</h2>
             <span class="mm-sub">{{ subtitle }}</span>
             <div class="mm-headacts">
-              <button class="mm-play" :disabled="!shownTracks.length" @click="playTrack(shownTracks[0])">
-                <Play :size="16" :stroke-width="2.5" /><span>Play</span>
+              <button
+                class="mm-play" :disabled="!shownTracks.length"
+                :aria-label="listPlaying ? 'Pause' : 'Play'" @click="playThisList"
+              >
+                <component :is="listPlaying ? Pause : Play" :size="16" :stroke-width="2.5" />
+                <span>{{ listPlaying ? 'Pause' : 'Play' }}</span>
               </button>
               <button
                 class="mm-ghost" :disabled="shownTracks.length < 2" v-tip="'Shuffle'"
@@ -321,7 +399,9 @@ onBeforeUnmount(() => {
             @dblclick="playTrack(t)"
           >
             <button class="mm-num" :aria-label="`Play ${t.title}`" @click="playTrack(t)">
+              <Loader2 v-if="loadingId === t.id" class="mm-numico mm-spin" :size="13" :stroke-width="2.5" />
               <component
+                v-else
                 :is="playing?.id === t.id && !paused ? Pause : Play"
                 class="mm-numico" :size="13" :stroke-width="2.5"
               />
@@ -576,15 +656,7 @@ onBeforeUnmount(() => {
 }
 @media (hover: hover) and (pointer: fine) { .mm-mini:hover { background: var(--hover); color: var(--text-1); } }
 .mm-lists { list-style: none; display: flex; flex-direction: column; gap: 2px; }
-/* Sits in the heading row on a desktop, and on its own in the strip on a
-   phone, where the heading is gone. */
-.mm-newbtn { position: absolute; top: 14px; right: 10px; }
-@media (max-width: 680px) {
-  .mm-newbtn {
-    position: static; flex: 0 0 auto; width: 32px; height: 32px;
-    border-radius: 50%; background: var(--bg-input);
-  }
-}
+
 .mm-railempty { padding: 2px 9px; font-size: 11.5px; line-height: 1.5; color: var(--text-3); }
 
 .mm-newlist { display: flex; flex-direction: column; gap: 6px; padding: 4px 4px 8px; }
@@ -744,6 +816,9 @@ onBeforeUnmount(() => {
 .mm-numico { display: none; }
 .mm-row:hover .mm-numico, .mm-row.on .mm-numico { display: block; }
 .mm-row:hover .mm-numtext, .mm-row.on .mm-numtext { display: none; }
+/* A loading row shows its spinner whether or not the pointer is over it. */
+.mm-num .mm-spin { display: block; }
+.mm-row:has(.mm-spin) .mm-numtext { display: none; }
 .mm-row.on .mm-num { color: var(--art-accent, var(--accent-text)); }
 
 .mm-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -880,9 +955,14 @@ onBeforeUnmount(() => {
     background: var(--bg-input); padding: 8px 12px;
   }
   .mm-lists { flex-direction: row; gap: 6px; }
-  /* The section heading and the meter are the parts a phone can do without:
-     the chips say what they are, and nobody manages storage on a phone. */
-  .mm-railhead, .mm-railempty, .mm-space { display: none; }
+  /* The meter and the empty note are what a phone can do without. The
+     heading stays, reduced to the button inside it — that button is the only
+     way to make a playlist, and it keeps its place in the markup rather than
+     being a second copy that exists only here. */
+  .mm-railempty, .mm-space { display: none; }
+  .mm-railhead { order: -1; flex: 0 0 auto; padding: 0; }
+  .mm-railhead > span { display: none; }
+  .mm-railhead .mm-mini { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-input); }
 
   .mm-head { padding: 16px 16px 14px; gap: 14px; }
   .mm-art { width: 92px; height: 92px; }
@@ -903,9 +983,6 @@ onBeforeUnmount(() => {
   .mm-shell { padding-top: 34px; }
   .mm-x { top: 2px; right: 8px; }
 
-  /* First, not last: a strip that scrolls would otherwise hide the only way
-     to make a playlist as soon as there are a few of them. */
-  .mm-newbtn { order: -1; }
   /* Names were truncating to four characters: a 40px thumbnail and a 86px
      action column were spending a third of a phone screen on furniture.
      The thumbnail shrinks and the columns give back what they do not need. */
