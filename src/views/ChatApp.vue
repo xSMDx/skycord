@@ -2,7 +2,7 @@
 import {
   ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
-  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff,
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff, Music2,
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
@@ -55,6 +55,8 @@ import ReactionPickerModal  from '@/components/modals/ReactionPickerModal.vue'
 import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
 import SkycordIcon          from '@/components/SkycordIcon.vue'
 import CallBar               from '@/components/voice/CallBar.vue'
+import MusicModal            from '@/components/music/MusicModal.vue'
+import { musicAvailable }    from '@/composables/useMusic'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
 import Skeleton             from '@/components/ui/Skeleton.vue'
 import InviteToVoice         from '@/components/voice/InviteToVoice.vue'
@@ -1202,6 +1204,15 @@ const startVideoCall = async () => {
   }
   openCameraPreview('video-call')
 }
+/**
+ * Your library, as a room rather than a popover.
+ *
+ * Reachable from the user panel as well as from a call, because what you
+ * own is yours whether or not anyone is listening — the call bar's flyout
+ * is the in-call control, not the only door.
+ */
+const musicModal = ref(false)
+
 const openSettings = (p: 'account' | 'profile' | 'appearance' | 'voice' = 'account') => {
   settingsPage.value = p
   showSettings.value = true
@@ -4454,6 +4465,12 @@ useDesktopTitleBar({
               <button class="up-chev" :class="{ open: upMenu === 'out' }" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
+            <button
+              v-if="musicAvailable" class="up-btn btn-music"
+              @click.stop="musicModal = true" v-tip="'Your music'"
+            >
+              <Music2 :size="16" :stroke-width="1.5"/>
+            </button>
             <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
               <Settings :size="16" :stroke-width="1.5"/>
             </button>
@@ -4729,6 +4746,12 @@ useDesktopTitleBar({
               <button class="up-chev" :class="{ open: upMenu === 'out' }" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
+            <button
+              v-if="musicAvailable" class="up-btn btn-music"
+              @click.stop="musicModal = true" v-tip="'Your music'"
+            >
+              <Music2 :size="16" :stroke-width="1.5"/>
+            </button>
             <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
               <Settings :size="16" :stroke-width="1.5"/>
             </button>
@@ -5159,6 +5182,7 @@ useDesktopTitleBar({
             @minimize="viewedVoiceId = null"
             @profile="showUserProfile = $event.id"
             @preview-camera="openCameraPreview('camera')"
+            @open-music-library="musicModal = true"
           />
 
           <!-- Pinned messages panel -->
@@ -5300,6 +5324,7 @@ useDesktopTitleBar({
       </template>
 
     </div>
+    <MusicModal v-if="musicModal" @close="musicModal = false" />
   </div>
 </template>
 

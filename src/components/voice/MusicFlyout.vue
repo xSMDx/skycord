@@ -14,7 +14,7 @@
  * second place to look during a call.
  */
 import { ref, computed } from 'vue'
-import { Music2, Plus, SkipForward, X } from 'lucide-vue-next'
+import { Music2, Plus, SkipForward, X, Library } from 'lucide-vue-next'
 import CallFlyout from './CallFlyout.vue'
 import { voice } from '@/composables/useVoice'
 import {
@@ -23,7 +23,7 @@ import {
 } from '@/composables/useMusic'
 
 defineProps<{ dir?: 'down' | 'up' }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; openLibrary: [] }>()
 
 const adding = ref(false)
 const name = ref('')
@@ -54,7 +54,7 @@ const canAdd = computed(() => name.value.trim() !== '' && url.value.trim() !== '
 const submitNew = () => {
   if (!canAdd.value) return
   clearMusicError()
-  createMusicChannel(name.value.trim(), url.value.trim())
+  createMusicChannel(name.value.trim(), { url: url.value.trim() })
   // Cleared on submit, not on success: the server answers a create with a
   // music:state rather than an ack, so a form waiting for one would sit
   // there looking stuck. A refusal appears below instead.
@@ -65,7 +65,7 @@ const submitQueue = (id: string) => {
   const u = queueUrl.value.trim()
   if (!u) return
   clearMusicError()
-  queueMusic(id, u)
+  queueMusic(id, { url: u })
   queueUrl.value = ''; queueFor.value = null
 }
 
@@ -129,6 +129,14 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
     <button v-else class="fr mf-add" @click="adding = true">
       <span>New music channel</span>
       <Plus :size="14" :stroke-width="2.25" />
+    </button>
+
+    <div class="fr-sep" />
+    <!-- The flyout is for the call; the room is for everything else. Saying
+         so here is the only way anyone finds the library at all. -->
+    <button class="fr mf-lib" @click="emit('openLibrary'); emit('close')">
+      <span>Your music</span>
+      <Library :size="14" :stroke-width="2.25" />
     </button>
 
     <p v-if="music.error" class="mf-err" role="alert">{{ music.error }}</p>
@@ -227,7 +235,7 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
 }
 .mf-go:active:not(:disabled), .mf-cancel:active { transform: scale(0.97); }
 
-.mf-add { color: var(--text-2); }
+.mf-add, .mf-lib { color: var(--text-2); }
 .mf-empty { padding: 2px 10px 6px; max-width: 230px; }
 .mf-err { margin: 2px 10px 6px; font-size: 12px; line-height: 1.45; color: var(--danger-text); }
 

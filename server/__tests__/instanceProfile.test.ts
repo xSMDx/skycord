@@ -17,6 +17,7 @@ describe('readInstanceProfile: nothing configured', () => {
     const { profile, warnings, iconFile } = readInstanceProfile(BASE, NO_FILES)
     expect(profile).toEqual({
       software: 'skycord',
+      music: false,
       version: 'v0.20.0',
       address: 'https://chat.example.com',
       name: 'chat.example.com',

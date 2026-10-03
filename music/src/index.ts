@@ -78,6 +78,7 @@ const server = createMusicServer(publisher, {
     maxDurationSec: num('MUSIC_MAX_DURATION_SEC', 30 * 60),
   },
   clam,
+  apiInternalUrl: apiUrl,
   onEnded,
   log,
 })

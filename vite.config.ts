@@ -113,6 +113,7 @@ export default defineConfig(({ mode }) => {
         '/invites':       { target: api, changeOrigin: true },
         '/instance':      { target: api, changeOrigin: true },
         '/gifs':          { target: api, changeOrigin: true },
+        '/music':         { target: api, changeOrigin: true },
         '/socket.io':     { target: api, changeOrigin: true, ws: true },
       }
     }

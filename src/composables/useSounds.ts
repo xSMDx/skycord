@@ -204,6 +204,37 @@ export const soundUserLeave = () => play([
   { hz: A3, at: 0.06, dur: 0.16, vol: 0.09 },
 ])
 
+// ── Music ───────────────────────────────────────────────────────────────────
+// A music channel opening is an event in the room with nothing visible to
+// announce it: there is deliberately no bot in the member list, so the sound
+// IS the announcement.
+//
+// It is the only cue in the palette with four notes, and the only one that
+// rolls rather than strikes — 45ms apart instead of 80-90, so it reads as an
+// arpeggio rather than as a sequence of chimes. That is what makes it mean
+// "music" instead of "another call event". F-A-C-D is the call-join triad
+// with a sixth added on top, so it belongs to the same family as the cue for
+// arriving somewhere, which is what tuning in is.
+//
+// Quieter than soundCallJoin, because it is not about you.
+export const soundMusicOpen = () => play([
+  { hz: F3, at: 0,     dur: 0.07, vol: 0.09 },
+  { hz: A3, at: 0.045, dur: 0.07, vol: 0.09 },
+  { hz: C4, at: 0.09,  dur: 0.07, vol: 0.10 },
+  { hz: D4, at: 0.135, dur: 0.30, vol: 0.10 },
+])
+
+// Tuning in and out: the same shape, two notes, so moving between channels
+// does not sound like opening one.
+export const soundMusicTune = () => play([
+  { hz: C4, at: 0,    dur: 0.06, vol: 0.08 },
+  { hz: D4, at: 0.05, dur: 0.18, vol: 0.08 },
+])
+export const soundMusicLeave = () => play([
+  { hz: D4, at: 0,    dur: 0.06, vol: 0.07 },
+  { hz: C4, at: 0.05, dur: 0.18, vol: 0.07 },
+])
+
 // Connection dropped — a single note sagging in pitch. The only cue that glides,
 // which is what makes it read as a failure rather than a choice.
 export const soundDisconnect = () => play([

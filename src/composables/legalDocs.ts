@@ -39,6 +39,8 @@ export interface InstanceProfile {
   icon: string | null
   legal: LegalEntry[]
   source: string
+  /** Whether this instance runs the music service. */
+  music?: boolean
 }
 
 /**

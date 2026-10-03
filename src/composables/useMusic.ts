@@ -21,6 +21,8 @@ import { getSocket } from './useSocket'
  * ObjectIds, set server-side in the LiveKit token, so no member can ever
  * hold a name shaped like this one.
  */
+import { soundMusicOpen, soundMusicTune, soundMusicLeave } from './useSounds'
+
 export const MUSIC_IDENTITY = 'svc:music'
 
 /**
@@ -54,7 +56,8 @@ export const musicAvailable = ref(false)
 export interface MusicChannelView {
   id: string
   name: string
-  now: { url: string; addedBy: string } | null
+  /** `url` is null for a library track; `title` is null for a bare link. */
+  now: { url: string | null; title: string | null; addedBy: string } | null
   queued: number
   listeners: string[]
 }
@@ -89,11 +92,18 @@ const send = (event: string, extra: Record<string, unknown> = {}): void => {
   getSocket()?.emit(event, { ...target, ...extra })
 }
 
-export const createMusicChannel = (name: string, url: string): void =>
-  send('music:create', { name, url })
+/**
+ * Start a channel from a library track, or from a pasted link.
+ *
+ * A library track travels as an id, never as a URL. The server checks the
+ * caller owns it and the service composes the address from its own
+ * configuration, so there is no link for anyone to point somewhere else.
+ */
+export const createMusicChannel = (name: string, source: { trackId: string } | { url: string }): void =>
+  send('music:create', { name, ...source })
 
-export const queueMusic = (channelId: string, url: string): void =>
-  send('music:queue', { channelId, url })
+export const queueMusic = (channelId: string, source: { trackId: string } | { url: string }): void =>
+  send('music:queue', { channelId, ...source })
 
 export const skipMusic = (channelId: string): void =>
   send('music:skip', { channelId })
@@ -110,13 +120,29 @@ export const closeMusicChannel = (channelId: string): void =>
  * it if the channel turned out to be gone.
  */
 export const listenToMusic = (channelId: string | null): void => {
+  // Played on the way out, not on the way back from the server: tuning in is
+  // a local decision that takes effect immediately, and a cue that waits for
+  // a round trip lands after the audio it was meant to introduce.
+  if (channelId !== music.listeningTo) (channelId ? soundMusicTune : soundMusicLeave)()
   music.listeningTo = channelId
   send('music:listen', { channelId })
 }
 
 /** Wired once, by useSocket, on every connect. */
 export const onMusicState = (payload: { channels: MusicChannelView[] }): void => {
+  const before = new Set(music.channels.map(c => c.id))
   music.channels = payload?.channels ?? []
+
+  /*
+   * A channel that is new to us gets the cue. Compared by id against what we
+   * had rather than driven off the create call, because the event everyone
+   * in the room needs to hear is somebody ELSE starting music — the person
+   * who started it already knows.
+   *
+   * `before.size` guards the first state after joining a call: arriving in a
+   * room with three channels already open must not fire three cues.
+   */
+  if (before.size && music.channels.some(c => !before.has(c.id))) soundMusicOpen()
   // A channel that went away while we were listening to it leaves us tuned
   // to nothing, rather than to an id nobody has.
   if (music.listeningTo && !music.channels.some(c => c.id === music.listeningTo)) {

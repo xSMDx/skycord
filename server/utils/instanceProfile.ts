@@ -51,6 +51,16 @@ export interface InstanceProfile {
   icon: string | null
   legal: LegalEntry[]
   source: string
+  /**
+   * Whether this instance runs the music service.
+   *
+   * Here rather than in the voice token, which is where the client used to
+   * learn it: that answer only arrives once you are in a call, and a member's
+   * own library has nothing to do with being in one. It is a fact about what
+   * the instance offers, in the document that already says what the instance
+   * is, and the client fetches that once per page load anyway.
+   */
+  music: boolean
 }
 
 export interface InstanceResolution {
@@ -156,6 +166,7 @@ export const readInstanceProfile = (env: Env, files: InstanceFiles): InstanceRes
   const profile: InstanceProfile = {
     software: 'skycord',
     version,
+    music: Boolean(env.MUSIC_SERVICE_URL && env.MUSIC_INTERNAL_SECRET),
     address,
     name: name ?? hostOf(address),
     nameIsAddress: name === null,

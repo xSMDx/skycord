@@ -1,9 +1,15 @@
 /**
- * The one thing the music service tells the API.
+ * What the API and the music service say to each other out of band.
  *
- * Only the service knows when a track ran out, because only the service is
- * decoding it. This is the way back: it says "that finished", and the API
- * advances the channel's queue and tells the room.
+ * Two things. The service reports that a track finished, because only the
+ * service is decoding it and only the API owns the queue. And the service
+ * reads a library track's audio, because the audio is in GridFS and the
+ * service deliberately has no database credentials.
+ *
+ * That second one is why a library track never travels as a URL the member
+ * supplied. The client names a track id, the API checks who owns it and
+ * hands the service an address the API itself composed. Nothing a member
+ * typed reaches the fetcher on this path at all.
  *
  * ## Why this is not behind requireAuth
  *
@@ -15,8 +21,11 @@
  */
 import { Router, type Request, type Response } from 'express'
 import { timingSafeEqual } from 'crypto'
+import { Types } from 'mongoose'
 import { config } from '../config/env'
 import { musicTrackEnded } from '../sockets/chatSocket'
+import { Track } from '../models/Track'
+import { trackStore } from '../utils/trackStore'
 
 /** Constant time, and length-checked first: timingSafeEqual throws on a mismatch. */
 const secretOk = (given: unknown, want: string): boolean => {
@@ -56,6 +65,39 @@ export const internalMusicRouter = (opts: { secret?: string } = {}): Router => {
 
     musicTrackEnded(room, channelId)
     res.json({ ok: true })
+  })
+
+  /**
+   * Stream a library track to the service so it can decode it.
+   *
+   * No range support and no caching, unlike the member-facing route: the
+   * consumer is ffmpeg reading start to finish exactly once.
+   *
+   * Deliberately not scoped to an owner. The API has already checked that
+   * the member asking for this channel owns the track; by the time the
+   * service calls back it is acting for the room, and the id it was given
+   * came from the API rather than from anyone's browser.
+   */
+  router.get('/music/track/:trackId/audio', (req: Request, res: Response) => {
+    void (async () => {
+      const want = opts.secret ?? config.music?.secret ?? ''
+      if (!want || !secretOk(req.headers['x-music-secret'], want)) {
+        res.status(401).json({ message: 'Not allowed' })
+        return
+      }
+
+      const id = String(req.params.trackId)
+      if (!Types.ObjectId.isValid(id)) { res.status(404).json({ message: 'No such track' }); return }
+
+      const doc = await Track.findById(id)
+      if (!doc) { res.status(404).json({ message: 'No such track' }); return }
+
+      res.status(200).set({
+        'content-type': 'audio/webm',
+        'content-length': String(doc.bytes),
+      })
+      trackStore.open(doc.store as { kind: 'gridfs'; id: Types.ObjectId }).pipe(res)
+    })().catch(() => { if (!res.headersSent) res.status(500).json({ message: 'Could not read that track' }) })
   })
 
   return router

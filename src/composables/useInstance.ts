@@ -10,6 +10,7 @@
 import { computed, ref } from 'vue'
 import { useAuth } from './useAuth'
 import type { InstanceProfile } from './legalDocs'
+import { musicAvailable } from './useMusic'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'failed'
 
@@ -26,6 +27,9 @@ const load = (): Promise<void> => {
       const res = await authFetch('/instance')
       if (!res.ok) throw new Error(`the instance profile answered ${res.status}`)
       profile.value = await res.json() as InstanceProfile
+      // The music room is reachable from the user panel, with no call
+      // involved, so this has to be known before any voice token exists.
+      musicAvailable.value = profile.value.music === true
       state.value = 'ready'
     } catch {
       state.value = 'failed'

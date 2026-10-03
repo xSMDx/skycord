@@ -540,6 +540,23 @@ export const useApi = () => {
   const trendingGifs = () =>
     get<{ gifs: ApiGif[] }>('/gifs/trending')
 
+  // ── music library ───────────────────────────────────────────────────
+  // Upload is not here: it needs XHR for progress, which fetch cannot give,
+  // so it lives in useMusicLibrary with the reason written beside it.
+  const listMusicTracks = (q = '') =>
+    get<MusicTracksResponse>(q.trim() ? `/music/tracks?q=${encodeURIComponent(q.trim())}` : '/music/tracks')
+  const importMusicTrack = (url: string) => post<{ track: WireTrack }>('/music/tracks/import', { url })
+  const deleteMusicTrack = (id: string) => del<{ ok: true }>(`/music/tracks/${id}`)
+
+  const listPlaylistsApi = () => get<{ playlists: WirePlaylist[] }>('/music/playlists')
+  const getPlaylistApi = (id: string) => get<{ playlist: WirePlaylist }>(`/music/playlists/${id}`)
+  const createPlaylistApi = (name: string) => post<{ playlist: WirePlaylist }>('/music/playlists', { name })
+  const deletePlaylistApi = (id: string) => del<{ ok: true }>(`/music/playlists/${id}`)
+  const addToPlaylistApi = (id: string, trackId: string) =>
+    post<{ playlist: WirePlaylist }>(`/music/playlists/${id}/tracks`, { trackId })
+  const removeFromPlaylistApi = (id: string, index: number) =>
+    del<{ playlist: WirePlaylist }>(`/music/playlists/${id}/tracks/${index}`)
+
   return {
     listSessions, revokeSession, revokeOtherSessions,
     searchGifs, trendingGifs, getMyDMs,
@@ -565,7 +582,55 @@ export const useApi = () => {
     createServerInvite, listServerInvites, revokeServerInvite,
     getServerInvite, joinServerInvite,
     searchMessagesApi,
+    listMusicTracks, importMusicTrack, deleteMusicTrack,
+    listPlaylistsApi, getPlaylistApi, createPlaylistApi, deletePlaylistApi,
+    addToPlaylistApi, removeFromPlaylistApi,
   }
+}
+
+// ── Music ───────────────────────────────────────────────────────────────────
+
+/** A track in a member's own library. The audio lives behind /audio. */
+export interface WireTrack {
+  id: string
+  title: string
+  artist: string
+  album: string
+  durationSec: number
+  bytes: number
+  /** A small WebP data URI, or null when the file carried no cover art. */
+  cover: string | null
+  source: 'upload' | 'link'
+  /**
+   * `skipped` is honest rather than reassuring: it means this instance runs
+   * no virus scanner, not that the file was checked and found clean.
+   */
+  scan: 'clean' | 'skipped' | 'infected' | 'error'
+  createdAt: string
+}
+
+export interface WirePlaylist {
+  id: string
+  name: string
+  description: string
+  trackIds: string[]
+  count: number
+  /** Only on a single-playlist read, resolved in the stored order. */
+  tracks?: WireTrack[]
+  updatedAt: string
+}
+
+export interface MusicLibraryCaps {
+  tracksPerMember: number
+  bytesPerMember: number
+  playlistsPerMember: number
+  tracksPerPlaylist: number
+}
+
+export interface MusicTracksResponse {
+  tracks: WireTrack[]
+  usage: { tracks: number; bytes: number }
+  caps: MusicLibraryCaps
 }
 
 // ── API types ──────────────────────────────────────────────────────────────

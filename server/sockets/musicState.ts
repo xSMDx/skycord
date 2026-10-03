@@ -15,8 +15,24 @@ import { randomUUID } from 'crypto'
 import type { MusicCaps, Check } from '../utils/musicLimits'
 import { canOpenChannel, canQueue } from '../utils/musicLimits'
 
+/**
+ * One thing to play.
+ *
+ * Two sources, and the difference is who chose the address. A pasted link
+ * is text a member typed, and every control in music/src/urlGuard.ts exists
+ * for it. A library track is an id the API resolves against a collection it
+ * owns, and the address is composed by the service from its own
+ * configuration — so no member-supplied text reaches the fetcher at all.
+ *
+ * Exactly one of these is set.
+ */
 export interface Track {
-  url: string
+  /** A link a member pasted. Untrusted; guarded in the service. */
+  url?: string
+  /** A track in the member's library, already checked to be theirs. */
+  trackId?: string
+  /** What to show while it plays. Absent for a bare link. */
+  title?: string
   addedBy: string
   addedAt: number
 }
@@ -34,7 +50,8 @@ export interface MusicChannel {
 export interface MusicChannelView {
   id: string
   name: string
-  now: { url: string; addedBy: string } | null
+  /** `url` is null for a library track; `title` is null for a bare link. */
+  now: { url: string | null; title: string | null; addedBy: string } | null
   queued: number
   listeners: string[]
 }
@@ -85,7 +102,9 @@ export class MusicRooms {
       channels: [...here.values()].map(c => ({
         id: c.id,
         name: c.name,
-        now: c.now ? { url: c.now.url, addedBy: c.now.addedBy } : null,
+        now: c.now
+          ? { url: c.now.url ?? null, title: c.now.title ?? null, addedBy: c.now.addedBy }
+          : null,
         queued: c.queue.length,
         listeners: [...c.listeners],
       })),
@@ -94,7 +113,7 @@ export class MusicRooms {
 
   // ── writing ────────────────────────────────────────────────────────────
 
-  create(room: string, name: string, url: string, by: string): Check & { id?: string } {
+  create(room: string, name: string, source: Omit<Track, 'addedBy' | 'addedAt'>, by: string): Check & { id?: string } {
     const room_ok = canOpenChannel(
       { channelsHere: this.channelsHere(room), channelsEverywhere: this.channelsEverywhere() },
       this.caps,
@@ -105,7 +124,7 @@ export class MusicRooms {
     if (!here) { here = new Map(); this.rooms.set(room, here) }
 
     const id = randomUUID()
-    const track: Track = { url, addedBy: by, addedAt: this.now() }
+    const track: Track = { ...source, addedBy: by, addedAt: this.now() }
     here.set(id, { id, name, createdBy: by, now: track, queue: [], listeners: new Set() })
 
     /*
@@ -120,12 +139,12 @@ export class MusicRooms {
     return { ok: true, id }
   }
 
-  queue(room: string, channelId: string, url: string, by: string): Check {
+  queue(room: string, channelId: string, source: Omit<Track, 'addedBy' | 'addedAt'>, by: string): Check {
     const channel = this.get(room, channelId)
     if (!channel) return no('That music channel is gone.')
     const room_ok = canQueue(channel.queue.length, this.caps)
     if (!room_ok.ok) return room_ok
-    channel.queue.push({ url, addedBy: by, addedAt: this.now() })
+    channel.queue.push({ ...source, addedBy: by, addedAt: this.now() })
     return { ok: true }
   }
 

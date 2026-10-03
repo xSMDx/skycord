@@ -52,7 +52,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   dismiss: []; toast: [msg: string]; openSettings: [page?: 'voice']
   expand: [on: boolean]; profile: [u: { id: string; displayName: string; avatar: string }]
-  previewCamera: []
+  previewCamera: []; openMusicLibrary: []
 }>()
 
 const { voice, connect, leave, toggleMute, toggleDeafen } = useVoice()
@@ -466,7 +466,10 @@ onBeforeUnmount(() => {
             >
               <Music2 :size="20" :stroke-width="2.25" />
             </button>
-            <MusicFlyout v-if="openMenu === 'music'" dir="up" @close="openMenu = ''" />
+            <MusicFlyout
+              v-if="openMenu === 'music'" dir="up"
+              @close="openMenu = ''" @open-library="emit('openMusicLibrary')"
+            />
           </div>
         </div>
         <!-- Hide-chat and fullscreen only exist once there's something worth

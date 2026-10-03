@@ -16,7 +16,9 @@ import * as presence from '../state/presence'
 import { config }   from '../config/env'
 import { MusicRooms } from './musicState'
 import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape } from '../utils/musicLimits'
-import { musicPlay, musicClose } from '../utils/musicService'
+import { musicPlay, musicPlayTrack, musicClose } from '../utils/musicService'
+import { Track as LibraryTrack } from '../models/Track'
+import type { Track as MusicSource } from './musicState'
 
 // Presence (who holds a socket, who is away) lives in server/state/presence.ts
 // so the User model can derive a wire-safe status without importing this file,
@@ -65,11 +67,57 @@ export const musicRooms = new MusicRooms(
  * is already gone — the service can report an end for one the API tore down
  * a moment earlier, and that must not resurrect it.
  */
+/**
+ * Start whatever a queue entry turned out to be.
+ *
+ * A library track and a pasted link reach the service by different calls —
+ * one sends an id the service resolves against our own API, the other sends
+ * a URL that has to survive the SSRF guard. Everywhere that advances a queue
+ * needs the same branch, so it lives here rather than three times.
+ */
+/**
+ * Work out what a member actually asked to play, and whether they may.
+ *
+ * Two shapes arrive on the same events. `trackId` names something in the
+ * caller's own library: it is checked against their ownership here, and the
+ * audio is then read by the service from an address the service composes —
+ * nothing the member typed reaches the fetcher. `url` is a pasted link, so
+ * it gets the cheap text pass and then the real guard inside the service.
+ *
+ * The ownership check is the important half. Without it a member could name
+ * any track id and have the room play a stranger's file, which is both a
+ * privacy leak and a way to read a library you cannot otherwise see.
+ */
+type Source = Omit<MusicSource, 'addedBy' | 'addedAt'>
+const resolveSource = async (
+  data: { url?: string; trackId?: string },
+  userId: string,
+): Promise<{ ok: true; value: Source } | { ok: false; reason: string }> => {
+  const trackId = String(data?.trackId ?? '').trim()
+  if (trackId) {
+    if (!/^[0-9a-f]{24}$/i.test(trackId)) return { ok: false, reason: 'No such track.' }
+    const owned = await LibraryTrack.findOne({ _id: trackId, ownerId: userId })
+    // Same answer for "does not exist" and "is not yours", so this cannot be
+    // used to find out which ids exist.
+    if (!owned) return { ok: false, reason: 'No such track.' }
+    return { ok: true, value: { trackId, title: owned.title } }
+  }
+
+  const url = checkUrlShape(data?.url)
+  if (!url.ok) return { ok: false, reason: url.reason }
+  return { ok: true, value: { url: String(data.url).trim() } }
+}
+
+const startSource = (room: string, channelId: string, now: MusicSource): void => {
+  if (now.trackId) void musicPlayTrack(room, channelId, now.trackId)
+  else if (now.url) void musicPlay(room, channelId, now.url)
+}
+
 export const musicTrackEnded = (room: string, channelId: string): void => {
   if (!musicRooms.get(room, channelId)) return
   const next = musicRooms.skip(room, channelId)
   broadcastMusic(room)
-  if (next.ok && next.now) void musicPlay(room, channelId, next.now.url)
+  if (next.ok && next.now) startSource(room, channelId, next.now)
 }
 
 /**
@@ -1379,33 +1427,44 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     /** Refusals go to the asker alone; nobody else needs to see them fail. */
     const musicRefuse = (reason: string) => socket.emit('music:error', { reason })
 
-    socket.on('music:create', (data: { conversationId: string; kind: string; name: string; url: string }) => {
-      const gate = musicGate(data); if (!gate) return
-      if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
-      const name = checkChannelName(data?.name)
-      if (!name.ok) return musicRefuse(name.reason)
-      const url = checkUrlShape(data?.url)
-      if (!url.ok) return musicRefuse(url.reason)
-      const made = musicRooms.create(gate.room, String(data.name).trim(), String(data.url).trim(), userId)
-      if (!made.ok) return musicRefuse(made.reason)
-      broadcastMusic(gate.room)
-      void musicPlay(gate.room, made.id!, String(data.url).trim())
+    socket.on('music:create', (data: { conversationId: string; kind: string; name: string; url?: string; trackId?: string }) => {
+      void (async () => {
+        const gate = musicGate(data); if (!gate) return
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+        const name = checkChannelName(data?.name)
+        if (!name.ok) return musicRefuse(name.reason)
+
+        const source = await resolveSource(data, userId)
+        if (!source.ok) return musicRefuse(source.reason)
+
+        const made = musicRooms.create(gate.room, String(data.name).trim(), source.value, userId)
+        if (!made.ok) return musicRefuse(made.reason)
+        broadcastMusic(gate.room)
+        startSource(gate.room, made.id!, { ...source.value, addedBy: userId, addedAt: Date.now() })
+      })()
     })
 
-    socket.on('music:queue', (data: { conversationId: string; kind: string; channelId: string; url: string }) => {
-      const gate = musicGate(data); if (!gate) return
-      if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
-      const url = checkUrlShape(data?.url)
-      if (!url.ok) return musicRefuse(url.reason)
-      const channelId = String(data?.channelId ?? '')
-      const wasSilent = musicRooms.get(gate.room, channelId)?.now == null
-      const r = musicRooms.queue(gate.room, channelId, String(data.url).trim(), userId)
-      if (!r.ok) return musicRefuse(r.reason)
+    socket.on('music:queue', (data: { conversationId: string; kind: string; channelId: string; url?: string; trackId?: string }) => {
+      void (async () => {
+        const gate = musicGate(data); if (!gate) return
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+
+        const source = await resolveSource(data, userId)
+        if (!source.ok) return musicRefuse(source.reason)
+
+        const channelId = String(data?.channelId ?? '')
+        const wasSilent = musicRooms.get(gate.room, channelId)?.now == null
+        const r = musicRooms.queue(gate.room, channelId, source.value, userId)
+        if (!r.ok) return musicRefuse(r.reason)
       // A channel whose queue ran dry is stopped, and nothing is going to
       // report an end for it — so the thing just queued has to be started
       // here or it waits for a skip that nobody will press.
-      if (wasSilent) { const next = musicRooms.skip(gate.room, channelId); if (next.ok && next.now) void musicPlay(gate.room, channelId, next.now.url) }
-      broadcastMusic(gate.room)
+        if (wasSilent) {
+          const next = musicRooms.skip(gate.room, channelId)
+          if (next.ok && next.now) startSource(gate.room, channelId, next.now)
+        }
+        broadcastMusic(gate.room)
+      })()
     })
 
     socket.on('music:skip', (data: { conversationId: string; kind: string; channelId: string }) => {
@@ -1414,7 +1473,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const r = musicRooms.skip(gate.room, skipId)
       if (!r.ok) return musicRefuse(r.reason)
       broadcastMusic(gate.room)
-      if (r.now) void musicPlay(gate.room, skipId, r.now.url)
+      if (r.now) startSource(gate.room, skipId, r.now)
       else void musicClose(gate.room, skipId)
     })
 

@@ -51,6 +51,16 @@ const post = async (path: string, body: unknown): Promise<boolean> => {
 export const musicPlay = (room: string, channelId: string, url: string): Promise<boolean> =>
   post('/play', { room, channelId, url })
 
+/**
+ * Play a track from the library.
+ *
+ * No URL crosses this call. The service composes the address from its own
+ * `API_INTERNAL_URL` and reads it back with the shared secret, which is why
+ * a library track needs none of the SSRF machinery a pasted link does.
+ */
+export const musicPlayTrack = (room: string, channelId: string, trackId: string): Promise<boolean> =>
+  post('/play-track', { room, channelId, trackId })
+
 /** Stop a channel and unpublish its track. */
 export const musicClose = (room: string, channelId: string): Promise<boolean> =>
   post('/close', { room, channelId })

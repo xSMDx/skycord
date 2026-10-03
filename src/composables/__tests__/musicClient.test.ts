@@ -88,15 +88,24 @@ describe('tuning in', () => {
 
 describe('the call target', () => {
   it('carries the call into every emit', () => {
-    createMusicChannel('Chill', 'https://x/a.mp3')
+    createMusicChannel('Chill', { url: 'https://x/a.mp3' })
     expect(emit).toHaveBeenCalledWith('music:create', {
       conversationId: 'c1', kind: 'channel', name: 'Chill', url: 'https://x/a.mp3',
     })
   })
 
+  it('sends a library track as an id, never as a link', () => {
+    createMusicChannel('Chill', { trackId: '507f1f77bcf86cd799439011' })
+    expect(emit).toHaveBeenCalledWith('music:create', {
+      conversationId: 'c1', kind: 'channel', name: 'Chill', trackId: '507f1f77bcf86cd799439011',
+    })
+    // No url key at all: the service composes the address itself.
+    expect(emit.mock.calls[0][1]).not.toHaveProperty('url')
+  })
+
   it('emits nothing at all when there is no call', () => {
     setMusicTarget(null)
-    createMusicChannel('Chill', 'https://x/a.mp3')
+    createMusicChannel('Chill', { url: 'https://x/a.mp3' })
     skipMusic('a')
     expect(emit).not.toHaveBeenCalled()
   })

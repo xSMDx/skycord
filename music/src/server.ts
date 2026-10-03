@@ -22,6 +22,7 @@ import { fetchFollowing, type Approved } from './safeFetch.js'
 import { ingest, type IngestLimits } from './ingest.js'
 import { IngestHold } from './ingestHold.js'
 import type { ClamConfig } from './clamav.js'
+import { Readable } from 'stream'
 import { createReadStream } from 'fs'
 import { stat } from 'fs/promises'
 
@@ -30,6 +31,8 @@ export interface ServerConfig {
   host?: string
   secret: string
   maxBytes: number
+  /** Where the API answers internal calls. Needed to read library tracks. */
+  apiInternalUrl?: string
   /** Ceilings for ingest. Shared with playback where they overlap. */
   ingestLimits?: IngestLimits
   /** Null when no scanner is configured; ingest then reports `skipped`. */
@@ -123,6 +126,44 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
     if (how !== 'replaced') cfg.onEnded?.(room, channelId)
   }
 
+  /**
+   * Play a track out of the member's library.
+   *
+   * The URL guard is deliberately not used here, and that is not a gap.
+   * The guard exists because a pasted link is text a member chose, and the
+   * attack is making us connect somewhere we should not. This address is
+   * not chosen by anyone: the host comes from this container's own
+   * `API_INTERNAL_URL`, and the only variable part is an id that has to look
+   * like a Mongo ObjectId. Running it through a guard whose whole job is to
+   * reject private addresses would reject our own API, which is private by
+   * design — so the honest answer is that this path has no untrusted input
+   * rather than that it has been checked.
+   */
+  const startTrack = async (room: string, channelId: string, trackId: string): Promise<void> => {
+    const base = cfg.apiInternalUrl
+    if (!base) {
+      log(`${room}/${channelId}: no API_INTERNAL_URL, cannot read library tracks`)
+      cfg.onEnded?.(room, channelId)
+      return
+    }
+    try {
+      const res = await fetch(`${base.replace(/\/$/, '')}/internal/music/track/${trackId}/audio`, {
+        headers: { 'x-music-secret': cfg.secret },
+      })
+      if (!res.ok || !res.body) {
+        log(`${room}/${channelId}: the API answered ${res.status} for track ${trackId}`)
+        cfg.onEnded?.(room, channelId)
+        return
+      }
+      const body = Readable.fromWeb(res.body as never)
+      const how = await pub.play(room, channelId, body)
+      if (how !== 'replaced') cfg.onEnded?.(room, channelId)
+    } catch (e) {
+      log(`${room}/${channelId}: could not read track ${trackId}: ${String(e).slice(0, 160)}`)
+      cfg.onEnded?.(room, channelId)
+    }
+  }
+
   const server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://music')
@@ -140,6 +181,18 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
           // going to hold a request open for it. The end arrives by callback.
           ok(res)
           void start(b.room, b.channelId, b.url)
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/play-track') {
+          const b = await readJson(req) as { room?: string; channelId?: string; trackId?: string }
+          if (!b.room || !b.channelId || !b.trackId) return fail(res, 400, 'room, channelId and trackId are required')
+          // Shape-checked before it is put in a path, even though the API
+          // composed it: one hex id is cheaper to verify than to trust.
+          if (!/^[0-9a-f]{24}$/i.test(b.trackId)) return fail(res, 400, 'that is not a track id')
+          await pub.open(b.room, b.channelId)
+          ok(res)
+          void startTrack(b.room, b.channelId, b.trackId)
           return
         }
 
