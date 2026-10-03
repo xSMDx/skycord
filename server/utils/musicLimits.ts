@@ -70,6 +70,53 @@ export const capsFromEnv = (env: NodeJS.ProcessEnv = process.env): MusicCaps => 
   }
 }
 
+/**
+ * What a member may keep, as opposed to what they may play.
+ *
+ * Separate from MusicCaps because the two protect different things. The play
+ * caps protect CPU — every open channel is a live decode. These protect disk,
+ * which on a self-hosted box is the resource that runs out quietly and takes
+ * the database down with it when it does.
+ */
+export interface LibraryCaps {
+  /** Tracks one member may own. */
+  tracksPerMember: number
+  /** Total stored bytes one member may own, after normalising. */
+  bytesPerMember: number
+  /** Playlists one member may create. */
+  playlistsPerMember: number
+  /** Entries in one playlist. */
+  tracksPerPlaylist: number
+}
+
+/**
+ * Sized against a modest disk, not a generous one. 500 tracks at 2GB is the
+ * shape of a real personal library at Opus bitrates, and twenty members of
+ * one server filling that is 40GB — which is a VPS disk, so the instance
+ * ceiling matters more than the per-member one and is left to the operator.
+ */
+export const DEFAULT_LIBRARY_CAPS: LibraryCaps = {
+  tracksPerMember:    500,
+  bytesPerMember:     2 * 1024 * 1024 * 1024,
+  playlistsPerMember: 50,
+  tracksPerPlaylist:  500,
+}
+
+export const libraryCapsFromEnv = (env: NodeJS.ProcessEnv = process.env): LibraryCaps => {
+  const n = (key: string, fallback: number): number => {
+    const raw = env[key]
+    if (raw === undefined || raw === '') return fallback
+    const v = Number(raw)
+    return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback
+  }
+  return {
+    tracksPerMember:    n('MUSIC_TRACKS_PER_MEMBER', DEFAULT_LIBRARY_CAPS.tracksPerMember),
+    bytesPerMember:     n('MUSIC_BYTES_PER_MEMBER', DEFAULT_LIBRARY_CAPS.bytesPerMember),
+    playlistsPerMember: n('MUSIC_PLAYLISTS_PER_MEMBER', DEFAULT_LIBRARY_CAPS.playlistsPerMember),
+    tracksPerPlaylist:  n('MUSIC_TRACKS_PER_PLAYLIST', DEFAULT_LIBRARY_CAPS.tracksPerPlaylist),
+  }
+}
+
 export type Check = { ok: true } | { ok: false; reason: string }
 const no = (reason: string): Check => ({ ok: false, reason })
 const YES: Check = { ok: true }
@@ -163,4 +210,53 @@ export class ActionRate {
   }
 
   get size(): number { return this.hits.size }
+}
+
+// ── Library ─────────────────────────────────────────────────────────────────
+
+export interface LibraryUse {
+  /** Tracks the member already owns. */
+  tracks: number
+  /** Bytes the member already owns. */
+  bytes: number
+}
+
+/**
+ * Checked twice, and the second time is the one that counts.
+ *
+ * Before ingest we know the member's current use but not the size of what
+ * they are adding, because the normalised size is not the uploaded size.
+ * So this runs once up front with `adding: 0` to reject a member who is
+ * already full, and again after transcoding with the real figure.
+ */
+export const canStoreTrack = (use: LibraryUse, adding: number, caps: LibraryCaps): Check => {
+  if (use.tracks >= caps.tracksPerMember) {
+    return no(`Your library is full — ${caps.tracksPerMember} tracks at most.`)
+  }
+  if (use.bytes + adding > caps.bytesPerMember) {
+    const gb = (caps.bytesPerMember / (1024 * 1024 * 1024)).toFixed(1)
+    return no(`That would put your library over ${gb}GB. Delete something first.`)
+  }
+  return YES
+}
+
+export const canCreatePlaylist = (owned: number, caps: LibraryCaps): Check =>
+  owned >= caps.playlistsPerMember
+    ? no(`You already have ${caps.playlistsPerMember} playlists.`)
+    : YES
+
+export const canAddToPlaylist = (length: number, caps: LibraryCaps): Check =>
+  length >= caps.tracksPerPlaylist
+    ? no(`That playlist is full — ${caps.tracksPerPlaylist} tracks at most.`)
+    : YES
+
+/** 1–64 visible characters. Same rules as a channel name, a longer ceiling. */
+export const checkPlaylistName = (raw: unknown): Check => {
+  if (typeof raw !== 'string') return no('Give the playlist a name.')
+  const name = raw.trim()
+  if (!name) return no('Give the playlist a name.')
+  if ([...name].length > 64) return no('That name is too long — 64 characters at most.')
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(name)) return no('That name has characters that are not allowed.')
+  return YES
 }
