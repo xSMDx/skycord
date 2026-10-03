@@ -68,6 +68,19 @@ const at = computed(() => player.at)
 const loadingId = computed(() => player.loadingId)
 const vol = computed(() => player.volume)
 
+/**
+ * A click anywhere on a row plays it.
+ *
+ * It used to need the number button or a double click, so a row looked
+ * clickable and was not — and the call rail asks you to "pick a track",
+ * which is the same gesture. Clicks that started on a control inside the
+ * row belong to that control.
+ */
+const onRowClick = (e: MouseEvent, t: LibTrack): void => {
+  if ((e.target as HTMLElement).closest("button, select")) return
+  void playTrack(t)
+}
+
 /** Play from THIS list, so next and previous follow what you are looking at. */
 const playTrack = (t: LibTrack): Promise<void> => play(t, shownTracks.value)
 
@@ -338,7 +351,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           <div
             v-for="(t, i) in shownTracks" :key="`${t.id}-${i}`"
             class="mm-tr mm-row" :class="{ on: playing?.id === t.id }" role="row"
-            @dblclick="playTrack(t)"
+            @click="onRowClick($event, t)"
           >
             <button class="mm-num" :aria-label="`Play ${t.title}`" @click="playTrack(t)">
               <Loader2 v-if="loadingId === t.id" class="mm-numico mm-spin" :size="13" :stroke-width="2.5" />
@@ -737,7 +750,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   letter-spacing: .4px; color: var(--text-3);
   border-bottom: 1px solid var(--divider); margin-bottom: 8px; border-radius: 0;
 }
-.mm-row { height: 56px; }
+.mm-row { height: 56px; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .mm-row:hover { background: var(--hover); } }
 .mm-row.on { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); }
 .mm-row.on .mm-name { color: var(--art-accent, var(--accent-text)); }

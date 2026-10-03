@@ -228,7 +228,16 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.mf-acts { display: flex; align-items: center; gap: 1px; padding-right: 4px; }
+/* At rest the row reads name / track / listeners ... JOIN. The three
+   glyphs arriving on hover keeps the verb from being one symbol among four,
+   which is how it read when they all sat together. Space is reserved, so
+   nothing jumps. Touch has no hover, so there they simply stay. */
+.mf-acts {
+  display: flex; align-items: center; gap: 1px; padding-right: 4px;
+  opacity: 0; transition: opacity var(--dur-2) var(--ease-out);
+}
+.mf-row:hover .mf-acts, .mf-row:focus-within .mf-acts { opacity: 1; }
+@media (hover: none) { .mf-acts { opacity: 1; } }
 .mf-icon {
   display: grid; place-items: center; width: 26px; height: 26px;
   border: none; background: none; cursor: pointer; color: var(--text-3);
