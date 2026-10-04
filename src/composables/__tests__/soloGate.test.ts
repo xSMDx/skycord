@@ -8,7 +8,7 @@ import { okToPlaySolo, playFrom, next, queue } from '../useMusicPlayer'
 import type { LibTrack } from '../useMusicLibrary'
 import { leavePrompt, answerLeave } from '../leavePrompt'
 
-const one = { channels: [{ id: 'a', name: 'Chill', now: null, queue: [], queued: 0, listeners: [] }] }
+const one = { channels: [{ id: 'a', name: 'Chill', now: null, queue: [], queued: 0, listeners: [], previous: false }] }
 
 beforeEach(() => {
   answerLeave(false)

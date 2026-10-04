@@ -13,7 +13,7 @@ vi.mock('../useSocket', () => ({ getSocket: () => ({ emit }) }))
 const view = (channels: Partial<{ id: string; name: string; now: null; queued: number; listeners: string[] }>[]) => ({
   channels: channels.map(c => ({
     id: c.id ?? 'x', name: c.name ?? 'X', now: c.now ?? null,
-    queue: [], queued: c.queued ?? 0, listeners: c.listeners ?? [],
+    queue: [], queued: c.queued ?? 0, listeners: c.listeners ?? [], previous: false,
   })),
 })
 
@@ -146,7 +146,7 @@ describe('errors', () => {
 /** A channel mid-song, as the server describes it at the moment it builds the state. */
 const playing = (elapsedMs: number, durationSec: number | null = 200): { channels: MusicChannelView[] } => ({
   channels: [{
-    id: 'p', name: 'Live', queue: [], queued: 0, listeners: [],
+    id: 'p', name: 'Live', queue: [], queued: 0, listeners: [], previous: false,
     now: {
       id: 'e0', kind: 'library', title: 'Song', artist: null, durationSec, addedBy: 'u1',
       url: null, cover: null, elapsedMs,

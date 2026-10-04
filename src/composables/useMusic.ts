@@ -82,6 +82,8 @@ export interface MusicChannelView {
   queue: MusicEntryView[]
   queued: number
   listeners: string[]
+  /** Whether there is a song to go back to. */
+  previous: boolean
 }
 
 export const music = reactive({
@@ -232,6 +234,10 @@ export const skipMusic = (channelId: string): void =>
 /** Move the channel's song for everyone. Whole seconds: the server floors anyway. */
 export const seekMusic = (channelId: string, sec: number): void =>
   send('music:seek', { channelId, sec: Math.floor(sec) })
+
+/** Back a song, or to the start of this one past three seconds, for everyone. */
+export const previousMusic = (channelId: string): void =>
+  send('music:previous', { channelId })
 
 /** Play one queued song now, for everyone. By id, so a shifting queue cannot misfire it. */
 export const playNowMusic = (channelId: string, entryId: string): void =>
