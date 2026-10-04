@@ -20,7 +20,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
-  Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert,
+  Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert, ShieldCheck,
   Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
   ListPlus, ListStart, ListEnd, LogOut,
 } from 'lucide-vue-next'
@@ -39,7 +39,7 @@ import { openMenu, type MenuItem } from '@/composables/useContextMenu'
 import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
-  musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, queueMusic, seekMusic,
+  musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, queueMusic, seekMusic, previousMusic,
 } from '@/composables/useMusic'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
@@ -700,10 +700,16 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
                 <span class="mm-name mm-ellip">{{ t.title }}</span>
                 <span class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
               </span>
-              <!-- Only when there is something to say. A clean badge on every
-                   row would be noise; this marks the files nobody checked. -->
+              <!-- What the scan said, in one fixed column. Checked files get a
+                   quiet green shield, so "scanned" is something you can see
+                   rather than the absence of a warning; unchecked ones keep
+                   the amber one. -->
+              <ShieldCheck
+                v-if="t.scan === 'clean'" class="mm-scanned" :size="13" :stroke-width="2.25"
+                v-tip="'Scanned for viruses — clean'"
+              />
               <ShieldAlert
-                v-if="t.scan === 'skipped'" class="mm-unscanned" :size="13" :stroke-width="2.25"
+                v-else-if="t.scan === 'skipped'" class="mm-unscanned" :size="13" :stroke-width="2.25"
                 v-tip="'This server has no virus scanner, so this file was converted but not scanned'"
               />
             </span>
@@ -805,6 +811,15 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           you. The bar below moves the song for everyone.
         -->
         <div class="mm-keys">
+          <!-- Back past three seconds in restarts the song, like your own
+               player's; before that it goes to the one that played before. -->
+          <button
+            class="mm-icon" :disabled="!live.previous && !(live.now && liveAt > 3)"
+            :aria-label="`Back — for everyone in ${live.name}`"
+            v-tip="'Back — for everyone listening'" @click="previousMusic(live.id)"
+          >
+            <SkipBack :size="16" :stroke-width="2.25" />
+          </button>
           <button
             class="mm-pill" :disabled="!live.now"
             :aria-label="`Skip for everyone in ${live.name}`" @click="skipMusic(live.id)"
@@ -1196,6 +1211,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 .mm-name { font-size: 14px; font-weight: 500; color: var(--text-1); }
 .mm-artist { font-size: 12px; color: var(--text-3); }
 .mm-unscanned { flex-shrink: 0; color: var(--warning-text); }
+.mm-scanned { flex-shrink: 0; color: var(--green-text); opacity: .8; }
 
 .mm-coltime { text-align: right; font-variant-numeric: tabular-nums; }
 .mm-acts { display: flex; align-items: center; justify-content: flex-end; gap: 2px; opacity: 0; }
