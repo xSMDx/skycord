@@ -6,6 +6,21 @@ import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
 import MusicFlyout from './MusicFlyout.vue'
 import { music, musicAvailable } from '@/composables/useMusic'
+
+/**
+ * Music playing in this call that you are not hearing.
+ *
+ * The button only lit up once you had tuned in, so a song your friends were
+ * listening to was invisible from the call until you went looking. Now the
+ * button carries a dot and its tip names the song.
+ */
+const musicNearby = computed(() =>
+  music.listeningTo ? null : music.channels.find(c => c.now) ?? null)
+const musicTip = computed(() => {
+  if (music.listeningTo) return 'Music — you are listening'
+  const c = musicNearby.value
+  return c ? `Music — “${c.now?.title ?? 'a linked track'}” is playing in ${c.name}` : 'Music'
+})
 import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia, canScreenShare, type VideoTrackInfo } from '@/composables/useVoiceMedia'
@@ -461,10 +476,11 @@ onBeforeUnmount(() => {
           <div class="cb-split" :class="{ menuopen: openMenu === 'music' }">
             <button
               class="cb-b cb-music" :class="{ listening: !!music.listeningTo }"
-              v-tip="music.listeningTo ? 'Music — you are listening' : 'Music'"
+              v-tip="musicTip" :aria-label="musicTip"
               @click="toggleMenu('music')"
             >
               <Music2 :size="20" :stroke-width="2.25" />
+              <span v-if="musicNearby" class="cb-musicdot" aria-hidden="true" />
             </button>
             <MusicFlyout
               v-if="openMenu === 'music'" dir="up"
@@ -719,6 +735,16 @@ onBeforeUnmount(() => {
  * scaled, and the bar still answers "is music on" without being opened.
  */
 .cb-b.listening { color: var(--accent-text); }
+.cb-music { position: relative; }
+/* Something is playing in this call and you are not hearing it. */
+.cb-musicdot {
+  position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); color: var(--text-on-accent);
+  box-shadow: 0 0 0 2px var(--bg-input);
+  animation: cb-musicbreathe 2.4s var(--ease-out) infinite;
+}
+@keyframes cb-musicbreathe { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+@media (prefers-reduced-motion: reduce) { .cb-musicdot { animation: none; } }
 .cb-b.listening:hover:not(:disabled) { color: var(--accent-text); }
 
 .cb-b.on { background: var(--green-deep); color: var(--text-on-green-deep); }

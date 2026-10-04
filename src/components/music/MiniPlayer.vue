@@ -10,6 +10,10 @@
  * see no sign of what it was. Listening together has to be visible, or it
  * is just sound from nowhere.
  *
+ * And a third, when you hear neither: music playing in your call that you
+ * have not tuned into. It used to show nothing at all, so a song everyone
+ * else was listening to was invisible unless you opened the music room.
+ *
  * Deliberately small: art, a name, two buttons, a hairline of progress.
  * Everything else is a click away in the room, and this sits directly above
  * the voice panel, the busiest corner of the app.
@@ -18,7 +22,8 @@ import { computed } from 'vue'
 import { LogOut, Music2, Pause, Play, Radio, SkipForward, X } from 'lucide-vue-next'
 import { player, toggle, next, stop } from '@/composables/useMusicPlayer'
 import {
-  musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic,
+  music, musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic,
+  type MusicChannelView,
 } from '@/composables/useMusic'
 
 const emit = defineEmits<{ open: [] }>()
@@ -27,7 +32,19 @@ const emit = defineEmits<{ open: [] }>()
 
 /** Tuned into a channel? Then that is what you hear, so that is what shows. */
 const live = computed(() => musicChannel.value)
-const local = computed(() => (live.value ? null : player.current))
+const soloPlaying = computed(() => !!player.current && !player.paused)
+
+/**
+ * Music in your call that you are not hearing — shown when nothing you
+ * hear is. The busiest channel if there are several: that is the one most
+ * people are in. A paused song of your own does not hide it; one playing does.
+ */
+const playingHere = computed(() => music.channels.filter(c => c.now))
+const nearby = computed(() => {
+  if (live.value || soloPlaying.value || !playingHere.value.length) return null
+  return [...playingHere.value].sort((a, b) => b.listeners.length - a.listeners.length)[0]
+})
+const local = computed(() => (live.value || nearby.value ? null : player.current))
 
 // ── the shared channel ──────────────────────────────────────────────────────
 
@@ -38,12 +55,19 @@ const liveTitle = computed(() => {
   return now.title ?? 'A linked track'
 })
 
-const liveProgress = computed(() => {
-  const c = live.value
+/** 0–100 through a channel's song, by the shared clock. */
+const channelProgress = (c: MusicChannelView | null): number => {
   const d = c?.now?.durationSec
   if (!c || !d) return 0
   const at = channelElapsed(c, musicNow.value) ?? 0
   return Math.min(100, (at / d) * 100)
+}
+const liveProgress = computed(() => channelProgress(live.value))
+
+const nearbyTitle = computed(() => nearby.value?.now?.title ?? 'A linked track')
+const nearbyWho = computed(() => {
+  const n = nearby.value?.listeners.length ?? 0
+  return n ? ` · ${n} listening` : ''
 })
 
 // ── your own preview ────────────────────────────────────────────────────────
@@ -54,13 +78,16 @@ const localProgress = computed(() => {
   return d > 0 ? Math.min(100, (player.at / d) * 100) : 0
 })
 
-const progress = computed(() => (live.value ? liveProgress.value : localProgress.value))
+const progress = computed(() =>
+  live.value ? liveProgress.value
+  : nearby.value ? channelProgress(nearby.value)
+  : localProgress.value)
 </script>
 
 <template>
   <!-- Absent rather than empty when nothing is playing either way: the
        sidebar has no room to spare for a strip that says nothing. -->
-  <div v-if="live || local" class="mp" :class="{ live: !!live, playing: !!live || !player.paused }">
+  <div v-if="live || nearby || local" class="mp" :class="{ live: !!live, nearby: !!nearby, playing: !!live || !player.paused }">
     <!-- ── a channel in the call ──────────────────────────────────────── -->
     <template v-if="live">
       <button class="mp-open" :aria-label="`Open music — ${liveTitle} in ${live.name}`" @click="emit('open')">
@@ -90,6 +117,22 @@ const progress = computed(() => (live.value ? liveProgress.value : localProgress
       >
         <LogOut :size="13" :stroke-width="2.5" />
       </button>
+    </template>
+
+    <!-- ── playing in the call, not for you ───────────────────────────── -->
+    <template v-else-if="nearby">
+      <button class="mp-open" :aria-label="`Open music — ${nearbyTitle} is playing in ${nearby.name}`" @click="emit('open')">
+        <span class="mp-art" :class="{ empty: !nearby.now?.cover }">
+          <img v-if="nearby.now?.cover" :src="nearby.now.cover" alt="" />
+          <Radio v-else :size="13" :stroke-width="2" />
+        </span>
+        <span class="mp-text">
+          <span class="mp-title">{{ nearbyTitle }}</span>
+          <!-- No live dot: you are not hearing this. Where, and how many are. -->
+          <span class="mp-artist"><span class="mp-where">Playing in {{ nearby.name }}{{ nearbyWho }}</span></span>
+        </span>
+      </button>
+      <button class="mp-join" :aria-label="`Join ${nearby.name}`" @click="listenToMusic(nearby.id)">Join</button>
     </template>
 
     <!-- ── your own preview ───────────────────────────────────────────── -->
@@ -175,6 +218,19 @@ const progress = computed(() => (live.value ? liveProgress.value : localProgress
 }
 @keyframes mp-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
+/* Join: the one thing to do about music you can see and not hear. */
+.mp-join {
+  flex-shrink: 0; height: 26px; padding: 0 11px; margin-right: 2px;
+  border: none; border-radius: var(--edge-pill); cursor: pointer;
+  background: var(--accent); color: var(--text-on-accent);
+  font-size: 11.5px; font-weight: 700; font-family: inherit;
+  transition: background var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .mp-join:hover { background: var(--accent-hover); color: var(--text-on-accent); } }
+.mp-join:active { transform: scale(.96); }
+/* Not yours yet, so the progress is quieter than a song you hear. */
+.mp.nearby .mp-fill { background: var(--text-3); }
+
 .mp-btn {
   flex-shrink: 0;
   display: grid; place-items: center; width: 24px; height: 24px;
@@ -205,11 +261,12 @@ const progress = computed(() => (live.value ? liveProgress.value : localProgress
 /* Touch targets, per DESIGN.md. */
 @media (max-width: 768px) {
   .mp-btn { width: 40px; height: 40px; }
+  .mp-join { height: 40px; padding: 0 16px; }
   .mp-art { width: 34px; height: 34px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mp-btn, .mp-fill { transition: none; }
+  .mp-btn, .mp-fill, .mp-join { transition: none; }
   .mp-pulse { animation: none; }
 }
 </style>
