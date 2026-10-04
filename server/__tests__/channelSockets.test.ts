@@ -38,6 +38,22 @@ describe('channel sockets', () => {
     // Which server it is in: a client names a mention's server and channel
     // from this, including for a server it has not opened this session.
     expect(payload.serverId).toBe(server.id)
+    // And which category, so a category's mute and level apply to it.
+    expect(payload.categoryId).toBeNull()
+  })
+
+  it('names the category a message was posted in', async () => {
+    const a = await register(), b = await register()
+    const { server, channels } = await mkServer(a)
+    await Server.updateOne({ _id: server.id }, { $push: { members: b.id } })
+    const c = channels.find((x: any) => x.type === 'text')
+    const cat = (await app().post(`/servers/${server.id}/categories`).set(auth(a)).send({ name: 'Talk' })).body.category
+    await app().patch(`/servers/${server.id}/channels/${c.id}`).set(auth(a)).send({ category: cat.id })
+
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    const received = nextEvent(bSock, 'channel:receive')
+    await app().post(`/servers/${server.id}/channels/${c.id}/messages`).set(auth(a)).send({ content: 'in a category' })
+    expect((await received).categoryId).toBe(cat.id)
   })
 
   it('does not deliver to someone who is not a member', async () => {

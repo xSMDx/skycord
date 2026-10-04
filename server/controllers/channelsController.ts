@@ -536,6 +536,8 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       // So a client can name a mention's server and channel, and open it,
       // for a server whose channel list it has not loaded.
       serverId:         found.server._id.toString(),
+      // And its category, whose mute and notification level apply to it.
+      categoryId:       found.channel.category ? found.channel.category.toString() : null,
       kind:             'channel',
       authorId:         userId,
       authorName:       msg.authorName,

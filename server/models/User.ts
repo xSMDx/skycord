@@ -67,10 +67,18 @@ export interface ICrop {
   y:    number
 }
 
+/** 'default': a server's own default (Only @mentions); a category or channel inherits. */
+export type NotifyLevel = 'default' | 'all' | 'mentions' | 'nothing'
+export const NOTIFY_LEVELS: readonly NotifyLevel[] = ['default', 'all', 'mentions', 'nothing']
+
 export interface IConvPref {
   pinned:     boolean
   muted:      boolean
   mutedUntil: Date | null   // null while muted = indefinitely
+  /** Servers, categories and channels. Unused on DMs and groups. */
+  level:      NotifyLevel
+  /** Servers only: leave muted channels out of the sidebar. */
+  hideMuted:  boolean
 }
 
 /**
@@ -188,6 +196,8 @@ const UserSchema = new Schema<IUserDocument, IUserModel>(
         pinned:     { type: Boolean, default: false },
         muted:      { type: Boolean, default: false },
         mutedUntil: { type: Date,    default: null },
+        level:      { type: String,  enum: NOTIFY_LEVELS, default: 'default' },
+        hideMuted:  { type: Boolean, default: false },
       }, { _id: false }),
       default: () => new Map(),
       select: false,

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
-import { User, liveStatus } from '../models/User'
+import { User, liveStatus, NOTIFY_LEVELS, type NotifyLevel } from '../models/User'
 import { Friendship } from '../models/Friendship'
 import mongoose from 'mongoose'
 import { getIO, isUserOnline } from '../sockets/chatSocket'
@@ -433,8 +433,10 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
   } catch (err) { next(err) }
 }
 
-// ── Conversation preferences (pin / mute) ────────────────────────────────────
-// Keyed by conversation id: a group's ObjectId, or a DM's synthetic dmConvId.
+// ── Conversation preferences (pin / mute / notification level) ───────────────
+// Keyed by whatever the client names: a DM partner, a group, a server, a
+// category or a channel. Only ever a key on this user's own document, so a key
+// for something they cannot see does nothing and needs no membership check.
 // Expiry is applied on READ, so a mute that has run out needs no cron sweeper
 // and no write — it simply stops reporting as muted.
 
@@ -444,8 +446,15 @@ const liveConvPref = (p: any) => {
     pinned:     !!p?.pinned,
     muted:      !!p?.muted && !expired,
     mutedUntil: expired ? null : (p?.mutedUntil ?? null),
+    // Entries written before levels existed read as the default.
+    level:      (NOTIFY_LEVELS.includes(p?.level) ? p.level : 'default') as NotifyLevel,
+    hideMuted:  !!p?.hideMuted,
   }
 }
+
+/** Whether a pref says anything at all. One that does not is dropped. */
+const carries = (p: ReturnType<typeof liveConvPref>) =>
+  p.pinned || p.muted || p.level !== 'default' || p.hideMuted
 
 const prefsToObject = (prefs: Map<string, any> | undefined) => {
   const out: Record<string, ReturnType<typeof liveConvPref>> = {}
@@ -454,7 +463,7 @@ const prefsToObject = (prefs: Map<string, any> | undefined) => {
     const live = liveConvPref(v)
     // Skip entries that carry no information — an expired mute on an unpinned
     // conversation is just noise the client would have to filter anyway.
-    if (live.pinned || live.muted) out[k] = live
+    if (carries(live)) out[k] = live
   })
   return out
 }
@@ -482,10 +491,17 @@ export const setConvPref = async (req: Request, res: Response, next: NextFunctio
 
     const prefs  = (user.convPrefs ?? new Map()) as Map<string, any>
     const cur    = liveConvPref(prefs.get(convId))
-    const { pinned, mute } = req.body as { pinned?: boolean; mute?: string | null }
+    const { pinned, mute, level, hideMuted } = req.body as {
+      pinned?: boolean; mute?: string | null; level?: unknown; hideMuted?: boolean
+    }
+    if (level !== undefined && !NOTIFY_LEVELS.includes(level as NotifyLevel)) {
+      res.status(400).json({ message: `level must be one of: ${NOTIFY_LEVELS.join(', ')}` }); return
+    }
 
     const next_: any = { ...cur }
     if (pinned !== undefined) next_.pinned = !!pinned
+    if (level !== undefined) next_.level = level
+    if (hideMuted !== undefined) next_.hideMuted = !!hideMuted
 
     if (mute !== undefined) {
       if (mute === null) {
@@ -503,7 +519,7 @@ export const setConvPref = async (req: Request, res: Response, next: NextFunctio
 
     // Drop the key entirely once nothing is set, so the map doesn't accumulate
     // an entry for every conversation the user has ever right-clicked.
-    if (!next_.pinned && !next_.muted) prefs.delete(convId)
+    if (!carries(next_)) prefs.delete(convId)
     else prefs.set(convId, next_)
 
     user.convPrefs = prefs as any
