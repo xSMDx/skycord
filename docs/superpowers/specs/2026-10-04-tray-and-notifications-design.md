@@ -127,7 +127,7 @@ socket events ──▶ useNotifications ──▶ notifyRules (pure) ──▶ 
 ## Out of scope
 
 - **Mentions by user id.** Today a mention is `<@display name>`, so two people sharing a display name in one server are both notified. The real fix (id tokens, rendering, old messages) is its own slice.
-- **Per-server notification levels** (All / Mentions / Nothing). Option 3 of the first question; not chosen.
+- **Per-server notification levels** (All / Mentions / Nothing). Not chosen at first; added the same day, see the addendum below.
 - **Open Skycord when Windows starts.** Not chosen.
 - **Phone push.** That arrives with the native phone app (roadmap 6) and needs server-side push.
 - **macOS and Linux specifics.** The shell targets Windows today. Nothing here is Windows-only in its interface, but only Windows is tested.
@@ -139,3 +139,29 @@ Driving the real desktop app found three things this design had wrong:
 - **The page cannot tell whether the window is in front.** Inside the app, `document.hasFocus()` and `visibilityState` report true even while the window is hidden in the tray, minimised or blurred. So the shell reports it: `notifications.onWindowFocus(cb)`, sent on every focus, blur, show, hide, minimise and restore, and once the page loads. The page uses that signal, and falls back to the document in a browser, where the document is right.
 - **"Looking at a conversation" means it is open *and* the window is in front.** Before, an open chat in a hidden window counted as looked at: its messages never became unread (so the badge said 0), and its incoming call was marked seen before it could ring, so the person whose chat was open could never call you. Now unread counts, the call rings, and coming back to the window reads what is open.
 - **A call rings at once; the avatar follows as an update.** Waiting for the picture first meant a call in a hidden, throttled window never rang at all. Accept is sent to the page before the window is shown, and the page remembers which call it rang for: shown first, the page treated the call as seen and the answer found nothing to accept.
+
+## Addendum: notification settings (2026-10-04)
+
+Asked for after testing: turn the Windows pop-ups off and keep the sound, and Discord's notification settings wherever they are simple. Plan: `docs/superpowers/plans/2026-10-04-notification-settings.md`.
+
+- **Right-click a server (its icon or its header), a category or a channel** for Mute (15 minutes, 1, 3, 8 or 24 hours, or until turned back on) and Notification Settings: All Messages, Only @mentions or Nothing, plus Use Server Default on a category or channel. The nearest level set wins: channel, then category, then server. A server left alone is **Only @mentions**. A server can **Hide Muted Channels**. A category gains Mark As Read.
+- **Muted is silent everywhere.** No pop-up and no sound. The row is dimmed with a bell, and its unread is gone from the row, the server icon and the tray badge.
+- **Stored in the existing per-user prefs map**, which was already keyed by any id. Entries gain `level` and `hideMuted`, and one that says nothing is dropped. Channel messages now carry `categoryId`, so a category's settings apply to a server whose channel list isn't loaded.
+- **Sounds follow the same rules as pop-ups**, from one function (`classify`) under both. They used to play from the socket layer for every channel message, ignoring mutes and whether the window was in front. Now:
+  - a sound plays only for what would notify;
+  - nothing plays while Do Not Disturb;
+  - nothing plays for the chat you are reading, unless that switch is on;
+  - while the window is in front, a sound still plays for other conversations, though a pop-up never shows then;
+  - @everyone in a DM no longer plays twice.
+- **Settings › Notifications** has the switches, each separate and kept per device:
+  - pop-ups;
+  - message text;
+  - taskbar flashing;
+  - keep running in the tray;
+  - the message sound, with Preview;
+  - the sound in the chat you're reading;
+  - the incoming-call ring, with Preview;
+  - Disable all notification sounds, which silences every cue while the other switches keep their values;
+  - the unread badge.
+- **Pop-ups off, flashing on:** the page asks the app for a flash with no toast (`notifications.flash()`). Pages from before this switch send no `flash` field, and the app keeps flashing for them.
+- **Left out:** "Notify me when…", email, mobile push timing, text-to-speech.
