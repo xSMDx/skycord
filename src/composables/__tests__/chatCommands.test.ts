@@ -28,3 +28,15 @@ describe('the slash list', () => {
     expect(matchCommands('back')).toEqual([])
   })
 })
+
+describe('which commands want more after their name', () => {
+  it('play, seek and volume do; skip, np and join do not', () => {
+    musicAvailable.value = true
+    expect(resolveSlash('play')?.takesArg).toBe(true)
+    expect(resolveSlash('seek')?.takesArg).toBe(true)
+    expect(resolveSlash('volume')?.takesArg).toBe(true)
+    for (const n of ['skip', 'next', 'prev', 'stop', 'np', 'q', 'join', 'leave']) {
+      expect(resolveSlash(n)?.takesArg, n).toBe(false)
+    }
+  })
+})

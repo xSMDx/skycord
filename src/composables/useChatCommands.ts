@@ -23,6 +23,8 @@ export interface SlashCommand {
   run?: (arg: string) => { insert?: string; send?: string }
   /** Does something, and answers with a note for the person who typed it. */
   act?: (arg: string) => Promise<string>
+  /** Needs something after its name, so Enter on the bare name completes it rather than running it. */
+  takesArg?:   boolean
 }
 
 const rand = (n: number) => Math.floor(Math.random() * n)
@@ -54,6 +56,8 @@ for (const m of MUSIC_COMMANDS) {
     glyph: MUSIC_GLYPH[m.name] ?? '🎵',
     group: 'Music',
     aliases: m.aliases,
+    // "<song>" is required, "[channel]" is not: /join alone is a whole command.
+    takesArg: m.usage.includes('<'),
     available: () => musicAvailable.value,
     // Loaded on first use: the bridge reaches the player and the call, and
     // listing command names should not have to.

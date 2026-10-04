@@ -408,6 +408,13 @@ const onKeydown = (e: KeyboardEvent) => {
   if (ac.value && acItems.value.length) {
     if (e.key === 'ArrowDown') { e.preventDefault(); acIndex.value = (acIndex.value + 1) % acItems.value.length; return }
     if (e.key === 'ArrowUp')   { e.preventDefault(); acIndex.value = (acIndex.value - 1 + acItems.value.length) % acItems.value.length; return }
+    if (e.key === 'Enter' && ac.value.kind === 'slash') {
+      // A command typed out in full that needs nothing more runs on Enter.
+      // Completing "/np" to "/np " and waiting for a second Enter made every
+      // argument-free music command take two presses. Aliases count: "/q".
+      const typed = resolveSlash(ac.value.query)
+      if (typed?.act && !typed.takesArg) { e.preventDefault(); ac.value = null; submit(); return }
+    }
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); chooseAc(acItems.value[acIndex.value].key); return }
     if (e.key === 'Escape') { e.preventDefault(); ac.value = null; return }
   }
