@@ -11,7 +11,13 @@ import { app } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { dirname, join } from 'path'
 
-export interface Stored { instanceOrigin?: string; servers?: unknown; share?: unknown; perf?: unknown }
+export interface Stored {
+  instanceOrigin?: string; servers?: unknown; share?: unknown; perf?: unknown
+  /** Close to the tray instead of quitting. Absent means yes. */
+  keepInTray?: unknown
+  /** The one-time "still running in the tray" toast has been shown. */
+  trayHintShown?: unknown
+}
 
 const file = () => join(app.getPath('userData'), 'skycord.json')
 

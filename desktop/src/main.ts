@@ -18,7 +18,11 @@ import { lookupInstance, normaliseAddress, type InstanceProfile } from './instan
 import { readStore, writeStore } from './store'
 import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
-import { startUpdates, currentUpdateState, checkForUpdatesNow, installUpdateNow } from './updates'
+import { startUpdates, currentUpdateState, checkForUpdatesNow, installUpdateNow, onBeforeInstall } from './updates'
+import { initToasts, showToast, closeAllToasts } from './toasts'
+import { initTray, updateTray, flashTaskbar, destroyTray } from './tray'
+import { parseNotice } from './notice'
+import { closeAction } from './trayModel'
 import { aboutFacts } from './about'
 import { showSplash } from './splash'
 import { createAppWindow, type AppWindow } from './appWindow'
@@ -55,6 +59,21 @@ const SWITCH = '--switch-server'
 let shellWin: AppWindow | null = null
 /** The instance on screen; null while the picker is showing. */
 let current: string | null = null
+
+// ── the tray and quitting ──
+/** Set once Skycord is really quitting, so closing the window closes it. */
+let quitting = false
+const keepInTray = () => readStore().keepInTray !== false
+const showWindow = () => {
+  const w = shellWin?.win
+  if (!w) return
+  if (w.isMinimized()) w.restore()
+  w.show()
+  w.focus()
+}
+const quitApp = () => { quitting = true; app.quit() }
+app.on('before-quit', () => { quitting = true; closeAllToasts(); destroyTray() })
+onBeforeInstall(() => { quitting = true; closeAllToasts() })
 
 // Hidden and idle: let the page drop its decoded images. Never
 // session.clearCache(), which would throw away the HTTP cache the next start
@@ -240,6 +259,28 @@ ipcMain.on('desktop:perfRestart', (event) => { if (!fromInstance(event)) return;
 ipcMain.handle('desktop:updateState', event => (fromInstance(event) ? currentUpdateState() : null))
 ipcMain.on('desktop:updateCheck', event => { if (fromInstance(event)) checkForUpdatesNow() })
 ipcMain.on('desktop:updateInstall', event => { if (fromInstance(event)) installUpdateNow() })
+
+// ── notifications, the tray and the badge ──
+ipcMain.on('desktop:notify', (event, value: unknown) => {
+  const n = fromInstance(event) ? parseNotice(value) : null
+  if (!n) return
+  showToast(n)
+  if (n.kind === 'message' || n.kind === 'mention') flashTaskbar()
+})
+ipcMain.on('desktop:unread', (event, value: unknown) => {
+  if (!fromInstance(event)) return
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(999, Math.floor(value))) : 0
+  updateTray({ unread: n })
+})
+ipcMain.on('desktop:callState', (event, value: unknown) => {
+  if (!fromInstance(event) || !value || typeof value !== 'object') return
+  const v = value as Record<string, unknown>
+  updateTray({ inCall: v.inCall === true, muted: v.muted === true, deafened: v.deafened === true })
+})
+ipcMain.handle('desktop:keepInTray', event => (fromInstance(event) ? keepInTray() : null))
+ipcMain.on('desktop:setKeepInTray', (event, value: unknown) => {
+  if (fromInstance(event) && typeof value === 'boolean') writeStore({ ...readStore(), keepInTray: value })
+})
 ipcMain.handle('desktop:about', event => {
   if (!fromInstance(event)) return null
   let addon = { supported: () => false, loaded: false }
@@ -258,10 +299,9 @@ ipcMain.handle('desktop:about', event => {
 })
 
 app.on('second-instance', (_e, argv) => {
-  const w = shellWin?.win
-  if (!w) return
-  if (w.isMinimized()) w.restore()
-  w.focus()
+  if (!shellWin?.win) return
+  // Brings a window hidden in the tray back too, not only a minimised one.
+  showWindow()
   if (argv.includes(SWITCH)) manageServers()
 })
 
@@ -272,6 +312,9 @@ app.on('web-contents-created', (_e, contents) => {
 
 app.whenReady().then(async () => {
   if (!primary) return
+  // Windows shows an app's toasts under the identity it declares; this must
+  // match the installer's appId (electron-builder.yml).
+  if (process.platform === 'win32') app.setAppUserModelId('xyz.skycord.desktop')
   // Permissions go to the chosen origin only, and only the ones a chat app needs.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
     callback(permissionAllowed(permission, details.requestingUrl, current)))
@@ -291,6 +334,27 @@ app.whenReady().then(async () => {
   shellWin.win.on('blur', armTrim)
   shellWin.win.on('show', cancelTrim)
   shellWin.win.on('focus', cancelTrim)
+
+  initToasts({ page: () => shellWin?.page ?? null, showWindow })
+  initTray({
+    window: () => shellWin?.win ?? null,
+    showWindow,
+    command: c => shellWin?.page.send('desktop:trayCommand', c),
+    checkUpdates: () => checkForUpdatesNow(),
+    quit: quitApp,
+  })
+  shellWin.win.on('close', e => {
+    if (closeAction({ quitting, keepInTray: keepInTray() }) === 'close') return
+    e.preventDefault()
+    shellWin?.win.hide()
+    if (readStore().trayHintShown !== true) {
+      writeStore({ ...readStore(), trayHintShown: true })
+      showToast({
+        id: 'tray-hint', kind: 'friend', conversation: null, title: 'Skycord is still running',
+        body: 'It keeps notifications and calls coming. Quit from the tray icon.', icon: null, group: null, canReply: false,
+      })
+    }
+  })
 
   // Servers used before the list existed join it.
   if (startupOrigin && !servers().some(s => s.origin === startupOrigin)) {
@@ -315,4 +379,6 @@ app.whenReady().then(async () => {
   startUpdates(() => shellWin?.page ?? null)
 })
 
-app.on('window-all-closed', () => app.quit())
+// With close-to-tray the window hides rather than closes, so this fires only
+// when Skycord is genuinely on its way out.
+app.on('window-all-closed', () => { if (quitting || !keepInTray()) app.quit() })

@@ -89,6 +89,30 @@ if (local && page === 'share.html') {
       applied: () => ipcRenderer.invoke('desktop:perfApplied'),
       restart: () => ipcRenderer.send('desktop:perfRestart'),
     },
+    // Notifications the app shows itself. Interactions come back here.
+    notifications: {
+      show: (notice: unknown) => ipcRenderer.send('desktop:notify', notice),
+      ring: (call: unknown) => ipcRenderer.send('desktop:ring', call),
+      unread: (count: number) => ipcRenderer.send('desktop:unread', count),
+      callState: (s: unknown) => ipcRenderer.send('desktop:callState', s),
+      onActivated: (cb: (a: unknown) => void) => {
+        const h = (_e: unknown, a: unknown) => cb(a)
+        ipcRenderer.on('desktop:noticeActivated', h)
+        return () => { ipcRenderer.off('desktop:noticeActivated', h) }
+      },
+      onCallAction: (cb: (a: unknown) => void) => {
+        const h = (_e: unknown, a: unknown) => cb(a)
+        ipcRenderer.on('desktop:callAction', h)
+        return () => { ipcRenderer.off('desktop:callAction', h) }
+      },
+      onTrayCommand: (cb: (c: unknown) => void) => {
+        const h = (_e: unknown, c: unknown) => cb(c)
+        ipcRenderer.on('desktop:trayCommand', h)
+        return () => { ipcRenderer.off('desktop:trayCommand', h) }
+      },
+      keepInTray: () => ipcRenderer.invoke('desktop:keepInTray'),
+      setKeepInTray: (on: boolean) => ipcRenderer.send('desktop:setKeepInTray', on),
+    },
   })
 
   // The shell asks when the window has been hidden a while. Only the renderer

@@ -46,9 +46,18 @@ export const checkForUpdatesNow = (): void => {
     apply({ type: 'error', message: String(err?.message ?? err), at: Date.now() }))
 }
 
+let beforeInstall: () => void = () => {}
+/**
+ * Called just before quitAndInstall, so the window really closes — closing
+ * to the tray must never hold an update. The other install path,
+ * autoInstallOnAppQuit, only runs on a real quit, which already marks it.
+ */
+export const onBeforeInstall = (fn: () => void): void => { beforeInstall = fn }
+
 /** Only ever called because someone pressed a button. */
 export const installUpdateNow = (): void => {
   if (state.phase !== 'ready') return
+  beforeInstall()
   autoUpdater.quitAndInstall()
 }
 
