@@ -1523,6 +1523,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       startSource(gate.room, channelId, r.now!, r.sec)
     })
 
+    socket.on('music:previous', (data: { conversationId: string; kind: string; channelId: string }) => {
+      const gate = musicGate(data); if (!gate) return
+      if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+      const channelId = String(data?.channelId ?? '')
+      const r = musicRooms.previous(gate.room, channelId)
+      if (!r.ok) return musicRefuse(r.reason)
+      broadcastMusic(gate.room)
+      // A restart and a step back both start a song from the top.
+      startSource(gate.room, channelId, r.now!)
+    })
+
     socket.on('music:play-now', (data: { conversationId: string; kind: string; channelId: string; entryId: string }) => {
       const gate = musicGate(data); if (!gate) return
       if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')

@@ -65,6 +65,8 @@ export interface MusicChannel {
   /** When `now` became the playing track, by this process's clock. */
   startedAt: number | null
   queue: Track[]
+  /** What played before `now`, oldest first, for "previous". Capped at HISTORY. */
+  history: Track[]
   listeners: Set<string>
 }
 
@@ -101,10 +103,18 @@ export interface MusicChannelView {
   queue: MusicEntryView[]
   queued: number
   listeners: string[]
+  /** Whether there is a song to go back to. */
+  previous: boolean
 }
 
 /** No real song is six hours long; past this a position is a typo or an attack. */
 export const MAX_SEEK_SEC = 6 * 60 * 60
+
+/** How many played songs a channel remembers for "previous". */
+export const HISTORY = 25
+
+/** Past this far in, "previous" restarts the song — the same rule as your own player. */
+export const RESTART_AFTER_MS = 3_000
 
 const entry = (t: Track): MusicEntryView => ({
   id: t.entryId,
@@ -177,6 +187,7 @@ export class MusicRooms {
         queue: c.queue.map(entry),
         queued: c.queue.length,
         listeners: [...c.listeners],
+        previous: c.history.length > 0,
       })),
     }
   }
@@ -195,7 +206,7 @@ export class MusicRooms {
 
     const id = randomUUID()
     const track: Track = { ...source, entryId: randomUUID(), addedBy: by, addedAt: this.now() }
-    here.set(id, { id, name, createdBy: by, now: track, startedAt: this.now(), queue: [], listeners: new Set() })
+    here.set(id, { id, name, createdBy: by, now: track, startedAt: this.now(), queue: [], history: [], listeners: new Set() })
 
     /*
      * The creator is NOT made a listener.
@@ -222,6 +233,7 @@ export class MusicRooms {
   skip(room: string, channelId: string): Check & { now?: Track | null } {
     const channel = this.get(room, channelId)
     if (!channel) return no('That music channel is gone.')
+    this.retire(channel)
     channel.now = channel.queue.shift() ?? null
     channel.startedAt = channel.now ? this.now() : null
     /*
@@ -258,6 +270,36 @@ export class MusicRooms {
   }
 
   /**
+   * Go back, for everyone.
+   *
+   * Past three seconds in, that means the start of this song; before it,
+   * the song that played before, with this one put back at the front of the
+   * queue so going back and then forward again lands where you were.
+   */
+  previous(room: string, channelId: string): Check & { now?: Track; restart?: boolean } {
+    const channel = this.get(room, channelId)
+    if (!channel) return no('That music channel is gone.')
+    const into = channel.startedAt === null ? 0 : this.now() - channel.startedAt
+    if (channel.now && into > RESTART_AFTER_MS) {
+      channel.startedAt = this.now()
+      return { ok: true, now: channel.now, restart: true }
+    }
+    const back = channel.history.pop()
+    if (!back) return no('Nothing played before this.')
+    if (channel.now) channel.queue.unshift(channel.now)
+    channel.now = back
+    channel.startedAt = this.now()
+    return { ok: true, now: back }
+  }
+
+  /** The song that was playing goes into history, newest last. */
+  private retire(channel: MusicChannel): void {
+    if (!channel.now) return
+    channel.history.push(channel.now)
+    if (channel.history.length > HISTORY) channel.history.shift()
+  }
+
+  /**
    * Play one queued entry now. What was playing ends; the rest keep their
    * order. Addressed by id rather than position, so a click on the third
    * row still plays that song if the first one finished in between.
@@ -268,6 +310,7 @@ export class MusicRooms {
     const i = channel.queue.findIndex(t => t.entryId === entryId)
     if (i < 0) return no('That song is not in the queue any more.')
     const [t] = channel.queue.splice(i, 1)
+    this.retire(channel)
     channel.now = t
     channel.startedAt = this.now()
     return { ok: true, now: t }

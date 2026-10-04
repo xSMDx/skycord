@@ -449,3 +449,45 @@ describe('arriving in a call where music is already playing', () => {
     expect((await told).channels[0].name).toBe('Chill')
   })
 })
+
+describe('going back, from the socket', () => {
+  const giveTrack = async (owner: TestUser, title: string) => {
+    const ownerId = new Types.ObjectId(owner.id)
+    const stored = await trackStore.put(Readable.from([Buffer.from('bytes')]), { ownerId, mimeType: 'audio/webm' })
+    const doc = await Track.create({
+      ownerId, title, artist: 'X', album: 'Y', durationSec: 270,
+      bytes: stored.bytes, store: stored.ref, source: 'upload', scan: 'skipped',
+    })
+    return String(doc._id)
+  }
+  type Ch = { id: string; now: { title?: string } | null; queue: { title: string | null }[]; previous: boolean }
+  const chans = (v: MusicView) => v.channels as unknown as Ch[]
+
+  it('anyone in the call can go back, and everyone hears it', async () => {
+    const a = await register(); const b = await register()
+    const { voice } = await seed(a, b)
+    const sa = await inCall(a, voice.id); const sb = await inCall(b, voice.id)
+    const one = await giveTrack(a, 'One'); const two = await giveTrack(a, 'Two')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: one })
+    const ch = (await musicStateWhere(sa, x => x.channels.length === 1)).channels[0].id
+    sa.emit('music:queue', { conversationId: voice.id, kind: 'channel', channelId: ch, trackId: two })
+    await musicStateWhere(sa, x => chans(x)[0]?.queue.length === 1)
+    sa.emit('music:skip', { conversationId: voice.id, kind: 'channel', channelId: ch })
+    await musicStateWhere(sb, x => chans(x)[0]?.now?.title === 'Two' && chans(x)[0].previous)
+    sb.emit('music:previous', { conversationId: voice.id, kind: 'channel', channelId: ch })
+    const back = await musicStateWhere(sa, x => chans(x)[0]?.now?.title === 'One')
+    expect(chans(back)[0].queue.map(e => e.title)).toEqual(['Two'])
+  })
+
+  it('says so when there is nothing to go back to', async () => {
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+    const one = await giveTrack(a, 'One')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: one })
+    const ch = (await musicStateWhere(sa, x => x.channels.length === 1)).channels[0].id
+    sa.emit('music:previous', { conversationId: voice.id, kind: 'channel', channelId: ch })
+    const err = await nextEvent(sa, 'music:error') as { reason: string }
+    expect(err.reason).toMatch(/nothing played before/i)
+  })
+})

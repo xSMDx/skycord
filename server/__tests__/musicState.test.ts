@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { MusicRooms, EMPTY_GRACE_MS, MAX_SEEK_SEC } from '../sockets/musicState'
+import { MusicRooms, EMPTY_GRACE_MS, MAX_SEEK_SEC, HISTORY, RESTART_AFTER_MS } from '../sockets/musicState'
 import { DEFAULT_CAPS } from '../utils/musicLimits'
 
 const caps = { ...DEFAULT_CAPS, channelsPerCall: 3, channelsPerInstance: 4, queuePerChannel: 2 }
@@ -426,5 +426,92 @@ describe('whose state this is', () => {
     m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
     expect(m.view(ROOM).room).toBe(ROOM)
     expect(m.view('voice:elsewhere')).toEqual({ room: 'voice:elsewhere', channels: [] })
+  })
+})
+
+describe('going back in a shared channel', () => {
+  // The same rule as your own player: "previous" past three seconds in
+  // restarts the song; before that it goes to the one before.
+  const lib = (title: string) => ({
+    kind: 'library' as const, trackId: 'a'.repeat(24), title, artist: 'X', durationSec: 200, cover: null,
+  })
+  const clockRooms = () => {
+    let t = 1_000_000
+    const m = new MusicRooms({ ...DEFAULT_CAPS }, () => {}, () => t)
+    return { m, tick: (ms: number) => { t += ms } }
+  }
+  const nowTitle = (m: MusicRooms) => m.view(ROOM).channels[0].now?.title
+  const queueTitles = (m: MusicRooms) => m.view(ROOM).channels[0].queue.map(e => e.title)
+
+  it('goes back to the song before, and puts this one first in the queue', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1'); m.queue(ROOM, id, lib('Three'), 'u1')
+    m.skip(ROOM, id)                                   // now Two
+    tick(1_000)
+    const r = m.previous(ROOM, id)
+    expect(r.ok).toBe(true)
+    expect(r.restart).toBeFalsy()
+    expect(nowTitle(m)).toBe('One')
+    expect(queueTitles(m)).toEqual(['Two', 'Three'])
+    expect(m.view(ROOM).channels[0].now?.elapsedMs).toBe(0)
+  })
+
+  it('past three seconds in, restarts the song instead', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1')
+    m.skip(ROOM, id)
+    tick(RESTART_AFTER_MS + 1)
+    const r = m.previous(ROOM, id)
+    expect(r.restart).toBe(true)
+    expect(nowTitle(m)).toBe('Two')
+    expect(m.view(ROOM).channels[0].now?.elapsedMs).toBe(0)
+    // History untouched: a second "previous" now goes back to One.
+    expect(m.previous(ROOM, id).restart).toBeFalsy()
+    expect(nowTitle(m)).toBe('One')
+  })
+
+  it('refuses with nothing before and nothing to restart', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    const r = m.previous(ROOM, id)
+    expect(r.ok).toBe(false)
+    expect(m.previous(ROOM, 'nope').ok).toBe(false)
+  })
+
+  it('restarts a lone song past three seconds', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    tick(10_000)
+    expect(m.previous(ROOM, id).restart).toBe(true)
+  })
+
+  it('play now remembers what it replaced', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1')
+    m.playNow(ROOM, id, m.view(ROOM).channels[0].queue[0].id)
+    m.previous(ROOM, id)
+    expect(nowTitle(m)).toBe('One')
+  })
+
+  it('remembers at most HISTORY songs', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('S0'), 'u1'))
+    for (let i = 1; i <= HISTORY + 5; i++) { m.queue(ROOM, id, lib(`S${i}`), 'u1'); m.skip(ROOM, id) }
+    // The clock never moves, so every "previous" goes back rather than
+    // restarting, until history runs out and it refuses.
+    let back = 0
+    while (back <= HISTORY + 10 && m.previous(ROOM, id).ok) back++
+    expect(back).toBe(HISTORY)
+  })
+
+  it('says whether there is anything to go back to', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    expect(m.view(ROOM).channels[0].previous).toBe(false)
+    m.queue(ROOM, id, lib('Two'), 'u1'); m.skip(ROOM, id)
+    expect(m.view(ROOM).channels[0].previous).toBe(true)
   })
 })
