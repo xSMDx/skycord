@@ -175,6 +175,16 @@ export const resolveCommand: (typed: string) => string | null  // alias → name
 - [ ] Rows: `scan === 'clean'` → `ShieldCheck` in `--success-text`, tip "Scanned for viruses — clean"; `'skipped'` → the existing `ShieldAlert`. Same slot, so the column holds.
 - [ ] `vue-tsc`, design tests, commit.
 
+### Task 4b: What is playing, when you are not listening
+
+Owner's report: in a call but not tuned in, nothing says a song is playing.
+
+**Files:** `src/components/music/MiniPlayer.vue`, the call bar's music button (`src/components/voice/CallBar.vue` or wherever `.cb-music` lives).
+
+- [ ] Mini player gains a third mode, **nearby**: not tuned in, your own player not playing, and a channel in your call has a song. It shows that song's cover and title, "Playing in ‹channel›" with no live dot (you are not hearing it), the listener count, and a **Join** button (`listenToMusic(id)`). Several playing channels: the one with the most listeners, and "+N more" opens the music room. Your own music playing wins: the strip shows what you hear.
+- [ ] Call bar music button: a small playing dot when any channel in the call has a song and you are not tuned in; tooltip names the song and channel.
+- [ ] Probe: B in the call, not tuned → strip shows A's song with Join; Join → live mode; the dot shows before and goes after.
+
 ### Task 5: The scanner, for real
 
 **Files:** create `deploy/compose.scan.yaml`; modify `deploy/install.sh`, `deploy/skycord`, `deploy/tests/cli.test.sh`, `docs/music-phase-2.md`.
