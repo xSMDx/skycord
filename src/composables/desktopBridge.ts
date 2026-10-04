@@ -91,6 +91,22 @@ export interface DesktopBridge {
   }
   /** Versions and capability facts. Absent in app builds before this. */
   about?(): Promise<AboutFacts | null>
+  /**
+   * Notifications the app shows itself: rich toasts, the call window, the
+   * tray and the taskbar badge. Absent in app builds before them — the page
+   * then uses web notifications, which work inside the app too.
+   */
+  notifications?: {
+    show(n: import('./notifyRules').Notice): void
+    ring(call: import('./notificationSinks').RingInfo | null): void
+    unread(count: number): void
+    callState(s: import('./notificationSinks').CallTrayState): void
+    onActivated(cb: (a: import('./notificationSinks').NoticeActivation) => void): () => void
+    onCallAction(cb: (a: 'accept' | 'decline') => void): () => void
+    onTrayCommand(cb: (c: 'mute' | 'deafen') => void): () => void
+    keepInTray(): Promise<boolean>
+    setKeepInTray(on: boolean): void
+  }
 }
 
 export const desktopBridge = (): DesktopBridge | null => {
