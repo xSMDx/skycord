@@ -6,7 +6,7 @@
  * client did not already count: a channel's unread flag covers every
  * message, and the badge counts only what would notify.
  */
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import type { Notice } from './notifyRules'
 import { pickSink, type RingInfo, type CallTrayState, type NoticeActivation } from './notificationSinks'
 import { desktopBridge } from './desktopBridge'
@@ -14,6 +14,13 @@ import { roundIcon } from './noticeIcon'
 
 const sink = pickSink(desktopBridge())
 export const desktopDelivers = sink.kind === 'desktop'
+
+/**
+ * Whether the app's window is in front, as the desktop app reports it; null
+ * in a browser, where the document's own focus and visibility are right.
+ */
+export const windowInFront = ref<boolean | null>(null)
+sink.onWindowFocus(v => { windowInFront.value = v })
 
 export const notify = async (n: Notice | null, iconSrc: string | null): Promise<void> => {
   if (!n) return

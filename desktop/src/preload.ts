@@ -116,6 +116,11 @@ if (local && page === 'share.html') {
         ipcRenderer.on('desktop:trayCommand', h)
         return () => { ipcRenderer.off('desktop:trayCommand', h) }
       },
+      onWindowFocus: (cb: (inFront: unknown) => void) => {
+        const h = (_e: unknown, v: unknown) => cb(v)
+        ipcRenderer.on('desktop:windowFocus', h)
+        return () => { ipcRenderer.off('desktop:windowFocus', h) }
+      },
       keepInTray: () => ipcRenderer.invoke('desktop:keepInTray'),
       setKeepInTray: (on: boolean) => ipcRenderer.send('desktop:setKeepInTray', on),
     },

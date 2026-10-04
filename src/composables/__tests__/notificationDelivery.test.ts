@@ -91,6 +91,29 @@ describe('choosing where notifications go', () => {
   })
 })
 
+describe('whether the window is in front', () => {
+  it('the app says, because only it knows', () => {
+    // Inside the desktop app the page reports focus and visibility as true
+    // even when the window is hidden in the tray — the shell is the truth.
+    let tell: ((v: boolean) => void) | null = null
+    const bridge: any = { platform: 'win32', notifications: {
+      show: vi.fn(), ring: vi.fn(), unread: vi.fn(), callState: vi.fn(),
+      onActivated: () => () => {}, onCallAction: () => () => {}, onTrayCommand: () => () => {},
+      onWindowFocus: (cb: (v: boolean) => void) => { tell = cb; return () => {} },
+      keepInTray: async () => true, setKeepInTray: vi.fn(),
+    } }
+    const got: boolean[] = []
+    pickSink(bridge).onWindowFocus(v => got.push(v))
+    tell!(false); tell!(true)
+    expect(got).toEqual([false, true])
+  })
+  it('a browser has nothing to say: the page asks the document itself', () => {
+    const got: boolean[] = []
+    webSink({}).onWindowFocus(v => got.push(v))
+    expect(got).toEqual([])
+  })
+})
+
 describe('prefs', () => {
   it('default on, and remembered on this device', () => {
     expect(notificationPrefs.enabled).toBe(true)

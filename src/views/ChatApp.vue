@@ -100,7 +100,7 @@ import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPre
 import { decide, mentionsMe, unreadCount, type ConvRef, type Incoming, type RuleState } from '@/composables/notifyRules'
 import {
   notify, ringFor, setUnread, setCallTray, onNoticeActivated, onCallAction, onTrayCommand,
-  mentionedChannels, noteMention, clearMention, desktopDelivers,
+  mentionedChannels, noteMention, clearMention, desktopDelivers, windowInFront,
 } from '@/composables/useNotifications'
 import { notificationPrefs } from '@/composables/notificationPrefs'
 import { stripMarkers } from '@/utils/richText'
@@ -4097,10 +4097,14 @@ useDesktopTitleBar({
 // Placed last: the watchers below run at once, and read state declared above.
 // See docs/superpowers/specs/2026-10-04-tray-and-notifications-design.md.
 
-// Whether the window is in front, kept as a ref so the call window can close
-// the moment you come back (the in-app ring takes over).
-const appFocused = ref(document.hasFocus() && document.visibilityState === 'visible')
-const syncFocus = () => { appFocused.value = document.hasFocus() && document.visibilityState === 'visible' }
+// Whether the window is in front. The desktop app says (windowInFront): inside
+// it the document reports focus and visibility as true even while hidden in
+// the tray. In a browser the document is right. Reactive, so the call window
+// can close the moment you come back and the in-app ring takes over.
+const domInFront = () => document.hasFocus() && document.visibilityState === 'visible'
+const domFocused = ref(domInFront())
+const syncFocus = () => { domFocused.value = domInFront() }
+const appFocused = computed(() => windowInFront.value ?? domFocused.value)
 onMounted(() => {
   window.addEventListener('focus', syncFocus)
   window.addEventListener('blur', syncFocus)
@@ -4122,7 +4126,7 @@ function noticeMe() {
 const ruleState = (): RuleState => ({
   me: noticeMe(),
   status: chosenStatus.value,
-  focused: document.hasFocus() && document.visibilityState === 'visible',
+  focused: windowInFront.value ?? domInFront(),
   enabled: notificationPrefs.enabled,
   previews: notificationPrefs.previews,
   isMuted: isConvMuted,

@@ -104,6 +104,8 @@ export interface DesktopBridge {
     onActivated(cb: (a: import('./notificationSinks').NoticeActivation) => void): () => void
     onCallAction(cb: (a: 'accept' | 'decline') => void): () => void
     onTrayCommand(cb: (c: 'mute' | 'deafen') => void): () => void
+    /** The window came to the front, or left it — hidden, minimised, behind another. */
+    onWindowFocus(cb: (inFront: boolean) => void): () => void
     keepInTray(): Promise<boolean>
     setKeepInTray(on: boolean): void
   }

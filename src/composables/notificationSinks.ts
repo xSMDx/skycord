@@ -20,6 +20,13 @@ export interface Sink {
   onActivated(cb: (a: NoticeActivation) => void): () => void
   onCallAction(cb: (a: 'accept' | 'decline') => void): () => void
   onTrayCommand(cb: (c: 'mute' | 'deafen') => void): () => void
+  /**
+   * Whether the window is in front, from the one who knows. Inside the
+   * desktop app the page reports focus and visibility as true even while the
+   * window is hidden in the tray, so the shell says. A browser never calls
+   * this — the page asks the document there.
+   */
+  onWindowFocus(cb: (inFront: boolean) => void): () => void
 }
 
 const never = () => () => {}
@@ -64,6 +71,7 @@ export const webSink = (env: { Notification?: typeof Notification; focus?: () =>
     onActivated(cb) { listeners.add(cb); return () => { listeners.delete(cb) } },
     onCallAction: never,
     onTrayCommand: never,
+    onWindowFocus: never,
   }
 }
 
@@ -76,6 +84,7 @@ const desktopSink = (d: NonNullable<DesktopBridge['notifications']>): Sink => ({
   onActivated: cb => d.onActivated(cb),
   onCallAction: cb => d.onCallAction(cb),
   onTrayCommand: cb => d.onTrayCommand(cb),
+  onWindowFocus: cb => d.onWindowFocus(cb),
 })
 
 /** The desktop app when its build has the bridge; the browser's notifications otherwise. */

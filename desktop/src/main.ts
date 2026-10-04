@@ -351,6 +351,17 @@ app.whenReady().then(async () => {
   shellWin.win.on('show', cancelTrim)
   shellWin.win.on('focus', cancelTrim)
 
+  // The page cannot tell whether the window is in front — inside the app its
+  // document reports focus and visibility as true even when hidden in the
+  // tray — so the shell tells it, on every change and once the page loads.
+  const tellFocus = () => {
+    const w = shellWin?.win
+    if (!w || w.isDestroyed()) return
+    shellWin?.page.send('desktop:windowFocus', w.isVisible() && !w.isMinimized() && w.isFocused())
+  }
+  for (const e of ['focus', 'blur', 'show', 'hide', 'minimize', 'restore'] as const) shellWin.win.on(e as 'focus', tellFocus)
+  shellWin.page.on('did-finish-load', tellFocus)
+
   initToasts({ page: () => shellWin?.page ?? null, showWindow })
   initTray({
     window: () => shellWin?.win ?? null,
