@@ -270,3 +270,25 @@ describe('notifications on the server menu', () => {
     expect(h.setLevel).toHaveBeenCalledWith('s1', 'all')
   })
 })
+
+describe('buildRailMenu', () => {
+  it('right-clicking a server icon: read state, notifications, the id', async () => {
+    const { buildRailMenu } = await import('../serverMenu')
+    expect(shape(buildRailMenu(theirs, handlers(), true))).toEqual([
+      'Mark As Read', '—',
+      'Mute Server', 'Notification Settings', 'Hide Muted Channels', '—',
+      'Copy Server ID',
+    ])
+  })
+  it('acts on the server that was right-clicked, which need not be the open one', async () => {
+    const { buildRailMenu } = await import('../serverMenu')
+    const h = handlers()
+    const other = { id: 's9', name: 'Elsewhere' }
+    const items = buildRailMenu(other, h, true).filter(isAction)
+    items.find(i => i.label === 'Mark As Read')!.onSelect!()
+    items.find(i => i.label === 'Copy Server ID')!.onSelect!()
+    expect(h.markRead).toHaveBeenCalledWith('s9')
+    expect(h.copy).toHaveBeenCalledWith('s9', 'Server ID')
+    expect(buildRailMenu(other, h, false).filter(isAction)[0].disabled).toBe(true)
+  })
+})

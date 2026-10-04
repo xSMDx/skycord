@@ -86,7 +86,7 @@ import { openMenu, closeMenu, menu } from '@/composables/useContextMenu'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { userMenu, type MenuUser } from '@/composables/contextMenus/userMenu'
 import { dmMenu, groupMenu }    from '@/composables/contextMenus/conversationMenu'
-import { buildServerMenu, buildSidebarMenu }      from '@/composables/contextMenus/serverMenu'
+import { buildServerMenu, buildSidebarMenu, buildRailMenu } from '@/composables/contextMenus/serverMenu'
 import { voiceOccupantMenu, voiceSelfMenu } from '@/composables/contextMenus/voiceOccupantMenu'
 import { buildChannelMenu, type MenuChannel } from '@/composables/contextMenus/channelMenu'
 import { buildCategoryMenu, type MenuCategory } from '@/composables/contextMenus/categoryMenu'
@@ -3007,9 +3007,10 @@ const openSidebarMenu = (e: MouseEvent) => {
 // through exactly the same handlers.
 const serverMenuHandlers = () => ({
   ...notifyActions,
-  markRead:      () => {
-    const ids = (channelsByServer.value[activeServerId.value ?? ""] ?? []).map(c => c.id)
-    ids.forEach(id => { clearUnread(id); clearAlert(id) })
+  // By the id the menu names: the rail's menu can be opened on a server
+  // that is not the one open.
+  markRead:      (sid: string) => {
+    for (const c of channelsByServer.value[sid] ?? []) { clearUnread(c.id); clearAlert(c.id) }
   },
   invitePeople:  () => { showInvite.value = true },
   createChannel: () => { openCreateChannel(null) },
@@ -3036,6 +3037,12 @@ const showVoiceServers = ref(false)
 // The server id whose settings are open, or null. Not a boolean + activeServer:
 // the menu can be opened on a server you are not currently viewing.
 const serverSettingsFor = ref<string | null>(null)
+
+/** Right-click on a server's icon in the rail. */
+const openRailMenu = (e: MouseEvent, srv: Server) => {
+  const hasUnread = (channelsByServer.value[srv.id] ?? []).some(c => !!unreadChannels.value[c.id])
+  openMenu(e, () => buildRailMenu(srv, serverMenuHandlers(), hasUnread))
+}
 
 const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const s = activeServer.value
@@ -4658,6 +4665,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
           @mouseenter="onRailHover($event, srv.id)"
           @mouseleave="closeRailPreview"
           @pointerdown="closeRailPreview"
+          @contextmenu.prevent.stop="openRailMenu($event, srv)"
           @click.stop="openServer(srv)">
           <div class="ri-pip" />
           <div class="ri-icon"><img :src="srv.img" :alt="srv.name" @error="fallBackToInitials($event, srv.name)" /></div>

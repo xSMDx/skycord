@@ -104,6 +104,32 @@ const addLabel = (can: ServerMenuAccess): string | null =>
 const manageLabel = (can: ServerMenuAccess): string | null =>
   can.manageServer ? 'Manage' : null
 
+/** Mark As Read and the server's notification rows, shared by both server menus. */
+const readAndNotify = (server: MenuServer, h: ServerMenuHandlers, hasUnread: boolean): MenuItem[] => [
+  { label: 'Mark As Read', icon: Check, disabled: !hasUnread, onSelect: () => h.markRead(server.id) },
+  { sep: true },
+  ...notifyRows(server.id, 'server', h),
+  // A toggle, so it stays open: you see the tick land.
+  {
+    label: 'Hide Muted Channels', icon: EyeOff, check: hidesMuted(server.id), keepOpen: true,
+    onSelect: () => h.setHideMuted(server.id, !hidesMuted(server.id)),
+  },
+  { sep: true },
+]
+
+/**
+ * Right-click on a server's icon in the rail: its read state and
+ * notifications, which is what Discord's own rail menu is mostly for.
+ *
+ * Only rows that act on the server they were built for. The add, settings and
+ * leave rows act on the server that is open, and the right-clicked one may
+ * not be — those stay on the header menu, a click away once it is open.
+ */
+export const buildRailMenu = (server: MenuServer, h: ServerMenuHandlers, hasUnread = false): MenuItem[] => [
+  ...readAndNotify(server, h, hasUnread),
+  { label: 'Copy Server ID', icon: Copy, onSelect: () => h.copy(server.id, 'Server ID') },
+]
+
 export const buildServerMenu = (
   server: MenuServer,
   myId: string | undefined,
@@ -115,15 +141,7 @@ export const buildServerMenu = (
 ): MenuItem[] => {
   const isOwner = !!myId && server.owner === myId
   const items: MenuItem[] = [
-    { label: 'Mark As Read', icon: Check, disabled: !hasUnread, onSelect: () => h.markRead(server.id) },
-    { sep: true },
-    ...notifyRows(server.id, 'server', h),
-    // A toggle, so it stays open: you see the tick land.
-    {
-      label: 'Hide Muted Channels', icon: EyeOff, check: hidesMuted(server.id), keepOpen: true,
-      onSelect: () => h.setHideMuted(server.id, !hidesMuted(server.id)),
-    },
-    { sep: true },
+    ...readAndNotify(server, h, hasUnread),
   ]
   // Only when there is something to add: a separator under nothing would
   // leave two touching.
