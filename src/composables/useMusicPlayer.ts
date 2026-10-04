@@ -29,6 +29,8 @@ import { useAuth } from './useAuth'
 import { library, trackAudioUrl, type LibTrack } from './useMusicLibrary'
 import { onYield, takeAudio, release as releaseFocus } from './audioFocus'
 import * as Q from './musicQueue'
+import { musicChannel, listenToMusic } from './useMusic'
+import { askToLeave } from './leavePrompt'
 
 export type { RepeatMode, QueueContext, QueueTarget } from './musicQueue'
 
@@ -248,30 +250,63 @@ const changed = (): void => { if (queue.current) prefetch(); persistSoon() }
  * Clicking the song that is already loaded, from the same list, is a toggle
  * rather than a restart: that row is the pause button for what it plays.
  */
-export const playFrom = (tracks: LibTrack[], index: number, context: Q.QueueContext): Promise<void> => {
+/**
+ * Before anything plays just for you: if you are in a channel, ask.
+ *
+ * Yes leaves the channel here, before the song is asked for, so the leave
+ * cue lands first and nothing below has to know channels exist. No leaves
+ * everything as it was — including the queue, which is why this runs
+ * before a step is computed rather than inside act().
+ *
+ * Every entry point that can START your own playback goes through this.
+ * The end-of-song advance does not: it only fires while your own song is
+ * playing, which means you are not in a channel.
+ */
+export const okToPlaySolo = async (what: string): Promise<boolean> => {
+  const ch = musicChannel.value
+  if (!ch) return true
+  if (!(await askToLeave(ch.name, what))) return false
+  if (musicChannel.value?.id === ch.id) listenToMusic(null)
+  return true
+}
+
+export const playFrom = async (tracks: LibTrack[], index: number, context: Q.QueueContext): Promise<void> => {
   const same = queue.context?.key === context.key
     && !queue.fromManual
     && queue.pos >= 0
     && queue.order[queue.pos] === index
     && !!el?.src
+  // Pausing what you are playing never needs asking.
+  if (same && !player.paused) return toggle()
+  if (!(await okToPlaySolo(tracks[index]?.title ?? 'this song'))) return
   if (same) return toggle()
   return act(Q.start(queue, tracks, context, index, rng))
 }
 
 export const toggle = async (): Promise<void> => {
   if (!queue.current) return
+  if (el?.src && !player.paused) { el.pause(); return }
+  if (!(await okToPlaySolo(queue.current.title))) return
   // Restored from a previous session and not loaded yet.
   if (!el?.src) { await act({ state: queue, track: queue.current, action: 'play' }); return }
-  if (player.paused) await safePlay()
-  else el.pause()
+  await safePlay()
 }
 
 export const resume = async (): Promise<void> => { if (player.paused) await toggle() }
 export const pause = (): void => { el?.pause() }
 
-export const next = (): Promise<void> => act(Q.next(queue, 'skip', rng))
-export const previous = (): Promise<void> => act(Q.previous(queue, el?.currentTime ?? player.at))
-export const jumpTo = (target: Q.QueueTarget): Promise<void> => act(Q.jump(queue, target))
+export const next = async (): Promise<void> => {
+  if (!(await okToPlaySolo('your own queue'))) return
+  return act(Q.next(queue, 'skip', rng))
+}
+export const previous = async (): Promise<void> => {
+  if (!(await okToPlaySolo('your own queue'))) return
+  return act(Q.previous(queue, el?.currentTime ?? player.at))
+}
+export const jumpTo = async (target: Q.QueueTarget): Promise<void> => {
+  if (!(await okToPlaySolo('your own queue'))) return
+  return act(Q.jump(queue, target))
+}
 
 export const seek = (sec: number): void => {
   if (!Number.isFinite(sec)) return

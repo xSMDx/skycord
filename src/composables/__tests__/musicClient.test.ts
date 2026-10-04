@@ -3,6 +3,7 @@ import {
   MUSIC_IDENTITY, music, setMusicTarget, listenToMusic,
   onMusicState, onMusicError, clearMusicError, musicChannel,
   createMusicChannel, skipMusic, shareToChannel, channelElapsed, musicNow,
+  seekMusic, playNowMusic,
   type MusicChannelView,
 } from '../useMusic'
 
@@ -147,7 +148,7 @@ const playing = (elapsedMs: number, durationSec: number | null = 200): { channel
   channels: [{
     id: 'p', name: 'Live', queue: [], queued: 0, listeners: [],
     now: {
-      kind: 'library', title: 'Song', artist: null, durationSec, addedBy: 'u1',
+      id: 'e0', kind: 'library', title: 'Song', artist: null, durationSec, addedBy: 'u1',
       url: null, cover: null, elapsedMs,
     },
   }],
@@ -231,5 +232,17 @@ describe('sharing a track to a channel', () => {
     shareToChannel('a', 'trk2')
     // A second listen would replay the tune-in cue over the music.
     expect(emit.mock.calls.map(c => c[0])).toEqual(['music:queue'])
+  })
+})
+
+describe('moving a shared song', () => {
+  it('seek sends whole seconds', () => {
+    seekMusic('a', 83.7)
+    expect(emit).toHaveBeenCalledWith('music:seek', expect.objectContaining({ channelId: 'a', sec: 83 }))
+  })
+
+  it('play now names the entry, not a position', () => {
+    playNowMusic('a', 'e1')
+    expect(emit).toHaveBeenCalledWith('music:play-now', expect.objectContaining({ channelId: 'a', entryId: 'e1' }))
   })
 })

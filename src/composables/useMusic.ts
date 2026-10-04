@@ -60,6 +60,8 @@ export const musicAvailable = ref(false)
 
 /** One entry as a listener sees it. A bare link has no title to show. */
 export interface MusicEntryView {
+  /** Stable for as long as the entry is queued. What "play now" names. */
+  id: string
   kind: 'link' | 'library'
   title: string | null
   artist: string | null
@@ -207,6 +209,14 @@ export const shareToChannel = (channelId: string, trackId: string): void => {
 
 export const skipMusic = (channelId: string): void =>
   send('music:skip', { channelId })
+
+/** Move the channel's song for everyone. Whole seconds: the server floors anyway. */
+export const seekMusic = (channelId: string, sec: number): void =>
+  send('music:seek', { channelId, sec: Math.floor(sec) })
+
+/** Play one queued song now, for everyone. By id, so a shifting queue cannot misfire it. */
+export const playNowMusic = (channelId: string, entryId: string): void =>
+  send('music:play-now', { channelId, entryId })
 
 export const closeMusicChannel = (channelId: string): void =>
   send('music:close', { channelId })
