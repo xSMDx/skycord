@@ -54,7 +54,7 @@ socket events ──▶ useNotifications ──▶ notifyRules (pure) ──▶ 
     conversation: { kind: 'dm' | 'group' | 'channel'; id: string; serverId?: string } | null
     title: string              // "Ana" · "Ana · Group" · "Ana · #general · Server"
     body: string               // plain text, or "New message" when previews are off
-    icon: string | null        // the sender's avatar URL
+    icon: string | null        // the sender's avatar as a 64 px round PNG data URL, drawn by the page
     group: { id: string; title: string } | null   // one stack per conversation
     canReply: boolean
   }
@@ -74,7 +74,8 @@ socket events ──▶ useNotifications ──▶ notifyRules (pure) ──▶ 
 - **What "unread" counts** (tray dot and taskbar badge): conversations holding something that would notify. That means DMs and groups with unread messages, muted ones excluded, plus server channels with an unseen mention. Channel mentions are tracked by `useNotifications` and cleared when you open the channel. Ordinary unread channel messages don't count, so the badge says the same thing the notifications do. The page computes the number and sends it with `setUnread`.
 - **Taskbar.** `setOverlayIcon` shows the unread badge (1 to 9, then 9+). `flashFrame(true)` fires on a DM or mention notification while the window is unfocused, and stops on focus.
 - **`main.ts`.** Calls `app.setAppUserModelId('xyz.skycord.desktop')` before any window opens.
-- **Bridge (`preload.ts`)**, added to `skycordDesktop`: `notify(notice)`, `ring(call | null)`, `setUnread(count)`, `setCallState({ inCall, muted, deafened })`, `onNotificationActivated(cb)`, `onTrayCommand(cb)`, `trayPref()` / `setTrayPref(on)`.
+- **Bridge (`preload.ts`)**: an optional `skycordDesktop.notifications` object with `show(notice)`, `ring(call | null)`, `unread(count)`, `callState({ inCall, muted, deafened })`, `onActivated(cb)`, `onCallAction(cb)`, `onTrayCommand(cb)`, `keepInTray()` and `setKeepInTray(on)`. It's optional because a server's page can meet an older installed app. The page then falls back to web notifications, which work inside Electron too.
+- **Icons.** Electron's toast icon must be a file or an in-memory image, not a web address, and avatars are JPEG data URLs, animated SVG data URLs (the default avatar) or links to GIF hosts. So the **page** draws each avatar into a 64 px round PNG, and the shell accepts only `data:image/png` of bounded size. The shell never fetches anything a page names.
 
 ## The rules
 
@@ -96,7 +97,7 @@ socket events ──▶ useNotifications ──▶ notifyRules (pure) ──▶ 
 **Content:**
 
 - The title is the sender, then the group name, or `#channel · Server`.
-- The body is the message as plain text with mention markers turned into `@Name` (the existing plain-text renderer in `src/utils/richText.ts`), cut to about 200 characters. An attachment-only message reads "Sent an image" or "Sent a file".
+- The body is the message as plain text with mention markers turned into `@Name` (the existing plain-text renderer in `src/utils/richText.ts`), cut to about 200 characters. (Messages have no file attachments yet, so there's no attachment wording to write.)
 - With "Show message text" off, the body is "New message".
 - The icon is the sender's avatar.
 
@@ -105,8 +106,9 @@ socket events ──▶ useNotifications ──▶ notifyRules (pure) ──▶ 
 - **Permission denied or blocked (web):** nothing shows, nothing breaks. Settings explains the state; Skycord doesn't ask again on its own.
 - **Windows Focus Assist or Do Not Disturb:** Windows holds the toast in Action Center. That's correct, and isn't worked around.
 - **Activation after a relaunch:** `handleActivation` delivers it. The page acts on it once it has loaded and signed in, and opens the conversation.
-- **A reply that fails to send** (offline, slowmode, no permission): the text isn't lost. The conversation opens with the reply waiting in the composer.
-- **Electron says notifications aren't supported** (`Notification.isSupported()` is false): the desktop sink falls back to doing nothing, and Settings says so.
+- **A reply that fails to send** (offline, slowmode, no permission): it goes through the chat box's own send path, after the page opens the conversation, so it fails the way a chat-box send fails: the message stays in the conversation, marked as failed.
+- **Toasts after Quit:** the shell closes every toast it showed when it quits, which also removes them from Action Center. Windows has no remove-all for an app (`Notification.removeAll` is macOS only), so the shell keeps its own list. A toast left behind by a crash can still be clicked: that opens the app, but a reply typed into it can't be routed, because a cold-start activation carries no notification identity.
+- **Electron says notifications aren't supported** (`Notification.isSupported()` is false): the shell shows nothing. The tray, badge and call window still work.
 
 ## Testing
 
