@@ -84,8 +84,11 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
           :aria-label="music.listeningTo === c.id ? `Stop listening to ${c.name}` : `Listen to ${c.name}`"
           @click="toggle(c.id)"
         >
-          <span class="mf-badge" :class="{ live: music.listeningTo === c.id }">
-            <Music2 :size="14" :stroke-width="2.25" />
+          <!-- The song's cover where it has one; the glyph only for a link,
+               which arrives with no art to show. -->
+          <span class="mf-badge" :class="{ live: music.listeningTo === c.id, art: !!c.now?.cover }">
+            <img v-if="c.now?.cover" :src="c.now.cover" alt="" />
+            <Music2 v-else :size="14" :stroke-width="2.25" />
           </span>
           <span class="mf-lines">
             <span class="mf-name">{{ c.name }}</span>
@@ -202,6 +205,10 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
   background: var(--bg-panel); color: var(--text-3);
 }
 .mf-badge.live { background: rgba(var(--accent-rgb), .18); color: var(--accent-text); }
+/* With art the tint has nothing to show through, so "live" becomes a ring. */
+.mf-badge.art { overflow: hidden; }
+.mf-badge.art.live { box-shadow: 0 0 0 2px var(--active-ring); }
+.mf-badge img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .mf-now {
   font-size: 11.5px; color: var(--text-2);

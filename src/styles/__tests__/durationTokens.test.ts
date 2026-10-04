@@ -49,6 +49,9 @@ const isZero = (item: string) => {
 // The first member of each stagger carries 0s, which isZero exempts by kind:
 // no offset is not an offset. Only the members that actually wait are named.
 const STAGGER = 'an offset between the members of one repeating motion, not a duration'
+/** A shared song's progress is stepped by a one-second clock; the glide has to last exactly one step. */
+const TICK = 'glides between once-a-second progress steps: the duration is the tick, not a motion'
+
 const ALLOWED: { file: string; selector: string; why: string }[] = [
   { file: 'components/chat/TypingIndicator.vue', selector: '.d2', why: STAGGER },
   { file: 'components/chat/TypingIndicator.vue', selector: '.d3', why: STAGGER },
@@ -62,6 +65,9 @@ const ALLOWED: { file: string; selector: string; why: string }[] = [
   { file: 'components/voice/VoiceConnectedPanel.vue', selector: '.vcp-sig :deep(path:nth-child(4))', why: 'the bars rise one after another: offsets, not durations' },
   { file: 'components/voice/MicFlyout.vue', selector: '.mf-fill', why: 'smooths a live signal, updated every frame' },
   { file: 'components/voice/VoiceVideoSettings.vue', selector: '.vv-meter-fill', why: 'smooths a live signal, updated every frame' },
+  { file: 'components/music/MiniPlayer.vue', selector: '.mp-fill', why: TICK },
+  { file: 'components/music/MusicCallRail.vue', selector: '.cr-fill', why: TICK },
+  { file: 'components/music/MusicModal.vue', selector: '.mm-livefill', why: TICK },
   { file: 'components/modals/ModalBase.vue', selector: '.modal.sheet', why: 'the release after a drag, tuned against the drag itself' },
   { file: 'components/ui/ContextMenu.vue', selector: '.cm.sheet', why: 'the release after a drag, tuned against the drag itself' },
   { file: 'App.vue', selector: '.splash-fill', why: 'a loading bar\'s fill time, not a transition' },

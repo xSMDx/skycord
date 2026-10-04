@@ -99,7 +99,17 @@ const resolveSource = async (
     // Same answer for "does not exist" and "is not yours", so this cannot be
     // used to find out which ids exist.
     if (!owned) return { ok: false, reason: 'No such track.' }
-    return { ok: true, value: { kind: 'library', trackId, title: owned.title } }
+    return {
+      ok: true,
+      value: {
+        kind: 'library', trackId, title: owned.title,
+        artist: owned.artist ?? '', durationSec: owned.durationSec ?? 0,
+        // Broadcast to everyone in the call on every state change, so only a
+        // cover that is genuinely small travels. A 320px WebP is typically
+        // 10–30KB; anything near the 256KB ingest ceiling is left out.
+        cover: owned.coverWebp && owned.coverWebp.length < 120_000 ? owned.coverWebp : null,
+      },
+    }
   }
 
   const url = checkUrlShape(data?.url)
@@ -1464,9 +1474,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         const wasSilent = musicRooms.get(gate.room, channelId)?.now == null
         const r = musicRooms.queue(gate.room, channelId, source.value, userId)
         if (!r.ok) return musicRefuse(r.reason)
-      // A channel whose queue ran dry is stopped, and nothing is going to
-      // report an end for it — so the thing just queued has to be started
-      // here or it waits for a skip that nobody will press.
+        // A channel whose queue ran dry is stopped, and nothing is going to
+        // report an end for it — so the thing just queued has to be started
+        // here or it waits for a skip that nobody will press.
         if (wasSilent) {
           const next = musicRooms.skip(gate.room, channelId)
           if (next.ok && next.now) startSource(gate.room, channelId, next.now)

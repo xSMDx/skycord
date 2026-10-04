@@ -257,3 +257,75 @@ describe('shutdown', () => {
     expect(m.get(ROOM, id)).toBeDefined()
   })
 })
+
+describe('what a listener is told', () => {
+  // A listener used to be told a title, at best. These are the fields that
+  // let the mini player and the call rail say what you are actually hearing.
+  const lib = (title: string, extra: Partial<{ artist: string; durationSec: number; cover: string | null }> = {}) => ({
+    kind: 'library' as const, trackId: 'a'.repeat(24), title,
+    artist: extra.artist ?? 'Probe Band', durationSec: extra.durationSec ?? 200,
+    cover: extra.cover ?? null,
+  })
+  let clock = 1_000_000
+  const timed = () => new MusicRooms(caps, () => {}, () => clock)
+
+  it('carries a library track\'s title, artist, length and cover', () => {
+    const m = timed()
+    const id = idOf(m.create(ROOM, 'Chill', lib('Blue Monday', { cover: 'data:image/webp;base64,AAAA' }), 'ana'))
+    const now = m.view(ROOM).channels.find(c => c.id === id)!.now!
+    expect(now).toMatchObject({
+      kind: 'library', title: 'Blue Monday', artist: 'Probe Band', durationSec: 200,
+      cover: 'data:image/webp;base64,AAAA', url: null, addedBy: 'ana',
+    })
+  })
+
+  it('says how far in as elapsed time, not as a timestamp', () => {
+    // Elapsed is clock-skew-free: a client a minute fast still draws the bar
+    // in the right place, because it only adds its own elapsed time to this.
+    clock = 1_000_000
+    const m = timed()
+    const id = idOf(m.create(ROOM, 'Chill', lib('One'), 'ana'))
+    clock += 42_000
+    expect(m.view(ROOM).channels.find(c => c.id === id)!.now!.elapsedMs).toBe(42_000)
+  })
+
+  it('starts the clock again when the next song begins', () => {
+    clock = 1_000_000
+    const m = timed()
+    const id = idOf(m.create(ROOM, 'Chill', lib('One'), 'ana'))
+    m.queue(ROOM, id, lib('Two'), 'ben')
+    clock += 90_000
+    m.skip(ROOM, id)
+    clock += 5_000
+    const now = m.view(ROOM).channels.find(c => c.id === id)!.now!
+    expect(now.title).toBe('Two')
+    expect(now.elapsedMs).toBe(5_000)
+  })
+
+  it('lists the shared queue in order, with who added each song', () => {
+    const m = timed()
+    const id = idOf(m.create(ROOM, 'Chill', lib('One'), 'ana'))
+    m.queue(ROOM, id, lib('Two'), 'ben')
+    m.queue(ROOM, id, { kind: 'link' as const, url: 'https://x/three.mp3' }, 'cy')
+    const view = m.view(ROOM).channels.find(c => c.id === id)!
+    expect(view.queue.map(q => [q.title, q.addedBy])).toEqual([['Two', 'ben'], [null, 'cy']])
+    expect(view.queued).toBe(2)
+  })
+
+  it('never sends a cover for anything but the playing song', () => {
+    // Covers are the heavy part of this broadcast, and it goes to everyone in
+    // the call on every change. Only one per channel travels.
+    const m = timed()
+    const id = idOf(m.create(ROOM, 'Chill', lib('One'), 'ana'))
+    m.queue(ROOM, id, lib('Two', { cover: 'data:image/webp;base64,BBBB' }), 'ben')
+    const queued = m.view(ROOM).channels.find(c => c.id === id)!.queue[0] as Record<string, unknown>
+    expect(queued).not.toHaveProperty('cover')
+  })
+
+  it('a pasted link has no title and no length to show', () => {
+    const m = timed()
+    const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
+    const now = m.view(ROOM).channels.find(c => c.id === id)!.now!
+    expect(now).toMatchObject({ kind: 'link', title: null, durationSec: null, url: 'https://x/a.mp3' })
+  })
+})

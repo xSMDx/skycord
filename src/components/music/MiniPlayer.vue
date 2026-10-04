@@ -1,61 +1,126 @@
 <script setup lang="ts">
 /**
- * What is playing, in the sidebar, while you get on with something else.
+ * What you are hearing, in the sidebar, while you get on with something else.
  *
- * It exists because the music kept going after the modal closed and then
- * nothing on screen said so — no title, no way to pause, no way back. A
- * player that is audible and invisible is worse than one that stops.
+ * Two sources, and only ever one at a time — audioFocus makes them mutually
+ * exclusive. Your own preview in the music room, or a music channel in the
+ * call that you have tuned into. This strip used to know only about the
+ * first, so tuning into a channel left it showing a paused preview, or
+ * nothing at all, while the room's music played: you could hear a song and
+ * see no sign of what it was. Listening together has to be visible, or it
+ * is just sound from nowhere.
  *
- * Deliberately small: art, name, one button, and a hairline of progress.
+ * Deliberately small: art, a name, two buttons, a hairline of progress.
  * Everything else is a click away in the room, and this sits directly above
- * the voice panel, which is already the busiest corner of the app.
+ * the voice panel, the busiest corner of the app.
  */
 import { computed } from 'vue'
-import { Music2, Pause, Play, SkipForward, X } from 'lucide-vue-next'
+import { LogOut, Music2, Pause, Play, Radio, SkipForward, X } from 'lucide-vue-next'
 import { player, toggle, next, stop } from '@/composables/useMusicPlayer'
+import {
+  musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic,
+} from '@/composables/useMusic'
 
 const emit = defineEmits<{ open: [] }>()
 
-const track = computed(() => player.current)
+// ── which one ───────────────────────────────────────────────────────────────
+
+/** Tuned into a channel? Then that is what you hear, so that is what shows. */
+const live = computed(() => musicChannel.value)
+const local = computed(() => (live.value ? null : player.current))
+
+// ── the shared channel ──────────────────────────────────────────────────────
+
+const liveTitle = computed(() => {
+  const now = live.value?.now
+  if (!now) return 'Nothing playing'
+  // A pasted link carries no tags, and a URL is not a title.
+  return now.title ?? 'A linked track'
+})
+
+const liveProgress = computed(() => {
+  const c = live.value
+  const d = c?.now?.durationSec
+  if (!c || !d) return 0
+  const at = channelElapsed(c, musicNow.value) ?? 0
+  return Math.min(100, (at / d) * 100)
+})
+
+// ── your own preview ────────────────────────────────────────────────────────
 
 /** 0–100. Guarded, because duration is NaN until metadata lands. */
-const progress = computed(() => {
+const localProgress = computed(() => {
   const d = player.duration
   return d > 0 ? Math.min(100, (player.at / d) * 100) : 0
 })
 
+const progress = computed(() => (live.value ? liveProgress.value : localProgress.value))
 </script>
 
 <template>
-  <!-- Nothing has played this session: the strip is simply absent rather
-       than sitting there empty, because the sidebar has no room to spare. -->
-  <div v-if="track" class="mp" :class="{ playing: !player.paused }">
-    <button class="mp-open" :aria-label="`Open music — ${track.title}`" @click="emit('open')">
-      <span class="mp-art" :class="{ empty: !track.cover }">
-        <img v-if="track.cover" :src="track.cover" alt="" />
-        <Music2 v-else :size="13" :stroke-width="2" />
-      </span>
-      <span class="mp-text">
-        <span class="mp-title">{{ track.title }}</span>
-        <span class="mp-artist">{{ track.artist || 'Unknown artist' }}</span>
-      </span>
-    </button>
+  <!-- Absent rather than empty when nothing is playing either way: the
+       sidebar has no room to spare for a strip that says nothing. -->
+  <div v-if="live || local" class="mp" :class="{ live: !!live, playing: !!live || !player.paused }">
+    <!-- ── a channel in the call ──────────────────────────────────────── -->
+    <template v-if="live">
+      <button class="mp-open" :aria-label="`Open music — ${liveTitle} in ${live.name}`" @click="emit('open')">
+        <span class="mp-art" :class="{ empty: !live.now?.cover }">
+          <img v-if="live.now?.cover" :src="live.now.cover" alt="" />
+          <Radio v-else :size="13" :stroke-width="2" />
+        </span>
+        <span class="mp-text">
+          <span class="mp-title">{{ liveTitle }}</span>
+          <!-- Live, and where: the one thing that tells you this is shared
+               rather than yours. -->
+          <span class="mp-artist"><span class="mp-pulse" aria-hidden="true" /><span class="mp-where">{{ live.name }}</span></span>
+        </span>
+      </button>
 
-    <button class="mp-btn" :aria-label="player.paused ? 'Play' : 'Pause'" @click="toggle">
-      <component :is="player.paused ? Play : Pause" :size="14" :stroke-width="2.5" />
-    </button>
-    <button class="mp-btn" aria-label="Next" @click="next">
-      <SkipForward :size="13" :stroke-width="2.5" />
-    </button>
-    <!-- Stops and puts the strip away. It does not touch the queue — it used
-         to remove the song from it, so closing this deleted a track from
-         the list you were playing. -->
-    <button class="mp-btn mp-stop" aria-label="Stop" @click="stop">
-      <X :size="13" :stroke-width="2.5" />
-    </button>
+      <!-- Skipping a shared channel skips it for everyone, so the label
+           says so rather than looking like the private next button. -->
+      <button
+        v-if="live.now" class="mp-btn" :aria-label="`Skip for everyone in ${live.name}`"
+        v-tip="'Skip — for everyone listening'" @click="skipMusic(live.id)"
+      >
+        <SkipForward :size="13" :stroke-width="2.5" />
+      </button>
+      <button
+        class="mp-btn mp-stop" :aria-label="`Stop listening to ${live.name}`"
+        v-tip="'Stop listening'" @click="listenToMusic(null)"
+      >
+        <LogOut :size="13" :stroke-width="2.5" />
+      </button>
+    </template>
+
+    <!-- ── your own preview ───────────────────────────────────────────── -->
+    <template v-else-if="local">
+      <button class="mp-open" :aria-label="`Open music — ${local.title}`" @click="emit('open')">
+        <span class="mp-art" :class="{ empty: !local.cover }">
+          <img v-if="local.cover" :src="local.cover" alt="" />
+          <Music2 v-else :size="13" :stroke-width="2" />
+        </span>
+        <span class="mp-text">
+          <span class="mp-title">{{ local.title }}</span>
+          <span class="mp-artist">{{ local.artist || 'Unknown artist' }}</span>
+        </span>
+      </button>
+
+      <button class="mp-btn" :aria-label="player.paused ? 'Play' : 'Pause'" @click="toggle">
+        <component :is="player.paused ? Play : Pause" :size="14" :stroke-width="2.5" />
+      </button>
+      <button class="mp-btn" aria-label="Next" @click="next">
+        <SkipForward :size="13" :stroke-width="2.5" />
+      </button>
+      <!-- Stops and puts the strip away. It does not touch the queue — it used
+           to remove the song from it, so closing this deleted a track from
+           the list you were playing. -->
+      <button class="mp-btn mp-stop" aria-label="Stop" @click="stop">
+        <X :size="13" :stroke-width="2.5" />
+      </button>
+    </template>
 
     <!-- A hairline, not a scrubber. Seeking belongs where you can see the
-         numbers; this only has to say that time is passing. -->
+         numbers, and a shared song cannot be sought at all. -->
     <span class="mp-rail" role="presentation">
       <span class="mp-fill" :style="{ transform: `scaleX(${progress / 100})` }" />
     </span>
@@ -69,6 +134,9 @@ const progress = computed(() => {
   margin: 0 8px 6px; padding: 6px 4px 6px 6px;
   background: var(--bg-input); border-radius: var(--edge-md);
 }
+/* Shared listening gets a hairline ring, so the strip reads as "the room"
+   at a glance without taking any more space. */
+.mp.live { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .35); }
 
 .mp-open {
   flex: 1; min-width: 0;
@@ -80,6 +148,7 @@ const progress = computed(() => {
   overflow: hidden; background: var(--bg-panel);
   display: grid; place-items: center; color: var(--text-3);
 }
+.mp.live .mp-art.empty { color: var(--accent-text); }
 .mp-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .mp-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
@@ -88,9 +157,23 @@ const progress = computed(() => {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mp-artist {
+  display: flex; align-items: center; gap: 5px;
   font-size: 10.5px; color: var(--text-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.mp.live .mp-artist { color: var(--accent-text); }
+/* Its own box: a flex row will not put an ellipsis on a bare text node, so
+   a long channel name ran off the edge instead of ending in "…". */
+.mp-where { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* The live dot breathes. It is the only motion in the strip, and it is the
+   thing that says "this is happening now, with other people". */
+.mp-pulse {
+  flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); color: var(--text-on-accent);
+  animation: mp-breathe 2.4s var(--ease-out) infinite;
+}
+@keyframes mp-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
 .mp-btn {
   flex-shrink: 0;
@@ -114,9 +197,9 @@ const progress = computed(() => {
   display: block; height: 100%; width: 100%;
   background: var(--accent); color: var(--text-on-accent);
   transform-origin: left center;
-  /* Stepped by timeupdate roughly four times a second, so a short transition
-     smooths it without lagging behind the audio. */
-  transition: transform var(--dur-1) linear;
+  /* Stepped about once a second, so a matching transition makes it glide
+     rather than tick. */
+  transition: transform 1s linear;
 }
 
 /* Touch targets, per DESIGN.md. */
@@ -127,5 +210,6 @@ const progress = computed(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .mp-btn, .mp-fill { transition: none; }
+  .mp-pulse { animation: none; }
 }
 </style>

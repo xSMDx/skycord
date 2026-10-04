@@ -22,7 +22,7 @@ import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
   Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert,
   Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
-  ListPlus, ListStart, ListEnd,
+  ListPlus, ListStart, ListEnd, LogOut,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import MusicCallRail from './MusicCallRail.vue'
@@ -36,6 +36,11 @@ import {
   removeFromQueue, clearQueue, type QueueContext,
 } from '@/composables/useMusicPlayer'
 import { openMenu, type MenuItem } from '@/composables/useContextMenu'
+import { voice } from '@/composables/useVoice'
+import {
+  music, musicAvailable, shareToChannel, createMusicChannel,
+  musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic,
+} from '@/composables/useMusic'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
   deleteTrack, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
@@ -45,7 +50,7 @@ import {
 
 defineProps<{ rooms?: VoiceRoomChoice[] }>()
 const emit = defineEmits<{ close: []; join: [channelId: string] }>()
-const { accessToken } = useAuth()
+const { accessToken, user } = useAuth()
 
 // The shell's own dismissal, so the leave transition plays. Emitting close
 // upward instead unmounts us on the same tick and the animation never runs.
@@ -74,7 +79,6 @@ const playing = computed(() => player.current)
 const paused = computed(() => player.paused)
 const at = computed(() => player.at)
 const loadingId = computed(() => player.loadingId)
-const vol = computed(() => player.volume)
 
 /**
  * A click anywhere on a row plays it.
@@ -122,12 +126,42 @@ const isPlayingRow = (t: LibTrack, i: number): boolean => {
 }
 
 /** Right-click on a row: everything you can do with that song, in one place. */
+/** Connected, in a room, and the host runs music: the call can take a song. */
+const inCallWithMusic = computed(() => voice.connected && !!voice.activeConvId && musicAvailable.value)
+
+/**
+ * A name for a channel started from a menu, where there is no field to type
+ * one. Named for the person rather than the song: the channel outlives the
+ * first track, and "whose is this" is what people ask.
+ */
+const defaultChannelName = (): string =>
+  `${user.value?.displayName || user.value?.username || 'Shared'}'s music`.slice(0, 32)
+
 const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
   const items: MenuItem[] = [
     { label: isPlayingRow(t, i) && !player.paused ? 'Pause' : 'Play', icon: Play, onSelect: () => playRow(i) },
     { label: 'Play next', icon: ListStart, onSelect: () => playNext(t) },
     { label: 'Add to queue', icon: ListEnd, onSelect: () => addToQueue(t) },
   ]
+  /*
+   * Straight to the call, without playing it here first.
+   *
+   * The rail's send button sends whatever is playing, and playing a preview
+   * takes your ear off the channel you are in — so sharing the next song
+   * meant leaving the room to pick it. From here it goes in front of
+   * everyone and you stay where you are.
+   */
+  if (inCallWithMusic.value) {
+    items.push({ sep: true }, music.channels.length
+      ? {
+          label: 'Play in the call', icon: Radio,
+          submenu: music.channels.map(c => ({ label: c.name, onSelect: () => shareToChannel(c.id, t.id) })),
+        }
+      : {
+          label: 'Start a music channel with this', icon: Radio,
+          onSelect: () => createMusicChannel(defaultChannelName(), { trackId: t.id }),
+        })
+  }
   if (library.playlists.length && !library.open) {
     items.push({ sep: true }, {
       label: 'Add to playlist',
@@ -140,24 +174,59 @@ const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
   openMenu(e, items)
 }
 
-const setVol = (e: Event): void => setVolume(Number((e.target as HTMLInputElement).value))
+/*
+ * Tuned into a channel? Then the bar is the channel.
+ *
+ * You hear one thing at a time, and the bar used to show your preview no
+ * matter what: listening to the room, you opened this and saw an idle 0:00
+ * player labelled "Only you" while somebody else's song played. The bar is
+ * what you are hearing, so it follows your ear.
+ */
+const live = computed(() => musicChannel.value)
+const liveAt = computed(() => channelElapsed(live.value, musicNow.value) ?? 0)
+const liveFraction = computed(() => {
+  const d = live.value?.now?.durationSec
+  return d ? Math.min(1, liveAt.value / d) : 0
+})
+
+/** One slider, whichever ear: the channel has its own gain, apart from the preview's. */
+const shownVol = computed(() => (live.value ? music.volume : player.volume))
+const setVol = (e: Event): void => {
+  const v = Number((e.target as HTMLInputElement).value)
+  if (live.value) music.volume = v
+  else setVolume(v)
+}
 const onSeek = (e: Event): void => seek(Number((e.target as HTMLInputElement).value))
-const volIcon = computed(() => player.muted || player.volume === 0 ? VolumeX
-  : player.volume < 0.5 ? Volume1 : Volume2)
+const volIcon = computed(() => (!live.value && player.muted) || shownVol.value === 0 ? VolumeX
+  : shownVol.value < 0.5 ? Volume1 : Volume2)
 
 // ── art-derived header ──────────────────────────────────────────────────────
 const theme = ref<CoverTheme | null>(null)
 /*
- * The playing record's sleeve wins.
+ * Two different questions, so two answers.
  *
- * It used to theme from the first track in the list that happened to have
- * art, which meant the colour had nothing to do with what you were hearing.
- * What is playing is the thing the room is about; the list's own art is the
- * fallback for before anything has started.
+ * The COLOUR is what you are hearing: the channel's song when you are tuned
+ * in, your preview otherwise, and the list's own art only before anything
+ * has started. It used to theme from the first track in the list, which
+ * had nothing to do with what was playing.
+ *
+ * The PICTURE is the list. It used to be the same value, so the cover of
+ * "All tracks" became whatever record was playing — and someone with an
+ * empty library, tuned into a friend's channel, saw that friend's album
+ * art sitting over "Nothing yet" as if it were theirs.
  */
-const headerArt = computed<string | null>(() =>
-  player.current?.cover ?? shownTracks.value.find(t => t.cover)?.cover ?? null)
-watch(headerArt, async (src) => { theme.value = await coverTheme(src) }, { immediate: true })
+/** Up to four different covers from the list, in list order. */
+const listArts = computed<string[]>(() => {
+  const seen = new Set<string>()
+  for (const t of shownTracks.value) {
+    if (t.cover && !seen.has(t.cover)) seen.add(t.cover)
+    if (seen.size === 4) break
+  }
+  return [...seen]
+})
+const themeArt = computed<string | null>(() =>
+  live.value?.now?.cover ?? player.current?.cover ?? listArts.value[0] ?? null)
+watch(themeArt, async (src) => { theme.value = await coverTheme(src) }, { immediate: true })
 
 /*
  * No variables at all when the setting says accent: every rule that reads
@@ -433,8 +502,14 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
         </section>
 
         <header class="mm-head" :class="{ themed: !!theme && appearance.musicColour === 'artwork' }">
-          <div class="mm-art" :class="{ empty: !headerArt }">
-            <img v-if="headerArt" :src="headerArt" alt="" />
+          <!-- Four covers make a mosaic, the way a list looks like a list
+               rather than like one of its albums. Fewer than four, and the
+               first one stands for it. -->
+          <div class="mm-art" :class="{ empty: !listArts.length, mosaic: listArts.length === 4 }">
+            <template v-if="listArts.length === 4">
+              <img v-for="(src, i) in listArts" :key="i" :src="src" alt="" />
+            </template>
+            <img v-else-if="listArts.length" :src="listArts[0]" alt="" />
             <Music2 v-else :size="38" :stroke-width="1.5" />
           </div>
           <div class="mm-headtext">
@@ -602,7 +677,19 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
     -->
     <footer class="mm-foot">
       <div class="mm-now">
-        <template v-if="playing">
+        <template v-if="live">
+          <span class="mm-nowart" :class="{ empty: !live.now?.cover }">
+            <img v-if="live.now?.cover" :src="live.now.cover" alt="" />
+            <Radio v-else :size="20" :stroke-width="1.75" />
+          </span>
+          <span class="mm-nownames">
+            <span class="mm-nowtitle mm-ellip">
+              {{ live.now ? (live.now.title ?? 'A linked track') : 'Nothing playing' }}
+            </span>
+            <span class="mm-artist mm-ellip">{{ live.now?.artist || (live.now ? 'Unknown artist' : 'Queue something from your library') }}</span>
+          </span>
+        </template>
+        <template v-else-if="playing">
           <span class="mm-nowart" :class="{ empty: !playing.cover }">
             <img v-if="playing.cover" :src="playing.cover" alt="" />
             <Music2 v-else :size="20" :stroke-width="1.75" />
@@ -614,7 +701,34 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
         </template>
       </div>
 
-      <div class="mm-deck">
+      <div v-if="live" class="mm-deck">
+        <!--
+          A shared song cannot be paused or sought — that would be doing it
+          to everyone — so the deck offers the two things you can do, in
+          words rather than glyphs, because neither is a button any player
+          has taught you.
+        -->
+        <div class="mm-keys">
+          <button
+            class="mm-pill" :disabled="!live.now"
+            :aria-label="`Skip for everyone in ${live.name}`" @click="skipMusic(live.id)"
+          >
+            <SkipForward :size="14" :stroke-width="2.5" /> Skip for everyone
+          </button>
+          <button class="mm-pill" :aria-label="`Stop listening to ${live.name}`" @click="listenToMusic(null)">
+            <LogOut :size="14" :stroke-width="2.5" /> Leave
+          </button>
+        </div>
+        <div class="mm-scrub">
+          <span class="mm-time">{{ live.now ? clock(liveAt) : '' }}</span>
+          <span class="mm-livebar" role="presentation">
+            <span class="mm-livefill" :style="{ transform: `scaleX(${liveFraction})` }" />
+          </span>
+          <span class="mm-time">{{ live.now?.durationSec ? clock(live.now.durationSec) : '' }}</span>
+        </div>
+      </div>
+
+      <div v-else class="mm-deck">
         <div class="mm-keys">
           <button
             class="mm-icon" :class="{ lit: player.shuffle }"
@@ -670,11 +784,12 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
                something without a toast for every click. -->
           <span v-if="queue.manual.length" class="mm-qbadge">{{ queue.manual.length }}</span>
         </button>
-        <span class="mm-only"><Radio :size="12" :stroke-width="2.25" /> Only you</span>
+        <span v-if="live" class="mm-only live"><span class="mm-livedot" aria-hidden="true" /> <span class="mm-ellip">Everyone in {{ live.name }}</span></span>
+        <span v-else class="mm-only"><Radio :size="12" :stroke-width="2.25" /> Only you</span>
         <component :is="volIcon" class="mm-volico" :size="16" :stroke-width="2.25" />
         <input
-          class="mm-vol" type="range" min="0" max="1" step="0.01" :value="vol"
-          aria-label="Preview volume" @input="setVol"
+          class="mm-vol" type="range" min="0" max="1" step="0.01" :value="shownVol"
+          :aria-label="live ? 'Channel volume' : 'Preview volume'" @input="setVol"
         />
       </div>
     </footer>
@@ -842,6 +957,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   display: grid; place-items: center; color: var(--text-3);
 }
 .mm-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mm-art.mosaic { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; place-items: stretch; }
 
 .mm-headtext { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; min-width: 0; }
 .mm-kind { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-2); }
@@ -1123,6 +1239,42 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 .mm-only {
   display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
   font-size: 11px; color: var(--text-3);
+}
+.mm-only.live { min-width: 0; flex-shrink: 1; color: var(--accent-text); }
+.mm-livedot {
+  flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); color: var(--text-on-accent);
+  animation: mm-breathe 2.4s var(--ease-out) infinite;
+}
+@keyframes mm-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+
+/* The live deck's two actions. Pills, not the round transport keys: they
+   are not play and pause, and dressing them up as such would lie. */
+.mm-pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 13px;
+  border: none; border-radius: var(--edge-pill); cursor: pointer;
+  background: var(--hover); color: var(--text-1);
+  font-size: 12.5px; font-weight: 600; font-family: inherit;
+  transition: background var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .mm-pill:hover:not(:disabled) { background: var(--hover-strong); } }
+.mm-pill:active:not(:disabled) { transform: scale(.97); }
+.mm-pill:disabled { opacity: .4; cursor: default; }
+
+/* Progress you can watch but not drag: a shared song has one position, and
+   it belongs to everyone. */
+.mm-livebar {
+  flex: 1; min-width: 60px; height: 4px; border-radius: var(--edge-pill);
+  background: var(--hover-strong); overflow: hidden;
+}
+.mm-livefill {
+  display: block; width: 100%; height: 100%; transform-origin: left center;
+  background: var(--art-accent, var(--accent));
+  transition: transform 1s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-livedot { animation: none; }
+  .mm-livefill, .mm-pill { transition: none; }
 }
 .mm-volico { flex-shrink: 0; color: var(--text-3); }
 .mm-vol { width: 92px; min-width: 0; accent-color: var(--art-accent, var(--accent)); cursor: pointer; }

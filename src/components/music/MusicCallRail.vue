@@ -15,12 +15,14 @@
  * "our music", which is why it says what it will do rather than just "play".
  */
 import { computed, ref } from 'vue'
-import { Music2, Plus, Radio, Send, Volume2, X } from 'lucide-vue-next'
+import { Music2, Plus, Radio, Send, SkipForward, Volume2, X } from 'lucide-vue-next'
 import { voice } from '@/composables/useVoice'
+import { useAuth } from '@/composables/useAuth'
 import {
-  music, createMusicChannel, queueMusic, listenToMusic, closeMusicChannel,
+  music, createMusicChannel, shareToChannel, listenToMusic, closeMusicChannel, skipMusic,
+  channelElapsed, musicNow, type MusicChannelView, type MusicEntryView,
 } from '@/composables/useMusic'
-import type { LibTrack } from '@/composables/useMusicLibrary'
+import { clock, type LibTrack } from '@/composables/useMusicLibrary'
 import type { VoiceRoomChoice } from './rooms'
 
 const props = defineProps<{ selected: LibTrack | null; rooms: VoiceRoomChoice[] }>()
@@ -34,8 +36,34 @@ const newName = ref('')
 // nothing to show the channels of yet.
 const inCall = computed(() => voice.connected && !!voice.activeConvId)
 
+const { user } = useAuth()
+
 const nameOf = (id: string): string =>
   voice.participants.find(p => p.id === id)?.name ?? 'Someone'
+
+/** Who put a song on. "you" for your own, because your own name reads oddly. */
+const addedBy = (id: string): string => (id === user.value?.id ? 'you' : nameOf(id))
+
+/** A pasted link carries no tags, and a URL is not a title. */
+const titleOf = (e: MusicEntryView): string => e.title ?? 'A linked track'
+
+/** How many of the queue to spell out before "and N more". */
+const SHOWN_NEXT = 3
+
+/** 0–1 through the current song, or null when there is no length to measure. */
+const fraction = (c: MusicChannelView): number | null => {
+  const d = c.now?.durationSec
+  const at = channelElapsed(c, musicNow.value)
+  return d && at !== null ? Math.min(1, at / d) : null
+}
+
+/** "1:02 / 3:30", or just "1:02" for a link that never said how long it is. */
+const timeLine = (c: MusicChannelView): string => {
+  const at = channelElapsed(c, musicNow.value)
+  if (at === null) return ''
+  const d = c.now?.durationSec
+  return d ? `${clock(at)} / ${clock(d)}` : clock(at)
+}
 
 /**
  * Names, not a number.
@@ -55,17 +83,9 @@ const listeners = (ids: string[], known?: { id: string; name: string }[]): strin
   return `${names[0]}, ${names[1]} and ${names.length - 2} more`
 }
 
-/**
- * Send the selected track to a channel, and listen to that channel.
- *
- * Sharing is "let's hear this together", so it moves your ear to the room.
- * Leaving the preview running instead played the same song twice, a beat
- * apart — which sounds like a fault, not like sharing.
- */
+/** Send the selected track to a channel, and move your ear there with it. */
 const pushTo = (channelId: string): void => {
-  if (!props.selected) return
-  queueMusic(channelId, { trackId: props.selected.id })
-  if (music.listeningTo !== channelId) listenToMusic(channelId)
+  if (props.selected) shareToChannel(channelId, props.selected.id)
 }
 
 const startWith = (): void => {
@@ -131,37 +151,89 @@ const startWith = (): void => {
           v-for="c in music.channels" :key="c.id"
           class="cr-card" :class="{ on: music.listeningTo === c.id }"
         >
-          <button
-            class="cr-tune"
-            :aria-pressed="music.listeningTo === c.id"
-            :aria-label="music.listeningTo === c.id ? `Stop listening to ${c.name}` : `Listen to ${c.name}`"
-            @click="listenToMusic(music.listeningTo === c.id ? null : c.id)"
-          >
-            <Music2 class="cr-ico" :size="14" :stroke-width="2.25" />
-            <span class="cr-names">
-              <span class="cr-name">{{ c.name }}</span>
-              <span class="cr-who">
-                {{ listeners(c.listeners) }}<template v-if="c.queued"> · {{ c.queued }} queued</template>
+          <div class="cr-top">
+            <button
+              class="cr-tune"
+              :aria-pressed="music.listeningTo === c.id"
+              :aria-label="music.listeningTo === c.id ? `Stop listening to ${c.name}` : `Listen to ${c.name}`"
+              @click="listenToMusic(music.listeningTo === c.id ? null : c.id)"
+            >
+              <!-- The song's own cover where it has one: a channel is what
+                   it is playing, and the art is the fastest way to say so. -->
+              <span class="cr-art" :class="{ empty: !c.now?.cover }">
+                <img v-if="c.now?.cover" :src="c.now.cover" alt="" />
+                <Music2 v-else :size="15" :stroke-width="2.25" />
               </span>
-            </span>
-          </button>
+              <span class="cr-names">
+                <span class="cr-name">{{ c.name }}</span>
+                <span v-if="c.now" class="cr-song">
+                  {{ titleOf(c.now) }}<template v-if="c.now.artist"> · {{ c.now.artist }}</template>
+                </span>
+                <span v-else class="cr-song quiet">Nothing playing</span>
+              </span>
+              <span class="cr-state">{{ music.listeningTo === c.id ? 'Listening' : 'Join' }}</span>
+            </button>
+          </div>
 
-          <div class="cr-acts">
-            <button
-              class="cr-icon" :disabled="!selected"
-              :aria-label="selected ? `Add ${selected.title} to ${c.name}` : 'Pick a track first'"
-              v-tip="selected ? `Add “${selected.title}” to ${c.name}` : 'Pick a track in your library first'"
-              @click="pushTo(c.id)"
-            >
-              <Send :size="13" :stroke-width="2.25" />
-            </button>
-            <button
-              class="cr-icon danger" :aria-label="`Close ${c.name} for everyone`"
-              v-tip="'Close this channel for everyone'"
-              @click="closeMusicChannel(c.id)"
-            >
-              <X :size="13" :stroke-width="2.25" />
-            </button>
+          <!-- Where the song is. Read from the server's clock offset, not
+               from audio, so it is right on a card you are not tuned into —
+               which is the card you are deciding whether to join. -->
+          <div v-if="c.now" class="cr-prog">
+            <span class="cr-rail" role="presentation">
+              <span
+                v-if="fraction(c) !== null" class="cr-fill"
+                :style="{ transform: `scaleX(${fraction(c)})` }"
+              />
+            </span>
+            <span class="cr-meta">
+              <span class="cr-by">Added by {{ addedBy(c.now.addedBy) }}</span>
+              <span class="cr-time">{{ timeLine(c) }}</span>
+            </span>
+          </div>
+
+          <!-- Who, and what you can do about it, on one line. The buttons used
+               to share the top row with the name and squeezed it to "pe…". -->
+          <div class="cr-foot">
+            <p class="cr-who">{{ c.listeners.length ? `${listeners(c.listeners)} listening` : 'Nobody listening yet' }}</p>
+            <div class="cr-acts">
+              <button
+                class="cr-icon" :disabled="!selected"
+                :aria-label="selected ? `Add ${selected.title} to ${c.name}` : 'Pick a track first'"
+                v-tip="selected ? `Add “${selected.title}” to ${c.name}` : 'Pick a track in your library first'"
+                @click="pushTo(c.id)"
+              >
+                <Send :size="13" :stroke-width="2.25" />
+              </button>
+              <!-- Shared, so skipping is for everyone, and the tip says so. -->
+              <button
+                v-if="c.now" class="cr-icon" :aria-label="`Skip for everyone in ${c.name}`"
+                v-tip="'Skip — for everyone listening'"
+                @click="skipMusic(c.id)"
+              >
+                <SkipForward :size="13" :stroke-width="2.25" />
+              </button>
+              <button
+                class="cr-icon danger" :aria-label="`Close ${c.name} for everyone`"
+                v-tip="'Close this channel for everyone'"
+                @click="closeMusicChannel(c.id)"
+              >
+                <X :size="13" :stroke-width="2.25" />
+              </button>
+            </div>
+          </div>
+
+          <!-- What is coming, so nobody has to tune in to find out. -->
+          <div v-if="c.queue.length" class="cr-next">
+            <span class="cr-nexthead">Up next</span>
+            <ol class="cr-nextlist">
+              <li v-for="(e, i) in c.queue.slice(0, SHOWN_NEXT)" :key="i" class="cr-nextrow">
+                <span class="cr-nexttitle">{{ titleOf(e) }}</span>
+                <span class="cr-nextby">{{ addedBy(e.addedBy) }}</span>
+              </li>
+            </ol>
+            <span v-if="c.queue.length > SHOWN_NEXT" class="cr-nextmore">
+              and {{ c.queue.length - SHOWN_NEXT }} more
+            </span>
           </div>
         </li>
       </ul>
@@ -241,21 +313,78 @@ const startWith = (): void => {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
 }
 .cr-card {
-  display: flex; align-items: center; gap: 2px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 4px 10px 8px;
   border-radius: var(--edge-md); background: var(--bg-input);
-  min-height: 54px;
 }
 /* Selection is a ring over a neutral fill. The accent means hover here. */
 .cr-card.on { box-shadow: inset 0 0 0 1px var(--active-ring); background: var(--active-bg); }
 
+.cr-top { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .cr-tune {
   flex: 1; min-width: 0;
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 4px 10px 11px; border: none; background: none; cursor: pointer;
-  text-align: left; border-radius: var(--edge-md);
+  display: flex; align-items: center; gap: 10px;
+  padding: 0; border: none; background: none; cursor: pointer;
+  text-align: left; border-radius: var(--edge-sm);
 }
 .cr-ico { flex-shrink: 0; color: var(--text-3); }
-.cr-card.on .cr-ico { color: var(--accent-text); }
+
+.cr-art {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: var(--edge-sm);
+  overflow: hidden; background: var(--bg-panel);
+  display: grid; place-items: center; color: var(--text-3);
+}
+.cr-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cr-card.on .cr-art.empty { color: var(--accent-text); }
+
+.cr-song {
+  font-size: 12px; color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cr-song.quiet { color: var(--text-3); }
+
+/* The verb, at rest. Same reasoning as the room cards: the card exists to
+   be clicked, and saying what a click does beats making you guess. */
+.cr-state {
+  flex-shrink: 0; padding: 0 4px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--text-3);
+}
+.cr-card.on .cr-state { color: var(--accent-text); }
+
+.cr-prog { display: flex; flex-direction: column; gap: 4px; padding-right: 6px; }
+.cr-rail {
+  display: block; height: 3px; border-radius: var(--edge-pill);
+  background: var(--hover-strong); overflow: hidden;
+}
+.cr-fill {
+  display: block; height: 100%; width: 100%;
+  background: var(--text-3);
+  transform-origin: left center;
+  /* Stepped once a second; a matching transition makes it glide. */
+  transition: transform 1s linear;
+}
+.cr-card.on .cr-fill { background: var(--accent); color: var(--text-on-accent); }
+.cr-meta {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: 10.5px; color: var(--text-3);
+}
+.cr-by { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cr-time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+.cr-next {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 7px 6px 0 0; border-top: 1px solid var(--border);
+}
+.cr-nexthead {
+  font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--text-3);
+}
+.cr-nextlist { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.cr-nextrow { display: flex; justify-content: space-between; gap: 8px; min-width: 0; font-size: 11.5px; }
+.cr-nexttitle { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cr-nextby { flex-shrink: 0; color: var(--text-3); font-size: 10.5px; }
+.cr-nextmore { font-size: 10.5px; color: var(--text-3); }
 .cr-names { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .cr-name {
   font-size: 13.5px; font-weight: 600; color: var(--text-1);
@@ -266,7 +395,9 @@ const startWith = (): void => {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.cr-acts { display: flex; align-items: center; gap: 1px; padding-right: 4px; }
+.cr-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.cr-foot .cr-who { flex: 1; min-width: 0; }
+.cr-acts { flex-shrink: 0; display: flex; align-items: center; gap: 1px; padding-right: 4px; }
 .cr-icon {
   display: grid; place-items: center; width: 24px; height: 24px;
   border: none; background: none; cursor: pointer; color: var(--text-3);

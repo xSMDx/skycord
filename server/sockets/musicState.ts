@@ -37,7 +37,18 @@ import { canOpenChannel, canQueue } from '../utils/musicLimits'
  */
 export type Source =
   | { kind: 'link'; url: string }
-  | { kind: 'library'; trackId: string; title: string }
+  | {
+      kind: 'library'
+      trackId: string
+      title: string
+      artist: string
+      durationSec: number
+      /**
+       * Small enough to broadcast, or null. Only the playing track's cover is
+       * ever sent — see view() — and resolveSource drops anything large.
+       */
+      cover: string | null
+    }
 
 export type Track = Source & {
   addedBy: string
@@ -49,19 +60,52 @@ export interface MusicChannel {
   name: string
   createdBy: string
   now: Track | null
+  /** When `now` became the playing track, by this process's clock. */
+  startedAt: number | null
   queue: Track[]
   listeners: Set<string>
 }
 
 /** What a client is told. Sets become counts and arrays; nothing else leaks. */
+/** One entry as a listener sees it. A bare link has no title to show. */
+export interface MusicEntryView {
+  kind: 'link' | 'library'
+  title: string | null
+  artist: string | null
+  durationSec: number | null
+  addedBy: string
+}
+
 export interface MusicChannelView {
   id: string
   name: string
-  /** `url` is null for a library track; `title` is null for a bare link. */
-  now: { url: string | null; title: string | null; addedBy: string } | null
+  now: (MusicEntryView & {
+    /** The link itself, for a pasted link; null for a library track. */
+    url: string | null
+    cover: string | null
+    /**
+     * How far in, in milliseconds, at the moment this view was built.
+     *
+     * Elapsed rather than a start timestamp, because a timestamp would be
+     * read against the CLIENT's clock, and a laptop a minute fast would draw
+     * every progress bar a minute ahead. The client adds its own elapsed
+     * time since it received this, which is skew-free.
+     */
+    elapsedMs: number | null
+  }) | null
+  /** What plays after it, in order. Covers are left out: only `now` shows one. */
+  queue: MusicEntryView[]
   queued: number
   listeners: string[]
 }
+
+const entry = (t: Track): MusicEntryView => ({
+  kind: t.kind,
+  title: t.kind === 'library' ? t.title : null,
+  artist: t.kind === 'library' ? (t.artist || null) : null,
+  durationSec: t.kind === 'library' ? t.durationSec : null,
+  addedBy: t.addedBy,
+})
 
 const no = (reason: string): Check => ({ ok: false, reason })
 
@@ -111,11 +155,13 @@ export class MusicRooms {
         name: c.name,
         now: c.now
           ? {
-              url:   c.now.kind === 'link' ? c.now.url : null,
-              title: c.now.kind === 'library' ? c.now.title : null,
-              addedBy: c.now.addedBy,
+              ...entry(c.now),
+              url: c.now.kind === 'link' ? c.now.url : null,
+              cover: c.now.kind === 'library' ? c.now.cover : null,
+              elapsedMs: c.startedAt === null ? null : Math.max(0, this.now() - c.startedAt),
             }
           : null,
+        queue: c.queue.map(entry),
         queued: c.queue.length,
         listeners: [...c.listeners],
       })),
@@ -136,7 +182,7 @@ export class MusicRooms {
 
     const id = randomUUID()
     const track: Track = { ...source, addedBy: by, addedAt: this.now() }
-    here.set(id, { id, name, createdBy: by, now: track, queue: [], listeners: new Set() })
+    here.set(id, { id, name, createdBy: by, now: track, startedAt: this.now(), queue: [], listeners: new Set() })
 
     /*
      * The creator is NOT made a listener.
@@ -164,6 +210,7 @@ export class MusicRooms {
     const channel = this.get(room, channelId)
     if (!channel) return no('That music channel is gone.')
     channel.now = channel.queue.shift() ?? null
+    channel.startedAt = channel.now ? this.now() : null
     /*
      * An empty channel is not closed here.
      *

@@ -58,11 +58,26 @@ export const MUSIC_IDENTITY = 'svc:music'
  */
 export const musicAvailable = ref(false)
 
+/** One entry as a listener sees it. A bare link has no title to show. */
+export interface MusicEntryView {
+  kind: 'link' | 'library'
+  title: string | null
+  artist: string | null
+  durationSec: number | null
+  addedBy: string
+}
+
 export interface MusicChannelView {
   id: string
   name: string
-  /** `url` is null for a library track; `title` is null for a bare link. */
-  now: { url: string | null; title: string | null; addedBy: string } | null
+  now: (MusicEntryView & {
+    url: string | null
+    cover: string | null
+    /** How far in at the moment the server built this. See channelElapsed. */
+    elapsedMs: number | null
+  }) | null
+  /** What plays after it, in order. */
+  queue: MusicEntryView[]
   queued: number
   listeners: string[]
 }
@@ -76,7 +91,59 @@ export const music = reactive({
   volume: 0.6,
   /** The last refusal, for showing next to the control that caused it. */
   error: '' as string,
+  /** When the last state arrived, by this machine's clock. See channelElapsed. */
+  receivedAt: 0,
 })
+
+/**
+ * Seconds into a channel's song, right now.
+ *
+ * The server says how far in it was when it built the state; this adds how
+ * long ago, by THIS machine's clock, that state arrived. Neither side ever
+ * reads the other's clock, so a laptop that is a minute fast still draws the
+ * bar in the right place.
+ */
+export const channelElapsed = (c: MusicChannelView | null, nowMs: number): number | null => {
+  if (!c?.now || c.now.elapsedMs === null) return null
+  const sec = (c.now.elapsedMs + (nowMs - music.receivedAt)) / 1000
+  const d = c.now.durationSec
+  return d ? Math.min(d, Math.max(0, sec)) : Math.max(0, sec)
+}
+
+/**
+ * A once-a-second tick, running while anything in the call is playing.
+ *
+ * Progress for a shared song comes from no audio element — the sound
+ * arrives through the call — so nothing fires timeupdate. Rather than every
+ * view running its own interval, they all read this one, and it stops when
+ * there is nothing to count.
+ *
+ * Not only while you are tuned in: the rail shows every channel's progress
+ * so you can see what you would be joining, and a bar that only moves on
+ * the one channel you already hear froze the others between updates.
+ */
+export const musicNow = ref(Date.now())
+let ticker: ReturnType<typeof setInterval> | null = null
+const tick = (on: boolean): void => {
+  if (on && !ticker) ticker = setInterval(() => { musicNow.value = Date.now() }, 1000)
+  if (!on && ticker) { clearInterval(ticker); ticker = null }
+}
+const syncTick = (): void => tick(music.channels.some(c => c.now !== null))
+
+/**
+ * Stop listening without telling the server — for when the server already
+ * knows, because the call ended or the channel closed.
+ *
+ * Kept apart from listenToMusic(null), which also sends, plays the leave
+ * cue and is a choice the person made. These are the two ways listening
+ * ends on its own, and both used to clear the id and nothing else: the
+ * preview could not take the ear back because audioFocus still thought a
+ * channel had it.
+ */
+const untune = (): void => {
+  music.listeningTo = null
+  release('channel')
+}
 
 export const musicChannel = computed(() =>
   music.channels.find(c => c.id === music.listeningTo) ?? null)
@@ -89,7 +156,7 @@ export const setMusicTarget = (t: typeof target): void => {
   target = t
   // Leaving a call leaves its music. The server forgets us too; this is the
   // half the client owns, so a stale panel never outlives the call.
-  if (!t) { music.channels = []; music.listeningTo = null; music.error = '' }
+  if (!t) { music.channels = []; untune(); syncTick(); music.error = '' }
 }
 
 const send = (event: string, extra: Record<string, unknown> = {}): void => {
@@ -126,6 +193,18 @@ export const createMusicChannel = (
 export const queueMusic = (channelId: string, source: { trackId: string } | { url: string }): void =>
   send('music:queue', { channelId, ...source })
 
+/**
+ * Put one of your tracks on a channel, and listen to that channel.
+ *
+ * Sharing is "let's hear this together", so it moves your ear to the room.
+ * Leaving a preview running instead played the same song twice, a beat
+ * apart — which sounds like a fault, not like sharing.
+ */
+export const shareToChannel = (channelId: string, trackId: string): void => {
+  queueMusic(channelId, { trackId })
+  if (music.listeningTo !== channelId) listenToMusic(channelId)
+}
+
 export const skipMusic = (channelId: string): void =>
   send('music:skip', { channelId })
 
@@ -152,8 +231,11 @@ export const listenToMusic = (channelId: string | null): void => {
 
 /** Wired once, by useSocket, on every connect. */
 export const onMusicState = (payload: { channels: MusicChannelView[] }): void => {
+  music.receivedAt = Date.now()
+  musicNow.value = music.receivedAt
   const before = new Set(music.channels.map(c => c.id))
   music.channels = payload?.channels ?? []
+  syncTick()
 
   /*
    * A channel that is new to us gets the cue. Compared by id against what we
@@ -175,7 +257,7 @@ export const onMusicState = (payload: { channels: MusicChannelView[] }): void =>
   // A channel that went away while we were listening to it leaves us tuned
   // to nothing, rather than to an id nobody has.
   if (music.listeningTo && !music.channels.some(c => c.id === music.listeningTo)) {
-    music.listeningTo = null
+    untune()
   }
 }
 

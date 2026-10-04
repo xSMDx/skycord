@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   MUSIC_IDENTITY, music, setMusicTarget, listenToMusic,
   onMusicState, onMusicError, clearMusicError, musicChannel,
-  createMusicChannel, skipMusic,
+  createMusicChannel, skipMusic, shareToChannel, channelElapsed, musicNow,
+  type MusicChannelView,
 } from '../useMusic'
 
 const emit = vi.fn()
@@ -11,7 +12,7 @@ vi.mock('../useSocket', () => ({ getSocket: () => ({ emit }) }))
 const view = (channels: Partial<{ id: string; name: string; now: null; queued: number; listeners: string[] }>[]) => ({
   channels: channels.map(c => ({
     id: c.id ?? 'x', name: c.name ?? 'X', now: c.now ?? null,
-    queued: c.queued ?? 0, listeners: c.listeners ?? [],
+    queue: [], queued: c.queued ?? 0, listeners: c.listeners ?? [],
   })),
 })
 
@@ -138,5 +139,97 @@ describe('errors', () => {
   it('says something even when the server said nothing', () => {
     onMusicError({} as never)
     expect(music.error).not.toBe('')
+  })
+})
+
+/** A channel mid-song, as the server describes it at the moment it builds the state. */
+const playing = (elapsedMs: number, durationSec: number | null = 200): { channels: MusicChannelView[] } => ({
+  channels: [{
+    id: 'p', name: 'Live', queue: [], queued: 0, listeners: [],
+    now: {
+      kind: 'library', title: 'Song', artist: null, durationSec, addedBy: 'u1',
+      url: null, cover: null, elapsedMs,
+    },
+  }],
+})
+
+describe('where a shared song is', () => {
+  afterEach(() => { vi.useRealTimers() })
+
+  it('adds the time since the state arrived, by this clock alone', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(playing(30_000))
+    const c = music.channels[0]
+    expect(channelElapsed(c, Date.now())).toBe(30)
+    // Five seconds later on this machine: the server is not asked again,
+    // and its clock is never compared with ours.
+    expect(channelElapsed(c, Date.now() + 5_000)).toBe(35)
+  })
+
+  it('never runs past the end of the song, or before its start', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(playing(195_000, 200))
+    const c = music.channels[0]
+    expect(channelElapsed(c, Date.now() + 60_000)).toBe(200)
+    expect(channelElapsed(c, Date.now() - 600_000)).toBe(0)
+  })
+
+  it('keeps counting for a link that never said how long it is', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(playing(10_000, null))
+    expect(channelElapsed(music.channels[0], Date.now() + 90_000)).toBe(100)
+  })
+
+  it('has no answer when nothing is playing', () => {
+    onMusicState(view([{ id: 'a' }]))
+    expect(channelElapsed(music.channels[0], Date.now())).toBeNull()
+    expect(channelElapsed(null, Date.now())).toBeNull()
+  })
+
+  it('ticks while anything in the call plays, tuned in or not', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(playing(0))
+    expect(music.listeningTo).toBeNull()
+    const start = musicNow.value
+    vi.advanceTimersByTime(3_000)
+    // Not only for the channel you hear: the rail shows every channel's
+    // progress, and a bar that froze on the others was the bug.
+    expect(musicNow.value - start).toBe(3_000)
+  })
+
+  it('stops ticking when nothing plays, and when the call ends', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(playing(0))
+    onMusicState(view([{ id: 'p' }]))
+    const quiet = musicNow.value
+    vi.advanceTimersByTime(5_000)
+    expect(musicNow.value).toBe(quiet)
+
+    onMusicState(playing(0))
+    setMusicTarget(null)
+    const after = musicNow.value
+    vi.advanceTimersByTime(5_000)
+    expect(musicNow.value).toBe(after)
+  })
+})
+
+describe('sharing a track to a channel', () => {
+  it('queues it as an id and moves your ear to that channel', () => {
+    onMusicState(view([{ id: 'a' }]))
+    shareToChannel('a', 'trk1')
+    const events = emit.mock.calls.map(c => c[0])
+    expect(events).toEqual(['music:queue', 'music:listen'])
+    expect(emit.mock.calls[0][1]).toMatchObject({ channelId: 'a', trackId: 'trk1' })
+    expect(emit.mock.calls[0][1]).not.toHaveProperty('url')
+    expect(music.listeningTo).toBe('a')
+  })
+
+  it('does not re-tune when you are already listening there', () => {
+    onMusicState(view([{ id: 'a' }]))
+    listenToMusic('a')
+    emit.mockClear()
+    shareToChannel('a', 'trk2')
+    // A second listen would replay the tune-in cue over the music.
+    expect(emit.mock.calls.map(c => c[0])).toEqual(['music:queue'])
   })
 })
