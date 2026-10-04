@@ -85,8 +85,8 @@ const progress = computed(() => (live.value ? liveProgress.value : localProgress
         <SkipForward :size="13" :stroke-width="2.5" />
       </button>
       <button
-        class="mp-btn mp-stop" :aria-label="`Stop listening to ${live.name}`"
-        v-tip="'Stop listening'" @click="listenToMusic(null)"
+        class="mp-btn mp-stop" :aria-label="`Leave ${live.name}`"
+        v-tip="'Leave channel'" @click="listenToMusic(null)"
       >
         <LogOut :size="13" :stroke-width="2.5" />
       </button>

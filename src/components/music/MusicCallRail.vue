@@ -15,11 +15,11 @@
  * "our music", which is why it says what it will do rather than just "play".
  */
 import { computed, ref } from 'vue'
-import { Music2, Plus, Radio, Send, SkipForward, Volume2, X } from 'lucide-vue-next'
+import { Music2, Play, Plus, Radio, Send, SkipForward, Volume2, X } from 'lucide-vue-next'
 import { voice } from '@/composables/useVoice'
 import { useAuth } from '@/composables/useAuth'
 import {
-  music, createMusicChannel, shareToChannel, listenToMusic, closeMusicChannel, skipMusic,
+  music, createMusicChannel, shareToChannel, listenToMusic, closeMusicChannel, skipMusic, playNowMusic,
   channelElapsed, musicNow, type MusicChannelView, type MusicEntryView,
 } from '@/composables/useMusic'
 import { clock, type LibTrack } from '@/composables/useMusicLibrary'
@@ -49,6 +49,20 @@ const titleOf = (e: MusicEntryView): string => e.title ?? 'A linked track'
 
 /** How many of the queue to spell out before "and N more". */
 const SHOWN_NEXT = 3
+
+/**
+ * Channels whose whole queue is showing. Folded by default, because three
+ * cards each listing twenty songs is a wall; one click opens it, because a
+ * song you cannot see is a song you cannot play now.
+ */
+const expanded = ref(new Set<string>())
+const shownQueue = (c: MusicChannelView): MusicEntryView[] =>
+  expanded.value.has(c.id) ? c.queue : c.queue.slice(0, SHOWN_NEXT)
+const toggleQueue = (id: string): void => {
+  const s = new Set(expanded.value)
+  if (s.has(id)) s.delete(id); else s.add(id)
+  expanded.value = s
+}
 
 /** 0–1 through the current song, or null when there is no length to measure. */
 const fraction = (c: MusicChannelView): number | null => {
@@ -226,14 +240,26 @@ const startWith = (): void => {
           <div v-if="c.queue.length" class="cr-next">
             <span class="cr-nexthead">Up next</span>
             <ol class="cr-nextlist">
-              <li v-for="(e, i) in c.queue.slice(0, SHOWN_NEXT)" :key="i" class="cr-nextrow">
+              <!-- Keyed by entry id: the same song can be queued twice, and a
+                   row must keep meaning that entry as the list shifts. -->
+              <li v-for="e in shownQueue(c)" :key="e.id" class="cr-nextrow">
+                <button
+                  class="cr-playnow" :aria-label="`Play ${titleOf(e)} now, for everyone in ${c.name}`"
+                  v-tip="'Play now — for everyone listening'"
+                  @click="playNowMusic(c.id, e.id)"
+                >
+                  <Play :size="11" :stroke-width="2.5" />
+                </button>
                 <span class="cr-nexttitle">{{ titleOf(e) }}</span>
                 <span class="cr-nextby">{{ addedBy(e.addedBy) }}</span>
               </li>
             </ol>
-            <span v-if="c.queue.length > SHOWN_NEXT" class="cr-nextmore">
-              and {{ c.queue.length - SHOWN_NEXT }} more
-            </span>
+            <button
+              v-if="c.queue.length > SHOWN_NEXT" class="cr-nextmore"
+              :aria-expanded="expanded.has(c.id)" @click="toggleQueue(c.id)"
+            >
+              {{ expanded.has(c.id) ? 'Show less' : `and ${c.queue.length - SHOWN_NEXT} more` }}
+            </button>
           </div>
         </li>
       </ul>
@@ -381,10 +407,25 @@ const startWith = (): void => {
   text-transform: uppercase; color: var(--text-3);
 }
 .cr-nextlist { list-style: none; display: flex; flex-direction: column; gap: 2px; }
-.cr-nextrow { display: flex; justify-content: space-between; gap: 8px; min-width: 0; font-size: 11.5px; }
-.cr-nexttitle { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cr-nextrow { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; }
+.cr-nexttitle { flex: 1; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Present but quiet until the row is pointed at: a play button on every
+   queued song at full strength would make the list read as buttons. */
+.cr-playnow {
+  flex-shrink: 0; display: grid; place-items: center; width: 20px; height: 20px;
+  border: none; border-radius: 50%; cursor: pointer;
+  background: var(--hover); color: var(--text-2); opacity: .55;
+  transition: opacity var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
+}
+.cr-nextrow:hover .cr-playnow, .cr-playnow:focus-visible { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .cr-playnow:hover { background: var(--hover-strong); color: var(--text-1); } }
+.cr-playnow:active { transform: scale(.92); }
 .cr-nextby { flex-shrink: 0; color: var(--text-3); font-size: 10.5px; }
-.cr-nextmore { font-size: 10.5px; color: var(--text-3); }
+.cr-nextmore {
+  align-self: flex-start; padding: 0; border: none; background: none; cursor: pointer;
+  font-size: 10.5px; font-family: inherit; color: var(--text-3);
+}
+@media (hover: hover) and (pointer: fine) { .cr-nextmore:hover { color: var(--text-1); text-decoration: underline; } }
 .cr-names { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .cr-name {
   font-size: 13.5px; font-weight: 600; color: var(--text-1);
@@ -464,7 +505,13 @@ const startWith = (): void => {
   .cr-add { width: auto; }
 }
 
+/* Touch: no hover to reveal the play buttons, and fingers need the room. */
+@media (max-width: 768px) {
+  .cr-playnow { width: 40px; height: 40px; opacity: 1; }
+  .cr-icon { width: 40px; height: 40px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .cr-icon, .cr-add, .cr-go, .cr-flat, .cr-in { transition: none; }
+  .cr-icon, .cr-add, .cr-go, .cr-flat, .cr-in, .cr-playnow { transition: none; }
 }
 </style>
