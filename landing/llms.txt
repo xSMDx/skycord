@@ -5,7 +5,8 @@
 > GitHub.
 
 Skycord is a self-hostable chat platform: servers with channels, roles and
-permissions, voice and video calls, screen sharing, direct messages and groups.
+permissions, voice and video calls, screen sharing, music you listen to together
+in a call, direct messages and groups.
 It is not a public-square network — there is no discovery, no algorithmic feed
 and no advertising. It is built for a crew that already knows each other.
 
@@ -17,7 +18,7 @@ central service that self-hosters depend on.
 
 - Web client: Vue 3, served by the instance itself
 - Desktop: an Electron app for Windows, with its own screen-share picker,
-  push-to-talk that works unfocused, and auto-update
+  notifications you can reply to, a tray icon, and auto-update
 - Server: Node and Express, MongoDB for storage, LiveKit for voice and video
 - Install: Docker Compose — the app, MongoDB, LiveKit and Caddy for HTTPS
 

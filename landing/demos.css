@@ -244,11 +244,127 @@
 .net-debug span { color: var(--text-3); }
 .net-debug b { color: var(--text-1); font-weight: 500; }
 
+/* ── Demo: music ───────────────────────────────────────────────────── */
+/* The app's "In this call" card, the queue under it, and the chat box that
+   takes /play — the three places a song can come from. */
+.mu-card { border: 1px solid var(--divider); border-radius: 10px; background: var(--sunk); padding: 14px; }
+.mu-now { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 13px; align-items: center; }
+.mu-cover {
+  --hue: 232;
+  width: 56px; height: 56px; border-radius: 8px;
+  background: linear-gradient(140deg, hsl(var(--hue) 68% 58%), hsl(calc(var(--hue) + 38) 58% 30%));
+  display: flex; align-items: flex-end; justify-content: center; gap: 3px; padding-bottom: 13px;
+  transition: background var(--dur-panel) var(--ease-out);
+}
+/* Bars that move only while you are listening, and only while on screen. */
+.mu-cover i {
+  width: 4px; height: 6px; border-radius: 2px; background: rgba(255,255,255,.92);
+  transform-origin: bottom; opacity: 0; transition: opacity var(--dur-ui) var(--ease-out);
+}
+.demo[data-tuned="true"][data-playing="true"] .mu-cover i { opacity: 1; }
+.demo[data-tuned="true"][data-playing="true"][data-visible="true"] .mu-cover i { animation: muEq 760ms ease-in-out infinite alternate; }
+.mu-cover i:nth-child(2) { animation-delay: -260ms !important; animation-duration: 640ms !important; }
+.mu-cover i:nth-child(3) { animation-delay: -520ms !important; animation-duration: 880ms !important; }
+@keyframes muEq { from { transform: scaleY(.7); } to { transform: scaleY(3.1); } }
+
+.mu-chan { font: 600 10.5px/1 var(--font-ui); letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); }
+.mu-title {
+  display: block; margin-top: 6px; font: 600 15px/1.25 var(--font-ui); color: var(--text-strong);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mu-artist { display: block; font-size: 12.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo[data-playing="false"] .mu-title { color: var(--text-2); }
+
+.mu-tune {
+  height: 32px; padding: 0 13px; border-radius: 7px;
+  background: var(--raised); border: 1px solid var(--border);
+  font: 500 12.5px/1 var(--font-ui); color: var(--text-1);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease;
+}
+.mu-tune:active { transform: scale(0.97); }
+.mu-tune[aria-pressed="true"] { background: rgba(var(--accent-rgb), .16); border-color: var(--accent); color: var(--accent-text); }
+
+/* The track is a pseudo-element so the fill can scale without a knob to distort. */
+.mu-seek { position: relative; height: 16px; margin-top: 14px; cursor: pointer; border-radius: 99px; touch-action: none; }
+.mu-seek::before, .mu-fill {
+  content: ''; position: absolute; left: 0; right: 0; top: 6px; height: 4px; border-radius: 99px;
+  transition: height 120ms var(--ease-out), top 120ms var(--ease-out);
+}
+.mu-seek::before { background: rgba(255,255,255,.1); }
+.mu-fill {
+  background: var(--accent); transform-origin: left; transform: scaleX(0);
+  transition: transform 250ms linear, background var(--dur-panel) var(--ease-out), height 120ms var(--ease-out), top 120ms var(--ease-out);
+}
+.mu-seek.jump .mu-fill { transition: transform 320ms var(--ease-out), height 120ms var(--ease-out), top 120ms var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .mu-seek:hover::before, .mu-seek:hover .mu-fill { top: 5px; height: 6px; }
+}
+.mu-seek:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.demo[data-playing="false"] .mu-seek { cursor: default; }
+
+.mu-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.mu-time { font: 500 11.5px/1 var(--font-ui); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.mu-btns { display: flex; gap: 6px; }
+.mu-b {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 32px; min-width: 32px; padding: 0 9px; border-radius: 7px;
+  font: 500 12.5px/1 var(--font-ui); color: var(--text-2);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, color var(--dur-ui) ease;
+}
+.mu-b svg { width: 15px; height: 15px; flex: none; }
+.mu-b:active { transform: scale(0.96); }
+.mu-skip { background: var(--raised); border: 1px solid var(--border); color: var(--text-1); padding: 0 12px; }
+@media (hover: hover) and (pointer: fine) { .mu-b:hover { background: var(--hover-strong); color: var(--text-1); } }
+.mu-b:disabled { opacity: .45; pointer-events: none; }
+
+.mu-who { display: flex; align-items: center; gap: 9px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider); font-size: 12px; color: var(--text-3); }
+.mu-avs { display: flex; }
+.mu-avs .av {
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  font: 600 10px/1 var(--font-ui); color: #fff; background: var(--c);
+  box-shadow: 0 0 0 2px var(--sunk);
+}
+.mu-avs .av + .av { margin-left: -4px; }
+.mu-avs .mu-you { display: none; background: var(--accent); color: var(--on-accent); transition: background-color var(--dur-panel) var(--ease-out); }
+.demo[data-tuned="true"] .mu-avs .mu-you { display: grid; animation: chipPop 380ms var(--ease-out); }
+
+.mu-next { margin-top: 14px; }
+.mu-next-head { margin: 0 2px 6px; font: 600 10.5px/1 var(--font-ui); letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); }
+.mu-queue { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; min-height: 76px; align-content: start; }
+.mu-queue li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 7px; font-size: 13px; color: var(--text-1); min-width: 0; }
+.mu-queue li span:not(.mu-dot) { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-dot { --hue: 200; flex: none; width: 22px; height: 22px; border-radius: 5px; background: linear-gradient(140deg, hsl(var(--hue) 68% 58%), hsl(calc(var(--hue) + 38) 58% 30%)); }
+.mu-queue em { margin-left: auto; flex: none; font-style: normal; font-size: 11.5px; color: var(--text-3); }
+.mu-queue li.mine em { color: var(--accent-text); }
+.mu-queue li.fresh { animation: muIn 420ms var(--ease-out); background: rgba(var(--accent-rgb), .08); }
+.mu-queue li.mu-empty { color: var(--text-3); font-size: 12.5px; }
+@keyframes muIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* The app answers commands with a note only you can see, above the box. */
+.mu-note { min-height: 18px; margin: 10px 2px 7px; font-size: 12.5px; line-height: 18px; color: var(--text-2); }
+.mu-note .tag { margin-right: 7px; font-size: 10.5px; color: var(--text-3); }
+.mu-note b { color: var(--accent-text); font-weight: 600; }
+.mu-note.in { animation: muIn 300ms var(--ease-out); }
+
+.mu-chat {
+  display: flex; align-items: center; height: 40px; padding: 0 12px; border-radius: 8px;
+  background: var(--raised); border: 1px solid var(--border);
+  transition: border-color var(--dur-ui) var(--ease-out), box-shadow var(--dur-ui) var(--ease-out);
+}
+.mu-chat:focus-within, .mu-chat.typing { border-color: rgba(var(--accent-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .12); }
+.mu-input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; font: 400 13.5px/1 var(--font-ui); color: var(--text-1); }
+.mu-input::placeholder { color: var(--text-3); }
+
 /* ── Reduced motion ────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .gcursor, .ripple { display: none !important; }
   .rx-chip.pop, .rx-chip .n.bump { animation: none; }
   .gauge-bar i { transition: none; }
+  .mu-cover i, .mu-queue li.fresh, .mu-note.in, .demo[data-tuned="true"] .mu-avs .mu-you { animation: none !important; }
+  .mu-cover i:nth-child(1) { transform: scaleY(1.8); }
+  .mu-cover i:nth-child(2) { transform: scaleY(2.8); }
+  .mu-cover i:nth-child(3) { transform: scaleY(1.3); }
+  .mu-fill, .mu-seek.jump .mu-fill { transition: none; }
 }
 
 /* ── Touch targets ─────────────────────────────────────────────────── */
@@ -260,4 +376,10 @@
   .seg-b { height: 44px; }
   .rx-act { width: 40px; height: 40px; font-size: 17px; }
   .rx-actions { gap: 4px; top: -22px; }
+  .mu-tune, .mu-b { height: 44px; }
+  .mu-b { min-width: 44px; }
+  .mu-seek { height: 28px; }
+  .mu-seek::before, .mu-fill { top: 12px; }
+  .mu-chat { height: 46px; }
+  .mu-input { font-size: 16px; }   /* below 16px, iOS zooms the page on focus */
 }

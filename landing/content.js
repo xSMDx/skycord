@@ -13,7 +13,8 @@
       'Dragging channels and categories into whatever order you want — live now',
       'Moving somebody into a different voice channel, rather than only disconnecting them',
       'Bans. Kicking works today; a ban that stops someone coming back does not exist yet',
-      'Per-server notification settings, hiding muted channels, and a per-server profile'
+      'Per-server notification settings, and hiding muted channels — live now',
+      'A per-server profile'
     ]
   },
   {
@@ -42,12 +43,13 @@
       'A real desktop app instead of a browser tab — for Windows, in testing now',
       'Add other people’s servers and switch between them, like TeamSpeak — your friend hosts his, you host yours, one app for both — live now',
       'Your own screen-share picker, with the stream quality you choose — live now',
+      'Notifications you can reply to, a tray icon, and an unread count on the taskbar — live now',
       'Push-to-talk that works while the app is in the background',
       'Per-app audio capture, so sharing a game does not echo the call back'
     ]
   },
   {
-    stage: 'next', label: 'Next up', title: 'Phone app',
+    stage: 'next', label: 'Next up', title: 'Phone app — v0.21',
     items: [
       'A real app rather than a website saved to your home screen',
       'Notifications that arrive when the app is closed',
@@ -106,6 +108,17 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.20.9', date: 'Oct 5, 2026', time: '00:20 UTC+2', title: 'Everyone hears the same song',
+    items: [
+      ['add', 'Music you listen to together. Upload your own tracks or paste a link to build a library, then open a music channel in any voice call: everyone in the call can tune in, add to one shared queue, skip, go back, or jump to any point in the song. The server plays it, so nobody has to share their screen or play songs into their mic. The chat box does the same from the keyboard \u2014 /play a song, /skip, /prev, /seek 1:30, /queue. **If you host your own instance, music is off unless you choose it: the installer asks, or pass --music.**'],
+      ['add', 'Notifications. DMs, group messages, mentions, calls and friend requests now tell you when Skycord is not the window in front \u2014 in the Windows app as proper Windows notifications you can reply to or mark as read without opening anything, and in a browser as the browser\u2019s own. A call rings in a small window of its own, with Accept and Decline.'],
+      ['add', 'The Windows app stays in the tray when you close it, so calls and messages keep arriving. The tray icon shows a dot for unread messages and the taskbar button a count, and during a call the tray menu can mute and deafen you.'],
+      ['add', 'Notification settings like Discord\u2019s. Right-click a server, a category or a channel to mute it, for fifteen minutes or until you turn it back on, or to choose whether it notifies you about every message, only when you are mentioned, or never. Servers start at only mentions, and a server can hide its muted channels. Settings \u203a Notifications has separate switches for the pop-ups, each sound, taskbar flashing and the unread badge \u2014 so you can turn the pop-ups off and still hear messages arrive.'],
+      ['imp', 'Message sounds follow the same rules as notifications. Every message in every channel used to make a sound, muted or not, including the conversation you were reading. Now a muted conversation is silent, Do Not Disturb is silent, and the chat you are reading only makes a sound if you ask it to.'],
+      ['fix', '@everyone in a DM or group played its sound twice, and the little notice it put up ignored a muted conversation and Do Not Disturb.'],
+      ['fix', 'An address with a broken id in it \u2014 cut off, or mistyped \u2014 made the server answer with an internal error and write a stack trace to its log. It now just says the id is invalid.'],
+    ]
+  }, {
     v: 'v0.20.6', date: 'Oct 3, 2026', time: '03:10 UTC+2', title: 'A way to knock the server over, closed',
     items: [
       ['fix', 'A fault in the library Skycord uses for its live connection \u2014 the one carrying presence, typing, and who is sitting in a voice channel \u2014 let anyone who could reach the server disrupt it without needing an account. It is fixed by an update underneath, and nothing about how you use Skycord changes. **If you host your own instance, this is worth updating for.**'],

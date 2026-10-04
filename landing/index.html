@@ -46,6 +46,9 @@
   <symbol id="i-gauge" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
   <symbol id="i-smile" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9.2"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/></g></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5.5l11-2V16"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></g></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 5v14L8 12z"/><path d="M5.5 5.5v13"/></g></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 5v14L16 12z"/><path d="M18.5 5.5v13"/></g></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></g></symbol>
 </svg>
@@ -94,7 +97,7 @@
         Open in your browser
       </a>
     </div>
-    <p class="meta reveal">v0.20.2 · Windows 10 and 11 · or run it on your own box in one command</p>
+    <p class="meta reveal">v0.20.9 · Windows 10 and 11 · or run it on your own box in one command</p>
 
     <!-- The product itself, shown rather than described. -->
     <div class="shot reveal" id="shot">
@@ -237,6 +240,62 @@
   <section class="feat" data-flip="0">
     <div class="shell feat-in">
       <div class="feat-copy reveal">
+        <span class="eyebrow"><svg class="ic"><use href="#i-music"/></svg> Music</span>
+        <h2>Press play for<br/>the whole call.</h2>
+        <p>Open a music channel in any voice call and everyone in it can tune in. The server plays
+          it, so nobody has to share their screen or play songs into their mic.</p>
+        <ul class="ticks">
+          <li>Your own library: upload a track or paste a link</li>
+          <li>A shared queue anyone can add to, skip or seek</li>
+          <li>Or type /play, /skip, /seek and /queue in chat</li>
+        </ul>
+      </div>
+      <div class="feat-demo reveal">
+        <div class="demo" data-demo="music">
+          <div class="demo-head"><span class="ic"><svg><use href="#i-music"/></svg></span><b>Listen together</b><span class="hint">yours — try it</span></div>
+          <div class="demo-body">
+            <div class="mu-card">
+              <div class="mu-now">
+                <span class="mu-cover" aria-hidden="true"><i></i><i></i><i></i></span>
+                <div class="mu-meta">
+                  <span class="mu-chan">In this call</span>
+                  <b class="mu-title">Night Drive</b>
+                  <span class="mu-artist">Lumen</span>
+                </div>
+                <button class="mu-tune" type="button" data-mu="tune" aria-pressed="false">Tune in</button>
+              </div>
+              <div class="mu-seek" role="slider" tabindex="0" aria-label="Seek, for everyone" aria-valuemin="0" aria-valuemax="198" aria-valuenow="42"><i class="mu-fill"></i></div>
+              <div class="mu-row">
+                <span class="mu-time"><span class="mu-cur">0:42</span> / <span class="mu-dur">3:18</span></span>
+                <span class="mu-btns">
+                  <button class="mu-b" type="button" data-mu="prev" aria-label="Previous song"><svg><use href="#i-prev"/></svg></button>
+                  <button class="mu-b mu-skip" type="button" data-mu="skip"><svg><use href="#i-next"/></svg>Skip for everyone</button>
+                </span>
+              </div>
+              <div class="mu-who">
+                <span class="mu-avs" aria-hidden="true"><span class="av mu-you">Y</span><span class="av" style="--c:#23a55a">M</span><span class="av" style="--c:#c26a2e">K</span></span>
+                <span class="mu-who-t">Max and Kai are listening</span>
+              </div>
+            </div>
+            <div class="mu-next">
+              <div class="mu-next-head" id="mu-next-h">Up next</div>
+              <ol class="mu-queue" aria-labelledby="mu-next-h"></ol>
+            </div>
+            <p class="mu-note" role="status"></p>
+            <form class="mu-chat" autocomplete="off">
+              <input class="mu-input" type="text" name="msg" maxlength="60" spellcheck="false"
+                placeholder="Message #general — try /play" aria-label="Message #general. Try /play and a song" />
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="feat" data-flip="1">
+    <div class="shell feat-in">
+      <div class="feat-copy reveal">
         <span class="eyebrow"><svg class="ic"><use href="#i-mark"/></svg> Themes</span>
         <h2>Make it look<br/>like yours.</h2>
         <p>Pick an accent and the whole app follows — not a preview tile, the actual interface.
@@ -263,7 +322,7 @@
     </div>
   </section>
 
-  <section class="feat" data-flip="1">
+  <section class="feat" data-flip="0">
     <div class="shell feat-in">
       <div class="feat-copy reveal">
         <span class="eyebrow"><svg class="ic"><use href="#i-bolt"/></svg> Performance</span>
@@ -297,7 +356,7 @@
     </div>
   </section>
 
-  <section class="feat" data-flip="0">
+  <section class="feat" data-flip="1">
     <div class="shell feat-in">
       <div class="feat-copy reveal">
         <span class="eyebrow"><svg class="ic"><use href="#i-smile"/></svg> Expression</span>
@@ -333,7 +392,7 @@
     </div>
   </section>
 
-  <section class="feat" data-flip="1">
+  <section class="feat" data-flip="0">
     <div class="shell feat-in">
       <div class="feat-copy reveal">
         <span class="eyebrow"><svg class="ic"><use href="#i-gauge"/></svg> Diagnostics</span>
@@ -408,7 +467,7 @@
       <a class="btn big ghost" href="https://app.skycord.xyz">
         <svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg>Open in your browser</a>
     </div>
-    <p class="meta">Free. No ads, no upsell. v0.20.2 — 33 releases in 15 weeks.</p>
+    <p class="meta">Free. No ads, no upsell. v0.20.9 — 36 releases in 15 weeks.</p>
   </div>
 </section>
 

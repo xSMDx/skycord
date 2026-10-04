@@ -1,7 +1,7 @@
 {
   "name": "skycord-desktop",
   "productName": "Skycord",
-  "version": "0.20.2",
+  "version": "0.20.9",
   "private": true,
   "description": "Skycord for Windows — a thin shell around your instance's own web client",
   "main": "dist/main.js",

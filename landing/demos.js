@@ -130,8 +130,8 @@
 
   /* Three things in order, and the order is what sells it: the cursor
      dips, the target answers, then state changes. */
-  Demo.prototype.click = function (sel) {
-    var self = this, p = this.at(sel);
+  Demo.prototype.click = function (sel, ox, oy) {
+    var self = this, p = this.at(sel, ox, oy);
     if (!p) return Promise.resolve();
     this.scale = 0.88;
     var r = document.createElement('span');
@@ -176,7 +176,7 @@
       demo: this,
       to:    function (s, ox, oy) { return step(function () { return self.to(s, ox, oy); }, 0); },
       dwell: function (ms)        { return step(function () {}, ms == null ? 200 : ms); },
-      click: function (s)         { return step(function () { return self.click(s); }, 0); },
+      click: function (s, ox, oy) { return step(function () { return self.click(s, ox, oy); }, 0); },
       run:   function (fn, ms)    { return step(fn, ms); }
     };
     (function cycle() {
@@ -291,6 +291,268 @@
       tap(a, '[data-nf="rnn"]', function () { el._set('rnn'); }, 1600),
       tap(a, '[data-nf="dfn"]', function () { el._set('dfn'); }, 2400)
     ]);
+  }
+
+  /* ── Demo: music ───────────────────────────────────────────────────── */
+  /* A music channel in a call: tune in, add a song with /play, jump ahead,
+     skip. The clock is real time, kept by the demo itself rather than the
+     ghost's frames, so the song keeps playing while someone is using it. */
+  var SONGS = {
+    'night drive':  { title: 'Night Drive',  artist: 'Lumen',   len: 198, hue: 232 },
+    'paper planes': { title: 'Paper Planes', artist: 'Halcyon', len: 171, hue: 168 },
+    'low tide':     { title: 'Low Tide',     artist: 'Marlowe', len: 220, hue: 18 },
+    'golden hour':  { title: 'Golden Hour',  artist: 'Sunroom', len: 204, hue: 40 }
+  };
+  /* Anything else typed after /play becomes a song too — named as typed,
+     with a length and colour of its own that stay the same each time. */
+  function songFor(name) {
+    var key = name.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 40);
+    if (SONGS[key]) return SONGS[key];
+    var h = 7;
+    for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+    return {
+      title: key.replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }),
+      artist: 'from your library', len: 140 + h % 120, hue: h % 360
+    };
+  }
+  function clock(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    return Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2);
+  }
+  function musicSetUp(el) {
+    var cover = $('.mu-cover', el), title = $('.mu-title', el), artist = $('.mu-artist', el);
+    var seek = $('.mu-seek', el), fill = $('.mu-fill', el), cur = $('.mu-cur', el), dur = $('.mu-dur', el);
+    var tune = $('[data-mu="tune"]', el), prevB = $('[data-mu="prev"]', el), skipB = $('[data-mu="skip"]', el);
+    var who = $('.mu-who-t', el), list = $('.mu-queue', el);
+    var note = $('.mu-note', el), form = $('.mu-chat', el), input = $('.mu-input', el);
+    var s = { now: null, by: '', t0: 0, queue: [], history: [], tuned: false };
+
+    function position() { return s.now ? Math.min(s.now.len, (performance.now() - s.t0) / 1000) : 0; }
+    function startAt(sec) { s.t0 = performance.now() - sec * 1000; }
+
+    function drawTime() {
+      var p = position(), len = s.now ? s.now.len : 1;
+      cur.textContent = clock(p);
+      fill.style.transform = 'scaleX(' + (s.now ? p / len : 0) + ')';
+      seek.setAttribute('aria-valuenow', String(Math.floor(p)));
+      seek.setAttribute('aria-valuetext', s.now ? clock(p) + ' of ' + clock(len) : 'nothing playing');
+    }
+    function row(entry) {
+      var li = document.createElement('li'), dot = document.createElement('span');
+      var name = document.createElement('span'), by = document.createElement('em');
+      dot.className = 'mu-dot';
+      dot.style.setProperty('--hue', entry.t.hue);
+      name.textContent = entry.t.title;
+      by.textContent = entry.by === 'you' ? 'added by you' : entry.by;
+      if (entry.by === 'you') li.classList.add('mine');
+      if (entry.fresh) { li.classList.add('fresh'); entry.fresh = false; }
+      li.appendChild(dot); li.appendChild(name); li.appendChild(by);
+      return li;
+    }
+    var drawn = null;
+    function draw() {
+      var n = s.now;
+      // A new song starts the bar from nothing; it must not sweep backwards
+      // across the old one's progress to get there.
+      if (n !== drawn) {
+        drawn = n;
+        fill.style.transition = 'none';
+        fill.style.transform = 'scaleX(0)';
+        void fill.offsetWidth;
+        fill.style.transition = '';
+      }
+      el.dataset.playing = String(!!n);
+      el.dataset.tuned = String(s.tuned);
+      title.textContent = n ? n.title : 'Nothing playing';
+      artist.textContent = n ? n.artist : 'Type /play and a song to start';
+      cover.style.setProperty('--hue', n ? n.hue : 220);
+      dur.textContent = clock(n ? n.len : 0);
+      seek.setAttribute('aria-valuemax', String(n ? n.len : 0));
+      tune.setAttribute('aria-pressed', String(s.tuned));
+      tune.textContent = s.tuned ? 'Listening' : 'Tune in';
+      who.textContent = (s.tuned ? 'You, Max and Kai are' : 'Max and Kai are') + ' listening';
+      prevB.disabled = !n && !s.history.length;
+      skipB.disabled = !n;
+      list.textContent = '';
+      if (!s.queue.length) {
+        var empty = document.createElement('li');
+        empty.className = 'mu-empty';
+        empty.textContent = 'Nothing queued — /play adds a song';
+        list.appendChild(empty);
+      }
+      s.queue.forEach(function (e) { list.appendChild(row(e)); });
+      drawTime();
+    }
+    /* parts alternate plain and bold. Built from text nodes: a song name is
+       whatever the visitor typed. */
+    function say(parts) {
+      note.textContent = '';
+      var tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = 'Only you can see this';
+      note.appendChild(tag);
+      parts.forEach(function (p, i) {
+        var n = document.createElement(i % 2 ? 'b' : 'span');
+        n.textContent = p;
+        note.appendChild(n);
+      });
+      note.classList.remove('in'); void note.offsetWidth; note.classList.add('in');
+    }
+
+    function play(name, by) {
+      var t = songFor(name);
+      if (!s.now) { s.now = t; s.by = by; startAt(0); say(['Playing ', t.title, ' for everyone in the call']); }
+      else { s.queue.push({ t: t, by: by, fresh: true }); say(['Added ', t.title, ' to the queue']); }
+      draw();
+    }
+    function skip(ended) {
+      if (!s.now) return say(['Nothing is playing']);
+      s.history.push({ t: s.now, by: s.by });
+      var next = s.queue.shift();
+      if (next) { s.now = next.t; s.by = next.by; startAt(0); if (!ended) say(['Skipped to ', next.t.title, ' for everyone']); }
+      else { s.now = null; if (!ended) say(['That was the last song in the queue']); }
+      draw();
+    }
+    /* Back a song, or to the start of this one — the app's rule: after
+       three seconds, previous means "again". */
+    function prev() {
+      if (s.now && position() > 3) return seekTo(0);
+      var back = s.history.pop();
+      if (!back) return seekTo(0);
+      if (s.now) s.queue.unshift({ t: s.now, by: s.by });
+      s.now = back.t; s.by = back.by; startAt(0);
+      draw();
+    }
+    function seekTo(frac) {
+      if (!s.now) return;
+      seek.classList.add('jump');
+      startAt(Math.max(0, Math.min(0.99, frac)) * s.now.len);
+      drawTime();
+      setTimeout(function () { seek.classList.remove('jump'); }, 340);
+    }
+    function setTuned(v) { s.tuned = v; draw(); }
+
+    function command(text) {
+      var line = text.trim();
+      if (!line) return;
+      var m = /^\/(\S+)\s*(.*)$/.exec(line);
+      if (!m) return say(['This box takes commands here — try ', '/play golden hour']);
+      var cmd = m[1].toLowerCase(), arg = m[2].trim();
+      if (cmd === 'play' || cmd === 'p') return arg ? play(arg, 'you') : say(['Name a song: ', '/play low tide']);
+      if (cmd === 'skip' || cmd === 's' || cmd === 'next') return skip();
+      if (cmd === 'prev' || cmd === 'previous' || cmd === 'back') return prev();
+      if (cmd === 'stop') {
+        if (!s.now) return say(['Nothing is playing']);
+        s.now = null; s.queue = []; draw();
+        return say(['Stopped the music for everyone']);
+      }
+      if (cmd === 'seek') {
+        var t = /^(?:(\d+):)?(\d{1,2})$/.exec(arg);
+        if (!s.now) return say(['Nothing is playing']);
+        if (!t) return say(['Say where: ', '/seek 1:30']);
+        var to = (t[1] ? Number(t[1]) * 60 : 0) + Number(t[2]);
+        seekTo(to / s.now.len);
+        return say(['Moved to ', clock(position()), ' for everyone']);
+      }
+      if (cmd === 'np' || cmd === 'nowplaying') {
+        return s.now ? say(['', s.now.title, ' by ' + s.now.artist + ', ' + clock(position()) + ' of ' + clock(s.now.len)])
+                     : say(['Nothing is playing']);
+      }
+      if (cmd === 'queue' || cmd === 'q') {
+        return s.queue.length
+          ? say(['Up next: ', s.queue.map(function (e) { return e.t.title; }).join(', ')])
+          : say(['The queue is empty']);
+      }
+      if (cmd === 'join') { setTuned(true); return say(['Listening to ', 'In this call']); }
+      if (cmd === 'leave') { setTuned(false); return say(['Stopped listening']); }
+      say(['Try ', '/play', ', ', '/skip', ', ', '/seek 1:30', ' or ', '/queue']);
+    }
+
+    function reset() {
+      s.tuned = false; s.history = [];
+      s.now = SONGS['night drive']; s.by = 'Max';
+      s.queue = [{ t: SONGS['paper planes'], by: 'Kai' }, { t: SONGS['low tide'], by: 'Max' }];
+      startAt(42);
+      input.value = '';
+      form.classList.remove('typing');
+      note.textContent = '';
+      draw();
+    }
+
+    /* Its own clock, on its own observer: a song that only moved while the
+       ghost was driving would stop the moment a visitor took over. */
+    var timer = 0;
+    function tick() {
+      if (s.now && position() >= s.now.len) skip(true);
+      else drawTime();
+    }
+    function run(on) { clearInterval(timer); timer = on ? setInterval(tick, 250) : 0; }
+    new IntersectionObserver(function (entries) {
+      el.dataset.visible = String(entries[0].isIntersecting);
+      run(entries[0].isIntersecting && !document.hidden);
+    }).observe(el);
+    document.addEventListener('visibilitychange', function () {
+      run(!document.hidden && el.dataset.visible === 'true');
+    });
+
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-mu]');
+      if (!b) return;
+      if (b.dataset.mu === 'tune') setTuned(!s.tuned);
+      else if (b.dataset.mu === 'prev') prev();
+      else if (b.dataset.mu === 'skip') skip();
+    });
+    seek.addEventListener('pointerdown', function (e) {
+      var r = seek.getBoundingClientRect();
+      seekTo((e.clientX - r.left) / r.width);
+    });
+    seek.addEventListener('keydown', function (e) {
+      var d = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5 }[e.key];
+      if (!s.now || (!d && e.key !== 'Home')) return;
+      e.preventDefault();
+      startAt(e.key === 'Home' ? 0 : Math.max(0, Math.min(s.now.len - 1, position() + d)));
+      drawTime();
+    });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      command(input.value);
+      input.value = '';
+    });
+
+    el._reset = reset;
+    el._tune = setTuned;
+    el._play = play;
+    el._skip = function () { skip(); };
+    el._seekTo = seekTo;
+    el._type = function (v) { input.value = v; };
+    el._typing = function (v) { form.classList.toggle('typing', v); };
+    el._send = function () { command(input.value); input.value = ''; };
+    reset();
+  }
+  function musicScript(a) {
+    var el = a.el, line = '/play golden hour';
+    var typing = line.split('').map(function (ch, i) {
+      return function () { return a.run(function () { el._type(line.slice(0, i + 1)); }, ch === ' ' ? 110 : 55); };
+    });
+    // Where 72% of the way along the bar is, from its centre, measured when
+    // the cursor gets there rather than when the loop starts.
+    function along() { return $('.mu-seek', el).clientWidth * 0.22; }
+    return chain(a, [
+      function () { return a.run(function () { el._reset(); }, 900); },
+      tap(a, '[data-mu="tune"]', function () { el._tune(true); }, 1100),
+      function () { return a.to('.mu-input', -70, 0); },
+      function () { return a.dwell(160); },
+      function () { return a.click('.mu-input', -70, 0); },
+      function () { return a.run(function () { el._typing(true); }, 260); }
+    ].concat(typing, [
+      function () { return a.dwell(380); },
+      function () { return a.run(function () { el._send(); el._typing(false); }, 1700); },
+      function () { return a.to('.mu-seek', along(), 0); },
+      function () { return a.dwell(200); },
+      function () { return a.click('.mu-seek', along(), 0); },
+      function () { return a.run(function () { el._seekTo(0.72); }, 1500); },
+      tap(a, '[data-mu="skip"]', function () { el._skip(); }, 2400)
+    ]));
   }
 
   /* ── Demo: themes ──────────────────────────────────────────────────── */
@@ -480,6 +742,7 @@
   var KINDS = {
     share:     { setUp: shareSetUp,     script: shareScript },
     voice:     { setUp: voiceSetUp,     script: voiceScript },
+    music:     { setUp: musicSetUp,     script: musicScript },
     themes:    { setUp: themesSetUp,    script: themesScript },
     perf:      { setUp: perfSetUp,      script: perfScript },
     reactions: { setUp: reactionsSetUp, script: reactionsScript },
@@ -507,6 +770,8 @@
       if (rx) { rx._add('😄', true); rx._add('😄', false); rx._add('🔥', false); }
       var sh = $('.demo[data-demo="share"]');
       if (sh) sh._pick('game');
+      var mu = $('.demo[data-demo="music"]');
+      if (mu) { mu._tune(true); mu._play('golden hour', 'you'); }
       demos.forEach(function (d) { if (d.el._frame) d.el._frame(); });
       return;
     }
