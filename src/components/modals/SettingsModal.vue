@@ -37,6 +37,7 @@ const DevicesPage = defineAsyncComponent(() => import('@/components/settings/Dev
 import AboutInstancePage from '@/components/settings/AboutInstancePage.vue'
 import ServersPage from '@/components/settings/ServersPage.vue'
 import PerformancePage from '@/components/settings/PerformancePage.vue'
+import NotificationsPage from '@/components/settings/NotificationsPage.vue'
 import UpdatesPage from '@/components/settings/UpdatesPage.vue'
 import DebugPage from '@/components/settings/DebugPage.vue'
 import { debugUnlocked } from '@/composables/debugUnlock'
@@ -483,6 +484,7 @@ const navSections = computed<NavSection[]>(() => [
     items: [
       { id: 'appearance', label: 'Appearance'    },
       { id: 'voice',      label: 'Voice & Video' },
+      { id: 'notifications', label: 'Notifications' },
       { id: 'keybinds',   label: 'Keybinds'      },
       { id: 'performance', label: 'Performance'  },
       // Only in the Windows app, which keeps the list of servers.
@@ -1348,6 +1350,11 @@ const handleSelfRevoked = () => handleLogout()
           <!-- ── Performance ── -->
           <template v-else-if="page === 'performance'">
             <PerformancePage />
+          </template>
+
+          <!-- ── Notifications ── -->
+          <template v-else-if="page === 'notifications'">
+            <NotificationsPage />
           </template>
 
           <!-- ── Servers (Windows app only) ── -->
