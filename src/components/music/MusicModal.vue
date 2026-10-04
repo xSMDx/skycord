@@ -33,7 +33,7 @@ import { appearance } from '@/composables/useAppearance'
 import {
   player, queue, queueView, playFrom, toggle, next, previous, jumpTo, seek, setVolume,
   forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue,
-  removeFromQueue, clearQueue, type QueueContext,
+  removeFromQueue, clearQueue, okToPlaySolo, type QueueContext,
 } from '@/composables/useMusicPlayer'
 import { openMenu, type MenuItem } from '@/composables/useContextMenu'
 import { voice } from '@/composables/useVoice'
@@ -335,12 +335,18 @@ const usedFraction = computed(() => {
 const thisListLoaded = computed(() => !!queue.current && queue.context?.key === viewContext.value.key)
 const listPlaying = computed(() => thisListLoaded.value && !player.paused)
 
+/*
+ * The list's own Play and Shuffle mean "play this list for me", in a
+ * channel too — so they go to playFrom, which asks before leaving, and not
+ * through playRow, which in a channel means "add this song to the room".
+ * Going through playRow quietly queued the first song for everyone.
+ */
 const playThisList = (): void => {
   // Already this list: the button is play/pause for it.
   if (thisListLoaded.value) { void toggle(); return }
   const n = shownTracks.value.length
   if (!n) return
-  void playRow(player.shuffle ? Math.floor(Math.random() * n) : 0)
+  void playFrom(shownTracks.value, player.shuffle ? Math.floor(Math.random() * n) : 0, viewContext.value)
 }
 
 /**
@@ -350,11 +356,14 @@ const playThisList = (): void => {
  * it was simply the next one in the list — a shuffle button that shuffled
  * exactly once.
  */
-const shufflePlay = (): void => {
+const shufflePlay = async (): Promise<void> => {
   const n = shownTracks.value.length
   if (!n) return
+  // Asked before shuffle is switched on, so "Stay" leaves that alone too.
+  // A yes leaves the channel, and playFrom then has nothing to ask.
+  if (!(await okToPlaySolo(heading.value))) return
   setShuffleOn()
-  void playRow(Math.floor(Math.random() * n))
+  void playFrom(shownTracks.value, Math.floor(Math.random() * n), viewContext.value)
 }
 
 // ── the centre pane's identity ──────────────────────────────────────────────
