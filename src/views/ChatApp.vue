@@ -97,7 +97,7 @@ import { formatChannelName } from '@/utils/channelName'
 // aborted ChatApp's update entirely, taking the sidebar and the incoming-call
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, levelOf, hidesMuted, setAllConvPrefs, setConvPrefLocal, type ConvPref } from '@/composables/useConvPrefs'
-import { decide, chime, classify, unreadCount, type ConvRef, type Incoming, type RuleState } from '@/composables/notifyRules'
+import { decide, chime, classify, unreadCount, everyoneMuteKey, type ConvRef, type Incoming, type RuleState } from '@/composables/notifyRules'
 import { placeMuted, type LevelChoice } from '@/composables/notifyLevels'
 import {
   notify, ringFor, setUnread, setCallTray, onNoticeActivated, onCallAction, onTrayCommand,
@@ -2473,7 +2473,10 @@ const setupSocket = () => {
   })
 
   // @everyone ping — a toast. Its sound comes with the message (consider).
+  // Not from a muted conversation, and not while Do Not Disturb: the toast
+  // is a notification like any other.
   socketOn('onMentionEveryone', (p: any) => {
+    if (chosenStatus.value === 'dnd' || isConvMuted(everyoneMuteKey(String(p.conversationId ?? ''), authUser.value?.id ?? ''))) return
     showToast(`${p.authorName || 'Someone'} mentioned @everyone`)
   })
 

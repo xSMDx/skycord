@@ -32,6 +32,14 @@ export const errorHandler = (
     return
   }
 
+  // An id in the URL or body that is not an id. The caller's mistake: a 400,
+  // and nothing in the log. It used to be a 500 with a stack trace for every
+  // malformed URL. Other cast failures are still bugs of ours.
+  if (err instanceof mongoose.Error.CastError && err.kind === 'ObjectId') {
+    res.status(400).json({ message: 'Invalid id' })
+    return
+  }
+
   if (err instanceof mongoose.Error.ValidationError) {
     const messages = Object.values(err.errors).map((e) => e.message)
     res.status(400).json({ message: messages[0] })

@@ -197,3 +197,13 @@ export const unreadCount = (
   for (const c of alerted) if (!channelMuted(c)) n++
   return n
 }
+
+/**
+ * The mute key for an @everyone toast. The server names a DM by its
+ * conversation id — both user ids, sorted, joined by `_` — and mutes key a DM
+ * by the partner's id, so the partner is the half that is not you.
+ */
+export const everyoneMuteKey = (conversationId: string, myId: string): string => {
+  const halves = conversationId.split('_')
+  return halves.length === 2 && halves.includes(myId) ? halves.find(h => h !== myId) ?? conversationId : conversationId
+}

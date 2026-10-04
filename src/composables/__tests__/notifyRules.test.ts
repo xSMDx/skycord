@@ -187,3 +187,12 @@ describe('unreadCount with channel mutes', () => {
     expect(unreadCount([], [], ['c1', 'c2'], () => false, c => c === 'c2')).toBe(1)
   })
 })
+
+describe('everyoneMuteKey', () => {
+  it("a DM's @everyone is muted under the partner's id; a group's under its own", async () => {
+    const { everyoneMuteKey } = await import('../notifyRules')
+    expect(everyoneMuteKey('aaa_me', 'me')).toBe('aaa')
+    expect(everyoneMuteKey('me_zzz', 'me')).toBe('zzz')
+    expect(everyoneMuteKey('64b7f0c2a1b2c3d4e5f60718', 'me')).toBe('64b7f0c2a1b2c3d4e5f60718')
+  })
+})
