@@ -674,7 +674,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           </div>
           <div
             v-for="(t, i) in shownTracks" :key="`${t.id}-${i}`"
-            class="mm-tr mm-row" :class="{ on: isPlayingRow(t, i) }" role="row"
+            class="mm-tr mm-row" :class="{ on: !live && isPlayingRow(t, i) }" role="row"
             @click="onRowClick($event, i)" @contextmenu.prevent="rowMenu($event, t, i)"
           >
             <button
