@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+  ref, computed, nextTick, onMounted, onBeforeUnmount, watch, watchEffect } from 'vue'
 import {
   Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff, Music2,
 } from 'lucide-vue-next'
@@ -97,6 +97,12 @@ import { formatChannelName } from '@/utils/channelName'
 // aborted ChatApp's update entirely, taking the sidebar and the incoming-call
 // modal down with it.
 import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
+import { decide, mentionsMe, unreadCount, type ConvRef, type Incoming, type RuleState } from '@/composables/notifyRules'
+import {
+  notify, ringFor, setUnread, setCallTray, onNoticeActivated, onCallAction, onTrayCommand,
+  mentionedChannels, noteMention, clearMention, desktopDelivers,
+} from '@/composables/useNotifications'
+import { notificationPrefs } from '@/composables/notificationPrefs'
 import { stripMarkers } from '@/utils/richText'
 
 import type { DM, Server, Channel, Category, Message, ReplyGraph, Group, AvatarCrop } from '@/types'
@@ -2384,6 +2390,10 @@ const setupSocket = () => {
         lastActiveAt: Date.now(),
       })
     }
+    consider({
+      type: 'dm', messageId: String(payload._id ?? payload.id ?? ''), partnerId,
+      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+    }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
   })
 
   // Presence update
@@ -2408,11 +2418,17 @@ const setupSocket = () => {
     pendingReqs.value.unshift(payload)
     // Show badge on pending tab
     if (view.value === 'friends') friendsTab.value = 'pending'
+    const r = payload.requester ?? {}
+    consider({ type: 'friend', userId: r.id ?? payload._id, name: r.displayName || r.username || 'Someone', accepted: false },
+      r.avatar ?? avatarFor(r.username ?? ''))
   })
 
   // Friend accepted — reload list so they appear
-  socketOn('onFriendAccepted', async () => {
+  socketOn('onFriendAccepted', async (p: any) => {
     await loadFriends()
+    const f = apiFriends.value.find(x => x.id === p?.friendId)
+    consider({ type: 'friend', userId: p?.friendId ?? '', name: f ? (f.displayName || f.username) : 'Someone', accepted: true },
+      f ? avatarFor(f.username, f.avatar ?? null) : null)
   })
 
   // Group created (someone added us or we just created it)
@@ -2454,6 +2470,11 @@ const setupSocket = () => {
       g.lastMessageAt = payload.createdAt || new Date().toISOString()
       if (!(view.value === 'group' && activeGroup.value?.id === groupId)) g.unread = (g.unread || 0) + 1
     }
+    consider({
+      type: 'group', messageId: String(payload._id ?? ''), groupId,
+      groupName: g ? groupDisplayName(g) : 'a group',
+      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+    }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
   })
 
   // ── Servers & channels ────────────────────────────────────────────────────
@@ -2472,6 +2493,27 @@ const setupSocket = () => {
     // keeps useSocket's `_activeChannelId` honest for the same reason).
     const looking = view.value === 'server' && activeChannelId.value === channelId && !voiceStageOpen.value
     if (!looking) markUnread(channelId)
+    const mine = payload.authorId === authUser.value?.id
+    const forMe = !!payload.mentionsEveryone || mentionsMe(payload.content ?? '', noticeMe())
+    if (!looking && !mine && forMe) noteMention(channelId)
+    void (async () => {
+      let home = channelHome(channelId)
+      // A server not opened this session has no channel list loaded. Fetch
+      // it — only for a message that would notify — so the notice can say
+      // where it is and a click can open it.
+      if (!home && forMe && !mine && payload.serverId) {
+        try { await loadServerDetail(payload.serverId) } catch { /* named generically below */ }
+        home = channelHome(channelId)
+      }
+      const serverId = home?.srv.id ?? payload.serverId ?? ''
+      consider({
+        type: 'channel', messageId: String(payload._id ?? ''), channelId,
+        channelName: home?.ch.name ?? 'a channel', serverId,
+        serverName: home?.srv.name ?? servers.value.find(s => s.id === serverId)?.name ?? 'a server',
+        authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+        mentionsEveryone: !!payload.mentionsEveryone,
+      }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
+    })()
   })
 
   socketOn('onChannelCreated', (p: any) => upsertChannel(p.channel))
@@ -4050,6 +4092,115 @@ useDesktopTitleBar({
     return false
   },
 })
+
+// ── notifications ───────────────────────────────────────────────────────────
+// Placed last: the watchers below run at once, and read state declared above.
+// See docs/superpowers/specs/2026-10-04-tray-and-notifications-design.md.
+
+// Whether the window is in front, kept as a ref so the call window can close
+// the moment you come back (the in-app ring takes over).
+const appFocused = ref(document.hasFocus() && document.visibilityState === 'visible')
+const syncFocus = () => { appFocused.value = document.hasFocus() && document.visibilityState === 'visible' }
+onMounted(() => {
+  window.addEventListener('focus', syncFocus)
+  window.addEventListener('blur', syncFocus)
+  document.addEventListener('visibilitychange', syncFocus)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', syncFocus)
+  window.removeEventListener('blur', syncFocus)
+  document.removeEventListener('visibilitychange', syncFocus)
+})
+
+function noticeMe() {
+  return {
+    id: authUser.value?.id ?? '',
+    displayName: authUser.value?.displayName ?? '',
+    username: authUser.value?.username ?? '',
+  }
+}
+const ruleState = (): RuleState => ({
+  me: noticeMe(),
+  status: chosenStatus.value,
+  focused: document.hasFocus() && document.visibilityState === 'visible',
+  enabled: notificationPrefs.enabled,
+  previews: notificationPrefs.previews,
+  isMuted: isConvMuted,
+})
+function consider(e: Incoming, iconSrc: string | null): void { void notify(decide(e, ruleState()), iconSrc) }
+
+/** A channel's server and names, from what is loaded. */
+function channelHome(cid: string) {
+  for (const srv of servers.value) {
+    const ch = channelsByServer.value[srv.id]?.find(c => c.id === cid)
+    if (ch) return { srv, ch }
+  }
+  return null
+}
+
+/** Open any conversation a notice names — the same moves as clicking it in the sidebar. */
+const openConversationRef = async (c: ConvRef): Promise<boolean> => {
+  if (c.kind === 'dm') {
+    const dm = dmsData.value.find(d => d.id === c.id)
+    if (!dm) return false
+    await openDM(dm); return true
+  }
+  if (c.kind === 'group') {
+    const g = groupsData.value.find(x => x.id === c.id)
+    if (!g) return false
+    await openGroup(g); return true
+  }
+  const home = channelHome(c.id)
+  if (!home) return false
+  await openServer(home.srv)
+  await selectChannel(home.ch)
+  return true
+}
+
+const markConversationRead = (c: ConvRef | null): void => {
+  if (!c) return
+  if (c.kind === 'dm') { const d = dmsData.value.find(x => x.id === c.id); if (d) d.unread = undefined }
+  else if (c.kind === 'group') { const g = groupsData.value.find(x => x.id === c.id); if (g) g.unread = undefined }
+  else { clearUnread(c.id); clearMention(c.id) }
+}
+
+const stopNotices = onNoticeActivated(async a => {
+  const c = a.notice.conversation
+  if (a.type === 'read') { markConversationRead(c); return }
+  const opened = c ? await openConversationRef(c) : false
+  // Through the chat box's own send path: a reply fails exactly as a typed
+  // message does, visibly, in the conversation.
+  if (a.type === 'reply' && opened && a.reply?.trim()) {
+    newMessage.value = a.reply.trim()
+    await doSend()
+  }
+})
+const stopCallActions = onCallAction(a => { if (a === 'accept') acceptIncomingCall(); else declineIncomingCall() })
+const stopTray = onTrayCommand(cmd => { if (cmd === 'mute') onToggleMute(); else onToggleDeafen() })
+onBeforeUnmount(() => { stopNotices(); stopCallActions(); stopTray() })
+
+// The badge and the tray dot: conversations holding something that would notify.
+watchEffect(() => setUnread(unreadCount(dmsData.value, groupsData.value, mentionedChannels, isConvMuted)))
+// The tray menu's Mute and Deafen, only while in a call.
+watchEffect(() => setCallTray({ inCall: voice.connected, muted: !!micOff.value, deafened: !!deafOff.value }))
+
+// A mention is seen once its channel is the text on screen.
+watch(
+  () => (view.value === 'server' && !voiceStageOpen.value ? activeChannelId.value : null),
+  cid => { if (cid) clearMention(cid) },
+  { immediate: true },
+)
+
+// Calls: the desktop app's call window, or a notification in a browser. Only
+// while the window is not in front — in front, the in-app ring already shows.
+watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus], ([c]) => {
+  if (!c) { void ringFor(null); return }
+  const n = decide({ type: 'call', room: c.room, kind: c.kind, convId: c.convId, muteKey: c.convId, name: c.name }, ruleState())
+  if (!n) { void ringFor(null); return }
+  if (desktopDelivers) void ringFor({ name: c.name, icon: c.avatar, group: c.kind === 'group' })
+  else void notify(n, c.avatar)
+})
+
 </script>
 
 <template>

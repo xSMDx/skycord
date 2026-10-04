@@ -533,6 +533,9 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
     const payload = {
       _id:              msg._id.toString(),
       conversationId:   channelId,
+      // So a client can name a mention's server and channel, and open it,
+      // for a server whose channel list it has not loaded.
+      serverId:         found.server._id.toString(),
       kind:             'channel',
       authorId:         userId,
       authorName:       msg.authorName,

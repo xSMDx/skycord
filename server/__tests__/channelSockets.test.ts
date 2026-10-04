@@ -35,6 +35,9 @@ describe('channel sockets', () => {
     expect(payload.content).toBe('live hello')
     expect(payload.conversationId).toBe(c.id)
     expect(payload.authorName).toBe(a.username)
+    // Which server it is in: a client names a mention's server and channel
+    // from this, including for a server it has not opened this session.
+    expect(payload.serverId).toBe(server.id)
   })
 
   it('does not deliver to someone who is not a member', async () => {
