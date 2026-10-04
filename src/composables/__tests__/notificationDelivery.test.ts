@@ -46,7 +46,9 @@ describe('web notifications', () => {
   })
 
   it('asks once, on its own, the first time — never again', async () => {
-    const { N, shown } = fakeNotification('default', 'denied')
+    // Closing the prompt without choosing leaves permission at 'default': only
+    // the asked-once flag stops a second prompt then.
+    const { N, shown } = fakeNotification('default', 'default')
     const sink = webSink({ Notification: N })
     sink.show(notice); await settle()
     sink.show(notice); await settle()
