@@ -21,6 +21,7 @@ import { check } from './urlGuard.js'
 import { fetchFollowing, type Approved } from './safeFetch.js'
 import { ingest, type IngestLimits } from './ingest.js'
 import { IngestHold } from './ingestHold.js'
+import { startOffset } from './decode.js'
 import type { ClamConfig } from './clamav.js'
 import { Readable } from 'stream'
 import { createReadStream } from 'fs'
@@ -80,6 +81,13 @@ const readJson = (req: IncomingMessage, limit = 16 * 1024): Promise<unknown> =>
     req.on('error', reject)
   })
 
+/**
+ * startSec from a request: absent or 0 is the start; anything else must be a
+ * whole number of seconds in range, and null says it was not.
+ */
+const readStart = (v: unknown): number | null =>
+  v === undefined || v === 0 ? 0 : (startOffset(v) || null)
+
 export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Server => {
   const log = (m: string) => cfg.log?.(m)
 
@@ -104,7 +112,7 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
   }
 
   /** Fetch and play, reporting the end so the API can move its queue on. */
-  const start = async (room: string, channelId: string, url: string): Promise<void> => {
+  const start = async (room: string, channelId: string, url: string, startSec = 0): Promise<void> => {
     const guard = async (u: string) => {
       const r = await check(u, { anyExtension: u !== url })
       return r.ok
@@ -119,7 +127,8 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
       return
     }
 
-    const how = await pub.play(room, channelId, got.body)
+    if (startSec) log(`${room}/${channelId}: starting at ${startSec}s`)
+    const how = await pub.play(room, channelId, got.body, startSec)
     if (got.tooBig()) log(`${room}/${channelId}: stopped at the size limit`)
     // 'replaced' means something else is already playing on this channel —
     // reporting an end then would advance a queue that has already moved.
@@ -139,7 +148,7 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
    * design — so the honest answer is that this path has no untrusted input
    * rather than that it has been checked.
    */
-  const startTrack = async (room: string, channelId: string, trackId: string): Promise<void> => {
+  const startTrack = async (room: string, channelId: string, trackId: string, startSec = 0): Promise<void> => {
     const base = cfg.apiInternalUrl
     if (!base) {
       log(`${room}/${channelId}: no API_INTERNAL_URL, cannot read library tracks`)
@@ -156,7 +165,8 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
         return
       }
       const body = Readable.fromWeb(res.body as never)
-      const how = await pub.play(room, channelId, body)
+      if (startSec) log(`${room}/${channelId}: starting at ${startSec}s`)
+      const how = await pub.play(room, channelId, body, startSec)
       if (how !== 'replaced') cfg.onEnded?.(room, channelId)
     } catch (e) {
       log(`${room}/${channelId}: could not read track ${trackId}: ${String(e).slice(0, 160)}`)
@@ -174,25 +184,29 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
 
       try {
         if (req.method === 'POST' && url.pathname === '/play') {
-          const b = await readJson(req) as { room?: string; channelId?: string; url?: string }
+          const b = await readJson(req) as { room?: string; channelId?: string; url?: string; startSec?: unknown }
           if (!b.room || !b.channelId || !b.url) return fail(res, 400, 'room, channelId and url are required')
+          const startSec = readStart(b.startSec)
+          if (startSec === null) return fail(res, 400, 'startSec must be a whole number of seconds')
           await pub.open(b.room, b.channelId)
           // Answered immediately: a track is minutes long and the API is not
           // going to hold a request open for it. The end arrives by callback.
           ok(res)
-          void start(b.room, b.channelId, b.url)
+          void start(b.room, b.channelId, b.url, startSec)
           return
         }
 
         if (req.method === 'POST' && url.pathname === '/play-track') {
-          const b = await readJson(req) as { room?: string; channelId?: string; trackId?: string }
+          const b = await readJson(req) as { room?: string; channelId?: string; trackId?: string; startSec?: unknown }
           if (!b.room || !b.channelId || !b.trackId) return fail(res, 400, 'room, channelId and trackId are required')
+          const startSec = readStart(b.startSec)
+          if (startSec === null) return fail(res, 400, 'startSec must be a whole number of seconds')
           // Shape-checked before it is put in a path, even though the API
           // composed it: one hex id is cheaper to verify than to trust.
           if (!/^[0-9a-f]{24}$/i.test(b.trackId)) return fail(res, 400, 'that is not a track id')
           await pub.open(b.room, b.channelId)
           ok(res)
-          void startTrack(b.room, b.channelId, b.trackId)
+          void startTrack(b.room, b.channelId, b.trackId, startSec)
           return
         }
 

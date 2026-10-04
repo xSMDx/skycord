@@ -32,23 +32,45 @@ export const CHANNELS = 2
 export const SAMPLES_PER_FRAME = SAMPLE_RATE / 50
 export const BYTES_PER_FRAME = SAMPLES_PER_FRAME * CHANNELS * 2   // s16 = 2 bytes
 
+/** The furthest in a track may start. No song is six hours long. */
+export const MAX_START_SEC = 6 * 60 * 60
+
 /**
- * Fixed, and a function so a test can read it.
+ * A start offset fit for argv, or 0.
  *
- * Nothing here is interpolated, and nothing here should ever be: the moment
- * one of these entries is built from input, the comment at the top of this
- * file stops being true.
+ * The one variable entry ffmpeg is ever given, and safe by construction:
+ * only an integer in range survives this, and String() of an integer is
+ * digits. Anything else — a fraction, a string, a negative — means "from
+ * the start" rather than an error, because the API has already refused it.
  */
-export const ffmpegArgs = (): string[] => [
-  '-hide_banner',
-  '-loglevel', 'error',
-  '-i', 'pipe:0',       // the fetched body, never a URL or a path
-  '-vn',                // an mp3 can carry cover art; we want none of it
-  '-f', 's16le',
-  '-ar', String(SAMPLE_RATE),
-  '-ac', String(CHANNELS),
-  'pipe:1',
-]
+export const startOffset = (v: unknown): number =>
+  typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= MAX_START_SEC ? v : 0
+
+/**
+ * Fixed apart from where to start, and a function so a test can read it.
+ *
+ * Nothing else here is interpolated, and nothing else should ever be: the
+ * moment an entry is built from input, the comment at the top of this file
+ * stops being true. The start offset is the single exception, and it only
+ * ever gets here through startOffset().
+ */
+export const ffmpegArgs = (startSec: number = 0): string[] => {
+  const at = startOffset(startSec)
+  return [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-i', 'pipe:0',       // the fetched body, never a URL or a path
+    // After -i, not before: a pipe cannot be sought, so ffmpeg decodes and
+    // throws away up to here. Opus decodes far faster than real time, so
+    // even the end of a long song is reached in about a second.
+    ...(at ? ['-ss', String(at)] : []),
+    '-vn',                // an mp3 can carry cover art; we want none of it
+    '-f', 's16le',
+    '-ar', String(SAMPLE_RATE),
+    '-ac', String(CHANNELS),
+    'pipe:1',
+  ]
+}
 
 export interface Decoder {
   /** Interleaved 16-bit little-endian stereo at 48kHz. */
@@ -63,12 +85,14 @@ export interface DecodeOptions {
   ffmpegPath?: string
   /** Called with ffmpeg's stderr, which is where a bad file explains itself. */
   onStderr?: (line: string) => void
+  /** Whole seconds in to start from. See startOffset. */
+  startSec?: number
 }
 
 export const decode = (body: Readable, opts: DecodeOptions = {}): Decoder => {
   const child: ChildProcessWithoutNullStreams = spawn(
     opts.ffmpegPath ?? 'ffmpeg',
-    ffmpegArgs(),
+    ffmpegArgs(opts.startSec),
     { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
   )
 

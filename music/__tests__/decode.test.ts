@@ -1,7 +1,10 @@
 /// <reference types="node" />
 import { describe, it, expect } from 'vitest'
 import { Readable } from 'stream'
-import { ffmpegArgs, frames, decode, BYTES_PER_FRAME, SAMPLES_PER_FRAME, SAMPLE_RATE, CHANNELS } from '../src/decode.js'
+import {
+  ffmpegArgs, frames, decode, startOffset, MAX_START_SEC,
+  BYTES_PER_FRAME, SAMPLES_PER_FRAME, SAMPLE_RATE, CHANNELS,
+} from '../src/decode.js'
 
 describe('the argument vector', () => {
   it('reads the body from a pipe, never a URL or a path', () => {
@@ -31,6 +34,30 @@ describe('the argument vector', () => {
 
   it('drops video, because an mp3 can carry cover art', () => {
     expect(ffmpegArgs()).toContain('-vn')
+  })
+})
+
+describe('starting part-way in', () => {
+  it('adds no offset at the start', () => {
+    expect(ffmpegArgs()).not.toContain('-ss')
+    expect(ffmpegArgs(0)).toEqual(ffmpegArgs())
+  })
+
+  it('puts the offset after the input, so a pipe can be sought by decoding', () => {
+    // Before -i, ffmpeg tries to seek the INPUT, and a pipe cannot be
+    // sought. After it, ffmpeg decodes and throws away up to the offset.
+    const a = ffmpegArgs(83)
+    expect(a[a.indexOf('-ss') + 1]).toBe('83')
+    expect(a.indexOf('-ss')).toBeGreaterThan(a.indexOf('-i'))
+  })
+
+  it('never lets anything but a whole number of seconds into argv', () => {
+    for (const bad of [12.5, -3, MAX_START_SEC + 1, '5; rm -rf /', '30', NaN, Infinity, null, {}]) {
+      expect(ffmpegArgs(bad as never)).not.toContain('-ss')
+      expect(startOffset(bad)).toBe(0)
+    }
+    expect(startOffset(MAX_START_SEC)).toBe(MAX_START_SEC)
+    expect(startOffset(1)).toBe(1)
   })
 })
 
@@ -117,6 +144,26 @@ describe('decode() against the real ffmpeg', () => {
     // own padding rather than pinning an exact count.
     expect(n).toBeGreaterThan(15)
     expect(errors.join(' ')).not.toMatch(/Invalid|error/i)
+  }, 30_000)
+
+  it('really starts late: three seconds from two in is one second of sound', async () => {
+    // Opus in WebM over a pipe: the format the library stores, arriving the
+    // way the service reads it. No cues to seek by, which is the point.
+    const { spawn } = await import('child_process')
+    const src = spawn('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+      '-c:a', 'libopus', '-f', 'webm', 'pipe:1',
+    ], { windowsHide: true })
+
+    const d = decode(src.stdout, { startSec: 2 })
+    let n = 0
+    for await (const _ of frames(d.pcm)) n++
+    await d.done
+    // 50 frames a second. A few either side for the codec's pre-skip and
+    // the last partial frame, but nowhere near the 150 of the whole thing.
+    expect(n).toBeGreaterThanOrEqual(45)
+    expect(n).toBeLessThanOrEqual(55)
   }, 30_000)
 
   it('stop() is safe to call twice and ends the decoder', async () => {

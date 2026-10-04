@@ -123,7 +123,9 @@ export class MusicPublisher {
    * advance its own queue. Errors are reported rather than thrown: a bad
    * file is an ordinary event here, not an exceptional one.
    */
-  async play(roomName: string, channelId: string, body: Readable): Promise<'ended' | 'replaced' | 'failed'> {
+  async play(
+    roomName: string, channelId: string, body: Readable, startSec = 0,
+  ): Promise<'ended' | 'replaced' | 'failed'> {
     const entry = this.rooms.get(roomName)
     const channel = entry?.channels.get(channelId)
     if (!channel) return 'failed'
@@ -133,6 +135,7 @@ export class MusicPublisher {
     const dec = decode(body, {
       ffmpegPath: this.cfg.ffmpegPath,
       onStderr: l => this.log(`ffmpeg ${roomName}/${channelId}: ${l}`),
+      startSec,
     })
 
     let replaced = false

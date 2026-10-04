@@ -20,7 +20,10 @@ const ended: string[] = []
 /** Enough of a publisher to record what the server asked it to do. */
 const stubPublisher = {
   open: async (room: string, id: string) => { calls.push(`open ${room}/${id}`) },
-  play: async (room: string, id: string) => { calls.push(`play ${room}/${id}`); return 'ended' as const },
+  play: async (room: string, id: string, _body: unknown, startSec = 0) => {
+    calls.push(`play ${room}/${id}${startSec ? ` @${startSec}` : ''}`)
+    return 'ended' as const
+  },
   close: async (room: string, id: string) => { calls.push(`close ${room}/${id}`) },
 } as unknown as MusicPublisher
 
@@ -100,6 +103,23 @@ describe('/play', () => {
     await post('/play', { room: 'voice:2', channelId: 'c2', url: 'http://192.168.1.1/a.mp3' }, SECRET)
     await new Promise(r => setTimeout(r, 400))
     expect(ended).toContain('voice:2/c2')
+  })
+})
+
+describe('starting at an offset', () => {
+  it('refuses a startSec that is not a whole number of seconds', async () => {
+    for (const startSec of [1.5, -1, 'ten', 999_999, null]) {
+      const r = await post('/play-track', { room: 'r', channelId: 'c', trackId: 'a'.repeat(24), startSec }, SECRET)
+      expect(r.status, JSON.stringify(startSec)).toBe(400)
+      const l = await post('/play', { room: 'r', channelId: 'c', url: 'https://x/a.mp3', startSec }, SECRET)
+      expect(l.status, JSON.stringify(startSec)).toBe(400)
+    }
+  })
+
+  it('accepts a whole number, and no number at all', async () => {
+    expect((await post('/play', { room: 'r', channelId: 'c', url: 'https://x/a.mp3', startSec: 30 }, SECRET)).status).toBe(200)
+    expect((await post('/play', { room: 'r', channelId: 'c', url: 'https://x/a.mp3', startSec: 0 }, SECRET)).status).toBe(200)
+    expect((await post('/play', { room: 'r', channelId: 'c', url: 'https://x/a.mp3' }, SECRET)).status).toBe(200)
   })
 })
 
