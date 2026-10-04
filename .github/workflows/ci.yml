@@ -43,7 +43,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Typecheck (client and server)
+      # The music service is its own package with its own lockfile, and the
+      # typecheck covers it (tsconfig.music.json). Without its dependencies,
+      # @livekit/rtc-node is missing and every run since music landed failed
+      # here, before a single test ran.
+      - name: Install the music service's dependencies
+        run: npm ci --prefix music
+      - name: Typecheck (client, server and music)
         run: npm run typecheck
       - name: Client tests
         run: npx vitest run src/
