@@ -6,7 +6,11 @@ import {
 } from 'lucide-vue-next'
 import AutocompletePopup from './AutocompletePopup.vue'
 import TimeTokenPicker from './TimeTokenPicker.vue'
-import { slashCommands, matchCommands } from '@/composables/useChatCommands'
+import { matchCommands, resolveSlash, type SlashCommand } from '@/composables/useChatCommands'
+import { suggestTracks } from '@/composables/musicCommands'
+import { music, clearMusicError } from '@/composables/useMusic'
+import { useApi } from '@/composables/useApi'
+import type { LibTrack } from '@/composables/useMusicLibrary'
 import { appearance } from '@/composables/useAppearance'
 
 interface AcItem { key: string; title: string; subtitle?: string; glyph?: string; avatar?: string }
@@ -189,7 +193,21 @@ const onPaste = (e: ClipboardEvent) => {
 }
 
 // ── Autocomplete (/ commands, @ mentions) ───────────────────────────────────
-const ac = ref<{ kind: 'slash' | 'mention'; start: number; query: string } | null>(null)
+const ac = ref<{ kind: 'slash' | 'mention' | 'song'; start: number; query: string } | null>(null)
+
+// ── /play suggestions ───────────────────────────────────────────────────────
+/**
+ * Your library, for "/play …" suggestions. Fetched when the suggestions first
+ * open and reused for half a minute: typing a song name is a burst of
+ * keystrokes, and one request per keystroke would be a request per letter.
+ */
+const songs = ref<LibTrack[]>([])
+let songsAt = 0
+const loadSongs = async (): Promise<void> => {
+  if (Date.now() - songsAt < 30_000) return
+  songsAt = Date.now()
+  try { songs.value = (await useApi().listMusicTracks('')).tracks } catch { songsAt = 0 }
+}
 const acIndex = ref(0)
 const showTimePicker = ref(false)
 let mentionStart = 0
@@ -198,6 +216,12 @@ const acItems = computed<AcItem[]>(() => {
   if (!ac.value) return []
   if (ac.value.kind === 'slash') {
     return matchCommands(ac.value.query).map(c => ({ key: c.name, title: `/${c.name}`, subtitle: c.description, glyph: c.glyph }))
+  }
+  if (ac.value.kind === 'song') {
+    return suggestTracks(ac.value.query, songs.value).map(t => ({
+      key: `song:${t.id}`, title: t.title, subtitle: t.artist || 'Unknown artist',
+      avatar: t.cover ?? undefined, glyph: '♪',
+    }))
   }
   const q = ac.value.query.toLowerCase()
   const items: AcItem[] = []
@@ -210,13 +234,30 @@ const acItems = computed<AcItem[]>(() => {
   }
   return items.slice(0, 8)
 })
-const acHeader = computed(() => ac.value?.kind === 'slash' ? 'Commands' : 'Members')
+const acHeader = computed(() => {
+  if (ac.value?.kind === 'song') return 'Your music'
+  if (ac.value?.kind !== 'slash') return 'Members'
+  // Named for the group when every row shown is in it: "/s" listing only
+  // music commands is clearer headed "Music" than "Commands".
+  const shown = matchCommands(ac.value.query)
+  const group = shown[0]?.group
+  return group && shown.every(c => c.group === group) ? group : 'Commands'
+})
 
 const refreshAc = () => {
   const el = inputEl.value; if (!el) { ac.value = null; return }
   const before = el.value.slice(0, el.selectionStart ?? 0)
   const slash = /^\/(\w*)$/.exec(before)
   if (slash) { ac.value = { kind: 'slash', start: 0, query: slash[1] }; acIndex.value = 0; return }
+  // "/play blu" — suggest songs. Only where /play exists, which is only
+  // where this instance runs music.
+  const playing = /^\/(play|p)\s+(.*)$/i.exec(before)
+  if (playing && resolveSlash(playing[1])?.act) {
+    ac.value = { kind: 'song', start: 0, query: playing[2] }
+    acIndex.value = 0
+    void loadSongs()
+    return
+  }
   const mention = /(?:^|\s)@([\w-]*)$/.exec(before)
   if (mention) { ac.value = { kind: 'mention', start: (el.selectionStart ?? 0) - mention[1].length - 1, query: mention[1] }; acIndex.value = 0; return }
   ac.value = null
@@ -243,6 +284,14 @@ const replaceToken = (text: string) => {
 const chooseAc = (key: string) => {
   if (!ac.value) return
   if (ac.value.kind === 'slash') { replaceToken(`/${key} `); return }
+  if (ac.value.kind === 'song') {
+    // Runs straight away, by id: picking a song is the decision, and two
+    // songs can share a title.
+    const cmd = resolveSlash('play')
+    ac.value = null
+    if (cmd) runAct(cmd, key.slice('song:'.length))
+    return
+  }
   if (key === 'everyone') { replaceToken('@everyone '); return }
   if (key === 'time') { mentionStart = ac.value.start; ac.value = null; showTimePicker.value = true; return }
   replaceToken(`<@${key.slice('member:'.length)}> `)
@@ -301,6 +350,36 @@ const cooldownText = computed(() => {
   return s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : `${s}s`
 })
 
+// ── Commands that answer privately ──────────────────────────────────────────
+/**
+ * The note a command leaves for the person who typed it.
+ *
+ * Never a message: "/skip" in #general is not something the channel needs
+ * to read, and the music it controls lives in a call, not here. Stays long
+ * enough to read a queue, and goes when dismissed or replaced.
+ */
+const note = ref('')
+let noteT: ReturnType<typeof setTimeout> | null = null
+/** When the last music command was sent, so a refusal can replace its note. */
+let sentAt = 0
+const showNote = (text: string, ms = 8000): void => {
+  note.value = text
+  if (noteT) clearTimeout(noteT)
+  noteT = setTimeout(() => { note.value = '' }, ms)
+}
+const runAct = (cmd: SlashCommand, arg: string): void => {
+  emit('update:modelValue', '')
+  clearMusicError()
+  sentAt = Date.now()
+  cmd.act!(arg).then(t => showNote(t), () => showNote('That did not work.'))
+}
+// The server refuses some things only once it has heard them — too fast,
+// a channel that just closed. Its reason replaces the note it contradicts.
+watch(() => music.error, e => {
+  if (e && Date.now() - sentAt < 2500) showNote(e)
+})
+onBeforeUnmount(() => { if (noteT) clearTimeout(noteT) })
+
 // ── Submit (runs slash commands) ────────────────────────────────────────────
 const submit = () => {
   // Refused here as well as by the API. The server is the authority — this
@@ -309,8 +388,9 @@ const submit = () => {
   if (cooling.value) return
   const m = /^\/(\w+)(?:\s+([\s\S]*))?$/.exec(props.modelValue)
   if (m) {
-    const cmd = slashCommands.find(c => c.name === m[1].toLowerCase())
-    if (cmd) {
+    const cmd = resolveSlash(m[1])
+    if (cmd?.act) { runAct(cmd, (m[2] || '').trim()); return }
+    if (cmd?.run) {
       const res = cmd.run((m[2] || '').trim())
       if (res.send !== undefined) {
         if (res.send) { emit('update:modelValue', res.send); nextTick(() => emit('send')) }
@@ -360,6 +440,14 @@ onMounted(autoGrow)
 
 <template>
   <div class="input-area">
+    <!-- A command's private answer. Above the box, where the eye already is. -->
+    <div v-if="note && !(ac && acItems.length)" class="cmd-note" role="status">
+      <span class="cmd-note-who">Only you can see this</span>
+      <p class="cmd-note-text">{{ note }}</p>
+      <button class="cmd-note-x" aria-label="Dismiss" @click="note = ''">
+        <X :size="13" :stroke-width="2.5" />
+      </button>
+    </div>
     <!-- Slash / mention autocomplete -->
     <div v-if="ac && acItems.length" class="ac-float">
       <AutocompletePopup :header="acHeader" :items="acItems" :selectedIndex="acIndex" @select="chooseAc" @hover="acIndex = $event" />
@@ -479,6 +567,28 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 /* Autocomplete + time picker float above the input box */
 .ac-float { position: absolute; left: 16px; right: 16px; bottom: 100%; margin-bottom: 8px; z-index: 50; }
 .tt-float { position: absolute; left: 16px; bottom: 100%; margin-bottom: 8px; z-index: 51; }
+
+/* A command's private answer, floating where the autocomplete does. */
+.cmd-note {
+  position: absolute; left: 16px; right: 16px; bottom: 100%; margin-bottom: 8px; z-index: 49;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px;
+  padding: 9px 8px 10px 14px;
+  background: var(--bg-panel); border: 1px solid var(--seam); border-radius: var(--edge-lg);
+  box-shadow: var(--shadow-md);
+}
+.cmd-note-who {
+  grid-column: 1; font-size: 11px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--text-3);
+}
+/* pre-line: /queue answers in lines. */
+.cmd-note-text { grid-column: 1; font-size: 13.5px; line-height: 1.45; color: var(--text-1); white-space: pre-line; }
+.cmd-note-x {
+  grid-column: 2; grid-row: 1 / span 2; align-self: start;
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--edge-sm);
+  color: var(--text-3); transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .cmd-note-x:hover { background: var(--hover); color: var(--text-1); } }
+@media (max-width: 768px) { .cmd-note-x { width: 40px; height: 40px; } }
 
 /* Reply strip fused to the input box */
 /* Sits above the composer, right-aligned and quiet — a status, not a control.

@@ -2,12 +2,27 @@
  * Slash command registry. Each command computes a result that either replaces
  * the composer text (`insert`) or is sent immediately (`send`). Adding a command
  * is a one-liner here — the `/` autocomplete lists them all automatically.
+ *
+ * A command can instead DO something and answer privately (`act`): the music
+ * commands control playback and reply with a note only the typist sees,
+ * rather than posting anything to the channel.
  */
+import { musicAvailable } from './useMusic'
+import { MUSIC_COMMANDS, runMusicCommand } from './musicCommands'
+
 export interface SlashCommand {
   name:        string
   description: string
   glyph:       string
-  run: (arg: string) => { insert?: string; send?: string }
+  /** Shown as the list's heading when every row shown belongs to it. */
+  group?:      string
+  /** Other names that run it when typed. Not listed. */
+  aliases?:    string[]
+  /** Whether it exists right now — music commands only where music runs. */
+  available?:  () => boolean
+  run?: (arg: string) => { insert?: string; send?: string }
+  /** Does something, and answers with a note for the person who typed it. */
+  act?: (arg: string) => Promise<string>
 }
 
 const rand = (n: number) => Math.floor(Math.random() * n)
@@ -27,5 +42,35 @@ export const slashCommands: SlashCommand[] = [
   { name: '8ball',    description: 'Ask the magic 8-ball a question',    glyph: '🎱', run: (a) => ({ send: `🎱 ${a ? `**${a}** — ` : ''}${EIGHT_BALL[rand(EIGHT_BALL.length)]}` }) },
 ]
 
+const MUSIC_GLYPH: Record<string, string> = {
+  play: '▶️', skip: '⏭️', next: '⏭️', prev: '⏮️', stop: '⏹️', pause: '⏸️', resume: '▶️',
+  np: '🎵', queue: '📜', seek: '⏩', join: '🎧', leave: '🚪', volume: '🔊', shuffle: '🔀', loop: '🔁',
+}
+
+for (const m of MUSIC_COMMANDS) {
+  slashCommands.push({
+    name: m.name,
+    description: m.description,
+    glyph: MUSIC_GLYPH[m.name] ?? '🎵',
+    group: 'Music',
+    aliases: m.aliases,
+    available: () => musicAvailable.value,
+    // Loaded on first use: the bridge reaches the player and the call, and
+    // listing command names should not have to.
+    act: async (arg) => {
+      const { musicWorld } = await import('./musicCommandWorld')
+      return runMusicCommand(m.name, arg, musicWorld())
+    },
+  })
+}
+
+const usable = (c: SlashCommand) => !c.available || c.available()
+
+/** The command a typed name means — by name or alias — if it exists here. */
+export const resolveSlash = (typed: string): SlashCommand | undefined => {
+  const t = typed.toLowerCase()
+  return slashCommands.find(c => usable(c) && (c.name === t || c.aliases?.includes(t)))
+}
+
 export const matchCommands = (query: string) =>
-  slashCommands.filter(c => c.name.startsWith(query.toLowerCase()))
+  slashCommands.filter(c => usable(c) && c.name.startsWith(query.toLowerCase()))

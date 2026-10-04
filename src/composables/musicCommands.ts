@@ -103,7 +103,7 @@ export const parseTime = (s: string): number | null => {
 /**
  * The library song a few typed words mean.
  *
- * Exact title first, then a title that starts with it, then one that
+ * An exact id first (a picked suggestion), then an exact title, then a title that starts with it, then one that
  * contains it, then the artist. Ties go to library order, which is the
  * order the room lists them in, so "/play blue" picks the row you would
  * have clicked.
@@ -112,7 +112,9 @@ export const findTrack = (q: string, tracks: LibTrack[]): LibTrack | null => {
   const n = q.trim().toLowerCase()
   if (!n) return null
   const low = (s: string | null | undefined) => (s ?? '').toLowerCase()
-  return tracks.find(t => low(t.title) === n)
+  // An exact id is what a picked suggestion sends: titles can repeat.
+  return tracks.find(t => t.id === q.trim())
+    ?? tracks.find(t => low(t.title) === n)
     ?? tracks.find(t => low(t.title).startsWith(n))
     ?? tracks.find(t => low(t.title).includes(n))
     ?? tracks.find(t => low(t.artist).includes(n))

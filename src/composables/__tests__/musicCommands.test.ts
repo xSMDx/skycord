@@ -89,6 +89,12 @@ describe('findTrack', () => {
     expect(findTrack('zzz', LIB)).toBeNull()
     expect(findTrack('  ', LIB)).toBeNull()
   })
+  it('takes an exact id first — what picking a suggestion sends', () => {
+    // Two songs can share a title; a picked suggestion must play the one picked.
+    const twins = [track('a1', 'Blue', 'Joni'), track('a2', 'Blue', 'Eiffel 65')]
+    expect(findTrack('a2', twins)?.artist).toBe('Eiffel 65')
+  })
+
   it('suggests in the same order', () => {
     expect(suggestTracks('blue', LIB).map(t => t.id)).toEqual(['t1', 't2', 't4'])
     expect(suggestTracks('', LIB, 2).map(t => t.id)).toEqual(['t1', 't2'])
