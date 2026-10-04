@@ -42,6 +42,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # Lockfiles name registry.npmjs.org and nothing else: npm swaps that
+      # host for whatever registry a machine is configured with, so every
+      # machine can install. A mirror's host written into the lock is fetched
+      # as-is everywhere. On 3 October an Iranian mirror landed in 288 entries;
+      # CI stayed green on a warm cache until the cache was evicted, and then
+      # npm hung for five minutes on the mirror and died.
+      - name: Lockfiles point at the npm registry
+        run: |
+          bad=$(grep -hoE '"resolved": "https?://[^/"]+' package-lock.json music/package-lock.json desktop/package-lock.json \
+            | grep -v '"resolved": "https://registry.npmjs.org' | sort | uniq -c || true)
+          if [ -n "$bad" ]; then echo "Lockfile entries resolve outside registry.npmjs.org:"; echo "$bad"; exit 1; fi
       - run: npm ci
       # The music service is its own package with its own lockfile, and the
       # typecheck covers it (tsconfig.music.json). Without its dependencies,
