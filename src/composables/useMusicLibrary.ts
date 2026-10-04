@@ -10,6 +10,7 @@
  */
 import { reactive, computed } from 'vue'
 import { useApi, type WireTrack, type WirePlaylist, type MusicLibraryCaps } from './useApi'
+import { uploadFailure } from './uploadFailure'
 
 // The wire shapes are defined once, in useApi, beside every other one.
 export type LibTrack = WireTrack
@@ -104,7 +105,7 @@ export const uploadTrack = (file: File, token: string): Promise<LibTrack | null>
         resolve(body.track)
         return
       }
-      library.error = body.message ?? 'That file could not be added.'
+      library.error = uploadFailure(xhr.status, xhr.responseText)
       resolve(null)
     }
     xhr.onerror = () => {

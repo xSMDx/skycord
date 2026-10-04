@@ -92,19 +92,67 @@ export const transcodeArgs = (src: string, dst: string): string[] => [
   '-y', dst,
 ]
 
+/**
+ * Duration and tags from the container, and per stream its kind, whether it
+ * is an attached picture (the cover), and its own tags — Ogg and Opus keep
+ * their tags on the audio stream rather than the container.
+ */
 export const probeArgs = (src: string): string[] => [
   '-hide_banner', '-loglevel', 'error',
-  '-show_entries', 'format=duration:format_tags=title,artist,album',
+  '-show_entries',
+  'format=duration:format_tags=title,artist,album'
+    + ':stream=index,codec_type:stream_disposition=attached_pic:stream_tags=title,artist,album',
   '-of', 'json',
   src,
 ]
 
-export const coverArgs = (src: string, dst: string): string[] => [
+type ProbeTags = Record<string, string | undefined>
+interface ProbeStream { index?: number; codec_type?: string; disposition?: { attached_pic?: number }; tags?: ProbeTags }
+export interface ProbeJson { streams?: ProbeStream[]; format?: { duration?: string; tags?: ProbeTags } }
+export interface ProbeReading {
+  durationSec: number
+  tags: { title?: string; artist?: string; album?: string }
+  /** The stream holding the cover, or null for none. */
+  coverIndex: number | null
+}
+
+/** A tag by name, in whatever case the container wrote it. */
+const tag = (tags: ProbeTags | undefined, name: string): string | undefined => {
+  if (!tags) return undefined
+  const key = Object.keys(tags).find(k => k.toLowerCase() === name)
+  return key ? tags[key] : undefined
+}
+
+/**
+ * ffprobe's answer, read. The container's tags win; the first audio stream's
+ * fill whatever the container left empty. The cover is the stream flagged as
+ * an attached picture — never merely the first video stream, which in a
+ * music video is the video.
+ */
+export const readProbe = (meta: ProbeJson): ProbeReading => {
+  const streams = meta.streams ?? []
+  const audio = streams.find(st => st.codec_type === 'audio')
+  const pick = (name: string) => tag(meta.format?.tags, name) || tag(audio?.tags, name) || undefined
+  const cover = streams.find(st => st.codec_type === 'video' && st.disposition?.attached_pic === 1)
+  const duration = Math.round(Number(meta.format?.duration ?? 0))
+  return {
+    durationSec: Number.isFinite(duration) ? duration : 0,
+    tags: { title: pick('title'), artist: pick('artist'), album: pick('album') },
+    coverIndex: typeof cover?.index === 'number' ? cover.index : null,
+  }
+}
+
+/**
+ * The cover, by the stream index the probe found. Not `-map disp:attached_pic`:
+ * that stream specifier is newer than the ffmpeg in the music image (Debian's
+ * 5.1), which refused it, so no upload in production ever got its artwork.
+ */
+export const coverArgs = (src: string, dst: string, streamIndex: number): string[] => [
   '-hide_banner', '-loglevel', 'error',
   '-nostdin',
   '-i', src,
   '-an',
-  '-map', 'disp:attached_pic',   // the cover, if the container has one
+  '-map', `0:${streamIndex}`,
   '-vframes', '1',
   '-vf', 'scale=320:320:force_original_aspect_ratio=increase,crop=320:320',
   '-f', 'webp',
@@ -236,11 +284,11 @@ export const ingest = async (src: Readable, opts: IngestOptions): Promise<Ingest
   const probed = await run(opts.ffprobePath ?? 'ffprobe', probeArgs(rawPath))
   if (probed.code !== 0) return fail('That file could not be read as audio.')
 
-  let meta: { format?: { duration?: string; tags?: Record<string, string> } }
-  try { meta = JSON.parse(probed.stdout) } catch { return fail('That file could not be read as audio.') }
+  let probe: ProbeReading
+  try { probe = readProbe(JSON.parse(probed.stdout) as ProbeJson) } catch { return fail('That file could not be read as audio.') }
 
-  const durationSec = Math.round(Number(meta.format?.duration ?? 0))
-  if (!Number.isFinite(durationSec) || durationSec <= 0) {
+  const durationSec = probe.durationSec
+  if (durationSec <= 0) {
     return fail('That file has no playable audio in it.')
   }
   if (durationSec > opts.limits.maxDurationSec) {
@@ -255,8 +303,10 @@ export const ingest = async (src: Readable, opts: IngestOptions): Promise<Ingest
 
   // ── 6. cover art, through the encoder as well ───────────────────────────
   let coverWebp: string | undefined
-  const cov = await run(opts.ffmpegPath ?? 'ffmpeg', coverArgs(rawPath, coverPath), 30_000)
-  if (cov.code === 0) {
+  const cov = probe.coverIndex === null
+    ? null
+    : await run(opts.ffmpegPath ?? 'ffmpeg', coverArgs(rawPath, coverPath, probe.coverIndex), 30_000)
+  if (cov?.code === 0) {
     const cs = await stat(coverPath).catch(() => null)
     // A cover is a nicety. Anything implausibly large for 320×320 is a sign
     // the extraction grabbed something else, and is dropped rather than
@@ -266,7 +316,7 @@ export const ingest = async (src: Readable, opts: IngestOptions): Promise<Ingest
     }
   }
 
-  const tags = meta.format?.tags ?? {}
+  const tags = probe.tags
   await sweep(rawPath, coverPath)
 
   return {
