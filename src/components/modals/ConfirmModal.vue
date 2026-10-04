@@ -8,12 +8,15 @@ const props = withDefaults(defineProps<{
   /** Label for the affirmative button. Defaults to 'Confirm' — pass something
    *  more specific ('Leave', 'Delete') when the generic verb reads oddly. */
   confirmLabel?: string
+  /** Label for the way out. 'Cancel' unless staying put has a better name ('Stay'). */
+  cancelLabel?:  string
   /** Styles the confirm button destructively (Discord red instead of accent). */
   danger?:       boolean
   /** Disables both buttons while the caller's async action runs. */
   busy?:         boolean
 }>(), {
   confirmLabel: 'Confirm',
+  cancelLabel:  'Cancel',
 })
 
 const emit = defineEmits<{ confirm: []; close: [] }>()
@@ -48,7 +51,7 @@ onMounted(() => (props.danger ? cancelBtn : confirmBtn).value?.focus())
       </div>
 
       <div class="cfm-footer">
-        <button ref="cancelBtn" class="cfm-cancel" :disabled="busy" @click="emit('close')">Cancel</button>
+        <button ref="cancelBtn" class="cfm-cancel" :disabled="busy" @click="emit('close')">{{ cancelLabel }}</button>
         <button
           ref="confirmBtn"
           class="cfm-confirm"

@@ -39,6 +39,7 @@ import EditChannelModal    from '@/components/modals/EditChannelModal.vue'
 import VoiceServersModal   from '@/components/modals/VoiceServersModal.vue'
 import ServerSettingsModal from '@/components/modals/ServerSettingsModal.vue'
 import ConfirmModal        from '@/components/modals/ConfirmModal.vue'
+import { leavePrompt, answerLeave } from '@/composables/leavePrompt'
 import EditFieldModal      from '@/components/modals/EditFieldModal.vue'
 import QuickSwitcherModal  from '@/components/modals/QuickSwitcherModal.vue'
 import NewDMModal          from '@/components/modals/NewDMModal.vue'
@@ -4249,6 +4250,19 @@ useDesktopTitleBar({
       :busy="confirmState.busy"
       @confirm="runConfirm"
       @close="confirmState = null"
+    />
+
+    <!-- Asked by the music room before playing something just for you would
+         take you out of the channel you are tuned into. It always opens after
+         the room has, and both teleport to body, so it draws on top. -->
+    <ConfirmModal
+      v-if="leavePrompt.open"
+      :title="`Leave ${leavePrompt.channel}?`"
+      :message="`You're listening to ${leavePrompt.channel} with the call. Playing “${leavePrompt.what}” just for you takes you out of it — the music keeps going for everyone else.`"
+      confirm-label="Leave and play"
+      cancel-label="Stay"
+      @confirm="answerLeave(true)"
+      @close="answerLeave(false)"
     />
     <QuickSwitcherModal
       v-if="showQuickSwitcher"
