@@ -4,6 +4,7 @@
  *   - the local server picker gets `skycordPicker` (look up, choose, saved servers);
  *   - the local share picker gets `skycordShare` (list sources, choose one);
  *   - the local title bar gets `skycordTitleBar` (what to show, back/forward);
+ *   - the incoming-call window gets `skycordCall` (who is calling, answer);
  *   - the launch screen gets nothing (it is static);
  *   - the chosen instance gets `skycordDesktop`.
  *
@@ -26,6 +27,11 @@ if (local && page === 'share.html') {
   // Nothing. The launch screen is static HTML and asks the main process for
   // nothing — but it still needs its own branch, or it would fall through to
   // the picker's surface below.
+} else if (local && page === 'call.html') {
+  contextBridge.exposeInMainWorld('skycordCall', {
+    onInfo: (cb: (info: unknown) => void) => { ipcRenderer.on('call:info', (_e, i) => cb(i)) },
+    answer: (a: 'accept' | 'decline') => ipcRenderer.send('call:answer', a),
+  })
 } else if (local && page === 'titlebar.html') {
   contextBridge.exposeInMainWorld('skycordTitleBar', {
     onState: (cb: (state: unknown) => void) => { ipcRenderer.on('titlebar:state', (_e, s) => cb(s)) },

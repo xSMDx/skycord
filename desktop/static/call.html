@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Incoming call</title>
+<style>
+  :root { --bar: #1e1f22; --text: #f2f3f5; --muted: #b5bac1; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 14px/1.35 "Segoe UI", system-ui, sans-serif; color: var(--text); background: var(--bar);
+    display: grid; grid-template-columns: 56px 1fr; grid-template-rows: auto auto 1fr; gap: 2px 12px;
+    padding: 14px 14px 12px; -webkit-app-region: drag; user-select: none; border: 1px solid rgba(255,255,255,.08);
+  }
+  .face {
+    grid-row: 1 / span 2; width: 56px; height: 56px; border-radius: 50%; overflow: hidden;
+    background: rgba(255,255,255,.08); display: grid; place-items: center;
+    font-size: 22px; font-weight: 700; color: var(--muted);
+  }
+  .face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: end; }
+  .what { color: var(--muted); font-size: 12.5px; }
+  .acts { grid-column: 1 / -1; display: flex; gap: 8px; align-self: end; -webkit-app-region: no-drag; }
+  button { flex: 1; height: 36px; border: 0; border-radius: 8px; font: 600 13px "Segoe UI", system-ui, sans-serif; color: #fff; cursor: pointer; }
+  .accept { background: #248046; } .accept:hover { background: #1a6334; }
+  .decline { background: #da373c; } .decline:hover { background: #a12828; }
+</style>
+</head>
+<body>
+  <!-- The caller's picture, or their initial when the call came without one. -->
+  <div class="face" id="face" aria-hidden="true"></div>
+  <div class="name" id="name">Someone</div>
+  <div class="what" id="what">Incoming call</div>
+  <div class="acts">
+    <button class="decline" id="decline">Decline</button>
+    <button class="accept" id="accept">Accept</button>
+  </div>
+<script>
+  const $ = id => document.getElementById(id)
+  window.skycordCall.onInfo(info => {
+    $('name').textContent = info.name || 'Someone'
+    $('what').textContent = info.group ? 'Group call' : 'Incoming call'
+    const face = $('face')
+    face.textContent = ''
+    if (info.icon && /^data:image\/png;base64,/.test(info.icon)) {
+      const img = document.createElement('img')
+      img.alt = ''
+      img.src = info.icon
+      face.appendChild(img)
+    } else {
+      face.textContent = (info.name || '?').trim().charAt(0).toUpperCase()
+    }
+    if (info.colors) {
+      document.documentElement.style.setProperty('--bar', info.colors.bar)
+      document.documentElement.style.setProperty('--text', info.colors.text)
+      document.documentElement.style.setProperty('--muted', info.colors.muted)
+    }
+  })
+  $('accept').onclick = () => window.skycordCall.answer('accept')
+  $('decline').onclick = () => window.skycordCall.answer('decline')
+</script>
+</body>
+</html>

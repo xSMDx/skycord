@@ -21,7 +21,8 @@ import { handleDisplayMedia } from './displayMedia'
 import { startUpdates, currentUpdateState, checkForUpdatesNow, installUpdateNow, onBeforeInstall } from './updates'
 import { initToasts, showToast, closeAllToasts } from './toasts'
 import { initTray, updateTray, flashTaskbar, destroyTray } from './tray'
-import { parseNotice } from './notice'
+import { parseNotice, parseRing } from './notice'
+import { showCall, hideCall, isCallWindow, type CallColors } from './callWindow'
 import { closeAction } from './trayModel'
 import { aboutFacts } from './about'
 import { showSplash } from './splash'
@@ -63,6 +64,8 @@ let current: string | null = null
 // ── the tray and quitting ──
 /** Set once Skycord is really quitting, so closing the window closes it. */
 let quitting = false
+/** The page's theme colours, as the title bar last received them — the call window wears them too. */
+let lastColors: CallColors = null
 const keepInTray = () => readStore().keepInTray !== false
 const showWindow = () => {
   const w = shellWin?.win
@@ -72,7 +75,7 @@ const showWindow = () => {
   w.focus()
 }
 const quitApp = () => { quitting = true; app.quit() }
-app.on('before-quit', () => { quitting = true; closeAllToasts(); destroyTray() })
+app.on('before-quit', () => { quitting = true; closeAllToasts(); destroyTray(); hideCall() })
 onBeforeInstall(() => { quitting = true; closeAllToasts() })
 
 // Hidden and idle: let the page drop its decoded images. Never
@@ -232,7 +235,7 @@ ipcMain.on('desktop:title', (event, value: unknown) => {
 })
 ipcMain.on('desktop:titleColors', (event, value: unknown) => {
   const c = fromInstance(event) ? parseColors(value) : null
-  if (c) shellWin!.setColors(c)
+  if (c) { shellWin!.setColors(c); lastColors = c }
 })
 ipcMain.on('desktop:perf', (event, payload: unknown) => {
   if (!fromInstance(event)) return
@@ -278,6 +281,19 @@ ipcMain.on('desktop:callState', (event, value: unknown) => {
   updateTray({ inCall: v.inCall === true, muted: v.muted === true, deafened: v.deafened === true })
 })
 ipcMain.handle('desktop:keepInTray', event => (fromInstance(event) ? keepInTray() : null))
+ipcMain.on('desktop:ring', (event, value: unknown) => {
+  if (!fromInstance(event)) return
+  const info = value === null ? null : parseRing(value)
+  if (info) showCall(PRELOAD, info, lastColors)
+  else hideCall()
+})
+// Only the call window may answer, and the page — which owns the call — does the answering.
+ipcMain.on('call:answer', (event, value: unknown) => {
+  if (!isCallWindow(event.sender) || (value !== 'accept' && value !== 'decline')) return
+  hideCall()
+  if (value === 'accept') showWindow()
+  shellWin?.page.send('desktop:callAction', value)
+})
 ipcMain.on('desktop:setKeepInTray', (event, value: unknown) => {
   if (fromInstance(event) && typeof value === 'boolean') writeStore({ ...readStore(), keepInTray: value })
 })
