@@ -18,7 +18,7 @@ HEALTH_TIMEOUT="${SKYCORD_HEALTH_TIMEOUT:-90}"
 KEEP_NIGHTLY="${SKYCORD_KEEP_NIGHTLY:-14}"
 KEEP_UPDATE="${SKYCORD_KEEP_UPDATE:-5}"
 
-ASSETS="compose.yaml compose.mongo.yaml compose.external-proxy.yaml compose.livekit.yaml compose.caddy.yaml compose.host.yaml compose.music.yaml mongo-init.sh Caddyfile.tmpl livekit.yaml.tmpl music-firewall.sh skycord VERSION"
+ASSETS="compose.yaml compose.mongo.yaml compose.external-proxy.yaml compose.livekit.yaml compose.caddy.yaml compose.host.yaml compose.music.yaml compose.scan.yaml mongo-init.sh Caddyfile.tmpl livekit.yaml.tmpl music-firewall.sh skycord VERSION"
 # The units are fetched too. They were not, and install.sh guards every use
 # of them with -f — so on a real server the nightly backup timer quietly was
 # never installed, and nothing said so.
@@ -347,6 +347,10 @@ cmd_restore() {
 
 # ── music ────────────────────────────────────────────────────────────────────
 
+scan_enabled() {
+  grep -q '^COMPOSE_FILE=.*compose\.scan\.yaml' "$SKYCORD_DIR/.env" 2>/dev/null
+}
+
 music_enabled() {
   grep -q '^COMPOSE_FILE=.*compose\.music\.yaml' "$SKYCORD_DIR/.env" 2>/dev/null
 }
@@ -374,6 +378,23 @@ music_status_line() {
   else
     say "Music:     on — egress rules NOT in place, run: sudo systemctl restart skycord-music-firewall"
   fi
+  scan_status_line
+}
+
+# Uploads are refused while the scanner is not answering (the service fails
+# closed), so "starting" and "down" are worth saying out loud.
+scan_status_line() {
+  if ! scan_enabled; then
+    say "Scanner:   off — uploads are converted but not virus-scanned"
+    return 0
+  fi
+  local health
+  health="$(compose ps --format '{{.Health}}' clamav 2>/dev/null | head -1 || true)"
+  case "$health" in
+    healthy)  say "Scanner:   on, ClamAV answering" ;;
+    starting) say "Scanner:   on, ClamAV starting — uploads are refused until it answers" ;;
+    *)        say "Scanner:   on, ClamAV NOT answering — uploads are refused. See: sudo skycord logs clamav" ;;
+  esac
 }
 
 cmd_status() {

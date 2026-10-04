@@ -179,7 +179,7 @@ has "nginx proxies /instance"              "$ROOT/docs/self-hosting/networking.m
 guarded="$(awk '/^if \[ -z "\$ASSUME_YES" \]; then$/{g=1} g{print} /^fi$/{g=0}' "$ROOT/deploy/install.sh")"
 for q in 'Name for this instance' 'Who runs it' 'How people can reach you' \
          'Link to your terms of service' 'Link to your privacy policy' \
-         'Enable music channels'; do
+         'Enable music channels' 'Scan music uploads for viruses'; do
   if grep -q "$q" <<<"$guarded"; then ok "--yes skips: $q"; else bad "--yes skips: $q" "not inside an ASSUME_YES block"; fi
 done
 
@@ -269,6 +269,39 @@ has "the firewall blocks link-local"       "$ROOT/deploy/music-firewall.sh" '169
 has "the firewall blocks the metadata net" "$ROOT/deploy/music-firewall.sh" '169.254'
 has "the firewall uses DOCKER-USER"        "$ROOT/deploy/music-firewall.sh" 'DOCKER-USER'
 has "the unit re-applies on boot"          "$ROOT/deploy/systemd/skycord-music-firewall.service" 'WantedBy=multi-user.target'
+
+echo "scanner"
+# Opt-in, so the same three have to agree: the flag, the question, the file.
+has "the installer documents --scan"      "$ROOT/deploy/install.sh" '--scan '
+has "the installer parses --scan"         "$ROOT/deploy/install.sh" '--scan)'
+has "the installer parses --no-scan"      "$ROOT/deploy/install.sh" '--no-scan)'
+has "it adds the scanner overlay"         "$ROOT/deploy/install.sh" 'compose.scan.yaml'
+# "Never ask" has to be a different answer from "not asked yet", or the
+# question is asked anyway. --no-music used to set "off" and was.
+has "--no-music means never ask"          "$ROOT/deploy/install.sh" 'MUSIC="never"'
+has "--no-scan means never ask"           "$ROOT/deploy/install.sh" 'SCAN="never"'
+case " $ASSETS " in
+  *" compose.scan.yaml "*) ok "released: compose.scan.yaml" ;;
+  *)                       bad "released: compose.scan.yaml" "not in ASSETS, so fetch_release never downloads it" ;;
+esac
+has "scanner overlay points music at clamd" "$ROOT/deploy/compose.scan.yaml" 'MUSIC_CLAMD_HOST: clamav'
+has "scanner overlay keeps its signatures"  "$ROOT/deploy/compose.scan.yaml" 'clamav-db:/var/lib/clamav'
+code_hasnt "the scanner never gets the database"    "$ROOT/deploy/compose.scan.yaml" 'MONGO_URI'
+code_hasnt "the scanner never gets the jwt secrets" "$ROOT/deploy/compose.scan.yaml" 'JWT_ACCESS_SECRET'
+code_hasnt "the scanner publishes no port"          "$ROOT/deploy/compose.scan.yaml" 'ports:'
+
+printf 'COMPOSE_FILE=compose.yaml:compose.music.yaml\n' > "$SKYCORD_DIR/.env"
+no_  "scanner off when its overlay is absent"  scan_enabled
+case "$(scan_status_line)" in
+  *"Scanner:   off"*) ok "status says the scanner is off" ;;
+  *)                  bad "status says the scanner is off" "got: $(scan_status_line)" ;;
+esac
+printf 'COMPOSE_FILE=compose.yaml:compose.music.yaml:compose.scan.yaml\n' > "$SKYCORD_DIR/.env"
+yes_ "scanner on when its overlay is there"    scan_enabled
+case "$(scan_status_line)" in
+  *"Scanner:   on"*) ok "status says the scanner is on" ;;
+  *)                 bad "status says the scanner is on" "got: $(scan_status_line)" ;;
+esac
 
 if [ "$FAILED" = "0" ]; then echo "all good"; else echo "FAILURES"; fi
 exit "$FAILED"

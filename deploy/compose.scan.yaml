@@ -1,0 +1,53 @@
+# Virus scanning for music uploads. Opt-in, because ClamAV keeps its whole
+# signature database in memory: about 1 GB steady (measured 1.0 GiB with
+# ClamAV 1.5), and close to twice that for a minute or so each day while a
+# signature update loads alongside the old one. Leave this file out of
+# COMPOSE_FILE and uploads are still re-encoded, just not scanned — and the
+# music room marks every such file as unscanned.
+#
+# Needs compose.music.yaml: this only adds to the music service.
+services:
+  music:
+    environment:
+      MUSIC_CLAMD_HOST: clamav
+      MUSIC_CLAMD_PORT: 3310
+    # Started, not healthy: the first signature download takes minutes, and
+    # the service is fail-closed — until clamd answers, an upload is refused
+    # with "the virus scanner is not answering", never let through unscanned.
+    depends_on:
+      clamav:
+        condition: service_started
+
+  clamav:
+    image: clamav/clamav:${CLAMAV_VERSION:-1.5}
+    restart: unless-stopped
+    # The signatures survive a restart, so it does not download ~300 MB again
+    # every time the container is recreated.
+    volumes:
+      - clamav-db:/var/lib/clamav
+    # Reached only by the music service, over the stack's own network. No
+    # port is published: nothing outside the stack has any reason to talk to
+    # it. It does need the internet, to fetch signature updates — the music
+    # firewall only blocks private ranges, so that keeps working.
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          # Above the daily reload peak, so the update does not get it killed.
+          memory: 2560M
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      # The first start downloads every signature before clamd will answer.
+      start_period: 10m
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  clamav-db:

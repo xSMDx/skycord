@@ -253,6 +253,30 @@ survive a restart and a control that lapses at the first reboot with nothing
 to say so is the worst shape one can take. `skycord status` reports them, and
 every command that recreates containers puts them back.
 
+### Virus scanning
+
+Off unless asked for: `--scan` at install, or the question the installer
+asks once music is on. It adds `compose.scan.yaml`, which runs ClamAV
+(`clamav/clamav`, pinned by `CLAMAV_VERSION`, default `1.5`) and points
+the music service at it. To switch it on later, add `compose.scan.yaml` to
+`COMPOSE_FILE` in `.env` and run `sudo skycord update`.
+
+What it costs, measured rather than quoted: clamd holds about 1 GB steady
+(1.0 GiB for the container with ClamAV 1.5.4), and close to twice that for a
+minute or so each day while a signature update loads beside the old one —
+the container's limit, 2560M, sits above that peak. The first start
+downloads roughly 300 MB of signatures, which a named volume keeps across
+restarts.
+
+Until clamd answers — on first start, or if it dies — uploads are refused
+with "the virus scanner is not answering", never admitted unscanned.
+`skycord status` says which: on and answering, starting, or not answering.
+It publishes no port, and the music firewall leaves it the internet it needs
+for updates, because those rules only block private ranges.
+
+The music room shows the result on every row: a green shield for a file the
+scanner checked, an amber one for a file nobody did.
+
 Those rules exclude the container's own subnet, which is not an oversight:
 the API and the service talk over it, so blocking it would break the feature
 the rules protect. That means music can still open a socket to MongoDB — and
@@ -264,9 +288,15 @@ that this container holds no database credential. Verified with
 
 Written down because the alternative is remembering.
 
-- **The virus scanner's happy path.** The fail-closed case is tested — a
-  configured scanner that cannot be reached refuses the upload. An actual
-  clamd accepting a clean file, or catching an EICAR string, is not.
+- ~~**The virus scanner's happy path.**~~ Verified 2026-10-04 against a real
+  clamd (ClamAV 1.5.4): a clean upload comes back `scan: 'clean'`, the EICAR
+  test file is caught by the service's own client, and with clamd stopped an
+  upload is refused. Doing it found a bug that made the feature unusable:
+  clamd ends every reply with NUL, `trim()` leaves NUL alone, so a clean
+  verdict never matched and every upload was refused. The client now has
+  tests against a fake clamd that answers byte for byte like the real one.
+  EICAR cannot go through the upload route itself — the sniff step refuses
+  anything that is not audio before the scanner sees it, by design.
 - **The release rehearsal's music section.** It needs Linux, a real Docker
   network and iptables, so it runs for the first time on the next release
   tag. Everything else about the deploy half is covered by `cli.test.sh`.

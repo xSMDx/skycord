@@ -25,6 +25,9 @@ LIVEKIT_SECRET_EXT=""
 # Off unless asked for. It is a second container, a decoder and an egress
 # rule; a server that does not want music should not carry any of it.
 MUSIC="off"
+# Virus scanning for music uploads: a ClamAV container. Off unless asked
+# for, because it holds about 1 GB of memory for as long as it runs.
+SCAN="off"
 HOST_NETWORK=""
 FROM_ENV=""
 ASSUME_YES=""
@@ -68,6 +71,9 @@ Skycord installer
   --music                      music channels: a second container that
                                fetches and decodes audio (off by default)
   --no-music                   never ask about music
+  --scan                       scan music uploads for viruses (ClamAV: about
+                               1 GB of memory, more during its daily update)
+  --no-scan                    never ask about scanning
   --from-env FILE              take secrets from an existing .env (moving a server)
   --dir PATH                   install somewhere other than /opt/skycord
   --host-network               join this machine's own network, to reach a
@@ -90,7 +96,9 @@ while [ $# -gt 0 ]; do
     --livekit-secret) LIVEKIT_SECRET_EXT="$2"; shift 2 ;;
     --no-voice)       VOICE="off"; shift ;;
     --music)          MUSIC="on"; shift ;;
-    --no-music)       MUSIC="off"; shift ;;
+    --no-music)       MUSIC="never"; shift ;;
+    --scan)           SCAN="on"; shift ;;
+    --no-scan)        SCAN="never"; shift ;;
     --from-env)       FROM_ENV="$2"; shift 2 ;;
     --dir)            SKYCORD_DIR="$2"; shift 2 ;;
     --host-network)   HOST_NETWORK=1; shift ;;
@@ -168,6 +176,22 @@ if [ -z "$ASSUME_YES" ]; then
     say "runs locked down and with no access to the database."
     [ "$(ask 'Enable music channels? [y/N] ' n)" = "y" ] && MUSIC="on"
   fi
+  # Asked only once music is on: the scanner checks music uploads and
+  # nothing else.
+  if [ "$MUSIC" = "on" ] && [ "$SCAN" = "off" ]; then
+    say ""
+    say "Uploads are always converted to a clean audio file. A virus scanner also"
+    say "checks each one before that, using ClamAV. It needs about 1 GB of memory"
+    say "while it runs (this machine has ${mem_mb}MB in total)."
+    [ "$(ask 'Scan music uploads for viruses? [y/N] ' n)" = "y" ] && SCAN="on"
+  fi
+fi
+if [ "$SCAN" = "on" ] && [ "$MUSIC" != "on" ]; then
+  warn "the scanner checks music uploads, and music is off — installing without it"
+  SCAN="off"
+fi
+if [ "$SCAN" = "on" ] && [ "$mem_mb" -lt 2500 ] 2>/dev/null; then
+  warn "the scanner wants about 1 GB on top of Skycord, and this machine has ${mem_mb}MB in total"
 fi
 if [ "$MUSIC" = "on" ] && [ "$VOICE" = "off" ]; then
   warn "music needs voice, and voice is off — installing without music"
@@ -273,6 +297,7 @@ COMPOSE_FILE="compose.yaml"
 [ "$MONGO" = "bundled" ] && COMPOSE_FILE="$COMPOSE_FILE:compose.mongo.yaml"
 [ "$VOICE" = "bundled" ] && COMPOSE_FILE="$COMPOSE_FILE:compose.livekit.yaml"
 [ "$MUSIC" = "on" ]       && COMPOSE_FILE="$COMPOSE_FILE:compose.music.yaml"
+[ "$SCAN" = "on" ]        && COMPOSE_FILE="$COMPOSE_FILE:compose.scan.yaml"
 if [ -n "$HOST_NETWORK" ]; then
   COMPOSE_FILE="$COMPOSE_FILE:compose.host.yaml"
 elif [ "$PROXY" = "bundled" ]; then
