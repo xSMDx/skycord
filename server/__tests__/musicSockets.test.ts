@@ -346,3 +346,75 @@ describe('library tracks', () => {
     expect(after.channels[0].queued).toBe(0)
   })
 })
+
+describe('moving through a shared song', () => {
+  // Anyone in the call may move the song or play a queued one now, as anyone
+  // may skip: a shared channel has one position and it belongs to the room.
+  const giveTrack = async (owner: TestUser, title: string) => {
+    const ownerId = new Types.ObjectId(owner.id)
+    const stored = await trackStore.put(Readable.from([Buffer.from('bytes')]), { ownerId, mimeType: 'audio/webm' })
+    const doc = await Track.create({
+      ownerId, title, artist: 'New Order', album: 'PCL',
+      durationSec: 270, bytes: stored.bytes, store: stored.ref, source: 'upload', scan: 'skipped',
+    })
+    return String(doc._id)
+  }
+  type Now = { title?: string; elapsedMs?: number } | null
+  type Ch = { id: string; now: Now; queue: { id: string; title: string | null }[] }
+  const chans = (v: MusicView) => v.channels as unknown as Ch[]
+
+  it('seek moves the song for everyone, not only the one who asked', async () => {
+    const a = await register(); const b = await register()
+    const { voice } = await seed(a, b)
+    const sa = await inCall(a, voice.id); const sb = await inCall(b, voice.id)
+    const id = await giveTrack(a, 'Long One')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: id })
+    const v = await musicStateWhere(sb, x => x.channels.length === 1)
+    sb.emit('music:seek', { conversationId: voice.id, kind: 'channel', channelId: v.channels[0].id, sec: 120 })
+    const after = await musicStateWhere(sa, x => (chans(x)[0]?.now?.elapsedMs ?? 0) >= 119_000)
+    expect(chans(after)[0].now!.elapsedMs!).toBeLessThan(125_000)
+  })
+
+  it('refuses a seek that is not a number, to the asker', async () => {
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+    const id = await giveTrack(a, 'One')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: id })
+    const v = await musicStateWhere(sa, x => x.channels.length === 1)
+    sa.emit('music:seek', { conversationId: voice.id, kind: 'channel', channelId: v.channels[0].id, sec: 'soon' })
+    const err = await nextEvent(sa, 'music:error') as { reason: string }
+    expect(err.reason).toMatch(/point in the song/i)
+  })
+
+  it('play now plays that entry for everyone and keeps the rest', async () => {
+    const a = await register(); const b = await register()
+    const { voice } = await seed(a, b)
+    const sa = await inCall(a, voice.id); const sb = await inCall(b, voice.id)
+    const one = await giveTrack(a, 'One'); const two = await giveTrack(a, 'Two'); const three = await giveTrack(a, 'Three')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: one })
+    const v = await musicStateWhere(sa, x => x.channels.length === 1)
+    const ch = v.channels[0].id
+    sa.emit('music:queue', { conversationId: voice.id, kind: 'channel', channelId: ch, trackId: two })
+    await musicStateWhere(sa, x => chans(x)[0]?.queue.length === 1)
+    sa.emit('music:queue', { conversationId: voice.id, kind: 'channel', channelId: ch, trackId: three })
+    const q = await musicStateWhere(sb, x => chans(x)[0]?.queue.length === 2)
+    const third = chans(q)[0].queue[1]
+    expect(third.title).toBe('Three')
+    sb.emit('music:play-now', { conversationId: voice.id, kind: 'channel', channelId: ch, entryId: third.id })
+    const after = await musicStateWhere(sa, x => chans(x)[0]?.now?.title === 'Three')
+    expect(chans(after)[0].queue.map(e => e.title)).toEqual(['Two'])
+  })
+
+  it('refuses play-now for an entry that is gone', async () => {
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+    const id = await giveTrack(a, 'One')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: id })
+    const v = await musicStateWhere(sa, x => x.channels.length === 1)
+    sa.emit('music:play-now', { conversationId: voice.id, kind: 'channel', channelId: v.channels[0].id, entryId: 'gone' })
+    const err = await nextEvent(sa, 'music:error') as { reason: string }
+    expect(err.reason).toMatch(/not in the queue/i)
+  })
+})

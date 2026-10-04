@@ -47,9 +47,12 @@ const post = async (path: string, body: unknown): Promise<boolean> => {
   }
 }
 
-/** Start (or replace) what is playing on a channel. */
-export const musicPlay = (room: string, channelId: string, url: string): Promise<boolean> =>
-  post('/play', { room, channelId, url })
+/**
+ * Start (or replace) what is playing on a channel, optionally part-way in.
+ * Whole seconds; the service refuses anything else.
+ */
+export const musicPlay = (room: string, channelId: string, url: string, startSec = 0): Promise<boolean> =>
+  post('/play', { room, channelId, url, ...(startSec ? { startSec } : {}) })
 
 /**
  * Play a track from the library.
@@ -58,8 +61,8 @@ export const musicPlay = (room: string, channelId: string, url: string): Promise
  * `API_INTERNAL_URL` and reads it back with the shared secret, which is why
  * a library track needs none of the SSRF machinery a pasted link does.
  */
-export const musicPlayTrack = (room: string, channelId: string, trackId: string): Promise<boolean> =>
-  post('/play-track', { room, channelId, trackId })
+export const musicPlayTrack = (room: string, channelId: string, trackId: string, startSec = 0): Promise<boolean> =>
+  post('/play-track', { room, channelId, trackId, ...(startSec ? { startSec } : {}) })
 
 /** Stop a channel and unpublish its track. */
 export const musicClose = (room: string, channelId: string): Promise<boolean> =>

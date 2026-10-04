@@ -117,10 +117,17 @@ const resolveSource = async (
   return { ok: true, value: { kind: 'link', url: String(data.url).trim() } }
 }
 
-const startSource = (room: string, channelId: string, now: MusicSource): void => {
+/**
+ * Tell the service to play `now` on a channel, from `startSec` in.
+ *
+ * Starting again replaces what the service was playing there, and a
+ * replaced play reports no end — so a seek restarts the song at the new
+ * point without advancing the queue.
+ */
+const startSource = (room: string, channelId: string, now: MusicSource, startSec = 0): void => {
   switch (now.kind) {
-    case 'library': void musicPlayTrack(room, channelId, now.trackId); break
-    case 'link':    void musicPlay(room, channelId, now.url); break
+    case 'library': void musicPlayTrack(room, channelId, now.trackId, startSec); break
+    case 'link':    void musicPlay(room, channelId, now.url, startSec); break
     default: {
       // Exhaustiveness, and it has to be written down to be true: a switch
       // with no default compiles happily when a new kind appears and then
@@ -1493,6 +1500,29 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       broadcastMusic(gate.room)
       if (r.now) startSource(gate.room, skipId, r.now)
       else void musicClose(gate.room, skipId)
+    })
+
+    // Anyone in the call may move the song or play a queued one now, as
+    // anyone may skip: a shared channel has one position, and it belongs to
+    // the room. Rate limited like every other music action.
+    socket.on('music:seek', (data: { conversationId: string; kind: string; channelId: string; sec: unknown }) => {
+      const gate = musicGate(data); if (!gate) return
+      if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+      const channelId = String(data?.channelId ?? '')
+      const r = musicRooms.seek(gate.room, channelId, data?.sec)
+      if (!r.ok) return musicRefuse(r.reason)
+      broadcastMusic(gate.room)
+      startSource(gate.room, channelId, r.now!, r.sec)
+    })
+
+    socket.on('music:play-now', (data: { conversationId: string; kind: string; channelId: string; entryId: string }) => {
+      const gate = musicGate(data); if (!gate) return
+      if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+      const channelId = String(data?.channelId ?? '')
+      const r = musicRooms.playNow(gate.room, channelId, String(data?.entryId ?? ''))
+      if (!r.ok) return musicRefuse(r.reason)
+      broadcastMusic(gate.room)
+      startSource(gate.room, channelId, r.now!)
     })
 
     socket.on('music:close', (data: { conversationId: string; kind: string; channelId: string }) => {
