@@ -51,6 +51,8 @@ export type Source =
     }
 
 export type Track = Source & {
+  /** Addresses this entry for "play now", and survives the queue shifting under a click. */
+  entryId: string
   addedBy: string
   addedAt: number
 }
@@ -69,6 +71,8 @@ export interface MusicChannel {
 /** What a client is told. Sets become counts and arrays; nothing else leaks. */
 /** One entry as a listener sees it. A bare link has no title to show. */
 export interface MusicEntryView {
+  /** Stable for as long as the entry exists. What "play now" names. */
+  id: string
   kind: 'link' | 'library'
   title: string | null
   artist: string | null
@@ -99,7 +103,11 @@ export interface MusicChannelView {
   listeners: string[]
 }
 
+/** No real song is six hours long; past this a position is a typo or an attack. */
+export const MAX_SEEK_SEC = 6 * 60 * 60
+
 const entry = (t: Track): MusicEntryView => ({
+  id: t.entryId,
   kind: t.kind,
   title: t.kind === 'library' ? t.title : null,
   artist: t.kind === 'library' ? (t.artist || null) : null,
@@ -181,7 +189,7 @@ export class MusicRooms {
     if (!here) { here = new Map(); this.rooms.set(room, here) }
 
     const id = randomUUID()
-    const track: Track = { ...source, addedBy: by, addedAt: this.now() }
+    const track: Track = { ...source, entryId: randomUUID(), addedBy: by, addedAt: this.now() }
     here.set(id, { id, name, createdBy: by, now: track, startedAt: this.now(), queue: [], listeners: new Set() })
 
     /*
@@ -201,7 +209,7 @@ export class MusicRooms {
     if (!channel) return no('That music channel is gone.')
     const room_ok = canQueue(channel.queue.length, this.caps)
     if (!room_ok.ok) return room_ok
-    channel.queue.push({ ...source, addedBy: by, addedAt: this.now() })
+    channel.queue.push({ ...source, entryId: randomUUID(), addedBy: by, addedAt: this.now() })
     return { ok: true }
   }
 
@@ -220,6 +228,44 @@ export class MusicRooms {
      * conversation about what to play next.
      */
     return { ok: true, now: channel.now }
+  }
+
+  /**
+   * Move the playing song to `sec`, for everyone. Answers with the position
+   * actually used, which is what the service is told to start from.
+   *
+   * Whole seconds, because that is all ffmpeg is ever given (see the music
+   * service's startOffset), and clamped short of the end: a seek past the
+   * last second would decode nothing, report an end and skip the song,
+   * which is not what dragging to the end of a bar means.
+   */
+  seek(room: string, channelId: string, sec: unknown): Check & { now?: Track; sec?: number } {
+    const channel = this.get(room, channelId)
+    if (!channel) return no('That music channel is gone.')
+    if (!channel.now) return no('Nothing is playing there.')
+    if (typeof sec !== 'number' || !Number.isFinite(sec) || sec < 0 || sec > MAX_SEEK_SEC) {
+      return no('That is not a point in the song.')
+    }
+    const d = channel.now.kind === 'library' ? channel.now.durationSec : null
+    const at = Math.floor(d ? Math.min(sec, Math.max(0, d - 1)) : sec)
+    channel.startedAt = this.now() - at * 1000
+    return { ok: true, now: channel.now, sec: at }
+  }
+
+  /**
+   * Play one queued entry now. What was playing ends; the rest keep their
+   * order. Addressed by id rather than position, so a click on the third
+   * row still plays that song if the first one finished in between.
+   */
+  playNow(room: string, channelId: string, entryId: string): Check & { now?: Track } {
+    const channel = this.get(room, channelId)
+    if (!channel) return no('That music channel is gone.')
+    const i = channel.queue.findIndex(t => t.entryId === entryId)
+    if (i < 0) return no('That song is not in the queue any more.')
+    const [t] = channel.queue.splice(i, 1)
+    channel.now = t
+    channel.startedAt = this.now()
+    return { ok: true, now: t }
   }
 
   close(room: string, channelId: string): Check {

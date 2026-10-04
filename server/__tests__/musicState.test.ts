@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { MusicRooms, EMPTY_GRACE_MS } from '../sockets/musicState'
+import { MusicRooms, EMPTY_GRACE_MS, MAX_SEEK_SEC } from '../sockets/musicState'
 import { DEFAULT_CAPS } from '../utils/musicLimits'
 
 const caps = { ...DEFAULT_CAPS, channelsPerCall: 3, channelsPerInstance: 4, queuePerChannel: 2 }
@@ -327,5 +327,92 @@ describe('what a listener is told', () => {
     const id = idOf(m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana'))
     const now = m.view(ROOM).channels.find(c => c.id === id)!.now!
     expect(now).toMatchObject({ kind: 'link', title: null, durationSec: null, url: 'https://x/a.mp3' })
+  })
+})
+
+describe('moving through a shared song', () => {
+  // Anyone in a channel can move the song or play a queued one now. These
+  // are the state halves; the socket tests cover who may ask.
+  const lib = (title: string, durationSec = 200) => ({
+    kind: 'library' as const, trackId: 'a'.repeat(24), title, artist: 'X', durationSec, cover: null,
+  })
+  const clockRooms = () => {
+    let t = 1_000_000
+    // Default caps: this file's own caps hold a queue of two, and play-now
+    // needs a queue long enough to have a middle.
+    const m = new MusicRooms({ ...DEFAULT_CAPS }, () => {}, () => t)
+    return { m, tick: (ms: number) => { t += ms } }
+  }
+
+  it('gives every queued entry a stable id', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1'); m.queue(ROOM, id, lib('Three'), 'u2')
+    const q = m.view(ROOM).channels[0].queue
+    expect(q).toHaveLength(2)
+    expect(new Set(q.map(e => e.id)).size).toBe(2)
+    expect(q.every(e => typeof e.id === 'string' && e.id.length > 0)).toBe(true)
+    // Stable: the same entry keeps its id from one view to the next.
+    expect(m.view(ROOM).channels[0].queue[0].id).toBe(q[0].id)
+  })
+
+  it('seek moves the clock for everyone', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    tick(10_000)
+    const r = m.seek(ROOM, id, 120)
+    expect(r.ok).toBe(true)
+    expect(r.sec).toBe(120)
+    expect(m.view(ROOM).channels[0].now?.elapsedMs).toBe(120_000)
+  })
+
+  it('seek clamps to the last second of a known length', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One', 200), 'u1'))
+    expect(m.seek(ROOM, id, 999).sec).toBe(199)
+  })
+
+  it('seek floors to whole seconds', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    expect(m.seek(ROOM, id, 42.9).sec).toBe(42)
+  })
+
+  it('seek refuses nonsense, an idle channel and a missing one', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    for (const bad of [-1, Number.NaN, Infinity, '30', null, undefined, MAX_SEEK_SEC + 1]) {
+      expect(m.seek(ROOM, id, bad).ok).toBe(false)
+    }
+    m.skip(ROOM, id)                         // queue empty: nothing playing now
+    expect(m.seek(ROOM, id, 10).ok).toBe(false)
+    expect(m.seek(ROOM, 'nope', 10).ok).toBe(false)
+  })
+
+  it('seek on a link has no end to clamp to', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'u1'))
+    expect(m.seek(ROOM, id, 4000).sec).toBe(4000)
+  })
+
+  it('play now takes that entry out and keeps the rest in order', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    for (const t of ['Two', 'Three', 'Four']) m.queue(ROOM, id, lib(t), 'u1')
+    const three = m.view(ROOM).channels[0].queue[1].id
+    tick(50_000)
+    const r = m.playNow(ROOM, id, three)
+    expect(r.ok).toBe(true)
+    const v = m.view(ROOM).channels[0]
+    expect(v.now?.title).toBe('Three')
+    expect(v.now?.elapsedMs).toBe(0)
+    expect(v.queue.map(e => e.title)).toEqual(['Two', 'Four'])
+  })
+
+  it('play now refuses an entry that is gone', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    expect(m.playNow(ROOM, id, 'not-an-entry').ok).toBe(false)
+    expect(m.playNow(ROOM, 'nope', 'x').ok).toBe(false)
   })
 })
