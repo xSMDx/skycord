@@ -291,8 +291,11 @@ ipcMain.on('desktop:ring', (event, value: unknown) => {
 ipcMain.on('call:answer', (event, value: unknown) => {
   if (!isCallWindow(event.sender) || (value !== 'accept' && value !== 'decline')) return
   hideCall()
-  if (value === 'accept') showWindow()
+  // Answer first, then show: showing focuses the window, and a focused page
+  // treats the call as seen in the open chat. In the other order the answer
+  // arrived to find no call left to accept.
   shellWin?.page.send('desktop:callAction', value)
+  if (value === 'accept') showWindow()
 })
 ipcMain.on('desktop:setKeepInTray', (event, value: unknown) => {
   if (fromInstance(event) && typeof value === 'boolean') writeStore({ ...readStore(), keepInTray: value })

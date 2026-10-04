@@ -29,12 +29,21 @@ export const notify = async (n: Notice | null, iconSrc: string | null): Promise<
 }
 
 let ringSeq = 0
-/** Open (or update) the call window, or close it with null. The last call wins. */
+/**
+ * Open (or update) the call window, or close it with null. The last call wins.
+ *
+ * Rings at once and sends the picture after, as an update to the window
+ * already open. Waiting for the avatar first meant a call in a hidden window
+ * never rang at all: the page is throttled there, and the drawing it waited
+ * on did not finish.
+ */
 export const ringFor = async (call: RingInfo | null): Promise<void> => {
   const mine = ++ringSeq
   if (!call) { sink.ring(null); return }
-  const icon = call.icon ? await roundIcon(call.icon) : null
-  if (mine === ringSeq) sink.ring({ ...call, icon })
+  sink.ring({ ...call, icon: null })
+  if (!call.icon) return
+  const icon = await roundIcon(call.icon)
+  if (icon && mine === ringSeq) sink.ring({ ...call, icon })
 }
 
 export const setUnread = (count: number): void => sink.unread(count)

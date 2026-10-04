@@ -242,6 +242,27 @@ const engagedCallRooms = ref<Set<string>>(new Set())
 // CallBar (that's dismissedCallRooms). Pruned when the call actually ends, so a
 // fresh call from the same room rings again.
 const modalAckedRooms = ref<Set<string>>(new Set())
+// Whether the window is in front — declared before anything that asks.
+// The desktop app says (windowInFront): inside it the document reports focus
+// and visibility as true even while hidden in the tray. In a browser the
+// document is right. "Looking at a conversation" means it is open AND the
+// window is in front: an open chat behind other windows, or in the tray, is
+// not being looked at — its messages are unread and its calls must ring.
+const domInFront = () => document.hasFocus() && document.visibilityState === 'visible'
+const domFocused = ref(domInFront())
+const syncFocus = () => { domFocused.value = domInFront() }
+const appFocused = computed(() => windowInFront.value ?? domFocused.value)
+onMounted(() => {
+  window.addEventListener('focus', syncFocus)
+  window.addEventListener('blur', syncFocus)
+  document.addEventListener('visibilitychange', syncFocus)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', syncFocus)
+  window.removeEventListener('blur', syncFocus)
+  document.removeEventListener('visibilitychange', syncFocus)
+})
+
 const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: string; name: string; avatar: string } | null>(() => {
   const myId = authUser.value?.id
   if (!myId || voice.connected || voice.connecting) return null
@@ -253,7 +274,9 @@ const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: stri
   for (const [room, ids] of Object.entries(activeCalls.value)) {
     if (modalAckedRooms.value.has(room)) continue    // declined / seen in-chat / left
     if (engagedCallRooms.value.has(room)) continue   // already accepted/joined this call
-    if (room === openRoom) continue                  // viewing it → CallBar handles it
+    // Viewing it → the CallBar shows it. Only while the window is in front:
+    // an open chat in a hidden window is a call nobody would see.
+    if (room === openRoom && appFocused.value) continue
     if (ids.includes(myId) || ids.length === 0) continue   // I'm in it, or it's empty
 
     if (room.startsWith('dm:')) {
@@ -1035,9 +1058,14 @@ const dismissCurrentCall = () => {
 // Acknowledge the open conversation's call (the in-chat CallBar already shows it)
 // so leaving and re-entering the chat doesn't re-trigger the ring modal. Modal
 // only — the in-chat bar stays visible regardless.
-watch([currentCall, activeCalls], () => {
+//
+// Only while the window is in front: the bar is "seen" only if someone can see
+// it. Acknowledging it in a window hidden in the tray swallowed the call — the
+// person whose chat happened to be open could never ring you. Coming back to
+// the window acknowledges it then, which also closes the call window.
+watch([currentCall, activeCalls, appFocused], () => {
   const c = currentCall.value
-  if (!c) return
+  if (!c || !appFocused.value) return
   const myId = authUser.value?.id || ''
   const room = voiceRoomName(c.kind, c.id, myId)
   const ids = activeCalls.value[room]
@@ -2374,7 +2402,7 @@ const setupSocket = () => {
     if (dm) {
       dm.lastMsg = payload.content
       dm.lastActiveAt = Date.now()
-      if (!(view.value === 'dm' && activeDM.value?.id === partnerId)) {
+      if (!(view.value === 'dm' && activeDM.value?.id === partnerId && appFocused.value)) {
         dm.unread = (dm.unread || 0) + 1
       }
     } else {
@@ -2468,7 +2496,7 @@ const setupSocket = () => {
     if (g) {
       g.lastMsg = payload.content
       g.lastMessageAt = payload.createdAt || new Date().toISOString()
-      if (!(view.value === 'group' && activeGroup.value?.id === groupId)) g.unread = (g.unread || 0) + 1
+      if (!(view.value === 'group' && activeGroup.value?.id === groupId && appFocused.value)) g.unread = (g.unread || 0) + 1
     }
     consider({
       type: 'group', messageId: String(payload._id ?? ''), groupId,
@@ -2491,7 +2519,7 @@ const setupSocket = () => {
     // unread badge (guarded here) and no sound (see the matching
     // `!voiceStageOpen` teardown around joinVoiceChannel/returnToCall that
     // keeps useSocket's `_activeChannelId` honest for the same reason).
-    const looking = view.value === 'server' && activeChannelId.value === channelId && !voiceStageOpen.value
+    const looking = view.value === 'server' && activeChannelId.value === channelId && !voiceStageOpen.value && appFocused.value
     if (!looking) markUnread(channelId)
     const mine = payload.authorId === authUser.value?.id
     const forMe = !!payload.mentionsEveryone || mentionsMe(payload.content ?? '', noticeMe())
@@ -4097,24 +4125,6 @@ useDesktopTitleBar({
 // Placed last: the watchers below run at once, and read state declared above.
 // See docs/superpowers/specs/2026-10-04-tray-and-notifications-design.md.
 
-// Whether the window is in front. The desktop app says (windowInFront): inside
-// it the document reports focus and visibility as true even while hidden in
-// the tray. In a browser the document is right. Reactive, so the call window
-// can close the moment you come back and the in-app ring takes over.
-const domInFront = () => document.hasFocus() && document.visibilityState === 'visible'
-const domFocused = ref(domInFront())
-const syncFocus = () => { domFocused.value = domInFront() }
-const appFocused = computed(() => windowInFront.value ?? domFocused.value)
-onMounted(() => {
-  window.addEventListener('focus', syncFocus)
-  window.addEventListener('blur', syncFocus)
-  document.addEventListener('visibilitychange', syncFocus)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('focus', syncFocus)
-  window.removeEventListener('blur', syncFocus)
-  document.removeEventListener('visibilitychange', syncFocus)
-})
 
 function noticeMe() {
   return {
@@ -4179,7 +4189,21 @@ const stopNotices = onNoticeActivated(async a => {
     await doSend()
   }
 })
-const stopCallActions = onCallAction(a => { if (a === 'accept') acceptIncomingCall(); else declineIncomingCall() })
+// The call the window was opened for. Answering acts on it even if the page
+// has since stopped listing it — coming to the front marks a call in the open
+// chat as seen, which takes it out of incomingCall.
+let rangFor: NonNullable<typeof incomingCall.value> | null = null
+const stopCallActions = onCallAction(a => {
+  const c = incomingCall.value ?? rangFor
+  rangFor = null
+  if (!c) return
+  if (a === 'accept') {
+    engagedCallRooms.value = new Set([...engagedCallRooms.value, c.room])
+    vConnect(c.convId, c.kind, c.name).catch(() => {})
+  } else {
+    modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room])
+  }
+})
 const stopTray = onTrayCommand(cmd => { if (cmd === 'mute') onToggleMute(); else onToggleDeafen() })
 onBeforeUnmount(() => { stopNotices(); stopCallActions(); stopTray() })
 
@@ -4188,9 +4212,22 @@ watchEffect(() => setUnread(unreadCount(dmsData.value, groupsData.value, mention
 // The tray menu's Mute and Deafen, only while in a call.
 watchEffect(() => setCallTray({ inCall: voice.connected, muted: !!micOff.value, deafened: !!deafOff.value }))
 
+// Coming back to the window reads what is open: its messages arrived while
+// nobody was looking (see "Looking at a conversation" above).
+watch(appFocused, inFront => {
+  if (!inFront) return
+  if (view.value === 'dm' && activeDM.value) {
+    const d = dmsData.value.find(x => x.id === activeDM.value!.id); if (d) d.unread = undefined
+  } else if (view.value === 'group' && activeGroup.value) {
+    const g = groupsData.value.find(x => x.id === activeGroup.value!.id); if (g) g.unread = undefined
+  } else if (view.value === 'server' && activeChannelId.value && !voiceStageOpen.value) {
+    clearUnread(activeChannelId.value); clearMention(activeChannelId.value)
+  }
+})
+
 // A mention is seen once its channel is the text on screen.
 watch(
-  () => (view.value === 'server' && !voiceStageOpen.value ? activeChannelId.value : null),
+  () => (view.value === 'server' && !voiceStageOpen.value && appFocused.value ? activeChannelId.value : null),
   cid => { if (cid) clearMention(cid) },
   { immediate: true },
 )
@@ -4201,7 +4238,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
   if (!c) { void ringFor(null); return }
   const n = decide({ type: 'call', room: c.room, kind: c.kind, convId: c.convId, muteKey: c.convId, name: c.name }, ruleState())
   if (!n) { void ringFor(null); return }
-  if (desktopDelivers) void ringFor({ name: c.name, icon: c.avatar, group: c.kind === 'group' })
+  if (desktopDelivers) { rangFor = c; void ringFor({ name: c.name, icon: c.avatar, group: c.kind === 'group' }) }
   else void notify(n, c.avatar)
 })
 
