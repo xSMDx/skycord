@@ -131,3 +131,11 @@ socket events ──▶ useNotifications ──▶ notifyRules (pure) ──▶ 
 - **Open Skycord when Windows starts.** Not chosen.
 - **Phone push.** That arrives with the native phone app (roadmap 6) and needs server-side push.
 - **macOS and Linux specifics.** The shell targets Windows today. Nothing here is Windows-only in its interface, but only Windows is tested.
+
+## What live testing changed (2026-10-04)
+
+Driving the real desktop app found three things this design had wrong:
+
+- **The page cannot tell whether the window is in front.** Inside the app, `document.hasFocus()` and `visibilityState` report true even while the window is hidden in the tray, minimised or blurred. So the shell reports it: `notifications.onWindowFocus(cb)`, sent on every focus, blur, show, hide, minimise and restore, and once the page loads. The page uses that signal, and falls back to the document in a browser, where the document is right.
+- **"Looking at a conversation" means it is open *and* the window is in front.** Before, an open chat in a hidden window counted as looked at: its messages never became unread (so the badge said 0), and its incoming call was marked seen before it could ring, so the person whose chat was open could never call you. Now unread counts, the call rings, and coming back to the window reads what is open.
+- **A call rings at once; the avatar follows as an update.** Waiting for the picture first meant a call in a hidden, throttled window never rang at all. Accept is sent to the page before the window is shown, and the page remembers which call it rang for: shown first, the page treated the call as seen and the answer found nothing to accept.
