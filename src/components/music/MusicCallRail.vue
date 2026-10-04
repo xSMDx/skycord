@@ -55,9 +55,17 @@ const listeners = (ids: string[], known?: { id: string; name: string }[]): strin
   return `${names[0]}, ${names[1]} and ${names.length - 2} more`
 }
 
+/**
+ * Send the selected track to a channel, and listen to that channel.
+ *
+ * Sharing is "let's hear this together", so it moves your ear to the room.
+ * Leaving the preview running instead played the same song twice, a beat
+ * apart — which sounds like a fault, not like sharing.
+ */
 const pushTo = (channelId: string): void => {
   if (!props.selected) return
   queueMusic(channelId, { trackId: props.selected.id })
+  if (music.listeningTo !== channelId) listenToMusic(channelId)
 }
 
 const startWith = (): void => {

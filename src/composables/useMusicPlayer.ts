@@ -26,6 +26,7 @@
 import { reactive, computed } from 'vue'
 import { useAuth } from './useAuth'
 import { trackAudioUrl, type LibTrack } from './useMusicLibrary'
+import { onYield, takeAudio, release } from './audioFocus'
 
 export type RepeatMode = 'off' | 'all' | 'one'
 
@@ -49,6 +50,10 @@ export const player = reactive({
 
 let el: HTMLAudioElement | null = null
 let objectUrl: string | null = null
+
+// Tuning into a music channel stops the preview: you are listening to the
+// room now, and hearing your own copy underneath it is the bug this fixes.
+onYield('preview', () => { el?.pause() })
 
 /**
  * Created on first use, not at import.
@@ -81,7 +86,9 @@ const element = (): HTMLAudioElement => {
   return el
 }
 
-const release = (): void => {
+// Named for what it frees. `release` now belongs to audioFocus, and two
+// different releases in one file is how the wrong one gets called.
+const releaseUrl = (): void => {
   if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
 }
 
@@ -144,6 +151,9 @@ export const play = async (t: LibTrack, from?: LibTrack[]): Promise<void> => {
     return
   }
 
+  // Claimed before the fetch, so a slow download cannot start playing
+  // underneath a channel you tuned into while waiting.
+  takeAudio('preview')
   player.current = t
   player.loadingId = t.id
   player.error = ''
@@ -158,7 +168,7 @@ export const play = async (t: LibTrack, from?: LibTrack[]): Promise<void> => {
     // Somebody picked a different track while this one was downloading.
     if (player.current?.id !== t.id) return
 
-    release()
+    releaseUrl()
     objectUrl = URL.createObjectURL(blob)
     a.src = objectUrl
     a.volume = player.muted ? 0 : player.volume
@@ -174,6 +184,7 @@ export const play = async (t: LibTrack, from?: LibTrack[]): Promise<void> => {
 
 export const resume = async (): Promise<void> => {
   if (!el || !objectUrl) return
+  takeAudio('preview')
   try { await el.play() } catch { player.paused = true }
 }
 
@@ -236,7 +247,8 @@ export const forget = (trackId: string): void => {
   player.queue = player.queue.filter(t => t.id !== trackId)
   if (player.current?.id !== trackId) return
   pause()
-  release()
+  releaseUrl()
+  release('preview')
   player.current = null
   player.at = 0
   player.duration = 0

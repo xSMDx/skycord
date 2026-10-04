@@ -22,6 +22,11 @@ import { getSocket } from './useSocket'
  * hold a name shaped like this one.
  */
 import { soundMusicOpen, soundMusicTune, soundMusicLeave } from './useSounds'
+import { onYield, takeAudio, release } from './audioFocus'
+
+// Starting a local preview leaves whatever channel you were tuned into:
+// the two are the same ear. See audioFocus.ts.
+onYield('channel', () => { if (music.listeningTo) listenToMusic(null) })
 
 export const MUSIC_IDENTITY = 'svc:music'
 
@@ -99,8 +104,24 @@ const send = (event: string, extra: Record<string, unknown> = {}): void => {
  * caller owns it and the service composes the address from its own
  * configuration, so there is no link for anyone to point somewhere else.
  */
-export const createMusicChannel = (name: string, source: { trackId: string } | { url: string }): void =>
+/**
+ * Tune into the channel this create is about to produce.
+ *
+ * You started it to hear it with people, so hearing nothing afterwards
+ * reads as a failure. The id does not exist yet — the server answers a
+ * create with a music:state rather than an ack — so the flag is spent on
+ * the next state that brings a channel we did not have.
+ */
+let tuneIntoNext = false
+
+export const createMusicChannel = (
+  name: string,
+  source: { trackId: string } | { url: string },
+  thenListen = true,
+): void => {
+  tuneIntoNext = thenListen
   send('music:create', { name, ...source })
+}
 
 export const queueMusic = (channelId: string, source: { trackId: string } | { url: string }): void =>
   send('music:queue', { channelId, ...source })
@@ -124,6 +145,7 @@ export const listenToMusic = (channelId: string | null): void => {
   // a local decision that takes effect immediately, and a cue that waits for
   // a round trip lands after the audio it was meant to introduce.
   if (channelId !== music.listeningTo) (channelId ? soundMusicTune : soundMusicLeave)()
+  if (channelId) takeAudio('channel'); else release('channel')
   music.listeningTo = channelId
   send('music:listen', { channelId })
 }
@@ -142,7 +164,14 @@ export const onMusicState = (payload: { channels: MusicChannelView[] }): void =>
    * `before.size` guards the first state after joining a call: arriving in a
    * room with three channels already open must not fire three cues.
    */
-  if (before.size && music.channels.some(c => !before.has(c.id))) soundMusicOpen()
+  const fresh = music.channels.filter(c => !before.has(c.id))
+  if (before.size && fresh.length) soundMusicOpen()
+
+  // Exactly one new channel, and we asked for it: that is ours.
+  if (tuneIntoNext && fresh.length === 1) {
+    tuneIntoNext = false
+    listenToMusic(fresh[0].id)
+  }
   // A channel that went away while we were listening to it leaves us tuned
   // to nothing, rather than to an id nobody has.
   if (music.listeningTo && !music.channels.some(c => c.id === music.listeningTo)) {
