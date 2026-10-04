@@ -172,3 +172,12 @@ describe('ActionRate', () => {
     expect(rate.take('new').ok).toBe(true)
   })
 })
+
+describe('the upload size the client is told', () => {
+  it('is the same MUSIC_MAX_BYTES the service refuses above, so the app can refuse first', async () => {
+    const { libraryCapsFromEnv } = await import('../utils/musicLimits')
+    expect(libraryCapsFromEnv({}).maxUploadBytes).toBe(100 * 1024 * 1024)
+    expect(libraryCapsFromEnv({ MUSIC_MAX_BYTES: '26214400' }).maxUploadBytes).toBe(26214400)
+    expect(libraryCapsFromEnv({ MUSIC_MAX_BYTES: 'lots' }).maxUploadBytes).toBe(100 * 1024 * 1024)
+  })
+})

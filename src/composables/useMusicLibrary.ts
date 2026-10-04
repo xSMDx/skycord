@@ -10,7 +10,7 @@
  */
 import { reactive, computed } from 'vue'
 import { useApi, type WireTrack, type WirePlaylist, type MusicLibraryCaps } from './useApi'
-import { uploadFailure } from './uploadFailure'
+import { uploadFailure, tooBigToUpload } from './uploadFailure'
 
 // The wire shapes are defined once, in useApi, beside every other one.
 export type LibTrack = WireTrack
@@ -78,6 +78,8 @@ export const openPlaylist = async (id: string | null): Promise<void> => {
  */
 export const uploadTrack = (file: File, token: string): Promise<LibTrack | null> =>
   new Promise((resolve) => {
+    const tooBig = tooBigToUpload(file.size, library.caps?.maxUploadBytes)
+    if (tooBig) { library.error = tooBig; resolve(null); return }
     library.uploading = 0
     library.error = ''
     const xhr = new XMLHttpRequest()

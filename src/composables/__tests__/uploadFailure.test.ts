@@ -24,3 +24,13 @@ describe('why an upload failed, in words', () => {
     expect(uploadFailure(400, 'not json')).toBe('That file could not be added.')
   })
 })
+
+describe('refusing a file before uploading it', () => {
+  it('says the limit, in the same words the service uses', async () => {
+    const { tooBigToUpload } = await import('../uploadFailure')
+    expect(tooBigToUpload(30 * 1024 * 1024, 25 * 1024 * 1024)).toBe('That file is too big — 25MB at most.')
+    expect(tooBigToUpload(20 * 1024 * 1024, 25 * 1024 * 1024)).toBeNull()
+    // An older server does not say: the service will still refuse, so let it.
+    expect(tooBigToUpload(900 * 1024 * 1024, undefined)).toBeNull()
+  })
+})

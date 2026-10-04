@@ -87,6 +87,12 @@ export interface LibraryCaps {
   playlistsPerMember: number
   /** Entries in one playlist. */
   tracksPerPlaylist: number
+  /**
+   * The largest file one upload may be — the same MUSIC_MAX_BYTES the music
+   * service refuses above. Told to the client so it can refuse a file before
+   * sending it, rather than after a long upload.
+   */
+  maxUploadBytes: number
 }
 
 /**
@@ -100,6 +106,7 @@ export const DEFAULT_LIBRARY_CAPS: LibraryCaps = {
   bytesPerMember:     2 * 1024 * 1024 * 1024,
   playlistsPerMember: 50,
   tracksPerPlaylist:  500,
+  maxUploadBytes:     100 * 1024 * 1024,
 }
 
 export const libraryCapsFromEnv = (env: NodeJS.ProcessEnv = process.env): LibraryCaps => {
@@ -114,6 +121,7 @@ export const libraryCapsFromEnv = (env: NodeJS.ProcessEnv = process.env): Librar
     bytesPerMember:     n('MUSIC_BYTES_PER_MEMBER', DEFAULT_LIBRARY_CAPS.bytesPerMember),
     playlistsPerMember: n('MUSIC_PLAYLISTS_PER_MEMBER', DEFAULT_LIBRARY_CAPS.playlistsPerMember),
     tracksPerPlaylist:  n('MUSIC_TRACKS_PER_PLAYLIST', DEFAULT_LIBRARY_CAPS.tracksPerPlaylist),
+    maxUploadBytes:     n('MUSIC_MAX_BYTES', DEFAULT_LIBRARY_CAPS.maxUploadBytes),
   }
 }
 

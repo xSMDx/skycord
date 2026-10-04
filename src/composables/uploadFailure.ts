@@ -21,3 +21,15 @@ export const uploadFailure = (status: number, responseText: string): string => {
   }
   return 'That file could not be added.'
 }
+
+/** The service's own wording for a size (describeSize in music/src/ingest.ts). */
+const describeSize = (bytes: number): string =>
+  bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))}MB` : `${Math.round(bytes / 1024)}KB`
+
+/**
+ * Refuse a file before sending it, when the server has said its limit — the
+ * same sentence the service would answer with, minus the wait. An older
+ * server that does not say is left to refuse it itself.
+ */
+export const tooBigToUpload = (size: number, maxBytes: number | undefined): string | null =>
+  maxBytes && size > maxBytes ? `That file is too big — ${describeSize(maxBytes)} at most.` : null

@@ -628,6 +628,8 @@ export interface MusicLibraryCaps {
   bytesPerMember: number
   playlistsPerMember: number
   tracksPerPlaylist: number
+  /** The largest file one upload may be. Absent from servers before it. */
+  maxUploadBytes?: number
 }
 
 export interface MusicTracksResponse {
