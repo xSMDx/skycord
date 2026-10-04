@@ -84,7 +84,10 @@ export const scanStream = (src: Readable, cfg: ClamConfig): Promise<ScanVerdict>
     sock.on('data', (c: Buffer) => { reply += c.toString('utf8') })
 
     sock.on('end', () => {
-      const line = reply.trim()
+      // A z-command's reply ends in NUL, and trim() leaves NUL alone — so
+      // without this "stream: OK\0" never ended in OK, every clean file read
+      // as a scanner error, and a configured scanner refused every upload.
+      const line = reply.replace(/\0/g, '').trim()
       // `stream: OK` / `stream: Eicar-Test-Signature FOUND` / `... ERROR`
       if (/\bOK$/.test(line)) return finish({ state: 'clean' })
       const found = /^stream:\s*(.+?)\s+FOUND$/m.exec(line)
