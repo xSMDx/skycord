@@ -264,6 +264,40 @@ then ok  "the firewall script agrees about when music is on"
 else bad "the firewall script agrees about when music is on" "it does not"
 fi
 
+# The check must find rules that are there. It piped `iptables -S` into
+# `grep -q` under pipefail: grep finds its line and exits, iptables is still
+# writing, dies of SIGPIPE, and the pipeline reports THAT — so a server with
+# every rule in place was told they were missing. The v0.20.9 rehearsal
+# failed on exactly this. The fake writes line by line, as iptables-nft does.
+# shellcheck disable=SC2329 # called by the slow_ipt fakes below
+slow_rules() {
+  local subnet="$1" skip="${2:-}" r i
+  printf '%s\n' "-N DOCKER-USER" \
+    "-A DOCKER-USER -s $subnet -d $subnet -m comment --comment skycord-music -j RETURN"
+  for r in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10; do
+    [ "$r" = "$skip" ] && continue
+    sleep 0.02
+    printf '%s\n' "-A DOCKER-USER -s $subnet -d $r -m comment --comment skycord-music -j REJECT --reject-with icmp-port-unreachable"
+  done
+  for i in $(seq 1 40); do sleep 0.002; printf '%s\n' "-A DOCKER-USER -s 10.9.$i.0/24 -j RETURN"; done
+}
+# shellcheck source=/dev/null
+if ( source "$ROOT/deploy/music-firewall.sh"
+     # shellcheck disable=SC2329 # called by have_rules, by name
+     slow_ipt() { slow_rules 172.20.0.0/16; }
+     have_rules slow_ipt 172.20.0.0/16 "$V4_BLOCK" )
+then ok  "the check finds rules that are there, however iptables writes them"
+else bad "the check finds rules that are there, however iptables writes them" "it reported them missing"
+fi
+# shellcheck source=/dev/null
+if ( source "$ROOT/deploy/music-firewall.sh"
+     # shellcheck disable=SC2329 # called by have_rules, by name
+     slow_ipt() { slow_rules 172.20.0.0/16 169.254.0.0/16; }
+     have_rules slow_ipt 172.20.0.0/16 "$V4_BLOCK" )
+then bad "the check still notices a missing rule" "it passed without the link-local reject"
+else ok  "the check still notices a missing rule"
+fi
+
 has "the firewall excludes its own subnet" "$ROOT/deploy/music-firewall.sh" 'RETURN'
 has "the firewall blocks link-local"       "$ROOT/deploy/music-firewall.sh" '169.254.0.0/16'
 has "the firewall blocks the metadata net" "$ROOT/deploy/music-firewall.sh" '169.254'

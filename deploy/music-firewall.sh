@@ -102,10 +102,15 @@ add_rules() {
 }
 
 have_rules() {
-  local ipt="$1" subnet="$2" blocks="$3" range
-  "$ipt" -S DOCKER-USER 2>/dev/null | grep -q -- "-s $subnet.*--comment \"\?$TAG\"\?.*RETURN" || return 1
+  local ipt="$1" subnet="$2" blocks="$3" range rules
+  # Captured, never piped into `grep -q`: under pipefail, grep finds its line
+  # and exits while iptables is still writing, iptables dies of SIGPIPE, and
+  # the pipeline reports that. Measured on iptables-nft: 196 of 200 checks
+  # called present rules missing. It failed the v0.20.9 release rehearsal.
+  rules="$("$ipt" -S DOCKER-USER 2>/dev/null)" || return 1
+  grep -q -- "-s $subnet.*--comment \"\?$TAG\"\?.*RETURN" <<<"$rules" || return 1
   for range in $blocks; do
-    "$ipt" -S DOCKER-USER 2>/dev/null | grep -q -- "-s $subnet -d $range.*$TAG" || return 1
+    grep -q -- "-s $subnet -d $range.*$TAG" <<<"$rules" || return 1
   done
   return 0
 }

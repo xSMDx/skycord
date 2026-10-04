@@ -135,7 +135,10 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 docker compose version >/dev/null 2>&1 || die "this Docker has no 'compose' — update Docker, or install the compose plugin"
 
-port_busy() { ss -ltn "sport = :$1" 2>/dev/null | grep -q LISTEN; }
+# Captured rather than piped into `grep -q`: under pipefail a grep that finds
+# its line early can leave the writer to die of SIGPIPE, and the pipeline then
+# reports a busy port as free (see have_rules in music-firewall.sh).
+port_busy() { grep -q LISTEN <<<"$(ss -ltn "sport = :$1" 2>/dev/null)"; }
 if [ "$PROXY" = "bundled" ] && { port_busy 80 || port_busy 443; }; then
   say "Something already serves ports 80/443 on this machine."
   say "Installing in front-end-less mode instead: Skycord will listen on 127.0.0.1:3001."
@@ -485,7 +488,7 @@ fi
 if [ "$VOICE" = "bundled" ]; then
   say ""
   say "Voice needs two ports open to this machine: ${LIVEKIT_UDP_PORT}/udp and 7881/tcp."
-  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  if command -v ufw >/dev/null 2>&1 && grep -q "Status: active" <<<"$(ufw status 2>/dev/null)"; then
     if [ -n "$ASSUME_YES" ] || [ "$(ask 'ufw is active. Open 80, 443, 7881/tcp and the UDP port? [Y/n] ' y)" != "n" ]; then
       ufw allow 80/tcp >/dev/null && ufw allow 443/tcp >/dev/null
       ufw allow 7881/tcp >/dev/null && ufw allow "${LIVEKIT_UDP_PORT}/udp" >/dev/null

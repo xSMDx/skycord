@@ -161,7 +161,8 @@ fetch_release() {
 }
 
 # ── backups ──────────────────────────────────────────────────────────────────
-mongo_in_stack() { compose ps --services 2>/dev/null | grep -qx mongo; }
+# Captured, not piped into grep -q: see have_rules in music-firewall.sh.
+mongo_in_stack() { grep -qx mongo <<<"$(compose ps --services 2>/dev/null)"; }
 
 # Runs a snippet of JavaScript against the database, wherever it lives: in this
 # stack, or wherever MONGO_URI points. Reading it directly is deliberate — the
