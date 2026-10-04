@@ -58,6 +58,7 @@ import CallBar               from '@/components/voice/CallBar.vue'
 import MusicModal            from '@/components/music/MusicModal.vue'
 import MiniPlayer            from '@/components/music/MiniPlayer.vue'
 import { musicAvailable }    from '@/composables/useMusic'
+import { useInstance }       from '@/composables/useInstance'
 import CameraPreviewModal    from '@/components/voice/CameraPreviewModal.vue'
 import Skeleton             from '@/components/ui/Skeleton.vue'
 import InviteToVoice         from '@/components/voice/InviteToVoice.vue'
@@ -1305,6 +1306,15 @@ const resolveRoomPeople = async (): Promise<void> => {
  * is the in-call control, not the only door.
  */
 const musicModal = ref(false)
+
+/*
+ * What this instance offers — music, chiefly — is in the instance profile,
+ * and only screens that call useInstance fetch it. The sign-in page is one,
+ * so signing in fresh set it; refreshing while signed in never shows that
+ * page, so the music button vanished on every reload. The shell asks for
+ * it itself now. Idempotent: one request per page load, shared.
+ */
+useInstance()
 
 // Resolving costs a request per server, so it waits until the room is
 // actually opened rather than running for everyone on every page load.

@@ -22,6 +22,7 @@ import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
   Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert,
   Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
+  ListPlus, ListStart, ListEnd,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import MusicCallRail from './MusicCallRail.vue'
@@ -30,9 +31,11 @@ import { useAuth } from '@/composables/useAuth'
 import { coverTheme, type CoverTheme } from '@/composables/coverTheme'
 import { appearance } from '@/composables/useAppearance'
 import {
-  player, play, pause, toggle, step, seek, setVolume, forget,
-  toggleShuffle, cycleRepeat, upNext,
+  player, queue, queueView, playFrom, toggle, next, previous, jumpTo, seek, setVolume,
+  forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue,
+  removeFromQueue, clearQueue, type QueueContext,
 } from '@/composables/useMusicPlayer'
+import { openMenu, type MenuItem } from '@/composables/useContextMenu'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
   deleteTrack, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
@@ -81,13 +84,61 @@ const vol = computed(() => player.volume)
  * which is the same gesture. Clicks that started on a control inside the
  * row belong to that control.
  */
-const onRowClick = (e: MouseEvent, t: LibTrack): void => {
-  if ((e.target as HTMLElement).closest("button, select")) return
-  void playTrack(t)
+const onRowClick = (e: MouseEvent, i: number): void => {
+  if ((e.target as HTMLElement).closest('button, select')) return
+  void playRow(i)
 }
 
-/** Play from THIS list, so next and previous follow what you are looking at. */
-const playTrack = (t: LibTrack): Promise<void> => play(t, shownTracks.value)
+/**
+ * The list being looked at, as a queue context.
+ *
+ * This is what a row click starts playing — and ONLY a row click. The queue
+ * drawer jumps within whatever context is already playing; it used to call
+ * this same path, which is how searching for a song and then clicking
+ * "up next" silently replaced the queue with the search results.
+ */
+const viewContext = computed<QueueContext>(() => {
+  if (library.open) return { key: `playlist:${library.open.id}`, label: library.open.name }
+  const q = search.value.trim()
+  if (q) return { key: `search:${q}`, label: `“${q}”` }
+  return { key: 'library', label: 'All tracks' }
+})
+
+const playRow = (i: number): Promise<void> => playFrom(shownTracks.value, i, viewContext.value)
+
+/**
+ * Is this row the one playing?
+ *
+ * In the list it is playing from, only the exact row counts — a playlist can
+ * hold one song twice, and lighting both would be wrong about which one you
+ * are on. Seen from any other list, the song is what matters.
+ */
+const isPlayingRow = (t: LibTrack, i: number): boolean => {
+  if (queue.current?.id !== t.id) return false
+  if (queue.context?.key === viewContext.value.key && !queue.fromManual) {
+    return queue.order[queue.pos] === i
+  }
+  return true
+}
+
+/** Right-click on a row: everything you can do with that song, in one place. */
+const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
+  const items: MenuItem[] = [
+    { label: isPlayingRow(t, i) && !player.paused ? 'Pause' : 'Play', icon: Play, onSelect: () => playRow(i) },
+    { label: 'Play next', icon: ListStart, onSelect: () => playNext(t) },
+    { label: 'Add to queue', icon: ListEnd, onSelect: () => addToQueue(t) },
+  ]
+  if (library.playlists.length && !library.open) {
+    items.push({ sep: true }, {
+      label: 'Add to playlist',
+      submenu: library.playlists.map(pl => ({ label: pl.name, onSelect: () => addToPlaylist(pl.id, t.id) })),
+    })
+  }
+  items.push({ sep: true }, library.open
+    ? { label: 'Remove from this playlist', icon: X, onSelect: () => removeHere(t, i) }
+    : { label: 'Delete from your library', icon: Trash2, danger: true, onSelect: () => removeHere(t, i) })
+  openMenu(e, items)
+}
 
 const setVol = (e: Event): void => setVolume(Number((e.target as HTMLInputElement).value))
 const onSeek = (e: Event): void => seek(Number((e.target as HTMLInputElement).value))
@@ -142,14 +193,29 @@ const usedFraction = computed(() => {
  * It used to always start the first track, which while that track was
  * playing meant pressing a button labelled Play and hearing the music stop.
  */
-const listPlaying = computed(() =>
-  !paused.value && !!playing.value && shownTracks.value.some(t => t.id === playing.value!.id))
+const thisListLoaded = computed(() => !!queue.current && queue.context?.key === viewContext.value.key)
+const listPlaying = computed(() => thisListLoaded.value && !player.paused)
 
 const playThisList = (): void => {
-  if (listPlaying.value) { pause(); return }
-  const current = playing.value && shownTracks.value.find(t => t.id === playing.value!.id)
-  const next = current ?? shownTracks.value[0]
-  if (next) void playTrack(next)
+  // Already this list: the button is play/pause for it.
+  if (thisListLoaded.value) { void toggle(); return }
+  const n = shownTracks.value.length
+  if (!n) return
+  void playRow(player.shuffle ? Math.floor(Math.random() * n) : 0)
+}
+
+/**
+ * Shuffle play: turn shuffle on and start somewhere random.
+ *
+ * It used to play one random song with shuffle still off, so the song after
+ * it was simply the next one in the list — a shuffle button that shuffled
+ * exactly once.
+ */
+const shufflePlay = (): void => {
+  const n = shownTracks.value.length
+  if (!n) return
+  setShuffleOn()
+  void playRow(Math.floor(Math.random() * n))
 }
 
 // ── the centre pane's identity ──────────────────────────────────────────────
@@ -283,35 +349,86 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
         <!-- The queue, over the centre pane rather than beside it: three
              columns is already the most this modal can hold, and what plays
              next is a question you ask occasionally, not a thing to watch. -->
-        <section v-if="showQueue" class="mm-queue">
+        <section v-if="showQueue" class="mm-queue" aria-label="Queue">
           <header class="mm-qhead">
-            <span class="fr-label">Up next</span>
+            <span class="mm-qtitle">Queue</span>
             <button class="mm-icon" aria-label="Close the queue" @click="showQueue = false">
               <X :size="14" :stroke-width="2.25" />
             </button>
           </header>
 
-          <p v-if="player.shuffle" class="mm-qnote">
-            Shuffle is on, so what comes next is picked when it gets there.
-          </p>
-          <ol v-else-if="upNext.length" class="mm-qlist">
-            <li v-for="(t, i) in upNext" :key="t.id + '-' + i" class="mm-qrow">
-              <button class="mm-qjump" :aria-label="'Play ' + t.title" @click="playTrack(t)">
-                <span class="mm-thumb" :class="{ empty: !t.cover }">
-                  <img v-if="t.cover" :src="t.cover" alt="" />
+          <template v-if="queue.current">
+            <span class="mm-qlabel">Now playing</span>
+            <div class="mm-qrow now">
+              <span class="mm-qjump" role="presentation">
+                <span class="mm-thumb" :class="{ empty: !queue.current.cover }">
+                  <img v-if="queue.current.cover" :src="queue.current.cover" alt="" />
                   <Music2 v-else :size="13" :stroke-width="2" />
                 </span>
                 <span class="mm-names">
-                  <span class="mm-name mm-ellip">{{ t.title }}</span>
-                  <span class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
+                  <span class="mm-name mm-ellip">{{ queue.current.title }}</span>
+                  <span class="mm-artist mm-ellip">
+                    {{ queue.current.artist || 'Unknown artist' }} ·
+                    {{ queue.fromManual ? 'from your queue' : `from ${queue.context?.label ?? 'your music'}` }}
+                  </span>
                 </span>
-                <span class="mm-dim">{{ clock(t.durationSec) }}</span>
-              </button>
-            </li>
-          </ol>
-          <p v-else class="mm-qnote">
-            Nothing after this one.
-            <template v-if="player.repeat === 'off'">Turn on repeat to start the list again.</template>
+              </span>
+            </div>
+          </template>
+
+          <!-- What you asked for, before the list carries on. -->
+          <template v-if="queueView.manual.length">
+            <div class="mm-qlabel row">
+              <span>Next in queue</span>
+              <button class="mm-qclear" @click="clearQueue">Clear</button>
+            </div>
+            <ol class="mm-qlist">
+              <li v-for="(t, i) in queueView.manual" :key="'m' + i + t.id" class="mm-qrow">
+                <button class="mm-qjump" :aria-label="'Play ' + t.title" @click="jumpTo({ kind: 'manual', index: i })">
+                  <span class="mm-thumb" :class="{ empty: !t.cover }">
+                    <img v-if="t.cover" :src="t.cover" alt="" />
+                    <Music2 v-else :size="13" :stroke-width="2" />
+                  </span>
+                  <span class="mm-names">
+                    <span class="mm-name mm-ellip">{{ t.title }}</span>
+                    <span class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
+                  </span>
+                  <span class="mm-dim">{{ clock(t.durationSec) }}</span>
+                </button>
+                <button class="mm-icon" :aria-label="'Remove ' + t.title + ' from the queue'" @click="removeFromQueue(i)">
+                  <X :size="13" :stroke-width="2.25" />
+                </button>
+              </li>
+            </ol>
+          </template>
+
+          <!-- The rest of the list, in the order it will actually play —
+               shuffled or not, that order was decided when shuffle went on. -->
+          <template v-if="queueView.context.length">
+            <span class="mm-qlabel">
+              Next from {{ queue.context?.label ?? 'your music' }}<template v-if="player.shuffle"> · shuffled</template>
+            </span>
+            <ol class="mm-qlist">
+              <li v-for="row in queueView.context" :key="'c' + row.orderIndex" class="mm-qrow">
+                <button class="mm-qjump" :aria-label="'Play ' + row.track.title" @click="jumpTo({ kind: 'context', orderIndex: row.orderIndex })">
+                  <span class="mm-thumb" :class="{ empty: !row.track.cover }">
+                    <img v-if="row.track.cover" :src="row.track.cover" alt="" />
+                    <Music2 v-else :size="13" :stroke-width="2" />
+                  </span>
+                  <span class="mm-names">
+                    <span class="mm-name mm-ellip">{{ row.track.title }}</span>
+                    <span class="mm-artist mm-ellip">{{ row.track.artist || 'Unknown artist' }}</span>
+                  </span>
+                  <span class="mm-dim">{{ clock(row.track.durationSec) }}</span>
+                </button>
+              </li>
+            </ol>
+          </template>
+
+          <p v-if="!queue.current" class="mm-qnote">Nothing is playing. Pick a song and the queue fills in.</p>
+          <p v-else-if="!queueView.manual.length && !queueView.context.length" class="mm-qnote">
+            That is the end of {{ queue.context?.label ?? 'the list' }}.
+            {{ player.repeat === 'all' ? 'It starts again from the top.' : 'Turn on repeat to keep it going.' }}
           </p>
         </section>
 
@@ -335,7 +452,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
               <button
                 class="mm-ghost" :disabled="shownTracks.length < 2" v-tip="'Shuffle'"
                 aria-label="Shuffle"
-                @click="playTrack(shownTracks[Math.floor(Math.random() * shownTracks.length)])"
+                @click="shufflePlay"
               >
                 <Shuffle :size="15" :stroke-width="2.25" />
               </button>
@@ -390,14 +507,14 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           </div>
           <div
             v-for="(t, i) in shownTracks" :key="`${t.id}-${i}`"
-            class="mm-tr mm-row" :class="{ on: playing?.id === t.id }" role="row"
-            @click="onRowClick($event, t)"
+            class="mm-tr mm-row" :class="{ on: isPlayingRow(t, i) }" role="row"
+            @click="onRowClick($event, i)" @contextmenu.prevent="rowMenu($event, t, i)"
           >
-            <button class="mm-num" :aria-label="`Play ${t.title}`" @click="playTrack(t)">
+            <button class="mm-num" :aria-label="`Play ${t.title}`" @click="playRow(i)">
               <Loader2 v-if="loadingId === t.id" class="mm-numico mm-spin" :size="13" :stroke-width="2.5" />
               <component
                 v-else
-                :is="playing?.id === t.id && !paused ? Pause : Play"
+                :is="isPlayingRow(t, i) && !paused ? Pause : Play"
                 class="mm-numico" :size="13" :stroke-width="2.5"
               />
               <span class="mm-numtext">{{ i + 1 }}</span>
@@ -424,6 +541,12 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             <span class="mm-coltime mm-dim" role="cell">{{ clock(t.durationSec) }}</span>
 
             <span class="mm-acts" role="cell">
+              <button
+                class="mm-icon" :aria-label="`Add ${t.title} to the queue`"
+                v-tip="'Add to queue'" @click="addToQueue(t)"
+              >
+                <ListPlus :size="14" :stroke-width="2.25" />
+              </button>
               <select
                 v-if="library.playlists.length && !library.open"
                 class="mm-add" :aria-label="`Add ${t.title} to a playlist`"
@@ -501,7 +624,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           >
             <ShuffleIcon :size="16" :stroke-width="2.25" />
           </button>
-          <button class="mm-icon" :disabled="!playing" aria-label="Previous" @click="step(-1)">
+          <button class="mm-icon" :disabled="!playing" aria-label="Previous" v-tip="'Previous — or restart, past 3 seconds'" @click="previous">
             <SkipBack :size="18" :stroke-width="2.25" />
           </button>
           <button
@@ -510,7 +633,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           >
             <component :is="paused ? Play : Pause" :size="18" :stroke-width="2.5" />
           </button>
-          <button class="mm-icon" :disabled="!playing" aria-label="Next" @click="step(1)">
+          <button class="mm-icon" :disabled="!playing" aria-label="Next" @click="next">
             <SkipForward :size="18" :stroke-width="2.25" />
           </button>
           <button
@@ -543,6 +666,9 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           @click="showQueue = !showQueue"
         >
           <ListVideo :size="16" :stroke-width="2.25" />
+          <!-- How many songs you lined up, so "Add to queue" visibly did
+               something without a toast for every click. -->
+          <span v-if="queue.manual.length" class="mm-qbadge">{{ queue.manual.length }}</span>
         </button>
         <span class="mm-only"><Radio :size="12" :stroke-width="2.25" /> Only you</span>
         <component :is="volIcon" class="mm-volico" :size="16" :stroke-width="2.25" />
@@ -895,12 +1021,43 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   padding: 14px 14px 18px;
   background: var(--bg-panel); border-radius: var(--edge-lg);
 }
-.mm-qhead { display: flex; align-items: center; justify-content: space-between; }
+.mm-qhead { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 6px; }
+.mm-qtitle { font-size: 18px; font-weight: 700; color: var(--text-strong); }
+.mm-qlabel {
+  display: block; padding: 14px 10px 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--text-3);
+}
+.mm-qlabel.row { display: flex; align-items: center; justify-content: space-between; }
+.mm-qclear {
+  border: none; background: none; cursor: pointer; padding: 2px 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--text-3); border-radius: var(--edge-sm);
+}
+@media (hover: hover) and (pointer: fine) { .mm-qclear:hover { color: var(--text-1); background: var(--hover); } }
+.mm-qrow { display: flex; align-items: center; gap: 2px; padding-right: 4px; }
+.mm-qrow .mm-icon { opacity: 0; }
+.mm-qrow:hover .mm-icon, .mm-qrow:focus-within .mm-icon { opacity: 1; }
+@media (hover: none) { .mm-qrow .mm-icon { opacity: 1; } }
+.mm-qrow.now { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); }
+.mm-qrow.now .mm-name { color: var(--art-accent, var(--accent-text)); }
+.mm-qrow.now .mm-qjump { cursor: default; }
+
+/* The queue button carries a count of what you lined up. */
+.mm-aside .mm-icon { position: relative; }
+.mm-qbadge {
+  position: absolute; top: -2px; right: -4px;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--edge-pill);
+  display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; line-height: 1;
+  background: var(--accent); color: var(--text-on-accent);
+}
 .mm-qnote { padding: 6px 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
 .mm-qlist { list-style: none; display: flex; flex-direction: column; gap: 2px; counter-reset: q; }
 .mm-qrow { border-radius: var(--edge-md); }
 @media (hover: hover) and (pointer: fine) { .mm-qrow:hover { background: var(--hover); } }
 .mm-qjump {
+  flex: 1; min-width: 0;
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 7px 10px; border: none; background: none; cursor: pointer; text-align: left;
   border-radius: var(--edge-md);

@@ -11,8 +11,8 @@
  * the voice panel, which is already the busiest corner of the app.
  */
 import { computed } from 'vue'
-import { Music2, Pause, Play, X } from 'lucide-vue-next'
-import { player, toggle, forget } from '@/composables/useMusicPlayer'
+import { Music2, Pause, Play, SkipForward, X } from 'lucide-vue-next'
+import { player, toggle, next, stop } from '@/composables/useMusicPlayer'
 
 const emit = defineEmits<{ open: [] }>()
 
@@ -24,7 +24,6 @@ const progress = computed(() => {
   return d > 0 ? Math.min(100, (player.at / d) * 100) : 0
 })
 
-const stop = (): void => { if (track.value) forget(track.value.id) }
 </script>
 
 <template>
@@ -45,7 +44,13 @@ const stop = (): void => { if (track.value) forget(track.value.id) }
     <button class="mp-btn" :aria-label="player.paused ? 'Play' : 'Pause'" @click="toggle">
       <component :is="player.paused ? Play : Pause" :size="14" :stroke-width="2.5" />
     </button>
-    <button class="mp-btn mp-stop" aria-label="Stop and clear" @click="stop">
+    <button class="mp-btn" aria-label="Next" @click="next">
+      <SkipForward :size="13" :stroke-width="2.5" />
+    </button>
+    <!-- Stops and puts the strip away. It does not touch the queue — it used
+         to remove the song from it, so closing this deleted a track from
+         the list you were playing. -->
+    <button class="mp-btn mp-stop" aria-label="Stop" @click="stop">
       <X :size="13" :stroke-width="2.5" />
     </button>
 
