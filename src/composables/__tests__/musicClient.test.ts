@@ -246,3 +246,33 @@ describe('moving a shared song', () => {
     expect(emit).toHaveBeenCalledWith('music:play-now', expect.objectContaining({ channelId: 'a', entryId: 'e1' }))
   })
 })
+
+describe('only your own call', () => {
+  // Every member of a server hears every voice channel's music state: the
+  // audience is the server, not the call. Applying all of them made the
+  // rail flip between calls whenever another channel changed.
+  const roomState = (room: string, id: string) => ({ room, ...view([{ id, name: id }]) })
+
+  it("ignores another call's state", () => {
+    setMusicTarget({ conversationId: 'c1', kind: 'channel' }, 'voice:c1')
+    onMusicState(roomState('voice:c1', 'mine'))
+    onMusicState(roomState('voice:other', 'theirs'))
+    expect(music.channels.map(c => c.id)).toEqual(['mine'])
+  })
+
+  it('keeps a state that arrived before the call was set, and shows it once it is', () => {
+    // The server answers a join with the room's state, and that can land
+    // before the client has finished deciding which call it is in.
+    setMusicTarget(null)
+    onMusicState(roomState('voice:c2', 'early'))
+    expect(music.channels).toEqual([])
+    setMusicTarget({ conversationId: 'c2', kind: 'channel' }, 'voice:c2')
+    expect(music.channels.map(c => c.id)).toEqual(['early'])
+  })
+
+  it('shows nothing when you are in no call', () => {
+    setMusicTarget(null)
+    onMusicState(roomState('voice:c3', 'x'))
+    expect(music.channels).toEqual([])
+  })
+})

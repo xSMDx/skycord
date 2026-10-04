@@ -152,13 +152,32 @@ export const musicChannel = computed(() =>
 
 /** Where we are, for every emit. Set by useVoice when a call is joined. */
 let target: { conversationId: string; kind: 'dm' | 'group' | 'channel' } | null = null
+/** The server's name for that call's room — what music:state is labelled with. */
+let targetRoom: string | null = null
 
-export const setMusicTarget = (t: typeof target): void => {
-  if (t?.conversationId === target?.conversationId && t?.kind === target?.kind) return
+/**
+ * Every room's last state, by room.
+ *
+ * A voice channel's audience is the whole server, so this member receives
+ * every call's music state, not only their own. Applying each as it came
+ * made the rail flip to whichever call changed last. Kept rather than
+ * dropped, because the server answers a join with the room's state and that
+ * can arrive before useVoice has told us which call we are in.
+ */
+const byRoom = new Map<string, MusicChannelView[]>()
+
+export const setMusicTarget = (t: typeof target, room: string | null = null): void => {
+  if (t?.conversationId === target?.conversationId && t?.kind === target?.kind && room === targetRoom) return
   target = t
+  targetRoom = t ? room : null
   // Leaving a call leaves its music. The server forgets us too; this is the
   // half the client owns, so a stale panel never outlives the call.
-  if (!t) { music.channels = []; untune(); syncTick(); music.error = '' }
+  if (!t) { music.channels = []; untune(); syncTick(); music.error = ''; return }
+  if (room && byRoom.has(room)) {
+    music.receivedAt = Date.now()
+    music.channels = byRoom.get(room)!
+    syncTick()
+  }
 }
 
 const send = (event: string, extra: Record<string, unknown> = {}): void => {
@@ -240,7 +259,13 @@ export const listenToMusic = (channelId: string | null): void => {
 }
 
 /** Wired once, by useSocket, on every connect. */
-export const onMusicState = (payload: { channels: MusicChannelView[] }): void => {
+export const onMusicState = (payload: { room?: string; channels: MusicChannelView[] }): void => {
+  if (payload?.room) {
+    if (payload.channels?.length) byRoom.set(payload.room, payload.channels)
+    else byRoom.delete(payload.room)
+    // Somebody else's call, or no call at all: filed, not shown.
+    if (payload.room !== targetRoom) return
+  }
   music.receivedAt = Date.now()
   musicNow.value = music.receivedAt
   const before = new Set(music.channels.map(c => c.id))

@@ -1375,6 +1375,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
       }
       broadcastCall(room)
+      // What is playing, to the newcomer alone. Music state only goes out on
+      // a change, so somebody arriving mid-song used to see an empty room
+      // until the song ended. Sent even when nothing plays: an empty list is
+      // an answer, and it clears anything stale from a previous call.
+      socket.emit('music:state', musicRooms.view(room))
     })
 
     /**
@@ -1417,6 +1422,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // `chan:` membership was restored, and a client missing itself from the
       // list is the same fault seen from the other side.
       socket.emit('call:state', callStatePayload(room))
+      // The same for music: a new socket missed every change made while the
+      // old one was gone.
+      socket.emit('music:state', musicRooms.view(room))
       // Already listed — a second tab, or a duplicate rejoin. Nothing changed
       // for anyone else, so nothing is fanned out to them.
       if (wasPresent) return

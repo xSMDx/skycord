@@ -153,11 +153,16 @@ export class MusicRooms {
     return this.rooms.get(room)?.get(channelId)
   }
 
-  /** The payload broadcast as `music:state`. Always the FULL list. */
-  view(room: string): { channels: MusicChannelView[] } {
+  /**
+   * The payload broadcast as `music:state`. Always the FULL list, and it
+   * names its room: a voice channel's audience is the whole server, so every
+   * member receives every call's state and needs to know which is theirs.
+   */
+  view(room: string): { room: string; channels: MusicChannelView[] } {
     const here = this.rooms.get(room)
-    if (!here) return { channels: [] }
+    if (!here) return { room, channels: [] }
     return {
+      room,
       channels: [...here.values()].map(c => ({
         id: c.id,
         name: c.name,

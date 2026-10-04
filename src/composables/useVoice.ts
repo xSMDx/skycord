@@ -465,7 +465,7 @@ watch(
   () => (voice.connected && voice.activeConvId && voice.activeKind
     ? { conversationId: voice.activeConvId, kind: voice.activeKind }
     : null),
-  t => setMusicTarget(t),
+  t => setMusicTarget(t, t ? voiceRoomName(t.kind, t.conversationId, useAuth().user.value?.id ?? '') : null),
   { immediate: true },
 )
 

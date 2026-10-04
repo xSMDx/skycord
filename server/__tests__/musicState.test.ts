@@ -416,3 +416,15 @@ describe('moving through a shared song', () => {
     expect(m.playNow(ROOM, 'nope', 'x').ok).toBe(false)
   })
 })
+
+describe('whose state this is', () => {
+  it('names its room, because it is sent to everyone in the server', () => {
+    // A server's voice channels share one audience, so a listener in one
+    // call receives every other call's music state too. The room is how a
+    // client tells which one is its own.
+    const m = make()
+    m.create(ROOM, 'Chill', { kind: 'link' as const, url: 'https://x/a.mp3' }, 'ana')
+    expect(m.view(ROOM).room).toBe(ROOM)
+    expect(m.view('voice:elsewhere')).toEqual({ room: 'voice:elsewhere', channels: [] })
+  })
+})

@@ -418,3 +418,34 @@ describe('moving through a shared song', () => {
     expect(err.reason).toMatch(/not in the queue/i)
   })
 })
+
+describe('arriving in a call where music is already playing', () => {
+  // A member who joins mid-song used to see "nothing playing" until the next
+  // change — a skip, a queue, the song ending. With a four-minute song that
+  // is four minutes of a room that looks silent while everyone listens.
+  const startChannel = async () => {
+    const a = await register(); const b = await register()
+    const { voice } = await seed(a, b)
+    const sa = await inCall(a, voice.id)
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'Chill', url: MP3 })
+    await musicStateWhere(sa, x => x.channels.length === 1)
+    return { b, voice }
+  }
+
+  it('tells a newcomer what is playing the moment they join', async () => {
+    const { b, voice } = await startChannel()
+    // Connected after the last broadcast, so nothing reached this socket yet.
+    const sb = track(await connectSocket(sockets.url, b.token))
+    const told = musicStateWhere(sb, x => x.channels.length === 1)
+    sb.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    expect((await told).channels[0].name).toBe('Chill')
+  })
+
+  it('tells someone coming back from a dropped connection too', async () => {
+    const { b, voice } = await startChannel()
+    const sb = track(await connectSocket(sockets.url, b.token))
+    const told = musicStateWhere(sb, x => x.channels.length === 1)
+    sb.emit('call:rejoin', { conversationId: voice.id, kind: 'channel' })
+    expect((await told).channels[0].name).toBe('Chill')
+  })
+})
