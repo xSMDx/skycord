@@ -1379,7 +1379,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 .mm-band {
   position: sticky; top: 0; z-index: 1;
   display: flex; align-items: center; gap: 8px; min-width: 0;
-  margin: 12px 14px 0; padding: 7px 7px 7px 12px;
+  margin: 12px 14px 14px; padding: 7px 7px 7px 12px;
   border-radius: var(--edge-md);
   background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel));
   color: var(--accent-text); font-size: 12.5px; font-weight: 600;
