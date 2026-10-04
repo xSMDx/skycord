@@ -67,7 +67,6 @@ const ALLOWED: { file: string; selector: string; why: string }[] = [
   { file: 'components/voice/VoiceVideoSettings.vue', selector: '.vv-meter-fill', why: 'smooths a live signal, updated every frame' },
   { file: 'components/music/MiniPlayer.vue', selector: '.mp-fill', why: TICK },
   { file: 'components/music/MusicCallRail.vue', selector: '.cr-fill', why: TICK },
-  { file: 'components/music/MusicModal.vue', selector: '.mm-livefill', why: TICK },
   { file: 'components/modals/ModalBase.vue', selector: '.modal.sheet', why: 'the release after a drag, tuned against the drag itself' },
   { file: 'components/ui/ContextMenu.vue', selector: '.cm.sheet', why: 'the release after a drag, tuned against the drag itself' },
   { file: 'App.vue', selector: '.splash-fill', why: 'a loading bar\'s fill time, not a transition' },

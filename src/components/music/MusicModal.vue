@@ -39,7 +39,7 @@ import { openMenu, type MenuItem } from '@/composables/useContextMenu'
 import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
-  musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic,
+  musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, queueMusic, seekMusic,
 } from '@/composables/useMusic'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
@@ -108,7 +108,20 @@ const viewContext = computed<QueueContext>(() => {
   return { key: 'library', label: 'All tracks' }
 })
 
-const playRow = (i: number): Promise<void> => playFrom(shownTracks.value, i, viewContext.value)
+/**
+ * A click on a song.
+ *
+ * In a channel it goes to the channel's queue and you stay where you are —
+ * the way a shared session works everywhere else. It used to start the
+ * song just for you, which silently took you out of the channel: the room's
+ * music stopped and nothing said why. Playing just for you is still there,
+ * on the row's menu, and it asks first.
+ */
+const playRow = (i: number): Promise<void> => {
+  const t = shownTracks.value[i]
+  if (live.value && t) { addToChannel(t); return Promise.resolve() }
+  return playFrom(shownTracks.value, i, viewContext.value)
+}
 
 /**
  * Is this row the one playing?
@@ -137,7 +150,45 @@ const inCallWithMusic = computed(() => voice.connected && !!voice.activeConvId &
 const defaultChannelName = (): string =>
   `${user.value?.displayName || user.value?.username || 'Shared'}'s music`.slice(0, 32)
 
+/** The end of every row menu: playlists, then removal. */
+const menuTail = (t: LibTrack, i: number): MenuItem[] => {
+  const items: MenuItem[] = []
+  if (library.playlists.length && !library.open) {
+    items.push({ sep: true }, {
+      label: 'Add to playlist',
+      submenu: library.playlists.map(pl => ({ label: pl.name, onSelect: () => addToPlaylist(pl.id, t.id) })),
+    })
+  }
+  items.push({ sep: true }, library.open
+    ? { label: 'Remove from this playlist', icon: X, onSelect: () => removeHere(t, i) }
+    : { label: 'Delete from your library', icon: Trash2, danger: true, onSelect: () => removeHere(t, i) })
+  return items
+}
+
 const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
+  // In a channel the menu leads with the channel, and "just for me" says
+  // what it costs: it goes through playFrom, which asks before leaving.
+  if (live.value) {
+    const ch = live.value
+    const others = music.channels.filter(c => c.id !== ch.id)
+    const items: MenuItem[] = [
+      { label: `Add to ${ch.name}`, icon: Radio, onSelect: () => addToChannel(t) },
+    ]
+    if (others.length) {
+      items.push({
+        label: 'Add to another channel',
+        submenu: others.map(c => ({ label: c.name, onSelect: () => shareToChannel(c.id, t.id) })),
+      })
+    }
+    items.push(
+      { sep: true },
+      { label: 'Play just for me', icon: Play, onSelect: () => { void playFrom(shownTracks.value, i, viewContext.value) } },
+      { label: 'Add to your own queue', icon: ListEnd, onSelect: () => addToQueue(t) },
+      ...menuTail(t, i),
+    )
+    openMenu(e, items)
+    return
+  }
   const items: MenuItem[] = [
     { label: isPlayingRow(t, i) && !player.paused ? 'Pause' : 'Play', icon: Play, onSelect: () => playRow(i) },
     { label: 'Play next', icon: ListStart, onSelect: () => playNext(t) },
@@ -162,15 +213,7 @@ const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
           onSelect: () => createMusicChannel(defaultChannelName(), { trackId: t.id }),
         })
   }
-  if (library.playlists.length && !library.open) {
-    items.push({ sep: true }, {
-      label: 'Add to playlist',
-      submenu: library.playlists.map(pl => ({ label: pl.name, onSelect: () => addToPlaylist(pl.id, t.id) })),
-    })
-  }
-  items.push({ sep: true }, library.open
-    ? { label: 'Remove from this playlist', icon: X, onSelect: () => removeHere(t, i) }
-    : { label: 'Delete from your library', icon: Trash2, danger: true, onSelect: () => removeHere(t, i) })
+  items.push(...menuTail(t, i))
   openMenu(e, items)
 }
 
@@ -184,10 +227,37 @@ const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
  */
 const live = computed(() => musicChannel.value)
 const liveAt = computed(() => channelElapsed(live.value, musicNow.value) ?? 0)
-const liveFraction = computed(() => {
-  const d = live.value?.now?.durationSec
-  return d ? Math.min(1, liveAt.value / d) : 0
-})
+
+/** Said in the banner for a moment after something is added. */
+const notice = ref('')
+let noticeT: ReturnType<typeof setTimeout> | null = null
+const say = (m: string): void => {
+  notice.value = m
+  if (noticeT) clearTimeout(noticeT)
+  noticeT = setTimeout(() => { notice.value = '' }, 3000)
+}
+onBeforeUnmount(() => { if (noticeT) clearTimeout(noticeT) })
+
+/** In a channel, a song goes to the channel. You stay where you are. */
+const addToChannel = (t: LibTrack): void => {
+  if (!live.value) return
+  queueMusic(live.value.id, { trackId: t.id })
+  say(`Added “${t.title}” to ${live.value.name}`)
+}
+
+/**
+ * Moving a shared song.
+ *
+ * It moves for everyone, so it is sent when you let go rather than on every
+ * pixel of a drag — each send restarts the song on the service. While you
+ * drag, the thumb and the time follow your hand, not the clock.
+ */
+const liveDrag = ref<number | null>(null)
+const commitLiveSeek = (e: Event): void => {
+  const v = Number((e.target as HTMLInputElement).value)
+  liveDrag.value = null
+  if (live.value?.now) seekMusic(live.value.id, v)
+}
 
 /** One slider, whichever ear: the channel has its own gain, apart from the preview's. */
 const shownVol = computed(() => (live.value ? music.volume : player.volume))
@@ -501,6 +571,19 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           </p>
         </section>
 
+        <!-- What changed and how to get out, at the top for as long as it is
+             true. Sticky, so scrolling the library never hides which mode a
+             click is in. Also the live region that says "added". -->
+        <div v-if="live" class="mm-band" role="status" aria-live="polite">
+          <span class="mm-banddot" aria-hidden="true" />
+          <span class="mm-bandtext mm-ellip">
+            {{ notice || `Listening with ${live.name} — click a song to add it to the channel` }}
+          </span>
+          <button class="mm-bandleave" @click="listenToMusic(null)">
+            <LogOut :size="13" :stroke-width="2.5" /> Leave channel
+          </button>
+        </div>
+
         <header class="mm-head" :class="{ themed: !!theme && appearance.musicColour === 'artwork' }">
           <!-- Four covers make a mosaic, the way a list looks like a list
                rather than like one of its albums. Fewer than four, and the
@@ -585,8 +668,12 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             class="mm-tr mm-row" :class="{ on: isPlayingRow(t, i) }" role="row"
             @click="onRowClick($event, i)" @contextmenu.prevent="rowMenu($event, t, i)"
           >
-            <button class="mm-num" :aria-label="`Play ${t.title}`" @click="playRow(i)">
-              <Loader2 v-if="loadingId === t.id" class="mm-numico mm-spin" :size="13" :stroke-width="2.5" />
+            <button
+              class="mm-num" :aria-label="live ? `Add ${t.title} to ${live.name}` : `Play ${t.title}`"
+              @click="playRow(i)"
+            >
+              <ListPlus v-if="live" class="mm-numico" :size="13" :stroke-width="2.5" />
+              <Loader2 v-else-if="loadingId === t.id" class="mm-numico mm-spin" :size="13" :stroke-width="2.5" />
               <component
                 v-else
                 :is="isPlayingRow(t, i) && !paused ? Pause : Play"
@@ -703,10 +790,10 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
       <div v-if="live" class="mm-deck">
         <!--
-          A shared song cannot be paused or sought — that would be doing it
-          to everyone — so the deck offers the two things you can do, in
-          words rather than glyphs, because neither is a button any player
-          has taught you.
+          A shared song cannot be paused — that would be doing it to
+          everyone — so the deck offers what you can do, in words rather
+          than glyphs, because neither is a button any player has taught
+          you. The bar below moves the song for everyone.
         -->
         <div class="mm-keys">
           <button
@@ -715,15 +802,23 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           >
             <SkipForward :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Skip for everyone</span>
           </button>
-          <button class="mm-pill" :aria-label="`Stop listening to ${live.name}`" @click="listenToMusic(null)">
-            <LogOut :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Leave</span>
+          <button class="mm-pill" :aria-label="`Leave ${live.name}`" @click="listenToMusic(null)">
+            <LogOut :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Leave channel</span>
           </button>
         </div>
         <div class="mm-scrub">
-          <span class="mm-time">{{ live.now ? clock(liveAt) : '' }}</span>
-          <span class="mm-livebar" role="presentation">
-            <span class="mm-livefill" :style="{ transform: `scaleX(${liveFraction})` }" />
-          </span>
+          <span class="mm-time">{{ live.now ? clock(liveDrag ?? liveAt) : '' }}</span>
+          <!-- A link that never said how long it is has no end to drag to,
+               so its bar stays still. -->
+          <input
+            class="mm-seek" type="range" min="0" step="1"
+            :max="live.now?.durationSec || 1" :value="liveDrag ?? liveAt"
+            :disabled="!live.now?.durationSec"
+            :aria-label="`Move the song — for everyone in ${live.name}`"
+            v-tip="'Moves the song for everyone listening'"
+            @input="liveDrag = Number(($event.target as HTMLInputElement).value)"
+            @change="commitLiveSeek"
+          />
           <span class="mm-time">{{ live.now?.durationSec ? clock(live.now.durationSec) : '' }}</span>
         </div>
       </div>
@@ -1086,7 +1181,9 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 }
 .mm-thumb.lg { width: 38px; height: 38px; border-radius: var(--edge-md); }
 .mm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.mm-names { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+/* flex: 1 so the title block takes the cell and the scan mark after it lands
+   at the same x on every row, rather than wherever each title ends. */
+.mm-names { flex: 1; display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .mm-name { font-size: 14px; font-weight: 500; color: var(--text-1); }
 .mm-artist { font-size: 12px; color: var(--text-3); }
 .mm-unscanned { flex-shrink: 0; color: var(--warning-text); }
@@ -1261,22 +1358,38 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 .mm-pill:active:not(:disabled) { transform: scale(.97); }
 .mm-pill:disabled { opacity: .4; cursor: default; }
 
-/* Progress you can watch but not drag: a shared song has one position, and
-   it belongs to everyone. */
-.mm-livebar {
-  flex: 1; min-width: 60px; height: 4px; border-radius: var(--edge-pill);
-  background: var(--hover-strong); overflow: hidden;
-}
-.mm-livefill {
-  display: block; width: 100%; height: 100%; transform-origin: left center;
-  background: var(--art-accent, var(--accent));
-  transition: transform 1s linear;
-}
+
 @media (prefers-reduced-motion: reduce) {
-  .mm-livedot { animation: none; }
-  .mm-livefill, .mm-pill { transition: none; }
+  .mm-livedot, .mm-banddot { animation: none; }
+  .mm-pill, .mm-bandleave { transition: none; }
 }
 .mm-volico { flex-shrink: 0; color: var(--text-3); }
+
+/* The channel-mode banner. Opaque, because it sticks over the list as it
+   scrolls; tinted, because it is the room's colour saying "shared". */
+.mm-band {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  margin: 12px 14px 0; padding: 7px 7px 7px 12px;
+  border-radius: var(--edge-md);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel));
+  color: var(--accent-text); font-size: 12.5px; font-weight: 600;
+}
+.mm-banddot {
+  flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); color: var(--text-on-accent);
+  animation: mm-breathe 2.4s var(--ease-out) infinite;
+}
+.mm-bandtext { flex: 1; min-width: 0; }
+.mm-bandleave {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 11px; border: none; border-radius: var(--edge-pill);
+  background: var(--bg-panel); color: var(--text-1); cursor: pointer;
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  transition: background var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .mm-bandleave:hover { background: var(--hover-strong); } }
+.mm-bandleave:active { transform: scale(.97); }
 .mm-vol { width: 92px; min-width: 0; accent-color: var(--art-accent, var(--accent)); cursor: pointer; }
 
 /* ── narrow ──────────────────────────────────────────────────────────── */
@@ -1397,6 +1510,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   .mm-row { height: 62px; }
   /* Two 40px controls need the room, and the time column can give it. */
   .mm-tr { grid-template-columns: 40px minmax(0, 1fr) 48px 86px; }
+  .mm-bandleave { height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
