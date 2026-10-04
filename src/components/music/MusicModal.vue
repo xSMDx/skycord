@@ -713,10 +713,10 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             class="mm-pill" :disabled="!live.now"
             :aria-label="`Skip for everyone in ${live.name}`" @click="skipMusic(live.id)"
           >
-            <SkipForward :size="14" :stroke-width="2.5" /> Skip for everyone
+            <SkipForward :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Skip for everyone</span>
           </button>
           <button class="mm-pill" :aria-label="`Stop listening to ${live.name}`" @click="listenToMusic(null)">
-            <LogOut :size="14" :stroke-width="2.5" /> Leave
+            <LogOut :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Leave</span>
           </button>
         </div>
         <div class="mm-scrub">
@@ -1357,6 +1357,10 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   .mm-nowart { width: 44px; height: 44px; }
   .mm-deck { flex-direction: row; gap: 0; width: auto; }
   .mm-scrub, .mm-aside { display: none; }
+  /* Two worded pills would take the title's whole column on a phone. The
+     words go; the aria-labels already say exactly what each one does. */
+  .mm-pilltext { display: none; }
+  .mm-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
 }
 
 /*
