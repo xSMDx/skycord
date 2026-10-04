@@ -6,6 +6,7 @@ import {
 import { useViewport } from '@/composables/useViewport'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
+import { musicAvailable } from '@/composables/useMusic'
 import { avatarFor } from '@/composables/useAvatar'
 import { useAppearance, accentHex, ACCENT_PRESETS, CUSTOM_TOKENS, UI_FONTS, MONO_FONTS, type Density,
   chooseFamily, chooseVariant, chooseStudio, setAutomaticTheme } from '@/composables/useAppearance'
@@ -1157,7 +1158,8 @@ const handleSelfRevoked = () => handleLogout()
             <input class="ap-slider" aria-label="Message font size" type="range" min="13" max="20" step="1" :value="appearance.msgSize" :style="{ '--fill': fillPct(appearance.msgSize, 13, 20) }" @input="setAppearance({ msgSize: +($event.target as HTMLInputElement).value })" />
 
             <div class="st-card">
-              <div class="st-field">
+              <!-- Only where this server runs music: off, there is no music to colour. -->
+              <div v-if="musicAvailable" class="st-field">
                 <div class="st-field-left">
                   <span class="st-field-label">Colour music from the artwork</span>
                   <span class="st-field-value muted">The music room takes its colour from the record that is playing. Off keeps your accent.</span>
@@ -1169,7 +1171,7 @@ const handleSelfRevoked = () => handleLogout()
                   @click="setAppearance({ musicColour: appearance.musicColour === 'artwork' ? 'accent' : 'artwork' })"
                 ><span /></button>
               </div>
-              <div class="st-field st-field-sep">
+              <div class="st-field" :class="{ 'st-field-sep': musicAvailable }">
                 <div class="st-field-left">
                   <span class="st-field-label">Always underline links</span>
                   <span class="st-field-value muted">Make links stand out more.</span>
