@@ -21,7 +21,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
   Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert,
-  Volume1, Volume2, VolumeX,
+  Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import MusicCallRail from './MusicCallRail.vue'
@@ -31,6 +31,7 @@ import { coverTheme, type CoverTheme } from '@/composables/coverTheme'
 import { appearance } from '@/composables/useAppearance'
 import {
   player, play, pause, toggle, step, seek, setVolume, forget,
+  toggleShuffle, cycleRepeat, upNext,
 } from '@/composables/useMusicPlayer'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
@@ -46,6 +47,10 @@ const { accessToken } = useAuth()
 // The shell's own dismissal, so the leave transition plays. Emitting close
 // upward instead unmounts us on the same tick and the animation never runs.
 const dismiss = inject<() => void>('modalClose', () => emit('close'))
+
+/** The queue drawer, over the centre pane. Closed by default: it answers
+ *  a question you only sometimes have. */
+const showQueue = ref(false)
 
 const search = ref('')
 const adding = ref<'' | 'link'>('')
@@ -275,6 +280,41 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
       <!-- ── centre: the record you are looking at ───────────────────── -->
       <section class="mm-main">
+        <!-- The queue, over the centre pane rather than beside it: three
+             columns is already the most this modal can hold, and what plays
+             next is a question you ask occasionally, not a thing to watch. -->
+        <section v-if="showQueue" class="mm-queue">
+          <header class="mm-qhead">
+            <span class="fr-label">Up next</span>
+            <button class="mm-icon" aria-label="Close the queue" @click="showQueue = false">
+              <X :size="14" :stroke-width="2.25" />
+            </button>
+          </header>
+
+          <p v-if="player.shuffle" class="mm-qnote">
+            Shuffle is on, so what comes next is picked when it gets there.
+          </p>
+          <ol v-else-if="upNext.length" class="mm-qlist">
+            <li v-for="(t, i) in upNext" :key="t.id + '-' + i" class="mm-qrow">
+              <button class="mm-qjump" :aria-label="'Play ' + t.title" @click="playTrack(t)">
+                <span class="mm-thumb" :class="{ empty: !t.cover }">
+                  <img v-if="t.cover" :src="t.cover" alt="" />
+                  <Music2 v-else :size="13" :stroke-width="2" />
+                </span>
+                <span class="mm-names">
+                  <span class="mm-name mm-ellip">{{ t.title }}</span>
+                  <span class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
+                </span>
+                <span class="mm-dim">{{ clock(t.durationSec) }}</span>
+              </button>
+            </li>
+          </ol>
+          <p v-else class="mm-qnote">
+            Nothing after this one.
+            <template v-if="player.repeat === 'off'">Turn on repeat to start the list again.</template>
+          </p>
+        </section>
+
         <header class="mm-head" :class="{ themed: !!theme && appearance.musicColour === 'artwork' }">
           <div class="mm-art" :class="{ empty: !headerArt }">
             <img v-if="headerArt" :src="headerArt" alt="" />
@@ -453,6 +493,14 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
       <div class="mm-deck">
         <div class="mm-keys">
+          <button
+            class="mm-icon" :class="{ lit: player.shuffle }"
+            :aria-pressed="player.shuffle" aria-label="Shuffle"
+            v-tip="player.shuffle ? 'Shuffle is on' : 'Shuffle'"
+            @click="toggleShuffle"
+          >
+            <ShuffleIcon :size="16" :stroke-width="2.25" />
+          </button>
           <button class="mm-icon" :disabled="!playing" aria-label="Previous" @click="step(-1)">
             <SkipBack :size="18" :stroke-width="2.25" />
           </button>
@@ -464,6 +512,16 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           </button>
           <button class="mm-icon" :disabled="!playing" aria-label="Next" @click="step(1)">
             <SkipForward :size="18" :stroke-width="2.25" />
+          </button>
+          <button
+            class="mm-icon" :class="{ lit: player.repeat !== 'off' }"
+            :aria-label="player.repeat === 'one' ? 'Repeat this track'
+              : player.repeat === 'all' ? 'Repeat the list' : 'Repeat'"
+            v-tip="player.repeat === 'one' ? 'Repeating this track'
+              : player.repeat === 'all' ? 'Repeating the list' : 'Repeat'"
+            @click="cycleRepeat"
+          >
+            <component :is="player.repeat === 'one' ? Repeat1 : Repeat" :size="16" :stroke-width="2.25" />
           </button>
         </div>
         <div class="mm-scrub">
@@ -479,6 +537,13 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
       <div class="mm-aside">
         <!-- Said plainly, because the entire point of the right-hand rail is
              that the other kind of listening is not private. -->
+        <button
+          class="mm-icon" :class="{ lit: showQueue }"
+          :aria-pressed="showQueue" aria-label="Queue" v-tip="'What plays next'"
+          @click="showQueue = !showQueue"
+        >
+          <ListVideo :size="16" :stroke-width="2.25" />
+        </button>
         <span class="mm-only"><Radio :size="12" :stroke-width="2.25" /> Only you</span>
         <component :is="volIcon" class="mm-volico" :size="16" :stroke-width="2.25" />
         <input
@@ -627,6 +692,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
 /* ── centre ──────────────────────────────────────────────────────────── */
 .mm-main {
+  position: relative;
   display: flex; flex-direction: column; min-width: 0; overflow-y: auto;
   background: var(--bg-panel); border-radius: var(--edge-lg);
 }
@@ -811,6 +877,42 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 }
 .mm-empty p { font-size: 13px; line-height: 1.55; max-width: 320px; }
 .mm-empty strong { color: var(--text-2); font-weight: 600; }
+
+/* ── the queue drawer ────────────────────────────────────────────────── */
+/*
+ * Over the centre pane, not beside it.
+ *
+ * It was a grid item in column 2, which made it a THIRD child competing
+ * for the same track — the grid duly pushed the library into the call
+ * rail's column and wrapped the rail underneath. An overlay has to be
+ * taken out of flow, and the pane it covers is the thing it should be
+ * positioned against, so it lives inside that pane.
+ */
+.mm-queue {
+  position: absolute; inset: 0; z-index: 2;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 14px 14px 18px;
+  background: var(--bg-panel); border-radius: var(--edge-lg);
+}
+.mm-qhead { display: flex; align-items: center; justify-content: space-between; }
+.mm-qnote { padding: 6px 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+.mm-qlist { list-style: none; display: flex; flex-direction: column; gap: 2px; counter-reset: q; }
+.mm-qrow { border-radius: var(--edge-md); }
+@media (hover: hover) and (pointer: fine) { .mm-qrow:hover { background: var(--hover); } }
+.mm-qjump {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 10px; border: none; background: none; cursor: pointer; text-align: left;
+  border-radius: var(--edge-md);
+}
+.mm-qjump .mm-dim { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* A control that is on. The transport is otherwise all one colour, so
+   shuffle and repeat need to say which of them is doing something. */
+.mm-icon.lit { color: var(--art-accent, var(--accent-text)); }
+@media (hover: hover) and (pointer: fine) {
+  .mm-icon.lit:hover { color: var(--art-accent, var(--accent-text)); }
+}
 
 /* ── transport ───────────────────────────────────────────────────────── */
 /*

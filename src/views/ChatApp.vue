@@ -4449,6 +4449,16 @@ useDesktopTitleBar({
         <button class="ri explore" :class="{ active: view==='discover' }" v-tip:right="'Explore'"
           :aria-current="view==='discover' ? 'page' : undefined"
           @click.stop="openDiscover"><div class="ri-pip"/><div class="ri-icon exp-icon"><Compass :size="20" :stroke-width="1.5"/></div></button>
+        <!--
+          Your music, beside Explore rather than in the user panel.
+          That panel had grown to an avatar, a name, mic, its chevron,
+          headphones, its chevron, music and settings in one 220px row —
+          the music note was the eighth thing and the row read as a tray.
+          The rail is where "places in the app" already live.
+        -->
+        <button v-if="musicAvailable" class="ri music" v-tip:right="'Your music'"
+          :class="{ active: musicModal }" aria-label="Your music"
+          @click.stop="musicModal = true"><div class="ri-pip"/><div class="ri-icon music-icon"><Music2 :size="20" :stroke-width="1.5"/></div></button>
       </nav>
 
       <!-- ── Left sidebar ──────────────────────────────────────────────── -->
@@ -4565,12 +4575,6 @@ useDesktopTitleBar({
               <button class="up-chev" :class="{ open: upMenu === 'out' }" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
-            <button
-              v-if="musicAvailable" class="up-btn btn-music"
-              @click.stop="musicModal = true" v-tip="'Your music'"
-            >
-              <Music2 :size="16" :stroke-width="1.5"/>
-            </button>
             <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
               <Settings :size="16" :stroke-width="1.5"/>
             </button>
@@ -4847,12 +4851,6 @@ useDesktopTitleBar({
               <button class="up-chev" :class="{ open: upMenu === 'out' }" v-tip="'Output device'" @click.stop="upMenu = upMenu === 'out' ? '' : 'out'" @contextmenu.prevent.stop="upMenu = 'out'"><ChevronDown :size="9" :stroke-width="2.25" class="up-chev-ic"/></button>
               <MicFlyout v-if="upMenu === 'out'" mode="output" dir="up" @close="upMenu = ''" @open-settings="upMenu = ''; openSettings('voice')" />
             </div>
-            <button
-              v-if="musicAvailable" class="up-btn btn-music"
-              @click.stop="musicModal = true" v-tip="'Your music'"
-            >
-              <Music2 :size="16" :stroke-width="1.5"/>
-            </button>
             <button class="up-btn btn-settings" @click.stop="openSettings()" v-tip="'User Settings'">
               <Settings :size="16" :stroke-width="1.5"/>
             </button>
@@ -5594,6 +5592,14 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .add-icon,.exp-icon{display:flex;align-items:center;justify-content:center;color:var(--green)}
 .ri.add:hover .ri-icon,.ri.explore:hover .ri-icon{background:var(--green)}
 .ri.add:hover .add-icon,.ri.explore:hover .exp-icon{color:var(--text-on-green)}
+/* Accent, not the green Add and Explore share: those two make something or
+   go looking for something, and music is a place you already own. */
+.music-icon{display:flex;align-items:center;justify-content:center;color:var(--accent)}
+/* Ink declared in the same rule as the fill it sits on — DESIGN.md, and
+   the test that enforces it. The glyph wrapper inherits rather than naming
+   --text-on-accent itself, which would be a colour with no background. */
+.ri.music:hover .ri-icon,.ri.music.active .ri-icon{background:var(--accent);color:var(--text-on-accent)}
+.ri.music:hover .music-icon,.ri.music.active .music-icon{color:inherit}
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar{width:234px;flex-shrink:0;background:var(--bg-raised);display:flex;flex-direction:column;border-right:1px solid var(--seam);transition: opacity var(--dur-3) var(--ease-out), width 0s;overflow:hidden}

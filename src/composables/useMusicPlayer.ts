@@ -257,4 +257,35 @@ export const forget = (trackId: string): void => {
   }
 }
 
+export const toggleShuffle = (): void => { player.shuffle = !player.shuffle }
+
+/**
+ * off -> all -> one -> off.
+ *
+ * Three states on one button, in the order they escalate: none, the list,
+ * this track. Cycling is what every player does and what the icon change
+ * has to carry, so the icon differs for 'one' rather than only the colour.
+ */
+export const cycleRepeat = (): void => {
+  player.repeat = player.repeat === 'off' ? 'all' : player.repeat === 'all' ? 'one' : 'off'
+}
+
+/**
+ * What plays after this, in the order it will actually happen.
+ *
+ * Not the raw queue: the queue is the list you started from, and what comes
+ * next depends on where you are in it and whether repeat is on. Shuffle is
+ * deliberately not predicted — it picks when it gets there, so claiming an
+ * order here would be a lie the next press contradicts.
+ */
+export const upNext = computed<LibTrack[]>(() => {
+  if (!player.current || !player.queue.length) return []
+  if (player.shuffle) return []
+  const i = player.queue.findIndex(t => t.id === player.current!.id)
+  if (i < 0) return []
+  const after = player.queue.slice(i + 1)
+  if (player.repeat === 'all') return [...after, ...player.queue.slice(0, i)]
+  return after
+})
+
 export const hasPlayer = computed(() => player.current !== null)
