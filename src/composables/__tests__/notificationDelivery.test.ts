@@ -12,7 +12,7 @@ vi.hoisted(() => {
   }
 })
 
-import { webSink, pickSink } from '../notificationSinks'
+import { webSink, pickSink, deliver, type Sink, type ShownNotice } from '../notificationSinks'
 import { notificationPrefs, setNotificationPref } from '../notificationPrefs'
 import type { Notice } from '../notifyRules'
 
@@ -20,6 +20,8 @@ const notice: Notice = {
   id: 'msg:1', kind: 'message', conversation: { kind: 'dm', id: 'ana' }, title: 'Ana', body: 'hi',
   icon: null, group: { id: 'dm:ana', title: 'Ana' }, canReply: true,
 }
+/** As it goes to a sink, saying whether to flash the taskbar. */
+const out: ShownNotice = { ...notice, flash: true }
 
 /** A stand-in for the browser's Notification, recording what was shown. */
 const fakeNotification = (permission: NotificationPermission, answer: NotificationPermission = permission) => {
@@ -39,7 +41,7 @@ beforeEach(() => { localStorage.clear(); setNotificationPref('asked', false) })
 describe('web notifications', () => {
   it('shows one when permission is granted, tagged per conversation, silent', async () => {
     const { N, shown } = fakeNotification('granted')
-    webSink({ Notification: N }).show(notice)
+    webSink({ Notification: N }).show(out)
     await settle()
     expect(shown).toHaveLength(1)
     expect(shown[0]).toMatchObject({ title: 'Ana', opts: { body: 'hi', tag: 'dm:ana', silent: true } })
@@ -50,8 +52,8 @@ describe('web notifications', () => {
     // the asked-once flag stops a second prompt then.
     const { N, shown } = fakeNotification('default', 'default')
     const sink = webSink({ Notification: N })
-    sink.show(notice); await settle()
-    sink.show(notice); await settle()
+    sink.show(out); await settle()
+    sink.show(out); await settle()
     expect(N.requestPermission).toHaveBeenCalledTimes(1)
     expect(shown).toHaveLength(0)
     expect(notificationPrefs.asked).toBe(true)
@@ -63,14 +65,14 @@ describe('web notifications', () => {
     const sink = webSink({ Notification: N, focus })
     const got: unknown[] = []
     sink.onActivated(a => got.push(a))
-    sink.show(notice); await settle()
+    sink.show(out); await settle()
     shown[0].inst.onclick()
     expect(focus).toHaveBeenCalled()
     expect(got).toEqual([{ type: 'click', notice: { id: 'msg:1', conversation: { kind: 'dm', id: 'ana' } } }])
   })
 
   it('does nothing at all without the Notification API', () => {
-    expect(() => webSink({}).show(notice)).not.toThrow()
+    expect(() => webSink({}).show(out)).not.toThrow()
   })
 })
 
@@ -84,8 +86,8 @@ describe('choosing where notifications go', () => {
     } }
     const desktop = pickSink(bridge)
     expect(desktop.kind).toBe('desktop')
-    desktop.show(notice)
-    expect(show).toHaveBeenCalledWith(notice)
+    desktop.show(out)
+    expect(show).toHaveBeenCalledWith(out)
     expect(pickSink({ platform: 'win32' } as any).kind).toBe('web')   // an older app build
     expect(pickSink(null).kind).toBe('web')
   })
@@ -114,7 +116,51 @@ describe('whether the window is in front', () => {
   })
 })
 
+describe('the boxes, the flash and the sound are separate switches', () => {
+  const sinkSpy = () => {
+    const shown: unknown[] = []; let flashes = 0
+    const sink = { show: (n: unknown) => shown.push(n), flash: () => { flashes++ } } as unknown as Sink
+    return { sink, shown, flashes: () => flashes }
+  }
+  it('notifications on: the box, telling the app whether to flash', () => {
+    const s = sinkSpy()
+    deliver(s.sink, notice, { enabled: true, flash: false })
+    expect(s.shown).toEqual([{ ...notice, flash: false }])
+    expect(s.flashes()).toBe(0)
+  })
+  it('notifications off: no box, and the taskbar still flashes if that is on', () => {
+    const s = sinkSpy()
+    deliver(s.sink, notice, { enabled: false, flash: true })
+    expect(s.shown).toEqual([])
+    expect(s.flashes()).toBe(1)
+    deliver(s.sink, notice, { enabled: false, flash: false })
+    expect(s.flashes()).toBe(1)
+  })
+  it('only a message or mention flashes, as before', () => {
+    const s = sinkSpy()
+    deliver(s.sink, { ...notice, kind: 'friend', conversation: null }, { enabled: false, flash: true })
+    expect(s.flashes()).toBe(0)
+  })
+  it('the desktop app is asked to flash through the bridge, when its build has it', () => {
+    const flash = vi.fn()
+    const base = {
+      show: vi.fn(), ring: vi.fn(), unread: vi.fn(), callState: vi.fn(),
+      onActivated: () => () => {}, onCallAction: () => () => {}, onTrayCommand: () => () => {},
+      onWindowFocus: () => () => {}, keepInTray: async () => true, setKeepInTray: vi.fn(),
+    }
+    pickSink({ platform: 'win32', notifications: { ...base, flash } } as any).flash()
+    expect(flash).toHaveBeenCalledOnce()
+    expect(() => pickSink({ platform: 'win32', notifications: base } as any).flash()).not.toThrow()
+    expect(() => webSink({}).flash()).not.toThrow()
+  })
+})
+
 describe('prefs', () => {
+  it('sound, flash and badge defaults', () => {
+    expect(notificationPrefs).toMatchObject({
+      flash: true, badge: true, messageSound: true, readingSound: false, ringSound: true, allSoundsOff: false,
+    })
+  })
   it('default on, and remembered on this device', () => {
     expect(notificationPrefs.enabled).toBe(true)
     expect(notificationPrefs.previews).toBe(true)

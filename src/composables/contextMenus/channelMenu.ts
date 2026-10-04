@@ -1,7 +1,11 @@
 /**
  * The menu behind a channel row in the sidebar (right-click or hover ⋯).
  *
- * Rows are gated on Manage Channels rather than shown-and-disabled, same
+ * A text channel's menu starts with its notification rows — Mute Channel and
+ * Notification Settings — for everyone, since those are their own settings.
+ * A voice channel has no messages to notify about, so it has neither.
+ *
+ * The other rows are gated on Manage Channels rather than shown-and-disabled, same
  * reasoning as serverMenu: createChannel/updateChannel/deleteChannel all 403
  * anyone without it, so their menu offers nothing that can only ever fail —
  * just the harmless Copy Channel ID. It was ownership until the server moved
@@ -10,6 +14,7 @@
  */
 import { Pencil, FolderInput, Copy, Trash2 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
+import { notifyRows, type NotifyHandlers } from './notifyRows'
 
 export interface MenuChannel {
   id:       string
@@ -26,7 +31,7 @@ export interface MoveTargetCategory {
   name: string
 }
 
-export interface ChannelMenuHandlers {
+export interface ChannelMenuHandlers extends NotifyHandlers {
   rename: (channel: MenuChannel) => void
   remove: (channel: MenuChannel) => void
   /** `categoryId: null` files the channel as uncategorised. */
@@ -75,12 +80,17 @@ export const buildChannelMenu = (
   h: ChannelMenuHandlers,
   categories: MoveTargetCategory[] = [],
 ): MenuItem[] => {
+  const notify: MenuItem[] = channel.type === 'text'
+    ? [...notifyRows(channel.id, 'channel', h), { sep: true }]
+    : []
   if (!canManage) {
     return [
+      ...notify,
       { label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(channel.id, 'Channel ID') },
     ]
   }
   return [
+    ...notify,
     { label: 'Edit Channel', icon: Pencil, onSelect: () => h.rename(channel) },
     // Omitted entirely when the server has no categories: the submenu would
     // hold one row, "Uncategorised", which is where the channel already is —

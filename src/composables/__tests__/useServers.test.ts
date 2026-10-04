@@ -160,6 +160,17 @@ describe('useServers', () => {
   // genuinely uncategorised channels' further down — against
   // `groupedChannels`, which is what actually renders.
 
+  it("counts a server's unread, leaving out the channels it is told are muted", () => {
+    s.receiveDetail(wireServer('s1'), [
+      wireChannel('c1', 's1', 'general', 'text', 0),
+      wireChannel('c2', 's1', 'memes',   'text', 1),
+    ])
+    s.markUnread('c1'); s.markUnread('c2'); s.markUnread('c2')
+    expect(s.serverUnread('s1')).toBe(3)
+    expect(s.serverUnread('s1', c => c.id === 'c2')).toBe(1)
+    expect(s.serverUnread('s1', () => true)).toBe(0)
+  })
+
   it('lands on the first text channel, never a voice one', () => {
     s.receiveDetail(wireServer('s1'), [
       wireChannel('v1', 's1', 'Lounge',  'voice', 0),

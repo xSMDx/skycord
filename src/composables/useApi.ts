@@ -4,6 +4,7 @@
  */
 import { useAuth } from './useAuth'
 import type { ConvPref } from './useConvPrefs'
+import type { LevelChoice } from './notifyLevels'
 
 /**
  * Turn a failed response into something a caller can actually branch on.
@@ -111,7 +112,9 @@ export const useApi = () => {
   // `mute`: null unmutes, 'forever' mutes indefinitely, an ISO string mutes
   // until then. Deliberately a different shape from the stored mutedUntil —
   // collapsing them would make "mute forever" and "unmute" identical on the wire.
-  const setConvPref = (convId: string, body: { pinned?: boolean; mute?: string | null }) =>
+  const setConvPref = (convId: string, body: {
+    pinned?: boolean; mute?: string | null; level?: LevelChoice; hideMuted?: boolean
+  }) =>
     patch<{ convId: string; pref: ConvPref; prefs: Record<string, ConvPref> }>(
       `/users/me/conversations/${encodeURIComponent(convId)}`, body)
 

@@ -2,7 +2,6 @@ import { ref } from 'vue'
 import { onMusicState, onMusicError, type MusicChannelView } from './useMusic'
 import { io, Socket } from 'socket.io-client'
 import { useAuth, silentRefresh } from './useAuth'
-import { isMuted }    from './useConvPrefs'
 
 /** The DM's real conversation id, matching the server's dmConvId: both user ids
  *  sorted and joined, so each side derives the same string. Used for "Copy
@@ -133,19 +132,6 @@ export const resetCalls = (): void => {
   voiceStates.value      = {}
 }
 
-let _activeDMPartnerId: string | null = null
-export const setActiveDMPartner = (id: string | null) => { _activeDMPartnerId = id }
-
-// Same idea for groups, which previously had no "am I looking at this?" concept
-// and so played a sound even for the conversation on screen.
-let _activeGroupId: string | null = null
-export const setActiveGroup = (id: string | null) => { _activeGroupId = id }
-
-// Same idea again for channels: a message arriving in the channel already on
-// screen should not ding.
-let _activeChannelId: string | null = null
-export const setActiveChannel = (id: string | null) => { _activeChannelId = id }
-
 type CB<T> = (p: T) => void
 const _h: Record<string, CB<any>> = {
   onMessage:        ((_p: any) => {}) as CB<any>,
@@ -199,7 +185,6 @@ export {
   soundDialStart, soundDialStop,
 } from './useSounds'
 import { applySelfPresence } from './usePresence'
-import { soundMessage, soundNotification } from './useSounds'
 
 // Call presence emitters — module-level (not closure-bound) so non-component code
 // (useVoice's cleanup, which fires on unexpected LiveKit drops) can clear server
@@ -239,7 +224,7 @@ const installNetworkWatch = () => {
   })
 }
 export const useSocket = () => {
-  const { accessToken, user } = useAuth()
+  const { accessToken } = useAuth()
 
   const connect = () => {
     // A deliberate new connection is a new attempt, so it gets its own shot at
@@ -325,25 +310,18 @@ export const useSocket = () => {
     // They are bound once at module scope now (see installNetworkWatch).
     installNetworkWatch()
 
-    // Incoming DM — silent if you're already in that chat, or it's muted.
-    _socket.on('dm:receive', (p: any) => {
-      if (p.authorId !== user.value?.id) {
-        // DM prefs are keyed by the PARTNER'S user id — the same `dm.id` the
-        // sidebar and the menus use. (Keying them by the synthetic dmConvId
-        // instead would look more correct and silently never match, because
-        // nothing else in the client refers to a DM that way.)
-        if (_activeDMPartnerId !== p.authorId && !isMuted(p.authorId)) soundMessage()
-      }
-      _h.onMessage(p)
-    })
+    // Message sounds are decided with notifications, in ChatApp's consider():
+    // one set of rules (notifyRules.chime) for mutes, levels, Do Not Disturb,
+    // Settings › Notifications › Sounds, and whether the window is in front.
+    _socket.on('dm:receive', (p: any) => _h.onMessage(p))
 
     _socket.on('presence', (p: any) => _h.onPresence(p))
     // Our OWN status, echoed back with the raw choice — friends get the
     // derived one on 'presence', we get to see 'invisible' as invisible.
     _socket.on('presence:self', (p: any) => applySelfPresence(p))
 
-    _socket.on('friend:request_received', (p: any) => { soundNotification(); _h.onFriendRequest(p) })
-    _socket.on('friend:request_accepted', (p: any) => { soundNotification(); _h.onFriendAccepted(p) })
+    _socket.on('friend:request_received', (p: any) => _h.onFriendRequest(p))
+    _socket.on('friend:request_accepted', (p: any) => _h.onFriendAccepted(p))
 
     _socket.on('typing:start', (d: any) => {
       if (typingUsers.value[d.userId]?.timer) clearTimeout(typingUsers.value[d.userId].timer)
@@ -365,22 +343,10 @@ export const useSocket = () => {
     // Group events
     _socket.on('group:created', (p: any) => _h.onGroupCreated(p))
     _socket.on('group:updated', (p: any) => _h.onGroupUpdated(p))
-    // Groups used to ding unconditionally — even while you had that group open,
-    // which DMs never did. Same gate as DMs now, plus mute.
-    _socket.on('group:receive', (p: any) => {
-      const gid = p.conversationId || p.groupId
-      if (p.authorId !== user.value?.id && _activeGroupId !== gid && !isMuted(gid)) soundMessage()
-      _h.onGroupMessage(p)
-    })
+    _socket.on('group:receive', (p: any) => _h.onGroupMessage(p))
 
     // ── Servers & channels ──────────────────────────────────────────────
-    // A channel message dings under the same rule as a group one: not from
-    // you, and not the channel you are looking at. Channel mutes are not a
-    // feature yet, so unlike groups there is no isMuted() check to make here.
-    _socket.on('channel:receive', (p: any) => {
-      if (p.authorId !== user.value?.id && _activeChannelId !== p.conversationId) soundMessage()
-      _h.onChannelMessage(p)
-    })
+    _socket.on('channel:receive', (p: any) => _h.onChannelMessage(p))
 
     _socket.on('channel:created',     (p: any) => _h.onChannelCreated(p))
     _socket.on('channel:updated',     (p: any) => _h.onChannelUpdated(p))
@@ -405,8 +371,9 @@ export const useSocket = () => {
     _socket.on('member:roles',           (p: any) => _h.onMemberRoles(p))
     _socket.on('server:accessChanged',   (p: any) => _h.onServerAccessChanged(p))
 
-    // @everyone ping — distinct notification sound + a toast in the UI
-    _socket.on('mention:everyone', (p: any) => { soundNotification(); _h.onMentionEveryone(p) })
+    // @everyone in a DM or group — a toast in the UI. Its sound comes with the
+    // message itself (notifyRules.chime), so it no longer plays twice.
+    _socket.on('mention:everyone', (p: any) => _h.onMentionEveryone(p))
 
     // Voice-call presence — server broadcasts who is in each room.
     //

@@ -22,7 +22,7 @@ import SearchResultsPanel from '@/components/search/SearchResultsPanel.vue'
 import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, setActiveDMPartner, setActiveGroup, setActiveChannel, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
+import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
 import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
 import { filterMembers } from '@/composables/memberFilter'
 import { canActOnMemberUI } from '@/composables/permissionMeta'
@@ -96,12 +96,14 @@ import { formatChannelName } from '@/utils/channelName'
 // shadowed it, so the template called a ref and threw on every render — which
 // aborted ChatApp's update entirely, taking the sidebar and the incoming-call
 // modal down with it.
-import { convPref, isPinned, isMuted as isConvMuted, setAllConvPrefs, setConvPrefLocal } from '@/composables/useConvPrefs'
-import { decide, mentionsMe, unreadCount, type ConvRef, type Incoming, type RuleState } from '@/composables/notifyRules'
+import { convPref, isPinned, isMuted as isConvMuted, levelOf, hidesMuted, setAllConvPrefs, setConvPrefLocal, type ConvPref } from '@/composables/useConvPrefs'
+import { decide, chime, classify, unreadCount, type ConvRef, type Incoming, type RuleState } from '@/composables/notifyRules'
+import { placeMuted, type LevelChoice } from '@/composables/notifyLevels'
 import {
   notify, ringFor, setUnread, setCallTray, onNoticeActivated, onCallAction, onTrayCommand,
-  mentionedChannels, noteMention, clearMention, desktopDelivers, windowInFront,
+  alertedChannels, noteAlert, clearAlert, desktopDelivers, windowInFront,
 } from '@/composables/useNotifications'
+import { soundMessage, soundNotification } from '@/composables/useSounds'
 import { notificationPrefs } from '@/composables/notificationPrefs'
 import { stripMarkers } from '@/utils/richText'
 
@@ -616,7 +618,7 @@ const returnToCall = () => {
   // "return to call" would land you next to the call instead of on it).
   const vc = liveVoiceChannel.value
   if (vc) {
-    const showStage = () => { viewVoiceChannel(vc.id); setActiveChannel(null) }
+    const showStage = () => viewVoiceChannel(vc.id)
     // Already in the right server: no navigation needed, but the stage may
     // still be closed (you were reading a different channel), so re-assert it.
     if (activeServerId.value === vc.serverId && view.value === 'server') { showStage(); return }
@@ -884,8 +886,8 @@ const railPreview = computed(() => {
      * that particular line is not available to be shown — inventing it would
      * be a label that lies. These are the states we actually hold.
      */
-    sub: serverUnread(srv.id)
-      ? `${serverUnread(srv.id)} unread`
+    sub: serverUnread(srv.id, channelMuted)
+      ? `${serverUnread(srv.id, channelMuted)} unread`
       : liveVoiceChannel.value?.serverId === srv.id
         ? 'You are in voice'
         : activity.length ? 'Someone is in voice' : null,
@@ -960,13 +962,6 @@ const joinVoiceChannel = (ch: Channel) => {
   // of the bug selectChannel had. A no-op on desktop.
   mobileNav.openConversation()
   viewVoiceChannel(ch.id)
-  // The stage is about to own the pane. `activeChannelId` stays pointed at
-  // the text channel underneath (see the comment above), but useSocket's own
-  // "am I looking at this?" tracker has no idea the pane got taken over — so
-  // without this a message landing in that now-hidden channel would still be
-  // treated as on-screen and never ding. `channel:receive`'s `looking` check
-  // (ChatApp.vue) covers the unread badge half of the same bug.
-  setActiveChannel(null)
   void vConnect(ch.id, 'channel', voiceChannelLabel(ch))
 }
 
@@ -993,10 +988,6 @@ watch(() => liveVoiceChannel.value?.id ?? null, (id, prev) => {
   if (viewedVoiceId.value !== prev) return
   if (view.value !== 'server' || !activeServerId.value) return
   selectLanding(activeServerId.value)
-  // The stage just gave the pane back to whatever selectLanding landed on —
-  // re-arm useSocket's tracker so that channel's own messages start dinging
-  // again (joinVoiceChannel nulled it out when the stage took over).
-  setActiveChannel(activeChannelId.value)
 })
 
 /**
@@ -1623,7 +1614,13 @@ const sidebarGroups = computed<SidebarGroup[]>(() =>
  * site is how a `v-if` and a class drift apart.
  */
 const rowFolded = (g: SidebarGroup, c: Channel) =>
-  g.collapsed && c.id !== activeChannelId.value && !unreadChannels.value[c.id]
+  c.id !== activeChannelId.value && (
+    (g.collapsed && !shownUnread(c))
+    // Hide Muted Channels, on the server menu. The open channel stays.
+    || (hidesMuted(c.serverId) && channelMuted(c)))
+
+/** A channel's unread as the sidebar shows it: none while muted. */
+const shownUnread = (c: Channel): number => (channelMuted(c) ? 0 : unreadChannels.value[c.id] ?? 0)
 
 /** Fold/unfold from a category header. A no-op on the headerless
  *  uncategorised group, which has nothing to fold and no header to click. */
@@ -2202,9 +2199,6 @@ const openGroup = async (group: Group) => {
   membersOpen.value = !isMobile.value
   const g = groupsData.value.find(x => x.id === group.id)
   if (g) g.unread = undefined
-  setActiveDMPartner(null)
-  setActiveGroup(group.id)
-  setActiveChannel(null)
   await loadGroupHistory(group.id)
   // After, not before: evicting first could drop the conversation being
   // opened, since it isn't "current" from the store's point of view until now.
@@ -2227,7 +2221,6 @@ const selectChannel = async (ch: Channel) => {
   // messages behind a list screen that never got out of the way.
   mobileNav.openConversation()
   openChannel(ch.id)
-  setActiveChannel(ch.id)
   await loadChannelHistory(ch.id)
   // After, not before: evicting first could drop the conversation being
   // opened, since it isn't "current" from the store's point of view until now.
@@ -2358,7 +2351,7 @@ const doLeaveServer = (sid: string) => {
         // below.
         const wasHere = activeServerId.value === sid
         removeServer(sid)
-        if (wasHere) { setActiveChannel(null); openFriends() }
+        if (wasHere) openFriends()
       } catch (e) { console.error('[doLeaveServer]', e); showToast('Couldn’t leave the server') }
     },
   })
@@ -2479,7 +2472,7 @@ const setupSocket = () => {
     }
   })
 
-  // @everyone ping — toast (sound is played in useSocket)
+  // @everyone ping — a toast. Its sound comes with the message (consider).
   socketOn('onMentionEveryone', (p: any) => {
     showToast(`${p.authorName || 'Someone'} mentioned @everyone`)
   })
@@ -2516,31 +2509,35 @@ const setupSocket = () => {
     // `viewedVoiceId`'s declaration in useServers), so a channel sitting
     // underneath the stage must NOT count as "looking" — otherwise messages
     // arriving there while you watch the call are silently swallowed: no
-    // unread badge (guarded here) and no sound (see the matching
-    // `!voiceStageOpen` teardown around joinVoiceChannel/returnToCall that
-    // keeps useSocket's `_activeChannelId` honest for the same reason).
+    // unread badge (guarded here) and no sound (ruleState's `open` applies
+    // the same `!voiceStageOpen`).
     const looking = view.value === 'server' && activeChannelId.value === channelId && !voiceStageOpen.value && appFocused.value
     if (!looking) markUnread(channelId)
-    const mine = payload.authorId === authUser.value?.id
-    const forMe = !!payload.mentionsEveryone || mentionsMe(payload.content ?? '', noticeMe())
-    if (!looking && !mine && forMe) noteMention(channelId)
-    void (async () => {
-      let home = channelHome(channelId)
-      // A server not opened this session has no channel list loaded. Fetch
-      // it — only for a message that would notify — so the notice can say
-      // where it is and a click can open it.
-      if (!home && forMe && !mine && payload.serverId) {
-        try { await loadServerDetail(payload.serverId) } catch { /* named generically below */ }
-        home = channelHome(channelId)
-      }
+    const event = (home: ReturnType<typeof channelHome>): Incoming => {
       const serverId = home?.srv.id ?? payload.serverId ?? ''
-      consider({
+      return {
         type: 'channel', messageId: String(payload._id ?? ''), channelId,
-        channelName: home?.ch.name ?? 'a channel', serverId,
+        channelName: home?.ch.name ?? 'a channel',
+        categoryId: home ? (home.ch.category ?? null) : (payload.categoryId ?? null), serverId,
         serverName: home?.srv.name ?? servers.value.find(s => s.id === serverId)?.name ?? 'a server',
         authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
         mentionsEveryone: !!payload.mentionsEveryone,
-      }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
+      }
+    }
+    let home = channelHome(channelId)
+    // For you at this channel's level: a mention, or anything in a channel
+    // set to All Messages. That is what the badge counts.
+    const alerts = classify(event(home), ruleState()) !== null
+    if (!looking && alerts) noteAlert(channelId)
+    void (async () => {
+      // A server not opened this session has no channel list loaded. Fetch
+      // it — only for a message that would notify — so the notice can say
+      // where it is and a click can open it.
+      if (!home && alerts && payload.serverId) {
+        try { await loadServerDetail(payload.serverId) } catch { /* named generically below */ }
+        home = channelHome(channelId)
+      }
+      consider(event(home), payload.authorAvatar || avatarFor(payload.authorName ?? ''))
     })()
   })
 
@@ -2578,10 +2575,6 @@ const setupSocket = () => {
       if (stageSurvives) viewedVoiceId.value = wasViewingVoice
       if (activeChannelId.value) {
         loadChannelHistory(activeChannelId.value)
-        // Only claim the pane for the sound gate if the stage isn't sitting on
-        // top of it — the landing channel is still hidden behind the call, same
-        // as joinVoiceChannel's setActiveChannel(null) above.
-        if (!stageSurvives) setActiveChannel(activeChannelId.value)
       }
     }
   })
@@ -2635,7 +2628,6 @@ const setupSocket = () => {
       // landed them on one that is. Same recovery as a deleted channel.
       if (view.value === 'server' && activeServerId.value === sid
           && activeChannelId.value && activeChannelId.value !== before) {
-        setActiveChannel(activeChannelId.value)
         loadChannelHistory(activeChannelId.value)
       }
     }, 150))
@@ -2670,7 +2662,7 @@ const setupSocket = () => {
   socketOn('onServerDeleted', (p: any) => {
     const wasHere = activeServerId.value === p.serverId
     removeServer(p.serverId)
-    if (wasHere) { setActiveChannel(null); openFriends() }
+    if (wasHere) openFriends()
   })
 
   // Neither event carries a memberCount field (confirmed again here — see
@@ -2735,10 +2727,6 @@ const openDM = async (dm: DM) => {
   // Clear unread
   const d = dmsData.value.find(x => x.id === dm.id)
   if (d) d.unread = undefined
-  // Tell socket which DM is open so sounds are suppressed
-  setActiveDMPartner(dm.id)
-  setActiveGroup(null)
-  setActiveChannel(null)
   // Load history from DB
   await loadDMHistory(dm.id)
   // After, not before: evicting first could drop the conversation being
@@ -2922,6 +2910,23 @@ const copyText = (text: string, what: string) => {
 // Pin/mute write through optimistically so the sidebar reorders on the same
 // frame as the click; the server's echo is authoritative and corrects it if the
 // write failed.
+// Mute, Notification Settings and Hide Muted Channels for servers, categories
+// and channels. Optimistic, like pin and mute below, and put back on failure.
+const writeNotifyPref = async (
+  id: string, local: Partial<ConvPref>, body: Parameters<typeof api.setConvPref>[1], what: string,
+) => {
+  const prev = convPref(id)
+  setConvPrefLocal(id, { ...prev, ...local })
+  try { const r = await api.setConvPref(id, body); setConvPrefLocal(id, r.pref) }
+  catch { setConvPrefLocal(id, prev); showToast(`Couldn’t update ${what}`) }
+}
+const notifyActions = {
+  setMute: (id: string, mute: string | null) => writeNotifyPref(id,
+    { muted: mute !== null, mutedUntil: mute === 'forever' || mute === null ? null : mute }, { mute }, 'mute'),
+  setLevel: (id: string, level: LevelChoice) => writeNotifyPref(id, { level }, { level }, 'notification settings'),
+  setHideMuted: (id: string, on: boolean) => writeNotifyPref(id, { hideMuted: on }, { hideMuted: on }, 'hidden channels'),
+}
+
 const convActions = {
   /** Open that conversation, then show its pinned messages. */
   openPins: (convId: string) => {
@@ -3001,9 +3006,10 @@ const openSidebarMenu = (e: MouseEvent) => {
 // Shared by the header chevron and the sidebar background so both menus act
 // through exactly the same handlers.
 const serverMenuHandlers = () => ({
+  ...notifyActions,
   markRead:      () => {
     const ids = (channelsByServer.value[activeServerId.value ?? ""] ?? []).map(c => c.id)
-    ids.forEach(clearUnread)
+    ids.forEach(id => { clearUnread(id); clearAlert(id) })
   },
   invitePeople:  () => { showInvite.value = true },
   createChannel: () => { openCreateChannel(null) },
@@ -3041,7 +3047,7 @@ const openServerMenu = (e: MouseEvent | KeyboardEvent) => {
   const hasUnread = serverChannelIds.some(id => !!unreadChannels.value[id])
 
   // Same handlers the sidebar-background menu uses — see serverMenuHandlers.
-  const items = buildServerMenu(s, authUser.value?.id, serverMenuHandlers(), serverMenuAccess(s.id), hasUnread)
+  const items = () => buildServerMenu(s, authUser.value?.id, serverMenuHandlers(), serverMenuAccess(s.id), hasUnread)
   if (e instanceof MouseEvent) { openMenu(e, items); return }
   // A keyboard activation carries no pointer position — anchor the menu to
   // the header itself rather than guessing at coordinates.
@@ -3102,6 +3108,7 @@ const openChannelMenu = (e: MouseEvent, ch: Channel) => {
     channelsByServer.value[ch.serverId]?.find(c => c.id === ch.id) ?? ch,
     canManageChannels.value,
     {
+      ...notifyActions,
       rename: openRenameChannel,
       remove: doDeleteChannel,
       move:   doMoveChannel,
@@ -3221,7 +3228,10 @@ const doDeleteChannel = (ch: MenuChannel) => {
 const openCategoryMenu = (e: MouseEvent, category: Category) => {
   const ids = categoryIds()
   const i = ids.indexOf(category.id)
-  openMenu(e, buildCategoryMenu(category, canManageChannels.value, {
+  const inIt = () => (channelsByServer.value[category.serverId] ?? []).filter(c => (c.category ?? null) === category.id)
+  openMenu(e, () => buildCategoryMenu(category, canManageChannels.value, {
+    ...notifyActions,
+    markRead: () => inIt().forEach(c => { clearUnread(c.id); clearAlert(c.id) }),
     // The header's `+` and this row are the same action; both name the
     // category so the channel lands in the group the user pointed at.
     createChannel: (c) => openCreateChannel(c.id),
@@ -3230,7 +3240,7 @@ const openCategoryMenu = (e: MouseEvent, category: Category) => {
     copy:          copyText,
     moveUp:        (c) => moveCategoryBy(c, -1),
     moveDown:      (c) => moveCategoryBy(c, 1),
-  }, { first: i <= 0, last: i === -1 || i === ids.length - 1 }))
+  }, { first: i <= 0, last: i === -1 || i === ids.length - 1 }, inIt().some(c => !!unreadChannels.value[c.id])))
 }
 
 // Create and rename both reuse EditFieldModal, exactly as channel rename does
@@ -3358,9 +3368,6 @@ const openFriends = () => {
   // list is what you see first rather than this.
   mobileNav.openConversation()
   activeDM.value = null
-  setActiveDMPartner(null)
-  setActiveGroup(null)
-  setActiveChannel(null)
 }
 
 /* ── Discover ──────────────────────────────────────────────────────────────
@@ -3401,9 +3408,6 @@ const openDiscover = async () => {
   view.value = 'discover'
   mobileNav.openConversation()
   activeDM.value = null
-  setActiveDMPartner(null)
-  setActiveGroup(null)
-  setActiveChannel(null)
 
   discoverLoading.value = true
   discoverError.value = ''
@@ -3440,8 +3444,6 @@ const joinFromDiscover = async (srv: WireServer) => {
 
 const openServer = async (srv: Server) => {
   view.value = 'server'
-  setActiveDMPartner(null)
-  setActiveGroup(null)
   // A modal opened against the server you're leaving must not outlive it.
   // InviteServerModal is additionally keyed on activeServer.id (belt and
   // braces against a switch that races its own onMounted load), but
@@ -3468,7 +3470,6 @@ const openServer = async (srv: Server) => {
     // Friends rather than stranding the user on a server view with someone
     // else's channel selected underneath it.
     activeChannelId.value = null
-    setActiveChannel(null)
     openFriends()
     return
   }
@@ -3481,12 +3482,7 @@ const openServer = async (srv: Server) => {
     try { await loadServerMembers(srv.id) }
     catch (e) { console.error('[openServer members]', e) }
   }
-  if (activeChannelId.value) {
-    setActiveChannel(activeChannelId.value)
-    await loadChannelHistory(activeChannelId.value)
-  } else {
-    setActiveChannel(null)
-  }
+  if (activeChannelId.value) await loadChannelHistory(activeChannelId.value)
 }
 
 const onServerCreated = async (serverId: string) => {
@@ -3496,8 +3492,6 @@ const onServerCreated = async (serverId: string) => {
   // CreateServerModal never populates membersByServer — so the guarded fetch
   // below always runs once for a just-created server.
   view.value = 'server'
-  setActiveDMPartner(null)
-  setActiveGroup(null)
   showInvite.value = false
   showCreateChannel.value = false
   await enterServer(serverId)
@@ -3505,12 +3499,7 @@ const onServerCreated = async (serverId: string) => {
     try { await loadServerMembers(serverId) }
     catch (e) { console.error('[onServerCreated members]', e) }
   }
-  if (activeChannelId.value) {
-    setActiveChannel(activeChannelId.value)
-    await loadChannelHistory(activeChannelId.value)
-  } else {
-    setActiveChannel(null)
-  }
+  if (activeChannelId.value) await loadChannelHistory(activeChannelId.value)
 }
 
 // ── Send message ───────────────────────────────────────────────────────────
@@ -4133,15 +4122,41 @@ function noticeMe() {
     username: authUser.value?.username ?? '',
   }
 }
+/** The conversation whose text is on screen — not one hidden under a call's stage. */
+function onScreen(): ConvRef | null {
+  if (view.value === 'dm' && activeDM.value) return { kind: 'dm', id: activeDM.value.id }
+  if (view.value === 'group' && activeGroup.value) return { kind: 'group', id: activeGroup.value.id }
+  if (view.value === 'server' && activeChannelId.value && !voiceStageOpen.value) return { kind: 'channel', id: activeChannelId.value }
+  return null
+}
 const ruleState = (): RuleState => ({
   me: noticeMe(),
   status: chosenStatus.value,
   focused: windowInFront.value ?? domInFront(),
-  enabled: notificationPrefs.enabled,
   previews: notificationPrefs.previews,
   isMuted: isConvMuted,
+  levelOf,
+  open: onScreen(),
+  sounds: { messages: notificationPrefs.messageSound, reading: notificationPrefs.readingSound },
 })
-function consider(e: Incoming, iconSrc: string | null): void { void notify(decide(e, ruleState()), iconSrc) }
+/** Everything that might notify comes through here: its sound, then its notice. */
+function consider(e: Incoming, iconSrc: string | null): void {
+  const s = ruleState()
+  const sound = chime(e, s)
+  if (sound === 'message') soundMessage()
+  else if (sound === 'notification') soundNotification()
+  void notify(decide(e, s), iconSrc)
+}
+
+/** A channel is muted when it, its category or its server is. */
+function channelMuted(ch: { id: string; category?: string | null; serverId: string }): boolean {
+  return placeMuted({ channelId: ch.id, categoryId: ch.category ?? null, serverId: ch.serverId }, { isMuted: isConvMuted, levelOf })
+}
+/** The same, by id alone, for a channel that may not be loaded. */
+function channelMutedById(cid: string): boolean {
+  const home = channelHome(cid)
+  return home ? channelMuted({ ...home.ch, serverId: home.srv.id }) : isConvMuted(cid)
+}
 
 /** A channel's server and names, from what is loaded. */
 function channelHome(cid: string) {
@@ -4175,7 +4190,7 @@ const markConversationRead = (c: ConvRef | null): void => {
   if (!c) return
   if (c.kind === 'dm') { const d = dmsData.value.find(x => x.id === c.id); if (d) d.unread = undefined }
   else if (c.kind === 'group') { const g = groupsData.value.find(x => x.id === c.id); if (g) g.unread = undefined }
-  else { clearUnread(c.id); clearMention(c.id) }
+  else { clearUnread(c.id); clearAlert(c.id) }
 }
 
 const stopNotices = onNoticeActivated(async a => {
@@ -4208,7 +4223,7 @@ const stopTray = onTrayCommand(cmd => { if (cmd === 'mute') onToggleMute(); else
 onBeforeUnmount(() => { stopNotices(); stopCallActions(); stopTray() })
 
 // The badge and the tray dot: conversations holding something that would notify.
-watchEffect(() => setUnread(unreadCount(dmsData.value, groupsData.value, mentionedChannels, isConvMuted)))
+watchEffect(() => setUnread(unreadCount(dmsData.value, groupsData.value, alertedChannels, isConvMuted, channelMutedById)))
 // The tray menu's Mute and Deafen, only while in a call.
 watchEffect(() => setCallTray({ inCall: voice.connected, muted: !!micOff.value, deafened: !!deafOff.value }))
 
@@ -4221,14 +4236,14 @@ watch(appFocused, inFront => {
   } else if (view.value === 'group' && activeGroup.value) {
     const g = groupsData.value.find(x => x.id === activeGroup.value!.id); if (g) g.unread = undefined
   } else if (view.value === 'server' && activeChannelId.value && !voiceStageOpen.value) {
-    clearUnread(activeChannelId.value); clearMention(activeChannelId.value)
+    clearUnread(activeChannelId.value); clearAlert(activeChannelId.value)
   }
 })
 
-// A mention is seen once its channel is the text on screen.
+// An alert is seen once its channel is the text on screen.
 watch(
   () => (view.value === 'server' && !voiceStageOpen.value && appFocused.value ? activeChannelId.value : null),
-  cid => { if (cid) clearMention(cid) },
+  cid => { if (cid) clearAlert(cid) },
   { immediate: true },
 )
 
@@ -4237,7 +4252,8 @@ watch(
 watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus], ([c]) => {
   if (!c) { void ringFor(null); return }
   const n = decide({ type: 'call', room: c.room, kind: c.kind, convId: c.convId, muteKey: c.convId, name: c.name }, ruleState())
-  if (!n) { void ringFor(null); return }
+  // The call window is a box too: notifications off, the in-app ring only.
+  if (!n || !notificationPrefs.enabled) { void ringFor(null); return }
   if (desktopDelivers) { rangFor = c; void ringFor({ name: c.name, icon: c.avatar, group: c.kind === 'group' }) }
   else void notify(n, c.avatar)
 })
@@ -4658,7 +4674,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
             :class="{ mine: myVoiceServerId === srv.id }" aria-hidden="true">
             <Volume2 :size="11" :stroke-width="2.75"/>
           </span>
-          <span v-if="serverUnread(srv.id)" class="ri-badge">{{ serverUnread(srv.id) }}</span>
+          <span v-if="serverUnread(srv.id, channelMuted)" class="ri-badge">{{ serverUnread(srv.id, channelMuted) }}</span>
         </div>
         <div class="ri-divider" />
         <button class="ri add"     v-tip:right="'Add server'" @click.stop="showCreateServer = true">  <div class="ri-pip"/><div class="ri-icon add-icon"><Plus :size="20" :stroke-width="1.5"/></div></button>
@@ -4917,7 +4933,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
                  changes their height and nudges the list under the pointer. -->
             <div v-if="dragChannelId && dropBeforeId === ch.id" class="ch-drop-line" aria-hidden="true" />
             <div
-              class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!unreadChannels[ch.id], dragging: dragChannelId===ch.id }"
+              class="ch-item" :class="{ active: activeChannelId===ch.id && !voiceStageOpen, unread: !!shownUnread(ch), muted: channelMuted(ch), dragging: dragChannelId===ch.id }"
               :draggable="canManageChannels"
               @dragstart="onChannelDragStart($event, ch)"
               @dragend="endChannelDrag"
@@ -4939,8 +4955,9 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
               </button>
               <!-- Outside the button: a count is a description of the row, not
                    part of the name of the control that opens it. -->
-              <span v-if="unreadChannels[ch.id]" class="ch-unread"
-                :aria-label="`${unreadChannels[ch.id]} unread`">{{ unreadChannels[ch.id] }}</span>
+              <span v-if="shownUnread(ch)" class="ch-unread"
+                :aria-label="`${shownUnread(ch)} unread`">{{ shownUnread(ch) }}</span>
+              <span v-else-if="channelMuted(ch)" class="ch-muted" v-tip="'Muted'" aria-label="Muted"><BellOff :size="12" :stroke-width="2.25"/></span>
               <button class="ch-more" type="button" :tabindex="rowFolded(group, ch) ? -1 : 0"
                 @click.stop="openChannelMenu($event, ch)" v-tip="'More'"
                 :aria-label="`More options for ${ch.name}`">
@@ -6107,6 +6124,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    only discoverable by reading the names underneath it. */
 .ch-item.voice .ch-icon.occupied{color:var(--green)}
 .ch-item.unread{color:var(--text-2);font-weight:600}
+/* Muted: dimmed like a muted DM (.dm-muted), except the open one. */
+.ch-item.muted:not(.active) .ch-open{opacity:.55}
+.ch-muted{display:flex;align-items:center;color:var(--text-3);flex-shrink:0}
 .ch-more{opacity:0;color:var(--text-faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius: var(--edge-sm);transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);flex-shrink:0}
 .ch-item:hover .ch-more,.ch-item:focus-within .ch-more{opacity:1}
 .ch-more:hover{color:var(--text-strong)}

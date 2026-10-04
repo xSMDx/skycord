@@ -10,10 +10,14 @@ import { notificationPrefs, setNotificationPref } from './notificationPrefs'
 export interface NoticeActivation { type: 'click' | 'reply' | 'read'; notice: { id: string; conversation: ConvRef | null }; reply?: string }
 export interface RingInfo { name: string; icon: string | null; group: boolean }
 export interface CallTrayState { inCall: boolean; muted: boolean; deafened: boolean }
+/** A notice on its way out, saying whether the app should flash the taskbar with it. */
+export type ShownNotice = Notice & { flash: boolean }
 
 export interface Sink {
   kind: 'web' | 'desktop'
-  show(n: Notice): void
+  show(n: ShownNotice): void
+  /** Flash the taskbar without a box. Nothing in a browser, or in app builds before it. */
+  flash(): void
   ring(call: RingInfo | null): void
   unread(count: number): void
   callState(s: CallTrayState): void
@@ -65,6 +69,7 @@ export const webSink = (env: { Notification?: typeof Notification; focus?: () =>
         }
       }).catch(() => {})
     },
+    flash() {},
     ring() {},          // a browser has no call window: the call arrives as a notice, via show()
     unread() {},
     callState() {},
@@ -78,6 +83,7 @@ export const webSink = (env: { Notification?: typeof Notification; focus?: () =>
 const desktopSink = (d: NonNullable<DesktopBridge['notifications']>): Sink => ({
   kind: 'desktop',
   show: n => d.show(n),
+  flash: () => d.flash?.(),
   ring: c => d.ring(c),
   unread: n => d.unread(n),
   callState: s => d.callState(s),
@@ -86,6 +92,16 @@ const desktopSink = (d: NonNullable<DesktopBridge['notifications']>): Sink => ({
   onTrayCommand: cb => d.onTrayCommand(cb),
   onWindowFocus: cb => d.onWindowFocus(cb),
 })
+
+/**
+ * A notice, as the switches allow. With notifications on, the box, telling the
+ * app whether to flash; with them off, only the flash — for a message or a
+ * mention, which are what flashed before there was a switch.
+ */
+export const deliver = (sink: Sink, n: Notice, p: { enabled: boolean; flash: boolean }): void => {
+  if (p.enabled) sink.show({ ...n, flash: p.flash })
+  else if (p.flash && (n.kind === 'message' || n.kind === 'mention')) sink.flash()
+}
 
 /** The desktop app when its build has the bridge; the browser's notifications otherwise. */
 export const pickSink = (bridge: DesktopBridge | null): Sink =>

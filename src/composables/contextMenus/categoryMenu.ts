@@ -2,17 +2,20 @@
  * The menu behind a category header in the sidebar (right-click or the header's
  * own affordance).
  *
- * Rows are gated on Manage Channels rather than shown-and-disabled, same
- * reasoning as channelMenu and serverMenu: createCategory/updateCategory/
- * deleteCategory and channel creation all need it
- * (server/controllers/categoriesController.ts), so anyone without it is
+ * Everyone gets read state and notifications first — Mark As Read, Mute
+ * Category, Notification Settings — since those are their own settings, not
+ * the server's. The management rows are gated on Manage Channels rather than
+ * shown-and-disabled, same reasoning as channelMenu and serverMenu:
+ * createCategory/updateCategory/deleteCategory and channel creation all need
+ * it (server/controllers/categoriesController.ts), so anyone without it is
  * offered nothing that can only ever 403 — just the harmless Copy Category ID.
  *
  * Row order mirrors channelMenu exactly: the constructive rows, then Copy, then
  * a separator, then the destructive one on its own.
  */
-import { Plus, Pencil, ArrowUp, ArrowDown, Copy, Trash2 } from 'lucide-vue-next'
+import { Plus, Pencil, ArrowUp, ArrowDown, Copy, Trash2, Check } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
+import { notifyRows, type NotifyHandlers } from './notifyRows'
 
 export interface MenuCategory {
   id:       string
@@ -20,7 +23,9 @@ export interface MenuCategory {
   serverId: string
 }
 
-export interface CategoryMenuHandlers {
+export interface CategoryMenuHandlers extends NotifyHandlers {
+  /** Clear the unread on every channel in it. */
+  markRead:      (category: MenuCategory) => void
   /** Opens Create Channel pre-targeted at this category. */
   createChannel: (category: MenuCategory) => void
   rename:        (category: MenuCategory) => void
@@ -46,13 +51,23 @@ export const buildCategoryMenu = (
    * is left out rather than disabled, the same as Move to Category is.
    */
   place?: CategoryPlace,
+  /** Whether any channel in it is unread — Mark As Read does nothing otherwise. */
+  hasUnread = false,
 ): MenuItem[] => {
+  const notify: MenuItem[] = [
+    { label: 'Mark As Read', icon: Check, disabled: !hasUnread, onSelect: () => h.markRead(category) },
+    { sep: true },
+    ...notifyRows(category.id, 'category', h),
+    { sep: true },
+  ]
   if (!canManage) {
     return [
+      ...notify,
       { label: 'Copy Category ID', icon: Copy, onSelect: () => h.copy(category.id, 'Category ID') },
     ]
   }
   return [
+    ...notify,
     { label: 'Create Channel',   icon: Plus,   onSelect: () => h.createChannel(category) },
     { label: 'Edit Category',    icon: Pencil, onSelect: () => h.rename(category) },
     ...(place && !place.first

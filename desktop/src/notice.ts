@@ -17,6 +17,8 @@ export interface ShellNotice {
   icon: string | null
   group: { id: string; title: string } | null
   canReply: boolean
+  /** Flash the taskbar with it. Pages from before the switch send nothing, and flash. */
+  flash: boolean
 }
 export interface RingInfo { name: string; icon: string | null; group: boolean }
 
@@ -57,7 +59,7 @@ export const parseNotice = (v: unknown): ShellNotice | null => {
 
   return {
     id: o.id, kind: o.kind as ShellNotice['kind'], conversation, title, body,
-    icon: icon(o.icon), group, canReply: o.canReply === true,
+    icon: icon(o.icon), group, canReply: o.canReply === true, flash: o.flash !== false,
   }
 }
 

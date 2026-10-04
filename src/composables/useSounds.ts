@@ -29,6 +29,8 @@
  * falling = something closed, and the drop is bigger the more final the action.
  */
 
+import { notificationPrefs } from './notificationPrefs'
+
 const A = { attack: 0.012, release: 0.08 }
 
 let _ctx: AudioContext | null = null
@@ -124,6 +126,9 @@ const voice = (ac: AudioContext, n: Note) => {
 }
 
 const play = (notes: Note[]) => {
+  // Settings › Notifications › Disable all notification sounds: every cue
+  // comes through here, the ring and the call sounds included.
+  if (notificationPrefs.allSoundsOff) return
   const ac = ctx(); if (!ac) return
   // Ask for a resume when suspended, but schedule REGARDLESS and never wait on
   // that promise. Deferring the schedule until resume() settles looks tidier
@@ -261,12 +266,14 @@ const F5 = 698.46, C5_ = 523.25, F4_ = 349.23
 
 let _ringT: ReturnType<typeof setInterval> | null = null
 const RING_MS = 2600
+const ring = () => play([
+  { hz: C5_, at: 0,    dur: 0.24, vol: 0.22 },
+  { hz: F5,  at: 0.28, dur: 0.32, vol: 0.22 },
+])
+/** One ring, for Settings' Preview — whatever the Incoming call switch says. */
+export const soundRingOnce = () => ring()
 export const soundRingStart = () => {
-  if (_ringT) return
-  const ring = () => play([
-    { hz: C5_, at: 0,    dur: 0.24, vol: 0.22 },
-    { hz: F5,  at: 0.28, dur: 0.32, vol: 0.22 },
-  ])
+  if (_ringT || !notificationPrefs.ringSound) return
   ring()
   _ringT = setInterval(ring, RING_MS)
 }

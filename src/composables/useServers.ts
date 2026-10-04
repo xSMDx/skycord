@@ -481,9 +481,9 @@ export const useServers = () => {
    * not hold cannot be attributed to a server. That is the same limit the
    * voice badge has, and it resolves the moment the server is opened.
    */
-  const serverUnread = (sid: string): number =>
+  const serverUnread = (sid: string, muted: (c: Channel) => boolean = () => false): number =>
     (channelsByServer.value[sid] ?? [])
-      .reduce((n, c) => n + (unreadChannels.value[c.id] ?? 0), 0)
+      .reduce((n, c) => n + (muted(c) ? 0 : (unreadChannels.value[c.id] ?? 0)), 0)
 
   const markUnread  = (cid: string) => { unreadChannels.value[cid] = (unreadChannels.value[cid] || 0) + 1 }
   const clearUnread = (cid: string) => { delete unreadChannels.value[cid] }

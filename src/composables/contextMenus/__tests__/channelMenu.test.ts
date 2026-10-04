@@ -5,7 +5,9 @@ import { isAction, isSeparator, hasSubmenu, type MenuItem } from '../../useConte
 const ch = { id: 'c1', name: 'general', type: 'text' as const, serverId: 's1' }
 const inCat = (category: string | null): MenuChannel => ({ ...ch, category })
 const cats = [{ id: 'cat1', name: 'Chat' }, { id: 'cat2', name: 'Info' }]
-const handlers = () => ({ rename: vi.fn(), remove: vi.fn(), move: vi.fn(), copy: vi.fn() })
+const handlers = () => ({ rename: vi.fn(), remove: vi.fn(), move: vi.fn(), copy: vi.fn(), setMute: vi.fn(), setLevel: vi.fn() })
+/** Everyone's, managing or not, for a text channel. */
+const NOTIFY = ['Mute Channel', 'Notification Settings', '—']
 const labels = (i: MenuItem[]) => i.filter(isAction).map(x => x.label)
 
 /**
@@ -27,6 +29,7 @@ const submenuOf = (i: MenuItem[], label: string) => {
 describe('buildChannelMenu', () => {
   it('gives the owner the complete row set, in order, when the server has categories', () => {
     expect(rows(buildChannelMenu(ch, true, handlers(), cats))).toEqual([
+      ...NOTIFY,
       'Edit Channel',
       'Move to Category',
       'Copy Channel ID',
@@ -37,6 +40,7 @@ describe('buildChannelMenu', () => {
 
   it('drops Move to Category when the server has none — the submenu would offer only where the channel already is', () => {
     expect(rows(buildChannelMenu(ch, true, handlers()))).toEqual([
+      ...NOTIFY,
       'Edit Channel',
       'Copy Channel ID',
       '—',
@@ -44,15 +48,19 @@ describe('buildChannelMenu', () => {
     ])
   })
 
-  it('gives a non-owner only Copy Channel ID', () => {
-    expect(rows(buildChannelMenu(ch, false, handlers()))).toEqual(['Copy Channel ID'])
+  it('gives a non-owner notifications and Copy Channel ID', () => {
+    expect(rows(buildChannelMenu(ch, false, handlers()))).toEqual([...NOTIFY, 'Copy Channel ID'])
   })
 
-  it('gives a non-owner only Copy Channel ID even when the server has categories', () => {
+  it('a voice channel has no messages to notify about, so no notification rows', () => {
+    expect(rows(buildChannelMenu({ ...ch, type: 'voice' }, false, handlers()))).toEqual(['Copy Channel ID'])
+  })
+
+  it('gives a non-owner no management rows even when the server has categories', () => {
     // updateChannel is requireOwner server-side, so a Move row here could only
     // ever 403. Pinned separately from the row set above because the
     // categories argument is exactly what would smuggle one in.
-    expect(rows(buildChannelMenu(ch, false, handlers(), cats))).toEqual(['Copy Channel ID'])
+    expect(rows(buildChannelMenu(ch, false, handlers(), cats))).toEqual([...NOTIFY, 'Copy Channel ID'])
   })
 
   it('copies the channel id, not the name', () => {

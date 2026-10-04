@@ -10,7 +10,12 @@ const handlers = () => ({
   copy:          vi.fn(),
   moveUp:        vi.fn(),
   moveDown:      vi.fn(),
+  markRead:      vi.fn(),
+  setMute:       vi.fn(),
+  setLevel:      vi.fn(),
 })
+/** What everyone gets first, managing or not: read state, then notifications. */
+const NOTIFY = ['Mark As Read', 'Mute Category', 'Notification Settings']
 const labels = (i: MenuItem[]) => i.filter(isAction).map(x => x.label)
 
 describe('buildCategoryMenu', () => {
@@ -20,12 +25,22 @@ describe('buildCategoryMenu', () => {
     // future row that forgets to gate on isOwner has to fail here — the same
     // strictness that caught a regression in the serverMenu tests.
     expect(labels(buildCategoryMenu(cat, true, handlers()))).toEqual([
-      'Create Channel', 'Edit Category', 'Copy Category ID', 'Delete Category',
+      ...NOTIFY, 'Create Channel', 'Edit Category', 'Copy Category ID', 'Delete Category',
     ])
   })
 
-  it('gives a non-owner only Copy Category ID', () => {
-    expect(labels(buildCategoryMenu(cat, false, handlers()))).toEqual(['Copy Category ID'])
+  it('gives a non-owner read state, notifications and Copy Category ID', () => {
+    expect(labels(buildCategoryMenu(cat, false, handlers()))).toEqual([...NOTIFY, 'Copy Category ID'])
+  })
+
+  it('Mark As Read is live only while something in the category is unread', () => {
+    const h = handlers()
+    const row = (unread: boolean) => buildCategoryMenu(cat, false, h, undefined, unread)
+      .filter(isAction).find(i => i.label === 'Mark As Read')!
+    expect(row(false).disabled).toBe(true)
+    expect(row(true).disabled).toBe(false)
+    row(true).onSelect!()
+    expect(h.markRead).toHaveBeenCalledWith(cat)
   })
 
   it('copies the category id, not the name', () => {
@@ -67,6 +82,7 @@ describe('buildCategoryMenu', () => {
 
     it('sits between Edit Category and Copy Category ID', () => {
       expect(labels(buildCategoryMenu(cat, true, handlers(), middle))).toEqual([
+        ...NOTIFY,
         'Create Channel', 'Edit Category', 'Move Up', 'Move Down', 'Copy Category ID', 'Delete Category',
       ])
     })
@@ -85,7 +101,7 @@ describe('buildCategoryMenu', () => {
     })
 
     it('offers neither to someone who cannot manage channels', () => {
-      expect(labels(buildCategoryMenu(cat, false, handlers(), middle))).toEqual(['Copy Category ID'])
+      expect(labels(buildCategoryMenu(cat, false, handlers(), middle))).toEqual([...NOTIFY, 'Copy Category ID'])
     })
 
     it('hands each move the category it was built for', () => {

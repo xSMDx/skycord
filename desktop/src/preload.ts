@@ -98,6 +98,7 @@ if (local && page === 'share.html') {
     // Notifications the app shows itself. Interactions come back here.
     notifications: {
       show: (notice: unknown) => ipcRenderer.send('desktop:notify', notice),
+      flash: () => ipcRenderer.send('desktop:flash'),
       ring: (call: unknown) => ipcRenderer.send('desktop:ring', call),
       unread: (count: number) => ipcRenderer.send('desktop:unread', count),
       callState: (s: unknown) => ipcRenderer.send('desktop:callState', s),

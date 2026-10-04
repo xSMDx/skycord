@@ -12,6 +12,9 @@ const handlers = () => ({
   voiceServers: vi.fn(),
   serverSettings: vi.fn(),
   copy: vi.fn(),
+  setMute: vi.fn(),
+  setLevel: vi.fn(),
+  setHideMuted: vi.fn(),
 })
 
 const labels = (items: MenuItem[]) =>
@@ -40,7 +43,8 @@ describe('buildServerMenu', () => {
   it('offers the owner exactly its row set', () => {
     // Exhaustive, so a row added anywhere has to be acknowledged here.
     expect(labels(buildServerMenu(mine, 'me', handlers(), ALL))).toEqual([
-      'Mark As Read', 'Invite to Server', 'Create Channel', 'Create Category',
+      'Mark As Read', 'Mute Server', 'Notification Settings', 'Hide Muted Channels',
+      'Invite to Server', 'Create Channel', 'Create Category',
       'Server Settings', 'Voice Servers', 'Delete Server', 'Copy Server ID',
     ])
   })
@@ -49,13 +53,15 @@ describe('buildServerMenu', () => {
     // Create Invite has been in the default @everyone set since roles landed;
     // the menu kept the row owner-only long after the server stopped asking.
     expect(labels(buildServerMenu(theirs, 'me', handlers(), MEMBER))).toEqual([
-      'Mark As Read', 'Invite to Server', 'Server Settings', 'Leave Server', 'Copy Server ID',
+      'Mark As Read', 'Mute Server', 'Notification Settings', 'Hide Muted Channels',
+      'Invite to Server', 'Server Settings', 'Leave Server', 'Copy Server ID',
     ])
   })
 
   it('offers a member granted nothing only the rows that need nothing', () => {
     expect(labels(buildServerMenu(theirs, 'me', handlers(), NOTHING))).toEqual([
-      'Mark As Read', 'Server Settings', 'Leave Server', 'Copy Server ID',
+      'Mark As Read', 'Mute Server', 'Notification Settings', 'Hide Muted Channels',
+      'Server Settings', 'Leave Server', 'Copy Server ID',
     ])
   })
 
@@ -157,6 +163,7 @@ describe('buildServerMenu', () => {
   it('sections the owner\'s menu without moving a row', () => {
     expect(shape(buildServerMenu(mine, 'me', handlers(), ALL))).toEqual([
       'Mark As Read', '—',
+      'Mute Server', 'Notification Settings', 'Hide Muted Channels', '—',
       '§ Invite & Create', 'Invite to Server', 'Create Channel', 'Create Category', '—',
       '§ Manage', 'Server Settings', 'Voice Servers', '—',
       'Delete Server', '—',
@@ -230,5 +237,36 @@ describe('buildSidebarMenu', () => {
 
   it('is empty for someone who may add nothing, so no menu opens at all', () => {
     expect(buildSidebarMenu(theirs, handlers(), NOTHING)).toEqual([])
+  })
+})
+
+describe('notifications on the server menu', () => {
+  const hide = (items: MenuItem[]) => items.filter(isAction).find(i => i.label === 'Hide Muted Channels')!
+
+  it('Hide Muted Channels is a toggle that stays open, checked while on', async () => {
+    const { setConvPrefLocal, setAllConvPrefs } = await import('../../useConvPrefs')
+    setAllConvPrefs({})
+    const h = handlers()
+    const off = hide(buildServerMenu(theirs, 'me', h, NOTHING))
+    expect(off.check).toBe(false)
+    expect(off.keepOpen).toBe(true)
+    off.onSelect!()
+    expect(h.setHideMuted).toHaveBeenCalledWith('s1', true)
+    setConvPrefLocal('s1', { pinned: false, muted: false, mutedUntil: null, hideMuted: true })
+    const on = hide(buildServerMenu(theirs, 'me', h, NOTHING))
+    expect(on.check).toBe(true)
+    on.onSelect!()
+    expect(h.setHideMuted).toHaveBeenLastCalledWith('s1', false)
+    setAllConvPrefs({})
+  })
+
+  it('mutes and sets the level of the server itself', () => {
+    const h = handlers()
+    const items = buildServerMenu(theirs, 'me', h, NOTHING).filter(isAction)
+    items.find(i => i.label === 'Mute Server')!.submenu!.filter(isAction).at(-1)!.onSelect!()
+    expect(h.setMute).toHaveBeenCalledWith('s1', 'forever')
+    items.find(i => i.label === 'Notification Settings')!.submenu!.filter(isAction)
+      .find(i => i.label === 'All Messages')!.onSelect!()
+    expect(h.setLevel).toHaveBeenCalledWith('s1', 'all')
   })
 })

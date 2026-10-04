@@ -268,8 +268,10 @@ ipcMain.on('desktop:notify', (event, value: unknown) => {
   const n = fromInstance(event) ? parseNotice(value) : null
   if (!n) return
   showToast(n)
-  if (n.kind === 'message' || n.kind === 'mention') flashTaskbar()
+  if (n.flash && (n.kind === 'message' || n.kind === 'mention')) flashTaskbar()
 })
+// Notifications switched off, taskbar flashing left on: a flash with no toast.
+ipcMain.on('desktop:flash', event => { if (fromInstance(event)) flashTaskbar() })
 ipcMain.on('desktop:unread', (event, value: unknown) => {
   if (!fromInstance(event)) return
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(999, Math.floor(value))) : 0
@@ -381,7 +383,7 @@ app.whenReady().then(async () => {
       writeStore({ ...readStore(), trayHintShown: true })
       showToast({
         id: 'tray-hint', kind: 'friend', conversation: null, title: 'Skycord is still running',
-        body: 'It keeps notifications and calls coming. Quit from the tray icon.', icon: null, group: null, canReply: false,
+        body: 'It keeps notifications and calls coming. Quit from the tray icon.', icon: null, group: null, canReply: false, flash: false,
       })
     }
   })

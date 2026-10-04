@@ -8,7 +8,12 @@ const good = {
 }
 
 describe('parseNotice — everything from the page is checked', () => {
-  it('keeps a well-formed notice', () => { expect(parseNotice(good)).toEqual(good) })
+  it('keeps a well-formed notice', () => { expect(parseNotice(good)).toEqual({ ...good, flash: true }) })
+  it('flashes the taskbar unless the page says not to — older pages say nothing and keep flashing', () => {
+    expect(parseNotice({ ...good, flash: false })?.flash).toBe(false)
+    expect(parseNotice({ ...good, flash: true })?.flash).toBe(true)
+    expect(parseNotice({ ...good, flash: 'no' })?.flash).toBe(true)
+  })
   it('refuses the wrong shapes', () => {
     for (const bad of [null, 'x', { ...good, kind: 'evil' }, { ...good, title: 42 }, { ...good, id: '' },
       { ...good, conversation: { kind: 'dm', id: '../x' } }, { ...good, conversation: { kind: 'web', id: 'a' } }]) {

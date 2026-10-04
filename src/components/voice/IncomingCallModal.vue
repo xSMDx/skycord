@@ -2,6 +2,7 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import { Phone, X } from 'lucide-vue-next'
 import { soundRingStart, soundRingStop } from '@/composables/useSocket'
+import { chosenStatus } from '@/composables/usePresence'
 
 defineProps<{ name: string; avatar: string; avatarCrop?: { zoom: number; x: number; y: number } | null }>()
 const emit = defineEmits<{ accept: []; decline: [] }>()
@@ -14,7 +15,9 @@ const emit = defineEmits<{ accept: []; decline: [] }>()
 // rather than remounting it — and the gate never re-ran. The single gate now
 // lives in ChatApp's incomingCall computed, so a muted conversation produces no
 // modal at all and there is nothing here to silence.
-onMounted(soundRingStart)
+// Do Not Disturb shows the call without ringing; Settings › Notifications ›
+// Incoming call is checked inside soundRingStart.
+onMounted(() => { if (chosenStatus.value !== 'dnd') soundRingStart() })
 onBeforeUnmount(soundRingStop)
 </script>
 

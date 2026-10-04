@@ -97,7 +97,9 @@ export interface DesktopBridge {
    * then uses web notifications, which work inside the app too.
    */
   notifications?: {
-    show(n: import('./notifyRules').Notice): void
+    show(n: import('./notificationSinks').ShownNotice): void
+    /** Flash the taskbar without a toast. Absent in app builds before it. */
+    flash?(): void
     ring(call: import('./notificationSinks').RingInfo | null): void
     unread(count: number): void
     callState(s: import('./notificationSinks').CallTrayState): void

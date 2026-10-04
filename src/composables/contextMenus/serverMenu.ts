@@ -2,12 +2,11 @@
  * The menu behind the sidebar header's chevron.
  *
  * Ordered to match the reference the user supplied: read state first, then
- * the things that add to the server, then settings, then leaving, with the id
- * last. What the reference has and this app does not — Unmute Server,
- * Notification Settings, Hide Muted Channels, Privacy Settings, Edit
- * Per-server Profile — is simply absent rather than shown dead, because none
- * of it has any implementation to reach: there is no server-level mute, no
- * notification model, and no per-server profile.
+ * notifications (Mute, Notification Settings, Hide Muted Channels), then the
+ * things that add to the server, then settings, then leaving, with the id
+ * last. What the reference has and this app does not — Privacy Settings, Edit
+ * Per-server Profile — is simply absent rather than shown dead, because there
+ * is no per-server profile or privacy model to reach.
  *
  * Rows that need a permission are gated rather than disabled, because the
  * server refuses anyone without it — a row that can only ever fail is worse
@@ -17,8 +16,10 @@
  * These were owner-only here long after the server stopped requiring it.
  * Deleting the server is the one thing still the owner's alone.
  */
-import { Check, UserPlus, Plus, FolderPlus, Copy, Trash2, LogOut, Settings, Server as ServerIcon } from 'lucide-vue-next'
+import { Check, UserPlus, Plus, FolderPlus, Copy, Trash2, LogOut, Settings, Server as ServerIcon, EyeOff } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
+import { hidesMuted } from '../useConvPrefs'
+import { notifyRows, type NotifyHandlers } from './notifyRows'
 
 export interface MenuServer { id: string; name: string; owner?: string }
 
@@ -35,8 +36,10 @@ export interface ServerMenuAccess {
   manageServer:   boolean
 }
 
-export interface ServerMenuHandlers {
+export interface ServerMenuHandlers extends NotifyHandlers {
   markRead:       (serverId: string) => void
+  /** Leave muted channels out of the sidebar, or bring them back. */
+  setHideMuted:   (serverId: string, on: boolean) => void
   invitePeople:   (serverId: string) => void
   createChannel:  (serverId: string) => void
   createCategory: (serverId: string) => void
@@ -80,9 +83,8 @@ export const buildAddRows = (serverId: string, h: ServerMenuHandlers, can: Serve
  * have to be kept in step forever.
  *
  * Empty for someone who may add nothing, and the caller then opens nothing
- * rather than an empty box. Hide Muted Channels, which the reference shows at
- * the top, is absent for the same reason it is absent from the header menu:
- * there is no server-level mute to hide anything by.
+ * rather than an empty box. Hide Muted Channels lives in the header menu with
+ * the server's other notification rows, rather than being repeated here.
  */
 export const buildSidebarMenu = (
   server: MenuServer,
@@ -114,6 +116,13 @@ export const buildServerMenu = (
   const isOwner = !!myId && server.owner === myId
   const items: MenuItem[] = [
     { label: 'Mark As Read', icon: Check, disabled: !hasUnread, onSelect: () => h.markRead(server.id) },
+    { sep: true },
+    ...notifyRows(server.id, 'server', h),
+    // A toggle, so it stays open: you see the tick land.
+    {
+      label: 'Hide Muted Channels', icon: EyeOff, check: hidesMuted(server.id), keepOpen: true,
+      onSelect: () => h.setHideMuted(server.id, !hidesMuted(server.id)),
+    },
     { sep: true },
   ]
   // Only when there is something to add: a separator under nothing would
