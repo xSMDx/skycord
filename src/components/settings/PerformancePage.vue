@@ -168,7 +168,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
       </select>
     </div>
 
-    <template v-if="desktop">
+    <template v-if="desktop?.performance">
       <div class="st-field">
         <div class="st-field-left">
           <span class="st-field-label">Skycord's title bar</span>

@@ -488,7 +488,7 @@ const navSections = computed<NavSection[]>(() => [
       { id: 'notifications', label: 'Notifications' },
       { id: 'keybinds',   label: 'Keybinds'      },
       { id: 'performance', label: 'Performance'  },
-      // Only in the Windows app, which keeps the list of servers.
+      // Only in the apps (Windows or Android), which keep the list of servers.
       ...(appBridge() ? [{ id: 'servers', label: 'Servers' }] : []),
       // Only in the app: a browser updates by reloading.
       ...(appBridge() ? [{ id: 'updates', label: 'Updates' }] : []),
