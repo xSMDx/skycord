@@ -4,6 +4,9 @@
 // any script of the page runs, so there is no shared module to put it in.
 (() => {
   const port = window.__skycordPort
+  // The port is this shim's alone: take it off window so no page script can reach it
+  // and replace its onmessage.
+  try { delete window.__skycordPort } catch { /* not removable; the shim still works */ }
   if (!port || window.skycordLauncher) return
   let seq = 0
   const pending = new Map()

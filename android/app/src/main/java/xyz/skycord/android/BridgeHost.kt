@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.webkit.WebView
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
@@ -30,6 +31,7 @@ import java.util.concurrent.Executors
 class BridgeHost(private val activity: MainActivity) {
     private companion object {
         const val PORT = "__skycordPort"
+        const val TAG = "SkycordBridge"
     }
 
     private val web: WebView get() = activity.web
@@ -43,6 +45,17 @@ class BridgeHost(private val activity: MainActivity) {
     private var launcherScript: ScriptHandler? = null
 
     /**
+     * Bumped whenever the listener is replaced or the bridge closes. Replacing
+     * the listener destroys every reply proxy the old one handed out, and
+     * posting to one (WebView offers no way to ask) crashes the process
+     * natively, so anything that answers later — after network I/O, or after
+     * the current message has unwound — checks it first and stays silent when
+     * it has moved on.
+     */
+    private var generation = 0
+    private var closed = false
+
+    /**
      * The current server page's way back to its bridge, from its hello. The
      * newest hello always wins — a reload sends a new one — and it is cleared
      * whenever the server changes. (Not on onPageStarted: that and the new
@@ -53,17 +66,64 @@ class BridgeHost(private val activity: MainActivity) {
 
     var onBackAnswer: (Int, Boolean) -> Unit = { _, _ -> }
 
-    /** Register for the current saved servers. Takes effect from the next page load. */
+    /**
+     * Register for the current saved servers; takes effect from the next page
+     * load. Called by the activity just before each navigation, never from a
+     * message handler. If WebView refuses a saved origin as a rule (an IPv6
+     * literal, say) the launch must not crash: it falls back to the current
+     * server alone, and then to the launcher alone.
+     */
     fun refresh() {
+        generation++
         appProxy = null
-        val servers = activity.store.list().map { it.origin }.toSet()
-        if (listening) WebViewCompat.removeWebMessageListener(web, PORT)
+        unregister()
+        val saved = activity.store.list().map { it.origin }.toSet()
+        val attempts = listOf(saved, setOfNotNull(activity.currentServer), emptySet<String>()).distinct()
+        for (servers in attempts.dropLast(1)) {
+            try {
+                register(servers)
+                if (servers != saved) Log.w(TAG, "WebView refused some origins; the bridge is on for $servers, skipped ${saved - servers}")
+                return
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "WebView refused the bridge for $servers", e)
+                unregister()
+            }
+        }
+        register(attempts.last())
+        if (saved.isNotEmpty()) Log.w(TAG, "the bridge is on for the launcher only, skipped $saved")
+    }
+
+    private fun register(servers: Set<String>) {
         WebViewCompat.addWebMessageListener(web, PORT, servers + MainActivity.LAUNCHER_ORIGIN, ::onMessage)
         listening = true
-        appScript?.remove()
-        launcherScript?.remove()
         appScript = if (servers.isEmpty()) null else WebViewCompat.addDocumentStartJavaScript(web, appShim, servers)
         launcherScript = WebViewCompat.addDocumentStartJavaScript(web, launcherShim, setOf(MainActivity.LAUNCHER_ORIGIN))
+    }
+
+    private fun unregister() {
+        if (listening) WebViewCompat.removeWebMessageListener(web, PORT)
+        listening = false
+        appScript?.remove()
+        launcherScript?.remove()
+        appScript = null
+        launcherScript = null
+    }
+
+    /** The activity is going away: no more replies, no more lookups. */
+    fun close() {
+        closed = true
+        generation++
+        appProxy = null
+        main.removeCallbacksAndMessages(null)
+        io.shutdownNow()
+    }
+
+    /**
+     * Runs on the main thread once the current message has unwound, unless the
+     * bridge has moved on since [at] (a refresh or a close).
+     */
+    private fun later(at: Int = generation, block: () -> Unit) {
+        main.post { if (!closed && at == generation) block() }
     }
 
     fun pushUpdates(state: UpdateState) {
@@ -72,6 +132,7 @@ class BridgeHost(private val activity: MainActivity) {
         try {
             appProxy?.postMessage(BridgeProtocol.event("updates", state.toJson()))
         } catch (e: Exception) {
+            Log.w(TAG, "could not push the update state to the page", e)
             appProxy = null
         }
     }
@@ -80,12 +141,18 @@ class BridgeHost(private val activity: MainActivity) {
     fun askBack(id: Int): Boolean {
         if (activity.currentServer == null) return false
         val proxy = appProxy ?: return false
-        proxy.postMessage(BridgeProtocol.event("back", id))
-        return true
+        return try {
+            proxy.postMessage(BridgeProtocol.event("back", id))
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "could not offer the back button to the page", e)
+            appProxy = null
+            false
+        }
     }
 
     private fun onMessage(view: WebView, message: WebMessageCompat, sourceOrigin: Uri, isMainFrame: Boolean, proxy: JavaScriptReplyProxy) {
-        if (!isMainFrame) return
+        if (closed || !isMainFrame) return
         val origin = Origins.of(sourceOrigin.toString()) ?: return
         val incoming = message.data?.let(BridgeProtocol::parse) ?: return
         when {
@@ -101,7 +168,9 @@ class BridgeHost(private val activity: MainActivity) {
             is Incoming.Call -> {
                 val reply = { value: Any? -> m.id?.let { proxy.postMessage(BridgeProtocol.reply(it, value)) } }
                 when (m.method) {
-                    "changeInstance", "openServers" -> { reply(null); activity.showLauncher() }
+                    // Reply first, then navigate once this message has unwound: navigating replaces
+                    // the listener whose callback we are still inside.
+                    "changeInstance", "openServers" -> { reply(null); later { activity.showLauncher() } }
                     "colors" -> m.args.optJSONObject(0)?.optString("bar")?.let(activity::applyBarColour)
                     "about" -> reply(about())
                     "updates.state" -> reply(activity.updates.state.toJson())
@@ -129,9 +198,11 @@ class BridgeHost(private val activity: MainActivity) {
                 val origin = call.args.optString(0)
                 // Only an origin that is already normal; never a URL the page chose.
                 if (Origins.normalise(origin) != origin) { reply(JSONObject().put("unreachable", true)); return }
+                val at = generation
                 io.execute {
                     val answer = InstanceFetch.get(origin)
-                    main.post {
+                    // Seconds may have passed; if the page was left meanwhile, its proxy is gone.
+                    later(at) {
                         reply(
                             if (answer == null) JSONObject().put("unreachable", true)
                             else JSONObject().put("status", answer.status).put("body", answer.body),
@@ -145,7 +216,10 @@ class BridgeHost(private val activity: MainActivity) {
                 // (posting to it afterwards crashes WebView natively) and cuts its port, which
                 // the page still needs for the open that follows. openServer and showLauncher
                 // refresh just before they load, which is when a new registration is needed.
-                val list = activity.store.save(e.stringOrNull("origin") ?: "", e.stringOrNull("name"), e.stringOrNull("icon"))
+                val wanted = e.stringOrNull("origin") ?: ""
+                // The launcher is not a server; saving it would let it open itself as one.
+                if (Origins.normalise(wanted) == MainActivity.LAUNCHER_ORIGIN) return reply(servers(activity.store.list()))
+                val list = activity.store.save(wanted, e.stringOrNull("name"), e.stringOrNull("icon"))
                 reply(servers(list))
             }
             "launcher.remove" -> {
@@ -154,9 +228,13 @@ class BridgeHost(private val activity: MainActivity) {
             }
             "launcher.open" -> {
                 val origin = call.args.optString(0)
-                if (activity.store.find(origin) == null) { proxy.postMessage(BridgeProtocol.error(id, "not a saved server")); return }
+                if (origin == MainActivity.LAUNCHER_ORIGIN || activity.store.find(origin) == null) {
+                    proxy.postMessage(BridgeProtocol.error(id, "not a saved server"))
+                    return
+                }
                 reply(null)
-                activity.openServer(origin)
+                // Checked again at the time: a remove may have slipped in between.
+                later { if (activity.store.find(origin) != null) activity.openServer(origin) }
             }
             else -> proxy.postMessage(BridgeProtocol.error(id, "unknown method"))
         }

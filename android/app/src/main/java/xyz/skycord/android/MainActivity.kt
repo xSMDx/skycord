@@ -63,6 +63,11 @@ class MainActivity : AppCompatActivity() {
     private var serverLoaded = false
     private var loadFailed = false
 
+    // Each openServer/showLauncher starts a fresh history: otherwise a server page's
+    // history.back() could land on the launcher entry while currentServer is set,
+    // where every launcher call is refused (history moves skip shouldOverrideUrlLoading).
+    private var clearHistoryOnFinish = false
+
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         val (request, resources) = pendingPermission ?: return@registerForActivityResult
         pendingPermission = null
@@ -120,12 +125,13 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         // onCreate returns early on the old-WebView screen, before updates exists.
         if (::updates.isInitialized) updates.close()
+        if (::bridge.isInitialized) bridge.close()
         super.onDestroy()
     }
 
+    // No refresh here: the first openServer or showLauncher registers, just before it loads.
     private fun onCreateBridge() {
         bridge = BridgeHost(this)
-        bridge.refresh()
     }
 
     private fun onUpdateState() {
@@ -186,6 +192,11 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                // Only the page just asked for ends it, not an earlier page finishing late.
+                if (clearHistoryOnFinish && Origins.of(url) == (currentServer ?: LAUNCHER_ORIGIN)) {
+                    clearHistoryOnFinish = false
+                    view.clearHistory()
+                }
                 // WebView also calls this after a failed load (for its error page), hence loadFailed.
                 if (currentServer != null && Origins.of(url) == currentServer && !loadFailed) serverLoaded = true
             }
@@ -204,6 +215,7 @@ class MainActivity : AppCompatActivity() {
         unreachable.visibility = View.GONE
         serverLoaded = false
         loadFailed = false
+        clearHistoryOnFinish = true
         currentServer = origin
         store.setLast(origin)
         onServerChanged()
@@ -212,6 +224,7 @@ class MainActivity : AppCompatActivity() {
 
     fun showLauncher() {
         unreachable.visibility = View.GONE
+        clearHistoryOnFinish = true
         currentServer = null
         onServerChanged()
         web.loadUrl(LAUNCHER_URL)
