@@ -135,7 +135,7 @@ echo no | avdmanager.bat create avd -n skycord35 -k "system-images;android-35;go
 Run: `source android/env.sh && java -version 2>&1 | head -1 && sdkmanager.bat --list_installed | grep -E "platforms;android-35|build-tools;35" && avdmanager.bat list avd | grep skycord35`
 Expected: `openjdk version "17.…"`, both packages listed, `Name: skycord35`.
 
-Run: `source android/env.sh && emulator -avd skycord35 -no-snapshot -no-audio -gpu swiftshader_indirect &` then `adb wait-for-device && adb shell getprop sys.boot_completed`
+Run: `source android/env.sh && emulator -avd skycord35 -ports 6554,6555 -no-snapshot -no-audio -gpu swiftshader_indirect &` then `adb wait-for-device && adb shell getprop sys.boot_completed`
 Expected (after a minute or two): `1`. If the emulator says hardware acceleration is unavailable, the Windows Hypervisor Platform feature must be on — report that to the owner instead of continuing.
 
 - [ ] **Step 6: Write `android/README.md`**
@@ -170,7 +170,7 @@ runs before every build.
 ## Run on the emulator
 
 ```bash
-emulator -avd skycord35 -no-snapshot -no-audio &
+emulator -avd skycord35 -ports 6554,6555 -no-snapshot -no-audio &
 adb wait-for-device
 adb reverse tcp:5500 tcp:5500     # the dev client, as http://localhost:5500 — a secure page
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -3205,7 +3205,7 @@ The dev API pins its session cookie to `localhost` (`COOKIE_DOMAIN: 'localhost'`
 /**
  * The Android shell, end to end, on the emulator.
  *
- * Needs: the emulator running (`emulator -avd skycord35`), the debug APK
+ * Needs: the emulator running (`emulator -avd skycord35 -ports 6554,6555`), the debug APK
  * installed, `adb reverse tcp:5500 tcp:5500`, and the dev stack: the client
  * on 5500 and its API on 3050 (`node .dev/desk-api.mjs` in
  * H:\projects\sykord-wt). It makes its own throwaway account on that local
@@ -3249,7 +3249,7 @@ await post('/servers', { name: serverName }, accessToken)
 
 // ── the device ───────────────────────────────────────────────────────────
 const [device] = await _android.devices()
-if (!device) { console.error('no emulator: start one with `emulator -avd skycord35`'); process.exit(1) }
+if (!device) { console.error('no emulator: start one with `emulator -avd skycord35 -ports 6554,6555`'); process.exit(1) }
 const sh = async cmd => (await device.shell(cmd)).toString()
 const back = () => sh('input keyevent 4')
 const inFront = async () => (await sh('dumpsys window | grep mCurrentFocus')).includes(PKG)
@@ -3374,7 +3374,7 @@ Expected: `21/21 passed`. A failure is a slice-1 bug: fix it in the task it belo
 ```bash
 sdkmanager.bat "system-images;android-26;google_apis;x86"
 echo no | avdmanager.bat create avd -n skycord26 -k "system-images;android-26;google_apis;x86" -d pixel
-emulator -avd skycord26 -no-snapshot -no-audio &
+emulator -avd skycord26 -ports 6554,6555 -no-snapshot -no-audio &
 adb wait-for-device && adb install -r android/app/build/outputs/apk/debug/app-debug.apk && adb shell am start -n xyz.skycord.android/.MainActivity
 adb shell uiautomator dump /sdcard/ui.xml >/dev/null && adb shell cat /sdcard/ui.xml | grep -o "Android System WebView needs an update"
 ```
