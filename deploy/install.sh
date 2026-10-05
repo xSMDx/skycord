@@ -427,7 +427,11 @@ fi
 # the music container actually landed on. Enabled as well as started, so
 # they come back after a reboot — iptables rules do not persist on their own.
 if [ "$MUSIC" = "on" ]; then
-  if systemctl enable --now skycord-music-firewall.service 2>/dev/null; then
+  # Believed only once the rules are seen in place. Taking systemctl's word
+  # for it printed "only the internet" over a unit that had failed, with no
+  # rules at all — the v0.20.9 rehearsal caught it.
+  systemctl enable --now skycord-music-firewall.service 2>/dev/null || true
+  if "$SKYCORD_DIR/music-firewall.sh" check >/dev/null 2>&1; then
     say "Music channels are on, and the decoder can only reach the internet."
   else
     warn "music is on but its egress rules could not be applied."

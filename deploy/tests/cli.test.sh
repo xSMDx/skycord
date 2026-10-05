@@ -298,6 +298,35 @@ then bad "the check still notices a missing rule" "it passed without the link-lo
 else ok  "the check still notices a missing rule"
 fi
 
+# A fresh machine has none of our rules, so the clear-out before adding finds
+# nothing. Its grep then exited 1, pipefail made that the pipeline's status,
+# and set -e ended the script before a single rule went in: apply failed on
+# every first install. The v0.20.9 rehearsal's diagnostics showed it.
+# Run in a fresh bash, not a subshell under `if`: bash ignores set -e anywhere
+# inside an if condition, subshells included, which is how the first version
+# of this test passed against the bug.
+# shellcheck disable=SC2016 # the script is for the inner bash
+out="$(bash -c '
+  source "$1"
+  empty_ipt() { [ "$1" = "-S" ] && printf "%s\n" "-N DOCKER-USER" "-A DOCKER-USER -j RETURN"; return 0; }
+  drop_ours empty_ipt
+  echo survived' _ "$ROOT/deploy/music-firewall.sh" 2>/dev/null)" || true   # this file sources skycord above, which set -e
+is "clearing our rules from a chain that has none carries on" "$out" "survived"
+# And with rules present it deletes each one, by its own spec.
+# shellcheck source=/dev/null
+deleted="$( source "$ROOT/deploy/music-firewall.sh"
+            # shellcheck disable=SC2329 # called by drop_ours, by name
+            some_ipt() {
+              if [ "$1" = "-S" ]; then
+                printf '%s\n' "-N DOCKER-USER" \
+                  "-A DOCKER-USER -s 172.20.0.0/16 -d 172.20.0.0/16 -m comment --comment skycord-music -j RETURN" \
+                  "-A DOCKER-USER -s 172.20.0.0/16 -d 10.0.0.0/8 -m comment --comment skycord-music -j REJECT" \
+                  "-A DOCKER-USER -j RETURN"
+              else echo "$*"; fi
+            }
+            drop_ours some_ipt )"
+is "it deletes exactly our rules" "$(printf '%s\n' "$deleted" | grep -c '^-D DOCKER-USER .*skycord-music')" "2"
+
 has "the firewall excludes its own subnet" "$ROOT/deploy/music-firewall.sh" 'RETURN'
 has "the firewall blocks link-local"       "$ROOT/deploy/music-firewall.sh" '169.254.0.0/16'
 has "the firewall blocks the metadata net" "$ROOT/deploy/music-firewall.sh" '169.254'

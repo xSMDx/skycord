@@ -81,12 +81,19 @@ music_subnets() {
 # again without guessing at line numbers — which shift whenever Docker or
 # anything else touches the chain.
 drop_ours() {
-  local ipt="$1" line
-  "$ipt" -S DOCKER-USER 2>/dev/null | grep -- "--comment \"\?$TAG\"\?" | while read -r line; do
+  local ipt="$1" line rules ours
+  # Read once, then searched. On a fresh machine none of the rules are ours,
+  # and a grep that matches nothing exits 1: inside a pipeline under
+  # pipefail and set -e, that ended the script before a single rule was
+  # added, so apply failed on every first install. Nothing to drop is fine.
+  rules="$("$ipt" -S DOCKER-USER 2>/dev/null)" || return 0
+  ours="$(grep -- "--comment \"\?$TAG\"\?" <<<"$rules" || true)"
+  [ -n "$ours" ] || return 0
+  while read -r line; do
     # -A becomes -D, and the rest of the rule is its own identifier.
     # shellcheck disable=SC2086 # deliberate: the rule is a word list
     "$ipt" ${line/#-A/-D} 2>/dev/null || true
-  done
+  done <<<"$ours"
 }
 
 add_rules() {
