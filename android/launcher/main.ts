@@ -1,6 +1,6 @@
 import { lookupInstance, type InstanceProfile } from '../../desktop/src/instanceAddress'
 import { hostOf } from '../../desktop/src/servers'
-import { HOSTED, httpWarning, displayName, iconUrl, originOfInstanceUrl } from './view'
+import { HOSTED, httpWarning, displayName, iconUrl, originOfInstanceUrl, fetchThroughApp, ensureAbortSignalTimeout } from './view'
 
 interface Saved { origin: string; name: string; icon: string | null }
 interface LauncherApi {
@@ -14,19 +14,11 @@ interface LauncherApi {
 const api = (window as unknown as { skycordLauncher: LauncherApi }).skycordLauncher
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 
+ensureAbortSignalTimeout()
+
+const nativeFetch = fetchThroughApp(origin => api.lookup(origin))
+
 let found: { origin: string; profile: InstanceProfile } | null = null
-
-// Statuses a Response may not carry a body with; the constructor throws otherwise.
-const NO_BODY = new Set([204, 205, 304])
-
-/** lookupInstance's fetch, done by the app: an https page may not fetch an http:// server. */
-const nativeFetch = async (url: string): Promise<Response> => {
-  const origin = originOfInstanceUrl(url)
-  if (!origin) throw new Error('not an instance URL')
-  const r = await api.lookup(origin)
-  if ('unreachable' in r) throw new Error('unreachable')
-  return new Response(NO_BODY.has(r.status) ? null : r.body, { status: r.status, headers: { 'content-type': 'application/json' } })
-}
 
 const initial = (name: string) => (name.trim()[0] ?? '?').toUpperCase()
 
