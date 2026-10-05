@@ -29,6 +29,32 @@ fail() {
   exit 1
 }
 
+# What the music firewall actually sees, printed before failing on it. A
+# failure here used to say only "NOT in place", with the check's own reason
+# sent to /dev/null by status — two release attempts went by on that.
+music_diag() {
+  printf '\n--- music firewall check, with its reasons\n'
+  sudo SKYCORD_DIR="$DIR" "$DIR/music-firewall.sh" check || true
+  printf '\n--- the unit that applies the rules\n'
+  sudo systemctl status skycord-music-firewall --no-pager 2>&1 | tail -8 || true
+  sudo journalctl -u skycord-music-firewall --no-pager 2>&1 | tail -15 || true
+  printf '\n--- DOCKER-USER, v4 and v6\n'
+  sudo iptables -S DOCKER-USER 2>&1 || true
+  sudo ip6tables -S DOCKER-USER 2>&1 || true
+  printf '\n--- the music container'"'"'s networks and their subnets\n'
+  local cid net
+  cid="$(stack ps -q music 2>/dev/null || true)"
+  for net in $(sudo docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$cid" 2>/dev/null); do
+    printf '%s: ' "$net"; sudo docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' "$net" 2>&1 || true
+  done
+  printf '\n--- docker %s, %s\n' "$(sudo docker version --format '{{.Server.Version}}' 2>/dev/null)" "$(sudo iptables -V 2>/dev/null)"
+}
+
+# The rules, read once and searched. Never `iptables -S | grep -q` under
+# pipefail: grep exits on its match while iptables is still writing, iptables
+# dies of SIGPIPE, and the pipeline fails with every rule in place.
+docker_user_rules() { sudo iptables -S DOCKER-USER 2>/dev/null || true; }
+
 # Everything comes from the working tree: the release these files describe does
 # not exist yet, which is the whole point of rehearsing before publishing.
 export SKYCORD_LOCAL_FILES="$ROOT/deploy/_bundle"
@@ -54,17 +80,18 @@ say "Music is on, and locked in"
 # need Linux, a real Docker network and iptables, none of which a developer's
 # machine reliably has. Everything else about music is unit-tested; this is
 # the part that is only true on a server.
-sudo skycord status | grep -q "Music:     on, egress restricted" \
-  || { sudo skycord status; fail "status does not report music as locked down"; }
+grep -q "Music:     on, egress restricted" <<<"$(sudo skycord status)" \
+  || { sudo skycord status; music_diag; fail "status does not report music as locked down"; }
 
 # The rules themselves, not just what status says about them.
-sudo iptables -S DOCKER-USER | grep -q "skycord-music" \
+RULES="$(docker_user_rules)"
+grep -q "skycord-music" <<<"$RULES" \
   || fail "no skycord-music rules in DOCKER-USER"
-sudo iptables -S DOCKER-USER | grep -q "169.254.0.0/16.*REJECT" \
+grep -q "169.254.0.0/16.*REJECT" <<<"$RULES" \
   || fail "the cloud metadata address is not blocked"
 # The container's own subnet must be allowed, above the rejects, or the API
 # and the decoder cannot speak and the feature is dead.
-sudo iptables -S DOCKER-USER | grep -q "skycord-music.*RETURN" \
+grep -q "skycord-music.*RETURN" <<<"$RULES" \
   || fail "the music subnet has no RETURN rule — the API would be unreachable"
 
 # The API agrees the feature is on. This is the half that was missing for a
@@ -119,7 +146,7 @@ printf 'FROM %s:%s\nENV SKYCORD_VERSION=%s\n' "$IMAGE" "$VERSION" "$NEXT" > "$CT
 sudo docker build -q -t "$IMAGE:$NEXT" "$CTX" >/dev/null
 sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" skycord update "$NEXT" --yes \
   || fail "the update did not finish"
-sudo skycord version | grep -q "$NEXT" || fail "the update did not record $NEXT"
+grep -q "$NEXT" <<<"$(sudo skycord version)" || fail "the update did not record $NEXT"
 
 say "Update to a broken build, which must roll itself back"
 printf 'FROM busybox\nCMD ["false"]\n' > "$CTX/Dockerfile"
@@ -128,7 +155,7 @@ sudo docker build -q -t "$IMAGE:$BROKEN" "$CTX" >/dev/null
 sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" SKYCORD_HEALTH_TIMEOUT=45 \
   skycord update "$BROKEN" --yes && fail "a broken build was accepted as healthy"
 
-sudo skycord version | grep -q "$NEXT" || fail "did not go back to $NEXT"
+grep -q "$NEXT" <<<"$(sudo skycord version)" || fail "did not go back to $NEXT"
 stack exec -T skycord \
   node -e "fetch('http://127.0.0.1:3001/health').then(r=>r.json()).then(h=>{ if (h.db!=='up') process.exit(1) })" \
   || fail "the working version did not come back healthy"
