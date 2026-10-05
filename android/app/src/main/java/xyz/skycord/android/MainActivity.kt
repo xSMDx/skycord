@@ -4,9 +4,12 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -16,6 +19,8 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -52,6 +57,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var assetLoader: WebViewAssetLoader
     private var pendingPermission: Pair<PermissionRequest, List<String>>? = null
 
+    // Per openServer: whether the page has loaded once, and whether the current load failed.
+    private var serverLoaded = false
+    private var loadFailed = false
+
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         val (request, resources) = pendingPermission ?: return@registerForActivityResult
         pendingPermission = null
@@ -61,9 +70,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Transparent bars on every Android version (the root view behind them carries the colour),
+        // so the old-WebView screen gets the same treatment.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         if (!webViewIsNewEnough()) {
             showOldWebView()
             return
+        }
+        // Below API 30 the keyboard inset only reaches the insets listener under adjustResize.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            @Suppress("DEPRECATION") // deprecated from API 30, which is exactly where this stops being needed
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
         setContentView(R.layout.activity_main)
         root = findViewById(R.id.root)
@@ -88,6 +108,13 @@ class MainActivity : AppCompatActivity() {
         updates.checkOnLaunch()
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Keep each server's sign-in if the process is killed while we are in the background.
+        // `web` is unset on the old-WebView screen, where there may be no WebView provider at all.
+        if (::web.isInitialized) CookieManager.getInstance().flush()
+    }
+
     override fun onDestroy() {
         // onCreate returns early on the old-WebView screen, before updates exists.
         if (::updates.isInitialized) updates.close()
@@ -98,9 +125,13 @@ class MainActivity : AppCompatActivity() {
     private fun onCreateBridge() {}
     private fun onUpdateState() {}
 
-    private fun webViewIsNewEnough(): Boolean =
+    // With no usable WebView provider the feature checks can throw; the old-WebView screen is the right answer then.
+    private fun webViewIsNewEnough(): Boolean = try {
         WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) &&
             WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+    } catch (e: Exception) {
+        false
+    }
 
     private fun showOldWebView() {
         setContentView(R.layout.screen_old_webview)
@@ -140,17 +171,32 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceErrorCompat) {
                 val server = currentServer ?: return
-                if (request.isForMainFrame && Origins.of(request.url.toString()) == server) showUnreachable(server)
+                if (!request.isForMainFrame || Origins.of(request.url.toString()) != server) return
+                loadFailed = true
+                // Only a server that never loaded gets the native screen; once the page has
+                // loaded, a dropped connection or a failed reload is the web app's own business.
+                if (!serverLoaded) showUnreachable(server)
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                // WebView also calls this after a failed load (for its error page), hence loadFailed.
+                if (currentServer != null && Origins.of(url) == currentServer && !loadFailed) serverLoaded = true
             }
         }
 
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) = handlePermission(request)
+
+            override fun onPermissionRequestCanceled(request: PermissionRequest) {
+                if (pendingPermission?.first == request) pendingPermission = null
+            }
         }
     }
 
     fun openServer(origin: String) {
         unreachable.visibility = View.GONE
+        serverLoaded = false
+        loadFailed = false
         currentServer = origin
         store.setLast(origin)
         onServerChanged()
@@ -199,6 +245,7 @@ class MainActivity : AppCompatActivity() {
         val missing = wanted.map(::androidPermissionFor).distinct()
             .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) { request.grant(wanted.toTypedArray()); return }
+        pendingPermission?.first?.deny()
         pendingPermission = request to wanted
         askPermissions.launch(missing.toTypedArray())
     }
