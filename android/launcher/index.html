@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https: http: data:; style-src 'self'; script-src 'self'" />
+  <title>Skycord</title>
+  <link rel="stylesheet" href="./launcher.css" />
+</head>
+<body>
+  <main class="lc">
+    <header class="lc-head">
+      <h1>Skycord</h1>
+      <p class="lc-lead">Choose a server to open.</p>
+    </header>
+
+    <section class="lc-list" aria-label="Servers">
+      <ul id="servers" class="lc-rows"></ul>
+    </section>
+
+    <form id="join" class="lc-join" novalidate>
+      <label for="address" class="lc-label">Join a server by address</label>
+      <div class="lc-field">
+        <input id="address" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"
+               placeholder="chat.example.com" />
+        <button id="check" type="submit" class="lc-btn">Check</button>
+      </div>
+      <p id="problem" class="lc-problem" role="alert" hidden></p>
+    </form>
+
+    <section id="found" class="lc-found" hidden aria-live="polite">
+      <div class="lc-card">
+        <span id="found-icon" class="lc-icon" aria-hidden="true"></span>
+        <div class="lc-card-text">
+          <strong id="found-name"></strong>
+          <span id="found-host" class="lc-sub"></span>
+          <span id="found-operator" class="lc-sub"></span>
+        </div>
+      </div>
+      <p id="found-warning" class="lc-warning" hidden></p>
+      <div class="lc-actions">
+        <button id="found-back" type="button" class="lc-btn lc-btn-quiet">Back</button>
+        <button id="found-open" type="button" class="lc-btn lc-btn-primary">Open</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

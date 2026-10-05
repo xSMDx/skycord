@@ -1,0 +1,49 @@
+/* The app's own tokens (dark by default, light when the phone is light), so
+   the launcher is the same product as what it opens. */
+:root {
+  --bg: #111214; --panel: #2b2d31; --input: #1e1f22; --text-1: #dcddde; --text-2: #b5bac1; --text-3: #949ba4;
+  --accent: #38b6f1; --on-accent: #0e0f11; --danger: #f23f43; --warn: #f0b232; --divider: rgba(255,255,255,.06);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2f3f5; --panel: #ffffff; --input: #e3e5e8; --text-1: #313338; --text-2: #4e5058; --text-3: #5c5e66;
+    --divider: rgba(0,0,0,.08); color-scheme: light;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text-1); font: 15px/1.45 system-ui, sans-serif; }
+button { font: inherit; border: none; }
+.lc { max-width: 520px; margin: 0 auto; padding: 32px 16px 24px; display: grid; gap: 24px; }
+.lc-head h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.01em; }
+.lc-lead { margin: 4px 0 0; color: var(--text-3); }
+.lc-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lc-row { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 12px; padding: 4px 8px 4px 4px; }
+.lc-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px; min-height: 56px;
+  background: none; color: inherit; text-align: left; border-radius: 10px; }
+.lc-open:active { background: var(--divider); }
+.lc-icon { flex: none; width: 40px; height: 40px; border-radius: 12px; background: var(--input); display: grid; place-items: center;
+  font-weight: 700; color: var(--text-2); overflow: hidden; }
+.lc-icon img { width: 100%; height: 100%; object-fit: cover; }
+.lc-row-text, .lc-card-text { display: grid; min-width: 0; }
+.lc-row-text strong, .lc-card-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-sub { color: var(--text-3); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-remove { background: none; color: var(--text-3); padding: 10px 12px; min-height: 44px; border-radius: 8px; }
+.lc-remove:active { color: var(--danger); background: var(--divider); }
+.lc-label { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text-3); }
+.lc-field { display: flex; gap: 8px; }
+.lc-field input { flex: 1; min-width: 0; height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid transparent;
+  background: var(--input); color: var(--text-1); font: inherit; font-size: 16px; }
+.lc-field input:focus { outline: none; border-color: var(--accent); }
+.lc-btn { height: 48px; padding: 0 18px; border-radius: 10px; background: var(--panel); color: var(--text-1); font-weight: 600; }
+.lc-btn:disabled { opacity: .5; }
+.lc-btn-primary { background: var(--accent); color: var(--on-accent); }
+.lc-btn-quiet { background: none; color: var(--text-2); }
+.lc-problem { margin: 10px 0 0; color: var(--danger); }
+.lc-found { display: grid; gap: 14px; }
+.lc-card { display: flex; gap: 14px; align-items: center; background: var(--panel); border-radius: 12px; padding: 16px; }
+.lc-card .lc-icon { width: 56px; height: 56px; border-radius: 16px; font-size: 20px; }
+.lc-warning { margin: 0; padding: 12px 14px; border-radius: 10px; background: rgba(240,178,50,.12); color: var(--text-1); }
+.lc-actions { display: flex; justify-content: flex-end; gap: 8px; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
