@@ -93,6 +93,9 @@ bridge.
   server.
 - **Microphone and camera.** Android's runtime permission prompt first, then the
   WebView grant — and only for the current server's origin.
+- **Choosing files.** The page's file inputs (a server or profile icon, a music
+  upload) open Android's file picker — only for the current server's page.
+  Added at the owner's request on 2026-10-05.
 - **A server unreachable at launch** gets a native screen (§2).
 - **Updates** — see §3.
 
@@ -218,6 +221,8 @@ and calls can be tested there too.
 - **Calls on a locked phone** (background audio, Android's ongoing-call
   notification, ringing like a phone call) — a later release.
 - **iOS and the Play Store.**
+- **Downloads.** The web client has nothing to download yet (no message
+  attachments); saving files to the phone comes with attachments.
 - **Deep links** (opening a channel or an invite from outside the app). The
   web app has no routes yet (`useMobileNav` is a boolean by design); invite
   links opening the app are their own piece of work.

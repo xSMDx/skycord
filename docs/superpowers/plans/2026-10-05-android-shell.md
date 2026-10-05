@@ -48,6 +48,7 @@ android/
     core/CssColor.kt                CSS colour → ARGB, and light or dark
     core/UpdateFeed.kt              latest.json: parse, trust, compare versions
     core/UpdateState.kt             the desktop's update state machine, in Kotlin
+    core/PickerTypes.kt             an <input accept> as MIME types for the picker
     PrefsKeyValue.kt                ServerStore's storage on SharedPreferences
     InstanceFetch.kt                native GET <origin>/instance
     UpdateManager.kt                check, download, verify, hand to the installer
@@ -2891,6 +2892,162 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
+### Task 10b: The file picker
+
+Added 2026-10-05 at the owner's request: Android's WebView does nothing for `<input type="file">` unless the app opens a picker itself. Today the web client has two file inputs — a server or profile icon (`accept="image/*"`, `src/components/modals/ChangeIconModal.vue:45`) and a music upload (`accept="audio/*,.mp3,.flac,.ogg,.opus,.wav,.m4a,.aac"`, `src/components/music/MusicModal.vue:919`). There are no message attachments and nothing to download yet, so downloads are out of scope.
+
+**Files:**
+- Create: `android/app/src/main/java/xyz/skycord/android/core/PickerTypes.kt`
+- Test: `android/app/src/test/java/xyz/skycord/android/core/PickerTypesTest.kt`
+- Modify: `android/app/src/main/java/xyz/skycord/android/MainActivity.kt`
+
+**Interfaces:**
+- Consumes: `Origins.of`, `MainActivity.currentServer`.
+- Produces: `PickerTypes.mimeTypes(accept: List<String>, mimeForExtension: (String) -> String?): List<String>`; the current server's page can open Android's file picker (single or multiple), and a cancelled pick tells the page nothing was chosen.
+
+- [ ] **Step 1: Write the failing test** — `PickerTypesTest.kt`
+
+```kotlin
+package xyz.skycord.android.core
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class PickerTypesTest {
+    private val known = mapOf("mp3" to "audio/mpeg", "flac" to "audio/flac", "m4a" to "audio/mp4")
+    private val guess = { ext: String -> known[ext] }
+
+    @Test fun mimeTypesPassThrough_extensionsAreLookedUp_unknownOnesDropped() {
+        assertEquals(
+            listOf("audio/*", "audio/mpeg", "audio/flac", "audio/mp4"),
+            PickerTypes.mimeTypes(listOf("audio/*,.mp3,.flac,.opus,.m4a"), guess),
+        )
+    }
+
+    @Test fun webViewMaySplitTheAttributeOrNot_andCaseAndSpacesDoNotMatter() {
+        assertEquals(listOf("image/*", "audio/mpeg"), PickerTypes.mimeTypes(listOf(" IMAGE/* ", ".MP3", "image/*"), guess))
+    }
+
+    @Test fun nothingUsable_meansAnything() {
+        assertEquals(emptyList<String>(), PickerTypes.mimeTypes(listOf(""), guess))
+        assertEquals(emptyList<String>(), PickerTypes.mimeTypes(emptyList(), guess))
+        assertEquals(emptyList<String>(), PickerTypes.mimeTypes(listOf("junk", ".opus"), guess))
+    }
+}
+```
+
+- [ ] **Step 2: Run it and see it fail**
+
+Run: `source android/env.sh && cd android && ./gradlew test`
+Expected: compilation fails — `Unresolved reference: PickerTypes`.
+
+- [ ] **Step 3: Implement** — `PickerTypes.kt`
+
+```kotlin
+package xyz.skycord.android.core
+
+/**
+ * An `<input accept>` as MIME types for Android's picker. WebView hands the
+ * attribute over either whole ("audio/*,.mp3") or split; extensions such as
+ * .flac are looked up, because Android's picker filters by type only. An
+ * empty answer means any file.
+ */
+object PickerTypes {
+    fun mimeTypes(accept: List<String>, mimeForExtension: (String) -> String?): List<String> =
+        accept.asSequence()
+            .flatMap { it.split(',') }
+            .map { it.trim().lowercase() }
+            .mapNotNull { entry ->
+                when {
+                    entry.startsWith('.') && entry.length > 1 -> mimeForExtension(entry.drop(1))
+                    entry.contains('/') -> entry
+                    else -> null
+                }
+            }
+            .distinct()
+            .toList()
+}
+```
+
+- [ ] **Step 4: Run the tests**
+
+Run: `source android/env.sh && cd android && ./gradlew test`
+Expected: `BUILD SUCCESSFUL`; `PickerTypesTest` 3/3.
+
+- [ ] **Step 5: Open the picker from the page** — in `MainActivity.kt` add imports `android.webkit.MimeTypeMap`, `android.webkit.ValueCallback`, `xyz.skycord.android.core.PickerTypes`, and the field and launcher next to the permission launcher:
+
+```kotlin
+    /** The page waiting for files; answered exactly once, with null on cancel. */
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+
+    private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val callback = fileCallback ?: return@registerForActivityResult
+        fileCallback = null
+        callback.onReceiveValue(pickedUris(result.resultCode, result.data))
+    }
+```
+
+In the `WebChromeClient` object, next to `onPermissionRequest`:
+
+```kotlin
+            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean =
+                showFilePicker(view, callback, params)
+```
+
+And the methods:
+
+```kotlin
+    /** Only the current server's own page may open the phone's files. */
+    private fun showFilePicker(view: WebView, callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean {
+        val server = currentServer
+        if (server == null || Origins.of(view.url ?: "") != server) {
+            callback.onReceiveValue(null)
+            return true
+        }
+        fileCallback?.onReceiveValue(null)
+        fileCallback = callback
+        val types = PickerTypes.mimeTypes(params.acceptTypes.toList()) { MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType(types.singleOrNull() ?: "*/*")
+        if (types.size > 1) intent.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+        if (params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        return try {
+            pickFiles.launch(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            fileCallback = null
+            callback.onReceiveValue(null)
+            true
+        }
+    }
+
+    private fun pickedUris(resultCode: Int, data: Intent?): Array<Uri>? {
+        if (resultCode != RESULT_OK || data == null) return null
+        data.clipData?.let { clip -> return Array(clip.itemCount) { clip.getItemAt(it).uri } }
+        return data.data?.let { arrayOf(it) }
+    }
+```
+
+- [ ] **Step 6: Build and try it**
+
+Run: `source android/env.sh && cd android && ./gradlew test assembleDebug`
+Expected: `BUILD SUCCESSFUL`.
+
+On the emulator (started with `-ports 6554,6555`), with the dev client on 5500 and `adb reverse tcp:5500 tcp:5500`: open `http://localhost:5500`, sign in, open a server's settings and choose to change its icon.
+Expected: Android's file picker opens (`adb shell dumpsys window | grep mCurrentFocus` shows `documentsui`); back returns to the app with the dialog still open and nothing chosen. If the dev stack is not running, the end-to-end task covers this instead — say so in the report.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add android/app/src/main/java/xyz/skycord/android/core/PickerTypes.kt android/app/src/test/java/xyz/skycord/android/core/PickerTypesTest.kt android/app/src/main/java/xyz/skycord/android/MainActivity.kt
+git commit -m "Android: a page's file inputs open the phone's file picker
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
 ### Task 11: The web side — `appBridge()`, back, bar colours, diagnostics
 
 **Files:**
@@ -3195,7 +3352,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: the debug APK (Tasks 2–10), the web changes (Task 11), the music dev stack — client on 5500 (Vite, `host: 0.0.0.0`), API on 3050 (`node .dev/desk-api.mjs` in `H:\projects\sykord-wt`), Playwright from `desktop/node_modules/playwright-core` (what the desktop probes use).
-- Produces: a script that exits 0 with `21/21 passed`.
+- Produces: a script that exits 0 with `23/23 passed`.
 
 The dev API pins its session cookie to `localhost` (`COOKIE_DOMAIN: 'localhost'` in `.dev/desk-api.mjs`), so in development a session can only live on `http://localhost:5500`. The second server — the same client as `http://127.0.0.1:5500`, a different origin — is therefore checked for asking its own sign-in, and the first for still being signed in after the switch. That is the property the spec cares about: visiting one server never signs you out of another.
 
@@ -3330,6 +3487,22 @@ check('back at the list puts the app in the background', !(await inFront()))
 await launch()
 check('reopening shows the same server, still signed in', await app.evaluate(() => !document.querySelector('#login-identifier')))
 
+// ── the file picker ──────────────────────────────────────────────────────
+// A real tap (Playwright's click is a user gesture), as the icon and music
+// pickers get; Chromium only opens a picker for one.
+await app.evaluate(() => {
+  const input = Object.assign(document.createElement('input'), { type: 'file', id: 'e2e-file', accept: 'audio/*,.flac' })
+  Object.assign(input.style, { position: 'fixed', top: '0', left: '0', width: '200px', height: '60px', zIndex: '99999' })
+  input.addEventListener('change', () => { window.__e2ePicked = input.files.length })
+  document.body.appendChild(input)
+})
+await app.click('#e2e-file')
+await wait(1500)
+check('a file input opens the phone’s picker', (await sh('dumpsys window | grep mCurrentFocus')).includes('documentsui'))
+await back(); await wait(800)
+check('cancelling the picker returns to the app with nothing chosen',
+  (await inFront()) && await app.evaluate(() => { const n = window.__e2ePicked; document.querySelector('#e2e-file')?.remove(); return n === undefined || n === 0 }))
+
 // ── a second server, and the first stays signed in ──────────────────────
 // Fire and forget: the page is replaced before the reply could arrive.
 await app.evaluate(() => { void window.skycordAndroid.changeInstance() })
@@ -3367,7 +3540,7 @@ process.exit(results.every(Boolean) ? 0 : 1)
 With the dev stack up (client 5500, API 3050), the emulator running and the debug APK from Task 11's state installed:
 
 Run: `source android/env.sh && adb reverse tcp:5500 tcp:5500 && node android/e2e/shell.e2e.mjs`
-Expected: `21/21 passed`. A failure is a slice-1 bug: fix it in the task it belongs to (with a unit test where the decision is in `core/`), then rerun.
+Expected: `23/23 passed`. A failure is a slice-1 bug: fix it in the task it belongs to (with a unit test where the decision is in `core/`), then rerun.
 
 - [ ] **Step 3: The old-WebView screen (optional, needs the API 26 image from Task 1)**
 
