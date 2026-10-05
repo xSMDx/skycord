@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -19,6 +21,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +31,8 @@ import androidx.webkit.WebResourceErrorCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import androidx.webkit.WebViewFeature
+import xyz.skycord.android.core.BackAction
+import xyz.skycord.android.core.BackGate
 import xyz.skycord.android.core.CssColor
 import xyz.skycord.android.core.Nav
 import xyz.skycord.android.core.NavigationPolicy
@@ -67,6 +72,9 @@ class MainActivity : AppCompatActivity() {
     // history.back() could land on the launcher entry while currentServer is set,
     // where every launcher call is refused (history moves skip shouldOverrideUrlLoading).
     private var clearHistoryOnFinish = false
+
+    private val backGate = BackGate()
+    private val main = Handler(Looper.getMainLooper())
 
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         val (request, resources) = pendingPermission ?: return@registerForActivityResult
@@ -132,6 +140,21 @@ class MainActivity : AppCompatActivity() {
     // No refresh here: the first openServer or showLauncher registers, just before it loads.
     private fun onCreateBridge() {
         bridge = BridgeHost(this)
+        bridge.onBackAnswer = { id, used -> backGate.answer(id, used)?.let(::act) }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = onBack()
+        })
+    }
+
+    /** Offered to the page first; 300 ms of silence counts as unused. */
+    private fun onBack() {
+        val id = backGate.ask()
+        if (!bridge.askBack(id)) { backGate.timeout(id)?.let(::act); return }
+        main.postDelayed({ backGate.timeout(id)?.let(::act) }, backGate.timeoutMs)
+    }
+
+    private fun act(action: BackAction) {
+        if (action == BackAction.TO_BACKGROUND) moveTaskToBack(true)
     }
 
     private fun onUpdateState() {
