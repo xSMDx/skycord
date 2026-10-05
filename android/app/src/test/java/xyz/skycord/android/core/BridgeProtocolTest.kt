@@ -44,7 +44,7 @@ class BridgeProtocolTest {
     }
 
     @Test fun aMessageNestedTooDeep_orTooLarge_isNothing() {
-        assertNull(BridgeProtocol.parse("""{"type":"call","method":"x","args":${"[".repeat(100)}${"]".repeat(100)}}"""))
+        assertNull(BridgeProtocol.parse("""{"type":"call","method":"x","args":${"[".repeat(300)}${"]".repeat(300)}}"""))
         assertNull(BridgeProtocol.parse("""{"type":"hello","pad":"${"x".repeat(70_000)}"}"""))
         // Brackets inside strings are text, not nesting.
         val c = BridgeProtocol.parse("""{"type":"call","id":1,"method":"launcher.save","args":[{"origin":"https://x.y","name":"[[[[[[[[[[[[[[[[[[[[{"}]}""") as Incoming.Call
@@ -72,5 +72,17 @@ class BridgeProtocolTest {
     @Test fun aMethodNameHasALimit() {
         assertEquals("m".repeat(40), (BridgeProtocol.parse("""{"type":"call","method":"${"m".repeat(40)}"}""") as Incoming.Call).method)
         assertNull(BridgeProtocol.parse("""{"type":"call","method":"${"m".repeat(41)}"}"""))
+    }
+
+    @Test fun quotingTricks_cannotHideNesting() {
+        assertNull(BridgeProtocol.parse("{'\"':" + "[".repeat(60_000)))
+        assertNull(BridgeProtocol.parse("""{"type":"hello","a":'"',"b":${"[".repeat(300)}"""))
+        assertNull(BridgeProtocol.parse("""{"type":"hello","a":/* " */1,"b":${"[".repeat(300)}"""))
+    }
+
+    @Test fun upTo256Brackets_isFine() {
+        val ok = """{"type":"call","method":"x","args":[{"name":"${"[".repeat(253)}"}]}"""
+        assertEquals("[".repeat(253), (BridgeProtocol.parse(ok) as Incoming.Call).args.getJSONObject(0).getString("name"))
+        assertNull(BridgeProtocol.parse("""{"type":"call","method":"x","args":[{"name":"${"[".repeat(254)}"}]}"""))
     }
 }

@@ -13,14 +13,17 @@ sealed interface Incoming {
 object BridgeProtocol {
     private const val MAX_METHOD = 40
     // Far above any real message (the largest is a saved server's name and
-    // icon address). Size and depth are checked before parsing: Android's JSON
+    // icon address). The bracket count is checked before parsing: Android's JSON
     // parser is recursive, and thousands of nested brackets would overflow the
-    // main thread's stack with an Error that no catch here would stop.
+    // main thread's stack with an Error that no catch here would stop. The parsers
+    // accept single quotes, comments and bare literals, so a string-aware scan
+    // can be fooled; counting raw brackets cannot. Any nesting of depth d needs
+    // at least d opening brackets. 256 levels is safe to recurse on any thread.
     private const val MAX_MESSAGE = 64 * 1024
-    private const val MAX_DEPTH = 16
+    private const val MAX_OPENS = 256
 
     fun parse(text: String): Incoming? {
-        if (text.length > MAX_MESSAGE || tooDeep(text)) return null
+        if (text.length > MAX_MESSAGE || text.count { it == '[' || it == '{' } > MAX_OPENS) return null
         return try {
             val o = JSONObject(text)
             when (o.opt("type")) {
@@ -31,6 +34,8 @@ object BridgeProtocol {
             }
         } catch (e: Exception) {
             null
+        } catch (e: StackOverflowError) {
+            null // Last line of defence; the bracket bound is the real guard.
         }
     }
 
@@ -44,27 +49,6 @@ object BridgeProtocol {
         val args = o.opt("args")
         if (args != null && args !is JSONArray) return null
         return Incoming.Call(id as? Int, method, args as? JSONArray ?: JSONArray())
-    }
-
-    /** True when brackets nest deeper than MAX_DEPTH; brackets inside strings don't count. */
-    private fun tooDeep(text: String): Boolean {
-        var depth = 0
-        var inString = false
-        var escaped = false
-        for (c in text) {
-            if (inString) {
-                when {
-                    escaped -> escaped = false
-                    c == '\\' -> escaped = true
-                    c == '"' -> inString = false
-                }
-            } else when (c) {
-                '"' -> inString = true
-                '[', '{' -> if (++depth > MAX_DEPTH) return true
-                ']', '}' -> depth--
-            }
-        }
-        return false
     }
 
     fun reply(id: Int, value: Any?): String =
