@@ -27,12 +27,16 @@ runs before every build.
 ## Run on the emulator
 
 ```bash
-emulator -avd skycord35 -no-snapshot -no-audio &
+emulator -avd skycord35 -ports 6554,6555 -no-snapshot -no-audio &
 adb wait-for-device
 adb reverse tcp:5500 tcp:5500     # the dev client, as http://localhost:5500 — a secure page
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n xyz.skycord.android/.MainActivity
 ```
+
+Windows reserves TCP 5541–5740 on this machine, which covers the emulator's
+default ports (5554–5682); without `-ports` it exits silently, and adb then
+calls the device `emulator-6554`.
 
 Debug builds allow `chrome://inspect` on the WebView.
 
