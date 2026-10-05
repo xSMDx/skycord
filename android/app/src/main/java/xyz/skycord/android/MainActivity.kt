@@ -13,7 +13,9 @@ import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
+import android.webkit.MimeTypeMap
 import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -37,6 +39,7 @@ import xyz.skycord.android.core.CssColor
 import xyz.skycord.android.core.Nav
 import xyz.skycord.android.core.NavigationPolicy
 import xyz.skycord.android.core.Origins
+import xyz.skycord.android.core.PickerTypes
 import xyz.skycord.android.core.ServerStore
 
 class MainActivity : AppCompatActivity() {
@@ -81,6 +84,15 @@ class MainActivity : AppCompatActivity() {
         pendingPermission = null
         val granted = resources.filter { ContextCompat.checkSelfPermission(this, androidPermissionFor(it)) == PackageManager.PERMISSION_GRANTED }
         if (granted.isEmpty()) request.deny() else request.grant(granted.toTypedArray())
+    }
+
+    /** The page waiting for files; answered exactly once, with null on cancel. */
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+
+    private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val callback = fileCallback ?: return@registerForActivityResult
+        fileCallback = null
+        callback.onReceiveValue(pickedUris(result.resultCode, result.data))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -228,6 +240,9 @@ class MainActivity : AppCompatActivity() {
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) = handlePermission(request)
 
+            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean =
+                showFilePicker(view, callback, params)
+
             override fun onPermissionRequestCanceled(request: PermissionRequest) {
                 if (pendingPermission?.first == request) pendingPermission = null
             }
@@ -292,5 +307,36 @@ class MainActivity : AppCompatActivity() {
         pendingPermission?.first?.deny()
         pendingPermission = request to wanted
         askPermissions.launch(missing.toTypedArray())
+    }
+
+    /** Only the current server's own page may open the phone's files. */
+    private fun showFilePicker(view: WebView, callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean {
+        val server = currentServer
+        if (server == null || Origins.of(view.url ?: "") != server) {
+            callback.onReceiveValue(null)
+            return true
+        }
+        fileCallback?.onReceiveValue(null)
+        fileCallback = callback
+        val types = PickerTypes.mimeTypes(params.acceptTypes.toList()) { MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType(types.singleOrNull() ?: "*/*")
+        if (types.size > 1) intent.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+        if (params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        return try {
+            pickFiles.launch(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            fileCallback = null
+            callback.onReceiveValue(null)
+            true
+        }
+    }
+
+    private fun pickedUris(resultCode: Int, data: Intent?): Array<Uri>? {
+        if (resultCode != RESULT_OK || data == null) return null
+        data.clipData?.let { clip -> return Array(clip.itemCount) { clip.getItemAt(it).uri } }
+        return data.data?.let { arrayOf(it) }
     }
 }
