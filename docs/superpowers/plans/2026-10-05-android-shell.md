@@ -1190,6 +1190,7 @@ class UpdateFeedTest {
 package xyz.skycord.android.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UpdateStateTest {
@@ -1221,7 +1222,7 @@ class UpdateStateTest {
     @Test fun speaksTheWebsShape() {
         val j = UpdateState.INITIAL.toJson()
         assertEquals("idle", j.getString("phase"))
-        for (k in listOf("version", "percent", "bytesPerSecond", "lastCheckedAt", "error")) assert(j.has(k)) { k }
+        for (k in listOf("version", "percent", "bytesPerSecond", "lastCheckedAt", "error")) assertTrue(k, j.has(k))
     }
 }
 ```
@@ -2581,6 +2582,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ```js
 // window.skycordLauncher — injected into the app's own launcher page only.
+// Its call/reply plumbing mirrors app-shim.js on purpose: each shim is
+// injected alone into a different origin's page at document start, before
+// any script of the page runs, so there is no shared module to put it in.
 (() => {
   const port = window.__skycordPort
   if (!port || window.skycordLauncher) return
