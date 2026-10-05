@@ -33,4 +33,16 @@ class UpdateFeedTest {
         assertFalse(UpdateFeed.isNewer("0.20.9", "0.21.0"))
         assertFalse(UpdateFeed.isNewer("garbage", "0.21.0"))
     }
+
+    @Test fun onlyTheExactPublishedAddress_forThatVersion() {
+        val bad = listOf(
+            "${UpdateFeed.DOWNLOAD_PREFIX}../../../../evil/repo/releases/download/x.apk",
+            "${UpdateFeed.DOWNLOAD_PREFIX}android-v0.21.1/%2e%2e/%2e%2e/evil.apk",
+            "${UpdateFeed.DOWNLOAD_PREFIX}android-v0.21.1/skycord-0.21.1.apk ",
+            "${UpdateFeed.DOWNLOAD_PREFIX}android-v0.21.1/skycord-0.21.1.apk?x=1",
+            "HTTPS://github.com/xSMDx/skycord-android-releases/releases/download/android-v0.21.1/skycord-0.21.1.apk",
+            "${UpdateFeed.DOWNLOAD_PREFIX}android-v0.21.0/skycord-0.21.0.apk",
+        )
+        for (u in bad) assertNull(u, UpdateFeed.parse("""{"version":"0.21.1","url":"$u","sha256":"$sha"}"""))
+    }
 }

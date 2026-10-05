@@ -6,8 +6,8 @@ data class Feed(val version: String, val url: String, val sha256: String)
 
 /**
  * latest.json, published with every release. Nothing in it is trusted until
- * it passes here: a plain X.Y.Z version, a download from our own releases
- * repo over https, and a SHA-256 the downloaded file must match.
+ * it passes here: a plain X.Y.Z version, the exact download address of that
+ * version in our own releases repo, and a SHA-256 the downloaded file must match.
  */
 object UpdateFeed {
     const val FEED_URL = "https://github.com/xSMDx/skycord-android-releases/releases/latest/download/latest.json"
@@ -20,10 +20,13 @@ object UpdateFeed {
         val version = o.getString("version")
         val url = o.getString("url")
         val sha = o.getString("sha256").lowercase()
-        if (VERSION.matches(version) && url.startsWith(DOWNLOAD_PREFIX) && SHA.matches(sha)) Feed(version, url, sha) else null
+        // Exactly what the release workflow publishes, tied to the version: a prefix alone would let ../ or %2e%2e walk out of our repo.
+        if (VERSION.matches(version) && url == downloadUrl(version) && SHA.matches(sha)) Feed(version, url, sha) else null
     } catch (e: Exception) {
         null
     }
+
+    fun downloadUrl(version: String): String = "${DOWNLOAD_PREFIX}android-v$version/skycord-$version.apk"
 
     fun isNewer(candidate: String, current: String): Boolean {
         val a = parts(candidate) ?: return false

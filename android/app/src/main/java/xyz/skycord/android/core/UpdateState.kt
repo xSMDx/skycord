@@ -38,7 +38,7 @@ private fun clamp(n: Double) = if (n.isFinite()) n.coerceIn(0.0, 100.0) else 0.0
 fun reduce(s: UpdateState, e: UpdateEvent): UpdateState = when (e) {
     UpdateEvent.Check -> s.copy(phase = UpdatePhase.CHECKING)
     is UpdateEvent.Available -> s.copy(phase = UpdatePhase.AVAILABLE, version = e.version, percent = 0.0, bytesPerSecond = 0.0, error = "")
-    is UpdateEvent.Progress -> s.copy(phase = UpdatePhase.DOWNLOADING, percent = clamp(e.percent), bytesPerSecond = e.bytesPerSecond, error = "")
+    is UpdateEvent.Progress -> s.copy(phase = UpdatePhase.DOWNLOADING, percent = clamp(e.percent), bytesPerSecond = if (e.bytesPerSecond.isFinite()) e.bytesPerSecond else 0.0, error = "")
     is UpdateEvent.Downloaded -> s.copy(phase = UpdatePhase.READY, version = e.version, percent = 100.0, bytesPerSecond = 0.0, error = "")
     is UpdateEvent.None -> s.copy(phase = UpdatePhase.IDLE, version = "", percent = 0.0, bytesPerSecond = 0.0, lastCheckedAt = e.at, error = "")
     // A downloaded update stays installable when a later check fails.

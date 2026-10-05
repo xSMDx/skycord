@@ -35,4 +35,11 @@ class UpdateStateTest {
         assertEquals("idle", j.getString("phase"))
         for (k in listOf("version", "percent", "bytesPerSecond", "lastCheckedAt", "error")) assertTrue(k, j.has(k))
     }
+
+    @Test fun aSpeedThatIsNotANumber_neverBreaksTheJson() {
+        val s = reduce(UpdateState.INITIAL, UpdateEvent.Progress(Double.NaN, Double.POSITIVE_INFINITY))
+        assertEquals(0.0, s.percent, 0.0)
+        assertEquals(0.0, s.bytesPerSecond, 0.0)
+        assertEquals("downloading", s.toJson().getString("phase"))
+    }
 }

@@ -6,20 +6,19 @@ package xyz.skycord.android.core
  */
 object CssColor {
     private val RGB = Regex("^rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*(?:,\\s*[\\d.]+\\s*)?\\)$")
+    private val HEX = Regex("^#([0-9a-f]{3}|[0-9a-f]{6})$")
 
     fun parse(css: String): Int? {
         val t = css.trim().lowercase()
         if (t.startsWith("#")) {
+            if (!HEX.matches(t)) return null
             val hex = t.drop(1)
-            val full = when (hex.length) {
-                3 -> hex.map { "$it$it" }.joinToString("")
-                6 -> hex
-                else -> return null
-            }
-            return full.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() }
+            val full = if (hex.length == 3) hex.map { "$it$it" }.joinToString("") else hex
+            return (0xFF000000 or full.toLong(16)).toInt()
         }
         val m = RGB.matchEntire(t) ?: return null
-        val (r, g, b) = m.destructured.toList().map { it.toInt().coerceIn(0, 255) }
+        // A channel too long for an Int is still "too bright": CSS clamps it, and so does this.
+        val (r, g, b) = m.destructured.toList().map { (it.toIntOrNull() ?: 255).coerceIn(0, 255) }
         return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
     }
 

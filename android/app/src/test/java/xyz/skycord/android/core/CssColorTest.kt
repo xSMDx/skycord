@@ -20,4 +20,12 @@ class CssColorTest {
         assertFalse(CssColor.isLight(0xFF111214.toInt()))
         assertTrue(CssColor.isLight(0xFFF2F3F5.toInt()))
     }
+
+    @Test fun aPageCannotBreakItWithStrangeNumbers() {
+        assertEquals(0xFFFF0000.toInt(), CssColor.parse("rgb(99999999999, 0, 0)"))
+        assertEquals(0xFFFF0000.toInt(), CssColor.parse("rgb(300, 0, 0)"))
+        assertNull(CssColor.parse("#-12345"))
+        assertNull(CssColor.parse("#+12345"))
+        assertNull(CssColor.parse("#12g"))
+    }
 }
