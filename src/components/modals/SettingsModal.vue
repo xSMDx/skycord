@@ -42,7 +42,7 @@ import NotificationsPage from '@/components/settings/NotificationsPage.vue'
 import UpdatesPage from '@/components/settings/UpdatesPage.vue'
 import DebugPage from '@/components/settings/DebugPage.vue'
 import { debugUnlocked } from '@/composables/debugUnlock'
-import { desktopBridge } from '@/composables/desktopBridge'
+import { appBridge } from '@/composables/desktopBridge'
 import LegalPage from '@/components/settings/LegalPage.vue'
 
 const emit = defineEmits<{ close: [] }>()
@@ -489,9 +489,9 @@ const navSections = computed<NavSection[]>(() => [
       { id: 'keybinds',   label: 'Keybinds'      },
       { id: 'performance', label: 'Performance'  },
       // Only in the Windows app, which keeps the list of servers.
-      ...(desktopBridge() ? [{ id: 'servers', label: 'Servers' }] : []),
+      ...(appBridge() ? [{ id: 'servers', label: 'Servers' }] : []),
       // Only in the app: a browser updates by reloading.
-      ...(desktopBridge() ? [{ id: 'updates', label: 'Updates' }] : []),
+      ...(appBridge() ? [{ id: 'updates', label: 'Updates' }] : []),
     ]
   },
   {

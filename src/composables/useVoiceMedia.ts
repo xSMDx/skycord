@@ -15,7 +15,7 @@ import { getRoom } from './voiceRoom'
 import { voiceSettings } from './useVoiceSettings'
 import { permits } from './voicePermits'
 import { useViewport } from './useViewport'
-import { desktopBridge } from './desktopBridge'
+import { appBridge } from './desktopBridge'
 import { shareOptions, pickerHints } from './shareOptions'
 import { takeShareAudioTrack, stopShareAudioTrack } from './shareAudioTrack'
 
@@ -187,7 +187,7 @@ export const toggleScreenShare = async (): Promise<string | null> => {
   let publish: TrackPublishOptions | undefined = { simulcast: false, degradationPreference: 'maintain-resolution' }
   // Inside the Windows app, its own picker comes first and brings stream
   // quality and audio with it. Closing it is a choice, not a failure.
-  const bridge = next ? desktopBridge() : null
+  const bridge = next ? appBridge() : null
   let hideOwn = false
   // The app clears `audio` when it wanted to capture an application's sound
   // and could not. A pid with no audio is exactly that case, and the only
@@ -213,7 +213,7 @@ export const toggleScreenShare = async (): Promise<string | null> => {
     } else {
       await stopShareAudioTrack()
       // `bridge` is only read when starting, so ask for it again here.
-      desktopBridge()?.stopShareAudio?.()
+      appBridge()?.stopShareAudio?.()
     }
     // The share is never refused over sound. The video was the point.
     if (audioRefused) return "Couldn't capture that app's sound — sharing video only"
@@ -221,7 +221,7 @@ export const toggleScreenShare = async (): Promise<string | null> => {
   } catch (e) {
     console.warn('[voice-media] screen share toggle cancelled/failed', e)
     await stopShareAudioTrack()
-    desktopBridge()?.stopShareAudio?.()
+    appBridge()?.stopShareAudio?.()
     media.localScreenOn = room.localParticipant.isScreenShareEnabled
     // Cancelling the OS picker rejects with NotAllowedError — that's a user
     // choice, not a failure; stay silent. Anything else deserves a toast.

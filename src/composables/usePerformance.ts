@@ -11,7 +11,7 @@
  */
 import { reactive, computed, watch } from 'vue'
 import { appearance } from './useAppearance'
-import { desktopBridge } from './desktopBridge'
+import { appBridge } from './desktopBridge'
 
 export type PerfLevel = 'max' | 'light'
 
@@ -122,7 +122,7 @@ const apply = () => {
   Object.assign(perf, resolve(perfState.level, perfState.overrides))
   save()
   // Absent on the web; the desktop shell stores these for its next start.
-  desktopBridge()?.performance?.level(perfState.level, {
+  appBridge()?.performance?.level(perfState.level, {
     skycordTitleBar: perf.skycordTitleBar,
     hardwareAcceleration: perf.hardwareAcceleration,
     heapCapMb: perf.heapCapMb,

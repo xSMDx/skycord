@@ -8,13 +8,13 @@
  */
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
-import { desktopBridge, type DesktopBridge } from '@/composables/desktopBridge'
+import { appBridge, type DesktopBridge } from '@/composables/desktopBridge'
 import {
   perf, perfState, setPerfLevel, setPerfOverride, clearPerfOverrides,
   dismissSuggestion, suggestsLight, restartNeeded, type PerfLevel,
 } from '@/composables/usePerformance'
 
-const desktop: DesktopBridge | null = desktopBridge()
+const desktop: DesktopBridge | null = appBridge()
 
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
   { id: 'max', name: 'Max', line: 'Everything on. The default.' },

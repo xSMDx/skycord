@@ -111,11 +111,26 @@ export interface DesktopBridge {
     keepInTray(): Promise<boolean>
     setKeepInTray(on: boolean): void
   }
+  /**
+   * Android only: the back button, offered to the page first. A handler
+   * returns true when it used the press. Returns a function that stops
+   * listening.
+   */
+  onBack?(cb: () => boolean): () => void
+  /** Android only: the theme's colours for the status and navigation bars. */
+  colors?(c: { bar: string; text: string }): void
 }
 
-export const desktopBridge = (): DesktopBridge | null => {
-  const b = (globalThis as { skycordDesktop?: unknown }).skycordDesktop
-  return b && typeof b === 'object' && typeof (b as DesktopBridge).changeInstance === 'function'
-    ? b as DesktopBridge
-    : null
+/**
+ * The app's bridge — the Windows app's (`skycordDesktop`) or the Android
+ * app's (`skycordAndroid`) — or null in a browser. Every member past
+ * `changeInstance` is optional and checked where it is used, so one shape
+ * serves both.
+ */
+export const appBridge = (): DesktopBridge | null => {
+  const g = globalThis as { skycordDesktop?: unknown; skycordAndroid?: unknown }
+  for (const b of [g.skycordDesktop, g.skycordAndroid]) {
+    if (b && typeof b === 'object' && typeof (b as DesktopBridge).changeInstance === 'function') return b as DesktopBridge
+  }
+  return null
 }

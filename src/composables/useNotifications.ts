@@ -10,12 +10,12 @@
 import { reactive, ref } from 'vue'
 import type { Notice } from './notifyRules'
 import { pickSink, type RingInfo, type CallTrayState, type NoticeActivation } from './notificationSinks'
-import { desktopBridge } from './desktopBridge'
+import { appBridge } from './desktopBridge'
 import { roundIcon } from './noticeIcon'
 import { deliver } from './notificationSinks'
 import { notificationPrefs } from './notificationPrefs'
 
-const sink = pickSink(desktopBridge())
+const sink = pickSink(appBridge())
 export const desktopDelivers = sink.kind === 'desktop'
 
 /**

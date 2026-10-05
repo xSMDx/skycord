@@ -35,3 +35,17 @@ describe('diagnosticsText', () => {
     for (const bad of ['token', 'cookie', 'password', '@']) expect(t).not.toContain(bad)
   })
 })
+
+describe('on Android', () => {
+  it('names the WebView instead of Electron, and leaves out desktop-only lines', async () => {
+    const { diagnosticsText } = await import('../diagnosticsText')
+    const text = diagnosticsText(
+      { app: '0.21.0', electron: '', chromium: '130.0.6723.58', node: '', platform: 'android', osVersion: 'Android 14 (API 34)', addonLoaded: false, perAppAudio: false },
+      { origin: 'https://app.skycord.xyz', bundle: 'index-x.js', workletLoaded: true, update: 'Skycord is up to date' },
+    )
+    expect(text).toContain('Android WebView 130.0.6723.58')
+    expect(text).not.toContain('Electron')
+    expect(text).not.toContain('per-app audio')
+    expect(text).toContain('instance: https://app.skycord.xyz')
+  })
+})

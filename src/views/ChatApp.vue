@@ -14,6 +14,9 @@ import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireCh
 import { avatarFor } from '@/composables/useAvatar'
 import { useUpdates } from '@/composables/useUpdates'
 import { shouldPrompt } from '@/composables/updatePrompt'
+import { appBridge } from '@/composables/desktopBridge'
+import { backAction, overlayOpen, pressEscape } from '@/composables/androidBack'
+import { useAndroidChrome } from '@/composables/androidChrome'
 import { useSearch, type SearchHit } from '@/composables/useSearch'
 import type { SuggestMember, SuggestChannel } from '@/composables/searchSuggest'
 import SearchField        from '@/components/search/SearchField.vue'
@@ -362,6 +365,19 @@ const groupsData    = ref<Group[]>([])
 const { open: searchResultsOpen, setScope: setSearchScope, close: closeSearch } = useSearch()
 const showSearchFilters = ref(false)
 const showSearchScreen  = ref(false)
+
+// Android: the back button, offered to the page first (see androidBack.ts),
+// and the system bars in the theme's colour.
+const stopAndroidBack = appBridge()?.onBack?.(() => {
+  const a = backAction({ searchOpen: showSearchScreen.value, overlayOpen: overlayOpen(), onConversation: mobileNav.onConversation.value })
+  if (a === 'close-search') showSearchScreen.value = false
+  else if (a === 'escape') pressEscape()
+  else if (a === 'to-list') mobileNav.backToList()
+  return a !== 'none'
+})
+onBeforeUnmount(() => stopAndroidBack?.())
+useAndroidChrome()
+
 /** The result opened last, marked in the panel so you can see where you were. */
 const openedResultId    = ref<string | null>(null)
 

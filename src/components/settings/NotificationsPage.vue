@@ -10,10 +10,10 @@
  */
 import { ref, onMounted } from 'vue'
 import { notificationPrefs, setNotificationPref, type NotificationPrefKey } from '@/composables/notificationPrefs'
-import { desktopBridge } from '@/composables/desktopBridge'
+import { appBridge } from '@/composables/desktopBridge'
 import { soundMessage, soundRingOnce } from '@/composables/useSounds'
 
-const notifications = desktopBridge()?.notifications ?? null
+const notifications = appBridge()?.notifications ?? null
 const permission = ref<NotificationPermission | 'unsupported'>(
   typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
 const keepInTray = ref<boolean | null>(null)

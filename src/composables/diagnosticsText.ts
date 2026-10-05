@@ -16,17 +16,19 @@ export interface DiagnosticsExtra {
 
 const yn = (b: boolean) => (b ? 'yes' : 'no')
 
-export const diagnosticsText = (f: AboutFacts, x: DiagnosticsExtra): string => [
-  `Skycord ${f.app}`,
-  `Electron ${f.electron} · Chromium ${f.chromium} · Node ${f.node}`,
-  `${f.platform} ${f.osVersion}`,
-  '',
-  `instance: ${x.origin}`,
-  `bundle: ${x.bundle}`,
-  '',
-  `addon loaded: ${yn(f.addonLoaded)}`,
-  `per-app audio: ${yn(f.perAppAudio)}`,
-  `worklet: ${x.workletLoaded ? 'loaded' : 'not loaded'}`,
-  '',
-  `updates: ${x.update}`,
-].join('\n')
+export const diagnosticsText = (f: AboutFacts, x: DiagnosticsExtra): string => {
+  const android = f.platform === 'android'
+  return [
+    `Skycord ${f.app}`,
+    android ? `Android WebView ${f.chromium}` : `Electron ${f.electron} · Chromium ${f.chromium} · Node ${f.node}`,
+    android ? f.osVersion : `${f.platform} ${f.osVersion}`,
+    '',
+    `instance: ${x.origin}`,
+    `bundle: ${x.bundle}`,
+    '',
+    ...(android ? [] : [`addon loaded: ${yn(f.addonLoaded)}`, `per-app audio: ${yn(f.perAppAudio)}`]),
+    `worklet: ${x.workletLoaded ? 'loaded' : 'not loaded'}`,
+    '',
+    `updates: ${x.update}`,
+  ].join('\n')
+}
