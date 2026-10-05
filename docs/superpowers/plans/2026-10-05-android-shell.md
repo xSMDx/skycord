@@ -3351,10 +3351,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `android/e2e/shell.e2e.mjs`
 
 **Interfaces:**
-- Consumes: the debug APK (Tasks 2–10), the web changes (Task 11), the music dev stack — client on 5500 (Vite, `host: 0.0.0.0`), API on 3050 (`node .dev/desk-api.mjs` in `H:\projects\sykord-wt`), Playwright from `desktop/node_modules/playwright-core` (what the desktop probes use).
+- Consumes: the debug APK (Tasks 2–10), the web changes (Task 11), the music dev stack — client on 6200 (Vite, `host: 0.0.0.0`), API on 3050 (`node .dev/desk-api.mjs` in `H:\projects\sykord-wt`), Playwright from `desktop/node_modules/playwright-core` (what the desktop probes use).
 - Produces: a script that exits 0 with `23/23 passed`.
 
-The dev API pins its session cookie to `localhost` (`COOKIE_DOMAIN: 'localhost'` in `.dev/desk-api.mjs`), so in development a session can only live on `http://localhost:5500`. The second server — the same client as `http://127.0.0.1:5500`, a different origin — is therefore checked for asking its own sign-in, and the first for still being signed in after the switch. That is the property the spec cares about: visiting one server never signs you out of another.
+Port note (2026-10-05): Windows' reserved TCP ranges on this machine grew to cover 5041–5740, so the dev client moved from 5500 to **6200** (`npx vite --host 0.0.0.0 --port 6200 --strictPort` in the worktree), and `.dev/desk-api.mjs` now has `CLIENT_ORIGIN: 'http://localhost:6200'`. Check `netsh interface ipv4 show excludedportrange protocol=tcp` if a port suddenly refuses to bind.
+
+The dev API pins its session cookie to `localhost` (`COOKIE_DOMAIN: 'localhost'` in `.dev/desk-api.mjs`), so in development a session can only live on `http://localhost:6200`. The second server — the same client as `http://127.0.0.1:6200`, a different origin — is therefore checked for asking its own sign-in, and the first for still being signed in after the switch. That is the property the spec cares about: visiting one server never signs you out of another.
 
 - [ ] **Step 1: Write the script** — `android/e2e/shell.e2e.mjs`
 
@@ -3363,13 +3365,13 @@ The dev API pins its session cookie to `localhost` (`COOKIE_DOMAIN: 'localhost'`
  * The Android shell, end to end, on the emulator.
  *
  * Needs: the emulator running (`emulator -avd skycord35 -ports 6554,6555`), the debug APK
- * installed, `adb reverse tcp:5500 tcp:5500`, and the dev stack: the client
- * on 5500 and its API on 3050 (`node .dev/desk-api.mjs` in
+ * installed, `adb reverse tcp:6200 tcp:6200`, and the dev stack: the client
+ * on 6200 and its API on 3050 (`node .dev/desk-api.mjs` in
  * H:\projects\sykord-wt). It makes its own throwaway account on that local
  * API; nothing here touches a real server.
  *
- * The dev API pins its cookie to `localhost`, so only http://localhost:5500
- * can hold a session. The second server (http://127.0.0.1:5500) is checked
+ * The dev API pins its cookie to `localhost`, so only http://localhost:6200
+ * can hold a session. The second server (http://127.0.0.1:6200) is checked
  * for asking its own sign-in, and the first for staying signed in.
  *
  *   node android/e2e/shell.e2e.mjs
@@ -3442,15 +3444,15 @@ await launcher.click('#check')
 check('an unreachable address says so', await passes(launcher.waitForFunction(
   () => /Couldn.t reach/.test(document.querySelector('#problem')?.textContent ?? ''), null, { timeout: 10000 })))
 
-await launcher.fill('#address', 'http://localhost:5500')
+await launcher.fill('#address', 'http://localhost:6200')
 await launcher.click('#check')
 const carded = await passes(launcher.waitForSelector('#found:not([hidden])', { timeout: 10000 }))
-check('a real server shows its card', carded && (await launcher.locator('#found-host').textContent()) === 'localhost:5500')
+check('a real server shows its card', carded && (await launcher.locator('#found-host').textContent()) === 'localhost:6200')
 check('localhost gets no http warning', await launcher.locator('#found-warning').isHidden())
 await launcher.click('#found-open')
 
 // ── sign in ──────────────────────────────────────────────────────────────
-let app = await pageOf('localhost:5500')
+let app = await pageOf('localhost:6200')
 check('the server\u2019s own sign-in page loads', await passes(app.waitForSelector('#login-identifier', { timeout: 30000 })))
 check('the bridge is there', await app.evaluate(() => window.skycordAndroid?.platform === 'android'))
 await app.fill('#login-identifier', account.username)
@@ -3508,25 +3510,25 @@ check('cancelling the picker returns to the app with nothing chosen',
 await app.evaluate(() => { void window.skycordAndroid.changeInstance() })
 launcher = await pageOf('appassets.androidplatform.net')
 await launcher.waitForSelector('#address')
-await launcher.fill('#address', 'http://127.0.0.1:5500')
+await launcher.fill('#address', 'http://127.0.0.1:6200')
 await launcher.click('#check')
 await launcher.waitForSelector('#found:not([hidden])', { timeout: 10000 })
 await launcher.click('#found-open')
-const second = await pageOf('127.0.0.1:5500')
+const second = await pageOf('127.0.0.1:6200')
 check('a new server asks for its own sign-in', await passes(second.waitForSelector('#login-identifier', { timeout: 30000 })))
 await second.evaluate(() => { void window.skycordAndroid.changeInstance() })
 launcher = await pageOf('appassets.androidplatform.net')
-await launcher.locator('.lc-open', { hasText: 'localhost:5500' }).click()
-app = await pageOf('localhost:5500')
+await launcher.locator('.lc-open', { hasText: 'localhost:6200' }).click()
+app = await pageOf('localhost:6200')
 await wait(3000)
 check('switching back keeps the first server signed in', await app.evaluate(() => !document.querySelector('#login-identifier')))
 
 // ── a server that cannot be reached ──────────────────────────────────────
 await sh(`am force-stop ${PKG}`)
-execSync('adb reverse --remove tcp:5500')
+execSync('adb reverse --remove tcp:6200')
 await launch()
 check('an unreachable server gets the native screen', await passes(device.wait({ text: 'Retry' }, { timeout: 15000 })))
-execSync('adb reverse tcp:5500 tcp:5500')
+execSync('adb reverse tcp:6200 tcp:6200')
 await device.tap({ text: 'Retry' })
 check('Retry loads it once it is back', await passes(device.wait({ text: 'Retry' }, { state: 'gone', timeout: 15000 })))
 
@@ -3537,9 +3539,9 @@ process.exit(results.every(Boolean) ? 0 : 1)
 
 - [ ] **Step 2: Run it**
 
-With the dev stack up (client 5500, API 3050), the emulator running and the debug APK from Task 11's state installed:
+With the dev stack up (client 6200, API 3050), the emulator running and the debug APK from Task 11's state installed:
 
-Run: `source android/env.sh && adb reverse tcp:5500 tcp:5500 && node android/e2e/shell.e2e.mjs`
+Run: `source android/env.sh && adb reverse tcp:6200 tcp:6200 && node android/e2e/shell.e2e.mjs`
 Expected: `23/23 passed`. A failure is a slice-1 bug: fix it in the task it belongs to (with a unit test where the decision is in `core/`), then rerun.
 
 - [ ] **Step 3: The old-WebView screen (optional, needs the API 26 image from Task 1)**
