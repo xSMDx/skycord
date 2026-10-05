@@ -47,6 +47,8 @@ class MainActivity : AppCompatActivity() {
         private set
     lateinit var updates: UpdateManager
         private set
+    lateinit var bridge: BridgeHost
+        private set
 
     /** The server whose page is showing; null on the launcher. */
     var currentServer: String? = null
@@ -121,9 +123,14 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    /** Hooks for Tasks 9 and 10; empty until then. */
-    private fun onCreateBridge() {}
-    private fun onUpdateState() {}
+    private fun onCreateBridge() {
+        bridge = BridgeHost(this)
+        bridge.refresh()
+    }
+
+    private fun onUpdateState() {
+        if (::bridge.isInitialized) bridge.pushUpdates(updates.state)
+    }
 
     // With no usable WebView provider the feature checks can throw; the old-WebView screen is the right answer then.
     private fun webViewIsNewEnough(): Boolean = try {
@@ -210,8 +217,9 @@ class MainActivity : AppCompatActivity() {
         web.loadUrl(LAUNCHER_URL)
     }
 
-    /** Hook for Task 9 (the bridge re-registers when the saved list changes). */
-    private fun onServerChanged() {}
+    private fun onServerChanged() {
+        if (::bridge.isInitialized) bridge.refresh()
+    }
 
     private fun showUnreachable(origin: String) {
         val name = store.find(origin)?.name ?: origin
