@@ -34,4 +34,23 @@ class OriginsTest {
         assertNull(Origins.of("intent://scan/#Intent;end"))
         assertNull(Origins.of("chat.example.com"))
     }
+
+    @Test fun onlyTheStartOfAUrlMatters_asInABrowser() {
+        // Chromium leaves these unescaped after the host; the origin is still the server's.
+        assertEquals("https://app.skycord.xyz", Origins.of("https://app.skycord.xyz/search?q=100%"))
+        assertEquals("https://app.skycord.xyz", Origins.of("https://app.skycord.xyz/?f={a}|b#x^y"))
+        assertEquals("https://chat.example.com", Origins.normalise("chat.example.com/x?y=|"))
+        // A backslash ends the host for the web's special schemes, so this is evil.example's page.
+        assertEquals("https://evil.example", Origins.of("https://evil.example\\@good.example/"))
+    }
+
+    @Test fun aPortIsDefaultOnlyForItsOwnScheme_andMustBeAPort() {
+        assertEquals("https://x.example:80", Origins.of("https://x.example:80/"))
+        assertEquals("http://x.example:443", Origins.of("http://x.example:443/"))
+        assertNull(Origins.of("https://x.example:99999/"))
+    }
+
+    @Test fun userInfoIsNotPartOfTheOrigin() {
+        assertEquals("https://x.example", Origins.of("https://u:p@x.example/"))
+    }
 }

@@ -6,6 +6,9 @@ plugins {
 // The release workflow passes -PappVersion=X.Y.Z from the tag. versionCode
 // must only ever grow, so it is derived from the version, not counted.
 val appVersion = (findProperty("appVersion") as String?) ?: "0.21.0"
+require(Regex("""\d+\.\d{1,2}\.\d{1,2}""").matches(appVersion)) {
+    "appVersion must be X.Y.Z with Y and Z below 100 (versionCode is X*10000 + Y*100 + Z); got '$appVersion'"
+}
 val (vMajor, vMinor, vPatch) = appVersion.split(".").map { it.toInt() }
 
 android {
