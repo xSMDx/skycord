@@ -144,6 +144,13 @@ say "Update to a build offered as newer"
 CTX="$(mktemp -d)"
 printf 'FROM %s:%s\nENV SKYCORD_VERSION=%s\n' "$IMAGE" "$VERSION" "$NEXT" > "$CTX/Dockerfile"
 sudo docker build -q -t "$IMAGE:$NEXT" "$CTX" >/dev/null
+# The music image is versioned in step with the app's, so an update to NEXT
+# pulls music at NEXT too — which no registry has. A local copy of the one
+# just installed stands in, the way the app's does. Without it the update
+# could not start music and failed; this rehearsal had never run with music.
+MUSIC_IMAGE="${IMAGE%/*}/skycord-music"
+sudo docker tag "$MUSIC_IMAGE:$VERSION" "$MUSIC_IMAGE:$NEXT"
+sudo docker tag "$MUSIC_IMAGE:$VERSION" "$MUSIC_IMAGE:$BROKEN"
 sudo -E SKYCORD_LOCAL_FILES="$SKYCORD_LOCAL_FILES" skycord update "$NEXT" --yes \
   || fail "the update did not finish"
 grep -q "$NEXT" <<<"$(sudo skycord version)" || fail "the update did not record $NEXT"
