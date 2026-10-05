@@ -29,7 +29,7 @@ runs before every build.
 ```bash
 emulator -avd skycord35 -ports 6554,6555 -no-snapshot -no-audio &
 adb wait-for-device
-adb reverse tcp:5500 tcp:5500     # the dev client, as http://localhost:5500 — a secure page
+adb reverse tcp:6200 tcp:6200     # the dev client, as http://localhost:6200 — a secure page
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n xyz.skycord.android/.MainActivity
 ```

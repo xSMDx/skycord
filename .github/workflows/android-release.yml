@@ -1,0 +1,76 @@
+# The Android app's release. A tag like android-v0.21.0 builds the APK,
+# signs it, and publishes it with latest.json — which installed apps check —
+# to the public releases-only repo.
+name: Android release
+
+on:
+  push:
+    tags: ['android-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Version from the tag
+        id: version
+        run: |
+          v="${GITHUB_REF_NAME#android-v}"
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]{1,2}\.[0-9]{1,2}$' || { echo "Tag version must be X.Y.Z (Y and Z below 100), got '$v'"; exit 1; }
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+      # Refuse rather than sign with a key nobody can sign with again: an APK
+      # signed by a new key cannot update any phone that has the old one.
+      - name: The signing key is there
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: test -n "$KS" || { echo "ANDROID_KEYSTORE_BASE64 is not set"; exit 1; }
+      - name: Unit tests
+        working-directory: android
+        run: ./gradlew test
+      - name: Build and sign
+        working-directory: android
+        env:
+          SKYCORD_KEYSTORE: ${{ runner.temp }}/release.jks
+          SKYCORD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SKYCORD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SKYCORD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          V: ${{ steps.version.outputs.v }}
+        run: |
+          echo "$KS" | base64 -d > "$SKYCORD_KEYSTORE"
+          ./gradlew assembleRelease -PappVersion="$V"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/skycord-$V.apk"
+          rm -f "$SKYCORD_KEYSTORE"
+      - name: latest.json
+        env:
+          V: ${{ steps.version.outputs.v }}
+        run: |
+          SHA=$(sha256sum "$RUNNER_TEMP/skycord-$V.apk" | cut -d' ' -f1)
+          # The url must be exactly what UpdateFeed.downloadUrl builds (android-v<V>/skycord-<V>.apk) — installed apps accept nothing else.
+          cat > "$RUNNER_TEMP/latest.json" <<EOF
+          {"version":"$V","url":"https://github.com/xSMDx/skycord-android-releases/releases/download/android-v$V/skycord-$V.apk","sha256":"$SHA","notes":"https://skycord.xyz/changelog/"}
+          EOF
+          cat "$RUNNER_TEMP/latest.json"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_RELEASES_TOKEN }}
+          V: ${{ steps.version.outputs.v }}
+          REPO: xSMDx/skycord-android-releases
+        run: |
+          gh release create "android-v$V" -R "$REPO" --title "Skycord for Android $V" \
+            --notes "Download **skycord-$V.apk** below and open it on your phone. Installed copies offer each update themselves." \
+            "$RUNNER_TEMP/skycord-$V.apk" "$RUNNER_TEMP/latest.json"
