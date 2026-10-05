@@ -1,7 +1,8 @@
 /**
  * The page's half of the Android back button, in this order:
- *  1. the search screen closes (it has its own close button, not Escape);
- *  2. whatever is open on top closes — the same Escape it already obeys;
+ *  1. whatever is open on top closes — the same Escape it already obeys, a
+ *     box over the search screen included;
+ *  2. the search screen closes (it has its own close button, not Escape);
  *  3. a conversation goes back to the list;
  *  4. otherwise the press is handed back to Android, which puts the app in
  *     the background.
@@ -9,14 +10,18 @@
 export type BackAction = 'close-search' | 'escape' | 'to-list' | 'none'
 
 export const backAction = (s: { searchOpen: boolean; overlayOpen: boolean; onConversation: boolean }): BackAction =>
-  s.searchOpen ? 'close-search' : s.overlayOpen ? 'escape' : s.onConversation ? 'to-list' : 'none'
+  s.overlayOpen ? 'escape' : s.searchOpen ? 'close-search' : s.onConversation ? 'to-list' : 'none'
 
 /**
  * Modals, sheets and popouts are dialogs; context menus are menus; flyouts are
  * AnchoredPanel, which marks itself with data-anchored-panel. (Its class, .ap,
- * is not unique: every message's hover buttons use it too.)
+ * is not unique: every message's hover buttons use it too.) The search screen
+ * is a dialog too, but it is closed by its own step, so it is left out (it
+ * marks itself data-search-screen). Any other transient popup that closes on
+ * Escape marks itself data-overlay.
  */
-export const OVERLAY_SELECTOR = '[role="dialog"], [role="menu"], [data-anchored-panel]'
+export const OVERLAY_SELECTOR =
+  '[role="dialog"]:not([data-search-screen]), [role="menu"], [data-anchored-panel], [data-overlay]'
 
 /** The overlays actually showing, in document order — a mounted, hidden one has no boxes. */
 const openOverlays = (doc: Pick<Document, 'querySelectorAll'>): Element[] =>

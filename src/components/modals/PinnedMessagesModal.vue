@@ -12,7 +12,7 @@ const pinned = computed(() => props.messages.filter(m => m.pinned))
 </script>
 
 <template>
-  <div class="pinned">
+  <div class="pinned" data-overlay>
     <div class="pinned-header">
       <Pin :size="16" :stroke-width="2.25" style="color:var(--warning)" />
       <span>Pinned Messages</span>

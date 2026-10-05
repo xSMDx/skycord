@@ -95,7 +95,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <Teleport to="body">
-    <div class="sv-overlay">
+    <div class="sv-overlay" data-overlay>
       <div class="sv" :class="{ mobile: isMobile, 'm-detail': mobileDetail }">
 
         <!-- ── Nav ── -->

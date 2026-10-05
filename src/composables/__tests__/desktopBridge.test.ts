@@ -2,7 +2,11 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { appBridge } from '../desktopBridge'
 
 const g = globalThis as { skycordDesktop?: unknown }
-afterEach(() => { delete g.skycordDesktop })
+afterEach(() => {
+  delete g.skycordDesktop
+  // A failing Android test must not leave its bridge behind for the next one.
+  delete (globalThis as { skycordAndroid?: unknown }).skycordAndroid
+})
 
 describe('appBridge', () => {
   it('is null in a browser, so nothing desktop-only appears there', () => {

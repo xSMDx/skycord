@@ -369,7 +369,13 @@ const showSearchScreen  = ref(false)
 // Android: the back button, offered to the page first (see androidBack.ts),
 // and the system bars in the theme's colour.
 const stopAndroidBack = appBridge()?.onBack?.(() => {
-  const a = backAction({ searchOpen: showSearchScreen.value, overlayOpen: overlayOpen(), onConversation: mobileNav.onConversation.value })
+  // The search screen and the list/conversation split are phone layouts; on a
+  // landscape phone or a tablet the panes sit side by side and those flags can be stale.
+  const a = backAction({
+    searchOpen: showSearchScreen.value && isMobile.value,
+    overlayOpen: overlayOpen(),
+    onConversation: mobileNav.onConversation.value && isMobile.value,
+  })
   if (a === 'close-search') showSearchScreen.value = false
   else if (a === 'escape') pressEscape()
   else if (a === 'to-list') mobileNav.backToList()

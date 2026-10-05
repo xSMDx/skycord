@@ -24,8 +24,8 @@ const manage = () => {
         <span class="st-field-label">Connected to {{ host }}</span>
         <span class="st-field-value muted">
           {{ desktop.platform === 'android'
-            ? 'Switch servers, remove the ones you’ve saved, or add another.'
-            : 'Switch servers, rename or remove the ones you’ve saved, or add another.' }}
+            ? "Switch servers, remove the ones you've saved, or add another."
+            : "Switch servers, rename or remove the ones you've saved, or add another." }}
           The list is kept by the app, so no server can see the others you use.
         </span>
       </div>

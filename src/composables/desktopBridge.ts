@@ -1,8 +1,9 @@
 /**
- * The Windows app's bridge, when this client is running inside it.
+ * The native app's bridge, when this client is running inside one.
  *
- * The desktop shell loads this same web client and adds `window.skycordDesktop`
- * through its preload. Everything desktop-only feature-detects through here, so
+ * Two apps load this same web client: the Windows app adds `window.skycordDesktop`
+ * through its preload, and the Android app's WebView shell injects
+ * `window.skycordAndroid`. Everything app-only feature-detects through here, so
  * in a browser it is simply null and nothing changes.
  */
 /** The stream settings chosen in the app's share picker. */

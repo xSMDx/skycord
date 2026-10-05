@@ -704,7 +704,7 @@ const handleSelfRevoked = () => handleLogout()
          mean @after-leave never fires and Settings stays mounted forever.
          Stuck open is a worse failure than an unanimated close. -->
     <Transition name="sm" appear :duration="{ enter: 240, leave: 140 }" @after-leave="emit('close')">
-    <div v-if="shown" class="sm-overlay" @click.self="requestClose">
+    <div v-if="shown" class="sm-overlay" data-overlay @click.self="requestClose">
       <div class="sm-modal" :class="{ mobile: isMobile, 'm-detail': mobileDetail }">
 
         <!-- Nav sidebar -->

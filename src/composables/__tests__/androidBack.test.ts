@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { backAction, overlayOpen, pressEscape, OVERLAY_SELECTOR } from '../androidBack'
 
 describe('the back button, in the page', () => {
-  it('closes the search screen first — it does not close on Escape', () => {
-    expect(backAction({ searchOpen: true, overlayOpen: true, onConversation: true })).toBe('close-search')
-  })
-  it('then whatever is open on top', () => {
+  it('closes what is open on top first — a box over the search screen included', () => {
+    expect(backAction({ searchOpen: true, overlayOpen: true, onConversation: true })).toBe('escape')
     expect(backAction({ searchOpen: false, overlayOpen: true, onConversation: true })).toBe('escape')
+  })
+  it('then the search screen — it does not close on Escape', () => {
+    expect(backAction({ searchOpen: true, overlayOpen: false, onConversation: true })).toBe('close-search')
   })
   it('then from a conversation to the list', () => {
     expect(backAction({ searchOpen: false, overlayOpen: false, onConversation: true })).toBe('to-list')
@@ -14,12 +15,15 @@ describe('the back button, in the page', () => {
   it('and otherwise hands it back to Android', () => {
     expect(backAction({ searchOpen: false, overlayOpen: false, onConversation: false })).toBe('none')
   })
-  it('knows an overlay by its role, or as an anchored panel', () => {
-    expect(OVERLAY_SELECTOR).toContain('[role="dialog"]')
+  it('knows an overlay by its role, as an anchored panel, or by its own marker', () => {
+    // The search screen is a dialog too, but it is closed by its own step.
+    expect(OVERLAY_SELECTOR).toContain('[role="dialog"]:not([data-search-screen])')
     expect(OVERLAY_SELECTOR).toContain('[role="menu"]')
     // Not `.ap`: every message's hover buttons have that class too.
     expect(OVERLAY_SELECTOR).toContain('[data-anchored-panel]')
     expect(OVERLAY_SELECTOR).not.toContain('.ap')
+    // Any other popup that closes on Escape marks itself.
+    expect(OVERLAY_SELECTOR).toContain('[data-overlay]')
   })
 
   const el = (shown: boolean) => ({ dispatchEvent: vi.fn(), getClientRects: () => (shown ? [{}] : []) })
@@ -39,5 +43,13 @@ describe('the back button, in the page', () => {
     expect(top.dispatchEvent).toHaveBeenCalledOnce()
     expect(first.dispatchEvent).not.toHaveBeenCalled()
     expect(hidden.dispatchEvent).not.toHaveBeenCalled()
+
+    // What was sent: a bubbling Escape keydown (the stub stores (type, init); a real event has the fields).
+    const sent = top.dispatchEvent.mock.calls[0][0] as {
+      type: string; key?: string; bubbles?: boolean; init?: { key?: string; bubbles?: boolean }
+    }
+    expect(sent.type).toBe('keydown')
+    expect(sent.key ?? sent.init?.key).toBe('Escape')
+    expect(sent.bubbles ?? sent.init?.bubbles).toBe(true)
   })
 })

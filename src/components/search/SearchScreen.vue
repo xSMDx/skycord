@@ -32,7 +32,7 @@ const settle = () => (document.activeElement as HTMLElement | null)?.blur()
 </script>
 
 <template>
-  <div class="ss" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="ss" data-search-screen role="dialog" aria-modal="true" aria-label="Search">
     <header class="ss-head">
       <button type="button" class="ss-back" aria-label="Close search" @click="emit('close')">
         <ChevronLeft :size="22" :stroke-width="2.25" aria-hidden="true" />

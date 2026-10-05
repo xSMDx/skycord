@@ -207,7 +207,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
 </script>
 
 <template>
-  <div class="picker" @keydown.esc="emit('close')">
+  <div class="picker" data-overlay @keydown.esc="emit('close')">
 
     <!-- Tabs -->
     <div class="picker-tabs">
