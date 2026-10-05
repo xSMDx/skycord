@@ -1,0 +1,21 @@
+[versions]
+agp = "8.7.3"
+kotlin = "2.0.21"
+core = "1.13.1"
+appcompat = "1.7.0"
+activity = "1.9.3"
+webkit = "1.12.1"
+junit = "4.13.2"
+orgjson = "20240303"
+
+[libraries]
+androidx-core = { group = "androidx.core", name = "core-ktx", version.ref = "core" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-activity = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+orgjson = { group = "org.json", name = "json", version.ref = "orgjson" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
