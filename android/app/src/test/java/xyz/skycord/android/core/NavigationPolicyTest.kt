@@ -28,4 +28,20 @@ class NavigationPolicyTest {
             assertEquals(url, Nav.BLOCK, NavigationPolicy.decide(url, server, launcher))
         }
     }
+
+    @Test fun aWebAddressOriginsCannotRead_stillGoesToTheBrowser() {
+        assertEquals(Nav.BROWSER, NavigationPolicy.decide("https://my_host.example/", server, launcher))
+    }
+
+    @Test fun lookalikes_areNotUs() {
+        assertEquals(Nav.BROWSER, NavigationPolicy.decide("https://appassets.androidplatform.net.evil.example/", server, launcher))
+        assertEquals(Nav.BROWSER, NavigationPolicy.decide("http://appassets.androidplatform.net/", server, launcher))
+        assertEquals(Nav.BROWSER, NavigationPolicy.decide("https://chat.example.com.evil.example/", server, launcher))
+    }
+
+    @Test fun caseAndDefaultPorts_doNotMatter() {
+        assertEquals(Nav.STAY, NavigationPolicy.decide("HTTPS://Chat.Example.com:443/x", server, launcher))
+        assertEquals(Nav.BROWSER, NavigationPolicy.decide("MAILTO:a@b.c", server, launcher))
+        assertEquals(Nav.STAY, NavigationPolicy.decide("$launcher/assets/launcher/index.html", server, launcher))
+    }
 }

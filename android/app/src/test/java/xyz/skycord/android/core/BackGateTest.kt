@@ -40,4 +40,19 @@ class BackGateTest {
     @Test fun theTimeoutIs300ms() {
         assertEquals(300L, BackGate().timeoutMs)
     }
+
+    @Test fun anOldPressesTimer_doesNothingOnceANewPressCame() {
+        val g = BackGate()
+        val first = g.ask()
+        g.ask()
+        assertNull(g.timeout(first))
+    }
+
+    @Test fun aSecondAnswer_andAnAnswerNobodyAskedFor_doNothing() {
+        val g = BackGate()
+        val id = g.ask()
+        assertEquals(BackAction.DONE, g.answer(id, used = true))
+        assertNull(g.answer(id, used = false))
+        assertNull(g.answer(id + 100, used = true))
+    }
 }
