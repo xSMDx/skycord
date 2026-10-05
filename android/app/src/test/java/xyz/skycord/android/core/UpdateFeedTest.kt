@@ -24,6 +24,16 @@ class UpdateFeedTest {
         )) assertNull(bad, UpdateFeed.parse(bad))
     }
 
+    @Test fun refusesAFeedThatCouldOverflowTheParser() {
+        val good = """{"version":"0.21.1","url":"$url","sha256":"$sha"}"""
+        // Over 64 KB: rejected before parsing, however well-formed.
+        assertNull(UpdateFeed.parse("""{"version":"0.21.1","url":"$url","sha256":"$sha","notes":"${"x".repeat(70 * 1024)}"}"""))
+        // 300 nested arrays: Android's recursive parser would overflow the stack.
+        assertNull(UpdateFeed.parse("""{"version":"0.21.1","url":"$url","sha256":"$sha","x":${"[".repeat(300)}${"]".repeat(300)}}"""))
+        // A normal feed still reads.
+        assertEquals(Feed("0.21.1", url, sha), UpdateFeed.parse(good))
+    }
+
     @Test fun comparesVersions() {
         assertTrue(UpdateFeed.isNewer("0.21.1", "0.21.0"))
         assertTrue(UpdateFeed.isNewer("0.22.0", "0.21.9"))

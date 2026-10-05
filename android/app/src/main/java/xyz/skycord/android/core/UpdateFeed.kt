@@ -15,7 +15,21 @@ object UpdateFeed {
     private val VERSION = Regex("^\\d+\\.\\d+\\.\\d+$")
     private val SHA = Regex("^[0-9a-f]{64}$")
 
-    fun parse(text: String): Feed? = try {
+    // The feed is a few hundred bytes. The bracket count is checked before
+    // parsing: Android's JSON parser is recursive, and thousands of nested
+    // brackets would overflow the stack with an Error that `catch (Exception)`
+    // does not stop (the same guard as BridgeProtocol). Counting raw brackets
+    // cannot be fooled by quoting tricks, and any nesting of depth d needs at
+    // least d opening brackets.
+    const val MAX_FEED_BYTES = 64 * 1024
+    private const val MAX_OPENS = 256
+
+    fun parse(text: String): Feed? {
+        if (text.length > MAX_FEED_BYTES || text.count { it == '[' || it == '{' } > MAX_OPENS) return null
+        return parseChecked(text)
+    }
+
+    private fun parseChecked(text: String): Feed? = try {
         val o = JSONObject(text)
         val version = o.getString("version")
         val url = o.getString("url")

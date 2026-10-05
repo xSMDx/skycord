@@ -88,6 +88,12 @@ class MainActivity : AppCompatActivity() {
         updates.checkOnLaunch()
     }
 
+    override fun onDestroy() {
+        // onCreate returns early on the old-WebView screen, before updates exists.
+        if (::updates.isInitialized) updates.close()
+        super.onDestroy()
+    }
+
     /** Hooks for Tasks 9 and 10; empty until then. */
     private fun onCreateBridge() {}
     private fun onUpdateState() {}
