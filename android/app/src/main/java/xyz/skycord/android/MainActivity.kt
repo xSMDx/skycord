@@ -143,6 +143,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // A page still waiting for files must be answered (null: nothing picked), or its file input stays stuck.
+        fileCallback?.onReceiveValue(null)
+        fileCallback = null
+        // A back offer still waiting for its 300 ms timeout has nothing left to act on.
+        main.removeCallbacksAndMessages(null)
         // onCreate returns early on the old-WebView screen, before updates exists.
         if (::updates.isInitialized) updates.close()
         if (::bridge.isInitialized) bridge.close()
@@ -304,7 +309,10 @@ class MainActivity : AppCompatActivity() {
         val missing = wanted.map(::androidPermissionFor).distinct()
             .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) { request.grant(wanted.toTypedArray()); return }
-        pendingPermission?.first?.deny()
+        // Android's prompt is already up for an earlier request: keep it and its answer, and refuse
+        // this one. Denying the earlier one instead would leave both denied, since launching a second
+        // prompt over the first cancels it.
+        if (pendingPermission != null) { request.deny(); return }
         pendingPermission = request to wanted
         askPermissions.launch(missing.toTypedArray())
     }
@@ -334,9 +342,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * What the picker returned. A third-party picker's clip item can carry no uri, and WebView
+     * crashes on a null in the array, so only the real ones go through. (Not parseResult: it reads
+     * only intent.data and would drop a multi-selection.)
+     */
     private fun pickedUris(resultCode: Int, data: Intent?): Array<Uri>? {
         if (resultCode != RESULT_OK || data == null) return null
-        data.clipData?.let { clip -> return Array(clip.itemCount) { clip.getItemAt(it).uri } }
+        data.clipData?.let { clip ->
+            val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+            if (uris.isNotEmpty()) return uris.toTypedArray()
+        }
         return data.data?.let { arrayOf(it) }
     }
 }

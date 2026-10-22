@@ -153,11 +153,20 @@ class BridgeHost(private val activity: MainActivity) {
 
     private fun onMessage(view: WebView, message: WebMessageCompat, sourceOrigin: Uri, isMainFrame: Boolean, proxy: JavaScriptReplyProxy) {
         if (closed || !isMainFrame) return
-        val origin = Origins.of(sourceOrigin.toString()) ?: return
-        val incoming = message.data?.let(BridgeProtocol::parse) ?: return
-        when {
-            origin == MainActivity.LAUNCHER_ORIGIN && activity.currentServer == null -> onLauncher(incoming, proxy)
-            origin == activity.currentServer -> onApp(incoming, proxy)
+        // A page can make the shim post something other than a string (it only has to replace
+        // JSON.stringify), and WebMessageCompat.data throws for an ArrayBuffer. A saved
+        // server's page must never be able to crash the app, so look at the type before
+        // touching the data and drop anything that goes wrong.
+        if (message.type != WebMessageCompat.TYPE_STRING) return
+        try {
+            val origin = Origins.of(sourceOrigin.toString()) ?: return
+            val incoming = message.data?.let(BridgeProtocol::parse) ?: return
+            when {
+                origin == MainActivity.LAUNCHER_ORIGIN && activity.currentServer == null -> onLauncher(incoming, proxy)
+                origin == activity.currentServer -> onApp(incoming, proxy)
+            }
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "dropped a message", e)
         }
     }
 
@@ -203,10 +212,14 @@ class BridgeHost(private val activity: MainActivity) {
                     val answer = InstanceFetch.get(origin)
                     // Seconds may have passed; if the page was left meanwhile, its proxy is gone.
                     later(at) {
-                        reply(
-                            if (answer == null) JSONObject().put("unreachable", true)
-                            else JSONObject().put("status", answer.status).put("body", answer.body),
-                        )
+                        try {
+                            reply(
+                                if (answer == null) JSONObject().put("unreachable", true)
+                                else JSONObject().put("status", answer.status).put("body", answer.body),
+                            )
+                        } catch (e: RuntimeException) {
+                            Log.w(TAG, "could not answer the lookup", e)
+                        }
                     }
                 }
             }

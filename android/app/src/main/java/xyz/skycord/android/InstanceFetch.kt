@@ -15,7 +15,11 @@ object InstanceFetch {
 
     private const val MAX_BYTES = 64 * 1024
 
+    /** Per-read timeouts alone let a server that trickles a byte at a time hold the lookup open indefinitely. */
+    private const val DEADLINE_MS = 5000L
+
     fun get(origin: String): Answer? {
+        val deadline = System.nanoTime() + DEADLINE_MS * 1_000_000
         try {
             val conn = URL("$origin/instance").openConnection() as HttpURLConnection
             conn.connectTimeout = 5000
@@ -27,7 +31,7 @@ object InstanceFetch {
                 // -1 is "not HTTP"; anything outside 200–599 the page's Response() would throw on.
                 if (status !in 200..599) return null
                 val stream = if (status in 200..399) conn.inputStream else conn.errorStream
-                val bytes = stream?.use { it.readNBytesCompat(MAX_BYTES) } ?: ByteArray(0)
+                val bytes = stream?.use { it.readNBytesCompat(MAX_BYTES, deadline) } ?: ByteArray(0)
                 return Answer(status, String(bytes, Charsets.UTF_8))
             } finally {
                 conn.disconnect()
@@ -37,10 +41,12 @@ object InstanceFetch {
         }
     }
 
-    private fun java.io.InputStream.readNBytesCompat(max: Int): ByteArray {
+    /** Reads up to [max] bytes; throws (so the lookup answers null) once [deadline] (System.nanoTime) has passed. */
+    private fun java.io.InputStream.readNBytesCompat(max: Int, deadline: Long): ByteArray {
         val out = java.io.ByteArrayOutputStream()
         val buf = ByteArray(8192)
         while (out.size() < max) {
+            if (System.nanoTime() - deadline > 0) throw java.io.IOException("the answer took too long")
             val n = read(buf, 0, minOf(buf.size, max - out.size()))
             if (n < 0) break
             out.write(buf, 0, n)

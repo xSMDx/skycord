@@ -34,7 +34,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n xyz.skycord.android/.MainActivity
 ```
 
-Windows reserves TCP 5541–5740 on this machine, which covers the emulator's
+Windows reserves TCP 5041–5740 on this machine, which covers the emulator's
 default ports (5554–5682); without `-ports` it exits silently, and adb then
 calls the device `emulator-6554`.
 
@@ -47,8 +47,32 @@ installed and the dev servers up. See the script's header.
 
 ## Releasing
 
-Tag `android-vX.Y.Z` and push the tag. `.github/workflows/android-release.yml`
-builds, signs and publishes to `xSMDx/skycord-android-releases` with
+Before the first tag, the owner sets these in the repository's Settings, Secrets
+and variables, Actions:
+
+| Kind | Name | What |
+|---|---|---|
+| secret | `ANDROID_KEYSTORE_BASE64` | the signing keystore, `base64 -w0 skycord-release.jks` |
+| secret | `ANDROID_KEYSTORE_PASSWORD` | its store password |
+| secret | `ANDROID_KEY_ALIAS` | the key's alias (`skycord`) |
+| secret | `ANDROID_KEY_PASSWORD` | the key's password |
+| secret | `ANDROID_RELEASES_TOKEN` | fine-grained token, Contents read and write on `xSMDx/skycord-android-releases` only |
+| **variable** | `ANDROID_CERT_SHA256` | the signing certificate's SHA-256 — the `SHA256:` line of `keytool -list -v -keystore skycord-release.jks -alias skycord` (colons optional) |
+
+Set `ANDROID_CERT_SHA256` when the key is made. The workflow refuses to run if
+any of the six is missing, and refuses to publish an APK whose signing
+certificate is not that one: phones that already have the app only update to
+an APK signed by the same key.
+
+Then tag `android-vX.Y.Z` and push the tag. `.github/workflows/android-release.yml`
+checks the tag and the settings first, then builds an **unsigned** APK with no
+secrets in the environment (npm, Gradle and the tests never see the key); a
+separate step zipaligns and signs it with the keystore and checks the
+certificate; then it publishes to `xSMDx/skycord-android-releases` with
 `latest.json`, which installed apps check. The signing key is the GitHub secret
 `ANDROID_KEYSTORE_BASE64`; **the owner keeps an offline copy** — without that
 key, no installed phone can ever update again.
+
+**Before publishing an APK, the hosted server must already serve the new web
+client** (the app loads each server's own web client, so a new app talking to an
+old client is a broken release). Deploy first, then tag.

@@ -3586,9 +3586,17 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
      keytool -genkeypair -v -keystore skycord-release.jks -alias skycord -keyalg RSA -keysize 4096 -validity 36500
      base64 -w0 skycord-release.jks > skycord-release.jks.b64
      ```
-     Then save the secrets `ANDROID_KEYSTORE_BASE64` (the .b64 contents), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`skycord`), `ANDROID_KEY_PASSWORD`.
+     Then save all four signing secrets in `xSMDx/skycord` (Settings, Secrets and variables, Actions): `ANDROID_KEYSTORE_BASE64` (the .b64 contents), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`skycord`), `ANDROID_KEY_PASSWORD`.
+  4. Set the repository **variable** (not a secret) `ANDROID_CERT_SHA256` to the new certificate's SHA-256, the `SHA256:` line of:
+     ```bash
+     keytool -list -v -keystore skycord-release.jks -alias skycord
+     ```
+     The release workflow refuses to run if any of the four signing secrets, `ANDROID_RELEASES_TOKEN` or this variable is missing, and refuses to publish an APK whose signing certificate is not this one (a phone that has the app only updates to an APK signed by the same key).
+  5. Before tagging a release, make sure the hosted server already serves the new web client: the app loads each server's own web client, so an APK published ahead of it is a broken release.
 
 - [ ] **Step 2: The workflow** — `.github/workflows/android-release.yml`
+
+> Revised after the final whole-branch review: the committed `.github/workflows/android-release.yml` is the source of truth, and the listing below is the first draft. The revision keeps the signing key out of the build: the tag and all six settings (four signing secrets, `ANDROID_RELEASES_TOKEN`, variable `ANDROID_CERT_SHA256`) are checked first; tests and `assembleRelease` run with no secrets and produce an unsigned APK (`app/build.gradle.kts` only uses the release signing config when `SKYCORD_KEYSTORE` is set); a separate step zipaligns and signs with the SDK's `apksigner` and compares the certificate's SHA-256 with the variable; third-party actions are pinned to commit SHAs.
 
 ```yaml
 # The Android app's release. A tag like android-v0.21.0 builds the APK,

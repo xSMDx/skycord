@@ -25,8 +25,10 @@ android {
 
     signingConfigs {
         create("release") {
-            // From the release workflow's secrets. Absent locally, so a local
-            // release build is unsigned and cannot be mistaken for a real one.
+            // Read from the environment, only when SKYCORD_KEYSTORE is set. The release
+            // workflow does not set it for the build — the build, and the npm and Gradle
+            // code it runs, never sees the key; a separate step signs the unsigned APK.
+            // A local release build is unsigned too, so it cannot be mistaken for a real one.
             System.getenv("SKYCORD_KEYSTORE")?.let { path ->
                 storeFile = file(path)
                 storePassword = System.getenv("SKYCORD_KEYSTORE_PASSWORD")
@@ -40,7 +42,8 @@ android {
         debug { versionNameSuffix = "-debug" }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            // Unsigned (app-release-unsigned.apk) unless the keystore is in the environment.
+            signingConfig = if (System.getenv("SKYCORD_KEYSTORE") != null) signingConfigs.getByName("release") else null
         }
     }
 

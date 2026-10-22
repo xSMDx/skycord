@@ -207,6 +207,9 @@ class UpdateManager(private val activity: Activity, private val onChange: (Updat
             fail("couldn’t open Android’s installer", e)
         } catch (e: IllegalArgumentException) {
             fail("couldn’t open Android’s installer", e)
+        } catch (e: SecurityException) {
+            // Some OEM and work-profile setups refuse the installer or the settings page.
+            fail("couldn’t open Android’s installer", e)
         }
     }
 

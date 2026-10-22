@@ -52,7 +52,7 @@ Mechanism:
 - `WebViewCompat.addDocumentStartJavaScript` adds a small shim, for the same
   origins, that defines `window.skycordAndroid` as promise-returning methods over
   that message channel.
-- Both are re-registered whenever the saved-server list changes.
+- Both are re-registered whenever a server is opened or the launcher is shown.
 
 These two WebView features need Chromium 86 or later. Where the system WebView
 is older, the app does not load a server; it shows a screen asking for an update
@@ -194,9 +194,10 @@ release workflow refuses to run without it rather than signing with a new one.
 
 JDK 17 and Android's command-line tools, installed on H: (C: has no free
 space), plus an emulator image. A debug build can point at any address; with
-`adb reverse tcp:5500 tcp:5500` the emulator reaches the dev server as
-`http://localhost:5500`, which Android treats as a secure page, so microphone
-and calls can be tested there too.
+`adb reverse tcp:6200 tcp:6200` the emulator reaches the dev server as
+`http://localhost:6200`, which Android treats as a secure page, so microphone
+and calls can be tested there too. (6200, not a lower port: Windows reserves
+TCP 5041–5740 on the dev machine, so the dev server cannot bind there.)
 
 ### Tests
 

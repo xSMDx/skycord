@@ -63,7 +63,7 @@ jobs:
       - name: Typecheck (client, server and music)
         run: npm run typecheck
       - name: Client tests
-        run: npx vitest run src/
+        run: npx vitest run src/ android/launcher
       - name: Server tests
         run: npx vitest run server/
       # The desktop shell's pure modules (address handling, the security
