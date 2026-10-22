@@ -4,13 +4,25 @@
  *     box over the search screen included;
  *  2. the search screen closes (it has its own close button, not Escape);
  *  3. a conversation goes back to the list;
- *  4. otherwise the press is handed back to Android, which puts the app in
- *     the background.
+ *  4. in a call, the press is used up and the app stays in front: Android
+ *     silences the microphone of an app in the background, so going there
+ *     would quietly cut the call;
+ *  5. otherwise the press is handed back to Android, which steps back through
+ *     the server's pages and then puts the app in the background.
  */
-export type BackAction = 'close-search' | 'escape' | 'to-list' | 'none'
+export type BackAction = 'close-search' | 'escape' | 'to-list' | 'stay-in-call' | 'none'
 
-export const backAction = (s: { searchOpen: boolean; overlayOpen: boolean; onConversation: boolean }): BackAction =>
-  s.overlayOpen ? 'escape' : s.searchOpen ? 'close-search' : s.onConversation ? 'to-list' : 'none'
+export const backAction = (s: {
+  searchOpen: boolean
+  overlayOpen: boolean
+  onConversation: boolean
+  inCall: boolean
+}): BackAction =>
+  s.overlayOpen ? 'escape'
+  : s.searchOpen ? 'close-search'
+  : s.onConversation ? 'to-list'
+  : s.inCall ? 'stay-in-call'
+  : 'none'
 
 /**
  * Modals, sheets and popouts are dialogs; context menus are menus; flyouts are

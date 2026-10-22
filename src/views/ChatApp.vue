@@ -375,10 +375,13 @@ const stopAndroidBack = appBridge()?.onBack?.(() => {
     searchOpen: showSearchScreen.value && isMobile.value,
     overlayOpen: overlayOpen(),
     onConversation: mobileNav.onConversation.value && isMobile.value,
+    // connected covers channels, DMs and groups; Android silences the microphone of an app in the background.
+    inCall: voice.connected,
   })
   if (a === 'close-search') showSearchScreen.value = false
   else if (a === 'escape') pressEscape()
   else if (a === 'to-list') mobileNav.backToList()
+  else if (a === 'stay-in-call') showToast('Leave the call first — Android stops your microphone when Skycord is in the background')
   return a !== 'none'
 })
 onBeforeUnmount(() => stopAndroidBack?.())
@@ -485,6 +488,8 @@ const showToast = (msg: string) => {
  * learn to dismiss without reading.
  */
 const { state: updateState, install: installUpdate } = useUpdates()
+// On Android the button hands the update to Android's installer; there is no restart.
+const onAndroid = appBridge()?.platform === 'android'
 const updateReady = ref('')
 let promptedVersion = ''
 // Watches the call too: an update that lands mid-call must still be offered
@@ -4524,7 +4529,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
       <Transition name="toast-pop">
         <div v-if="updateReady" class="app-update" role="status">
           <span class="app-update-text">Skycord {{ updateReady }} is ready to install.</span>
-          <button type="button" class="app-update-btn primary" @click="installUpdate()">Restart now</button>
+          <button type="button" class="app-update-btn primary" @click="installUpdate()">{{ onAndroid ? 'Install' : 'Restart now' }}</button>
           <button type="button" class="app-update-btn" @click="updateReady = ''">Later</button>
         </div>
       </Transition>

@@ -46,6 +46,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val LAUNCHER_ORIGIN = "https://appassets.androidplatform.net"
         const val LAUNCHER_URL = "$LAUNCHER_ORIGIN/assets/launcher/index.html"
+        /** The launcher shortcut "Choose a server" (res/xml/shortcuts.xml) sends this. */
+        const val ACTION_CHOOSE_SERVER = "xyz.skycord.android.action.CHOOSE_SERVER"
         private const val WEBVIEW_PACKAGE = "com.google.android.webview"
     }
 
@@ -130,9 +132,24 @@ class MainActivity : AppCompatActivity() {
 
         onCreateBridge()
 
+        // The shortcut asks for the server list, not the server the app last had open.
         val last = store.last()
-        if (last != null) openServer(last) else showLauncher()
+        if (intent?.action == ACTION_CHOOSE_SERVER || last == null) showLauncher() else openServer(last)
         updates.checkOnLaunch()
+    }
+
+    // singleTask: a running app gets the launcher shortcut here, not in onCreate.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // `web` is unset on the old-WebView screen, which has no server list to show.
+        if (intent.action == ACTION_CHOOSE_SERVER && ::web.isInitialized) showLauncher()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The launch check has just set the time, so the first onResume after onCreate does not repeat it.
+        if (::updates.isInitialized) updates.checkIfStale()
     }
 
     override fun onPause() {
@@ -171,7 +188,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun act(action: BackAction) {
-        if (action == BackAction.TO_BACKGROUND) moveTaskToBack(true)
+        if (action != BackAction.TO_BACKGROUND) return
+        // The page didn't use it: step back through this server's pages (history starts fresh at each
+        // openServer/showLauncher, so this cannot reach the launcher), and only then leave the app.
+        if (currentServer != null && web.canGoBack()) web.goBack() else moveTaskToBack(true)
     }
 
     private fun onUpdateState() {
@@ -229,6 +249,17 @@ class MainActivity : AppCompatActivity() {
                 // Only a server that never loaded gets the native screen; once the page has
                 // loaded, a dropped connection or a failed reload is the web app's own business.
                 if (!serverLoaded) showUnreachable(server)
+            }
+
+            // A server that answers with an error page (WebView shows its body, and onReceivedError never
+            // fires) gets the same screen as one that can't be reached. Only before the page has loaded:
+            // later errors are the web app's own business.
+            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+                val server = currentServer ?: return
+                if (!request.isForMainFrame || Origins.of(request.url.toString()) != server) return
+                if (errorResponse.statusCode < 500 || serverLoaded) return
+                loadFailed = true
+                showUnreachable(server)
             }
 
             override fun onPageFinished(view: WebView, url: String) {

@@ -4,6 +4,7 @@
     <string name="unreachable_body">Check your connection, or that the server is running.</string>
     <string name="retry">Retry</string>
     <string name="choose_another">Choose another server</string>
+    <string name="shortcut_choose_server">Choose a server</string>
     <string name="old_webview_title">Android System WebView needs an update</string>
     <string name="old_webview_body">Skycord runs inside Android System WebView, and the version on this phone is too old. Update it, then open Skycord again.</string>
     <string name="old_webview_action">Update Android System WebView</string>

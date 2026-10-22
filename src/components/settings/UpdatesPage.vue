@@ -9,9 +9,12 @@
  */
 import { computed } from 'vue'
 import { useUpdates, updateLabel } from '@/composables/useUpdates'
+import { appBridge } from '@/composables/desktopBridge'
 import '@/styles/settingsShared.css'
 
 const { state, supported, check, install } = useUpdates()
+// On Android the update goes to Android's installer, and the app checks when it opens and when you come back after a while.
+const onAndroid = appBridge()?.platform === 'android'
 
 const label = computed(() => updateLabel(state.value))
 const busy = computed(() => state.value.phase === 'checking' || state.value.phase === 'downloading')
@@ -46,7 +49,7 @@ const speed = computed(() => {
         <button
           v-if="state.phase === 'ready'"
           type="button" class="st-btn st-btn--primary" @click="install()"
-        >Restart to update</button>
+        >{{ onAndroid ? 'Install update' : 'Restart to update' }}</button>
         <button v-else type="button" class="st-btn" :disabled="busy" @click="check()">
           {{ busy ? 'Working…' : 'Check now' }}
         </button>
@@ -65,7 +68,12 @@ const speed = computed(() => {
       <div class="st-field">
         <div class="st-field-left">
           <span class="st-field-label">How updating works</span>
-          <span class="st-field-value">
+          <span v-if="onAndroid" class="st-field-value">
+            Skycord checks when it opens, and again when you come back to it after six hours.
+            An update downloads in the background while you carry on, and installs only when you
+            press Install update and confirm it on Android's screen.
+          </span>
+          <span v-else class="st-field-value">
             Skycord checks when it starts and every six hours. An update downloads in the background
             while you carry on, and only installs when you press Restart — never on its own, and
             never in the middle of a call.

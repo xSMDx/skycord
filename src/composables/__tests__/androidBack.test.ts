@@ -2,18 +2,40 @@ import { describe, expect, it, vi } from 'vitest'
 import { backAction, overlayOpen, pressEscape, OVERLAY_SELECTOR } from '../androidBack'
 
 describe('the back button, in the page', () => {
+  const state = (over: Partial<Parameters<typeof backAction>[0]> = {}) =>
+    ({ searchOpen: false, overlayOpen: false, onConversation: false, inCall: false, ...over })
+
   it('closes what is open on top first — a box over the search screen included', () => {
-    expect(backAction({ searchOpen: true, overlayOpen: true, onConversation: true })).toBe('escape')
-    expect(backAction({ searchOpen: false, overlayOpen: true, onConversation: true })).toBe('escape')
+    expect(backAction(state({ searchOpen: true, overlayOpen: true, onConversation: true }))).toBe('escape')
+    expect(backAction(state({ overlayOpen: true, onConversation: true }))).toBe('escape')
   })
   it('then the search screen — it does not close on Escape', () => {
-    expect(backAction({ searchOpen: true, overlayOpen: false, onConversation: true })).toBe('close-search')
+    expect(backAction(state({ searchOpen: true, onConversation: true }))).toBe('close-search')
   })
   it('then from a conversation to the list', () => {
-    expect(backAction({ searchOpen: false, overlayOpen: false, onConversation: true })).toBe('to-list')
+    expect(backAction(state({ onConversation: true }))).toBe('to-list')
   })
   it('and otherwise hands it back to Android', () => {
-    expect(backAction({ searchOpen: false, overlayOpen: false, onConversation: false })).toBe('none')
+    expect(backAction(state())).toBe('none')
+  })
+
+  describe('in a call', () => {
+    it('stays in the app at the list: Android silences the microphone of an app in the background', () => {
+      expect(backAction(state({ inCall: true }))).toBe('stay-in-call')
+    })
+    it('still steps back from a conversation first', () => {
+      expect(backAction(state({ inCall: true, onConversation: true }))).toBe('to-list')
+    })
+    it('still closes an overlay first, with or without the search screen', () => {
+      expect(backAction(state({ inCall: true, overlayOpen: true }))).toBe('escape')
+      expect(backAction(state({ inCall: true, overlayOpen: true, searchOpen: true, onConversation: true }))).toBe('escape')
+    })
+    it('still closes the search screen first', () => {
+      expect(backAction(state({ inCall: true, searchOpen: true }))).toBe('close-search')
+    })
+    it('is not a thing when there is no call', () => {
+      expect(backAction(state({ inCall: false }))).toBe('none')
+    })
   })
   it('knows an overlay by its role, as an anchored panel, or by its own marker', () => {
     // The search screen is a dialog too, but it is closed by its own step.

@@ -14,6 +14,7 @@ import xyz.skycord.android.core.Feed
 import xyz.skycord.android.core.UpdateEvent
 import xyz.skycord.android.core.UpdateFeed
 import xyz.skycord.android.core.UpdatePhase
+import xyz.skycord.android.core.UpdateSchedule
 import xyz.skycord.android.core.UpdateState
 import xyz.skycord.android.core.reduce
 import java.io.ByteArrayOutputStream
@@ -64,14 +65,25 @@ class UpdateManager(private val activity: Activity, private val onChange: (Updat
         emit(UpdateEvent.Error(message, System.currentTimeMillis()))
     }
 
+    /** When the last check that actually started did (elapsedRealtime); null until one has. */
+    @Volatile
+    private var lastCheckStartedAt: Long? = null
+
     /** Debug builds never offer a release over themselves. */
     fun checkOnLaunch() { if (!BuildConfig.DEBUG) check() }
+
+    /** Coming back to the app after a long while: look again, as on launch. Not in debug builds. */
+    fun checkIfStale() {
+        if (BuildConfig.DEBUG) return
+        if (UpdateSchedule.isStale(lastCheckStartedAt, SystemClock.elapsedRealtime())) check()
+    }
 
     fun check() {
         if (closed) return
         // A downloaded update is waiting for Install; the next launch looks again.
         if (state.phase == UpdatePhase.READY && apk?.exists() == true) return
         if (!busy.compareAndSet(false, true)) return
+        lastCheckStartedAt = SystemClock.elapsedRealtime()
         emit(UpdateEvent.Check)
         try {
             io.execute {
