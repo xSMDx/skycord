@@ -44,3 +44,23 @@ export const setPermits = (next: Partial<VoicePermits>) => Object.assign(permits
 /** Back to unrestricted. Called when a call ends, so the constraints of the
  *  channel just left cannot follow the person into the next one. */
 export const resetPermits = () => Object.assign(permits, ALL_ALLOWED)
+
+/**
+ * Microphone and camera as the media server's live grant has them — the same
+ * shape the token mint writes (publishGrantFor on the server): `canPublish`
+ * false stops everything, an empty source list means every source, and a
+ * narrowed list names what is left.
+ *
+ * Read mid-call because a server mute, a deafen and their lifting change the
+ * grant without a new token. The source values are passed in so this can be
+ * tested without importing LiveKit.
+ */
+export const permitsFromGrant = (
+  grant: { canPublish: boolean; canPublishSources: readonly unknown[] },
+  microphone: unknown,
+  camera: unknown,
+): Pick<VoicePermits, 'audio' | 'video'> => {
+  const allows = (source: unknown) =>
+    grant.canPublish && (grant.canPublishSources.length === 0 || grant.canPublishSources.includes(source))
+  return { audio: allows(microphone), video: allows(camera) }
+}

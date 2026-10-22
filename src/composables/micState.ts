@@ -73,6 +73,28 @@ export const micAfterToggle = (previous: MicState, muted: boolean): MicState => 
 }
 
 /**
+ * What the microphone should do when the media server changes whether this
+ * participant may publish audio mid-call — a moderator's server mute or deafen,
+ * or its lifting.
+ *
+ * Losing it forbids the microphone. Getting it back returns the person to what
+ * they had, the way Discord does: someone who was talking is on the air again,
+ * while someone who had muted themselves, is deafened, or talks with
+ * push-to-talk only gets a microphone button that works again.
+ */
+export type PermitStep = 'none' | 'forbid' | 'restore-live' | 'restore-muted'
+
+export const micStepOnPermitChange = (
+  was: boolean,
+  now: boolean,
+  s: { liveWhenAllowed: boolean; deafened: boolean; ptt: boolean },
+): PermitStep => {
+  if (was === now) return 'none'
+  if (!now) return 'forbid'
+  return s.liveWhenAllowed && !s.deafened && !s.ptt ? 'restore-live' : 'restore-muted'
+}
+
+/**
  * What to show the person in the call. Written for a member who was invited to
  * somebody else's server: it says what happened and what they can do, and
  * never names HTTPS, certificates or a script to run. The host-facing detail

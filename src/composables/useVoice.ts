@@ -11,7 +11,7 @@ import {
   type LocalAudioTrack, type LocalParticipant,
 } from 'livekit-client'
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
-import { micFailureReason, micIsLive, micAfterToggle, type MicState } from './micState'
+import { micFailureReason, micIsLive, micAfterToggle, micStepOnPermitChange, type MicState } from './micState'
 import { holdPresence } from './usePresence'
 import { useAuth } from './useAuth'
 import { useApi } from './useApi'
@@ -29,7 +29,7 @@ import {
   voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded,
   effectiveInputMode, noiseNodeFor,
 } from './useVoiceSettings'
-import { permits, setPermits, resetPermits } from './voicePermits'
+import { permits, setPermits, resetPermits, permitsFromGrant } from './voicePermits'
 import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia, media } from './useVoiceMedia'
 import { resetRtcStats } from './useRtcStats'
 
@@ -93,6 +93,10 @@ export const voice = reactive<VoiceState>({
 
 const audioEls = new Map<string, HTMLAudioElement>()   // trackSid -> <audio>
 let muteBeforeDeafen = false
+/** Whether the microphone goes back on the air when a server mute is lifted:
+ *  true when the person was talking as it was imposed, or joined to talk while
+ *  it was already in force. See micStepOnPermitChange. */
+let liveWhenAllowed = false
 let pttBound = false
 let statsTimer: ReturnType<typeof setInterval> | null = null
 let connectSeq = 0   // bumped per connect() attempt; lets a superseded join bail out
@@ -560,7 +564,54 @@ const applyHiddenPause = () => {
 if (typeof document !== 'undefined') document.addEventListener('visibilitychange', applyHiddenPause)
 watch(() => perf.pauseVideoWhenHidden, applyHiddenPause)
 
+/**
+ * A moderator muted, deafened or lifted either while this person is in the
+ * call. The server changes what the media server lets them publish — no new
+ * token — so the permits read at join are refreshed from the live grant here.
+ *
+ * Without this, a lifted server mute left the person silent: the server had
+ * also muted their microphone track, and the permits still said "forbidden",
+ * so the microphone button refused to unmute until they left and rejoined.
+ */
+const onLocalPermissionsChanged = (r: Room) => {
+  const grant = r.localParticipant.permissions
+  if (!grant) return
+  const next = permitsFromGrant(
+    grant,
+    Track.sourceToProto(Track.Source.Microphone),
+    Track.sourceToProto(Track.Source.Camera),
+  )
+  const step = micStepOnPermitChange(permits.audio, next.audio, {
+    liveWhenAllowed,
+    deafened: voice.localDeafened,
+    ptt: effectiveInputMode() === 'ptt',
+  })
+  setPermits(next)
+
+  if (step === 'forbid') {
+    liveWhenAllowed = !voice.localMuted && !voice.localDeafened
+    voice.localMuted = true
+    voice.mic = 'forbidden'
+    r.localParticipant.setMicrophoneEnabled(false).catch(() => {})
+  } else if (step === 'restore-live') {
+    liveWhenAllowed = false
+    voice.localMuted = false
+    // publishMic both unmutes the track the server muted and republishes one
+    // that was never published (joined while muted).
+    publishMic(r.localParticipant)
+      .then(() => { voice.mic = 'live' })
+      .catch(e => { voice.mic = micFailureReason(e); voice.localMuted = true })
+  } else if (step === 'restore-muted') {
+    liveWhenAllowed = false
+    voice.mic = 'muted'
+  }
+  if (step !== 'none') syncParticipants()
+}
+
 const wireRoom = (r: Room) => {
+  r.on(RoomEvent.ParticipantPermissionsChanged, (_prev, p) => {
+    if (p === r.localParticipant) onLocalPermissionsChanged(r)
+  })
   /*
    * A music track arriving is not a person arriving.
    *
@@ -658,6 +709,7 @@ const cleanup = () => {
   // button dead in the next call — including in a DM, where nobody has the
   // authority to have forbidden anything.
   resetPermits()
+  liveWhenAllowed = false
   voice.serverMuted = false
   voice.serverDeafened = false
   intentionalLeave = false
@@ -862,6 +914,8 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
         voice.mic = 'insecure'
       } else if (!permits.audio) {
         voice.mic = 'forbidden'
+        // They joined to talk; if the mute is lifted mid-call, they are on the air.
+        liveWhenAllowed = true
       } else {
         try {
           await publishMic(r.localParticipant)

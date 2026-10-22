@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { micFailureReason, micIsLive, micNotice, micAfterToggle } from '../micState'
+import { micFailureReason, micIsLive, micNotice, micAfterToggle, micStepOnPermitChange } from '../micState'
 
 // getUserMedia reports why it failed through DOMException.name, and the four
 // causes need four different sentences: the recovery is different for each and
@@ -95,5 +95,32 @@ describe('micAfterToggle', () => {
   it('maps a disable to muted when there was no failure to protect', () => {
     expect(micAfterToggle('live', true)).toBe('muted')
     expect(micAfterToggle('muted', true)).toBe('muted')
+  })
+})
+
+// A moderator's server mute (or deafen) and its lifting arrive mid-call as a
+// change to what the media server lets this participant publish. Before this,
+// the client read that only at join: an unmuted member stayed silent, with a
+// microphone button that refused to unmute, until they left and rejoined.
+describe('micStepOnPermitChange', () => {
+  const allowed = { liveWhenAllowed: true, deafened: false, ptt: false }
+
+  it('does nothing when the microphone permission did not change', () => {
+    expect(micStepOnPermitChange(true, true, allowed)).toBe('none')
+    expect(micStepOnPermitChange(false, false, allowed)).toBe('none')
+  })
+
+  it('forbids the microphone when the permission is taken away', () => {
+    expect(micStepOnPermitChange(true, false, allowed)).toBe('forbid')
+  })
+
+  it('puts someone who was talking straight back on the air when it returns', () => {
+    expect(micStepOnPermitChange(false, true, allowed)).toBe('restore-live')
+  })
+
+  it('only unlocks the button for someone who had muted themselves, deafened, or uses push-to-talk', () => {
+    expect(micStepOnPermitChange(false, true, { ...allowed, liveWhenAllowed: false })).toBe('restore-muted')
+    expect(micStepOnPermitChange(false, true, { ...allowed, deafened: true })).toBe('restore-muted')
+    expect(micStepOnPermitChange(false, true, { ...allowed, ptt: true })).toBe('restore-muted')
   })
 })
