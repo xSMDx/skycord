@@ -142,8 +142,9 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // `web` is unset on the old-WebView screen, which has no server list to show.
-        if (intent.action == ACTION_CHOOSE_SERVER && ::web.isInitialized) showLauncher()
+        // `web` is unset on the old-WebView screen, which has no server list to show. Already on the
+        // launcher (currentServer is null): leave it alone, so a half-typed address isn't wiped.
+        if (intent.action == ACTION_CHOOSE_SERVER && ::web.isInitialized && currentServer != null) showLauncher()
     }
 
     override fun onResume() {
@@ -189,9 +190,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun act(action: BackAction) {
         if (action != BackAction.TO_BACKGROUND) return
-        // The page didn't use it: step back through this server's pages (history starts fresh at each
-        // openServer/showLauncher, so this cannot reach the launcher), and only then leave the app.
-        if (currentServer != null && web.canGoBack()) web.goBack() else moveTaskToBack(true)
+        // The page didn't use it: step back through this server's pages, and only then leave the app.
+        // Not while clearHistoryOnFinish is set: until the load finishes the history is still
+        // [launcher, server], and a history move onto the launcher entry skips shouldOverrideUrlLoading,
+        // leaving a launcher whose calls are all refused.
+        if (currentServer != null && !clearHistoryOnFinish && web.canGoBack()) web.goBack() else moveTaskToBack(true)
     }
 
     private fun onUpdateState() {

@@ -375,8 +375,9 @@ const stopAndroidBack = appBridge()?.onBack?.(() => {
     searchOpen: showSearchScreen.value && isMobile.value,
     overlayOpen: overlayOpen(),
     onConversation: mobileNav.onConversation.value && isMobile.value,
-    // connected covers channels, DMs and groups; Android silences the microphone of an app in the background.
-    inCall: voice.connected,
+    // connected covers channels, DMs and groups; connecting is a join or a reconnect, which is still a call
+    // (Android silences the microphone of an app in the background once it is up).
+    inCall: voice.connected || voice.connecting,
   })
   if (a === 'close-search') showSearchScreen.value = false
   else if (a === 'escape') pressEscape()
