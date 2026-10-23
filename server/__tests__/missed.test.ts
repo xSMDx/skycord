@@ -211,6 +211,32 @@ describe('GET /users/me/missed', () => {
       expect(contents(await missed(b, t0))).toEqual([`<@${b.username}> reply`])
     })
 
+    it("never returns messages from a channel a category overwrite hides from the caller's role", async () => {
+      const { a, b, sid, cid } = await world()
+      const c = await register()   // a member the overwrite does not apply to
+      await Server.updateOne({ _id: sid }, { $push: { members: c.id } })
+      const t0 = Date.now() - 10 * MIN
+
+      // The channel has no overwrites of its own: whatever it can't be read by comes from its category.
+      const cat = await Category.create({ server: sid, name: 'Staff only' })
+      await Channel.updateOne({ _id: cid }, { $set: { category: cat._id } })
+      const outsiders = await Role.create({ server: sid, name: 'Outsiders', position: 3 })
+      await Server.updateOne({ _id: sid }, { $push: { memberRoles: { user: a.id, roles: [outsiders._id] } } })
+      await setPref(a, cid, { level: 'all' })
+      await setPref(c, cid, { level: 'all' })
+      await put(cid, 'channel', b, `<@${a.username}> <@${c.username}> the secret`, t0 + 1000, { mentionsEveryone: true })
+
+      // Before the overwrite both can read it, so the empty answer below is the overwrite and not the setup.
+      expect(contents(await missed(a, t0))).toHaveLength(1)
+      expect(contents(await missed(c, t0))).toHaveLength(1)
+
+      await Category.updateOne({ _id: cat._id }, {
+        $set: { overwrites: [{ id: outsiders._id, type: 'role', allow: '0', deny: PERMISSIONS.ViewChannels.toString() }] },
+      })
+      expect((await missed(a, t0)).body.events).toEqual([])
+      expect(contents(await missed(c, t0))).toEqual([`<@${a.username}> <@${c.username}> the secret`])
+    })
+
     it("never returns messages from a server the caller isn't in", async () => {
       const { a, b, sid, cid } = await world()
       const t0 = Date.now() - 10 * MIN

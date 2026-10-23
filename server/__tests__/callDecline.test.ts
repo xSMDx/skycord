@@ -11,13 +11,14 @@
  * phone sends it over its background socket — so, unlike joining, a background
  * socket is allowed to do it.
  */
-import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Socket as ClientSocket } from 'socket.io-client'
 import {
-  connectDb, disconnectDb, resetDb, register,
+  app, auth, connectDb, disconnectDb, resetDb, register,
   withSocketServer, connectSocket, connectBackground, nextEvent, type TestUser,
 } from './helpers'
 import { Conversation } from '../models/Conversation'
+import { Server } from '../models/Server'
 import { User } from '../models/User'
 import { cancelAllCallEnds, isInCall } from '../sockets/chatSocket'
 import { dmConvId } from '../controllers/messagesController'
@@ -217,6 +218,9 @@ describe('call:decline', () => {
     // B answered. A late Decline (a second device, a double tap) must not tell
     // the caller they were turned down by somebody who is on the call.
     const room = dmRoom(a, b)
+    // joinCall can return on A's own join broadcast reaching B first, before
+    // B's join has been processed, and a decline sent in that gap would be real.
+    await vi.waitFor(() => expect(isInCall(room, b.id)).toBe(true))
     const saw = [watchDeclines(aSock), watchDeclines(bSock)]
     bSock.emit('call:decline', { room })
     await settle(300)
@@ -224,7 +228,66 @@ describe('call:decline', () => {
     expect(isInCall(room, b.id)).toBe(true)
   })
 
-  it('malformed declines are ignored and the server keeps working', async () => {
+  it('a decline for a live voice-channel call is ignored', async () => {
+    // A voice channel is not a ringing call: there is nobody to answer and
+    // nobody who was rung. Unlike a made-up room it IS live, so it gets past the
+    // first gate and has to be turned away by the room's own prefix.
+    const a = await register(), b = await register(), c = await register()
+    const { server, channels } = (await app().post('/servers').set(auth(a)).send({ name: 'VC' })).body
+    await Server.updateOne({ _id: server.id }, { $push: { members: { $each: [b.id, c.id] } } })
+    const voice = channels.find((ch: any) => ch.type === 'voice')
+
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    const cSock = track(await connectSocket(sockets.url, c.token))
+    // Waits for the state that lists `who` in `room`, not just the next one:
+    // a broadcast from somebody else's join, or from the other call, must not
+    // be taken for this join having landed.
+    const joined = (s: ClientSocket, room: string, who: TestUser) => new Promise<void>(resolve => {
+      const on = (p: { room: string; userIds: string[] }) => {
+        if (p.room === room && p.userIds.includes(who.id)) { s.off('call:state', on); resolve() }
+      }
+      s.on('call:state', on)
+    })
+    const voiceRoom = `voice:${voice.id}`
+    for (const [who, s] of [[a, aSock], [b, bSock]] as const) {
+      const there = joined(s, voiceRoom, who)
+      s.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+      await there
+    }
+    expect(isInCall(voiceRoom, a.id)).toBe(true)
+    expect(isInCall(voiceRoom, b.id)).toBe(true)
+
+    const saw = [watchDeclines(aSock), watchDeclines(bSock), watchDeclines(cSock)]
+    cSock.emit('call:decline', { room: voiceRoom })
+    await settle(300)
+    expect(saw).toEqual([[], [], []])
+    // And it only ever notifies, so the call is as it was.
+    expect(isInCall(voiceRoom, a.id)).toBe(true)
+    expect(isInCall(voiceRoom, b.id)).toBe(true)
+    expect(isInCall(voiceRoom, c.id)).toBe(false)
+
+    // The controls: A rings B and C in DM calls, and each of them declining
+    // reaches the listeners above. So the silence was the voice-room refusal,
+    // and not a listener that was never going to hear anything.
+    for (const [callee, calleeSock] of [[b, bSock], [c, cSock]] as const) {
+      const room = dmRoom(a, callee)
+      const there = joined(aSock, room, a)
+      aSock.emit('call:join', { conversationId: callee.id, kind: 'dm' })
+      await there
+      const heard = Promise.all([
+        nextEvent<Declined>(aSock, 'call:declined'),
+        nextEvent<Declined>(calleeSock, 'call:declined'),
+      ])
+      calleeSock.emit('call:decline', { room })
+      const [toCaller, toCallee] = await heard
+      expect(toCaller.userId).toBe(callee.id)
+      expect(toCallee.userId).toBe(callee.id)
+    }
+    expect(saw.map(list => list.map(d => d.userId))).toEqual([[b.id, c.id], [b.id], [c.id]])
+  })
+
+  it('malformed declines and made-up rooms are ignored and the server keeps working', async () => {
     const a = await register(), b = await register()
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
@@ -232,6 +295,9 @@ describe('call:decline', () => {
 
     const saw = [watchDeclines(aSock), watchDeclines(bSock)]
     const room = dmRoom(a, b)
+    // Not one of these is a live call, so each is stopped at the first gate
+    // and never reaches the prefix checks behind it. Those are covered by the
+    // DM, group and voice-channel tests around this one.
     const junk: unknown[] = [
       undefined, null, 'dm', {}, { room: 42 }, { room: ['x'] }, { room: '' },
       { room: 'dm:' }, { room: `${room}_${b.id}` }, { room: `x${room}` },

@@ -6,8 +6,7 @@ import { Server } from '../models/Server'
 import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { Conversation } from '../models/Conversation'
-import { loadAccess, categoryOverwriteMap, channelBits, has } from '../utils/access'
-import { parseOverwrites } from '../permissions'
+import { loadAccess, categoryOverwriteMap, channelViewOf } from '../utils/access'
 
 /**
  * What did I miss: the messages that would have notified this person while a
@@ -22,11 +21,11 @@ import { parseOverwrites } from '../permissions'
  */
 
 /** Never reach further back than this, whatever `since` says. */
-export const MAX_AGE_MS = 24 * 60 * 60 * 1000
+const MAX_AGE_MS = 24 * 60 * 60 * 1000
 /** The newest this many from one conversation: a burst is one notification anyway. */
-export const PER_CONVERSATION = 5
+const PER_CONVERSATION = 5
 /** And this many in all, newest first. */
-export const TOTAL = 100
+const TOTAL = 100
 /** Queries in flight at once. One per conversation is cheap; hundreds together are not. */
 const PARALLEL = 20
 
@@ -63,9 +62,11 @@ interface ChannelInfo { serverId: string; categoryId: string | null; all: boolea
  * The text channels this person may read, in servers they belong to, each with
  * where it sits and whether its effective level is All messages.
  *
- * Readability is the one rule every channel route goes through — loadAccess
- * once per server, channelBits once per channel — so a channel hidden from
- * someone is never summarised for them here either.
+ * Readability is the one rule every path that hands a channel to a client goes
+ * through — loadAccess once per server, channelViewOf once per channel, and
+ * only 'full' counts — so a channel hidden from someone is never summarised
+ * for them here either. A locked stub shows a name and never a message, so it
+ * is no more readable here than anywhere else.
  */
 const readableChannels = async (userId: string, prefs: Prefs): Promise<Map<string, ChannelInfo>> => {
   const servers = await Server.find({ members: new Types.ObjectId(userId) })
@@ -80,17 +81,12 @@ const readableChannels = async (userId: string, prefs: Prefs): Promise<Map<strin
     Promise.all(servers.map(s => loadAccess(s, userId))),
   ])
   const accessOf = new Map(servers.map((s, i) => [s._id.toString(), accesses[i]]))
-  const categoryOverwrites = await categoryOverwriteMap(categories as never)
+  const categoryOverwrites = await categoryOverwriteMap(categories)
 
   for (const c of channels) {
     const serverId = c.server.toString()
     const categoryId = c.category ? c.category.toString() : null
-    const bits = channelBits(
-      accessOf.get(serverId)!,
-      categoryOverwrites.get(categoryId ?? '') ?? [],
-      parseOverwrites(c.overwrites as never),
-    )
-    if (!has(bits, 'ViewChannels')) continue
+    if (channelViewOf(accessOf.get(serverId)!, c, categoryOverwrites) !== 'full') continue
     const chain = categoryId ? [c._id.toString(), categoryId, serverId] : [c._id.toString(), serverId]
     found.set(c._id.toString(), { serverId, categoryId, all: levelAt(prefs, chain) === 'all' })
   }
