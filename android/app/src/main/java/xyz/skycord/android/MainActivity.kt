@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -54,6 +55,7 @@ import xyz.skycord.android.core.PromptOnce
 import xyz.skycord.android.core.RefreshCookie
 import xyz.skycord.android.core.ServerStore
 import xyz.skycord.android.notify.CallRinger
+import xyz.skycord.android.notify.Notifier
 import xyz.skycord.android.notify.NotifyHub
 import xyz.skycord.android.notify.NotifyService
 
@@ -388,6 +390,15 @@ class MainActivity : AppCompatActivity() {
                 showUnreachable(server)
             }
 
+            // A page of the current server has begun loading — a reload, a redirect, a link inside it:
+            // a new document that has to sign in and subscribe all over again, so it is not "in front"
+            // until it says so (its hello resets it too, and its "ready" comes much later). Only the
+            // current server's own origin; a late callback for the page just left changes nothing.
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                val server = currentServer ?: return
+                if (Origins.of(url) == server) NotifyService.pageShown(this@MainActivity, server)
+            }
+
             override fun onPageFinished(view: WebView, url: String) {
                 // Only the page just asked for ends it, not an earlier page finishing late.
                 if (clearHistoryOnFinish && Origins.of(url) == (currentServer ?: LAUNCHER_ORIGIN)) {
@@ -434,8 +445,8 @@ class MainActivity : AppCompatActivity() {
         // A new page (or the launcher) is loading: the questions wait for its hello.
         serverPageUp = false
         if (::bridge.isInitialized) bridge.refresh()
-        // A new page (or the launcher) is being loaded: nothing has said hello yet, so the phone still
-        // notifies for this server until the page does (NotifyService.pageHello, from the bridge).
+        // A new page (or the launcher) is being loaded: it is not ready, so the phone still notifies for this
+        // server until the page's web client says it is (NotifyService.pageReady, from the bridge).
         NotifyService.pageShown(this, currentServer)
         // The background connection follows the last server used (Review Focus 2).
         syncNotifyService(leaving = false)
@@ -623,8 +634,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun deliver(request: NoticeRequest) {
         // A tap cancels the notification without its delete intent, so nothing else re-arms the
-        // conversation's burst: its next message must alert again, not slip in silently.
-        request.convKey?.let(NotifyHub::rearm)
+        // conversation's burst (its next message must alert again, not slip in silently) or lets go of
+        // the lines it held (a message in the next few seconds would bring every old line back).
+        request.convKey?.let {
+            NotifyHub.rearm(it)
+            Notifier(this).forget(it)
+        }
         // Answered: the ring is over now (its sound and screen), not when the page's join reaches the server.
         request.room?.let { NotifyService.callAnswered(this, it) }
         if (request.join) bridge.requestJoin(request.origin, request.value) else bridge.requestOpen(request.origin, request.value)

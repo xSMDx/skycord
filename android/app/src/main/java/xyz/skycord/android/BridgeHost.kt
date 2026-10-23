@@ -254,16 +254,22 @@ class BridgeHost(private val activity: MainActivity) {
         when (m) {
             Incoming.Hello -> {
                 appProxy = proxy
-                // The page is up and has the sounds: from here the phone stays quiet for this server while the
-                // app is on screen (it is not "in front" before this: see FrontGate).
-                activity.currentServer?.let { NotifyService.pageHello(activity, it) }
-                // The first time a server's page is up is when the one-time questions are asked.
+                // A new document, whatever the page navigation hooks said before it: nothing in it is ready
+                // yet (the web client has not even loaded), so the phone still notifies for this server. Its
+                // "ready" comes much later, once the chat has signed in and subscribed (Incoming.Ready).
+                activity.currentServer?.let { NotifyService.pageShown(activity, it) }
+                // The first time a server's page is up is when the one-time questions are asked. They hang off
+                // this hello, not off "ready": they are about the phone (permission, battery, calls), not the
+                // page's account, and "ready" would hold them back until after sign-in, or for ever.
                 later { activity.onServerPageUp() }
                 // A new page (or a reload) knows nothing yet: it is told the state again, and gets
                 // anything waiting for it.
                 sentBackground = null
                 scheduleFlush()
             }
+            // The web client subscribed to the background state (it does that only once signed in), or let go
+            // of it (signed out, the chat closed). Only now is the page "in front": see FrontGate.
+            is Incoming.Ready -> activity.currentServer?.let { NotifyService.pageReady(activity, it, m.up) }
             is Incoming.BackAnswer -> onBackAnswer(m.id, m.used)
             is Incoming.Call -> {
                 val reply = { value: Any? -> m.id?.let { proxy.postMessage(BridgeProtocol.reply(it, value)) } }

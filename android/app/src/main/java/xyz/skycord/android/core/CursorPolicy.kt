@@ -5,11 +5,16 @@ package xyz.skycord.android.core
  *
  * The cursor is the promise "everything before this has been shown". The phone can
  * only keep that promise up to the last packet that actually arrived on the socket:
- * a connection can die silently, and a phone can sleep before anything notices, so
- * "now" says nothing about what was received. Advancing to now minus a margin, as the
- * first version did, jumped over the whole silent gap and catch-up never fetched it.
- * So the cursor goes only to a margin before the last packet heard (the margin covers
- * a message still in flight when that packet was sent), and never backwards.
+ * a connection can die silently, so "now" says nothing about what was received.
+ * Advancing to now minus a margin, as the first version did, jumped over the whole
+ * silent gap and catch-up never fetched it. So the cursor goes only to a margin before
+ * the last packet heard (the margin covers a message still in flight when that packet
+ * was sent), and never backwards.
+ *
+ * What the CPU did after that packet is no part of the rule: the stream is ordered, so a
+ * packet that arrived vouches for everything the server sent before it, whether the phone
+ * slept afterwards or not. (A "the CPU slept" rule only made the cursor lag, and after the
+ * process died the next catch-up posted again what had already been shown.)
  */
 object CursorPolicy {
     /**
@@ -27,42 +32,28 @@ object CursorPolicy {
 
     /**
      * The cursor after moving on from [current] (server clock). [lastPacketAt] is the server-clock
-     * time of the last packet heard, null when none has been since the connection was made;
-     * [slept] is whether the CPU slept since that packet (then nothing is vouched for beyond it,
-     * and the cursor stays).
+     * time of the last packet heard, null when none has been since the connection was made.
      */
-    fun advance(current: Long, lastPacketAt: Long?, slept: Boolean): Long {
-        if (lastPacketAt == null || slept) return current
+    fun advance(current: Long, lastPacketAt: Long?): Long {
+        if (lastPacketAt == null) return current
         return maxOf(current, lastPacketAt - MARGIN_MS)
     }
 }
 
 /**
  * The last packet heard on the socket (any event, and the engine's own ping and pong),
- * as a time on the server's clock, with the CPU's deep-sleep total at that moment
- * (`elapsedRealtime − uptimeMillis`) so a sleep since can be told. Worker thread only.
+ * as a time on the server's clock. Worker thread only.
  */
 class LastPacket {
     /** Server-clock time of the last packet, or null when none since the connection began. */
     var at: Long? = null
         private set
-    private var sleepAtPacket = 0L
 
-    fun heard(serverNow: Long, deepSleepMs: Long) {
+    fun heard(serverNow: Long) {
         at = serverNow
-        sleepAtPacket = deepSleepMs
     }
-
-    /** Whether the CPU slept (more than the tolerance) since the last packet. False when none was heard. */
-    fun sleptSince(deepSleepNow: Long): Boolean = at != null && deepSleepNow - sleepAtPacket > SLEEP_TOLERANCE_MS
 
     fun clear() {
         at = null
-        sleepAtPacket = 0L
-    }
-
-    companion object {
-        /** A dozing CPU naps for moments between work; only more than this counts as having slept. */
-        const val SLEEP_TOLERANCE_MS = 5_000L
     }
 }

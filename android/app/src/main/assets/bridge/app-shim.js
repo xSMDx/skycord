@@ -55,11 +55,19 @@
     }
   }
   const on = (set) => (cb) => { set.add(cb); return () => { set.delete(cb) } }
-  // A subscriber that arrives after the state, or the request, gets it now.
+  // A subscriber that arrives after the state, or the request, gets it now. The web client subscribes
+  // only once it has signed in, so a subscriber is also the page saying it is ready: the app counts
+  // the page as in front (and stays quiet while it is) only from the first subscriber to the moment
+  // the last one lets go (signed out, the chat closed). The hello at the end of this file says only
+  // that a document began.
   const onBackground = (cb) => {
+    const first = backgroundHandlers.size === 0
     backgroundHandlers.add(cb)
+    if (first) send({ type: 'ready', value: true })
     if (backgrounded !== null) { try { cb(backgrounded) } catch { /* its own problem */ } }
-    return () => { backgroundHandlers.delete(cb) }
+    return () => {
+      if (backgroundHandlers.delete(cb) && backgroundHandlers.size === 0) send({ type: 'ready', value: false })
+    }
   }
   const onRequest = (name, set) => (cb) => {
     set.add(cb)

@@ -6,6 +6,8 @@ import org.json.JSONObject
 /** What the page sends. Anything that does not parse is dropped, not guessed at. */
 sealed interface Incoming {
     data object Hello : Incoming
+    /** The page's web client has (or no longer has) a subscriber to the background state: it is ready, or gone. */
+    data class Ready(val up: Boolean) : Incoming
     data class BackAnswer(val id: Int, val used: Boolean) : Incoming
     data class Call(val id: Int?, val method: String, val args: JSONArray) : Incoming
 }
@@ -29,6 +31,7 @@ object BridgeProtocol {
             val o = JSONObject(text)
             when (o.opt("type")) {
                 "hello" -> Incoming.Hello
+                "ready" -> (o.opt("value") as? Boolean)?.let(Incoming::Ready)
                 "back" -> (o.opt("id") as? Int)?.let { Incoming.BackAnswer(it, o.opt("used") == true) }
                 "call" -> call(o)
                 else -> null

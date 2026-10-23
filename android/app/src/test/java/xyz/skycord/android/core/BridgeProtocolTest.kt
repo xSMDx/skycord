@@ -11,6 +11,19 @@ class BridgeProtocolTest {
         assertEquals(Incoming.Hello, BridgeProtocol.parse("""{"type":"hello"}"""))
     }
 
+    /** The web client has (or no longer has) a subscriber to the background state: the page's "ready". */
+    @Test fun ready_andNotReady() {
+        assertEquals(Incoming.Ready(true), BridgeProtocol.parse("""{"type":"ready","value":true}"""))
+        assertEquals(Incoming.Ready(false), BridgeProtocol.parse("""{"type":"ready","value":false}"""))
+    }
+
+    /** Strict, like every message: anything but a real boolean is dropped, not read as a yes. */
+    @Test fun aReadyThatIsNotABoolean_isNothing() {
+        for (bad in listOf("""{"type":"ready"}""", """{"type":"ready","value":"true"}""", """{"type":"ready","value":1}""", """{"type":"ready","value":null}""")) {
+            assertNull(bad, BridgeProtocol.parse(bad))
+        }
+    }
+
     @Test fun aBackAnswer() {
         assertEquals(Incoming.BackAnswer(7, true), BridgeProtocol.parse("""{"type":"back","id":7,"used":true}"""))
         assertEquals(Incoming.BackAnswer(7, false), BridgeProtocol.parse("""{"type":"back","id":7}"""))

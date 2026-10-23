@@ -74,8 +74,8 @@ import java.util.concurrent.TimeUnit
  * dropped before anything else (the server echoes a REST reply to your own
  * sockets); a message met before is dropped ([SeenMessages], across live and
  * catch-up); nothing at all while the app is in front — this server's page on
- * screen and having said hello over the bridge ([FrontGate]); the launcher, the
- * can't-reach screen and a page still loading are not (the page has the sound
+ * screen and its web client ready, signed in and subscribed ([FrontGate]); the launcher, the
+ * can't-reach screen, a page still loading and the sign-in screen are not (the page has the sound
  * then, and nothing else would show the message); then the web client's rules
  * ([classify]: DND, which ends by itself at its end time, mutes, levels); then the
  * names the event lacks are looked up, only now; then [BurstGate] decides loud
@@ -119,7 +119,7 @@ class NotifyService : Service() {
         @Volatile private var instance: NotifyService? = null
 
         /**
-         * Whether the page of the server this service is for is on screen and has said hello. Fed by the
+         * Whether the page of the server this service is for is on screen and its web client is ready. Fed by the
          * activity and the bridge; read by the worker (see [FrontGate]).
          */
         private val front = FrontGate()
@@ -138,6 +138,9 @@ class NotifyService : Service() {
         fun setEnabled(context: Context, on: Boolean) {
             prefs(context).edit().putBoolean(KEY_ENABLED, on).apply()
             if (!on) {
+                // Before the cursor is cleared (stop does it too, before it clears anything of its own): a
+                // worker mid-way through a catch-up or a fresh start must not write it back.
+                instance?.stopNow()
                 stop(context, clearNotices = false)
                 CatchUpCursor(context).clear()
             }
@@ -157,40 +160,58 @@ class NotifyService : Service() {
 
         /** Stop, with the message notifications too when [clearNotices] (their server is no longer the one). */
         fun stop(context: Context, clearNotices: Boolean) {
+            // First, here and now: the service only learns it is stopped when Android gets round to
+            // onDestroy, a main-loop turn later, and in that turn the worker could post a message after
+            // the clear below, or write a cursor after the caller cleared it.
+            instance?.stopNow()
             if (clearNotices) Notifier(context).clearAll()
             context.stopService(Intent(context, NotifyService::class.java))
         }
 
         /**
          * The app came on screen ([onScreen] true) or left it. On screen alone is not "in front": the page
-         * of the server must also be showing and have said hello ([pageShown], [pageHello]).
+         * of the server must also be showing and its web client ready ([pageShown], [pageReady]).
          */
         fun setForeground(@Suppress("UNUSED_PARAMETER") context: Context, onScreen: Boolean) {
             front.onScreen(onScreen)
         }
 
         /**
-         * [origin]'s page is now what the app shows: a new load, which has not said hello yet. Null when it
-         * is the launcher or the can't-reach screen. While a page is loading, or none is there, messages
-         * are shown on the phone as usual.
+         * [origin]'s page is now what the app shows, or has just started loading again (a reload, a
+         * redirect, opening the server): a page that is not ready yet. Null when it is the launcher or the
+         * can't-reach screen. While a page is loading, signing in, or none is there, messages are shown on
+         * the phone as usual.
          */
         fun pageShown(@Suppress("UNUSED_PARAMETER") context: Context, origin: String?) {
             front.shown(origin)
         }
 
-        /** The page of [origin] said hello over the bridge: it is up, and from here it has the sounds. */
-        fun pageHello(@Suppress("UNUSED_PARAMETER") context: Context, origin: String) {
-            front.hello(origin)
+        /**
+         * The web client of [origin]'s page is ready ([up]: it has subscribed to the app's background state,
+         * which it does only once signed in) or has gone (signed out, the chat closed). From ready it has the
+         * sounds and its own ring, so a call still ringing on the phone ends here ([pageTakesOver]).
+         */
+        fun pageReady(context: Context, origin: String, up: Boolean) {
+            front.ready(origin, up)
+            if (up) pageTakesOver(context)
         }
 
         /**
-         * The app is on screen and focused (the activity's onResume): the page has the sounds and its own
-         * ring now, so a call still ringing on the phone ends here. Not in onStart: for an activity that was
-         * stopped Android runs onStart *before* onNewIntent, and an Answer that brought the app back must still
-         * find its ring ringing there (MainActivity refuses an Answer for a ring that has ended).
+         * The page may now have the sounds and its own ring (the app resumed, or the page became ready): a
+         * call still ringing on the phone ends — but only when this server's page really is in front, ready
+         * and on screen. Resumed onto the launcher, or onto a page still loading or signing in, nothing
+         * there rings, so the phone's ring goes on. Judged on the worker, when it runs. Not from onStart:
+         * for an activity that was stopped Android runs onStart *before* onNewIntent, and an Answer that
+         * brought the app back must still find its ring ringing there (MainActivity refuses an Answer for
+         * a ring that has ended); it is called from onResume.
          */
         fun pageTakesOver(@Suppress("UNUSED_PARAMETER") context: Context) {
-            instance?.let { svc -> svc.onWorker { svc.session?.endRings() } }
+            instance?.let { svc ->
+                svc.onWorker {
+                    val s = svc.session
+                    if (s != null && front.inFront(s.origin)) s.endRings()
+                }
+            }
         }
 
         /**
@@ -333,13 +354,33 @@ class NotifyService : Service() {
     @Volatile private var session: Session? = null
 
     /**
-     * Set first in [onDestroy]. The worker may still be in the middle of something (a blocking
-     * load, a catch-up) when the service is stopped, and a stopped service must post nothing and
-     * write no cursor: a notification after "off" is a bug, and a fresh-start cursor written
-     * after Settings cleared it would make the next start catch up instead of starting fresh.
-     * Checked wherever work is about to be shown or kept.
+     * Set the moment a stop is asked for ([stopNow], from [stop] and [setEnabled], on the main thread,
+     * before they clear anything) and again first in [onDestroy]. The worker may still be in the middle of
+     * something (a blocking load, a catch-up) when the service is stopped, and a stopped service must post
+     * nothing and write no cursor: a notification after "off" is a bug, and a fresh-start cursor written
+     * after Settings cleared it would make the next start catch up instead of starting fresh. Checked
+     * wherever work is about to be shown or kept; what is shown or kept goes through [unlessStopped].
+     * Not left to [onDestroy] alone, which runs a main-loop turn after the stop was asked for.
      */
     @Volatile private var destroyed = false
+
+    /** Held while something is shown or kept, and while a stop raises the flag: see [unlessStopped]. */
+    private val stopLock = Any()
+
+    /** Main thread, from [stop] and [setEnabled]: from here on nothing more is shown or kept. */
+    private fun stopNow() {
+        synchronized(stopLock) { destroyed = true }
+    }
+
+    /**
+     * Runs [block] (a post, a cursor write) unless the service has been stopped. The flag is raised under
+     * the same lock, so a stop waits for a block that has begun, and what that block did is then cleared by
+     * the stop; a block that has not begun finds the flag. A check followed by a write, with nothing between,
+     * would leave a gap in which the stop's clear could come first.
+     */
+    private inline fun unlessStopped(block: () -> Unit) {
+        synchronized(stopLock) { if (!destroyed) block() }
+    }
 
     // Worker thread only, from here down.
     private var prefsTimer: ScheduledFuture<*>? = null
@@ -394,7 +435,7 @@ class NotifyService : Service() {
     }
 
     override fun onDestroy() {
-        destroyed = true // first: anything the worker is still doing must see it
+        stopNow() // first (usually already so): anything the worker is still doing must see it
         // Turned off in Settings: its clear ran when Stop was asked, before this service was gone; once
         // nothing more can be written (above), the cursor is cleared for good, so turning it back on is fresh.
         if (!isEnabled(this)) cursor.clear()
@@ -488,7 +529,7 @@ class NotifyService : Service() {
             notifier.clearAll()
             burst = BurstGate()
             if (destroyed) return // Settings just cleared the cursor: a start-fresh one must not be written back
-            cursor.set(s.origin, me.id, freshSince(s))
+            unlessStopped { cursor.set(s.origin, me.id, freshSince(s)) }
             s.caughtUp = true
         } else {
             s.catchUpTries = 0
@@ -573,7 +614,7 @@ class NotifyService : Service() {
                 if (destroyed) return
                 // The server's own clock at the answer: everything before it was in the answer, however the
                 // socket was doing, so this one is safe without a packet to vouch for it.
-                cursor.advance(s.origin, me.id, r.missed.now)
+                unlessStopped { cursor.advance(s.origin, me.id, r.missed.now) }
                 s.caughtUp = true
             }
             CatchUp.Outcome.NotSupported -> {
@@ -598,15 +639,16 @@ class NotifyService : Service() {
     /**
      * Moves catch-up's place on, while everything before it has been seen — but only as far as the
      * last packet received vouches for ([CursorPolicy.advance]): "now" proves nothing when the
-     * socket may have died silently (and the phone slept before anyone noticed). Only on the server's
-     * clock: with the offset unknown it stays where the server put it.
+     * socket may have died silently, and a packet that did arrive vouches for what came before it
+     * whatever the phone did afterwards. Only on the server's clock: with the offset unknown it stays
+     * where the server put it.
      */
     private fun moveCursor(s: Session) {
         if (destroyed || !s.caughtUp || s.api.serverOffsetMs == null) return
         val me = s.directory.me ?: return
         val current = cursor.get(s.origin, me.id) ?: return
-        val to = CursorPolicy.advance(current, s.connection.lastPacketAt, s.connection.sleptSinceLastPacket())
-        if (to > current) cursor.advance(s.origin, me.id, to)
+        val to = CursorPolicy.advance(current, s.connection.lastPacketAt)
+        if (to > current) unlessStopped { cursor.advance(s.origin, me.id, to) }
     }
 
     // ---- messages --------------------------------------------------------------------------------
@@ -636,8 +678,8 @@ class NotifyService : Service() {
     private fun prepare(s: Session, raw: RawMessage, live: Boolean): Ready? {
         if (destroyed) return null // before marking it seen: nothing is shown after stop
         if (!seenIds.firstTime(raw.messageId)) return null
-        // In front (this server's page is on screen and has said hello), the page sounds and shows it. Marked seen
-        // above, so catch-up won't bring it back. With only the launcher, a page still loading or the can't-reach
+        // In front (this server's page is on screen and its web client is ready), the page sounds and shows it. Marked seen
+        // above, so catch-up won't bring it back. With only the launcher, a page still loading or signing in, or the can't-reach
         // screen up, nobody would show it: it is posted as usual.
         if (front.inFront(s.origin)) return null
         val me = s.directory.me ?: return null
@@ -662,7 +704,7 @@ class NotifyService : Service() {
         if (destroyed || group.isEmpty()) return
         val alert = if (group.any { it.alert == Alert.LOUD }) Alert.LOUD else Alert.SILENT
         try {
-            notifier.postAll(group.map { it.note }, alert, s.origin)
+            unlessStopped { notifier.postAll(group.map { it.note }, alert, s.origin) }
         } catch (ex: RuntimeException) {
             // Android can refuse a post (a notification it finds too big, say); the next message tries afresh.
             Log.w(TAG, "couldn’t post a notification: ${ex.javaClass.simpleName}")
@@ -682,7 +724,7 @@ class NotifyService : Service() {
      * ring (joined, or the room emptied: a missed call), or nothing. Voice channels never ring.
      */
     private fun onCallState(s: Session, payload: JSONObject) {
-        if (s !== session) return
+        if (destroyed || s !== session) return // stopped: no ring starts
         val me = s.directory.me ?: return
         val state = CallEvents.state(payload) ?: return
         val target = CallRooms.target(state.room, me.id)
