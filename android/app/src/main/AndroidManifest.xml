@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -10,6 +11,9 @@
     <!-- The background connection (notify/NotifyService): a foreground service of type remoteMessaging. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <!-- A call rings full-screen, even over the lock screen (notify/CallRinger). From Android 14 the person
+         can switch it off, and the ring is then a heads-up notification. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -34,6 +38,18 @@
             </intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- The incoming-call screen: over the lock screen, waking the phone. Its own task, so it never
+             disturbs the app's, and never in Recents. Not exported: only a ring's PendingIntent opens it.
+             showWhenLocked/turnScreenOn start at API 27; the activity sets the window flags for API 26. -->
+        <activity
+            tools:ignore="UnusedAttribute"
+            android:name=".notify.IncomingCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:turnScreenOn="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection" />
         <!-- remoteMessaging: passing the person's messages on to them, no daily limit, and still
              allowed to start from boot on Android 15 (see NotifyService). Not exported. -->
         <service

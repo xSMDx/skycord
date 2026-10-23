@@ -5,4 +5,7 @@
     <color name="text3">#949BA4</color>
     <color name="accent">#38B6F1</color>
     <color name="on_accent">#0E0F11</color>
+    <!-- The incoming-call screen's two buttons. -->
+    <color name="call_answer">#23A55A</color>
+    <color name="call_decline">#DA373C</color>
 </resources>

@@ -26,6 +26,13 @@
     <string name="notice_send_failed">Couldn\'t send — open Skycord to try again</string>
     <string name="notice_signed_out">Signed out — open Skycord to sign in</string>
 
+    <!-- A call that rings (the Calls channel), the screen it opens, and the one left behind when nobody answered. -->
+    <string name="call_incoming">Incoming call</string>
+    <string name="call_answer">Answer</string>
+    <string name="call_decline">Decline</string>
+    <string name="call_someone">Someone</string>
+    <string name="notice_missed_call">Missed call from %1$s</string>
+
     <!-- The background connection's own, always-on notification (the Connection channel). -->
     <string name="service_connected">Connected to %1$s</string>
     <string name="service_connecting">Connecting to %1$s…</string>

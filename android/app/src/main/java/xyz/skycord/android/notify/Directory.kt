@@ -120,6 +120,21 @@ internal class Directory(private val api: ServerApi) : MessageEvents.Names {
     /** For the ring (Task 12): a DM partner's or group member's name, when one has been met. */
     fun personName(userId: String): String? = people[userId]
 
+    /**
+     * The name a ring gives its caller: one already met, else asked of the server once (the person's
+     * profile) and kept. A friend who has not written since the phone connected is not in [people], and
+     * a ring that said "Someone" for them would be a poor one. Null when the server will not say
+     * (asked again after a minute at the earliest). Blocking, on the service's thread.
+     */
+    fun callerName(userId: String): String? {
+        people[userId]?.let { return it }
+        if (!mayAsk("person:$userId")) return null
+        val user = (api.get("/users/${ServerApi.segment(userId)}/profile") as? ApiResult.Ok)?.body?.optJSONObject("user") ?: return null
+        val name = user.str("displayName") ?: user.str("username") ?: return null
+        learnName(userId, name)
+        return name
+    }
+
     /** For the ring (Task 12): whether the person is in [groupId], as far as the last fetch knows. */
     fun isGroupMember(groupId: String): Boolean = me?.id?.let { groups[groupId]?.memberIds?.contains(it) } == true
 

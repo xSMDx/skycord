@@ -109,4 +109,23 @@ class NoticeTextTest {
     @Test fun theAuthorIsTheSameWhereverTheMessageCameFrom() {
         for (e in listOf(dm(), group(), channel())) assertEquals("Ana", NoticeText.authorName(e))
     }
+
+    // ---- a call nobody answered (the CallRinger's missed-call notification) --------------------------
+
+    @Test fun aMissedCallSaysWhoCalled() = assertEquals("Missed call from Sam", NoticeText.missedCallText("Sam"))
+
+    @Test fun aMissedCallFromAGroupNamesTheCallerAndTheGroup() =
+        assertEquals("Missed call from Sam · Crew", NoticeText.missedCallText("Sam · Crew"))
+
+    @Test fun aNameIsNeverReadAsFormatting() =
+        assertEquals("Missed call from 100%s %1\$s", NoticeText.missedCallText("100%s %1\$s"))
+
+    @Test fun theStringResourceSaysTheSameThing() {
+        // The notification's words live in strings.xml; this ties them to the pure function's default,
+        // so the two cannot drift apart. (Unit tests run in the module's directory.)
+        val xml = java.io.File("src/main/res/values/strings.xml").readText()
+        val template = Regex("""<string name="notice_missed_call">(.*?)</string>""").find(xml)?.groupValues?.get(1)
+        assertEquals("Missed call from %1\$s", template)
+        assertEquals(NoticeText.missedCallText("Sam"), template!!.format("Sam"))
+    }
 }

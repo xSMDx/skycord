@@ -46,6 +46,7 @@ import xyz.skycord.android.core.Origins
 import xyz.skycord.android.core.PickerTypes
 import xyz.skycord.android.core.RefreshCookie
 import xyz.skycord.android.core.ServerStore
+import xyz.skycord.android.notify.CallRinger
 import xyz.skycord.android.notify.NotifyHub
 import xyz.skycord.android.notify.NotifyService
 
@@ -71,6 +72,13 @@ class MainActivity : AppCompatActivity() {
          */
         const val EXTRA_JOIN_KIND = "xyz.skycord.android.extra.JOIN_KIND"
         const val EXTRA_JOIN_ID = "xyz.skycord.android.extra.JOIN_ID"
+        /**
+         * Which ring this Answer is for (the call's room). With it the app ends that ring, and refuses an
+         * Answer whose ring has already ended (the caller hung up while the person unlocked), so a late
+         * Answer never starts a new call. Absent, nothing is checked.
+         */
+        const val EXTRA_JOIN_ROOM = "xyz.skycord.android.extra.JOIN_ROOM"
+        private const val MAX_ROOM = 200
         private const val WEBVIEW_PACKAGE = "com.google.android.webview"
         private val OPEN_KINDS = setOf("dm", "group", "channel")
         private val JOIN_KINDS = setOf("dm", "group")
@@ -199,6 +207,9 @@ class MainActivity : AppCompatActivity() {
             // Here rather than in onStart: onNewIntent, with an answered call, always comes before
             // onResume, so the page hears "join" before "back in front" (BridgeHost.flush).
             bridge.setBackground(false)
+            // A call still ringing on the phone is the page's to ring now. After onNewIntent (an Answer has
+            // ended its own ring there), which onStart is not: see NotifyService.pageTakesOver.
+            NotifyService.pageTakesOver(this)
             // Back from Android's settings, where notifications may just have been allowed.
             syncNotifyService(leaving = false)
         }
@@ -431,7 +442,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** What a notification asked for: open a conversation, or join a call, on a saved server. */
-    private class NoticeRequest(val origin: String, val join: Boolean, val value: JSONObject, val convKey: String?)
+    private class NoticeRequest(val origin: String, val join: Boolean, val value: JSONObject, val convKey: String?, val room: String? = null)
 
     /** The request [intent] carries, or null when it carries none (or names a server not saved). */
     private fun noticeRequest(intent: Intent): NoticeRequest? {
@@ -439,7 +450,11 @@ class MainActivity : AppCompatActivity() {
         val joinKind = intent.getStringExtra(EXTRA_JOIN_KIND)
         val joinId = intent.getStringExtra(EXTRA_JOIN_ID)
         if (joinKind in JOIN_KINDS && !joinId.isNullOrEmpty()) {
-            return NoticeRequest(origin, join = true, JSONObject().put("kind", joinKind).put("convId", joinId), convKey = null)
+            val room = intent.getStringExtra(EXTRA_JOIN_ROOM)?.takeIf { it.isNotEmpty() && it.length <= MAX_ROOM }
+            // An Answer for a ring that has ended (the caller hung up, or another device answered, while
+            // the person was unlocking) must not start a call of its own: the app just opens.
+            if (room != null && !CallRinger.isRinging(room)) return null
+            return NoticeRequest(origin, join = true, JSONObject().put("kind", joinKind).put("convId", joinId), convKey = null, room = room)
         }
         val kind = intent.getStringExtra(EXTRA_OPEN_KIND)?.takeIf { it in OPEN_KINDS } ?: return null
         val id = intent.getStringExtra(EXTRA_OPEN_ID)?.takeIf { it.isNotEmpty() } ?: return null
@@ -452,6 +467,8 @@ class MainActivity : AppCompatActivity() {
         // A tap cancels the notification without its delete intent, so nothing else re-arms the
         // conversation's burst: its next message must alert again, not slip in silently.
         request.convKey?.let(NotifyHub::rearm)
+        // Answered: the ring is over now (its sound and screen), not when the page's join reaches the server.
+        request.room?.let { NotifyService.callAnswered(this, it) }
         if (request.join) bridge.requestJoin(request.origin, request.value) else bridge.requestOpen(request.origin, request.value)
     }
 

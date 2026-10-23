@@ -22,10 +22,15 @@ import xyz.skycord.android.PrefsKeyValue
 import xyz.skycord.android.R
 import xyz.skycord.android.core.Backoff
 import xyz.skycord.android.core.BurstGate
+import xyz.skycord.android.core.CallEvents
+import xyz.skycord.android.core.CallRooms
 import xyz.skycord.android.core.IncomingMessage
 import xyz.skycord.android.core.MessageEvents
+import xyz.skycord.android.core.Me
 import xyz.skycord.android.core.NoticeText
 import xyz.skycord.android.core.RawMessage
+import xyz.skycord.android.core.RingAction
+import xyz.skycord.android.core.RingGate
 import xyz.skycord.android.core.SeenMessages
 import xyz.skycord.android.core.ServerStore
 import xyz.skycord.android.core.classify
@@ -68,6 +73,15 @@ import java.util.concurrent.TimeUnit
  * or quiet (on the monotonic clock, so a corrected clock offset cannot buzz),
  * and [Notifier] posts. Catch-up runs after every reconnect that has a place to
  * start from, and is always quiet.
+ *
+ * **Calls.** `call:state` goes through a [RingGate] (per server, told of every
+ * reconnect first, and given the server's clock): it says when a DM or group call
+ * is one to ring for, and [CallRinger] rings it. Not while the app is in front or
+ * for a muted conversation or Do Not Disturb (the page rings, or the person has
+ * said no); each of those ends the ring before it begins. A ring ends on the gate's
+ * word (joined, the room emptied: a missed call), after 30 s (a missed call), on
+ * Answer, on Decline (which sends `call:decline`, so the caller is told), on your own
+ * decline elsewhere (`call:declined` with your id), and when the app comes to the front.
  *
  * Everything runs on one worker thread, so the state below needs no locks; the
  * companion functions only hand things over to it.
@@ -147,6 +161,34 @@ class NotifyService : Service() {
         }
 
         /**
+         * The app is on screen and focused (the activity's onResume): the page has the sounds and its own
+         * ring now, so a call still ringing on the phone ends here. Not in onStart: for an activity that was
+         * stopped Android runs onStart *before* onNewIntent, and an Answer that brought the app back must still
+         * find its ring ringing there (MainActivity refuses an Answer for a ring that has ended).
+         */
+        fun pageTakesOver(@Suppress("UNUSED_PARAMETER") context: Context) {
+            instance?.let { svc -> svc.onWorker { svc.session?.endRings() } }
+        }
+
+        /**
+         * Answer was pressed (the call screen, or the notification): the ring is over, quietly — no missed
+         * call, nothing said to the caller — and the page joins. Takes the ring down at once, service or not.
+         */
+        fun callAnswered(context: Context, room: String) {
+            CallRinger.cancel(context, room)
+            instance?.let { svc -> svc.onWorker { svc.session?.endRing(room) } }
+        }
+
+        /**
+         * Decline was pressed: the ring ends at once, and the server is told, so the caller sees "declined"
+         * and the person's other devices stop ringing. With no service there is no connection to tell it by.
+         */
+        fun declineCall(context: Context, room: String) {
+            CallRinger.cancel(context, room)
+            instance?.let { svc -> svc.onWorker { svc.session?.decline(room) } }
+        }
+
+        /**
          * The page has [convKey] ("dm:…", "group:…", "channel:…") on screen: its
          * notification goes, and its next message alerts again.
          */
@@ -178,7 +220,17 @@ class NotifyService : Service() {
         var catchUpTries = 0
         var catchUpRetry: ScheduledFuture<*>? = null
 
+        // Calls: when to ring, the ring itself, and for each room ringing its name and its 30 s timer.
+        // Worker thread only. (Room names are this server's, so a new server starts with a new gate.)
+        val gate = RingGate()
+        val ringer = CallRinger(this@NotifyService, origin)
+        private val ringing = HashMap<String, Ringing>()
+
+        private inner class Ringing(val name: String, val timer: ScheduledFuture<*>?)
+
         fun open() {
+            connection.on("call:state") { onCallState(this, it) }
+            connection.on("call:declined") { onCallDeclined(this, it) }
             connection.on("dm:receive") { onMessage(this, "dm", it) }
             connection.on("group:receive") { onMessage(this, "group", it) }
             connection.on("channel:receive") { onMessage(this, "channel", it) }
@@ -194,6 +246,41 @@ class NotifyService : Service() {
             catchUpRetry?.cancel(false)
             moveCursor(this)
             connection.stop()
+            endRings()
+        }
+
+        /** Worker. A ring started for [room], named [name], to end by itself in [RING_MS]. */
+        fun began(room: String, name: String) {
+            ringing[room]?.timer?.cancel(false)
+            ringing[room] = Ringing(name, later(CallRinger.RING_MS) { onRingTimeout(this, room) })
+        }
+
+        /** Worker. [room] stops ringing, whatever ended it; its name, if it was ringing. */
+        fun ended(room: String): String? {
+            val r = ringing.remove(room) ?: return null
+            r.timer?.cancel(false)
+            return r.name
+        }
+
+        /** Worker. The call was answered here: the ring is over, quietly. */
+        fun endRing(room: String) {
+            gate.onDeclined(room)
+            ended(room)
+            ringer.stop(room)
+        }
+
+        /** Worker. Every ring over, quietly: the app is in front, or this connection is going. */
+        fun endRings() {
+            for (room in ringing.keys.toList()) endRing(room)
+            ringer.stopAll()
+        }
+
+        /** Worker. Decline: the ring ends, and the server is told, if the ring was still on. */
+        fun decline(room: String) {
+            gate.onDeclined(room)
+            val was = ended(room)
+            ringer.stop(room)
+            if (was != null) connection.emit("call:decline", JSONObject().put("room", room))
         }
 
         override fun onConnected() = onSessionConnected(this)
@@ -327,6 +414,9 @@ class NotifyService : Service() {
 
     private fun onSessionConnected(s: Session) {
         if (s !== session) return
+        // Every (re)connect, before the call:state events the server replays right after it: a call
+        // that was going on is not one that has just begun.
+        s.gate.onConnected(s.api.serverNow())
         when (s.directory.load()) {
             Directory.Outcome.SIGNED_OUT -> { signedOut(); return }
             Directory.Outcome.FAILED -> {
@@ -371,6 +461,7 @@ class NotifyService : Service() {
         session?.let {
             it.catchUpRetry?.cancel(false)
             it.connection.stop()
+            it.endRings()
         }
         session = null
         cursor.clear()
@@ -466,6 +557,86 @@ class NotifyService : Service() {
         if (s !== session) return
         // Added to a group mid-connection: the server joined this socket to its groups only at connect.
         s.directory.onGroup(payload)?.let { id -> s.connection.emit("group:subscribe", JSONObject().put("groupId", id)) }
+    }
+
+    // ---- calls -----------------------------------------------------------------------------------
+
+    /**
+     * Worker. A `call:state`: [RingGate] says whether it is a call to ring for, one that has ended its
+     * ring (joined, or the room emptied: a missed call), or nothing. Voice channels never ring.
+     */
+    private fun onCallState(s: Session, payload: JSONObject) {
+        if (s !== session) return
+        val me = s.directory.me ?: return
+        val state = CallEvents.state(payload) ?: return
+        val target = CallRooms.target(state.room, me.id)
+        val isMember = when (target?.kind) {
+            "dm" -> true // the room names the two people, and the person is one of them
+            "group" -> s.directory.isGroupMember(target.convId)
+            else -> false
+        }
+        when (s.gate.onCallState(state.room, state.userIds, state.startedAt, me.id, isMember, s.api.serverNow())) {
+            is RingAction.Ring -> if (target != null) startRing(s, me, state, target) else s.gate.onDeclined(state.room)
+            is RingAction.Stop -> finishRing(s, state.room, missed = false)
+            is RingAction.Missed -> finishRing(s, state.room, missed = true)
+            RingAction.None -> {}
+        }
+    }
+
+    /**
+     * Worker. The gate says ring. Not while the app is in front (the page rings then), nor for a muted
+     * conversation or Do Not Disturb (the web client's own rules for a call); those end the ring before it
+     * begins, so nothing is left behind for it. The caller is named from the directory, asked if need be.
+     */
+    private fun startRing(s: Session, me: Me, state: CallEvents.State, target: CallRooms.Target) {
+        val room = state.room
+        val rules = s.directory.ruleState()
+        if (inFront || rules == null || rules.dnd || rules.isMuted(target.convId)) {
+            s.gate.onDeclined(room)
+            return
+        }
+        // In a DM the caller is the other person; in a group, whoever is in the call first started it.
+        val callerId = if (target.kind == "dm") target.convId else state.userIds.firstOrNull { it != me.id }
+        val label = CallRooms.callerLabel(
+            kind = target.kind,
+            callerName = callerId?.let(s.directory::callerName),
+            groupName = if (target.kind == "group") s.directory.groupName(target.convId) else null,
+            someone = getString(R.string.call_someone),
+            unknownGroup = getString(R.string.notice_unknown_group),
+        )
+        try {
+            s.ringer.ring(room, label, target.kind, target.convId)
+        } catch (ex: RuntimeException) {
+            // Android refused to show it, so nothing is ringing, and nothing can be missed.
+            Log.w(TAG, "couldn’t ring: ${ex.javaClass.simpleName}")
+            s.gate.onDeclined(room)
+            return
+        }
+        Log.i(TAG, "ringing for a ${target.kind} call")
+        s.began(room, label)
+    }
+
+    /** Worker. The ring ran its 30 s unanswered. */
+    private fun onRingTimeout(s: Session, room: String) {
+        if (s !== session) return
+        if (s.gate.onTimeout(room) is RingAction.Missed) finishRing(s, room, missed = true)
+    }
+
+    /** Worker. A ring over: [missed] when nobody answered, else (joined elsewhere) quietly. */
+    private fun finishRing(s: Session, room: String, missed: Boolean) {
+        val name = s.ended(room)
+        if (missed && name != null) s.ringer.missed(room, name) else s.ringer.stop(room)
+        Log.i(TAG, if (missed) "the call rang out: a missed call" else "the ring is over")
+    }
+
+    /** Worker. Somebody declined: only your own decline, from another of your devices, ends this ring. */
+    private fun onCallDeclined(s: Session, payload: JSONObject) {
+        if (s !== session) return
+        val me = s.directory.me ?: return
+        val declined = CallEvents.declined(payload) ?: return
+        // Someone you called declining is for the caller's screen; a phone that rings is never the caller's.
+        if (declined.userId != me.id) return
+        s.endRing(declined.room)
     }
 
     private fun onPrefsChanged() {

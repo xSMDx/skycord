@@ -37,6 +37,9 @@ class NoticeActions : BroadcastReceiver() {
         when (intent.action) {
             ACTION_DISMISSED -> intent.getStringExtra(EXTRA_CONV_KEY)?.let(NotifyHub::rearm)
             ACTION_REPLY -> reply(context, intent)
+            // Decline on a ringing call. Nothing slow here: the service does the telling, on its own thread.
+            ACTION_DECLINE_CALL -> intent.getStringExtra(EXTRA_CALL_ROOM)?.takeIf { it.isNotEmpty() }
+                ?.let { NotifyService.declineCall(context, it) }
         }
     }
 
@@ -113,6 +116,10 @@ class NoticeActions : BroadcastReceiver() {
     companion object {
         const val ACTION_REPLY = "xyz.skycord.android.action.NOTICE_REPLY"
         const val ACTION_DISMISSED = "xyz.skycord.android.action.NOTICE_DISMISSED"
+        const val ACTION_DECLINE_CALL = "xyz.skycord.android.action.DECLINE_CALL"
+
+        /** The room of the ringing call on a Decline intent (notify/CallRinger). */
+        const val EXTRA_CALL_ROOM = "xyz.skycord.android.extra.CALL_ROOM"
 
         /** The RemoteInput key the reply field's text comes back under. */
         const val KEY_REPLY = "reply"

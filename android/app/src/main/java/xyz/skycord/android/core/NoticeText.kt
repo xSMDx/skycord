@@ -71,6 +71,16 @@ object NoticeText {
      */
     fun body(content: String, fallback: String): String = plainBody(content).ifEmpty { fallback }
 
+    /**
+     * The missed-call notification's title: "Missed call from Sam". [template] is the
+     * string resource (`notice_missed_call`, one `%1$s` for the name); it defaults to the same
+     * words, which a test ties to the resource. The name is an argument, never part of the
+     * template, so a `%` in it is only a `%`.
+     */
+    fun missedCallText(name: String, template: String = MISSED_CALL): String = template.format(name)
+
+    private const val MISSED_CALL = "Missed call from %1\$s"
+
     // URLEncoder writes a space as "+", which in a path is a plus, not a space.
     private fun segment(id: String): String = URLEncoder.encode(id, "UTF-8").replace("+", "%20")
 }

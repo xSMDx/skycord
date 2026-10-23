@@ -153,14 +153,35 @@ class Notifier(context: Context) {
         publish(conv, headline = conv.title, mentions = false, loud = false, at = System.currentTimeMillis(), create = false) {}
     }
 
-    /** Removes one conversation's notification. */
-    fun clear(convKey: String) {
-        nm.cancel(convKey, NOTICE_ID)
+    /**
+     * A call nobody answered: "Missed call from Sam" on the Messages channel, one per
+     * conversation, until it is tapped (which opens that conversation, like any message
+     * notification's tap) or dismissed. [text] is the whole title ([NoticeText.missedCallText]).
+     */
+    internal fun missedCall(conv: Conv, text: String, at: Long = System.currentTimeMillis()) {
+        ensureChannelsOnce()
+        val notice = NotificationCompat.Builder(app, CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ContextCompat.getColor(app, R.color.accent))
+            .setContentTitle(text)
+            .setCategory(CATEGORY_MISSED_CALL)
+            .setAutoCancel(true)
+            .setWhen(at)
+            .setShowWhen(true)
+            .setContentIntent(tapIntent(conv))
+            .build()
+        nm.notify(missedTag(conv.key), MISSED_ID, notice)
     }
 
-    /** Removes every message notification (not the service's own, nor a signed-out notice). */
+    /** Removes one conversation's notification, and the missed call it holds. */
+    fun clear(convKey: String) {
+        nm.cancel(convKey, NOTICE_ID)
+        nm.cancel(missedTag(convKey), MISSED_ID)
+    }
+
+    /** Removes every message and missed-call notification (not the service's own, nor a signed-out notice). */
     fun clearAll() {
-        for (n in nm.activeNotifications) if (n.id == NOTICE_ID) nm.cancel(n.tag, n.id)
+        for (n in nm.activeNotifications) if (n.id == NOTICE_ID || n.id == MISSED_ID) nm.cancel(n.tag, n.id)
     }
 
     /**
@@ -248,7 +269,7 @@ class Notifier(context: Context) {
     private fun showing(convKey: String): Notification? =
         nm.activeNotifications.firstOrNull { it.id == NOTICE_ID && it.tag == convKey }?.notification
 
-    private fun ensureChannelsOnce() {
+    internal fun ensureChannelsOnce() {
         if (!channelsMade) ensureChannels()
     }
 
@@ -301,6 +322,15 @@ class Notifier(context: Context) {
         /** Every message notification: the conversation key is its tag, this its id. */
         private const val NOTICE_ID = 1001
         private const val SIGNED_OUT_ID = 1002
+        // 1003 is the service's own (NotifyService). The two below belong to calls (CallRinger,
+        // missedCall here): a ringing call, tagged by its room, and a missed one, tagged by its conversation.
+        internal const val RING_ID = 1004
+        private const val MISSED_ID = 1005
+
+        // Android's own "missed_call" category (a constant of Notification from API 33).
+        private const val CATEGORY_MISSED_CALL = "missed_call"
+
+        private fun missedTag(convKey: String) = "missed:$convKey"
 
         private const val EXTRA_MENTIONED = "xyz.skycord.android.extra.MENTIONED"
 
