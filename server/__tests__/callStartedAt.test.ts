@@ -11,10 +11,10 @@
  * call that blips and comes straight back is the SAME call and keeps its clock.
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client'
+import type { Socket as ClientSocket } from 'socket.io-client'
 import {
   connectDb, disconnectDb, resetDb, register,
-  withSocketServer, connectSocket, connectSocketRaw, nextEvent,
+  withSocketServer, connectSocket, connectSocketRaw, connectBackground, nextEvent,
 } from './helpers'
 import { cancelAllCallEnds, isInCall } from '../sockets/chatSocket'
 import { dmConvId } from '../controllers/messagesController'
@@ -57,17 +57,6 @@ const stateWhere = (s: ClientSocket, want: (p: CallState) => boolean, ms = 3000)
   })
 const exactly = (...ids: string[]) => (p: CallState) =>
   p.userIds.length === ids.length && ids.every(id => p.userIds.includes(id))
-
-/** Like connectSocket, but as the phone's notification service connects. */
-const connectBackground = async (url: string, token: string): Promise<ClientSocket> => {
-  const s = await new Promise<ClientSocket>((resolve, reject) => {
-    const c = ioClient(url, { auth: { token, background: true }, transports: ['websocket'], forceNew: true })
-    c.on('connect', () => resolve(c))
-    c.on('connect_error', reject)
-  })
-  await new Promise(r => setTimeout(r, 350))
-  return s
-}
 
 describe('call:state startedAt', () => {
   it('startedAt is set when a DM call starts', async () => {
@@ -155,29 +144,48 @@ describe('call:state startedAt', () => {
   })
 
   it('a call that blips and comes back inside the grace period keeps its startedAt', async () => {
-    const a = await register(), b = await register()
-    const aSock = track(await connectSocket(sockets.url, a.token))
-    const bSock = track(await connectSocket(sockets.url, b.token))
+    // This test needs the room to still be inside its grace period when a
+    // reconnect finishes, and the file-wide GRACE_MS leaves under a second of
+    // slack for that (connectSocket's 350 ms settle, the 60 ms wait and the
+    // rejoin round trip all come out of it) — a slow CI box would lapse the
+    // call and fail the test for no real reason. Read per schedule, so a longer
+    // value set here covers the disconnect below; restored in the finally so
+    // the test that needs it short still sees it short.
+    const savedGrace = process.env.CALL_END_GRACE_MS
+    process.env.CALL_END_GRACE_MS = '10000'
+    try {
+      const a = await register(), b = await register()
+      const aSock = track(await connectSocket(sockets.url, a.token))
+      const bSock = track(await connectSocket(sockets.url, b.token))
 
-    const first = nextEvent(bSock, 'call:state')
-    aSock.emit('call:join', { conversationId: b.id, kind: 'dm' })
-    const started = (await first).startedAt
-    expect(typeof started).toBe('number')
+      const first = nextEvent(bSock, 'call:state')
+      aSock.emit('call:join', { conversationId: b.id, kind: 'dm' })
+      const started = (await first).startedAt
+      expect(typeof started).toBe('number')
 
-    // The blip: a's socket drops, occupancy goes at once, the call is not over.
-    const cleared = nextEvent(bSock, 'call:state')
-    aSock.disconnect()
-    expect((await cleared).userIds).toEqual([])
+      // The blip: a's socket drops, occupancy goes at once, the call is not over.
+      const cleared = nextEvent(bSock, 'call:state')
+      aSock.disconnect()
+      const emptied = await cleared
+      expect(emptied.userIds).toEqual([])
+      // The room still has a start time on file (that is what the rejoin below
+      // keeps), but an empty room has none to report. Pins the
+      // `userIds.length > 0` guard in callStatePayload.
+      expect(emptied.startedAt).toBeUndefined()
 
-    // Long enough that a fresh Date.now() could not be mistaken for the old one.
-    await settle(60)
-    const aAgain = track(await connectSocket(sockets.url, a.token))
-    const self = nextEvent(aAgain, 'call:state')
-    aAgain.emit('call:rejoin', { conversationId: b.id, kind: 'dm' })
-    const payload = await self
+      // Long enough that a fresh Date.now() could not be mistaken for the old one.
+      await settle(60)
+      const aAgain = track(await connectSocket(sockets.url, a.token))
+      const self = nextEvent(aAgain, 'call:state')
+      aAgain.emit('call:rejoin', { conversationId: b.id, kind: 'dm' })
+      const payload = await self
 
-    expect(payload.userIds).toEqual([a.id])
-    expect(payload.startedAt).toBe(started)
+      expect(payload.userIds).toEqual([a.id])
+      expect(payload.startedAt).toBe(started)
+    } finally {
+      if (savedGrace === undefined) delete process.env.CALL_END_GRACE_MS
+      else process.env.CALL_END_GRACE_MS = savedGrace
+    }
   })
 
   it('once the grace period lapses the next call starts a new clock', async () => {

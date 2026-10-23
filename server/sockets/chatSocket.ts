@@ -1463,6 +1463,89 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       leaveCall(callRoom(data.kind, data.conversationId), 'hang-up')
     })
 
+    /**
+     * Turn down a call that is ringing.
+     *
+     * Two audiences, one event. The caller is told so their screen can say
+     * "<name> declined", and the decliner's OTHER devices are told so they stop
+     * ringing — a call answered or refused on the phone must not keep ringing the
+     * laptop. `user:<id>` reaches every socket a person has, so addressing the
+     * decliner's own personal room covers both the device that pressed the button
+     * and all the rest.
+     *
+     * A DM goes to both people. A group call goes to the decliner alone: it has
+     * no single caller to answer to, and telling every member that somebody
+     * passed on it is noise for the people still deciding.
+     *
+     * This only ever NOTIFIES. It never touches `activeCalls`, so it cannot end
+     * a call, evict anybody or write a message; the call carries on exactly as
+     * it was, and whoever declined can still join it later.
+     *
+     * Deliberately NOT guarded by `background`, unlike call:join and
+     * call:rejoin above. Those refuse a background socket because it would seat
+     * the person in a call while they look offline. Decline is the opposite
+     * case: the phone's Decline button on the ringing notification speaks over
+     * exactly that socket, and it seats nobody.
+     *
+     * The room has to be one this person could actually be ringing for AND one
+     * that is live: occupied, and without them. Anything else is dropped without
+     * a word, the same shape every other handler here uses for "not allowed" —
+     * otherwise this would be a way to put a "declined" on a stranger's screen
+     * for a call that does not exist, or one you are standing in. No ack is
+     * taken on this event, so there is nothing to answer.
+     */
+    socket.on('call:decline', async (data: { room?: unknown }) => {
+      try {
+        const room = data?.room
+        if (typeof room !== 'string') return
+
+        // Live and not yet joined by this person. Read from `activeCalls` each
+        // time rather than remembered: it is asked again after the awaits below,
+        // because the call can end, or this person can join it from another
+        // device, while the lookups are in flight.
+        const ringingFor = () => {
+          const members = activeCalls.get(room)
+          return !!members && members.size > 0 && !members.has(userId)
+        }
+        // First, because it is free and turns away every made-up room before
+        // anything touches the database.
+        if (!ringingFor()) return
+
+        let partner: string | null = null
+        if (room.startsWith('dm:')) {
+          // A DM room is `dm:<a>_<b>` (see dmConvId). Containing the decliner's
+          // id is the whole of the membership test: there is no other list.
+          const ids = room.slice(3).split('_')
+          if (ids.length !== 2 || !ids.includes(userId)) return
+          partner = ids[0] === userId ? ids[1] : ids[0]
+        } else if (room.startsWith('group:')) {
+          // The same membership rule call:join applies, not a second copy of it.
+          if (!await canJoinCall('group', room.slice(6), userId)) return
+        } else {
+          // A voice channel is not a ringing call, and anything unrecognised
+          // is not a room at all.
+          return
+        }
+
+        // Looked up now rather than taken from this connection's `myName`: a
+        // phone's socket lives all day, so that could be a name the person
+        // changed hours ago — and it is only filled in once setup has finished,
+        // so a Decline sent straight after connecting would carry the username.
+        const me = await User.findById(userId).select('displayName username').lean()
+        const name = me?.displayName || me?.username || username
+        if (!ringingFor()) return
+
+        const payload = { room, userId, name }
+        if (partner) io.to(`user:${partner}`).to(`user:${userId}`).emit('call:declined', payload)
+        else io.to(`user:${userId}`).emit('call:declined', payload)
+      } catch (err) {
+        // An async handler with no catch is an unhandled rejection, and a
+        // malformed id or a dropped connection must not be able to take the
+        // process down from here.
+        console.error('[WS] call:decline', err)
+      }
+    })
+
     // ── Music channels ─────────────────────────────────────────────────────
     /**
      * Several music streams inside one voice channel, each member tuned to at

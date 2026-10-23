@@ -10,10 +10,10 @@
  * It announces itself with `auth: { token, background: true }`.
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client'
+import type { Socket as ClientSocket } from 'socket.io-client'
 import {
   connectDb, disconnectDb, resetDb, register,
-  withSocketServer, connectSocket, nextEvent, type TestUser,
+  withSocketServer, connectSocket, connectBackground, nextEvent, type TestUser,
 } from './helpers'
 import { Friendship } from '../models/Friendship'
 import { User } from '../models/User'
@@ -31,21 +31,6 @@ const track = (s: ClientSocket) => { open.push(s); return s }
 
 const befriend = (a: TestUser, b: TestUser) =>
   Friendship.create({ requester: a.id, receiver: b.id, status: 'accepted' })
-
-/**
- * Connects the way the phone's notification service does, and — like
- * connectSocket — resolves only once the server has finished setting the
- * connection up (rooms joined), so a test can emit at it straight away.
- */
-const connectBackground = async (url: string, token: string): Promise<ClientSocket> => {
-  const s = await new Promise<ClientSocket>((resolve, reject) => {
-    const c = ioClient(url, { auth: { token, background: true }, transports: ['websocket'], forceNew: true })
-    c.on('connect', () => resolve(c))
-    c.on('connect_error', reject)
-  })
-  await new Promise(r => setTimeout(r, 350))
-  return s
-}
 
 /** Records every `presence` event about `userId` that reaches `listener`. */
 const watchPresence = (listener: ClientSocket, userId: string) => {

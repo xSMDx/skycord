@@ -118,16 +118,32 @@ export const connectSocketRaw = (url: string, token: string): Promise<ClientSock
  * Use `connectSocketRaw` instead when the test needs to observe an event the
  * server emits DURING setup — the call catch-up, for one. Waiting past setup
  * means waiting past the very thing under test.
+ *
+ * `extraAuth` rides along in the handshake's `auth` beside the token. Its one
+ * user is `connectBackground`; it is a parameter rather than a second copy of
+ * this function so the settle above cannot be fixed in one and forgotten in the
+ * other.
  */
-export const connectSocket = async (url: string, token: string): Promise<ClientSocket> => {
+export const connectSocket = async (
+  url: string, token: string, extraAuth: Record<string, unknown> = {},
+): Promise<ClientSocket> => {
   const s = await new Promise<ClientSocket>((resolve, reject) => {
-    const c = ioClient(url, { auth: { token }, transports: ['websocket'], forceNew: true })
+    const c = ioClient(url, { auth: { token, ...extraAuth }, transports: ['websocket'], forceNew: true })
     c.on('connect', () => resolve(c))
     c.on('connect_error', reject)
   })
   await new Promise(r => setTimeout(r, 350))
   return s
 }
+
+/**
+ * Connects the way the Android app's notification service does
+ * (`auth: { token, background: true }`), and — like `connectSocket` — resolves
+ * only once the server has finished setting the connection up, so a test can
+ * emit at it straight away.
+ */
+export const connectBackground = (url: string, token: string): Promise<ClientSocket> =>
+  connectSocket(url, token, { background: true })
 
 /** Resolves with the next payload for `name`, or rejects if it never arrives. */
 export const nextEvent = <T = any>(s: ClientSocket, name: string, ms = 3000): Promise<T> =>
