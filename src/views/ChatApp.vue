@@ -15,7 +15,7 @@ import { avatarFor } from '@/composables/useAvatar'
 import { useUpdates } from '@/composables/useUpdates'
 import { shouldPrompt } from '@/composables/updatePrompt'
 import { appBridge } from '@/composables/desktopBridge'
-import { backAction, overlayOpen, pressEscape } from '@/composables/androidBack'
+import { backAction, overlayOpen, pressEscape, closeOverlays } from '@/composables/androidBack'
 import { useAndroidChrome } from '@/composables/androidChrome'
 import { alertsBelongToPage, declinedText, firstDecline } from '@/composables/androidNotify'
 import { useSearch, type SearchHit } from '@/composables/useSearch'
@@ -254,7 +254,8 @@ const modalAckedRooms = ref<Set<string>>(new Set())
 // server's replay of the call's presence can land first and would ring a modal
 // for the call being answered. It cannot be an engaged room, because that set
 // is pruned against `activeCalls`, which may not hold the room yet. Cleared by
-// endJoiningFromApp (see "Android: what the app asks of the page").
+// endJoiningFromApp, whose safety timer starts when the call is made rather than
+// here (see "Android: what the app asks of the page").
 const joiningFromApp = ref<string | null>(null)
 // Whether the window is in front — declared before anything that asks.
 // The desktop app says (windowInFront): inside it the document reports focus
@@ -3859,7 +3860,7 @@ const handleDeleteById = (msgId: number) => {
   const msg  = list.find(m => m.id === msgId)
   if (!msg) return
 
-  const body = stripMarkers(msg.content || "").replace(/s+/g, " ").trim()
+  const body = stripMarkers(msg.content || "").replace(/\s+/g, " ").trim()
   const preview = body.length > DELETE_PREVIEW_MAX
     ? body.slice(0, DELETE_PREVIEW_MAX) + "…"
     : body
@@ -4353,20 +4354,30 @@ onBeforeUnmount(() => { stopNotices(); stopCallActions(); stopTray() })
 // the page tells the app which conversation is on screen. All through optional
 // bridge members, so Windows and a browser never get here.
 
-/** Open a conversation the app names, once what it points at has loaded. */
-const openFromApp = async (c: ConvRef) => {
+/** What a tap on a notification says when what it points at is not in the lists. */
+const CONVERSATION_GONE = 'That conversation is no longer here'
+
+/**
+ * Open a conversation the app names, once what it points at has loaded, and say
+ * whether it was there. A missing one is toasted, unless the caller `quiet`s it
+ * because it has its own answer to give.
+ */
+const openFromApp = async (c: ConvRef, opts: { quiet?: boolean } = {}): Promise<boolean> => {
   await whenBooted()
   showSearchScreen.value = false   // a phone's search screen covers the conversation
   // On a phone Settings, the quick switcher, pins and profiles fill the screen:
   // a conversation opened beneath one changes nothing the person can see. Close
-  // what is open, topmost first — the back button's own Escape — a few times at
-  // most, so a box that will not close cannot hold this up.
-  for (let i = 0; i < 6 && overlayOpen(); i++) { pressEscape(); await nextTick() }
+  // what is open, topmost first — the back button's own Escape — waiting for each
+  // box to be gone before the next, and a bounded number of times at most, so a
+  // box that will not close cannot hold this up.
+  await closeOverlays()
   // A channel in a server not opened this session: fetch the server first, as a notice does.
   if (c.kind === 'channel' && !channelHome(c.id) && c.serverId) {
     try { await loadServerDetail(c.serverId) } catch { /* not found, said below */ }
   }
-  if (!(await openConversationRef(c))) showToast('That conversation is no longer here')
+  const opened = await openConversationRef(c)
+  if (!opened && !opts.quiet) showToast(CONVERSATION_GONE)
+  return opened
 }
 const stopOpenFromApp = appBridge()?.onOpenConversation?.(c => { void openFromApp(c) })
 
@@ -4385,6 +4396,10 @@ const callNameFor = (kind: 'dm' | 'group', convId: string): string => {
 // guard comes down when the call is up (the engaged set takes over from there),
 // when the attempt ends without one, if the join throws, or after a safety
 // timeout. The name is cosmetic and never holds the guard up.
+//
+// The timeout runs from the moment the call is made, not from the request: the
+// page may still be booting when the request arrives, and a slow boot would use
+// the guard up before anything had begun to connect.
 const JOINING_FROM_APP_MS = 15_000
 let joiningTimer: ReturnType<typeof setTimeout> | null = null
 let joiningSawConnecting = false
@@ -4392,6 +4407,10 @@ const endJoiningFromApp = () => {
   if (joiningTimer) { clearTimeout(joiningTimer); joiningTimer = null }
   joiningFromApp.value = null
   joiningSawConnecting = false
+}
+const armJoiningTimer = () => {
+  if (joiningTimer) clearTimeout(joiningTimer)
+  joiningTimer = setTimeout(endJoiningFromApp, JOINING_FROM_APP_MS)
 }
 watch(() => [voice.connecting, voice.connected] as const, ([connecting, connected]) => {
   if (joiningFromApp.value === null) return
@@ -4401,18 +4420,24 @@ watch(() => [voice.connecting, voice.connected] as const, ([connecting, connecte
 })
 const joinFromApp = async (c: { kind: 'dm' | 'group'; convId: string }) => {
   await whenBooted()
-  vConnect(c.convId, c.kind, callNameFor(c.kind, c.convId)).catch(endJoiningFromApp)
-  // The call with the app on screen: the conversation it belongs to, opened.
-  await openFromApp({ kind: c.kind, id: c.convId })
+  armJoiningTimer()
+  let failed = false
+  vConnect(c.convId, c.kind, callNameFor(c.kind, c.convId)).catch(() => { failed = true; endJoiningFromApp() })
+  // The call with the app on screen: the conversation it belongs to, opened. A DM
+  // that is not in the list can still be joined, so while the join stands a
+  // conversation that is not here is no cause for a toast; a join that has
+  // already failed, with nothing to show for it, still says so.
+  const opened = await openFromApp({ kind: c.kind, id: c.convId }, { quiet: true })
+  if (!opened && failed) showToast(CONVERSATION_GONE)
 }
 const stopJoinFromApp = appBridge()?.onJoinCall?.(c => {
   const myId = authUser.value?.id
-  // Synchronously, ahead of the awaits in joinFromApp (see joiningFromApp).
+  // Synchronously, ahead of the awaits in joinFromApp (see joiningFromApp). The
+  // safety timer is not started here: joinFromApp starts it with the call.
   if (myId) {
     joiningFromApp.value = voiceRoomName(c.kind, c.convId, myId)
     joiningSawConnecting = false
-    if (joiningTimer) clearTimeout(joiningTimer)
-    joiningTimer = setTimeout(endJoiningFromApp, JOINING_FROM_APP_MS)
+    if (joiningTimer) { clearTimeout(joiningTimer); joiningTimer = null }
   }
   void joinFromApp(c)
 })

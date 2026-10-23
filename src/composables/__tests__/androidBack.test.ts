@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
-import { backAction, overlayOpen, pressEscape, OVERLAY_SELECTOR } from '../androidBack'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  backAction, overlayOpen, pressEscape, closeOverlays, OVERLAY_SELECTOR, CLOSE_PASSES, CLOSE_WAIT_MS,
+} from '../androidBack'
 
 describe('the back button, in the page', () => {
   const state = (over: Partial<Parameters<typeof backAction>[0]> = {}) =>
@@ -73,5 +75,90 @@ describe('the back button, in the page', () => {
     expect(sent.type).toBe('keydown')
     expect(sent.key ?? sent.init?.key).toBe('Escape')
     expect(sent.bubbles ?? sent.init?.bubbles).toBe(true)
+  })
+})
+
+describe('closing every open overlay', () => {
+  afterEach(() => { vi.useRealTimers() })
+
+  /**
+   * A dialog as ModalBase leaves one: Escape starts a ~150 ms leave transition
+   * during which it is still attached and still showing, and only then does it
+   * go. `stubborn` ignores Escape altogether.
+   */
+  const dialog = (leaveMs = 150, stubborn = false) => {
+    const d = {
+      isConnected: true, leaving: false, escapes: 0,
+      getClientRects: () => (d.isConnected ? [{}] : []),
+      dispatchEvent: vi.fn(() => {
+        d.escapes++
+        if (!stubborn && !d.leaving) { d.leaving = true; setTimeout(() => { d.isConnected = false }, leaveMs) }
+        return true
+      }),
+    }
+    return d
+  }
+  const pageOf = (...stack: ReturnType<typeof dialog>[]) => ({
+    // What is in the page now, in document order — a gone dialog is no longer there.
+    querySelectorAll: () => stack.filter(d => d.isConnected),
+    body: { dispatchEvent: vi.fn() },
+  }) as unknown as Document
+
+  /** Runs the clock until `p` settles, and says how long that took. */
+  const settle = async (p: Promise<void>) => {
+    let done = false
+    void p.then(() => { done = true })
+    const t0 = Date.now()
+    for (let i = 0; i < 400 && !done; i++) await vi.advanceTimersByTimeAsync(10)
+    return { done, took: Date.now() - t0 }
+  }
+
+  it('hands back the overlay it sent Escape to, or none', () => {
+    ;(globalThis as { KeyboardEvent?: unknown }).KeyboardEvent ??= class { constructor(public type: string, public init: object) {} }
+    const under = dialog(), top = dialog()
+    expect(pressEscape(pageOf(under, top))).toBe(top)
+    expect(pressEscape(pageOf())).toBeNull()
+  })
+
+  it('lets a leaving dialog go before it looks again, so the box under it gets its own Escape', async () => {
+    ;(globalThis as { KeyboardEvent?: unknown }).KeyboardEvent ??= class { constructor(public type: string, public init: object) {} }
+    vi.useFakeTimers()
+    const under = dialog(), top = dialog()
+    const page = pageOf(under, top)
+
+    const { done } = await settle(closeOverlays(page))
+    expect(done).toBe(true)
+    // Escape once each. Looking again at once would find `top` still showing
+    // and send it a second one, again and again, and `under` never would.
+    expect(top.escapes).toBe(1)
+    expect(under.escapes).toBe(1)
+    expect(overlayOpen(page)).toBe(false)
+  })
+
+  it('waits only as long as the dialog takes, not the whole bound', async () => {
+    ;(globalThis as { KeyboardEvent?: unknown }).KeyboardEvent ??= class { constructor(public type: string, public init: object) {} }
+    vi.useFakeTimers()
+    const { done, took } = await settle(closeOverlays(pageOf(dialog(), dialog())))
+    expect(done).toBe(true)
+    expect(took).toBeLessThan(2 * CLOSE_WAIT_MS)   // two dialogs of ~150 ms, one after the other
+  })
+
+  it('does not wait on an overlay that ignores Escape for longer than the bound, nor pass more than six times', async () => {
+    ;(globalThis as { KeyboardEvent?: unknown }).KeyboardEvent ??= class { constructor(public type: string, public init: object) {} }
+    vi.useFakeTimers()
+    const stuck = dialog(150, true)
+    const { done, took } = await settle(closeOverlays(pageOf(stuck)))
+    expect(done).toBe(true)
+    expect(stuck.escapes).toBe(CLOSE_PASSES)
+    expect(CLOSE_PASSES).toBe(6)
+    expect(took).toBeLessThanOrEqual(CLOSE_PASSES * (CLOSE_WAIT_MS + 20))
+  })
+
+  it('sends nothing when nothing is open', async () => {
+    vi.useFakeTimers()
+    const page = pageOf()
+    const { done } = await settle(closeOverlays(page))
+    expect(done).toBe(true)
+    expect(page.body.dispatchEvent).not.toHaveBeenCalled()
   })
 })
