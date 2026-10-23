@@ -48,6 +48,15 @@ class MainActivity : AppCompatActivity() {
         const val LAUNCHER_URL = "$LAUNCHER_ORIGIN/assets/launcher/index.html"
         /** The launcher shortcut "Choose a server" (res/xml/shortcuts.xml) sends this. */
         const val ACTION_CHOOSE_SERVER = "xyz.skycord.android.action.CHOOSE_SERVER"
+        /**
+         * A tapped message notification (notify/Notifier) sends these: the conversation to open,
+         * as the page names it ("dm", "group" or "channel", and its id), a channel's server id
+         * (the page needs it to find the channel), and the origin of the server the notice came from.
+         */
+        const val EXTRA_OPEN_KIND = "xyz.skycord.android.extra.OPEN_KIND"
+        const val EXTRA_OPEN_ID = "xyz.skycord.android.extra.OPEN_ID"
+        const val EXTRA_OPEN_SERVER = "xyz.skycord.android.extra.OPEN_SERVER"
+        const val EXTRA_OPEN_ORIGIN = "xyz.skycord.android.extra.OPEN_ORIGIN"
         private const val WEBVIEW_PACKAGE = "com.google.android.webview"
     }
 

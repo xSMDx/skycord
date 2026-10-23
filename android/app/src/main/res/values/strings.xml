@@ -8,4 +8,21 @@
     <string name="old_webview_title">Android System WebView needs an update</string>
     <string name="old_webview_body">Skycord runs inside Android System WebView, and the version on this phone is too old. Update it, then open Skycord again.</string>
     <string name="old_webview_action">Update Android System WebView</string>
+
+    <!-- Notification channels: the names Android's own settings list. -->
+    <string name="channel_messages">Messages</string>
+    <string name="channel_messages_description">Messages and mentions from your conversations.</string>
+    <string name="channel_calls">Calls</string>
+    <string name="channel_calls_description">Incoming calls, which ring like a phone call.</string>
+    <string name="channel_connection">Connection</string>
+    <string name="channel_connection_description">The quiet notice that Skycord is connected in the background.</string>
+
+    <!-- A message notification. -->
+    <string name="notice_you">You</string>
+    <string name="notice_no_text">New message</string>
+    <string name="notice_mentioned">Mentioned you</string>
+    <string name="notice_reply">Reply</string>
+    <string name="notice_reply_hint">Write a reply</string>
+    <string name="notice_send_failed">Couldn\'t send — open Skycord to try again</string>
+    <string name="notice_signed_out">Signed out — open Skycord to sign in</string>
 </resources>

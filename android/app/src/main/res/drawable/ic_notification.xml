@@ -1,0 +1,9 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="56" android:viewportHeight="56">
+    <!-- The launcher's speech bubble, cropped to fill the frame. A status-bar icon is a
+         silhouette: Android tints it, so only the shape counts, not the colour. -->
+    <group android:translateX="-26" android:translateY="-30">
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M34,36h40a8,8 0 0 1 8,8v18a8,8 0 0 1 -8,8H52l-10,9v-9h-8a8,8 0 0 1 -8,-8V44a8,8 0 0 1 8,-8z" />
+    </group>
+</vector>
