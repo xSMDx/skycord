@@ -4,7 +4,7 @@ import { User } from '../models/User'
 import mongoose from 'mongoose'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 import { wellFormed } from '../utils/wellFormed'
-import { getIO, buildReplyPreviews } from '../sockets/chatSocket'
+import { getIO } from '../sockets/chatSocket'
 
 // Make a stable conversation ID from two user IDs (sorted so A↔B = B↔A)
 export const dmConvId = (a: string, b: string) =>
@@ -56,6 +56,23 @@ export const canDM = async (userId: string, partnerId: string): Promise<boolean>
 // already produces over the socket path. Kept in one place so REST and socket
 // never silently drift apart on what a "resolved" replyTo actually looks like.
 export interface ReplyPreview { id: string; author: string; content: string }
+
+// Resolve a list of parent message ids into reply previews, preserving order
+// and dropping any that no longer exist. `conversationId` is required, not
+// optional — every call site knows exactly which conversation it's building
+// a message for, and an optional scope here is one forgotten call site away
+// from reopening the same leak: a crafted replyToIds naming a message in
+// someone else's DM would otherwise resolve and echo that message's author +
+// a content snippet into whatever conversation the caller chose.
+export const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string): Promise<ReplyPreview[]> => {
+  if (!Array.isArray(ids) || ids.length === 0) return []
+  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content').lean()
+  const byId = new Map(targets.map(t => [t._id.toString(), t]))
+  return ids
+    .map(id => byId.get(id))
+    .filter((t): t is NonNullable<typeof t> => !!t)
+    .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+}
 
 /**
  * A DM message as `dm:receive` and the `dm:send` ack carry it.
@@ -214,6 +231,10 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
       if (io) {
         const replyTo = await buildReplyPreviews(msg.replyToIds.map(id => id.toString()), conversationId)
         io.to(`user:${userId}`).to(`user:${partnerId}`).emit('dm:receive', dmReceivePayload(msg, replyTo))
+        // The partner only: the sender knows what they wrote.
+        if (/@everyone\b/.test(msg.content)) {
+          io.to(`user:${partnerId}`).emit('mention:everyone', { conversationId, authorName: msg.authorName })
+        }
       }
     } catch (err) { console.error('[REST] dm live emit', err) }
 

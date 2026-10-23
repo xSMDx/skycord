@@ -171,6 +171,37 @@ describe('DM messages: a send over REST arrives live', () => {
     })
   })
 
+  it('raises mention:everyone for the partner, and only the partner, when it says @everyone', async () => {
+    const a = await register(), b = await register()
+    await befriend(a, b)
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    let senderHeard = false
+    aSock.on('mention:everyone', () => { senderHeard = true })
+    const pinged = nextEvent(bSock, 'mention:everyone')
+
+    const res = await app().post(`/messages/dm/${b.id}`).set(auth(a)).send({ content: 'heads up @everyone' })
+    expect(res.status).toBe(201)
+
+    expect(await pinged).toEqual({ conversationId: dmConvId(a.id, b.id), authorName: a.username })
+    await new Promise(r => setTimeout(r, 300))
+    expect(senderHeard).toBe(false)
+  })
+
+  it('raises no mention:everyone for an ordinary message', async () => {
+    const a = await register(), b = await register()
+    await befriend(a, b)
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    let heard = false
+    bSock.on('mention:everyone', () => { heard = true })
+    const arrived = nextEvent(bSock, 'dm:receive')
+
+    await app().post(`/messages/dm/${b.id}`).set(auth(a)).send({ content: 'just a hello' })
+    await arrived
+    await new Promise(r => setTimeout(r, 300))
+    expect(heard).toBe(false)
+  })
+
   it('tells nobody when the send is refused', async () => {
     const a = await register(), stranger = await register()   // no friendship, no history, no shared group
     const sSock = track(await connectSocket(sockets.url, stranger.token))

@@ -10,7 +10,7 @@ import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf } from '../utils/access'
 import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
-import { dmConvId, canDM, dmReceivePayload } from '../controllers/messagesController'
+import { dmConvId, canDM, dmReceivePayload, buildReplyPreviews } from '../controllers/messagesController'
 import { wellFormed } from '../utils/wellFormed'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
@@ -783,23 +783,6 @@ const presenceAudience = async (
   const coMemberIds = servers.flatMap(s => s.members.map(m => (m as any).toString()))
 
   return [...new Set([...friendIds, ...coMemberIds])].filter(id => id !== userId)
-}
-
-// Resolve a list of parent message ids into reply previews, preserving order
-// and dropping any that no longer exist. `conversationId` is required, not
-// optional — every call site knows exactly which conversation it's building
-// a message for, and an optional scope here is one forgotten call site away
-// from reopening the same leak: a crafted replyToIds naming a message in
-// someone else's DM would otherwise resolve and echo that message's author +
-// a content snippet into whatever conversation the caller chose.
-export const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string) => {
-  if (!Array.isArray(ids) || ids.length === 0) return []
-  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content').lean()
-  const byId = new Map(targets.map(t => [t._id.toString(), t]))
-  return ids
-    .map(id => byId.get(id))
-    .filter((t): t is NonNullable<typeof t> => !!t)
-    .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
 }
 
 export const initSocket = (httpServer: HttpServer): IOServer => {

@@ -24,6 +24,7 @@ import SearchFiltersModal from '@/components/search/SearchFiltersModal.vue'
 import SearchResultsPanel from '@/components/search/SearchResultsPanel.vue'
 import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
+import { ownEcho } from '@/composables/ownEcho'
 import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
 import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
@@ -2412,7 +2413,23 @@ const setupSocket = () => {
     const parts = (payload.conversationId as string).split('_')
     const partnerId = parts.find(p => p !== authUser.value?.id) || payload.authorId
 
+    // A DM sent over REST is announced to the sender's own sockets too (a phone
+    // answering a notification, a voice invite). Mine and already drawn: nothing
+    // to do. Mine from somewhere else: show it, but it is not news — never an
+    // unread, never a new sidebar row built from my own name and avatar.
+    const echo = ownEcho(payload, authUser.value?.id, getDMMessages(partnerId))
+    if (echo === 'seen') return
+
     const msg: Message = toClientMessage(payload, authUser.value?.id)
+
+    if (echo === 'fresh') {
+      // Back in history, hold it off the screen as any live message is — but
+      // without feeding the "jump to present" count, which is for what others said.
+      if (windowOf('dm', partnerId).live) pushDMMessage(partnerId, msg)
+      const mine = dmsData.value.find(d => d.id === partnerId)
+      if (mine) { mine.lastMsg = payload.content; mine.lastActiveAt = Date.now() }
+      return
+    }
 
     // Back in history, a live message is counted for the bar, not appended
     // below messages it does not follow.
@@ -2515,12 +2532,17 @@ const setupSocket = () => {
     // (e.g. our own optimistic message that got stamped via the send ack), skip.
     if (payload._id && getGroupMsgs(groupId).some(m => (m as any).dbId === payload._id)) return
     const msg: Message = toClientMessage(payload, authUser.value?.id)
-    if (!holdIfAway('group', groupId)) pushGroupMessage(groupId, msg)
+    // A REST group send is announced to every member, the sender included (a
+    // phone answering a notification). Having got this far it is mine from
+    // somewhere else: show it, but it is not unread and not away-count news.
+    const mine = ownEcho(payload, authUser.value?.id, getGroupMsgs(groupId)) !== null
+    if (mine) { if (windowOf('group', groupId).live) pushGroupMessage(groupId, msg) }
+    else if (!holdIfAway('group', groupId)) pushGroupMessage(groupId, msg)
     const g = groupsData.value.find(x => x.id === groupId)
     if (g) {
       g.lastMsg = payload.content
       g.lastMessageAt = payload.createdAt || new Date().toISOString()
-      if (!(view.value === 'group' && activeGroup.value?.id === groupId && appFocused.value)) g.unread = (g.unread || 0) + 1
+      if (!mine && !(view.value === 'group' && activeGroup.value?.id === groupId && appFocused.value)) g.unread = (g.unread || 0) + 1
     }
     consider({
       type: 'group', messageId: String(payload._id ?? ''), groupId,
@@ -3587,7 +3609,12 @@ const doSend = async () => {
           if (m) { (m as any).dbId = ack.message._id; if (ack.message.replyTo) m.replyTo = ack.message.replyTo }
         }
       } else {
-        await sendDMRest(activeDM.value.id, text, name, myAvatar.value, replyIds)
+        // Stamp from the 201 as the socket branch does from its ack, so the
+        // echo the server now sends back to our own sockets finds it and stops.
+        const res = await sendDMRest(activeDM.value.id, text, name, myAvatar.value, replyIds)
+        const msgs = getDMMessages(activeDM.value.id)
+        const m = msgs.find(m => m.id === optimistic.id)
+        if (m && res.message?._id) { (m as any).dbId = res.message._id; if (res.message.replyTo) m.replyTo = res.message.replyTo as any }
       }
     } catch (e) {
       console.error('[doSend]', e)
