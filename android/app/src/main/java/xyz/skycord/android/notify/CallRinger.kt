@@ -158,7 +158,7 @@ class CallRinger(context: Context, private val origin: String) {
 
         /** What Answer opens: the app, on [origin]'s page, joining the [kind] call with [convId]. */
         fun answerIntent(context: Context, origin: String, room: String, kind: String, convId: String): Intent =
-            Intent(context, MainActivity::class.java)
+            MainActivity.noticeIntent(context)
                 .setData(uri("answer", room))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(MainActivity.EXTRA_JOIN_KIND, kind)

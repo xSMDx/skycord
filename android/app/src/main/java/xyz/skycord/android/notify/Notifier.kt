@@ -341,7 +341,7 @@ class Notifier(context: Context) {
     private fun uri(key: String): Uri = Uri.Builder().scheme("skycord").authority("notice").appendPath(key).build()
 
     private fun tapIntent(conv: Conv): PendingIntent {
-        val intent = Intent(app, MainActivity::class.java)
+        val intent = MainActivity.noticeIntent(app)
             .setData(uri(conv.key))
             .putExtra(MainActivity.EXTRA_OPEN_KIND, conv.ref.kind)
             .putExtra(MainActivity.EXTRA_OPEN_ID, conv.ref.id)

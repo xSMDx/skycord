@@ -38,6 +38,14 @@
             </intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- The private door for the app's own notifications, rings, missed calls and Answer button
+             (notify/Notifier, CallRinger): they open MainActivity through this alias, and MainActivity
+             honours the open/join extras only when an intent came through it (core/NoticeEntry). Not
+             exported, so no other app can address it: MainActivity itself is exported, being the launcher. -->
+        <activity-alias
+            android:name=".NoticeEntry"
+            android:exported="false"
+            android:targetActivity=".MainActivity" />
         <!-- The incoming-call screen: over the lock screen, waking the phone. Its own task, so it never
              disturbs the app's, and never in Recents. Not exported: only a ring's PendingIntent opens it.
              showWhenLocked/turnScreenOn start at API 27; the activity sets the window flags for API 26. -->

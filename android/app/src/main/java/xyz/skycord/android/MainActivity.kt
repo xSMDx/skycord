@@ -2,6 +2,7 @@ package xyz.skycord.android
 
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -42,6 +43,7 @@ import xyz.skycord.android.core.BackGate
 import xyz.skycord.android.core.CssColor
 import xyz.skycord.android.core.Nav
 import xyz.skycord.android.core.NavigationPolicy
+import xyz.skycord.android.core.NoticeEntry
 import xyz.skycord.android.core.Origins
 import xyz.skycord.android.core.PickerTypes
 import xyz.skycord.android.core.RefreshCookie
@@ -79,6 +81,14 @@ class MainActivity : AppCompatActivity() {
          */
         const val EXTRA_JOIN_ROOM = "xyz.skycord.android.extra.JOIN_ROOM"
         private const val MAX_ROOM = 200
+
+        /**
+         * The intent every notification, ring, missed-call tap and Answer starts the app with: MainActivity
+         * through its private, non-exported alias ([NoticeEntry]). Only an intent that came this way has its
+         * open/join extras honoured, so another app cannot make Skycord join a call or switch servers.
+         */
+        fun noticeIntent(context: Context): Intent = Intent().setClassName(context, NoticeEntry.ALIAS)
+
         private const val WEBVIEW_PACKAGE = "com.google.android.webview"
         private val OPEN_KINDS = setOf("dm", "group", "channel")
         private val JOIN_KINDS = setOf("dm", "group")
@@ -449,6 +459,10 @@ class MainActivity : AppCompatActivity() {
 
     /** The request [intent] carries, or null when it carries none (or names a server not saved). */
     private fun noticeRequest(intent: Intent): NoticeRequest? {
+        // MainActivity is exported (it is the launcher), so any app can send it these extras. Only an
+        // intent that came through the private alias is the app's own notification; any other starts the
+        // app plainly, with the extras ignored. Both onCreate and onNewIntent come through here.
+        if (!NoticeEntry.honours(intent.component?.className)) return null
         val origin = intent.getStringExtra(EXTRA_OPEN_ORIGIN)?.takeIf { store.find(it) != null } ?: return null
         val joinKind = intent.getStringExtra(EXTRA_JOIN_KIND)
         val joinId = intent.getStringExtra(EXTRA_JOIN_ID)
