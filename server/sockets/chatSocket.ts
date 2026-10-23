@@ -35,6 +35,29 @@ export const getOnlineUserIds = presence.onlineUserIds
 const activeCalls   = new Map<string, Set<string>>()
 
 /**
+ * When each live call began (epoch ms): the moment its room went from empty to
+ * occupied. Sent on every `call:state` for an occupied room so a client can
+ * tell a call that is starting NOW from one that was already under way when it
+ * connected — the phone rings for the first and never for the second.
+ *
+ * Cleared in releaseCallRoom, not when the room's occupancy goes. Occupancy
+ * drops the instant a socket does, but a dropped socket is not a hang-up (see
+ * CALL_END_GRACE_MS): the person is back within seconds, and it is the same
+ * call. Clearing the time with the occupancy would hand that call a new start
+ * on rejoin, and every blip would ring the phone again.
+ *
+ * PER-PROCESS, like activeCalls. After an API restart the clients rejoin and
+ * the clock restarts from the first of them.
+ */
+const callStartedAt = new Map<string, number>()
+
+/** Start the clock for a room that has just become occupied, unless one is
+ *  already running — a call resumed inside its grace period keeps its start. */
+const noteCallStarted = (room: string): void => {
+  if (!callStartedAt.has(room)) callStartedAt.set(room, Date.now())
+}
+
+/**
  * Music channels, per voice room.
  *
  * Module-level and not per-socket, for the same reason activeCalls is: the
@@ -331,6 +354,7 @@ const forgetEmptyRoom = (room: string): void => {
 const releaseCallRoom = (room: string): void => {
   cancelCallEnd(room)
   callVoiceServer.delete(room)
+  callStartedAt.delete(room)
 }
 
 /** How many people are in a call room right now, and whether a given user is
@@ -446,7 +470,15 @@ const callStatePayload = (room: string) => {
   // a server whose channel list it has not fetched.
   const serverId = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
   const states = statesFor(room)
-  return { room, userIds, ...(serverId ? { serverId } : {}), ...(states ? { states } : {}) }
+  // Only for an occupied room. A room inside its grace period still has a
+  // start time on file (so the call keeps it if somebody comes back), but it
+  // has nobody in it, and "when did this call start" has no answer to give.
+  const startedAt = userIds.length > 0 ? callStartedAt.get(room) : undefined
+  return {
+    room, userIds,
+    ...(startedAt !== undefined ? { startedAt } : {}),
+    ...(serverId ? { serverId } : {}), ...(states ? { states } : {}),
+  }
 }
 
 export const broadcastCallState = (room: string): void => {
@@ -801,8 +833,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       ;(socket as any).username = p.username
       // The Android app holds a socket open all day so a DM or a call can ring
       // while the app is closed. It says so here, and from then on the server
-      // treats it as a listener only: it receives everything the user's other
-      // sockets do, but it never counts as the person being online.
+      // does not count it as the person being there: it receives everything
+      // the user's other sockets do, but it never makes them look online, and
+      // it cannot set their presence or take a seat in a call. Other events are
+      // not restricted by this flag.
       ;(socket as any).background = socket.handshake.auth?.background === true
       next()
     } catch { next(new Error('Invalid token')) }
@@ -1350,6 +1384,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       broadcastCall(room)
     })
     socket.on('call:join', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+      // A background connection must not put the person in a call: it would
+      // list them as present while every other surface shows them offline.
+      // No ack is taken on this event, so there is nothing to answer.
+      if (background) return
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       // Refuse silently, same shape every other handler in this file uses for
       // "not allowed" — no ack is expected on this event, so there is nothing
@@ -1374,6 +1412,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const resuming = callEndPending(room)
       cancelCallEnd(room)
       if (!set) { set = new Set(); activeCalls.set(room, set) }
+      noteCallStarted(room)
       set.add(userId)
       joinedCallRooms.add(room)
       // No "X started a call" for a voice channel: there is no text history
@@ -1412,6 +1451,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * instance a second time, in everybody's history.
      */
     socket.on('call:rejoin', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+      // Same as call:join: a background connection never holds a seat in a call.
+      if (background) return
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       // The same gate as call:join: coming back from a blip is not a way in.
       if (!await canJoinCall(data.kind, data.conversationId, userId)) return
@@ -1424,6 +1465,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       cancelCallEnd(room)
       let set = activeCalls.get(room)
       if (!set) { set = new Set(); activeCalls.set(room, set) }
+      noteCallStarted(room)
       const wasPresent = set.has(userId)
       set.add(userId)
       joinedCallRooms.add(room)
@@ -1762,11 +1804,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
             ? myGroups.some(g => `group:${g._id.toString()}` === room)
             : room.slice(3).split('_').includes(userId)
         if (!belongs) continue
-        const sid = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
-        // Without this a late arrival sees the room's occupants but none of
-        // their state until somebody happens to change theirs.
-        const catchUpStates = statesFor(room)
-        socket.emit('call:state', { room, userIds: [...participants], ...(sid ? { serverId: sid } : {}), ...(catchUpStates ? { states: catchUpStates } : {}) })
+        // The live payload builder, so a late arrival gets exactly what a
+        // broadcast would have carried: the occupants, their state (without it
+        // they see who is there but not who is muted until somebody changes),
+        // and when the call started.
+        socket.emit('call:state', callStatePayload(room))
       }
     } catch (err) {
       // A failed setup must not take the connection down — the handlers are
