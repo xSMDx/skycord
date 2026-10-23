@@ -2,4 +2,13 @@
     <style name="Theme.Skycord" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">#111214</item>
     </style>
+
+    <!-- The one-time questions (MainActivity.ask): dark like the app, whatever the phone's own theme is. -->
+    <style name="Theme.Skycord.Dialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="colorBackgroundFloating">@color/panel</item>
+        <item name="android:textColorPrimary">@color/text1</item>
+        <item name="android:textColorSecondary">@color/text3</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:colorAccent">@color/accent</item>
+    </style>
 </resources>

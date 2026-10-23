@@ -64,7 +64,8 @@ import java.util.concurrent.TimeUnit
  * when the app comes to the front or leaves it ([setForeground]). Started with
  * another server, it clears the old server's notifications and reconnects
  * (Review Focus 2). It is sticky: if Android kills the process, it comes back
- * with the last server and catches up. It stops when background notifications
+ * with the last server and catches up. After a restart of the phone, or an update of
+ * the app, [BootReceiver] starts it, so it does not wait for the app to be opened. It stops when background notifications
  * are turned off, when the sign-in is over (then it leaves the "Signed out —
  * open Skycord to sign in" notice and does not loop, Review Focus 1), or when
  * the activity asks.
@@ -394,6 +395,9 @@ class NotifyService : Service() {
 
     override fun onDestroy() {
         destroyed = true // first: anything the worker is still doing must see it
+        // Turned off in Settings: its clear ran when Stop was asked, before this service was gone; once
+        // nothing more can be written (above), the cursor is cleared for good, so turning it back on is fresh.
+        if (!isEnabled(this)) cursor.clear()
         if (instance === this) instance = null
         if (NotifyHub.listener === hub) NotifyHub.listener = null
         try {

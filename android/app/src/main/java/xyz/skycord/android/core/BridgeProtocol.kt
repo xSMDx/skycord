@@ -11,7 +11,8 @@ sealed interface Incoming {
 }
 
 object BridgeProtocol {
-    private const val MAX_METHOD = 40
+    // Room for the longest real name (androidNotifications.requestBatteryExemption is 44), and no more.
+    private const val MAX_METHOD = 64
     // Far above any real message (the largest is a saved server's name and
     // icon address). The bracket count is checked before parsing: Android's JSON
     // parser is recursive, and thousands of nested brackets would overflow the

@@ -70,8 +70,21 @@ class BridgeProtocolTest {
     }
 
     @Test fun aMethodNameHasALimit() {
-        assertEquals("m".repeat(40), (BridgeProtocol.parse("""{"type":"call","method":"${"m".repeat(40)}"}""") as Incoming.Call).method)
-        assertNull(BridgeProtocol.parse("""{"type":"call","method":"${"m".repeat(41)}"}"""))
+        assertEquals("m".repeat(64), (BridgeProtocol.parse("""{"type":"call","method":"${"m".repeat(64)}"}""") as Incoming.Call).method)
+        assertNull(BridgeProtocol.parse("""{"type":"call","method":"${"m".repeat(65)}"}"""))
+    }
+
+    // The page's calls (assets/bridge/app-shim.js): the limit once cut off the longest, so the battery
+    // "Allow" in Settings › Notifications was dropped without a sound.
+    @Test fun everyMethodTheShimCallsGetsThrough() {
+        for (method in listOf(
+            "changeInstance", "openServers", "colors", "updates.state", "updates.check", "updates.install", "about",
+            "seen", "prefsChanged", "androidNotifications.state", "androidNotifications.setEnabled",
+            "androidNotifications.openSystemSettings", "androidNotifications.requestBatteryExemption",
+        )) {
+            val c = BridgeProtocol.parse("""{"type":"call","method":"$method"}""") as? Incoming.Call
+            assertEquals(method, c?.method)
+        }
     }
 
     @Test fun quotingTricks_cannotHideNesting() {

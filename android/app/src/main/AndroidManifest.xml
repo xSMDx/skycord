@@ -14,6 +14,10 @@
     <!-- A call rings full-screen, even over the lock screen (notify/CallRinger). From Android 14 the person
          can switch it off, and the ring is then a heads-up notification. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Back after a restart (notify/BootReceiver), and one explained ask to be left running in the
+         background (MainActivity, once). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -67,6 +71,17 @@
         <receiver
             android:name=".notify.NoticeActions"
             android:exported="false" />
+        <!-- The background connection comes back after a restart and after an update. Both broadcasts are
+             the system's own, which a non-exported receiver still gets; no one else can send them. Not
+             direct-boot aware: it runs after the first unlock, when the sign-in can be read. -->
+        <receiver
+            android:name=".notify.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"

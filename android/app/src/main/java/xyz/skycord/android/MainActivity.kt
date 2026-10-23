@@ -1,6 +1,7 @@
 package xyz.skycord.android
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -11,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.View
@@ -30,6 +32,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -46,6 +50,7 @@ import xyz.skycord.android.core.NavigationPolicy
 import xyz.skycord.android.core.NoticeEntry
 import xyz.skycord.android.core.Origins
 import xyz.skycord.android.core.PickerTypes
+import xyz.skycord.android.core.PromptOnce
 import xyz.skycord.android.core.RefreshCookie
 import xyz.skycord.android.core.ServerStore
 import xyz.skycord.android.notify.CallRinger
@@ -88,6 +93,11 @@ class MainActivity : AppCompatActivity() {
          * open/join extras honoured, so another app cannot make Skycord join a call or switch servers.
          */
         fun noticeIntent(context: Context): Intent = Intent().setClassName(context, NoticeEntry.ALIAS)
+
+        /** The one-time questions' keys (core/PromptOnce). */
+        private const val ASKED_NOTIFICATIONS = "post_notifications"
+        private const val ASKED_BATTERY = "battery"
+        private const val ASKED_FULL_SCREEN = "full_screen"
 
         private const val WEBVIEW_PACKAGE = "com.google.android.webview"
         private val OPEN_KINDS = setOf("dm", "group", "channel")
@@ -138,6 +148,29 @@ class MainActivity : AppCompatActivity() {
         val callback = fileCallback ?: return@registerForActivityResult
         fileCallback = null
         callback.onReceiveValue(pickedUris(result.resultCode, result.data))
+    }
+
+    // The one-time questions (askFirstRun): at most one on screen, whichever it is.
+    private var asking = false
+    private var questionDialog: AlertDialog? = null
+
+    /** A server's page is up (it said hello) and has not been left for another since: the questions may be asked. */
+    private var serverPageUp = false
+
+    /** Between onResume and onPause: a dialog or a system screen can be put in front of the person. */
+    private var resumed = false
+
+    private val askNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        asking = false
+        // Allowed just now: Android lets the app show notices, so the background connection can start.
+        syncNotifyService(leaving = false)
+        askFirstRun()
+    }
+
+    /** A system screen the person is sent to (battery exemption, full-screen calls); the next question waits until they are back. */
+    private val askSystemScreen = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        asking = false
+        askFirstRun()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -211,6 +244,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Not `lifecycle.currentState`: it reaches RESUMED only after this method has returned.
+        resumed = true
         // The launch check has just set the time, so the first onResume after onCreate does not repeat it.
         if (::updates.isInitialized) updates.checkIfStale()
         if (::bridge.isInitialized) {
@@ -222,6 +257,8 @@ class MainActivity : AppCompatActivity() {
             NotifyService.pageTakesOver(this)
             // Back from Android's settings, where notifications may just have been allowed.
             syncNotifyService(leaving = false)
+            // A question that had to wait for the app to be on screen again.
+            askFirstRun()
         }
     }
 
@@ -237,12 +274,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        resumed = false
         // Keep each server's sign-in if the process is killed while we are in the background.
         // `web` is unset on the old-WebView screen, where there may be no WebView provider at all.
         if (::web.isInitialized) CookieManager.getInstance().flush()
     }
 
     override fun onDestroy() {
+        // A question still on screen has no activity left to answer to.
+        questionDialog?.dismiss()
+        questionDialog = null
         // A page still waiting for files must be answered (null: nothing picked), or its file input stays stuck.
         fileCallback?.onReceiveValue(null)
         fileCallback = null
@@ -390,6 +431,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onServerChanged() {
+        // A new page (or the launcher) is loading: the questions wait for its hello.
+        serverPageUp = false
         if (::bridge.isInitialized) bridge.refresh()
         // A new page (or the launcher) is being loaded: nothing has said hello yet, so the phone still
         // notifies for this server until the page does (NotifyService.pageHello, from the bridge).
@@ -443,15 +486,113 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * The battery-limits screen. Task 13 replaces this with the one-time, explained request to be
-     * exempt; until then the page's "Allow" opens Android's list, where the person can do it.
+     * Settings › Notifications' "Allow" for battery limits: the person has just asked, so Android's own
+     * "let it run in the background?" request goes straight up, with no explanation of ours and no
+     * once-only rule (that is for the unprompted first-run question, [askFirstRun]).
      */
     fun requestBatteryExemption() {
-        try {
-            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-        } catch (e: ActivityNotFoundException) {
-            Log.w("MainActivity", "no battery settings screen on this phone")
+        startSystemScreen(batteryExemptionScreens(), forResult = false)
+    }
+
+    // ---- the one-time questions (core/PromptOnce) ----------------------------------------------------
+
+    /** Android's own request to be exempt from battery optimisation; where a phone has none, its list of apps. */
+    private fun batteryExemptionScreens() = listOf(
+        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.fromParts("package", packageName, null)),
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+    )
+
+    /** Android 14's switch for full-screen calls, for this app; where a phone has none, the app's notification settings. */
+    private fun fullScreenScreens() = listOf(
+        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", packageName, null)),
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+    )
+
+    /** Opens the first of [screens] this phone has; false when it has none. [forResult]: the next question waits for the return. */
+    private fun startSystemScreen(screens: List<Intent>, forResult: Boolean): Boolean {
+        for (screen in screens) {
+            try {
+                if (forResult) askSystemScreen.launch(screen) else startActivity(screen)
+                return true
+            } catch (e: ActivityNotFoundException) {
+                // Not on this phone: the next.
+            } catch (e: SecurityException) {
+                Log.w("MainActivity", "Android refused a settings screen: ${e.javaClass.simpleName}")
+            }
         }
+        Log.w("MainActivity", "no settings screen for that on this phone")
+        return false
+    }
+
+    /** The page of the server now showing has said hello: the one-time questions may begin. */
+    fun onServerPageUp() {
+        serverPageUp = true
+        askFirstRun()
+    }
+
+    /**
+     * The things the background connection needs from the person, each asked once, the first time a
+     * server's page loads, and one at a time in this order: Android's notification permission (Android
+     * 13+), the battery exemption (after a short explanation of ours), full-screen calls (Android 14+, only
+     * while not allowed). Each is [PromptOnce]-marked the moment it is put, so whatever the answer, or
+     * none, it is never asked again; Settings › Notifications is the way back. Called again after each
+     * answer, which runs the next, and from onResume for one that had to wait for the app to be on screen.
+     */
+    private fun askFirstRun() {
+        if (asking || !serverPageUp || currentServer == null || isFinishing || isDestroyed) return
+        if (!resumed) return // onResume asks again
+        val kv = PrefsKeyValue(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && PromptOnce.shouldAsk(ASKED_NOTIFICATIONS, kv)) {
+            PromptOnce.markAsked(ASKED_NOTIFICATIONS, kv)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                asking = true
+                askNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+
+        if (PromptOnce.shouldAsk(ASKED_BATTERY, kv)) {
+            PromptOnce.markAsked(ASKED_BATTERY, kv)
+            val power = getSystemService(PowerManager::class.java)
+            if (power?.isIgnoringBatteryOptimizations(packageName) != true) {
+                ask(R.string.ask_battery_body) { startSystemScreen(batteryExemptionScreens(), forResult = true) }
+                return
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && PromptOnce.shouldAsk(ASKED_FULL_SCREEN, kv)) {
+            PromptOnce.markAsked(ASKED_FULL_SCREEN, kv)
+            if (getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() != true) {
+                ask(R.string.ask_full_screen_body) { startSystemScreen(fullScreenScreens(), forResult = true) }
+            }
+        }
+    }
+
+    /**
+     * A plain question with "Allow" and "Not now". Allow runs [allow], which must open a system screen
+     * ([askSystemScreen] then goes on to the next question when the person is back) and say whether it
+     * did; Not now, or dismissing the dialog, goes straight on.
+     */
+    private fun ask(@StringRes body: Int, allow: () -> Boolean) {
+        asking = true
+        var answered = false
+        val answer = { yes: Boolean ->
+            if (!answered) {
+                answered = true
+                questionDialog = null
+                if (!(yes && allow())) {
+                    asking = false
+                    askFirstRun()
+                }
+            }
+        }
+        questionDialog = AlertDialog.Builder(this, R.style.Theme_Skycord_Dialog)
+            .setMessage(body)
+            .setPositiveButton(R.string.ask_allow) { _, _ -> answer(true) }
+            .setNegativeButton(R.string.ask_not_now) { _, _ -> answer(false) }
+            .setOnCancelListener { answer(false) }
+            .show()
     }
 
     /** What a notification asked for: open a conversation, or join a call, on a saved server. */

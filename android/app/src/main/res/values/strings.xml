@@ -37,6 +37,13 @@
     <string name="service_connected">Connected to %1$s</string>
     <string name="service_connecting">Connecting to %1$s…</string>
 
+    <!-- The two questions asked once, the first time a server's page loads (MainActivity). The
+         notification permission is Android's own dialog and has no copy of ours. -->
+    <string name="ask_battery_body">Skycord needs to run in the background to tell you about messages and calls. Android may stop it to save battery unless you allow it.</string>
+    <string name="ask_full_screen_body">Calls ring as a normal notification until you let Skycord show them full screen.</string>
+    <string name="ask_allow">Allow</string>
+    <string name="ask_not_now">Not now</string>
+
     <!-- What a notification calls a group, channel or server whose name the app could not look up. -->
     <string name="notice_unknown_group">Group</string>
     <string name="notice_unknown_channel">channel</string>
