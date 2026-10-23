@@ -24,9 +24,11 @@ import xyz.skycord.android.core.Backoff
 import xyz.skycord.android.core.BurstGate
 import xyz.skycord.android.core.CallEvents
 import xyz.skycord.android.core.CallRooms
+import xyz.skycord.android.core.CursorPolicy
 import xyz.skycord.android.core.IncomingMessage
 import xyz.skycord.android.core.MessageEvents
 import xyz.skycord.android.core.Me
+import xyz.skycord.android.core.NetworkWatch
 import xyz.skycord.android.core.NoticeText
 import xyz.skycord.android.core.RawMessage
 import xyz.skycord.android.core.RingAction
@@ -105,15 +107,6 @@ class NotifyService : Service() {
         private const val CURSOR_EVERY_MS = 60_000L
         private const val PREFS_DEBOUNCE_MS = 1_000L
         private const val MAX_CATCH_UP_TRIES = 6
-
-        /**
-         * How far behind "now" catch-up's place is kept while connected. A dropped
-         * connection is noticed up to ~15 s late (the server pings every 10 s and
-         * waits 5), and the phone's estimate of the server's clock is good to a second
-         * or two; this covers both, with room. Too far back only repeats messages,
-         * which [SeenMessages] drops; too little would lose them.
-         */
-        private const val CURSOR_MARGIN_MS = 30_000L
 
         @Volatile private var instance: NotifyService? = null
         @Volatile private var inFront = false
@@ -309,16 +302,30 @@ class NotifyService : Service() {
     // Written on the worker only; volatile so serverNow() can read it from elsewhere.
     @Volatile private var session: Session? = null
 
+    /**
+     * Set first in [onDestroy]. The worker may still be in the middle of something (a blocking
+     * load, a catch-up) when the service is stopped, and a stopped service must post nothing and
+     * write no cursor: a notification after "off" is a bug, and a fresh-start cursor written
+     * after Settings cleared it would make the next start catch up instead of starting fresh.
+     * Checked wherever work is about to be shown or kept.
+     */
+    @Volatile private var destroyed = false
+
     // Worker thread only, from here down.
     private var prefsTimer: ScheduledFuture<*>? = null
     private var cursorTimer: ScheduledFuture<*>? = null
     private var prefsSoon: ScheduledFuture<*>? = null
+    private val networkWatch = NetworkWatch()
 
     private val hub = NotifyHub.Listener { key -> burst.rearm(key) }
 
     private val network = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(net: Network) {
-            onWorker { session?.connection?.retryNow() }
+            onWorker { onNetworkAvailable(net) }
+        }
+
+        override fun onLost(net: Network) {
+            onWorker { networkWatch.onLost(net) }
         }
     }
 
@@ -357,6 +364,7 @@ class NotifyService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true // first: anything the worker is still doing must see it
         if (instance === this) instance = null
         if (NotifyHub.listener === hub) NotifyHub.listener = null
         try {
@@ -379,6 +387,7 @@ class NotifyService : Service() {
 
     /** Worker. Connect to [origin], or, when already there, check that the sign-in is still the same. */
     private fun use(origin: String) {
+        if (destroyed) return // queued before the stop, run after it: connect to nothing
         val current = session
         if (current != null && current.origin == origin) {
             checkSignIn(current)
@@ -413,14 +422,18 @@ class NotifyService : Service() {
     }
 
     private fun onSessionConnected(s: Session) {
-        if (s !== session) return
+        if (destroyed || s !== session) return
         // Every (re)connect, before the call:state events the server replays right after it: a call
         // that was going on is not one that has just begun.
         s.gate.onConnected(s.api.serverNow())
-        when (s.directory.load()) {
+        val loaded = s.directory.load() // blocking: the service may have been stopped meanwhile
+        if (destroyed || s !== session) return
+        when (loaded) {
             Directory.Outcome.SIGNED_OUT -> { signedOut(); return }
             Directory.Outcome.FAILED -> {
                 // Connected, but without knowing who the person is or what they muted nothing can be decided.
+                // The connect did not reset the backoff, so a server that keeps doing this is retried 1 s,
+                // 2 s, 4 s … up to a minute, not every second.
                 Log.w(TAG, "connected, but couldn’t read the account; trying again")
                 s.connection.fail()
                 return
@@ -428,6 +441,9 @@ class NotifyService : Service() {
             Directory.Outcome.READY -> {}
         }
         val me = s.directory.me ?: return
+        // Usable from here: the socket is up and the account is known. Only now does a later failure start
+        // its backoff over.
+        s.connection.markReady()
         notifier.clearSignedOut()
         goForeground(nameOf(s.origin), connected = true)
 
@@ -438,6 +454,7 @@ class NotifyService : Service() {
             Log.i(TAG, "first connect for this server and person: starting fresh")
             notifier.clearAll()
             burst = BurstGate()
+            if (destroyed) return // Settings just cleared the cursor: a start-fresh one must not be written back
             cursor.set(s.origin, me.id, freshSince(s))
             s.caughtUp = true
         } else {
@@ -447,16 +464,43 @@ class NotifyService : Service() {
     }
 
     private fun onSessionDisconnected(s: Session) {
-        if (s !== session) return
+        if (destroyed || s !== session) return
+        openGap(s)
+    }
+
+    /**
+     * Worker. The connection has dropped, or is about to be dropped by us: the cursor moves on as far
+     * as the last packet vouches for (and no further), and from here until a catch-up succeeds there is a
+     * gap, so it stays before it.
+     */
+    private fun openGap(s: Session) {
         moveCursor(s)
-        // From here until a catch-up succeeds, there is a gap, and the cursor must stay before it.
         s.caughtUp = false
         s.catchUpRetry?.cancel(false)
         goForeground(nameOf(s.origin), connected = false)
     }
 
+    /**
+     * Worker. The phone's default network is now [net]. Never connected, or waiting out a backoff:
+     * try now. Connected, but on a different network (or the same one back after a loss): the socket
+     * is probably dead and would linger until its ping timeout, so make it again.
+     */
+    private fun onNetworkAvailable(net: Network) {
+        val changed = networkWatch.onAvailable(net)
+        val s = session
+        if (destroyed || s == null) return
+        if (changed && s.connection.connected) {
+            Log.i(TAG, "the network changed; connecting again")
+            openGap(s)
+            s.connection.restart()
+        } else {
+            s.connection.retryNow()
+        }
+    }
+
     /** Worker. The sign-in is over: say so once, forget the place, stop. No retries, no loop. */
     private fun signedOut() {
+        if (destroyed) return // stopped meanwhile: no notice; whoever stopped the service decided about the cursor
         Log.i(TAG, "signed out; the background connection stops")
         session?.let {
             it.catchUpRetry?.cancel(false)
@@ -472,16 +516,22 @@ class NotifyService : Service() {
     // ---- catch-up --------------------------------------------------------------------------------
 
     private fun runCatchUp(s: Session, since: Long) {
-        if (s !== session || !s.connection.connected) return
-        when (val r = s.catchUp.fetch(since)) {
+        if (destroyed || s !== session || !s.connection.connected) return
+        val outcome = s.catchUp.fetch(since) // blocking: the service may have been stopped meanwhile
+        if (destroyed || s !== session) return
+        when (val r = outcome) {
             is CatchUp.Outcome.Caught -> {
                 Log.i(TAG, "caught up: ${r.missed.events.size} message(s) since the gap")
                 val me = s.directory.me ?: return
                 // Newest first from the server; shown oldest first, so each conversation reads in order.
                 for (raw in r.missed.events.asReversed()) {
+                    if (destroyed) return // stopped mid-way: no more posts, and the gap stays open
                     if (raw.authorId == me.id) continue
                     handle(s, raw, live = false)
                 }
+                if (destroyed) return
+                // The server's own clock at the answer: everything before it was in the answer, however the
+                // socket was doing, so this one is safe without a packet to vouch for it.
                 cursor.advance(s.origin, me.id, r.missed.now)
                 s.caughtUp = true
             }
@@ -500,18 +550,22 @@ class NotifyService : Service() {
         }
     }
 
-    /** The first `since` on a fresh start: the server's clock now, or a minute back if its clock is unknown. */
+    /** The first `since` on a fresh start ([CursorPolicy.fresh]): the server's clock now, or a minute back if it is unknown. */
     private fun freshSince(s: Session): Long =
-        if (s.api.serverOffsetMs != null) s.api.serverNow() else System.currentTimeMillis() - 60_000L
+        CursorPolicy.fresh(if (s.api.serverOffsetMs != null) s.api.serverNow() else null, System.currentTimeMillis())
 
     /**
-     * Moves catch-up's place up to (a margin before) now, while everything before it has been
-     * seen. Only on the server's clock: with the offset unknown it stays where the server put it.
+     * Moves catch-up's place on, while everything before it has been seen — but only as far as the
+     * last packet received vouches for ([CursorPolicy.advance]): "now" proves nothing when the
+     * socket may have died silently (and the phone slept before anyone noticed). Only on the server's
+     * clock: with the offset unknown it stays where the server put it.
      */
     private fun moveCursor(s: Session) {
-        if (!s.caughtUp || s.api.serverOffsetMs == null) return
+        if (destroyed || !s.caughtUp || s.api.serverOffsetMs == null) return
         val me = s.directory.me ?: return
-        cursor.advance(s.origin, me.id, s.api.serverNow() - CURSOR_MARGIN_MS)
+        val current = cursor.get(s.origin, me.id) ?: return
+        val to = CursorPolicy.advance(current, s.connection.lastPacketAt, s.connection.sleptSinceLastPacket())
+        if (to > current) cursor.advance(s.origin, me.id, to)
     }
 
     // ---- messages --------------------------------------------------------------------------------
@@ -528,6 +582,7 @@ class NotifyService : Service() {
 
     /** Worker. One message, live or caught up, through the rules to a notification (or not). */
     private fun handle(s: Session, raw: RawMessage, live: Boolean) {
+        if (destroyed) return // before marking it seen: nothing is shown after stop
         if (!seenIds.firstTime(raw.messageId)) return
         // In front, the page sounds and shows it. Marked seen above, so catch-up won't bring it back.
         if (inFront) return

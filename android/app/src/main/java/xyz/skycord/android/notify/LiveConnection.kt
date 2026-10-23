@@ -1,11 +1,15 @@
 package xyz.skycord.android.notify
 
+import android.os.SystemClock
 import android.util.Log
 import io.socket.client.IO
+import io.socket.client.Manager
 import io.socket.client.Socket
+import io.socket.engineio.client.Transport
 import io.socket.engineio.client.transports.WebSocket
 import org.json.JSONObject
-import xyz.skycord.android.core.Backoff
+import xyz.skycord.android.core.LastPacket
+import xyz.skycord.android.core.ReconnectCounter
 import java.net.URI
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
@@ -21,8 +25,13 @@ import java.util.concurrent.TimeUnit
  *    phone is in a pocket) and refuses it a seat in a call; it still receives
  *    everything the person's other sockets do.
  *  - **Reconnecting** is done here, not by the client library (its own is off):
- *    after a drop or a failed try it waits [Backoff] — 1 s, doubling, at most a
- *    minute — and the count starts again on every successful connect.
+ *    after a drop or a failed try it waits [ReconnectCounter] — 1 s, doubling, at most a
+ *    minute — and the count starts again only when the service says the session is
+ *    usable ([markReady]), not when the socket merely connects: a server whose socket
+ *    works and whose REST does not would otherwise be retried every second for ever.
+ *  - **Proof of life.** Every packet that arrives (any event, and the engine's own
+ *    ping and pong) is noted with the server-clock time, in [lastPacketAt]; catch-up's
+ *    cursor never moves past it.
  *  - **The token** comes from [ServerApi], which keeps it. A handshake the server
  *    refuses for the token (`connect_error` carrying the server's message, not a
  *    network error) gets one fresh token and an immediate retry; refused again, it
@@ -58,7 +67,8 @@ internal class LiveConnection(
     private val handlers = LinkedHashMap<String, (JSONObject) -> Unit>()
     private var socket: Socket? = null
     private var generation = 0
-    private var attempt = 0
+    private val failures = ReconnectCounter()
+    private val lastPacket = LastPacket()
     private var authRetried = false
     private var pending: ScheduledFuture<*>? = null
     private var stopped = true
@@ -66,6 +76,17 @@ internal class LiveConnection(
     /** Whether the socket is connected right now. */
     var connected = false
         private set
+
+    /** Server-clock time of the last packet this socket received, or null when none has since it was made. */
+    val lastPacketAt: Long? get() = lastPacket.at
+
+    /** Whether the CPU slept since that packet (the socket may have died in the meantime, unnoticed). */
+    fun sleptSinceLastPacket(): Boolean = lastPacket.sleptSince(deepSleepNow())
+
+    /** The session is usable (the socket is up and the account loaded): the next failure waits the first wait again. */
+    fun markReady() {
+        failures.markReady()
+    }
 
     /** Handle [event] (its first argument, a JSON object) on [worker]. Register before [start]. */
     fun on(event: String, handler: (JSONObject) -> Unit) {
@@ -75,7 +96,7 @@ internal class LiveConnection(
     fun start() {
         if (!stopped) return
         stopped = false
-        attempt = 0
+        failures.reset()
         connect()
     }
 
@@ -98,7 +119,7 @@ internal class LiveConnection(
         if (stopped) return
         cancelPending()
         closeSocket()
-        attempt = 0
+        failures.reset()
         connect()
     }
 
@@ -150,6 +171,12 @@ internal class LiveConnection(
             scheduleRetry()
             return
         }
+        lastPacket.clear() // a new socket has heard nothing yet; the dead one's last packet vouches for nothing of it
+        // Every engine.io packet, pings and pongs included: the manager hands the transport on as it is made.
+        // (A transport that never reports is no harm: the events below count too, and the cursor only waits.)
+        s.io().on(Manager.EVENT_TRANSPORT) { args ->
+            (args.firstOrNull() as? Transport)?.on(Transport.EVENT_PACKET) { heard(gen) }
+        }
         s.on(Socket.EVENT_CONNECT) { post(gen) { onConnect() } }
         s.on(Socket.EVENT_CONNECT_ERROR) { args ->
             // The server's own refusal (its middleware's `next(new Error(…))`) arrives as a JSON
@@ -164,6 +191,7 @@ internal class LiveConnection(
         for ((event, handler) in handlers) {
             s.on(event) { args ->
                 val payload = args.firstOrNull() as? JSONObject ?: return@on
+                heard(gen)
                 post(gen) { handler(payload) }
             }
         }
@@ -174,8 +202,10 @@ internal class LiveConnection(
     private fun onConnect() {
         Log.i(TAG, "connected")
         connected = true
-        attempt = 0
+        // Not a reset of the backoff: a connected socket proves nothing about the session (markReady does).
+        failures.connected()
         authRetried = false
+        noteHeard()
         listener.onConnected()
     }
 
@@ -205,8 +235,7 @@ internal class LiveConnection(
     private fun scheduleRetry() {
         if (stopped) return
         cancelPending()
-        val delay = Backoff.next(attempt)
-        attempt = (attempt + 1).coerceAtMost(MAX_ATTEMPT)
+        val delay = failures.failed()
         Log.i(TAG, "trying again in ${delay / 1000} s")
         // After a wait, a refused token earns one more fresh one.
         authRetried = false
@@ -231,6 +260,16 @@ internal class LiveConnection(
         s.close()
     }
 
+    /** Any socket thread: a packet arrived on the socket numbered [gen]. Stamped now, stored on the worker. */
+    private fun heard(gen: Int) {
+        val serverAt = api.serverNow()
+        val sleep = deepSleepNow()
+        post(gen) { lastPacket.heard(serverAt, sleep) }
+    }
+
+    /** Worker: the connect itself was a packet. */
+    private fun noteHeard() = lastPacket.heard(api.serverNow(), deepSleepNow())
+
     /** Runs [block] on [worker], unless the socket numbered [gen] has been replaced by then. */
     private fun post(gen: Int, block: () -> Unit) {
         try {
@@ -251,9 +290,11 @@ internal class LiveConnection(
     private companion object {
         const val TAG = "LiveConnection"
         const val CONNECT_TIMEOUT_MS = 20_000L
-        const val MAX_ATTEMPT = 30
         const val CLIENT_DISCONNECT = "io client disconnect"
         const val SERVER_DISCONNECT = "io server disconnect"
+
+        /** Total time the CPU has slept: it grows while the phone is in deep sleep, and only then. */
+        fun deepSleepNow(): Long = SystemClock.elapsedRealtime() - SystemClock.uptimeMillis()
 
         /**
          * `{ token, background: true }`. The library types `auth` as strings only, but it
