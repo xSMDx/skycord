@@ -10,7 +10,7 @@ import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf } from '../utils/access'
 import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
-import { dmConvId, canDM } from '../controllers/messagesController'
+import { dmConvId, canDM, dmReceivePayload } from '../controllers/messagesController'
 import { wellFormed } from '../utils/wellFormed'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
@@ -792,7 +792,7 @@ const presenceAudience = async (
 // from reopening the same leak: a crafted replyToIds naming a message in
 // someone else's DM would otherwise resolve and echo that message's author +
 // a content snippet into whatever conversation the caller chose.
-const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string) => {
+export const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string) => {
   if (!Array.isArray(ids) || ids.length === 0) return []
   const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content').lean()
   const byId = new Map(targets.map(t => [t._id.toString(), t]))
@@ -915,19 +915,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           content:        wellFormed(data.content.trim()),
           replyToIds:     replyTo.map(r => r.id),
         })
-        const payload = {
-          _id:            msg._id.toString(),
-          conversationId: msg.conversationId,
-          authorId:       userId,
-          authorName:     msg.authorName,
-          authorAvatar:   msg.authorAvatar,
-          content:        msg.content,
-          reactions:      [],
-          pinned:         false,
-          edited:         false,
-          replyTo,
-          createdAt:      msg.createdAt.toISOString(),
-        }
+        const payload = dmReceivePayload(msg, replyTo)
         io.to(`user:${data.partnerId}`).emit('dm:receive', payload)
         if (/@everyone\b/.test(msg.content)) io.to(`user:${data.partnerId}`).emit('mention:everyone', { conversationId: msg.conversationId, authorName: msg.authorName })
         ack?.({ ok: true, message: payload })
@@ -1165,19 +1153,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           replyToIds:     replyTo.map(r => r.id),
         })
 
-        const payload = {
-          _id:            msg._id.toString(),
-          conversationId: msg.conversationId,
-          authorId:       userId,
-          authorName:     msg.authorName,
-          authorAvatar:   msg.authorAvatar,
-          content:        msg.content,
-          reactions:      [],
-          pinned:         false,
-          edited:         false,
-          replyTo,
-          createdAt: msg.createdAt.toISOString(),
-        }
+        const payload = dmReceivePayload(msg, replyTo)
 
         io.to(`user:${data.partnerId}`).emit('dm:receive', payload)
         if (/@everyone\b/.test(msg.content)) io.to(`user:${data.partnerId}`).emit('mention:everyone', { conversationId: msg.conversationId, authorName: msg.authorName })

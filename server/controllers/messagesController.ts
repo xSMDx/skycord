@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express'
-import { Message } from '../models/Message'
+import { Message, type IMessage } from '../models/Message'
 import { User } from '../models/User'
 import mongoose from 'mongoose'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 import { wellFormed } from '../utils/wellFormed'
+import { getIO, buildReplyPreviews } from '../sockets/chatSocket'
 
 // Make a stable conversation ID from two user IDs (sorted so A↔B = B↔A)
 export const dmConvId = (a: string, b: string) =>
@@ -54,7 +55,29 @@ export const canDM = async (userId: string, partnerId: string): Promise<boolean>
 // Shape of a resolved reply preview, matching what chatSocket.ts's message:get
 // already produces over the socket path. Kept in one place so REST and socket
 // never silently drift apart on what a "resolved" replyTo actually looks like.
-interface ReplyPreview { id: string; author: string; content: string }
+export interface ReplyPreview { id: string; author: string; content: string }
+
+/**
+ * A DM message as `dm:receive` and the `dm:send` ack carry it.
+ *
+ * One builder for both ways of sending — the socket handler and the REST route
+ * — so the two can't drift on what a live DM looks like. Takes the previews
+ * already resolved because the caller has to scope them to the conversation
+ * (see buildReplyPreviews) before anything is persisted or sent.
+ */
+export const dmReceivePayload = (msg: IMessage, replyTo: ReplyPreview[]) => ({
+  _id:            msg._id.toString(),
+  conversationId: msg.conversationId,
+  authorId:       msg.authorId.toString(),
+  authorName:     msg.authorName,
+  authorAvatar:   msg.authorAvatar,
+  content:        msg.content,
+  reactions:      [],
+  pinned:         false,
+  edited:         false,
+  replyTo,
+  createdAt:      msg.createdAt.toISOString(),
+})
 
 // Resolve a batch of raw message docs into client-ready shape: live author
 // avatars (never the frozen per-message snapshot) and resolved replyTo
@@ -179,6 +202,20 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
       content:        wellFormed(content.trim()),
       replyToIds:     rawReplyIds.filter(id => validReplyIds.has(id)),
     })
+
+    // Reach connected clients live — the partner's, and the sender's own other
+    // devices. The sender used REST (a phone answering a notification, say)
+    // rather than a socket, so nothing else will announce this message; without
+    // it the partner only saw it after a reload. Best-effort: the message is
+    // already saved, so a hiccup building or sending the notice must not turn
+    // a stored message into a 500 that invites a duplicate retry.
+    try {
+      const io = getIO()
+      if (io) {
+        const replyTo = await buildReplyPreviews(msg.replyToIds.map(id => id.toString()), conversationId)
+        io.to(`user:${userId}`).to(`user:${partnerId}`).emit('dm:receive', dmReceivePayload(msg, replyTo))
+      }
+    } catch (err) { console.error('[REST] dm live emit', err) }
 
     res.status(201).json({ message: msg })
   } catch (err) { next(err) }
