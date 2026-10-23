@@ -799,6 +799,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const p = verifyAccessToken(token)
       ;(socket as any).userId   = p.sub
       ;(socket as any).username = p.username
+      // The Android app holds a socket open all day so a DM or a call can ring
+      // while the app is closed. It says so here, and from then on the server
+      // treats it as a listener only: it receives everything the user's other
+      // sockets do, but it never counts as the person being online.
+      ;(socket as any).background = socket.handshake.auth?.background === true
       next()
     } catch { next(new Error('Invalid token')) }
   })
@@ -808,7 +813,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     const username = (socket as any).username as string
     console.log(`[WS] + ${username}`)
 
-    const wasOffline = presence.addSocket(userId, socket.id)
+    // A background socket joins the user's rooms like any other (that is the
+    // point of it) but is never entered in the presence registry: no
+    // addSocket, so isOnline() ignores it, and no removeSocket on the way out.
+    const background = (socket as any).background === true
+    const wasOffline = !background && presence.addSocket(userId, socket.id)
     socket.join(`user:${userId}`)
 
     /*
@@ -1583,6 +1592,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     /** The user picked a status. Persist the choice, then tell people. */
     socket.on('presence:set', async (raw: unknown, ack?: (r: any) => void) => {
+      // A listener-only connection has no say in how the person appears. Acked
+      // rather than dropped so a client waiting on the callback is not left
+      // hanging.
+      if (background) { ack?.({ ok: false, error: 'Not available on a background connection' }); return }
       const next = typeof raw === 'string' ? raw : (raw as any)?.status
       if (!presence.isChosenStatus(next)) { ack?.({ ok: false, error: 'Unknown status' }); return }
 
@@ -1613,6 +1626,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * starts you as away. effectiveStatus() only lets it apply to 'online'.
      */
     socket.on('presence:away', async (raw: unknown) => {
+      if (background) return   // a phone idling in a pocket says nothing about the person
       const away = raw === true || (raw as any)?.away === true
       if (presence.isAway(userId) === away) return   // no-op, don't spam friends
       presence.setAway(userId, away)
@@ -1630,7 +1644,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         for (const room of [...joinedCallRooms]) leaveCall(room, 'socket-lost')
         // Only go offline once the user's LAST socket closes — otherwise closing
         // one of two tabs (or a refresh) would falsely mark them offline.
-        if (presence.removeSocket(userId, socket.id)) {
+        // A background socket was never registered, so closing it is not an
+        // arrival or a departure and must not reach the offline broadcast.
+        if (!background && presence.removeSocket(userId, socket.id)) {
           // lastSeenAt only. Writing status: 'offline' here is exactly what used
           // to erase the user's Do Not Disturb every time they closed the app.
           await User.findByIdAndUpdate(userId, { lastSeenAt: new Date() })
@@ -1649,9 +1665,13 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     try {
       // Reads the chosen status rather than stamping 'online' over it. That
       // write was the reason Do Not Disturb never survived a sign-in.
-      const me = await User.findByIdAndUpdate(
-        userId, { lastSeenAt: new Date() }, { new: true }
-      ).select('avatar avatarCrop displayName username status statusUntil').lean()
+      //
+      // A background connect only reads. lastSeenAt is when the person was last
+      // actually here, and a phone reconnecting in a pocket is not that.
+      const meFields = 'avatar avatarCrop displayName username status statusUntil'
+      const me = await (background
+        ? User.findById(userId).select(meFields).lean()
+        : User.findByIdAndUpdate(userId, { lastSeenAt: new Date() }, { new: true }).select(meFields).lean())
       // Skipped entirely when presence:set beat this load: the row was read
     // before that write, so "catching up" from it would roll the fresher
     // choice back to the stale one.
@@ -1721,7 +1741,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // of the point of a member list, and the audience only widens to rooms
       // the user chose to join. Invisible is still a full opt-out, because
       // effectiveStatus maps it to offline.
-      if (wasOffline) {
+      // A background socket never announces: it is not the person arriving.
+      if (!background && wasOffline) {
         const eff = presence.effectiveStatus(myStatus, userId, myStatusUntil)
         const audience = await presenceAudience(userId, myServers)
         for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status: eff })
