@@ -7,6 +7,7 @@ import {
   changeUsername, changeEmail, changePassword,
   getConvPrefs, setConvPref, getUserProfile
 } from '../controllers/usersController'
+import { getMissed } from '../controllers/missedController'
 
 const router = Router()
 
@@ -29,6 +30,8 @@ router.patch('/me/password',  writeLimit,  changePassword)
 // Per-conversation pin/mute. One route for both — they're the same write.
 router.get('/me/conversations',           getConvPrefs)
 router.patch('/me/conversations/:convId', setConvPref)
+// What a phone missed while its background connection was down.
+router.get('/me/missed',                  getMissed)
 // LAST: '/me/...' above would otherwise be swallowed by ':userId'.
 router.get('/:userId/profile',            getUserProfile)
 
