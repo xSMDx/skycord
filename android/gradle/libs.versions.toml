@@ -7,6 +7,7 @@ activity = "1.9.3"
 webkit = "1.12.1"
 junit = "4.13.2"
 orgjson = "20240303"
+socketio = "2.1.1"
 
 [libraries]
 androidx-core = { group = "androidx.core", name = "core-ktx", version.ref = "core" }
@@ -15,6 +16,7 @@ androidx-activity = { group = "androidx.activity", name = "activity-ktx", versio
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 orgjson = { group = "org.json", name = "json", version.ref = "orgjson" }
+socketio-client = { group = "io.socket", name = "socket.io-client", version.ref = "socketio" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

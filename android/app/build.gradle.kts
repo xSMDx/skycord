@@ -60,6 +60,12 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.webkit)
+    // The background connection (notify/LiveConnection): the Java client of the socket.io the
+    // server and the web client speak. It brings OkHttp 3.12 and Okio. Android has org.json
+    // built in, so the library's own copy stays out, as the client's Android guide says.
+    implementation(libs.socketio.client) {
+        exclude(group = "org.json", module = "json")
+    }
     testImplementation(libs.junit)
     // Android's own org.json is a stub in JVM unit tests; this is the real one.
     testImplementation(libs.orgjson)

@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -28,11 +30,13 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.webkit.WebResourceErrorCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import androidx.webkit.WebViewFeature
+import org.json.JSONObject
 import xyz.skycord.android.core.BackAction
 import xyz.skycord.android.core.BackGate
 import xyz.skycord.android.core.CssColor
@@ -40,7 +44,10 @@ import xyz.skycord.android.core.Nav
 import xyz.skycord.android.core.NavigationPolicy
 import xyz.skycord.android.core.Origins
 import xyz.skycord.android.core.PickerTypes
+import xyz.skycord.android.core.RefreshCookie
 import xyz.skycord.android.core.ServerStore
+import xyz.skycord.android.notify.NotifyHub
+import xyz.skycord.android.notify.NotifyService
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -57,7 +64,16 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_OPEN_ID = "xyz.skycord.android.extra.OPEN_ID"
         const val EXTRA_OPEN_SERVER = "xyz.skycord.android.extra.OPEN_SERVER"
         const val EXTRA_OPEN_ORIGIN = "xyz.skycord.android.extra.OPEN_ORIGIN"
+        /**
+         * Answer on a call notification (Task 12) sends these: the call to join, as the page
+         * names it ("dm" with the partner's id, or "group" with the group's), with
+         * [EXTRA_OPEN_ORIGIN] for the server it rang on.
+         */
+        const val EXTRA_JOIN_KIND = "xyz.skycord.android.extra.JOIN_KIND"
+        const val EXTRA_JOIN_ID = "xyz.skycord.android.extra.JOIN_ID"
         private const val WEBVIEW_PACKAGE = "com.google.android.webview"
+        private val OPEN_KINDS = setOf("dm", "group", "channel")
+        private val JOIN_KINDS = setOf("dm", "group")
     }
 
     lateinit var web: WebView
@@ -141,9 +157,14 @@ class MainActivity : AppCompatActivity() {
 
         onCreateBridge()
 
+        // A notification that started the app names its server; otherwise the one used last. A
+        // restored activity (or one opened from Recents) is handed its old intent again, which must
+        // not reopen a conversation the person has long since left.
+        val notice = intent?.takeIf { savedInstanceState == null && !launchedFromHistory(it) }?.let(::noticeRequest)
         // The shortcut asks for the server list, not the server the app last had open.
-        val last = store.last()
-        if (intent?.action == ACTION_CHOOSE_SERVER || last == null) showLauncher() else openServer(last)
+        val first = notice?.origin ?: store.last()
+        if (intent?.action == ACTION_CHOOSE_SERVER || first == null) showLauncher() else openServer(first)
+        notice?.let(::deliver)
         updates.checkOnLaunch()
     }
 
@@ -154,12 +175,43 @@ class MainActivity : AppCompatActivity() {
         // `web` is unset on the old-WebView screen, which has no server list to show. Already on the
         // launcher (currentServer is null): leave it alone, so a half-typed address isn't wiped.
         if (intent.action == ACTION_CHOOSE_SERVER && ::web.isInitialized && currentServer != null) showLauncher()
+        // A notification tapped (or a call answered) while the app was running.
+        if (::web.isInitialized && !launchedFromHistory(intent)) {
+            noticeRequest(intent)?.let { request ->
+                // A notification from another saved server than the one showing: that server first.
+                if (request.origin != currentServer) openServer(request.origin)
+                deliver(request)
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Before anything else: from now on the page has the sounds, and the service posts nothing.
+        NotifyService.setForeground(this, true)
     }
 
     override fun onResume() {
         super.onResume()
         // The launch check has just set the time, so the first onResume after onCreate does not repeat it.
         if (::updates.isInitialized) updates.checkIfStale()
+        if (::bridge.isInitialized) {
+            // Here rather than in onStart: onNewIntent, with an answered call, always comes before
+            // onResume, so the page hears "join" before "back in front" (BridgeHost.flush).
+            bridge.setBackground(false)
+            // Back from Android's settings, where notifications may just have been allowed.
+            syncNotifyService(leaving = false)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        NotifyService.setForeground(this, false)
+        if (::bridge.isInitialized) {
+            bridge.setBackground(true)
+            // Leaving is when a sign-in made, or ended, in the page while it was on screen counts.
+            syncNotifyService(leaving = true)
+        }
     }
 
     override fun onPause() {
@@ -318,7 +370,93 @@ class MainActivity : AppCompatActivity() {
 
     private fun onServerChanged() {
         if (::bridge.isInitialized) bridge.refresh()
+        // The background connection follows the last server used (Review Focus 2).
+        syncNotifyService(leaving = false)
     }
+
+    // ---- the background connection (notify/NotifyService) ------------------------------------------
+
+    /**
+     * Starts, points or stops the background connection to match the app: it runs for the
+     * last server used while background notifications are on, Android lets them show, and
+     * that server holds a sign-in. Called whenever one of those may have changed, and when
+     * the app is left ([leaving]), which is when a sign-out made in the page counts: the
+     * service then finds the sign-in gone, says "Signed out", and stops. A server never
+     * signed in to gets no service, and so no such notice.
+     */
+    fun syncNotifyService(leaving: Boolean) {
+        if (!::store.isInitialized) return
+        val target = store.last()?.takeIf {
+            NotifyService.isEnabled(this) && NotificationManagerCompat.from(this).areNotificationsEnabled()
+        }
+        val running = NotifyService.runningOrigin
+        if (target == null) {
+            // Off, or not allowed to show anything; and a server no longer saved takes its notices with it.
+            if (running != null) NotifyService.stop(this, clearNotices = running != store.last() || store.find(running) == null)
+            return
+        }
+        val signedIn = try {
+            RefreshCookie.from(CookieManager.getInstance().getCookie(target)) != null
+        } catch (e: Exception) {
+            false
+        }
+        when {
+            signedIn -> NotifyService.start(this, target)
+            running == target && leaving -> NotifyService.start(this, target)
+            running == target -> {} // signed out in the page just now; decided when the app is left
+            running != null -> NotifyService.stop(this, clearNotices = true) // another server's: its notices go with it
+        }
+    }
+
+    /** Android's notification settings for the app, where each channel can be changed. */
+    fun openNotificationSettings() {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Log.w("MainActivity", "no notification settings screen on this phone")
+        }
+    }
+
+    /**
+     * The battery-limits screen. Task 13 replaces this with the one-time, explained request to be
+     * exempt; until then the page's "Allow" opens Android's list, where the person can do it.
+     */
+    fun requestBatteryExemption() {
+        try {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (e: ActivityNotFoundException) {
+            Log.w("MainActivity", "no battery settings screen on this phone")
+        }
+    }
+
+    /** What a notification asked for: open a conversation, or join a call, on a saved server. */
+    private class NoticeRequest(val origin: String, val join: Boolean, val value: JSONObject, val convKey: String?)
+
+    /** The request [intent] carries, or null when it carries none (or names a server not saved). */
+    private fun noticeRequest(intent: Intent): NoticeRequest? {
+        val origin = intent.getStringExtra(EXTRA_OPEN_ORIGIN)?.takeIf { store.find(it) != null } ?: return null
+        val joinKind = intent.getStringExtra(EXTRA_JOIN_KIND)
+        val joinId = intent.getStringExtra(EXTRA_JOIN_ID)
+        if (joinKind in JOIN_KINDS && !joinId.isNullOrEmpty()) {
+            return NoticeRequest(origin, join = true, JSONObject().put("kind", joinKind).put("convId", joinId), convKey = null)
+        }
+        val kind = intent.getStringExtra(EXTRA_OPEN_KIND)?.takeIf { it in OPEN_KINDS } ?: return null
+        val id = intent.getStringExtra(EXTRA_OPEN_ID)?.takeIf { it.isNotEmpty() } ?: return null
+        val value = JSONObject().put("kind", kind).put("id", id)
+        intent.getStringExtra(EXTRA_OPEN_SERVER)?.takeIf { it.isNotEmpty() }?.let { value.put("serverId", it) }
+        return NoticeRequest(origin, join = false, value, convKey = "$kind:$id")
+    }
+
+    private fun deliver(request: NoticeRequest) {
+        // A tap cancels the notification without its delete intent, so nothing else re-arms the
+        // conversation's burst: its next message must alert again, not slip in silently.
+        request.convKey?.let(NotifyHub::rearm)
+        if (request.join) bridge.requestJoin(request.origin, request.value) else bridge.requestOpen(request.origin, request.value)
+    }
+
+    private fun launchedFromHistory(intent: Intent): Boolean =
+        intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
 
     private fun showUnreachable(origin: String) {
         val name = store.find(origin)?.name ?: origin

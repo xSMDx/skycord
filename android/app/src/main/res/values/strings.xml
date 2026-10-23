@@ -25,4 +25,13 @@
     <string name="notice_reply_hint">Write a reply</string>
     <string name="notice_send_failed">Couldn\'t send — open Skycord to try again</string>
     <string name="notice_signed_out">Signed out — open Skycord to sign in</string>
+
+    <!-- The background connection's own, always-on notification (the Connection channel). -->
+    <string name="service_connected">Connected to %1$s</string>
+    <string name="service_connecting">Connecting to %1$s…</string>
+
+    <!-- What a notification calls a group, channel or server whose name the app could not look up. -->
+    <string name="notice_unknown_group">Group</string>
+    <string name="notice_unknown_channel">channel</string>
+    <string name="notice_unknown_server">Server</string>
 </resources>

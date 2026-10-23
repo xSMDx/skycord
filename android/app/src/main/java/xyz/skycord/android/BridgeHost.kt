@@ -1,11 +1,14 @@
 package xyz.skycord.android
 
+import android.app.NotificationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.webkit.WebView
+import androidx.core.app.NotificationManagerCompat
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebMessageCompat
@@ -18,6 +21,7 @@ import xyz.skycord.android.core.Origins
 import xyz.skycord.android.core.SavedServer
 import xyz.skycord.android.core.UpdateState
 import xyz.skycord.android.core.stringOrNull
+import xyz.skycord.android.notify.NotifyService
 import java.util.concurrent.Executors
 
 /**
@@ -32,6 +36,8 @@ class BridgeHost(private val activity: MainActivity) {
     private companion object {
         const val PORT = "__skycordPort"
         const val TAG = "SkycordBridge"
+        val CONVERSATION_KINDS = setOf("dm", "group", "channel")
+        const val MAX_ID = 128
     }
 
     private val web: WebView get() = activity.web
@@ -65,6 +71,22 @@ class BridgeHost(private val activity: MainActivity) {
     private var appProxy: JavaScriptReplyProxy? = null
 
     var onBackAnswer: (Int, Boolean) -> Unit = { _, _ -> }
+
+    /**
+     * What the app asks of a server's page, held here until that page can hear it:
+     * whether the app is in the background, and a tapped notification's conversation
+     * or an answered call. A request from a notification can come before the page
+     * exists (a cold start) or before it has said hello; it waits, and goes right
+     * after the hello. Only the newest of each kind is kept, it is dropped once sent,
+     * and it is sent only to the server it is for. (The page's shim then holds it
+     * until the chat has subscribed, which happens only after sign-in.)
+     */
+    private class Request(val origin: String, val value: JSONObject)
+    private var pendingJoin: Request? = null
+    private var pendingOpen: Request? = null
+    private var background: Boolean? = null
+    private var sentBackground: Boolean? = null
+    private var flushPosted = false
 
     /**
      * Register for the current saved servers; takes effect from the next page
@@ -137,6 +159,64 @@ class BridgeHost(private val activity: MainActivity) {
         }
     }
 
+    /** The app went to the background (true) or came back. The page keeps quiet while it is away. */
+    fun setBackground(away: Boolean) {
+        background = away
+        scheduleFlush()
+    }
+
+    /** A tapped notification: open conversation [value] (`{ kind, id, serverId? }`) on [origin]'s page. */
+    fun requestOpen(origin: String, value: JSONObject) {
+        pendingOpen = Request(origin, value)
+        scheduleFlush()
+    }
+
+    /** Answer on a call notification: join call [value] (`{ kind, convId }`) on [origin]'s page. */
+    fun requestJoin(origin: String, value: JSONObject) {
+        pendingJoin = Request(origin, value)
+        scheduleFlush()
+    }
+
+    // Once the current message or lifecycle call has unwound: the activity's onNewIntent (which
+    // sets a request) always comes before its onResume (which says it is back), and both land in
+    // this one flush, which sends them in the order the page needs.
+    private fun scheduleFlush() {
+        if (flushPosted || closed) return
+        flushPosted = true
+        main.post {
+            flushPosted = false
+            if (!closed) flush()
+        }
+    }
+
+    /**
+     * Sends what is waiting to the current server's page, if it has said hello: an answered
+     * call first, then a conversation to open, and only then "back in front" — so the page's
+     * guard against ringing for the call being answered is up before it starts alerting again.
+     */
+    private fun flush() {
+        val server = activity.currentServer ?: return
+        val proxy = appProxy ?: return
+        try {
+            pendingJoin?.let { r ->
+                pendingJoin = null
+                if (r.origin == server) proxy.postMessage(BridgeProtocol.event("joinCall", r.value))
+            }
+            pendingOpen?.let { r ->
+                pendingOpen = null
+                if (r.origin == server) proxy.postMessage(BridgeProtocol.event("openConversation", r.value))
+            }
+            val away = background
+            if (away != null && away != sentBackground) {
+                proxy.postMessage(BridgeProtocol.event("background", away))
+                sentBackground = away
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "could not reach the page", e)
+            appProxy = null
+        }
+    }
+
     /** Offer the back button to the page. False when the page has no bridge to ask. */
     fun askBack(id: Int): Boolean {
         if (activity.currentServer == null) return false
@@ -172,7 +252,13 @@ class BridgeHost(private val activity: MainActivity) {
 
     private fun onApp(m: Incoming, proxy: JavaScriptReplyProxy) {
         when (m) {
-            Incoming.Hello -> appProxy = proxy
+            Incoming.Hello -> {
+                appProxy = proxy
+                // A new page (or a reload) knows nothing yet: it is told the state again, and gets
+                // anything waiting for it.
+                sentBackground = null
+                scheduleFlush()
+            }
             is Incoming.BackAnswer -> onBackAnswer(m.id, m.used)
             is Incoming.Call -> {
                 val reply = { value: Any? -> m.id?.let { proxy.postMessage(BridgeProtocol.reply(it, value)) } }
@@ -185,6 +271,16 @@ class BridgeHost(private val activity: MainActivity) {
                     "updates.state" -> reply(activity.updates.state.toJson())
                     "updates.check" -> activity.updates.check()
                     "updates.install" -> activity.updates.install()
+                    // The conversation on screen: its notification goes and its next message alerts again.
+                    "seen" -> convKeyOf(m.args.optJSONObject(0))?.let { NotifyService.seen(activity, it) }
+                    "prefsChanged" -> NotifyService.prefsChanged(activity)
+                    "androidNotifications.state" -> reply(notifyState())
+                    "androidNotifications.setEnabled" -> (m.args.opt(0) as? Boolean)?.let { on ->
+                        NotifyService.setEnabled(activity, on)
+                        later { activity.syncNotifyService(leaving = false) }
+                    }
+                    "androidNotifications.openSystemSettings" -> later { activity.openNotificationSettings() }
+                    "androidNotifications.requestBatteryExemption" -> later { activity.requestBatteryExemption() }
                     else -> m.id?.let { proxy.postMessage(BridgeProtocol.error(it, "unknown method")) }
                 }
             }
@@ -238,6 +334,8 @@ class BridgeHost(private val activity: MainActivity) {
             "launcher.remove" -> {
                 val list = activity.store.remove(call.args.optString(0))
                 reply(servers(list))
+                // Removing the last server used ends its background connection, and its notifications.
+                later { activity.syncNotifyService(leaving = false) }
             }
             "launcher.open" -> {
                 val origin = call.args.optString(0)
@@ -251,6 +349,29 @@ class BridgeHost(private val activity: MainActivity) {
             }
             else -> proxy.postMessage(BridgeProtocol.error(id, "unknown method"))
         }
+    }
+
+    /**
+     * A `seen` call's `{ kind, id }` as a notification key ("dm:…", "group:…", "channel:…"),
+     * or null when it is not one. Strict, as every call is: a page cannot name anything else.
+     */
+    private fun convKeyOf(o: JSONObject?): String? {
+        val kind = o?.opt("kind") as? String ?: return null
+        val id = o.opt("id") as? String ?: return null
+        if (kind !in CONVERSATION_KINDS || id.isEmpty() || id.length > MAX_ID) return null
+        return "$kind:$id"
+    }
+
+    /** Settings › Notifications' Android rows (desktopBridge.ts AndroidNotifyState). */
+    private fun notifyState(): JSONObject {
+        val nm = activity.getSystemService(NotificationManager::class.java)
+        val power = activity.getSystemService(PowerManager::class.java)
+        return JSONObject()
+            .put("enabled", NotifyService.isEnabled(activity))
+            .put("permission", NotificationManagerCompat.from(activity).areNotificationsEnabled())
+            .put("batteryExempt", power?.isIgnoringBatteryOptimizations(activity.packageName) == true)
+            // Android 14 made full-screen incoming calls a permission of its own; before, every app had it.
+            .put("fullScreenCalls", Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || nm?.canUseFullScreenIntent() == true)
     }
 
     /** The desktop's AboutFacts shape, so the web's Debug page reads it unchanged. */
