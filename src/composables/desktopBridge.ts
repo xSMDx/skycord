@@ -120,6 +120,43 @@ export interface DesktopBridge {
   onBack?(cb: () => boolean): () => void
   /** Android only: the theme's colours for the status and navigation bars. */
   colors?(c: { bar: string; text: string }): void
+  /**
+   * Android only: the app went to the background (true) or came back (false).
+   * While it is away the app's own service posts the notifications, so the page
+   * keeps quiet. Returns a function that stops listening.
+   */
+  onBackground?(cb: (backgrounded: boolean) => void): () => void
+  /**
+   * Android only: a notification was tapped. Open that conversation — for a
+   * channel, in its server. Returns a function that stops listening.
+   */
+  onOpenConversation?(cb: (c: { kind: 'dm' | 'group' | 'channel'; id: string; serverId?: string }) => void): () => void
+  /**
+   * Android only: Answer on a call notification. Join that call. Returns a
+   * function that stops listening.
+   */
+  onJoinCall?(cb: (c: { kind: 'dm' | 'group'; convId: string }) => void): () => void
+  /** Android only: the conversation now on screen, so the app can clear its notification. */
+  seen?(c: { kind: 'dm' | 'group' | 'channel'; id: string }): void
+  /** Android only: a conversation's mute or level was written, so the app can re-read them. */
+  prefsChanged?(): void
+  /** Android only: the app's own notification switches, shown in Settings › Notifications. */
+  androidNotifications?: {
+    state(): Promise<AndroidNotifyState>
+    setEnabled(on: boolean): void
+    openSystemSettings(): void
+    requestBatteryExemption(): void
+  }
+}
+
+/** What Android lets the app do about notifications, and whether it is on. */
+export interface AndroidNotifyState {
+  enabled: boolean
+  /** Android's notification permission is granted. */
+  permission: boolean
+  /** The app is exempt from battery optimisation, so it can stay connected. */
+  batteryExempt: boolean
+  fullScreenCalls: boolean
 }
 
 /**

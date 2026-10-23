@@ -172,6 +172,8 @@ const _h: Record<string, CB<any>> = {
   onMemberRoles:        ((_p: any) => {}) as CB<any>,
   /** Who may see or do what in a server changed for this user: refetch it. */
   onServerAccessChanged: ((_p: any) => {}) as CB<any>,
+  /** Somebody declined a call: told to the caller (a DM), and to the decliner's own sockets. */
+  onCallDeclined:       ((_p: any) => {}) as CB<any>,
 }
 
 // ── Sounds ────────────────────────────────────────────────────────────────
@@ -197,6 +199,11 @@ export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'ch
  * call:rejoin for why that distinction is load-bearing.
  */
 export const emitCallRejoin = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:rejoin', { conversationId, kind })
+/**
+ * Turn down a ring: the caller is told, and so are my other devices, which stop
+ * ringing. `room` is the room name `call:state` uses (dm: or group:).
+ */
+export const emitCallDecline = (room: string): void => { _socket?.emit('call:decline', { room }) }
 
 /**
  * Bind the OS online/offline events exactly once.
@@ -390,8 +397,14 @@ export const useSocket = () => {
     _socket.on('music:state', (p: { channels: MusicChannelView[] }) => onMusicState(p))
     _socket.on('music:error', (p: { reason: string }) => onMusicError(p))
 
+    // Somebody declined. The caller hears it for a DM; the decliner's own
+    // sockets hear it for DMs and groups, so a Decline on the phone quiets the PC.
+    _socket.on('call:declined', (p: { room: string; userId: string; name: string }) => _h.onCallDeclined(p))
+
     _socket.on('call:state', (p: {
       room: string; userIds: string[]; serverId?: string
+      /** When the call began, ms since epoch. Nothing in the web client reads it. */
+      startedAt?: number
       states?: Record<string, VoiceMemberState>
     }) => {
       const next = { ...activeCalls.value }
@@ -494,7 +507,7 @@ export const useSocket = () => {
     getMessageSocket,
     sendTypingStart, sendTypingStop,
     subscribeGroup,
-    emitCallJoin, emitCallLeave,
+    emitCallJoin, emitCallLeave, emitCallDecline,
     on,
   }
 }

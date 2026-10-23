@@ -8,17 +8,45 @@
  * server, category or channel — said once at the top so nobody hunts for it
  * here.
  */
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { notificationPrefs, setNotificationPref, type NotificationPrefKey } from '@/composables/notificationPrefs'
-import { appBridge } from '@/composables/desktopBridge'
+import { appBridge, type AndroidNotifyState } from '@/composables/desktopBridge'
 import { soundMessage, soundRingOnce } from '@/composables/useSounds'
 
 const notifications = appBridge()?.notifications ?? null
+// The Android app notifies on its own while it is in the background, so the
+// desktop switches (pop-ups, browser permission, message text) are replaced by
+// the app's own three rows. Absent in older app builds, which keep what they had.
+const droid = appBridge()?.androidNotifications ?? null
 const permission = ref<NotificationPermission | 'unsupported'>(
   typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
 const keepInTray = ref<boolean | null>(null)
+const droidState = ref<AndroidNotifyState | null>(null)
 
-onMounted(async () => { keepInTray.value = notifications ? await notifications.keepInTray() : null })
+const readDroid = async () => {
+  if (!droid) return
+  try { droidState.value = await droid.state() } catch { /* keep the last answer */ }
+}
+// The battery question and Android's own settings are other screens: look
+// again when this one is back in front.
+const onBack = () => { if (document.visibilityState === 'visible') void readDroid() }
+
+onMounted(async () => {
+  keepInTray.value = notifications ? await notifications.keepInTray() : null
+  void readDroid()
+  document.addEventListener('visibilitychange', onBack)
+  window.addEventListener('focus', onBack)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onBack)
+  window.removeEventListener('focus', onBack)
+})
+
+const toggleBackground = () => {
+  if (!droid || !droidState.value) return
+  droidState.value = { ...droidState.value, enabled: !droidState.value.enabled }
+  droid.setEnabled(droidState.value.enabled)
+}
 
 const allow = async () => {
   if (typeof Notification === 'undefined') return
@@ -39,7 +67,40 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
   </p>
 
   <h2 class="st-section">Notifications</h2>
-  <div class="st-card">
+  <div v-if="droid" class="st-card">
+    <div class="st-field">
+      <div class="st-field-left">
+        <span class="st-field-label">Background notifications</span>
+        <span class="st-field-value prose">Messages, mentions and calls reach you while Skycord is in the background. Off, Skycord stops listening and its always-on notification goes away.</span>
+      </div>
+      <button
+        type="button" class="st-toggle" :class="{ on: droidState?.enabled }" role="switch"
+        :aria-checked="!!droidState?.enabled" aria-label="Background notifications"
+        :disabled="!droidState"
+        @click="toggleBackground"
+      ><span /></button>
+    </div>
+
+    <div v-if="droidState" class="st-field">
+      <div class="st-field-left">
+        <span class="st-field-label">Battery</span>
+        <span v-if="droidState.batteryExempt" class="st-field-value prose">Allowed to run in the background</span>
+        <span v-else class="st-field-value prose">Android may stop Skycord in the background, and notifications stop with it.</span>
+      </div>
+      <button v-if="!droidState.batteryExempt" type="button" class="st-btn" @click="droid.requestBatteryExemption()">Allow</button>
+    </div>
+
+    <div class="st-field">
+      <div class="st-field-left">
+        <span class="st-field-label">Android notification settings</span>
+        <span v-if="droidState && !droidState.permission" class="st-field-value prose">Android isn't letting Skycord show notifications. Allow them here.</span>
+        <span v-else class="st-field-value prose">Silence messages, calls or the connection notice separately.</span>
+      </div>
+      <button type="button" class="st-btn" @click="droid.openSystemSettings()">Open</button>
+    </div>
+  </div>
+
+  <div v-else class="st-card">
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Enable desktop notifications</span>

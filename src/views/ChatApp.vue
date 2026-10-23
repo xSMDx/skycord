@@ -17,6 +17,7 @@ import { shouldPrompt } from '@/composables/updatePrompt'
 import { appBridge } from '@/composables/desktopBridge'
 import { backAction, overlayOpen, pressEscape } from '@/composables/androidBack'
 import { useAndroidChrome } from '@/composables/androidChrome'
+import { alertsBelongToPage, declinedText, firstDecline } from '@/composables/androidNotify'
 import { useSearch, type SearchHit } from '@/composables/useSearch'
 import type { SuggestMember, SuggestChannel } from '@/composables/searchSuggest'
 import SearchField        from '@/components/search/SearchField.vue'
@@ -26,7 +27,7 @@ import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { ownEcho } from '@/composables/ownEcho'
 import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
+import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates, emitCallDecline } from '@/composables/useSocket'
 import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
 import { filterMembers } from '@/composables/memberFilter'
 import { canActOnMemberUI } from '@/composables/permissionMeta'
@@ -257,7 +258,15 @@ const modalAckedRooms = ref<Set<string>>(new Set())
 const domInFront = () => document.hasFocus() && document.visibilityState === 'visible'
 const domFocused = ref(domInFront())
 const syncFocus = () => { domFocused.value = domInFront() }
-const appFocused = computed(() => windowInFront.value ?? domFocused.value)
+// Android only: the app says when it is in the background. Then its own service
+// posts the notifications, so the page keeps quiet (no chimes, no ring, no
+// incoming-call box) and is not looking at anything: what arrives meanwhile is
+// unread. Nothing else ever sets this — Windows and a browser stay false.
+const backgrounded = ref(false)
+const stopBackground = appBridge()?.onBackground?.(b => { backgrounded.value = !!b })
+onBeforeUnmount(() => stopBackground?.())
+const pageAlerts = computed(() => alertsBelongToPage(appBridge()?.platform, backgrounded.value))
+const appFocused = computed(() => !backgrounded.value && (windowInFront.value ?? domFocused.value))
 onMounted(() => {
   window.addEventListener('focus', syncFocus)
   window.addEventListener('blur', syncFocus)
@@ -319,8 +328,37 @@ const acceptIncomingCall  = () => {
   vConnect(c.convId, c.kind, c.name).catch(() => {})
 }
 // Decline only silences the ring modal (acked) — it must NOT hide the in-chat
-// CallBar, so opening the conversation still shows "in a call / Join".
-const declineIncomingCall = () => { const c = incomingCall.value; if (c) modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room]) }
+// CallBar, so opening the conversation still shows "in a call / Join". It also
+// tells the server, which tells the caller (a DM) and quiets this account's
+// other devices — the phone stops ringing when the computer declines.
+const declineIncomingCall = () => {
+  const c = incomingCall.value; if (!c) return
+  modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room])
+  emitCallDecline(c.room)
+}
+// Who has declined the call I am in, so "Sam declined" shows once however many
+// times the server says it. Emptied when I leave the call.
+const declinedShown = new Set<string>()
+watch(() => voice.connected || voice.connecting, inCall => { if (!inCall) declinedShown.clear() })
+/** Is `room` the call I am in, or joining? Only DM and group calls can be declined. */
+const inCallRoom = (room: string): boolean => {
+  const myId = authUser.value?.id, id = voice.activeConvId ?? voice.connectingConvId
+  return !!myId && !!id && (room === voiceRoomName('dm', id, myId) || room === voiceRoomName('group', id, myId))
+}
+// Somebody declined. My own decline coming back — from this window or another
+// device — only has to stop the ring here. Someone else's, in the call I am in
+// or placing, is a toast.
+const onCallDeclined = (p: { room: string; userId: string; name: string }) => {
+  if (p.userId === authUser.value?.id) {
+    // Only a call still going: an ack for a room that has emptied is pruned by
+    // nobody, and would swallow that person's next call.
+    if (activeCalls.value[p.room] && !modalAckedRooms.value.has(p.room)) {
+      modalAckedRooms.value = new Set([...modalAckedRooms.value, p.room])
+    }
+    return
+  }
+  if (inCallRoom(p.room) && firstDecline(declinedShown, p.room, p.userId)) showToast(declinedText(p.name))
+}
 // Mark any room you connect to as engaged (covers joining via the CallBar's Join
 // button too, not just accepting the ring) so a later media drop won't re-ring.
 watch(() => [voice.connected, voice.activeConvId, voice.activeKind] as const, ([conn, cid, kind]) => {
@@ -2702,6 +2740,8 @@ const setupSocket = () => {
     }
   })
 
+  socketOn('onCallDeclined', onCallDeclined)
+
   socketOn('onVoiceDisconnected', (p: any) => {
     // Only the person removed has a call to tear down. Everyone else's view is
     // corrected by the occupancy broadcast the server already sent.
@@ -2965,12 +3005,16 @@ const copyText = (text: string, what: string) => {
 // write failed.
 // Mute, Notification Settings and Hide Muted Channels for servers, categories
 // and channels. Optimistic, like pin and mute below, and put back on failure.
+// The Android app keeps its own copy of mutes and levels for notifying in the
+// background; it re-reads them when told one was written. Guarded, so a
+// throwing bridge cannot turn a saved write into a rolled-back one.
+const prefWritten = () => { try { appBridge()?.prefsChanged?.() } catch { /* the app's to report */ } }
 const writeNotifyPref = async (
   id: string, local: Partial<ConvPref>, body: Parameters<typeof api.setConvPref>[1], what: string,
 ) => {
   const prev = convPref(id)
   setConvPrefLocal(id, { ...prev, ...local })
-  try { const r = await api.setConvPref(id, body); setConvPrefLocal(id, r.pref) }
+  try { const r = await api.setConvPref(id, body); setConvPrefLocal(id, r.pref); prefWritten() }
   catch { setConvPrefLocal(id, prev); showToast(`Couldn’t update ${what}`) }
 }
 const notifyActions = {
@@ -2991,7 +3035,7 @@ const convActions = {
   setPinned: async (convId: string, pinned: boolean) => {
     const prev = convPref(convId)
     setConvPrefLocal(convId, { ...prev, pinned })
-    try { const r = await api.setConvPref(convId, { pinned }); setConvPrefLocal(convId, r.pref) }
+    try { const r = await api.setConvPref(convId, { pinned }); setConvPrefLocal(convId, r.pref); prefWritten() }
     catch { setConvPrefLocal(convId, prev); showToast('Couldn’t update pin') }
   },
   setMute: async (convId: string, mute: string | null) => {
@@ -2999,7 +3043,7 @@ const convActions = {
     setConvPrefLocal(convId, {
       ...prev, muted: mute !== null, mutedUntil: mute === 'forever' || mute === null ? null : mute,
     })
-    try { const r = await api.setConvPref(convId, { mute }); setConvPrefLocal(convId, r.pref) }
+    try { const r = await api.setConvPref(convId, { mute }); setConvPrefLocal(convId, r.pref); prefWritten() }
     catch { setConvPrefLocal(convId, prev); showToast('Couldn’t update mute') }
   },
   copy: copyText,
@@ -4090,6 +4134,11 @@ useShortcuts({
 })
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
+/** The friends, DMs and groups have loaded: what a tap from the Android app needs to find its conversation. */
+const booted = ref(false)
+const whenBooted = (): Promise<void> => booted.value ? Promise.resolve() : new Promise(resolve => {
+  const stop = watch(booted, v => { if (v) { stop(); resolve() } })
+})
 onMounted(async () => {
   socketConnect()
   setupSocket()
@@ -4107,6 +4156,7 @@ onMounted(async () => {
 
   await loadFriends()
   await loadMyGroups()
+  booted.value = true
 
   document.addEventListener('keydown', onKey)
   document.addEventListener('click',   onClick)
@@ -4197,7 +4247,7 @@ function onScreen(): ConvRef | null {
 const ruleState = (): RuleState => ({
   me: noticeMe(),
   status: chosenStatus.value,
-  focused: windowInFront.value ?? domInFront(),
+  focused: !backgrounded.value && (windowInFront.value ?? domInFront()),
   previews: notificationPrefs.previews,
   isMuted: isConvMuted,
   levelOf,
@@ -4206,6 +4256,8 @@ const ruleState = (): RuleState => ({
 })
 /** Everything that might notify comes through here: its sound, then its notice. */
 function consider(e: Incoming, iconSrc: string | null): void {
+  // In the Android app's background its service has the sound and the notice.
+  if (!pageAlerts.value) return
   const s = ruleState()
   const sound = chime(e, s)
   if (sound === 'message') soundMessage()
@@ -4282,10 +4334,65 @@ const stopCallActions = onCallAction(a => {
     vConnect(c.convId, c.kind, c.name).catch(() => {})
   } else {
     modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room])
+    emitCallDecline(c.room)   // as the box's Decline does: tell the caller, quiet the other devices
   }
 })
 const stopTray = onTrayCommand(cmd => { if (cmd === 'mute') onToggleMute(); else onToggleDeafen() })
 onBeforeUnmount(() => { stopNotices(); stopCallActions(); stopTray() })
+
+// ── Android: what the app asks of the page ──────────────────────────────────
+// Tapping a notification opens its conversation; Answer on a call joins it; and
+// the page tells the app which conversation is on screen. All through optional
+// bridge members, so Windows and a browser never get here.
+
+/** Open a conversation the app names, once what it points at has loaded. */
+const openFromApp = async (c: ConvRef) => {
+  await whenBooted()
+  showSearchScreen.value = false   // a phone's search screen covers the conversation
+  // A channel in a server not opened this session: fetch the server first, as a notice does.
+  if (c.kind === 'channel' && !channelHome(c.id) && c.serverId) {
+    try { await loadServerDetail(c.serverId) } catch { /* not found, said below */ }
+  }
+  if (!(await openConversationRef(c))) showToast('That conversation is no longer here')
+}
+const stopOpenFromApp = appBridge()?.onOpenConversation?.(c => { void openFromApp(c) })
+
+/** Who a call is with, as the ring names them. */
+const callNameFor = (kind: 'dm' | 'group', convId: string): string => {
+  if (kind === 'group') {
+    const g = groupsData.value.find(x => x.id === convId)
+    return g ? groupDisplayName(g) : 'Group call'
+  }
+  const f = apiFriends.value.find(x => x.id === convId)
+  return f ? (f.displayName || f.username) : dmsData.value.find(d => d.id === convId)?.name ?? 'Someone'
+}
+const stopJoinFromApp = appBridge()?.onJoinCall?.(async c => {
+  await whenBooted()
+  const myId = authUser.value?.id
+  // Engaged, as accepting the ring does: a flap in the media must not ring again.
+  if (myId) engagedCallRooms.value = new Set([...engagedCallRooms.value, voiceRoomName(c.kind, c.convId, myId)])
+  vConnect(c.convId, c.kind, callNameFor(c.kind, c.convId)).catch(() => {})
+})
+onBeforeUnmount(() => { stopOpenFromApp?.(); stopJoinFromApp?.() })
+
+// The conversation on screen, for the app to clear its notification and start
+// a fresh burst. Fires when the open conversation changes in front, and when the
+// app comes back to the front with one open — and, on a phone, when it is pushed
+// over the list again, even if it is the same one. Keyed by a string so a
+// re-assigned but unchanged conversation says nothing.
+watch(
+  () => {
+    if (!appFocused.value || (isMobile.value && !mobileNav.onConversation.value)) return null
+    const c = onScreen()
+    return c ? `${c.kind}:${c.id}` : null
+  },
+  key => {
+    if (!key) return
+    const i = key.indexOf(':')
+    const kind = key.slice(0, i) as ConvRef['kind']
+    try { appBridge()?.seen?.({ kind, id: key.slice(i + 1) }) } catch { /* the app's to report */ }
+  },
+)
 
 // The badge and the tray dot: conversations holding something that would notify.
 watchEffect(() => setUnread(unreadCount(dmsData.value, groupsData.value, alertedChannels, isConvMuted, channelMutedById)))
@@ -4314,8 +4421,9 @@ watch(
 
 // Calls: the desktop app's call window, or a notification in a browser. Only
 // while the window is not in front — in front, the in-app ring already shows.
-watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus], ([c]) => {
-  if (!c) { void ringFor(null); return }
+watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, pageAlerts], ([c]) => {
+  // Not while the Android app is in the background: its service rings.
+  if (!c || !pageAlerts.value) { void ringFor(null); return }
   const n = decide({ type: 'call', room: c.room, kind: c.kind, convId: c.convId, muteKey: c.convId, name: c.name }, ruleState())
   // The call window is a box too: notifications off, the in-app ring only.
   if (!n || !notificationPrefs.enabled) { void ringFor(null); return }
@@ -4341,9 +4449,11 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
     -->
     <button class="skip-link" @click="focusComposer">Skip to message box</button>
 
-    <!-- Incoming DM call — ringing modal (accept joins, decline dismisses) -->
+    <!-- Incoming DM call — ringing modal (accept joins, decline dismisses).
+         It rings from mounting, so keeping it away keeps the Android app's
+         background ring from doubling up. -->
     <IncomingCallModal
-      v-if="incomingCall"
+      v-if="incomingCall && pageAlerts"
       :name="incomingCall.name"
       :avatar="incomingCall.avatar"
       @accept="acceptIncomingCall"
