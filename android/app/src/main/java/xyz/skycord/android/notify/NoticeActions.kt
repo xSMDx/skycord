@@ -18,8 +18,9 @@ import kotlin.concurrent.thread
  * PendingIntents reach it.
  *
  *  - **Dismissed** (swiped away): the person has dealt with the conversation, so its
- *    next message alerts again. Passed to [NotifyHub], which does nothing when the
- *    background service is not running.
+ *    next message alerts again (passed to [NotifyHub], which does nothing when the
+ *    background service is not running) and starts a new notification: the lines the old
+ *    one held are forgotten ([Notifier.forget]).
  *  - **Reply** (typed into the notification's reply field): sent to the server as the
  *    person; on success "You: …" joins the notification and the conversation re-arms;
  *    on failure the notification says it could not send. Either way the notification
@@ -35,7 +36,11 @@ import kotlin.concurrent.thread
 class NoticeActions : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            ACTION_DISMISSED -> intent.getStringExtra(EXTRA_CONV_KEY)?.let(NotifyHub::rearm)
+            ACTION_DISMISSED -> intent.getStringExtra(EXTRA_CONV_KEY)?.let { key ->
+                NotifyHub.rearm(key)
+                // The notification is gone; the lines it held go with it, so the next message starts a new one.
+                Notifier(context).forget(key)
+            }
             ACTION_REPLY -> reply(context, intent)
             // Decline on a ringing call. Nothing slow here: the service does the telling, on its own thread.
             ACTION_DECLINE_CALL -> intent.getStringExtra(EXTRA_CALL_ROOM)?.takeIf { it.isNotEmpty() }

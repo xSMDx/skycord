@@ -20,11 +20,14 @@ import org.json.JSONObject
 import xyz.skycord.android.MainActivity
 import xyz.skycord.android.PrefsKeyValue
 import xyz.skycord.android.R
+import xyz.skycord.android.core.Alert
 import xyz.skycord.android.core.Backoff
 import xyz.skycord.android.core.BurstGate
 import xyz.skycord.android.core.CallEvents
 import xyz.skycord.android.core.CallRooms
+import xyz.skycord.android.core.ConvGroups
 import xyz.skycord.android.core.CursorPolicy
+import xyz.skycord.android.core.FrontGate
 import xyz.skycord.android.core.IncomingMessage
 import xyz.skycord.android.core.MessageEvents
 import xyz.skycord.android.core.Me
@@ -69,18 +72,22 @@ import java.util.concurrent.TimeUnit
  * **What it posts.** Each message event goes through, in order: your own are
  * dropped before anything else (the server echoes a REST reply to your own
  * sockets); a message met before is dropped ([SeenMessages], across live and
- * catch-up); nothing at all while the app is in front (the page has the sound
- * then); then the web client's rules ([classify]: DND, mutes, levels); then the
+ * catch-up); nothing at all while the app is in front — this server's page on
+ * screen and having said hello over the bridge ([FrontGate]); the launcher, the
+ * can't-reach screen and a page still loading are not (the page has the sound
+ * then, and nothing else would show the message); then the web client's rules
+ * ([classify]: DND, which ends by itself at its end time, mutes, levels); then the
  * names the event lacks are looked up, only now; then [BurstGate] decides loud
  * or quiet (on the monotonic clock, so a corrected clock offset cannot buzz),
  * and [Notifier] posts. Catch-up runs after every reconnect that has a place to
- * start from, and is always quiet.
+ * start from, and is always quiet; it posts each conversation once, with all its
+ * lines, oldest first.
  *
  * **Calls.** `call:state` goes through a [RingGate] (per server, told of every
  * reconnect first, and given the server's clock): it says when a DM or group call
  * is one to ring for, and [CallRinger] rings it. Not while the app is in front or
  * for a muted conversation or Do Not Disturb (the page rings, or the person has
- * said no); each of those ends the ring before it begins. A ring ends on the gate's
+ * said no; "in front" as above, so with only the launcher up the phone rings); each of those ends the ring before it begins. A ring ends on the gate's
  * word (joined, the room emptied: a missed call), after 30 s (a missed call), on
  * Answer, on Decline (which sends `call:decline`, so the caller is told), on your own
  * decline elsewhere (`call:declined` with your id), and when the app comes to the front.
@@ -109,7 +116,12 @@ class NotifyService : Service() {
         private const val MAX_CATCH_UP_TRIES = 6
 
         @Volatile private var instance: NotifyService? = null
-        @Volatile private var inFront = false
+
+        /**
+         * Whether the page of the server this service is for is on screen and has said hello. Fed by the
+         * activity and the bridge; read by the worker (see [FrontGate]).
+         */
+        private val front = FrontGate()
 
         /** The server the running service is for, or null when it is not running. */
         val runningOrigin: String? get() = instance?.origin
@@ -148,9 +160,26 @@ class NotifyService : Service() {
             context.stopService(Intent(context, NotifyService::class.java))
         }
 
-        /** The app came to the front ([inFront] true) or left it. Nothing is posted while it is in front. */
-        fun setForeground(@Suppress("UNUSED_PARAMETER") context: Context, inFront: Boolean) {
-            this.inFront = inFront
+        /**
+         * The app came on screen ([onScreen] true) or left it. On screen alone is not "in front": the page
+         * of the server must also be showing and have said hello ([pageShown], [pageHello]).
+         */
+        fun setForeground(@Suppress("UNUSED_PARAMETER") context: Context, onScreen: Boolean) {
+            front.onScreen(onScreen)
+        }
+
+        /**
+         * [origin]'s page is now what the app shows: a new load, which has not said hello yet. Null when it
+         * is the launcher or the can't-reach screen. While a page is loading, or none is there, messages
+         * are shown on the phone as usual.
+         */
+        fun pageShown(@Suppress("UNUSED_PARAMETER") context: Context, origin: String?) {
+            front.shown(origin)
+        }
+
+        /** The page of [origin] said hello over the bridge: it is up, and from here it has the sounds. */
+        fun pageHello(@Suppress("UNUSED_PARAMETER") context: Context, origin: String) {
+            front.hello(origin)
         }
 
         /**
@@ -523,11 +552,19 @@ class NotifyService : Service() {
             is CatchUp.Outcome.Caught -> {
                 Log.i(TAG, "caught up: ${r.missed.events.size} message(s) since the gap")
                 val me = s.directory.me ?: return
-                // Newest first from the server; shown oldest first, so each conversation reads in order.
+                // Newest first from the server; taken oldest first, so each conversation reads in order. Each
+                // conversation is posted once, with all its lines (up to 5 per conversation, 100 in all): posting
+                // them one by one would read half-updated notifications, and Android drops updates that come too fast.
+                val ready = ArrayList<Ready>()
                 for (raw in r.missed.events.asReversed()) {
                     if (destroyed) return // stopped mid-way: no more posts, and the gap stays open
                     if (raw.authorId == me.id) continue
-                    handle(s, raw, live = false)
+                    prepare(s, raw, live = false)?.let(ready::add)
+                }
+                // The conversation with the newest message goes last, so it ends up on top.
+                for (group in ConvGroups.byConversation(ready, { NoticeText.convKey(it.note.e) }, { it.note.at })) {
+                    if (destroyed) return
+                    post(s, group)
                 }
                 if (destroyed) return
                 // The server's own clock at the answer: everything before it was in the answer, however the
@@ -580,18 +617,31 @@ class NotifyService : Service() {
         handle(s, raw, live = true)
     }
 
-    /** Worker. One message, live or caught up, through the rules to a notification (or not). */
+    /** A message that passed every rule and is ready to be shown: what it is, and how loudly. */
+    private class Ready(val note: Note, val alert: Alert)
+
+    /** Worker. One live message through the rules to a notification (or not). */
     private fun handle(s: Session, raw: RawMessage, live: Boolean) {
-        if (destroyed) return // before marking it seen: nothing is shown after stop
-        if (!seenIds.firstTime(raw.messageId)) return
-        // In front, the page sounds and shows it. Marked seen above, so catch-up won't bring it back.
-        if (inFront) return
-        val me = s.directory.me ?: return
-        val state = s.directory.ruleState() ?: return
+        prepare(s, raw, live)?.let { post(s, listOf(it)) }
+    }
+
+    /**
+     * Worker. One message, live or caught up, through the rules: null when it is not to be shown (a
+     * duplicate, in front, muted, DND…), else what to show. Shows nothing itself.
+     */
+    private fun prepare(s: Session, raw: RawMessage, live: Boolean): Ready? {
+        if (destroyed) return null // before marking it seen: nothing is shown after stop
+        if (!seenIds.firstTime(raw.messageId)) return null
+        // In front (this server's page is on screen and has said hello), the page sounds and shows it. Marked seen
+        // above, so catch-up won't bring it back. With only the launcher, a page still loading or the can't-reach
+        // screen up, nobody would show it: it is posted as usual.
+        if (front.inFront(s.origin)) return null
+        val me = s.directory.me ?: return null
+        val state = s.directory.ruleState() ?: return null
         // The rules first, with no names: a channel message that won't notify must not cost a lookup.
-        val bare = MessageEvents.toIncoming(raw, me.id, NO_NAMES, FALLBACKS_FOR_RULES) ?: return
-        val kind = classify(bare, state) ?: return
-        val e: IncomingMessage = MessageEvents.toIncoming(raw, me.id, s.directory, fallbacks()) ?: return
+        val bare = MessageEvents.toIncoming(raw, me.id, NO_NAMES, FALLBACKS_FOR_RULES) ?: return null
+        val kind = classify(bare, state) ?: return null
+        val e: IncomingMessage = MessageEvents.toIncoming(raw, me.id, s.directory, fallbacks()) ?: return null
         val key = NoticeText.convKey(e)
         val alert = if (live) {
             burst.onLive(key, SystemClock.elapsedRealtime(), mentionsMe(e.content, me))
@@ -600,8 +650,15 @@ class NotifyService : Service() {
         }
         // A caught-up message is shown at the time it was sent, on the phone's clock.
         val at = if (live) System.currentTimeMillis() else raw.createdAt?.let { it - (s.api.serverOffsetMs ?: 0L) } ?: System.currentTimeMillis()
+        return Ready(Note(e, kind, at), alert)
+    }
+
+    /** Worker. [group], one conversation's messages oldest first, as one post to its notification. */
+    private fun post(s: Session, group: List<Ready>) {
+        if (destroyed || group.isEmpty()) return
+        val alert = if (group.any { it.alert == Alert.LOUD }) Alert.LOUD else Alert.SILENT
         try {
-            notifier.post(e, kind, alert, s.origin, at)
+            notifier.postAll(group.map { it.note }, alert, s.origin)
         } catch (ex: RuntimeException) {
             // Android can refuse a post (a notification it finds too big, say); the next message tries afresh.
             Log.w(TAG, "couldn’t post a notification: ${ex.javaClass.simpleName}")
@@ -646,7 +703,7 @@ class NotifyService : Service() {
     private fun startRing(s: Session, me: Me, state: CallEvents.State, target: CallRooms.Target) {
         val room = state.room
         val rules = s.directory.ruleState()
-        if (inFront || rules == null || rules.dnd || rules.isMuted(target.convId)) {
+        if (front.inFront(s.origin) || rules == null || rules.dnd || rules.isMuted(target.convId)) {
             s.gate.onDeclined(room)
             return
         }

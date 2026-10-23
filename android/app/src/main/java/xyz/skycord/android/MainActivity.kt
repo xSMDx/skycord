@@ -381,6 +381,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun onServerChanged() {
         if (::bridge.isInitialized) bridge.refresh()
+        // A new page (or the launcher) is being loaded: nothing has said hello yet, so the phone still
+        // notifies for this server until the page does (NotifyService.pageHello, from the bridge).
+        NotifyService.pageShown(this, currentServer)
         // The background connection follows the last server used (Review Focus 2).
         syncNotifyService(leaving = false)
     }
@@ -479,6 +482,8 @@ class MainActivity : AppCompatActivity() {
         val name = store.find(origin)?.name ?: origin
         findViewById<TextView>(R.id.unreachable_title).text = getString(R.string.unreachable_title, name)
         unreachable.visibility = View.VISIBLE
+        // This screen covers the page: it is not on screen, whatever it said before, so the phone notifies.
+        NotifyService.pageShown(this, null)
     }
 
     fun applyBarColour(css: String) {

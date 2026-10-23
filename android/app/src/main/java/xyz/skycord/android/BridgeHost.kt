@@ -254,6 +254,9 @@ class BridgeHost(private val activity: MainActivity) {
         when (m) {
             Incoming.Hello -> {
                 appProxy = proxy
+                // The page is up and has the sounds: from here the phone stays quiet for this server while the
+                // app is on screen (it is not "in front" before this: see FrontGate).
+                activity.currentServer?.let { NotifyService.pageHello(activity, it) }
                 // A new page (or a reload) knows nothing yet: it is told the state again, and gets
                 // anything waiting for it.
                 sentBackground = null

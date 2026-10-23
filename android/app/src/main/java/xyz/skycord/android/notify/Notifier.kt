@@ -10,6 +10,7 @@ import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -18,6 +19,7 @@ import androidx.core.content.ContextCompat
 import xyz.skycord.android.MainActivity
 import xyz.skycord.android.R
 import xyz.skycord.android.core.Alert
+import xyz.skycord.android.core.ConvLines
 import xyz.skycord.android.core.ConvRef
 import xyz.skycord.android.core.IncomingMessage
 import xyz.skycord.android.core.Kind
@@ -62,15 +64,30 @@ internal data class Conv(val origin: String, val ref: ConvRef, val title: String
 }
 
 /**
+ * One message that passed the rules, on its way into its conversation's notification:
+ * the event, what it is for the person ([kind]), and when it was sent ([at]).
+ */
+internal class Note(val e: IncomingMessage, val kind: Kind, val at: Long)
+
+/** One line of a conversation's notification. A null [sender] is the person themself (a reply). */
+private class Line(val text: String, val at: Long, val sender: Person?)
+
+/**
  * The phone's notifications: one per conversation, updated as messages arrive,
  * with a reply field. The background service hands each message that passed the
- * rules to [post]; nothing here decides whether a message deserves one.
+ * rules to [post] (or, for a catch-up, a conversation's several to [postAll], once);
+ * nothing here decides whether a message deserves one.
  *
  *  - **One per conversation.** Each is posted under its conversation key as the tag
  *    (never a hash, so two conversations cannot share one) and [NOTICE_ID]. A new
- *    message is added to the messages the notification already holds, read back
- *    from Android's own list of what is showing, so nothing is remembered in memory
- *    and a restarted process loses nothing. Android keeps the latest 25.
+ *    message is added to the lines the conversation already holds. Those are kept
+ *    here, in memory, last 25 ([ConvLines]), not read back from Android's list of what
+ *    is showing: `notify()` is asynchronous and Android sheds updates posted too fast,
+ *    so a burst read a stale list and lost lines. They are forgotten when the
+ *    notification goes ([clear], [clearAll], [signedOut], [forget] on a swipe). A
+ *    notification left over from before the process began is taken over once, from
+ *    Android's list; one gone without a word (a tap) is noticed on the next post after
+ *    a few seconds, by asking Android once.
  *  - **Alerts.** A [Alert.LOUD] post lets the channel make its sound. A
  *    [Alert.SILENT] post updates quietly (`setOnlyAlertOnce`); and when there is
  *    nothing showing to update, as with catch-up, it is also marked silent, because
@@ -121,27 +138,41 @@ class Notifier(context: Context) {
      * message was sent (the live moment by default; catch-up passes the real one).
      */
     fun post(e: IncomingMessage, kind: Kind, alert: Alert, origin: String, at: Long = System.currentTimeMillis()) {
-        val conv = Conv(origin, NoticeText.ref(e), NoticeText.conversationTitle(e))
-        val sender = Person.Builder().setName(NoticeText.authorName(e)).setKey("user:${e.authorId}").build()
-        val text = NoticeText.body(e.content, app.getString(R.string.notice_no_text))
-        publish(conv, headline = NoticeText.title(e), mentions = kind == Kind.MENTION, loud = alert == Alert.LOUD, at = at, create = true) {
-            it.addMessage(text, at, sender)
+        postAll(listOf(Note(e, kind, at)), alert, origin)
+    }
+
+    /**
+     * Several messages of one conversation (a catch-up's), oldest first, as one post: the conversation's
+     * notification gets all their lines at once and is posted a single time, so nothing depends on how
+     * fast Android takes updates. All [notes] must be for the same conversation; the title and the time
+     * are the newest's, and a mention in any of them marks the notification.
+     */
+    internal fun postAll(notes: List<Note>, alert: Alert, origin: String) {
+        val newest = notes.lastOrNull() ?: return
+        val conv = Conv(origin, NoticeText.ref(newest.e), NoticeText.conversationTitle(newest.e))
+        val noText = app.getString(R.string.notice_no_text)
+        val added = notes.map { n ->
+            val sender = Person.Builder().setName(NoticeText.authorName(n.e)).setKey("user:${n.e.authorId}").build()
+            Line(NoticeText.body(n.e.content, noText), n.at, sender)
         }
+        publish(
+            conv, headline = NoticeText.title(newest.e), mentions = notes.any { it.kind == Kind.MENTION },
+            loud = alert == Alert.LOUD, at = newest.at, create = true, added = added,
+        )
     }
 
     /** Your reply went through: "You: …" joins the conversation, quietly. Nothing to do if the notice has gone. */
     internal fun appendReply(conv: Conv, text: String, at: Long = System.currentTimeMillis()) {
-        publish(conv, headline = conv.title, mentions = false, loud = false, at = at, create = false) {
-            it.addMessage(text, at, it.user)
-        }
+        publish(conv, headline = conv.title, mentions = false, loud = false, at = at, create = false, added = listOf(Line(text, at, null)))
     }
 
     /** Your reply did not go: say so in the conversation, even if the notice was swiped away meanwhile. */
     internal fun replyFailed(conv: Conv, at: Long = System.currentTimeMillis()) {
         val skycord = Person.Builder().setName(app.getString(R.string.app_name)).setKey("skycord").build()
-        publish(conv, headline = conv.title, mentions = false, loud = false, at = at, create = true) {
-            it.addMessage(app.getString(R.string.notice_send_failed), at, skycord)
-        }
+        publish(
+            conv, headline = conv.title, mentions = false, loud = false, at = at, create = true,
+            added = listOf(Line(app.getString(R.string.notice_send_failed), at, skycord)),
+        )
     }
 
     /**
@@ -150,7 +181,7 @@ class Notifier(context: Context) {
      * it when there is nothing to say.
      */
     internal fun settle(conv: Conv) {
-        publish(conv, headline = conv.title, mentions = false, loud = false, at = System.currentTimeMillis(), create = false) {}
+        publish(conv, headline = conv.title, mentions = false, loud = false, at = System.currentTimeMillis(), create = false, added = emptyList())
     }
 
     /**
@@ -173,14 +204,24 @@ class Notifier(context: Context) {
         nm.notify(missedTag(conv.key), MISSED_ID, notice)
     }
 
-    /** Removes one conversation's notification, and the missed call it holds. */
-    fun clear(convKey: String) {
+    /** Removes one conversation's notification and its lines, and the missed call it holds. */
+    fun clear(convKey: String) = synchronized(LOCK) {
+        lines.clear(convKey)
         nm.cancel(convKey, NOTICE_ID)
         nm.cancel(missedTag(convKey), MISSED_ID)
     }
 
-    /** Removes every message and missed-call notification (not the service's own, nor a signed-out notice). */
-    fun clearAll() {
+    /**
+     * The conversation's notification was swiped away (Android has already removed it): its lines go
+     * with it, so the next message starts a new one.
+     */
+    internal fun forget(convKey: String) = synchronized(LOCK) {
+        lines.clear(convKey)
+    }
+
+    /** Removes every message and missed-call notification (not the service's own, nor a signed-out notice), and every line. */
+    fun clearAll() = synchronized(LOCK) {
+        lines.clearAll()
         for (n in nm.activeNotifications) if (n.id == NOTICE_ID || n.id == MISSED_ID) nm.cancel(n.tag, n.id)
     }
 
@@ -216,9 +257,9 @@ class Notifier(context: Context) {
     // ---- building and posting ------------------------------------------------------------------
 
     /**
-     * Reads what [conv]'s notification holds, lets [edit] change it, and posts the result.
-     * With nothing showing it starts a fresh one, unless [create] is false. One at a time:
-     * two posts for the same conversation must not both read the old list.
+     * Adds [added] (oldest first) to the lines [conv]'s notification holds and posts the result. With
+     * nothing held it starts a fresh one, unless [create] is false. One at a time: two posts for the
+     * same conversation must not both start from the old lines.
      */
     private fun publish(
         conv: Conv,
@@ -227,23 +268,30 @@ class Notifier(context: Context) {
         loud: Boolean,
         at: Long,
         create: Boolean,
-        edit: (NotificationCompat.MessagingStyle) -> Unit,
+        added: List<Line>,
     ) = synchronized(LOCK) {
         ensureChannelsOnce()
-        val previous = showing(conv.key)
-        if (previous == null && !create) return@synchronized
+        val key = conv.key
+        val now = SystemClock.elapsedRealtime()
+        when {
+            // Not touched since this process began: a notification from before it may be showing.
+            !lines.tracked(key) -> takeOver(key, now)
+            // Held for a while without a post: it may have gone without telling us (a tap), so ask Android.
+            lines.stale(key, now) && showing(key) == null -> lines.clear(key)
+        }
+        val before = lines.held(key)
+        if (before == null && !create) return@synchronized
 
-        val style = previous?.let { NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(it) }
-            ?: NotificationCompat.MessagingStyle(Person.Builder().setName(app.getString(R.string.notice_you)).build())
+        val style = NotificationCompat.MessagingStyle(Person.Builder().setName(app.getString(R.string.notice_you)).build())
         // A DM is between two people and needs no title; a group or a channel is named.
         if (conv.ref.kind != "dm") {
             style.conversationTitle = conv.title
             style.isGroupConversation = true
         }
-        edit(style)
-
         // Once a mention is in the notification it stays marked, even as plain messages join it.
-        val mentioned = mentions || previous?.extras?.getBoolean(EXTRA_MENTIONED, false) == true
+        val held = lines.append(key, added, mentions, now)
+        for (l in held.lines) style.addMessage(l.text, l.at, l.sender ?: style.user)
+        val mentioned = held.mentioned
         val builder = NotificationCompat.Builder(app, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(ContextCompat.getColor(app, R.color.accent))
@@ -261,8 +309,20 @@ class Notifier(context: Context) {
         if (mentioned) builder.setSubText(app.getString(R.string.notice_mentioned))
         // Only-alert-once keeps an update quiet, but a notification that is new (catch-up, or one
         // swiped away a moment ago) alerts all the same. Silent covers that case.
-        if (!loud && previous == null) builder.setSilent(true)
-        nm.notify(conv.key, NOTICE_ID, builder.build())
+        if (!loud && before == null) builder.setSilent(true)
+        nm.notify(key, NOTICE_ID, builder.build())
+    }
+
+    /**
+     * A notification for [key] that was showing before this process began (Android keeps them when it
+     * kills the app): its lines become the ones held, once, so the next message adds to them.
+     */
+    private fun takeOver(key: String, now: Long) {
+        val shown = showing(key) ?: return
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(shown) ?: return
+        // Lines with no key are the person's own (their user has none); every other sender has one.
+        val old = style.messages.map { m -> Line(m.text.toString(), m.timestamp, m.person?.takeIf { it.key != null }) }
+        lines.seed(key, old, shown.extras.getBoolean(EXTRA_MENTIONED, false), now)
     }
 
     /** The notification showing for [convKey], if any. */
@@ -336,5 +396,11 @@ class Notifier(context: Context) {
 
         private val LOCK = Any()
         @Volatile private var channelsMade = false
+
+        /**
+         * Every conversation's lines, for the whole process: a Notifier is made afresh by whoever needs
+         * one (the service, a reply, a ring), and all of them must see the same lines.
+         */
+        private val lines = ConvLines<Line>()
     }
 }

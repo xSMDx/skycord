@@ -7,6 +7,7 @@ import xyz.skycord.android.core.ConvPrefs
 import xyz.skycord.android.core.Me
 import xyz.skycord.android.core.MessageEvents
 import xyz.skycord.android.core.RuleState
+import xyz.skycord.android.core.SelfStatus
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -36,8 +37,8 @@ internal class Directory(private val api: ServerApi) : MessageEvents.Names {
     @Volatile var me: Me? = null
         private set
 
-    @Volatile private var status: String? = null
-    @Volatile private var statusUntil: Long? = null
+    // Chosen status and when it ends: a timed Do Not Disturb ends on its own at that time.
+    private val selfStatus = SelfStatus()
     @Volatile private var prefs: ConvPrefs = ConvPrefs.EMPTY
 
     private val servers = ConcurrentHashMap<String, String>()
@@ -61,8 +62,9 @@ internal class Directory(private val api: ServerApi) : MessageEvents.Names {
         }
         val id = self.str("id") ?: return Outcome.FAILED
         me = Me(id, self.str("displayName") ?: "", self.str("username") ?: "")
-        status = self.str("status")
-        statusUntil = null // /auth/me does not carry the end; a presence:self that does replaces this
+        // /auth/me reports the status read against the clock, with the end of a timed one (statusUntil,
+        // an ISO time, or null). The server never flips the stored status back, so the end is ours to keep.
+        selfStatus.load(self.str("status"), self.str("statusUntil"))
 
         val prefsOutcome = refreshPrefs()
         if (prefsOutcome != Outcome.READY) return prefsOutcome
@@ -82,22 +84,27 @@ internal class Directory(private val api: ServerApi) : MessageEvents.Names {
         else -> Outcome.FAILED
     }
 
-    /** The rules' inputs as they stand now, or null before [load] has said who the person is. */
-    fun ruleState(nowMs: Long = System.currentTimeMillis()): RuleState? {
+    /**
+     * The rules' inputs as they stand now, or null before [load] has said who the person is.
+     * [nowMs] is the server's clock (the ends of a timed Do Not Disturb and of a mute are its times).
+     */
+    fun ruleState(nowMs: Long = api.serverNow()): RuleState? {
         val who = me ?: return null
         val p = prefs
         return RuleState(
             me = who,
-            dnd = ConvPrefs.dnd(status, statusUntil, nowMs),
+            dnd = selfStatus.dnd(nowMs),
             isMuted = { id -> p.isMuted(id, nowMs) },
             levelOf = p::levelOf,
         )
     }
 
-    /** `presence:self`: the person changed their status somewhere. `until` absent keeps the end known; null clears it. */
+    /**
+     * `presence:self`: the person changed their status somewhere, or its end. A status with no `until`
+     * named has no end; `until` null clears the end (see [SelfStatus.onPresenceSelf]).
+     */
     fun onPresenceSelf(p: JSONObject) {
-        p.str("status")?.let { status = it }
-        if (p.has("until")) statusUntil = MessageEvents.epochMs(p.opt("until") as? String)
+        selfStatus.onPresenceSelf(p.str("status"), p.has("until"), p.opt("until") as? String)
     }
 
     /**
