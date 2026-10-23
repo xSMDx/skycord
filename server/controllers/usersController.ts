@@ -302,7 +302,11 @@ const broadcastStatusToFriends = async (
     const fid = f.requester.toString() === userId ? f.receiver.toString() : f.requester.toString()
     io.to(`user:${fid}`).emit('presence', { userId, status })
   }
-  io.to(`user:${userId}`).emit('presence:self', { status: chosen, effective: status })
+  // `until` is always present, null included, exactly as the socket path
+  // sends it: the web client disarms its expiry timer only when the key
+  // exists, so omitting it left a tab holding the deadline a previous timed
+  // status had set.
+  io.to(`user:${userId}`).emit('presence:self', { status: chosen, effective: status, until })
 }
 
 // ── Change username (requires current password) ──────────────────────────────

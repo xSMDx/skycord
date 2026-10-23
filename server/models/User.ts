@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema, Model, Types } from 'mongoose'
 import bcrypt from 'bcrypt'
-import { effectiveStatus, CHOSEN_STATUSES, type ChosenStatus } from '../state/presence'
+import { effectiveStatus, chosenNow, CHOSEN_STATUSES, type ChosenStatus } from '../state/presence'
 
 const SALT_ROUNDS = 12
 
@@ -34,7 +34,7 @@ export interface IUserDocument extends Document {
   updatedAt:     Date
   comparePassword(candidate: string): Promise<boolean>
   toPublicJSON(): PublicUser
-  toSelfJSON(): PublicUser
+  toSelfJSON(): SelfUser
 }
 
 /**
@@ -118,6 +118,17 @@ export interface PublicUser {
   bannerCrop:    ICrop | null
   customStatus:  ICustomStatus | null
   createdAt:     Date
+}
+
+/**
+ * What a person is told about THEMSELVES: everything public, plus when their
+ * chosen status ends. Never part of PublicUser -- the deadline is nobody
+ * else's business.
+ */
+export interface SelfUser extends PublicUser {
+  /** ISO time the chosen status stops applying. Null when it never does, or
+   *  when it already has -- an ended deadline is not worth reporting. */
+  statusUntil: string | null
 }
 
 interface IUserModel extends Model<IUserDocument> {
@@ -249,9 +260,27 @@ UserSchema.methods.toPublicJSON = function (): PublicUser {
  * Your own view of yourself. Identical to toPublicJSON except that `status`
  * is your actual choice, so the status picker can show "Invisible" ticked
  * while everyone else is being told you're offline.
+ *
+ * "Your actual choice" is still read against the clock (chosenNow). Nothing
+ * on the server flips a timed status back when it runs out -- only an open web
+ * client does -- so the stored value can outlive its deadline by any amount.
+ * Reporting it raw left a client that reads this on connect (the Android
+ * background service, for Do Not Disturb) believing in a status that had
+ * ended, indefinitely. `statusUntil` goes with it so the client knows when the
+ * status it was handed will stop applying.
  */
-UserSchema.methods.toSelfJSON = function () {
-  return { ...this.toPublicJSON(), status: this.status as ChosenStatus }
+UserSchema.methods.toSelfJSON = function (): SelfUser {
+  // The deadline is read BEFORE the status. At the millisecond a deadline
+  // passes the two reads can disagree; this order can only yield an
+  // already-ended time next to the ended-to status, never the reverse (an
+  // ended status with nothing to say so).
+  const end  = this.statusUntil ? new Date(this.statusUntil) : null
+  const live = end !== null && end.getTime() > Date.now()
+  return {
+    ...this.toPublicJSON(),
+    status:      chosenNow(this.status, this.statusUntil),
+    statusUntil: live ? end!.toISOString() : null,
+  }
 }
 
 // Find by email OR username — includes password + tokenVersion for auth
