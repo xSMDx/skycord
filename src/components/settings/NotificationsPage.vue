@@ -32,10 +32,14 @@ const readDroid = async () => {
 const onBack = () => { if (document.visibilityState === 'visible') void readDroid() }
 
 onMounted(async () => {
+  // Listening first, and only in the Android app: nothing here may wait on the
+  // tray question below, or the page could unmount with the listeners still to be added.
+  if (droid) {
+    document.addEventListener('visibilitychange', onBack)
+    window.addEventListener('focus', onBack)
+    void readDroid()
+  }
   keepInTray.value = notifications ? await notifications.keepInTray() : null
-  void readDroid()
-  document.addEventListener('visibilitychange', onBack)
-  window.addEventListener('focus', onBack)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onBack)
@@ -71,7 +75,7 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
     <div class="st-field">
       <div class="st-field-left">
         <span class="st-field-label">Background notifications</span>
-        <span class="st-field-value prose">Messages, mentions and calls reach you while Skycord is in the background. Off, Skycord stops listening and its always-on notification goes away.</span>
+        <span class="st-field-value prose">Messages, mentions and calls reach you while Skycord is in the background. Turning this off also removes the always-on notification.</span>
       </div>
       <button
         type="button" class="st-toggle" :class="{ on: droidState?.enabled }" role="switch"

@@ -249,6 +249,13 @@ const engagedCallRooms = ref<Set<string>>(new Set())
 // CallBar (that's dismissedCallRooms). Pruned when the call actually ends, so a
 // fresh call from the same room rings again.
 const modalAckedRooms = ref<Set<string>>(new Set())
+// The room the Android app has just asked this page to join (its Answer button).
+// Set the moment the request arrives, before anything loads or awaits: the
+// server's replay of the call's presence can land first and would ring a modal
+// for the call being answered. It cannot be an engaged room, because that set
+// is pruned against `activeCalls`, which may not hold the room yet. Cleared by
+// endJoiningFromApp (see "Android: what the app asks of the page").
+const joiningFromApp = ref<string | null>(null)
 // Whether the window is in front — declared before anything that asks.
 // The desktop app says (windowInFront): inside it the document reports focus
 // and visibility as true even while hidden in the tray. In a browser the
@@ -289,6 +296,7 @@ const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: stri
   for (const [room, ids] of Object.entries(activeCalls.value)) {
     if (modalAckedRooms.value.has(room)) continue    // declined / seen in-chat / left
     if (engagedCallRooms.value.has(room)) continue   // already accepted/joined this call
+    if (room === joiningFromApp.value) continue      // answered in the Android app, joining now
     // Viewing it → the CallBar shows it. Only while the window is in front:
     // an open chat in a hidden window is a call nobody would see.
     if (room === openRoom && appFocused.value) continue
@@ -4349,6 +4357,11 @@ onBeforeUnmount(() => { stopNotices(); stopCallActions(); stopTray() })
 const openFromApp = async (c: ConvRef) => {
   await whenBooted()
   showSearchScreen.value = false   // a phone's search screen covers the conversation
+  // On a phone Settings, the quick switcher, pins and profiles fill the screen:
+  // a conversation opened beneath one changes nothing the person can see. Close
+  // what is open, topmost first — the back button's own Escape — a few times at
+  // most, so a box that will not close cannot hold this up.
+  for (let i = 0; i < 6 && overlayOpen(); i++) { pressEscape(); await nextTick() }
   // A channel in a server not opened this session: fetch the server first, as a notice does.
   if (c.kind === 'channel' && !channelHome(c.id) && c.serverId) {
     try { await loadServerDetail(c.serverId) } catch { /* not found, said below */ }
@@ -4366,14 +4379,44 @@ const callNameFor = (kind: 'dm' | 'group', convId: string): string => {
   const f = apiFriends.value.find(x => x.id === convId)
   return f ? (f.displayName || f.username) : dmsData.value.find(d => d.id === convId)?.name ?? 'Someone'
 }
-const stopJoinFromApp = appBridge()?.onJoinCall?.(async c => {
-  await whenBooted()
-  const myId = authUser.value?.id
-  // Engaged, as accepting the ring does: a flap in the media must not ring again.
-  if (myId) engagedCallRooms.value = new Set([...engagedCallRooms.value, voiceRoomName(c.kind, c.convId, myId)])
-  vConnect(c.convId, c.kind, callNameFor(c.kind, c.convId)).catch(() => {})
+
+// Answering in the Android app. `joiningFromApp` keeps the ring modal away from
+// the very call being answered until the voice state itself takes over: the
+// guard comes down when the call is up (the engaged set takes over from there),
+// when the attempt ends without one, if the join throws, or after a safety
+// timeout. The name is cosmetic and never holds the guard up.
+const JOINING_FROM_APP_MS = 15_000
+let joiningTimer: ReturnType<typeof setTimeout> | null = null
+let joiningSawConnecting = false
+const endJoiningFromApp = () => {
+  if (joiningTimer) { clearTimeout(joiningTimer); joiningTimer = null }
+  joiningFromApp.value = null
+  joiningSawConnecting = false
+}
+watch(() => [voice.connecting, voice.connected] as const, ([connecting, connected]) => {
+  if (joiningFromApp.value === null) return
+  if (connected) endJoiningFromApp()
+  else if (connecting) joiningSawConnecting = true
+  else if (joiningSawConnecting) endJoiningFromApp()   // gave up: let the call ring again
 })
-onBeforeUnmount(() => { stopOpenFromApp?.(); stopJoinFromApp?.() })
+const joinFromApp = async (c: { kind: 'dm' | 'group'; convId: string }) => {
+  await whenBooted()
+  vConnect(c.convId, c.kind, callNameFor(c.kind, c.convId)).catch(endJoiningFromApp)
+  // The call with the app on screen: the conversation it belongs to, opened.
+  await openFromApp({ kind: c.kind, id: c.convId })
+}
+const stopJoinFromApp = appBridge()?.onJoinCall?.(c => {
+  const myId = authUser.value?.id
+  // Synchronously, ahead of the awaits in joinFromApp (see joiningFromApp).
+  if (myId) {
+    joiningFromApp.value = voiceRoomName(c.kind, c.convId, myId)
+    joiningSawConnecting = false
+    if (joiningTimer) clearTimeout(joiningTimer)
+    joiningTimer = setTimeout(endJoiningFromApp, JOINING_FROM_APP_MS)
+  }
+  void joinFromApp(c)
+})
+onBeforeUnmount(() => { stopOpenFromApp?.(); stopJoinFromApp?.(); if (joiningTimer) clearTimeout(joiningTimer) })
 
 // The conversation on screen, for the app to clear its notification and start
 // a fresh burst. Fires when the open conversation changes in front, and when the
