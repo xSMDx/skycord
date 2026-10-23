@@ -35,8 +35,9 @@ sealed interface AuthResult {
  * The person signs in once, in the WebView; the server keeps that in the
  * httpOnly refresh cookie (syk_rt) the WebView stores. This reads that cookie
  * back, trades it at POST /auth/refresh for its own short-lived access token,
- * and writes any cookie the server re-issues back into the WebView's store, so
- * the web client and the native part never disagree about who is signed in.
+ * and writes any cookie the server returns back into the WebView's store (a re-issued
+ * one, or the clearing one that comes with a 401), so the web client and the native
+ * part never disagree about who is signed in.
  *
  * Nothing here ever logs the cookie or the token.
  */
@@ -83,7 +84,12 @@ class SessionAuth(@Suppress("unused") context: Context) {
                     }
                 }
                 // The server's answer about this sign-in: missing, revoked, expired, signed out from the devices screen.
-                401, 403 -> AuthResult.SignedOut
+                // It sends a clearing cookie with that answer; the web client must hear it too, or the
+                // WebView keeps a dead cookie and the two disagree about who is signed in.
+                401, 403 -> {
+                    writeBack(origin, conn)
+                    AuthResult.SignedOut
+                }
                 // 429 (rate limited), 5xx, a redirect, anything else: the sign-in itself is not in question.
                 else -> {
                     Log.w(TAG, "the refresh answered $status")
