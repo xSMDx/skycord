@@ -16,6 +16,8 @@ import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { Conversation } from '../models/Conversation'
 import { dmConvId } from '../controllers/messagesController'
+import { mentionNames, resolveMentions } from '../utils/searchFields'
+import { mentionCandidates } from '../utils/searchMembers'
 import { PERMISSIONS } from '../permissions'
 
 beforeAll(connectDb)
@@ -29,16 +31,24 @@ const HOUR = 60 * MIN
  * Raw inserts, bypassing Mongoose: the tests need exact `createdAt` values and
  * `timestamps: true` would stamp its own. The same trick historyWindow.test.ts
  * uses.
+ *
+ * A raw insert also skips the model's validate hook, which is what fills
+ * `mentions` on a real send -- and the catch-up reads `mentions`. So it is
+ * resolved here with the hook's own functions, or a fixture would describe a
+ * message no send could have produced. `extra` may still override it.
  */
 const put = async (
   conversationId: string, kind: 'dm' | 'group' | 'channel' | 'system', author: TestUser,
   content: string, at: number, extra: Record<string, unknown> = {},
 ) => {
+  const names  = kind === 'system' ? [] : mentionNames(content)
+  const people = names.length ? await mentionCandidates(kind, conversationId, names) : []
   const doc = {
     _id: new Types.ObjectId(), conversationId, kind,
     authorId: new Types.ObjectId(author.id), authorName: author.username, authorAvatar: null, authorAvatarCrop: null,
     content, systemType: kind === 'system' ? 'call' : null, reactions: [], pinned: false, mentionsEveryone: false,
-    edited: false, replyTo: null, replyToIds: [], createdAt: new Date(at), updatedAt: new Date(at), ...extra,
+    edited: false, replyTo: null, replyToIds: [], createdAt: new Date(at), updatedAt: new Date(at),
+    mentions: resolveMentions(names, people).map(id => new Types.ObjectId(id)), ...extra,
   }
   await Message.collection.insertOne(doc)
   return doc
@@ -154,6 +164,26 @@ describe('GET /users/me/missed', () => {
       await put(cid, 'channel', b, 'ping <@ann (ops)>', t0 + 1000)
       await put(cid, 'channel', b, 'ping <@somebody else>', t0 + 2000)
       expect(contents(await missed(a, t0))).toEqual(['ping <@ann (ops)>'])
+    })
+
+    it('finds a mention from the message\'s stored mentions, written through the model as a real send is', async () => {
+      // Not a raw insert: the model's hook resolves `<@Ann>` to this member's id
+      // while she is called Ann, and the catch-up reads THAT. She is renamed
+      // afterwards, so the text no longer names her -- only the stored id does.
+      const { a, b, cid } = await world()
+      const t0 = Date.now() - 10 * MIN
+      await app().patch('/users/me').set(auth(a)).send({ displayName: 'Ann' })
+      await Message.create({
+        conversationId: cid, kind: 'channel', authorId: b.id, authorName: b.username,
+        content: 'ping <@Ann> about the rota',
+      })
+      await Message.create({
+        conversationId: cid, kind: 'channel', authorId: b.id, authorName: b.username,
+        content: 'ping <@Nobody> about nothing',
+      })
+      await app().patch('/users/me').set(auth(a)).send({ displayName: 'Bea' })
+
+      expect(contents(await missed(a, t0))).toEqual(['ping <@Ann> about the rota'])
     })
 
     it('returns plain chatter in a channel whose level is all', async () => {
@@ -328,5 +358,30 @@ describe('GET /users/me/missed', () => {
     it('requires auth', async () => {
       expect((await app().get('/users/me/missed?since=1')).status).toBe(401)
     })
+  })
+})
+
+describe('the quiet-channel lookup', () => {
+  it('reads only the messages that mention the caller or @everyone, not every message in the window', async () => {
+    // The catch-up asks a quiet channel for "mentions me, or @everyone". With
+    // an index for only one of those two, Mongo cannot union them and falls
+    // back to fetching every message in the window and testing it -- the cost
+    // this lookup exists to avoid. Both need an index, so this counts the
+    // documents the query actually fetched.
+    const { a, b, cid } = await world()
+    await Message.init()    // indexes are built in the background; wait for them
+    const t0 = Date.now() - 10 * MIN
+    for (let i = 0; i < 300; i++) await put(cid, 'channel', b, `chatter ${i}`, t0 + i)
+    await put(cid, 'channel', b, `hello <@${a.username}>`, t0 + 1000)
+    await put(cid, 'channel', b, 'attention all', t0 + 1001, { mentionsEveryone: true })
+
+    const plan: any = await Message.collection.find({
+      conversationId: { $in: [cid] }, createdAt: { $gte: new Date(t0) }, kind: 'channel',
+      authorId: { $ne: new Types.ObjectId(a.id) },
+      $or: [{ mentionsEveryone: true }, { mentions: new Types.ObjectId(a.id) }],
+    }).explain('executionStats')
+
+    expect(plan.executionStats.nReturned).toBe(2)
+    expect(plan.executionStats.totalDocsExamined).toBe(2)
   })
 })

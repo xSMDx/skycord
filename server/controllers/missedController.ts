@@ -32,19 +32,6 @@ const PARALLEL = 20
 /** A server left alone is Only @mentions: the same default notifyLevels.ts holds. */
 const SERVER_DEFAULT = 'mentions'
 
-const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-/**
- * The text of a mention of this person: `<@displayName>` or `<@username>`,
- * either case. The server-side twin of `mentionsMe` in notifyRules.ts, so a
- * message that would light up live is one this finds. Null for a person with
- * neither name, who cannot be mentioned.
- */
-const mentionPattern = (names: (string | undefined)[]): string | null => {
-  const escaped = names.map(n => (n ?? '').trim()).filter(Boolean).map(literal)
-  return escaped.length ? `<@(?:${escaped.join('|')})>` : null
-}
-
 type Prefs = Record<string, { level?: string } | undefined>
 
 /** The notification level that applies: the nearest set on channel, category, server. */
@@ -120,7 +107,7 @@ export const getMissed = async (req: Request, res: Response, next: NextFunction)
 
     // convPrefs is select:false, and `+convPrefs` beside an inclusion list would
     // silently drop it, so it is named in the list instead.
-    const user = await User.findById(userId).select('username displayName convPrefs').lean()
+    const user = await User.findById(userId).select('convPrefs').lean()
     if (!user) { res.status(404).json({ message: 'User not found' }); return }
     // Lean leaves the prefs Map as the plain object it is stored as.
     const prefs = (user.convPrefs ?? {}) as unknown as Prefs
@@ -131,8 +118,11 @@ export const getMissed = async (req: Request, res: Response, next: NextFunction)
     ])
 
     // A channel at a quiet level still counts for a mention or an @everyone.
-    const pattern = mentionPattern([user.displayName, user.username])
-    const forMe = [{ mentionsEveryone: true }, ...(pattern ? [{ content: { $regex: pattern, $options: 'i' } }] : [])]
+    // The mention is the id the message resolved to when it was written
+    // (Message.mentions, filled by the model's hook and backfilled for older
+    // rows), not a pattern run over every message's text in the window. The
+    // index { conversationId, mentions, createdAt } answers it.
+    const forMe = [{ mentionsEveryone: true }, { mentions: me }]
     const allIds   = [...channels].filter(([, c]) => c.all).map(([id]) => id)
     const quietIds = [...channels].filter(([, c]) => !c.all).map(([id]) => id)
 
@@ -142,8 +132,9 @@ export const getMissed = async (req: Request, res: Response, next: NextFunction)
      * grow with how much was said — every filter here is on the two fields of
      * the { conversationId, createdAt } index, and a conversation that turns out
      * to hold only the caller's own words or a system line is weeded out in
-     * step 2. The exception is a quiet channel, where the mention has to be
-     * looked for in the text.
+     * step 2. The exception is a quiet channel, where the lookup is "mentions me
+     * or @everyone": each side has its own index on the conversation, so the
+     * two are unioned there too and no message is read to be tested.
      *
      * A DM has no document of its own: its id is the two user ids, sorted and
      * joined by `_`, so the caller is the prefix or the suffix. The prefix form

@@ -108,5 +108,10 @@ MessageSchema.pre('validate', async function () {
 MessageSchema.index({ content: 'text' }, { default_language: 'none', name: 'content_text' })
 MessageSchema.index({ conversationId: 1, mentions: 1, createdAt: -1 })
 MessageSchema.index({ conversationId: 1, has: 1, createdAt: -1 })
+// The catch-up for a phone (GET /users/me/missed) asks a quiet channel for
+// "mentions me, OR is an @everyone". Mongo can only union the two if each side
+// has an index; with just the mentions one above it fetched every message in
+// the window to test the other. Additive, built in the background at startup.
+MessageSchema.index({ conversationId: 1, mentionsEveryone: 1, createdAt: -1 })
 
 export const Message = mongoose.model<IMessage>('Message', MessageSchema)
