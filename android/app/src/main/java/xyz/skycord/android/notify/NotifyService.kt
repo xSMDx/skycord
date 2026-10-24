@@ -659,7 +659,7 @@ class NotifyService : Service() {
         val raw = MessageEvents.live(kind, payload) ?: return
         // Your own never notify, including the echo of a reply sent from a notification. First of all.
         if (raw.authorId == me.id) return
-        if (raw.kind == "dm") s.directory.learnName(raw.authorId, raw.authorName)
+        MessageEvents.nameToLearn(raw)?.let { s.directory.learnName(raw.authorId, it) }
         handle(s, raw, live = true)
     }
 

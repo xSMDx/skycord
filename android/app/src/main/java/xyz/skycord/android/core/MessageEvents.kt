@@ -85,6 +85,16 @@ object MessageEvents {
         }
     }
 
+    /**
+     * The name [raw] vouches for as its author's own, to keep for the ring and the missed-call notice,
+     * or null when it vouches for none: only a person's own DM does. A system line ("X started a call",
+     * "Call ended") is written by the server under the caller's username, and an older server does so
+     * still, so keeping it would swap a friend's display name for their username just before the ring
+     * asks for it.
+     */
+    fun nameToLearn(raw: RawMessage): String? =
+        raw.authorName.takeIf { raw.kind == "dm" && !raw.system && it.isNotEmpty() }
+
     /** The rules' view of [raw], or null when it cannot be placed (a DM that is not [me]'s). */
     fun toIncoming(raw: RawMessage, me: String, names: Names, fallbacks: Fallbacks): IncomingMessage? = when (raw.kind) {
         "dm" -> dmPartner(raw.conversationId, me)?.let { partner ->

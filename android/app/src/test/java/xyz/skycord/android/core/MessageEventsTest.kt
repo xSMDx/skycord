@@ -60,6 +60,40 @@ class MessageEventsTest {
         assertTrue((MessageEvents.toIncoming(raw, me, names, fallbacks) as IncomingMessage.Dm).system)
     }
 
+    // ---- the name a message teaches the directory ----------------------------------------------
+
+    @Test fun aPersonsOwnDmTeachesTheirName() {
+        val raw = MessageEvents.live(
+            "dm",
+            json("""{"_id":"m1","conversationId":"$dmConv","authorId":"$ana","authorName":"Ana","content":"hi"}"""),
+        )!!
+        assertEquals("Ana", MessageEvents.nameToLearn(raw))
+    }
+
+    // The server stamps a call's "started a call" / "Call ended" lines with the caller's username, not their
+    // display name. Learned, it overwrote "Bea" with "bea_mvltzvvw" just before the ring asked for the caller.
+    @Test fun aSystemLineTeachesNoName() {
+        val raw = MessageEvents.live(
+            "dm",
+            json("""{"_id":"m2","conversationId":"$dmConv","kind":"system","systemType":"call","authorId":"$ana","authorName":"ana_x1y2z3","content":"ana_x1y2z3 started a call"}"""),
+        )!!
+        assertTrue(raw.system)
+        assertNull(MessageEvents.nameToLearn(raw))
+    }
+
+    @Test fun onlyADmTeachesANameAndNeverAnEmptyOne() {
+        val group = MessageEvents.live(
+            "group",
+            json("""{"_id":"m3","conversationId":"g1","authorId":"$ana","authorName":"Ana","content":"hi"}"""),
+        )!!
+        assertNull(MessageEvents.nameToLearn(group))
+        val nameless = MessageEvents.live(
+            "dm",
+            json("""{"_id":"m4","conversationId":"$dmConv","authorId":"$ana","content":"hi"}"""),
+        )!!
+        assertNull(MessageEvents.nameToLearn(nameless))
+    }
+
     @Test fun aGroupMessageIsNamedFromTheDirectory() {
         val raw = MessageEvents.live("group", json("""{"_id":"m3","conversationId":"g1","authorId":"$ana","authorName":"Ana","content":"yo"}"""))!!
         assertEquals(IncomingMessage.Group("m3", "g1", "Weekend", ana, "Ana", "yo", false), MessageEvents.toIncoming(raw, me, names, fallbacks))

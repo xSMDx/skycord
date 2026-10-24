@@ -503,6 +503,29 @@ export const broadcastCallState = (room: string): void => {
 }
 
 /**
+ * The name a call's system lines ("X started a call", "Call ended") go under:
+ * the person's display name, else their username — the rule an ordinary message
+ * follows for its author. The username on its own is what these lines used to
+ * carry, so the web client printed "t11b_mvkppvuf started a call" and a phone
+ * that remembers the last name it saw for somebody learned the username from the
+ * line and rang with it.
+ *
+ * Looked up when the line is written, not taken from the socket: a connection
+ * lives for hours and the person may have renamed themselves since, and the
+ * socket's own copy is only filled in once its async setup has finished, so a
+ * call joined straight after connecting would still carry the username.
+ * [fallback] is the name the caller already holds, for a lookup that fails.
+ */
+const callLineName = async (userId: string, fallback: string): Promise<string> => {
+  try {
+    const u = await User.findById(userId).select('displayName username').lean()
+    return u?.displayName || u?.username || fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
  * Write "Call ended" into the conversation the room belongs to.
  *
  * Module level rather than a closure over the socket that triggered it,
@@ -521,13 +544,14 @@ const postCallEnded = async (room: string, author: CallAuthor) => {
   try {
     const isGroup = room.startsWith('group:')
     const conversationId = isGroup ? room.slice(6) : room.slice(3)
+    const authorName = await callLineName(author.id, author.name)
     const msg = await Message.create({
       conversationId, kind: 'system', systemType: 'call',
-      authorId: author.id, authorName: author.name, authorAvatar: null, content: 'Call ended',
+      authorId: author.id, authorName, authorAvatar: null, content: 'Call ended',
     })
     const payload = {
       _id: msg._id.toString(), conversationId, kind: 'system', systemType: 'call',
-      authorId: author.id, authorName: author.name, authorAvatar: null, content: 'Call ended',
+      authorId: author.id, authorName, authorAvatar: null, content: 'Call ended',
       reactions: [], pinned: false, edited: false, replyTo: null,
       createdAt: msg.createdAt.toISOString(),
     }
@@ -1246,15 +1270,20 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // Never called for a channel — the parameter type is the guard, and the one
     // call site narrows `kind` before reaching here. A voice channel has no
     // readable text history for a system message to land in.
-    const postCallSystem = async (kind: 'dm' | 'group', convId: string, content: string) => {
+    //
+    // `say` builds the text from the caller's name, so the author and the
+    // sentence cannot disagree about who it is (see callLineName).
+    const postCallSystem = async (kind: 'dm' | 'group', convId: string, say: (name: string) => string) => {
       const conversationId = kind === 'group' ? convId : dmConvId(userId, convId)
+      const authorName = await callLineName(userId, myName)
+      const content = say(authorName)
       const msg = await Message.create({
         conversationId, kind: 'system', systemType: 'call',
-        authorId: userId, authorName: username, authorAvatar: null, content,
+        authorId: userId, authorName, authorAvatar: null, content,
       })
       const payload = {
         _id: msg._id.toString(), conversationId, kind: 'system', systemType: 'call',
-        authorId: userId, authorName: username, authorAvatar: null, content,
+        authorId: userId, authorName, authorAvatar: null, content,
         reactions: [], pinned: false, edited: false, replyTo: null,
         createdAt: msg.createdAt.toISOString(),
       }
@@ -1379,7 +1408,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // a conversation nobody can open. Narrowing here is also what keeps
       // postCallSystem's signature honest.
       if (wasEmpty && !resuming && data.kind !== 'channel') {
-        await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
+        await postCallSystem(data.kind, data.conversationId, name => `${name} started a call`)
       }
       broadcastCall(room)
       // What is playing, to the newcomer alone. Music state only goes out on
