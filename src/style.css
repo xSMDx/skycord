@@ -2,6 +2,12 @@
 
 html, body { width: 100%; height: 100%; overflow: hidden; }
 
+/* No grey flash on tap. Android paints a translucent box over whatever was
+   touched, on top of the app's own press state (the inset veil below), so every
+   tap showed two responses and the first was the browser's. Desktop never draws
+   it, so this changes nothing there. */
+* { -webkit-tap-highlight-color: transparent; }
+
 body {
   font-family: var(--font-ui);
   background: var(--bg-floor);
@@ -156,4 +162,21 @@ button:disabled:active,
 .empty-pane-note {
   margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-3);
   max-width: 44ch;   /* these are sentences, and a centred pane is wide */
+}
+
+/* ── Full-screen overlays clear the connection strip ──────────────────────
+ * The strip ("Reconnecting…", "Back online") is pinned at z-index 10000 so
+ * nothing can cover it, and ConnectionBanner publishes its measured height as
+ * --conn-h while it is up (0 otherwise). .app already shrinks by it, but a
+ * full-screen overlay is position:fixed against the viewport and ignores .app,
+ * so the strip was drawn over Settings' title and its close button.
+ *
+ * These are the full-bleed overlays whose title bar is at the top edge:
+ * Settings, Server settings, the phone search screen. Phone only: on a wide
+ * window the strip sits over an area they do not draw in. !important because
+ * each one's own scoped rule says `inset: 0` at higher specificity, and this is
+ * a backstop that has to hold without editing every component. A bottom sheet
+ * (ModalBase, BottomSheet) leaves the top uncovered and needs nothing. */
+@media (max-width: 768px) {
+  .sm-overlay, .sv-overlay, [data-search-screen] { top: var(--conn-h, 0px) !important; }
 }
