@@ -250,6 +250,14 @@ class NotifyService : Service() {
             instance?.onPrefsChanged()
         }
 
+        /**
+         * Whether the server is an older version than this app expects: its catch-up route is missing (404), and
+         * with it the support for a background connection that does not count as the person being online. The
+         * phone then makes the person appear online while it listens. False when not running or not known yet.
+         * Settings › Notifications says so (androidNotifications.state).
+         */
+        val legacyServer: Boolean get() = instance?.session?.legacyServer == true
+
         /** The server's clock as the running service estimates it (Task 12's ring rule), or null when not running. */
         fun serverNow(): Long? = instance?.session?.api?.serverNow()
 
@@ -267,6 +275,9 @@ class NotifyService : Service() {
         var caughtUp = false
         var catchUpTries = 0
         var catchUpRetry: ScheduledFuture<*>? = null
+
+        /** The catch-up route answered 404 the last time it was asked: an older server (see [NotifyService.legacyServer]). */
+        @Volatile var legacyServer = false
 
         // Calls: when to ring, the ring itself, and for each room ringing its name and its 30 s timer.
         // Worker thread only. (Room names are this server's, so a new server starts with a new gate.)
@@ -540,8 +551,10 @@ class NotifyService : Service() {
             notifier.clearAll()
             burst = BurstGate()
             if (destroyed) return // Settings just cleared the cursor: a start-fresh one must not be written back
-            unlessStopped { cursor.set(s.origin, me.id, freshSince(s)) }
+            val from = freshSince(s)
+            unlessStopped { cursor.set(s.origin, me.id, from) }
             s.caughtUp = true
+            probeServerAge(s, from)
         } else {
             s.catchUpTries = 0
             runCatchUp(s, since)
@@ -627,10 +640,12 @@ class NotifyService : Service() {
                 // socket was doing, so this one is safe without a packet to vouch for it.
                 unlessStopped { cursor.advance(s.origin, me.id, r.missed.now) }
                 s.caughtUp = true
+                s.legacyServer = false
             }
             CatchUp.Outcome.NotSupported -> {
                 Log.i(TAG, "this server has no catch-up; live notifications only")
                 s.caughtUp = true
+                s.legacyServer = true
             }
             CatchUp.Outcome.SignedOut -> signedOut()
             CatchUp.Outcome.Failed -> {
@@ -640,6 +655,23 @@ class NotifyService : Service() {
                 if (++s.catchUpTries > MAX_CATCH_UP_TRIES) return // the next reconnect tries again
                 s.catchUpRetry = later(Backoff.next(s.catchUpTries)) { runCatchUp(s, since) }
             }
+        }
+    }
+
+    /**
+     * Worker. A fresh start has no catch-up, but whether the server has the route is still worth knowing (an
+     * older one does not, and the web client says so): one cheap request, whose messages are not shown. Only a
+     * clear answer changes what is known; a failure leaves it as it was.
+     */
+    private fun probeServerAge(s: Session, since: Long) {
+        if (destroyed || s !== session) return
+        val outcome = s.catchUp.fetch(since) // blocking, like the catch-up itself
+        if (destroyed || s !== session) return
+        when (outcome) {
+            is CatchUp.Outcome.Caught -> s.legacyServer = false
+            CatchUp.Outcome.NotSupported -> s.legacyServer = true
+            CatchUp.Outcome.SignedOut -> signedOut()
+            CatchUp.Outcome.Failed -> {}
         }
     }
 

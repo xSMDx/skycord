@@ -383,6 +383,9 @@ class BridgeHost(private val activity: MainActivity) {
             .put("batteryExempt", power?.isIgnoringBatteryOptimizations(activity.packageName) == true)
             // Android 14 made full-screen incoming calls a permission of its own; before, every app had it.
             .put("fullScreenCalls", Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || nm?.canUseFullScreenIntent() == true)
+            // An older server (no catch-up route) also ignores that this connection is only listening: while it
+            // listens, the person shows as online. The page says so.
+            .put("legacyServer", NotifyService.legacyServer)
     }
 
     /** The desktop's AboutFacts shape, so the web's Debug page reads it unchanged. */
