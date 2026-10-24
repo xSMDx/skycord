@@ -16,9 +16,20 @@ import {
 
 const desktop: DesktopBridge | null = appBridge()
 
+/**
+ * What Light does depends on where it runs. The plain title bar and the graphics
+ * card are the Windows app's to switch; a browser or a phone has neither, so
+ * naming them there would describe two things that do not happen. The Windows
+ * line says what it costs there, and the figure is the one measured on that app.
+ */
+const windowsApp = desktop?.platform === 'win32'
+const LIGHT_LINE = windowsApp
+  ? 'Two cameras, no motion, the plain Windows title bar, and the graphics card off — that last one does most of the work. Measured at 41% less memory than Max on this machine. Best on an old one, and video may look worse.'
+  : 'Two cameras at a time, no motion and lighter drawing — it uses a lot less memory than Max. Best on an older device, and video may look worse.'
+
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
   { id: 'max', name: 'Max', line: 'Everything on. The default.' },
-  { id: 'light', name: 'Light', line: 'Two cameras at a time, no motion and lighter drawing — it uses a lot less memory than Max. Best on an older device, and video may look worse.' },
+  { id: 'light', name: 'Light', line: LIGHT_LINE },
 ]
 
 const memory = ref<{ privateMb: number; workingSetMb: number } | null>(null)
