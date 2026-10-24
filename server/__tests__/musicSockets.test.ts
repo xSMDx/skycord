@@ -78,13 +78,50 @@ const musicStateWhere = (
     s.on('music:state', on)
   })
 
-/** In a voice channel, with a socket, ready to use music. */
-const inCall = async (u: TestUser, channelId: string) => {
-  const s = track(await connectSocket(sockets.url, u.token))
+/**
+ * Join a voice channel with a socket that is already connected, and wait until
+ * the join has finished talking.
+ *
+ * A join answers twice, back to back: `call:state` to everyone, then the
+ * newcomer's own `music:state`. Resolving on the first left the second in
+ * flight, and the next `nextEvent(s, 'music:state')` in a test caught THAT --
+ * the join's empty list, not the change the test had just made. Both are
+ * awaited here, registered before the emit so neither can be missed.
+ */
+const joinCall = async (s: ClientSocket, channelId: string) => {
+  const call  = nextEvent(s, 'call:state')
+  const music = nextEvent(s, 'music:state')
   s.emit('call:join', { conversationId: channelId, kind: 'channel' })
-  await nextEvent(s, 'call:state')
+  await Promise.all([call, music])
   return s
 }
+
+/** In a voice channel, with a socket, ready to use music. */
+const inCall = async (u: TestUser, channelId: string) =>
+  joinCall(track(await connectSocket(sockets.url, u.token)), channelId)
+
+describe('the join helper', () => {
+  it("leaves nothing of the join's own in flight when it returns", async () => {
+    // A join answers twice, back to back: call:state, then the newcomer's own
+    // music:state. The second is easy to catch by accident as "the next
+    // music:state" in a test that has just changed something. To make the gap
+    // between the two deterministic, this client delivers music:state late
+    // -- which is all a slow link or a split packet does on a bad run.
+    const a = await register()
+    const { voice } = await seed(a)
+    const s = track(await connectSocket(sockets.url, a.token))
+    const deliver = (s as any).onevent.bind(s)
+    ;(s as any).onevent = (packet: { data: unknown[] }) =>
+      packet.data[0] === 'music:state' ? void setTimeout(() => deliver(packet), 60) : deliver(packet)
+
+    await joinCall(s, voice.id)
+
+    const stray: unknown[] = []
+    s.on('music:state', v => stray.push(v))
+    await new Promise(r => setTimeout(r, 200))
+    expect(stray).toEqual([])
+  })
+})
 
 describe('the gate', () => {
   it('ignores a member who is not in the call', async () => {
