@@ -300,6 +300,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 /* ── Phone: two screens, the nav pushed aside by the detail ── */
 @media (max-width: 768px) {
+  /* Below the connection strip, which is pinned over the top edge and publishes
+     its height as --conn-h while it is up (see SettingsModal). That height
+     already includes the status-bar inset, so the header drops its own while
+     the strip is showing. */
+  .sv-overlay {
+    top: var(--conn-h, 0px);
+    --sv-top-inset: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px));
+  }
   .sv { overflow: hidden; }
   .sv-nav, .sv-main {
     position: absolute; inset: 0; width: 100%;
@@ -325,8 +333,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   .sv-mhead {
     position: sticky; top: 0; z-index: 5; flex: none;
     display: flex; align-items: center; gap: 4px;
-    padding: env(safe-area-inset-top) 8px 0;
-    min-height: calc(56px + env(safe-area-inset-top));
+    padding: var(--sv-top-inset, env(safe-area-inset-top)) 8px 0;
+    min-height: calc(56px + var(--sv-top-inset, env(safe-area-inset-top)));
     background: var(--bg-floor);
     border-bottom: 1px solid var(--border);
   }

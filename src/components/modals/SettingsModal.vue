@@ -2040,6 +2040,17 @@ img    { display: block; object-fit: cover; }
 }
 /* Full-bleed, so it reads as a screen rather than a card floating on a phone. */
 .sm-overlay:has(.sm-modal.mobile) { background: var(--bg-raised); }
+/* The connection strip (ConnectionBanner, z-index 10000) is pinned over the top
+   edge and publishes its height as --conn-h while it is up. This overlay is
+   position:fixed against the viewport, so it has to start below the strip
+   itself. That height already includes the status-bar inset the strip pads for,
+   so while it is up the header must not add the inset a second time. */
+@media (max-width: 768px) {
+  .sm-overlay {
+    top: var(--conn-h, 0px);
+    --sm-top-inset: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px));
+  }
+}
 
 .sm-modal.mobile .sm-nav,
 .sm-modal.mobile .sm-content {
@@ -2085,8 +2096,8 @@ img    { display: block; object-fit: cover; }
 .sm-mhead {
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; gap: 4px;
-  padding: env(safe-area-inset-top) 8px 0;
-  min-height: calc(56px + env(safe-area-inset-top));
+  padding: var(--sm-top-inset, env(safe-area-inset-top)) 8px 0;
+  min-height: calc(56px + var(--sm-top-inset, env(safe-area-inset-top)));
   background: var(--bg-floor);
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;

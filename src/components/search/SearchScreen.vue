@@ -67,4 +67,13 @@ const settle = () => (document.activeElement as HTMLElement | null)?.blur()
 }
 .ss-back:active { background: var(--press-veil); }
 .ss-field { flex: 1; min-width: 0; }
+/* Below the connection strip, which is pinned over the top edge and publishes
+   its height as --conn-h while it is up (see SettingsModal). That height already
+   includes the status-bar inset, so this drops its own while the strip shows. */
+@media (max-width: 768px) {
+  .ss {
+    top: var(--conn-h, 0px);
+    padding-top: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px));
+  }
+}
 </style>

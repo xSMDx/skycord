@@ -165,18 +165,11 @@ button:disabled:active,
 }
 
 /* ── Full-screen overlays clear the connection strip ──────────────────────
- * The strip ("Reconnecting…", "Back online") is pinned at z-index 10000 so
- * nothing can cover it, and ConnectionBanner publishes its measured height as
- * --conn-h while it is up (0 otherwise). .app already shrinks by it, but a
- * full-screen overlay is position:fixed against the viewport and ignores .app,
- * so the strip was drawn over Settings' title and its close button.
- *
- * These are the full-bleed overlays whose title bar is at the top edge:
- * Settings, Server settings, the phone search screen. Phone only: on a wide
- * window the strip sits over an area they do not draw in. !important because
- * each one's own scoped rule says `inset: 0` at higher specificity, and this is
- * a backstop that has to hold without editing every component. A bottom sheet
- * (ModalBase, BottomSheet) leaves the top uncovered and needs nothing. */
-@media (max-width: 768px) {
-  .sm-overlay, .sv-overlay, [data-search-screen] { top: var(--conn-h, 0px) !important; }
-}
+ * The strip ("Reconnecting…", "Back online") is pinned at z-index 10000 and
+ * ConnectionBanner publishes its measured height as --conn-h while it is up (0
+ * otherwise). .app shrinks by it, but a full-screen overlay is position:fixed
+ * against the viewport and ignores .app, so each overlay with a title bar at the
+ * top edge sets `top: var(--conn-h, 0px)` in its own phone rule (SettingsModal,
+ * ServerSettingsModal, SearchScreen) and drops its status-bar inset while the
+ * strip is up, since --conn-h already includes it. A bottom sheet leaves the top
+ * uncovered and needs nothing. */
