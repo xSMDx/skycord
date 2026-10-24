@@ -589,6 +589,21 @@ const membersOpen   = ref(false)
 // On a phone the member list is a sheet over the conversation. Going back to
 // the list must not leave its scrim up over the channel list.
 watch(() => mobileNav.onConversation.value, on => { if (!on && isMobile.value) membersOpen.value = false })
+/**
+ * The phone's members sheet is up. It is the same <aside> as the desktop column,
+ * laid over the chat by the .shell.mobile rules.
+ *
+ * Android Back closes what is on top by sending it Escape, and finds it by role
+ * (see androidBack.ts). A sheet that was not a dialog was invisible to it, so
+ * Back left the channel with the sheet still showing. The marks are bound only
+ * while it is open: on a phone a closed sheet is merely translated off the
+ * bottom, still has boxes, and would count as an open overlay for ever.
+ */
+const membersSheetOpen = computed(() => isMobile.value && membersOpen.value && (view.value === 'server' || view.value === 'group'))
+const membersSheetAttrs = computed(() =>
+  membersSheetOpen.value ? { role: 'dialog', 'aria-modal': true, 'aria-label': 'Members' } : {},
+)
+const closeMembersSheet = () => { if (membersSheetOpen.value) membersOpen.value = false }
 /*
  * Mute and deafen now live in useSelfAudio, shared. They used to be two refs
  * right here, which made them unreachable from any other component — the
@@ -5949,7 +5964,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
           :channels="searchChannels" :active-id="openedResultId"
           @open="openSearchResult" @close="closeSearch()"
         />
-        <aside v-if="view==='server' && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }">
+        <aside v-if="view==='server' && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }" v-bind="membersSheetAttrs" @keydown.esc="closeMembersSheet">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="14" :stroke-width="1.5"/>
@@ -5993,7 +6008,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
         </aside>
 
         <!-- Members sidebar (group DM) -->
-        <aside v-if="view==='group' && activeGroup && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }">
+        <aside v-if="view==='group' && activeGroup && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }" v-bind="membersSheetAttrs" @keydown.esc="closeMembersSheet">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeGroup.memberCount }}</span></h3></div>
           <div class="mp-list">
             <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
@@ -6753,11 +6768,11 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .icon-btn-sidebar,
 .shell.mobile .ch-edit-btn{display:none}
 /* If the desktop toggle was left collapsed (a window dragged narrow, or a saved
-   state), the phone list must still behave like the normal phone list. */
-.shell.mobile .sidebar.collapsed{
-  width:auto;pointer-events:auto;
-  opacity:calc(1 - (var(--m, 0) * 0.35));
-}
+   state), the phone list must still behave like the normal phone list. Its width,
+   opacity and transition already come from .shell.mobile .sidebar above, which
+   is later than .sidebar.collapsed at the same weight; only pointer-events is
+   set by .collapsed alone, so only that is undone here. */
+.shell.mobile .sidebar.collapsed{pointer-events:auto}
 
 @media (prefers-reduced-motion: reduce){
   .shell.mobile .ch-ident{transition:none}
