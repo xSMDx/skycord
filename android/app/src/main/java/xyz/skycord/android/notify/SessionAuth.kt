@@ -5,6 +5,7 @@ import android.util.Log
 import android.webkit.CookieManager
 import org.json.JSONObject
 import xyz.skycord.android.core.RefreshCookie
+import xyz.skycord.android.core.RefreshStatus
 import xyz.skycord.android.core.ServerClock
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -69,10 +70,15 @@ class SessionAuth(@Suppress("unused") context: Context) {
             conn.setFixedLengthStreamingMode(0)
             conn.outputStream.close()
 
-            return when (val status = conn.responseCode) {
-                200 -> {
-                    // The re-issued cookie first: the server has already decided on it, whatever the body turns out to be.
-                    writeBack(origin, conn)
+            val status = conn.responseCode
+            // Taken as soon as the headers are in: the Date header was stamped then, not after the body had trickled in.
+            val phoneNow = System.currentTimeMillis()
+            // Every cookie the server sent with its answer goes to the WebView first, so the web client and
+            // this part never disagree about who is signed in: the re-issued one with a 200, the clearing
+            // one with a 401. Never for anything else — a 5xx or a proxy's 403 says nothing about the sign-in.
+            if (RefreshStatus.writesBack(status)) writeBack(origin, conn)
+            return when (RefreshStatus.outcomeOf(status)) {
+                RefreshStatus.Outcome.TOKEN -> {
                     val deadline = System.nanoTime() + TIMEOUT_MS * 1_000_000L
                     val body = conn.inputStream.use { it.readBounded(MAX_BYTES, deadline) }
                     val token = parseToken(String(body, Charsets.UTF_8))
@@ -80,18 +86,13 @@ class SessionAuth(@Suppress("unused") context: Context) {
                         Log.w(TAG, "the refresh answer had no access token")
                         AuthResult.Unreachable
                     } else {
-                        AuthResult.Token(token, ServerClock.offsetFrom(conn.getHeaderField("Date"), System.currentTimeMillis()))
+                        AuthResult.Token(token, ServerClock.offsetFrom(conn.getHeaderField("Date"), phoneNow))
                     }
                 }
-                // The server's answer about this sign-in: missing, revoked, expired, signed out from the devices screen.
-                // It sends a clearing cookie with that answer; the web client must hear it too, or the
-                // WebView keeps a dead cookie and the two disagree about who is signed in.
-                401, 403 -> {
-                    writeBack(origin, conn)
-                    AuthResult.SignedOut
-                }
-                // 429 (rate limited), 5xx, a redirect, anything else: the sign-in itself is not in question.
-                else -> {
+                RefreshStatus.Outcome.SIGNED_OUT -> AuthResult.SignedOut
+                // 403 (a proxy or firewall — the server itself never sends it here), 429, 5xx, a redirect,
+                // anything else: the sign-in itself is not in question.
+                RefreshStatus.Outcome.UNREACHABLE -> {
                     Log.w(TAG, "the refresh answered $status")
                     AuthResult.Unreachable
                 }
