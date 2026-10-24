@@ -502,6 +502,12 @@ class MainActivity : AppCompatActivity() {
      * once-only rule (that is for the unprompted first-run question, [askFirstRun]).
      */
     fun requestBatteryExemption() {
+        // Only from a page the person is looking at: a page that is not (backgrounded, a system screen in
+        // front) must not be able to put a settings screen over whatever they are doing.
+        if (!resumed) {
+            Log.w("MainActivity", "ignored a request for the battery exemption: the app is not in front")
+            return
+        }
         startSystemScreen(batteryExemptionScreens(), forResult = false)
     }
 
@@ -562,6 +568,13 @@ class MainActivity : AppCompatActivity() {
                 return
             }
         }
+
+        // Without the notification permission there are no notices to keep alive for, so the questions that
+        // are only about keeping the connection alive (battery, full-screen calls) wait: not asked and not
+        // marked, so they are put once, when the permission has been given (Settings › Notifications).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
 
         if (PromptOnce.shouldAsk(ASKED_BATTERY, kv)) {
             PromptOnce.markAsked(ASKED_BATTERY, kv)
