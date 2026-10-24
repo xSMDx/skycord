@@ -84,6 +84,9 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
       <div class="st-field-left">
         <span class="st-field-label">Background notifications</span>
         <span class="st-field-value prose">Messages, mentions and calls reach you while Skycord is in the background. Turning this off also removes the always-on notification.</span>
+        <!-- An older server ignores that the phone is only listening, so it counts as online.
+             The app reports it; older app builds do not have the field, so absent reads as no. -->
+        <span v-if="droidState?.legacyServer" class="st-field-value prose">This server is an older version — while Skycord listens in the background you'll appear online. Updating the server fixes this.</span>
       </div>
       <button
         type="button" class="st-toggle" :class="{ on: droidState?.enabled }" role="switch"

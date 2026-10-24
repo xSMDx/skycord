@@ -157,6 +157,11 @@ export interface AndroidNotifyState {
   /** The app is exempt from battery optimisation, so it can stay connected. */
   batteryExempt: boolean
   fullScreenCalls: boolean
+  /**
+   * The server is an older version that ignores "background" sockets, so the
+   * phone counts as online while the app listens. Absent in older app builds.
+   */
+  legacyServer?: boolean
 }
 
 /**
