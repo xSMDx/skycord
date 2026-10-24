@@ -530,6 +530,13 @@ export const setConvPref = async (req: Request, res: Response, next: NextFunctio
     user.markModified('convPrefs')
     await user.save({ validateModifiedOnly: true })
 
+    // Tell the person's OTHER devices to re-read. The Android background
+    // service decides mute and level from the copy it fetched at connect, so
+    // without this a mute made on the web rang the phone until it reconnected.
+    // No payload on purpose: the listener refetches, so there is nothing to
+    // apply out of order. Additive -- an older client has no handler for it.
+    getIO()?.to(`user:${req.user!.sub}`).emit('prefs:changed')
+
     res.json({ convId, pref: liveConvPref(prefs.get(convId)), prefs: prefsToObject(prefs) })
   } catch (err) { next(err) }
 }
