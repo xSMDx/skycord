@@ -159,6 +159,15 @@ watch(shellRef, (el, prev) => {
   if (el) edgeSwipe.bind(el)
 })
 
+// The shell is clipped, so it cannot scroll sideways on a current WebView. An
+// older one still treats `overflow:hidden` as scrollable and slides the whole
+// app left when focus lands off-screen (measured scrollLeft 158), so every
+// screen change puts it back.
+watch(() => mobileNav.screen.value, () => {
+  const el = shellRef.value
+  if (el && isMobile.value) { el.scrollLeft = 0; el.scrollTop = 0 }
+})
+
 // ── API ────────────────────────────────────────────────────────────────────
 const api = useApi()
 const {
@@ -569,6 +578,9 @@ const unhideConv = (id: string) => {
 const deleteDM = (id: string) => { initDM(id, []); hideConv(id) }
 const sidebarOpen   = ref(true)
 const membersOpen   = ref(false)
+// On a phone the member list is a sheet over the conversation. Going back to
+// the list must not leave its scrim up over the channel list.
+watch(() => mobileNav.onConversation.value, on => { if (!on && isMobile.value) membersOpen.value = false })
 /*
  * Mute and deafen now live in useSelfAudio, shared. They used to be two refs
  * right here, which made them unreachable from any other component — the
@@ -4787,6 +4799,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
       @close="showUserProfile = null"
       @toast="showToast"
       @message="openDMFromUser"
+      @edit-profile="showUserProfile = null; openSettings('profile')"
     />
     <!-- Reaction picker modal (full center modal) -->
     <ReactionPickerModal
@@ -5710,7 +5723,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
                    .members-panel` already hides the panel, so the toggle would
                    be a button with no visible outcome — the same reason the
                    CallBar's hide-chat control is suppressed for a channel. -->
-              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersShown }" v-tip="membersShown ? 'Hide Member List' : 'Show Member List'" @click.stop="toggleMembers">
+              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersShown, 'members-in-group': view==='group' }" :aria-label="membersShown ? 'Hide Member List' : 'Show Member List'" v-tip="isMobile ? '' : (membersShown ? 'Hide Member List' : 'Show Member List')" @click.stop="toggleMembers">
                 <Users :size="18" :stroke-width="1.5"/>
               </button>
 
@@ -5936,12 +5949,16 @@ img{display:block;width:100%;height:100%;object-fit:cover}
      the chat header — it was hiding the back button. */
   height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
   margin-top: var(--conn-h, 0px);
-  overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
+  overflow:hidden;overflow:clip;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
   /* No transition. Height and margin follow --conn-h and --keyboard-h, and
      animating them reflowed the whole app on every frame; the connection
      strip animates its own entrance, by transform. */
 }
-.shell{display:flex;height:100%;overflow:hidden}
+/* `overflow:hidden` still leaves this a scroll container, and focus landing on
+   something off-screen scrolls it: measured scrollLeft 158 on a phone, the whole
+   app slid left. `clip` cuts without being scrollable. `hidden` stays on the line
+   before it for WebViews that predate `clip` — they drop the second declaration. */
+.shell{display:flex;height:100%;overflow:hidden;overflow:clip}
 
 /* ── Rail ──────────────────────────────────────────────────────────────── */
 .rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding: 10px 0;gap: 2px;overflow: hidden auto}
@@ -6620,11 +6637,25 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 
 /* Pin, invite and members are desktop affordances — on a phone they belong on
-   the details screen, and crowding them in here costs the title its room. */
+   the details screen, and crowding them in here costs the title its room.
+   A server channel has no details screen, so its members button stays: it opens
+   the members sheet. A group DM does have one, so its copy still goes.
+
+   `icon-btn-sidebar` is the desktop "collapse the channel list" toggle. On a
+   phone the list is its own screen, so there is nothing to collapse — and
+   tapping it left the list on screen but untappable (pointer-events:none)
+   until a reload. */
 .shell.mobile .icon-btn-pin,
-.shell.mobile .icon-btn-members,
+.shell.mobile .icon-btn-members.members-in-group,
 .shell.mobile .icon-btn-invite,
+.shell.mobile .icon-btn-sidebar,
 .shell.mobile .ch-edit-btn{display:none}
+/* If the desktop toggle was left collapsed (a window dragged narrow, or a saved
+   state), the phone list must still behave like the normal phone list. */
+.shell.mobile .sidebar.collapsed{
+  width:auto;pointer-events:auto;
+  opacity:calc(1 - (var(--m, 0) * 0.35));
+}
 
 @media (prefers-reduced-motion: reduce){
   .shell.mobile .ch-ident{transition:none}
@@ -6642,11 +6673,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .btn-mic,
 .shell.mobile .btn-headphones,
 .shell.mobile .btn-settings{min-width:44px;min-height:44px}
-.shell.mobile .up-chev{min-width:28px;min-height:44px}
+/* The device chevrons beside mic and deafen are gone on a phone. At 360px the
+   panel holds an avatar, three 44px buttons and two 28px chevrons, which left the
+   name about 40px — "Be…". Long-pressing mic or deafen opens the same device
+   flyout (their contextmenu handler), and a 28px sliver was a poor target anyway. */
+.shell.mobile .up-chev{display:none}
 .shell.mobile .ftab{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center}
-/* up-chev stays 28x44: the user panel has 16px of slack at 390px and widening
-   both chevrons needs 32px. They are secondary to a full 44x44 sibling, and
-   long-pressing that sibling opens the same device flyout. */
 .shell.mobile .sb-search-btn{min-height:44px}
 .shell.mobile .add-friend-btn,
 .shell.mobile .an-add-btn{min-height:44px}
