@@ -1695,12 +1695,39 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * at one of the call sites.
      */
     const broadcastPresence = async () => {
-      const status = presence.effectiveStatus(myStatus, userId, myStatusUntil)
       const audience = await presenceAudience(userId)
+      // The status is read from the user, NOT taken from this socket's copy.
+      // myStatus was loaded when THIS socket connected and only this socket's
+      // own presence:set refreshes it, so a broadcast triggered by another tab
+      // (presence:away) or another route (PATCH /users/me) carried an old
+      // choice, and every tab -- the phone too -- adopted it. Read last, right
+      // before the emits, so a choice saved while the audience was being worked
+      // out is the one that goes.
+      await refreshChosenStatus()
+      const status = presence.effectiveStatus(myStatus, userId, myStatusUntil)
       for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status })
       // Your own other tabs get the RAW choice — you must see your own
       // "Invisible", even while your friends are being told you're offline.
-      io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status, until: myStatusUntil })
+      // `until` is only sent while it still applies: an ended deadline is null,
+      // which the client reads as "disarm the timer", exactly as toSelfJSON does.
+      const live = myStatusUntil !== null && myStatusUntil.getTime() > Date.now()
+      io.to(`user:${userId}`).emit('presence:self', {
+        status: presence.chosenNow(myStatus, myStatusUntil), effective: status, until: live ? myStatusUntil : null,
+      })
+    }
+
+    /**
+     * Bring this socket's copy of the chosen status up to what is stored. One
+     * indexed read per presence event; a failed read keeps the copy we have,
+     * which is the old behaviour rather than silence.
+     */
+    const refreshChosenStatus = async () => {
+      try {
+        const row = await User.findById(userId).select('status statusUntil').lean()
+        if (!row) return
+        myStatus      = presence.isChosenStatus(row.status) ? row.status : 'online'
+        myStatusUntil = (row.statusUntil as Date | null | undefined) ?? null
+      } catch { /* keep the copy we have */ }
     }
 
     /** The user picked a status. Persist the choice, then tell people. */
@@ -1730,7 +1757,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         await User.findByIdAndUpdate(userId, { status: next, statusUntil: until })
       } catch { ack?.({ ok: false, error: 'Could not save that' }); return }
       await broadcastPresence()
-      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, myStatusUntil), until: myStatusUntil })
+      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, until), until })
     })
 
     /**

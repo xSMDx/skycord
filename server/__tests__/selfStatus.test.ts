@@ -23,6 +23,7 @@ import {
   withSocketServer, connectSocket, nextEvent, type TestUser,
 } from './helpers'
 import { User } from '../models/User'
+import { Friendship } from '../models/Friendship'
 
 let sockets: { url: string; close: () => Promise<void> }
 const open: ClientSocket[] = []
@@ -171,5 +172,75 @@ describe('presence:self from the REST status change', () => {
     expect(Object.keys(viaRest).sort()).toEqual(Object.keys(viaSocket).sort())
     expect(viaRest.status).toBe('dnd')
     expect(viaRest.effective).toBe('dnd')
+  })
+})
+
+describe('presence:self is read from the user, not from the socket that happens to send it', () => {
+  // Each socket loaded the status once, at its own connect, and only ITS OWN
+  // presence:set updated it. So when tab B reported idle, the broadcast carried
+  // tab B's stale copy -- and every other tab, the phone included, adopted it.
+  // These open B BEFORE the change, which is exactly what makes B's copy stale.
+
+  it("another tab's idle report does not roll your status back", async () => {
+    const a = await register()
+    const tabB = track(await connectSocket(sockets.url, a.token))   // loads 'online'
+    const tabA = track(await connectSocket(sockets.url, a.token))
+
+    const ack: any = await new Promise(r => tabA.emit('presence:set', { status: 'dnd', minutes: 60 }, r))
+    expect(ack.ok).toBe(true)
+
+    const heard = nextEvent<any>(tabA, 'presence:self')
+    tabB.emit('presence:away', true)
+    const p = await heard
+
+    expect(p.status).toBe('dnd')
+    expect(p.effective).toBe('dnd')
+    expect(new Date(p.until).getTime()).toBeGreaterThan(Date.now() + 59 * 60_000)
+  })
+
+  it('and your friends are told dnd, not the idle that a stale online would produce', async () => {
+    const a = await register(), f = await register()
+    await Friendship.create({ requester: a.id, receiver: f.id, status: 'accepted' })
+    const friend = track(await connectSocket(sockets.url, f.token))
+    const tabB = track(await connectSocket(sockets.url, a.token))
+    const tabA = track(await connectSocket(sockets.url, a.token))
+
+    await new Promise(r => tabA.emit('presence:set', { status: 'dnd' }, r))
+
+    const heard = nextEvent<any>(friend, 'presence')
+    tabB.emit('presence:away', true)
+    const p = await heard
+
+    expect(p.userId).toBe(a.id)
+    expect(p.status).toBe('dnd')
+  })
+
+  it('a status changed over HTTP is not rolled back by an idle report either', async () => {
+    const a = await register()
+    const tab = track(await connectSocket(sockets.url, a.token))   // loads 'online'
+
+    const res = await app().patch('/users/me').set(auth(a)).send({ status: 'dnd' })
+    expect(res.status).toBe(200)
+
+    const heard = nextEvent<any>(tab, 'presence:self')
+    tab.emit('presence:away', true)
+    const p = await heard
+
+    expect(p.status).toBe('dnd')
+    expect(p.effective).toBe('dnd')
+  })
+
+  it('a timed status that ran out meanwhile reads as online, with no end time', async () => {
+    const a = await register()
+    const tab = track(await connectSocket(sockets.url, a.token))
+    await User.updateOne({ _id: a.id }, { status: 'dnd', statusUntil: inPast(1000) })
+
+    const heard = nextEvent<any>(tab, 'presence:self')
+    tab.emit('presence:away', true)
+    const p = await heard
+
+    expect(p.status).toBe('online')
+    expect(p.effective).toBe('idle')    // online + away
+    expect(p.until).toBeNull()
   })
 })
