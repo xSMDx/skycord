@@ -72,6 +72,24 @@ const actorNameOf = async (userId: string): Promise<string> => {
   return u?.displayName || u?.username || 'Someone'
 }
 
+/**
+ * Take a person's open sockets out of a group's socket room.
+ *
+ * A socket joins `group:<id>` once, when it connects (or on `group:subscribe`),
+ * and a membership change in the database does not reach the sockets already
+ * open. The ones that matter live longest: the phone's background socket stays
+ * up for days, so without this a former member kept getting the group's messages
+ * and its `call:state` until the socket happened to reconnect, and the phone
+ * rings for a group whose `call:state` it hears. `user:<id>` names every socket
+ * the person has, whichever device or tab.
+ *
+ * Called once the membership change is stored, and before the "left the group"
+ * line goes out, so the person who left is not sent their own departure.
+ */
+const dropFromGroupRoom = (userId: string, groupId: string): void => {
+  getIO()?.in(`user:${userId}`).socketsLeave(`group:${groupId}`)
+}
+
 // ── Create a group ────────────────────────────────────────────────────────────
 export const createGroup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -481,6 +499,7 @@ export const leaveGroup = async (req: Request, res: Response, next: NextFunction
     if (group.members.length === 0) {
       await Conversation.deleteOne({ _id: group._id })
       await GroupInvite.deleteMany({ group: group._id })
+      dropFromGroupRoom(userId, groupId)
       res.json({ left: true, deleted: true }); return
     }
 
@@ -490,6 +509,7 @@ export const leaveGroup = async (req: Request, res: Response, next: NextFunction
       group.owner = group.members[0]
     }
     await group.save()
+    dropFromGroupRoom(userId, groupId)
 
     if (io) {
       const memberDocs = await User.find({ _id: { $in: group.members } })
