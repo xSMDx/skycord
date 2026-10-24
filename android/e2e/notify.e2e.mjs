@@ -6,9 +6,10 @@
  * notification arrives; five quick messages are one notification and one alert;
  * a muted conversation is silent; a mention notifies and a plain channel
  * message does not; a call rings full screen, Decline tells the caller, a call
- * left to ring out is a missed call, a reconnect into a call already going does
- * not ring, Answer joins; a force-stopped app catches up silently and shows
- * offline to a friend; and after a reboot the app reconnects on its own.
+ * left to ring out is a missed call, a phone that was cut off when a call began
+ * does not ring for it when it reconnects, Answer joins; a force-stopped app
+ * catches up silently and shows offline to a friend; and after a reboot the app
+ * reconnects on its own.
  *
  * Run it from a shell where the toolchain is on PATH:
  *
@@ -40,19 +41,26 @@
  * microphone and camera permissions and the full-screen-call switch, and signs
  * a throwaway account in to it; presses Home, locks and wakes the screen
  * (dismissing the keyguard), opens the notification shade and taps in it;
- * turns the emulator's wifi off for a few seconds and back on (a change of
- * network, which makes the app connect again); force-stops the app; and
- * finally **reboots the emulator**,
- * leaving the app signed in and its background connection running. On the local
- * dev API it registers two throwaway accounts (the phone's and a friend's, who
- * is made a friend of the first) and a server they share; they stay in the
- * local dev database. Nothing here touches a real server. Every message it
- * sends is tagged `e2e-` and comes from the friend.
+ * cuts the phone off for about 40 seconds (it removes the 6200 reverse and
+ * turns the emulator's wifi off, which makes the app drop its connection) and
+ * puts both back, wifi first in a `finally`; force-stops the app; and finally
+ * **reboots the emulator**, leaving the app signed in and its background
+ * connection running. It clears the device's logs (`logcat -c`, and the events
+ * buffer) before each window it counts, so what it counts is its own, and it
+ * writes one file on the device, `/sdcard/e2e-ui.xml` (the screen dump), which
+ * it leaves there. On the local dev API it registers two throwaway accounts
+ * (the phone's and a friend's, who is made a friend of the first) and a server
+ * they share; they stay in the local dev database. Nothing here touches a real
+ * server. Every message it sends is tagged `e2e-` and comes from the friend.
  *
  * Reads notifications with `adb shell dumpsys notification --noredact`, the
  * alerts the system really made from the events log (`notification_alert`, one
- * line each time a notification buzzes or beeps), and the screen with the
- * stock uiautomator.
+ * line each time a notification buzzes or beeps; `notification_enqueue`, one
+ * for each post), and the screen with the stock uiautomator. A check that
+ * something did NOT happen is paired with one that it does in the same window
+ * (a mute with the unmute, a plain channel message with the mention, a missed
+ * start with the reconnect), so a parse that stopped finding anything cannot
+ * pass for silence.
  *
  * The dev API pins its sign-in cookie to `localhost`, and `/auth/register` and
  * `/auth/login` share a limit of 10 per address per 15 minutes: one run uses
@@ -96,6 +104,12 @@ const until = async (fn, ms = 5000, every = 300) => {
     await wait(every)
   } while (Date.now() < end)
   return v || false
+}
+// `p` for at most `ms`: a call on a WebView page that never answers is an error with a name, not a hang.
+const bounded = (p, ms, what) => {
+  let timer
+  const late = new Promise((_, no) => { timer = setTimeout(() => no(new Error(`${what}: no answer in ${ms / 1000} s`)), ms) })
+  return Promise.race([p, late]).finally(() => clearTimeout(timer))
 }
 
 // ── what the script needs to be running, before it touches anything ──────
@@ -215,6 +229,9 @@ const quiet = n => n.flags.includes('ONLY_ALERT_ONCE')
 // What the system did, not what was asked of it. Each notification that buzzes or beeps puts one line
 // in the events log; each post of one puts another. Clear the log, act, then count.
 const clearEvents = () => sh('logcat -b events -c')
+// The app's own log lines (connects, network changes) are counted too: clear those before a window as well,
+// so a buffer that has rolled over cannot make a count go backwards.
+const clearLogs = () => { sh('logcat -c'); clearEvents() }
 const eventLines = name => sh(`logcat -b events -d -v brief -s ${name}`).split(/\r?\n/).filter(l => l.includes(`${name}(`))
 // An alert names the notification by its key (user|package|id|tag|uid); a post lists package, id and tag.
 const alertsFor = tag => eventLines('notification_alert').filter(l => l.includes(`|${PKG}|1001|${tag}|`)).length
@@ -302,84 +319,126 @@ const statusOfA = async () => {
   return friends.find(f => (f.id ?? f._id) === A.id)?.status
 }
 
-step('two accounts, a friendship, a server')
-await register(A)
-await register(B)
-await call(B, 'POST', '/users/friends/request', { targetId: A.id })
-const { requests } = await call(A, 'GET', '/users/friends/pending')
-const pending = requests.find(r => JSON.stringify(r).includes(B.id))
-await call(A, 'PATCH', `/users/friends/accept/${pending.id ?? pending._id}`, {})
-const serverName = `Notify E2E ${tag}`
-const created = await call(B, 'POST', '/servers', { name: serverName })
-const serverId = created.server.id
-const generalId = created.channels.find(c => c.type === 'text').id
-const invite = await call(B, 'POST', `/servers/${serverId}/invites`, {})
-await call(A, 'POST', `/invites/${invite.invite.code}`, {})
-
-// The friend's own connection, as the web client has one: it hears the call's occupancy and a decline.
+// The friend's own connection, as the web client has one: it hears a call's occupancy, a decline, and a DM
+// arriving live. Made in the setup below.
 const heard = []
-const friend = io(API, { auth: { token: await tokenOf(B) }, transports: ['websocket'] })
-friend.on('call:state', p => heard.push({ name: 'call:state', p }))
-friend.on('call:declined', p => heard.push({ name: 'call:declined', p }))
-await new Promise((ok, no) => { friend.on('connect', ok); friend.on('connect_error', e => no(new Error(`the friend's socket: ${e.message}`))) })
-const callWith = { conversationId: A.id, kind: 'dm' }
-const startCall = () => friend.emit('call:join', callWith)
+let mark = 0
+const heardSince = (name, pred = () => true) => heard.slice(mark).filter(h => h.name === name && pred(h.p))
+let friend, app, serverName, serverId, generalId
+const callWith = () => ({ conversationId: A.id, kind: 'dm' })
+const startCall = () => friend.emit('call:join', callWith())
 const endCall = async () => {
-  friend.emit('call:leave', callWith)
+  friend.emit('call:leave', callWith())
   // Over when the room has emptied: the next call is a new one, with a new start.
   await until(() => heard.some((h, i) => i >= mark && h.name === 'call:state' && h.p.userIds.length === 0), 6000, 200)
 }
-let mark = 0
-const heardSince = (name, pred = () => true) => heard.slice(mark).filter(h => h.name === name && pred(h.p))
 
-// ── a fresh app, signed in ───────────────────────────────────────────────
+// The tally, and the end of the run. The passwords never reach the output: whatever is printed is scrubbed.
+const secrets = [A.password, B.password]
+const scrub = s => secrets.reduce((t, x) => t.split(x).join('***'), String(s))
+const finish = () => {
+  const passed = results.filter(Boolean).length
+  console.log(`\n${passed}/${EXPECTED} passed${results.length !== EXPECTED ? ` (${results.length} checks ran)` : ''}`)
+  if (failed.length) console.log(`failed: ${scrub(failed.join('; '))}`)
+  if (results.length !== EXPECTED) console.log(`FAIL  expected ${EXPECTED} checks, ran ${results.length}`)
+  friend?.close()
+  process.exit(passed === EXPECTED && results.length === EXPECTED && !failed.length ? 0 : 1)
+}
+
+// ── the app's WebView pages ──────────────────────────────────────────────
 const pageOf = async urlPart => {
   for (let i = 0; i < 40; i++) {
     for (const wv of device.webViews()) {
       if (wv.pkg() !== PKG) continue
-      const p = await wv.page()
+      const p = await bounded(wv.page(), 10000, 'the WebView')
       if (p.url().includes(urlPart)) return p
     }
     await wait(500)
   }
   throw new Error(`no WebView page at ${urlPart}`)
 }
+// Something run in the signed-in page, with a time limit.
+const inPage = (fn, arg) => bounded(app.evaluate(fn, arg), 10000, 'the page')
 
-step('a fresh app, signed in as the phone\u2019s account')
-sh(`pm clear ${PKG}`)
-for (const p of ['POST_NOTIFICATIONS', 'RECORD_AUDIO', 'CAMERA']) sh(`pm grant ${PKG} android.permission.${p}`)
-sh(`appops set ${PKG} USE_FULL_SCREEN_INTENT allow`)
-await wake()
-await launch()
-await wait(1500)
-const launcher = await pageOf('appassets.androidplatform.net')
-await launcher.waitForSelector('#address')
-await launcher.fill('#address', CLIENT)
-await launcher.click('#check')
-await launcher.waitForSelector('#found:not([hidden])', { timeout: 15000 })
-await launcher.click('#found-open')
-const app = await pageOf('localhost:6200')
-await app.waitForSelector('#login-identifier', { timeout: 30000 })
-await app.fill('#login-identifier', A.username)
-await app.fill('#login-password', A.password)
-await app.getByRole('button', { name: 'Sign In', exact: true }).click()
-check('the phone\u2019s account signs in', await until(async () => await app.evaluate(() => !!document.querySelector('.ri.home') && !document.querySelector('#login-identifier')), 40000, 500))
-// The first-run question about battery limits: not now (it is asked once, and is not what this tests).
-const notNow = await findOnScreen(n => n.text === 'Not now', 6000)
-if (notNow) tapNode(notNow)
-await wait(800)
+// ── setup: the accounts, the app, the sign-in ────────────────────────────
+try {
+  step('two accounts, a friendship, a server')
+  await register(A)
+  await register(B)
+  await call(B, 'POST', '/users/friends/request', { targetId: A.id })
+  const { requests } = await call(A, 'GET', '/users/friends/pending')
+  const pending = requests.find(r => JSON.stringify(r).includes(B.id))
+  await call(A, 'PATCH', `/users/friends/accept/${pending.id ?? pending._id}`, {})
+  serverName = `Notify E2E ${tag}`
+  const created = await call(B, 'POST', '/servers', { name: serverName })
+  serverId = created.server.id
+  generalId = created.channels.find(c => c.type === 'text').id
+  const invite = await call(B, 'POST', `/servers/${serverId}/invites`, {})
+  await call(A, 'POST', `/invites/${invite.invite.code}`, {})
 
-step('the app is left: the background connection comes up')
-await home()
-check('leaving the app starts the background connection', await until(connected, 30000, 500), `service notice: ${serviceNotice()?.title}`)
+  friend = io(API, { auth: { token: await tokenOf(B) }, transports: ['websocket'] })
+  friend.on('call:state', p => heard.push({ name: 'call:state', p }))
+  friend.on('call:declined', p => heard.push({ name: 'call:declined', p }))
+  friend.on('dm:receive', p => heard.push({ name: 'dm:receive', p }))
+  await new Promise((ok, no) => { friend.on('connect', ok); friend.on('connect_error', e => no(new Error(`the friend's socket: ${e.message}`))) })
+
+  step('a fresh app, signed in as the phone’s account')
+  sh(`pm clear ${PKG}`)
+  for (const p of ['POST_NOTIFICATIONS', 'RECORD_AUDIO', 'CAMERA']) sh(`pm grant ${PKG} android.permission.${p}`)
+  sh(`appops set ${PKG} USE_FULL_SCREEN_INTENT allow`)
+  await wake()
+  await launch()
+  await wait(1500)
+  const launcher = await pageOf('appassets.androidplatform.net')
+  const onLauncher = p => bounded(p, 35000, 'the server list')
+  await onLauncher(launcher.waitForSelector('#address', { timeout: 30000 }))
+  await onLauncher(launcher.fill('#address', CLIENT))
+  await onLauncher(launcher.click('#check'))
+  await onLauncher(launcher.waitForSelector('#found:not([hidden])', { timeout: 15000 }))
+  await onLauncher(launcher.click('#found-open'))
+  app = await pageOf('localhost:6200')
+  const onSignIn = p => bounded(p, 35000, 'the sign-in page')
+  await onSignIn(app.waitForSelector('#login-identifier', { timeout: 30000 }))
+  await onSignIn(app.fill('#login-identifier', A.username))
+  await onSignIn(app.fill('#login-password', A.password))
+  await onSignIn(app.getByRole('button', { name: 'Sign In', exact: true }).click())
+  const signedIn = await until(() => inPage(() => !!document.querySelector('.ri.home') && !document.querySelector('#login-identifier')), 40000, 500)
+  check('the phone’s account signs in', !!signedIn)
+  if (!signedIn) {
+    const limited = await inPage(() => /too many|try again/i.test(document.body.innerText)).catch(() => false)
+    throw new Error(limited ? 'register/login budget used — wait 15 min and run again' : 'the phone’s account did not sign in')
+  }
+  // The first-run question about battery limits: not now (it is asked once, and is not what this tests).
+  const notNow = await findOnScreen(n => n.text === 'Not now', 6000)
+  if (notNow) tapNode(notNow)
+  await wait(800)
+
+  step('the app is left: the background connection comes up')
+  await home()
+  check('leaving the app starts the background connection', await until(connected, 30000, 500), `service notice: ${serviceNotice()?.title}`)
+} catch (e) {
+  const message = scrub(e.message).split('\n')[0]
+  const limited = /: 429 /.test(message) || /budget used/.test(message)
+  console.error(`\nFAIL  setup — ${limited ? 'register/login budget used — wait 15 min and run again' : message}`)
+  failed.push(`setup: ${limited ? 'register/login budget used' : message}`)
+  finish()
+}
 
 // A phase that fails (a thrown error: nothing on the screen, no page) is reported and the next one still
 // runs, so one run shows everything that is wrong; the checks it did not get to make count as missing.
 const phase = async (name, fn) => {
   step(name)
   try { await fn() } catch (e) {
-    failed.push(`${name}: ${e.message}`)
-    console.log(`FAIL  ${name}  — ${e.message}`)
+    const message = scrub(e.message).split('\n')[0]
+    failed.push(`${name}: ${message}`)
+    console.log(`FAIL  ${name}  — ${message}`)
+    // What the phone was doing, for whoever reads this: the window in front and the app's own latest log lines
+    // (they never hold a token, a name or a message).
+    try {
+      console.log(`      in front: ${focus().replace(/^.*u0 /, '').replace(/\}$/, '')}`)
+      const log = sh('logcat -d -v time -s NotifyService:I LiveConnection:I CallRinger:I BootReceiver:I').split(/\r?\n/).filter(l => /^\d\d-/.test(l)).slice(-6)
+      for (const l of log) console.log(`      ${l.replace(/^\d\d-\d\d /, '')}`)
+    } catch { /* the device is not answering: nothing more to say */ }
   } finally {
     try { closeShade() } catch { /* nothing to close */ }
   }
@@ -403,7 +462,7 @@ await phase('a DM from a friend', async () => {
 await phase('tap it', async () => {
   await tapNoticeLine('e2e-dm-1')
   const opened = await until(inFront, 10000, 300)
-  const shown = opened && await until(async () => await app.evaluate(t => {
+  const shown = opened && await until(() => inPage(t => {
     const chat = document.querySelector('.shell.m-chat')
     return !!chat && chat.innerText.includes('Bea') && chat.innerText.includes(t)
   }, 'e2e-dm-1'), 15000, 500)
@@ -416,15 +475,22 @@ await phase('reply from the notification', async () => {
   await home()
   await dm('e2e-dm-2')
   if (!(await until(() => noticeFor(dmTag, 'e2e-dm-2'), 10000, 400))) throw new Error('the DM to reply to never notified')
+  await wait(1500)   // its own alert lands in the log before the window below starts
+  clearEvents()      // from here on: only what the reply does
+  mark = heard.length
   const reply = 'e2e-reply-1'
   await replyFromShade('e2e-dm-2', reply)
   const arrived = await until(async () => (await call(B, 'GET', `/messages/dm/${A.id}`)).messages.some(m => m.authorId === A.id && m.content === reply), 10000, 500)
-  check('a reply typed into the notification reaches the friend', !!arrived)
+  // Live: the friend's open connection is told, not only the history (the REST send announces itself).
+  const live = await until(() => heardSince('dm:receive', p => p.authorId === A.id && p.content === reply)[0], 10000, 300)
+  check('a reply typed into the notification reaches the friend, in their history and live', !!arrived && !!live,
+    `in the history: ${!!arrived}; arrived live on their connection: ${!!live}`)
   const afterReply = await until(() => noticeFor(dmTag, reply), 8000, 400)
+  await wait(1200)
   check('…and joins the notification as the person’s own line, once, quietly',
     !!afterReply && afterReply.lines.at(-1)?.from === 'You' && afterReply.lines.filter(l => l.text === reply).length === 1
-      && afterReply.lines.length === 2 && quiet(afterReply),
-    afterReply ? `lines: ${afterReply.lines.map(l => `${l.from}: ${l.text}`).join(' / ')}; flags ${afterReply.flags.join('|')}` : 'the notification is gone')
+      && afterReply.lines.length === 2 && quiet(afterReply) && alertsFor(dmTag) === 0,
+    afterReply ? `lines: ${afterReply.lines.map(l => `${l.from}: ${l.text}`).join(' / ')}; flags ${afterReply.flags.join('|')}; alerts ${alertsFor(dmTag)}` : 'the notification is gone')
 })
 
 // ── 4. five quick messages: one notification, one alert ──────────────────
@@ -442,13 +508,16 @@ await phase('five quick messages', async () => {
 })
 
 // ── 5. muted: nothing ────────────────────────────────────────────────────
-// A mute is written by the page (the server keeps it per person), which then tells the app to read the
-// mutes again (`prefsChanged`): so does this.
+// What this covers is the app's half. The mute is written to the server by REST here, and the app is told
+// as the web client tells it (`skycordAndroid.prefsChanged()`, which the web client calls after each write):
+// so the app's re-read of mutes, and the rules that use them, are driven. The web client's own path (its
+// setConvPref, which makes that same call) is not: that is the web client's test.
 await phase('mute the conversation', async () => {
   const prefsChanged = async () => {
-    try { await app.evaluate(() => window.skycordAndroid.prefsChanged()) } catch {
+    const tell = () => inPage(() => window.skycordAndroid.prefsChanged())
+    try { await tell() } catch {
       // A page the system has put to sleep with the app: wake it, tell it, and leave again.
-      await launch(); await app.evaluate(() => window.skycordAndroid.prefsChanged()); await home()
+      await launch(); await tell(); await home()
     }
     await wait(2500)
   }
@@ -461,7 +530,9 @@ await phase('mute the conversation', async () => {
   await call(A, 'PATCH', `/users/me/conversations/${B.id}`, { mute: null })
   await prefsChanged()
   await dm('e2e-unmuted-1')
-  check('…and unmuting brings the notifications back', !!(await until(() => noticeFor(dmTag, 'e2e-unmuted-1'), 10000, 400)))
+  const back = await until(() => noticeFor(dmTag, 'e2e-unmuted-1'), 10000, 400)
+  // The same window's log must show the post: the "posts nothing" above is only worth something if it can see one.
+  check('…and unmuting brings the notifications back', !!back && postsFor(dmTag) >= 1, `posts since the mute: ${postsFor(dmTag)}`)
 })
 
 // ── 6. a mention notifies; a plain channel message does not ──────────────
@@ -486,33 +557,39 @@ await phase('a call, with the phone asleep: it rings full screen', async () => {
   await sleepScreen()
   mark = heard.length
   startCall()
-  const ring = await until(ringNotice, 15000, 400)
-  const onCallScreen = await until(() => focus().includes('IncomingCallActivity'), 10000, 300)
-  check('a DM call rings as a call notification, with Decline and Answer, on the Calls channel',
-    !!ring && ring.channel === 'calls' && ring.category === 'call' && ring.flags.includes('INSISTENT')
-      && ring.actions.includes('Decline') && ring.actions.includes('Answer') && ring.fullScreen,
-    ring ? `${ring.channel}/${ring.category}, flags ${ring.flags.join('|')}, template ${ring.template}, actions ${ring.actions.join('/')}, full screen ${ring.fullScreen}` : 'no ring')
-  const hasButtons = onCallScreen && !!(await findOnScreen(n => n.text === 'Incoming call', 6000))
-    && !!(await findOnScreen(n => n['content-desc'] === 'Answer', 3000)) && !!(await findOnScreen(n => n['content-desc'] === 'Decline', 3000))
-  check('…and the call screen takes the phone, with Answer and Decline',
-    onCallScreen && hasButtons, `call screen in front: ${onCallScreen}; “Incoming call” and both buttons: ${hasButtons}`)
-  // The ring and the call screen name the caller as the friend's own messages do (their display name),
-  // not by the account's username.
-  const onScreenName = onCallScreen ? !!(await findOnScreen(n => n.text === B.displayName, 3000)) : false
-  check('the ring and the call screen name the caller by display name, as the friend’s messages do',
-    !!ring && ring.title === B.displayName && onScreenName,
-    `ring title "${ring?.title}"; call screen shows "${B.displayName}": ${onScreenName}`)
-  if (hasButtons) await tapText('Decline')
-  const declined = await until(() => heardSince('call:declined')[0], 10000, 300)
-  await until(() => !ringNotice() && !focus().includes('IncomingCallActivity'), 8000, 300)
-  check('Decline tells the caller who declined, and ends the ring',
-    !!declined && declined.p.userId === A.id && declined.p.name === 'Droid' && !ringNotice() && !focus().includes('IncomingCallActivity'),
-    declined ? `declined by ${declined.p.name}` : 'the caller heard nothing')
-  await wake()
-  await endCall()
+  try {
+    const ring = await until(ringNotice, 15000, 400)
+    const onCallScreen = await until(() => focus().includes('IncomingCallActivity'), 10000, 300)
+    // One look at the call screen serves everything below, and Decline is pressed from it at once: the ring
+    // lasts 30 s, and a screen dump can take seconds on a busy emulator.
+    const screen = onCallScreen ? await until(() => { const n = screenNodes(); return n.some(x => x['content-desc'] === 'Decline') && n }, 15000, 200) : false
+    const onScreen = pred => !!screen && screen.some(pred)
+    const hasButtons = onScreen(n => n.text === 'Incoming call') && onScreen(n => n['content-desc'] === 'Answer') && onScreen(n => n['content-desc'] === 'Decline')
+    const showsName = onScreen(n => n.text === B.displayName)
+    if (screen) tapNode(screen.find(n => n['content-desc'] === 'Decline'))
+    check('a DM call rings as a call notification, with Decline and Answer, on the Calls channel',
+      !!ring && ring.channel === 'calls' && ring.category === 'call' && ring.flags.includes('INSISTENT')
+        && ring.actions.includes('Decline') && ring.actions.includes('Answer') && ring.fullScreen,
+      ring ? `${ring.channel}/${ring.category}, flags ${ring.flags.join('|')}, template ${ring.template}, actions ${ring.actions.join('/')}, full screen ${ring.fullScreen}` : 'no ring')
+    check('…and the call screen takes the phone, with Answer and Decline',
+      onCallScreen && hasButtons, `call screen in front: ${onCallScreen}; “Incoming call” and both buttons: ${hasButtons}`)
+    // The ring and the call screen name the caller as the friend's own messages do (their display name),
+    // not by the account's username.
+    check('the ring and the call screen name the caller by display name, as the friend’s messages do',
+      !!ring && ring.title === B.displayName && showsName,
+      `ring title "${ring?.title}"; call screen shows "${B.displayName}": ${showsName}`)
+    const declined = await until(() => heardSince('call:declined')[0], 10000, 300)
+    await until(() => !ringNotice() && !focus().includes('IncomingCallActivity'), 8000, 300)
+    check('Decline tells the caller who declined, and ends the ring',
+      !!declined && declined.p.userId === A.id && declined.p.name === 'Droid' && !ringNotice() && !focus().includes('IncomingCallActivity'),
+      declined ? `declined by ${declined.p.name}` : 'the caller heard nothing')
+  } finally {
+    await wake()
+    await endCall()
+  }
 })
 
-// ── 8. a call that rings out is a missed call; a reconnect does not ring ──
+// ── 8. a call that rings out is a missed call ────────────────────────────
 await phase('a call nobody answers', async () => {
   mark = heard.length
   startCall()
@@ -525,25 +602,43 @@ await phase('a call nobody answers', async () => {
   check('…and it names the caller by display name', missed?.title === `Missed call from ${B.displayName}`, `title "${missed?.title}"`)
 })
 
-await phase('the network changes during that call', async () => {
-  // The call is still going (the caller has not hung up) and is older than the ring's 30 s. A change of
-  // network (wifi off, mobile on, wifi back) makes the app connect again; the server then replays the
-  // call's state to it, and the app must not ring for it.
-  const connectsBefore = connects()
-  const changesBefore = networkChanges()
-  sh('svc wifi disable')
-  await wait(3000)
-  sh('svc wifi enable')
-  const reconnected = await until(() => connects() > connectsBefore && networkChanges() > changesBefore, 40000, 500)
-  const settled = await until(connected, 30000, 500)
-  await wait(6000)   // the server replays the call's state right after the connect
-  check('a reconnect into a call already going does not ring',
-    reconnected && settled && !ringNotice(),
-    `connects ${connectsBefore} → ${connects()}; network changes ${changesBefore} → ${networkChanges()}; connected again: ${settled}; ring: ${!!ringNotice()}`)
+// ── 9. a reconnect into a call it never saw begin does not ring ──────────
+await phase('a call begins while the phone is cut off', async () => {
+  // The phone must MISS the call's start: a reconnect into the call that has just rung out would only show
+  // that a call is not rung twice (the ring gate remembers it). So: cut the phone off, end the old call, start
+  // a NEW one, let it run past the ring's 30 s, then let the phone back. The server replays the call to it,
+  // already old, and it must not ring.
+  // Wifi off makes the app drop its connection and start over (it is a change of network), and with the 6200
+  // tunnel gone the start-over fails and stays failed: the phone is cut off. Both go back in the `finally`.
+  clearLogs()
+  let cut = false
+  let startedAt = 0
+  try {
+    adb('reverse', '--remove', 'tcp:6200')
+    sh('svc wifi disable')
+    cut = await until(() => !connected(), 25000, 400)
+    if (!cut) throw new Error('the app never reported being disconnected')
+    await endCall()
+    mark = heard.length
+    startCall()
+    startedAt = Date.now()
+    await wait(36000)
+  } finally {
+    adb('reverse', 'tcp:6200', 'tcp:6200')
+    sh('svc wifi enable')
+  }
+  const age = Math.round((Date.now() - startedAt) / 1000)
+  const reconnected = await until(connected, 90000, 500)
+  // The ring would come with the replay, right after the connect: look for it for a while.
+  const rang = await until(ringNotice, 9000, 500)
+  const stillGoing = heardSince('call:state', p => p.userIds.includes(B.id)).length > 0 && heardSince('call:state', p => p.userIds.length === 0).length === 0
+  check('a call that began while the phone was cut off does not ring when it reconnects, being over 30 s old',
+    cut && reconnected && connects() >= 1 && networkChanges() >= 1 && stillGoing && age > 30 && !rang,
+    `cut off: ${cut}; reconnected: ${reconnected} (connects ${connects()}, network changes ${networkChanges()}); the call was ${age} s old and still going: ${stillGoing}; ring: ${!!rang}`)
   await endCall()
 })
 
-// ── 9. Answer joins ──────────────────────────────────────────────────────
+// ── 10. Answer joins ─────────────────────────────────────────────────────
 await phase('a call that is answered', async () => {
   mark = heard.length
   startCall()
@@ -559,7 +654,7 @@ await phase('a call that is answered', async () => {
     `Answer on the ring: ${!!answer}; app in front: ${inApp}; the caller sees the phone’s account in the call: ${!!joined}; ring gone: ${!ringNotice()}`)
 })
 
-// ── 10. the app is killed: catch-up, silently; offline to a friend ───────
+// ── 11. the app is killed: catch-up, silently; offline to a friend ───────
 await phase('the app is force-stopped and a DM arrives', async () => {
   const onlineBefore = await statusOfA()
   sh(`am force-stop ${PKG}`)
@@ -578,12 +673,14 @@ await phase('the app is force-stopped and a DM arrives', async () => {
     caught ? `flags ${caught.flags.join('|')}, silent section: ${caught.silentSection}, alerts ${alertsFor(dmTag)}` : 'no notification')
   const serviceUp = await until(connected, 20000, 500)
   const offline = await until(async () => (await statusOfA()) === 'offline', 20000, 700)
+  // The control: with the app open the friend saw the account online (or idle), so "offline" now is the
+  // background connection not counting, not an account that was never shown at all.
   check('the account shows offline to a friend while only the background connection is up',
-    onlineBefore !== 'offline' && serviceUp && !!offline,
+    ['online', 'idle'].includes(onlineBefore) && serviceUp && !!offline,
     `with the app open: ${onlineBefore}; background connection up: ${serviceUp}; now: ${await statusOfA()}`)
 })
 
-// ── 11. reboot: the connection comes back on its own ─────────────────────
+// ── 12. reboot: the connection comes back on its own ─────────────────────
 await phase('reboot the emulator', async () => {
   await device.close()
   adb('reboot')
@@ -599,14 +696,8 @@ await phase('reboot the emulator', async () => {
   check('after a reboot the app reconnects without being opened',
     booted && startedAtBoot && reconnected && !inFront(),
     `booted: ${booted}; started by the boot receiver: ${startedAtBoot}; connected: ${reconnected}; app in front: ${inFront()}`)
-  clearEvents()
   await dm('e2e-boot-1')
   check('…and a DM then notifies', !!(await until(() => noticeFor(dmTag, 'e2e-boot-1'), 30000, 500)))
 })
 
-const passed = results.filter(Boolean).length
-console.log(`\n${passed}/${results.length} passed`)
-if (failed.length) console.log(`failed: ${failed.join('; ')}`)
-if (results.length !== EXPECTED) console.log(`FAIL  expected ${EXPECTED} checks, ran ${results.length}`)
-friend.close()
-process.exit(results.every(Boolean) && results.length === EXPECTED && !failed.length ? 0 : 1)
+finish()
