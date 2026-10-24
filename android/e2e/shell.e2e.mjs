@@ -15,8 +15,8 @@
  *    `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`);
  *  - the dev client on port 6200, started in this worktree with
  *      npx vite --host 0.0.0.0 --port 6200 --strictPort
- *    (its proxy goes to the API on the port in `.env` `API_PORT`, 3050 here);
- *  - the dev API on port 3050: `node .dev/desk-api.mjs` from H:\projects\sykord-wt.
+ *    (its proxy goes to the API on the port in `.env` `API_PORT`, 3200 here);
+ *  - the dev API on port 3200: `node .dev/desk-api.mjs` from H:\projects\sykord-wt.
  *
  * What it does to the machine: it runs `adb reverse tcp:6200 tcp:6200` (and
  * leaves it in place), `pm clear`s the app (all its saved servers and
