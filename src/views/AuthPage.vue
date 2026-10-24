@@ -149,6 +149,11 @@ const submitLogin = async () => {
   }
 }
 
+// Belt and braces for the sideways slide (see .blobs): if anything ever does
+// scroll the shell sideways, put it back.
+const shellEl = ref<HTMLElement | null>(null)
+const pinX = () => { const el = shellEl.value; if (el && el.scrollLeft) el.scrollLeft = 0 }
+
 const submitRegister = async () => {
   clearAll()
   if (!rf.username.trim()) { re.username = 'Username is required'; return }
@@ -172,8 +177,13 @@ const submitRegister = async () => {
 </script>
 
 <template>
-  <div class="shell">
-    <div class="blob b1"/><div class="blob b2"/><div class="blob b3"/>
+  <div class="shell" ref="shellEl" @scroll.passive="pinX">
+    <!-- Its own clipped layer: the blobs hang past the right and bottom edges,
+         and an absolutely positioned child extends its scroll container's
+         scrollable area. On a phone that gave the shell about 150px of
+         sideways scroll, which focusing a long field used — the whole card
+         slid left. Clipped here, they cannot. -->
+    <div class="blobs" aria-hidden="true"><div class="blob b1"/><div class="blob b2"/><div class="blob b3"/></div>
 
     <div class="card">
       <!-- Logo -->
@@ -453,19 +463,39 @@ button{background:none;border:none;cursor:pointer;color:inherit;font:inherit}
 input{background:none;border:none;outline:none;color:inherit;font:inherit}
 
 .shell {
-  width:100vw; min-height:100vh; min-height:100dvh;
+  width:100vw; height:100vh; height:100dvh;
   background:var(--bg-floor);
   /* Column, not row: the legal footer is a second child and must sit UNDER
      the card, not beside it. The card still centres — both children are
-     centred as a group. */
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
+     centred as a group.
+
+     Centred with auto margins on the card and the footer, not
+     justify-content:center. This box scrolls now (below), and centring by
+     justify-content puts the overflow above the top edge, where a scroll bar
+     cannot reach it: on a short phone with the keyboard up, the logo and tabs
+     would be gone for good. Auto margins collapse to zero when there is no
+     spare room, so the form simply starts at the top and scrolls. */
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
   /* Safe-area padding so the card clears the notch and home indicator once
      viewport-fit=cover lets us paint into them. */
   padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
           max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
-  position:relative; overflow:hidden;
+  position:relative;
+  /* Scrolls vertically so a tall form is reachable above the keyboard. The page
+     root (html, body) does not scroll, and a min-height here left the lower
+     fields and the button off the bottom of the screen with no way to reach
+     them. Sideways stays hidden, and nothing is left to scroll that way: the
+     blobs are clipped in their own layer, and pinX() puts it back if focus
+     ever moves it. (An overflow-x:clip would compute to hidden here anyway,
+     because the other axis scrolls.) */
+  overflow: hidden auto;
   font-family: var(--font-ui);
 }
+.shell > .card { margin-top: auto; }
+.shell > .card:last-child { margin-bottom: auto; }
+.shell > .legal-foot { margin-bottom: auto; }
+/* Fixed, so the glow stays put while the form scrolls over it. */
+.blobs { position:fixed; inset:0; overflow:hidden; overflow:clip; pointer-events:none; }
 
 .blob { position:absolute; border-radius: 50%; filter:blur(80px); pointer-events:none; animation:drift 12s ease-in-out infinite alternate; }
 /* Each blob starts its drift at its own point: offsets, not durations. */
@@ -552,6 +582,22 @@ input{background:none;border:none;outline:none;color:inherit;font:inherit}
      password has already gone wrong once. */
   .eye { width: 44px; height: 44px; }
   .eye:active { color: var(--text-2); }
+
+  /* Username and Display Name side by side leave each about 130px: Display
+     Name's field ran past the card's right edge at 360 and 412. One column. */
+  .row2 { grid-template-columns: 1fr; gap: 0; }
+
+  /* The two tabs were 30px tall. */
+  .tab { min-height: 44px; }
+
+  /* The text links ("Register", "Sign in", the legal links) are 12-14px of
+     text. They keep their look; an invisible box around each makes the press
+     area 44px tall. Pseudo-elements, so layout does not move. */
+  .switch button, .legal-foot a { position: relative; }
+  .switch button::after, .legal-foot a::after {
+    content: ''; position: absolute; inset: -14px -10px;
+  }
+  .legal-foot a::after { inset: -16px -6px; }
 }
 /* Was stroke="#23a55a" on the element; Lucide strokes with currentColor. */
 .check { color: var(--green); flex-shrink:0; margin-right: 8px; }
