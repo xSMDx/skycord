@@ -33,7 +33,7 @@ const server = ref<WireServer | null>(null)
 const isOwner = computed(() => !!server.value && !!user.value && server.value.owner === user.value.id)
 
 /**
- * `ready: false` means the screen has no backend yet and shows a placeholder.
+ * `ready: false` means the screen has no backend yet, so the nav does not list it.
  *
  * The list is deliberately NOT a copy of the reference. Server Tag, Boost
  * Perks, Engagement, App Directory, Enable Community, Server Template, AutoMod
@@ -188,10 +188,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 :is-owner="isOwner"
                 @toast="m => emit('toast', m)"
               />
-              <div v-else :key="page" class="st-placeholder">
-                <span class="st-placeholder-title">{{ currentLabel }} isn't available yet</span>
-                <span class="st-placeholder-sub">This part of server settings is still being built.</span>
-              </div>
+              <!-- The profile page describes a server that getServerDetail has not
+                   returned yet. Until it does there is nothing true to show; a
+                   failed load toasts and closes, so this never sticks. -->
+              <div v-else key="loading" aria-busy="true" />
             </Transition>
           </div>
         </main>
