@@ -2,8 +2,10 @@
  * The Android app's notifications, replies, calls and catch-up, end to end, on
  * the emulator, against the local dev stack. It walks the spec's list
  * (docs/superpowers/specs/2026-10-23-android-notifications-design.md, "Tests")
- * in order: a DM notifies and its tap opens the chat; a reply sent from the
- * notification arrives; five quick messages are one notification and one alert;
+ * in order: a DM notifies and its tap opens the chat; an app left in the
+ * background past the page's 45 s grace shows offline to a friend (the page
+ * lets go of its own connection; the service's does not count) and online
+ * again when it is back; a reply sent from the notification arrives; five quick messages are one notification and one alert;
  * a muted conversation is silent; a mention notifies and a plain channel
  * message does not; a call rings full screen, Decline tells the caller, a call
  * left to ring out is a missed call, a phone that was cut off when a call began
@@ -43,7 +45,7 @@
  * (dismissing the keyguard), opens the notification shade and taps in it;
  * cuts the phone off for about 40 seconds (it removes the 6200 reverse and
  * turns the emulator's wifi off, which makes the app drop its connection) and
- * puts both back, wifi first in a `finally`; force-stops the app; and finally
+ * puts both back, the tunnel first and then wifi, each in a `finally` of its own; force-stops the app; and finally
  * **reboots the emulator**, leaving the app signed in and its background
  * connection running. It clears the device's logs (`logcat -c`, and the events
  * buffer) before each window it counts, so what it counts is its own, and it
@@ -72,7 +74,7 @@ import { execSync, execFileSync } from 'child_process'
 
 // The number of checks below. A run that makes fewer or more has lost or grown
 // a check by accident, and fails.
-const EXPECTED = 25
+const EXPECTED = 27
 
 try { execSync('adb version', { stdio: 'pipe' }) } catch {
   console.error('adb is not on PATH: run `source android/env.sh` first')
@@ -470,6 +472,28 @@ await phase('tap it', async () => {
     `app in front: ${opened}; chat shown: ${!!shown}; notification gone: ${!noticeFor(dmTag)}`)
 })
 
+// ── 2b. the page lets go of its own connection once the app has been away a while ──
+// The page holds its own socket while the app is in front, and that one counts as the person being online.
+// Left in the background it lets go of it after 45 s (BACKGROUND_GRACE_MS, src/composables/backgroundSocket.ts):
+// otherwise a phone in a pocket would read online to friends all day, on a second connection next to the
+// service's, which is a `background` one and does not count. The service stays up; coming back, the page
+// reconnects.
+await phase('the app is left for a while', async () => {
+  const statusNow = async () => { const st = await statusOfA(); return ['online', 'idle'].includes(st) ? st : false }
+  // The control: with the page in front the friend sees the account, so "offline" later is the page letting go.
+  const before = await until(statusNow, 10000, 700)
+  await home()
+  await wait(50000)   // past the 45 s grace
+  const offline = await until(async () => (await statusOfA()) === 'offline', 25000, 1000)
+  const serviceUp = connected()
+  check('left in the background past its grace, the page lets go: the friend sees the account offline while the background connection is up',
+    !!before && serviceUp && !!offline,
+    `with the page in front: ${before}; background connection up: ${serviceUp}; after 50 s away: ${await statusOfA()}`)
+  await launch()
+  const back = await until(statusNow, 30000, 1000)
+  check('…and back in front the page reconnects: the account shows online again', !!back, `now: ${back || await statusOfA()}`)
+})
+
 // ── 3. a reply from the notification arrives ─────────────────────────────
 await phase('reply from the notification', async () => {
   await home()
@@ -609,33 +633,50 @@ await phase('a call begins while the phone is cut off', async () => {
   // a NEW one, let it run past the ring's 30 s, then let the phone back. The server replays the call to it,
   // already old, and it must not ring.
   // Wifi off makes the app drop its connection and start over (it is a change of network), and with the 6200
-  // tunnel gone the start-over fails and stays failed: the phone is cut off. Both go back in the `finally`.
+  // tunnel gone the start-over fails and stays failed: the phone is cut off. Both go back in `finally`
+  // blocks of their own, the tunnel first (so that wifi coming back finds it) and then wifi, and the second
+  // still runs if putting the first back throws.
+  //
+  // A run that was aborted in the middle of this may have left wifi off: put it on, and wait for the app to
+  // be connected, or "cut off" below would hold before anything was cut.
+  sh('svc wifi enable')
+  if (!(await until(connected, 90000, 500))) throw new Error('the app was not connected before the cut')
   clearLogs()
   let cut = false
+  let stayedCut = false
   let startedAt = 0
   try {
-    adb('reverse', '--remove', 'tcp:6200')
-    sh('svc wifi disable')
-    cut = await until(() => !connected(), 25000, 400)
-    if (!cut) throw new Error('the app never reported being disconnected')
-    await endCall()
-    mark = heard.length
-    startCall()
-    startedAt = Date.now()
-    await wait(36000)
+    try {
+      adb('reverse', '--remove', 'tcp:6200')
+      try {
+        sh('svc wifi disable')
+        cut = await until(() => !connected(), 25000, 400)
+        if (!cut) throw new Error('the app never reported being disconnected')
+        await endCall()
+        mark = heard.length
+        startCall()
+        startedAt = Date.now()
+        await wait(36000)
+        // Still cut off just now, with the call going: not one connect since the logs were cleared before the cut.
+        stayedCut = connects() === 0 && !connected()
+      } finally {
+        adb('reverse', 'tcp:6200', 'tcp:6200')
+      }
+    } finally {
+      sh('svc wifi enable')
+    }
+    const age = Math.round((Date.now() - startedAt) / 1000)
+    const reconnected = await until(connected, 90000, 500)
+    // The ring would come with the replay, right after the connect: look for it for a while.
+    const rang = await until(ringNotice, 9000, 500)
+    const stillGoing = heardSince('call:state', p => p.userIds.includes(B.id)).length > 0 && heardSince('call:state', p => p.userIds.length === 0).length === 0
+    check('a call that began while the phone was cut off does not ring when it reconnects, being over 30 s old',
+      cut && stayedCut && reconnected && connects() >= 1 && networkChanges() >= 1 && stillGoing && age > 30 && !rang,
+      `cut off: ${cut}; still cut off, no connect, just before restoring: ${stayedCut}; reconnected: ${reconnected} (connects ${connects()}, network changes ${networkChanges()}); the call was ${age} s old and still going: ${stillGoing}; ring: ${!!rang}`)
   } finally {
-    adb('reverse', 'tcp:6200', 'tcp:6200')
-    sh('svc wifi enable')
+    // The call goes on until here, whatever happened above: a phase that threw must not leave it for the next.
+    await endCall()
   }
-  const age = Math.round((Date.now() - startedAt) / 1000)
-  const reconnected = await until(connected, 90000, 500)
-  // The ring would come with the replay, right after the connect: look for it for a while.
-  const rang = await until(ringNotice, 9000, 500)
-  const stillGoing = heardSince('call:state', p => p.userIds.includes(B.id)).length > 0 && heardSince('call:state', p => p.userIds.length === 0).length === 0
-  check('a call that began while the phone was cut off does not ring when it reconnects, being over 30 s old',
-    cut && reconnected && connects() >= 1 && networkChanges() >= 1 && stillGoing && age > 30 && !rang,
-    `cut off: ${cut}; reconnected: ${reconnected} (connects ${connects()}, network changes ${networkChanges()}); the call was ${age} s old and still going: ${stillGoing}; ring: ${!!rang}`)
-  await endCall()
 })
 
 // ── 10. Answer joins ─────────────────────────────────────────────────────

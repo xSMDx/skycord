@@ -47,7 +47,8 @@ try { execSync('adb version', { stdio: 'pipe' }) } catch {
 const { _android } = createRequire(new URL('../../desktop/package.json', import.meta.url))('playwright-core')
 
 const PKG = 'xyz.skycord.android'
-const API = 'http://127.0.0.1:3050'
+// The dev API's port: `API_PORT` from the environment (the same name as in `.env`), 3200 by default.
+const API = `http://127.0.0.1:${process.env.API_PORT || 3200}`
 const results = []
 const check = (name, ok, detail = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`) }
 const passes = p => p.then(() => true, () => false)

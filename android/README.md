@@ -42,8 +42,19 @@ Debug builds allow `chrome://inspect` on the WebView.
 
 ## End to end
 
-`node android/e2e/shell.e2e.mjs` with the emulator running, the debug APK
-installed and the dev servers up. See the script's header.
+Both scripts need the emulator running, the debug APK installed and the dev
+servers up; each script's header says exactly what it needs and what it does to
+the machine.
+
+```bash
+node android/e2e/shell.e2e.mjs    # the app shell
+node android/e2e/notify.e2e.mjs   # notifications, replies, calls, catch-up, reboot
+```
+
+`notify.e2e.mjs` takes several minutes and reboots the emulator at the end. Each
+run uses three of the dev API's register and sign-in allowance (10 per address
+per 15 minutes). With more than one emulator up, name yours with
+`ANDROID_SERIAL`.
 
 ## Releasing
 
