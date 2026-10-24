@@ -1,24 +1,24 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
-import { useVoiceSettings, micCaptureOptions, gateThreshold as sharedGateThreshold } from '@/composables/useVoiceSettings'
+import { useVoiceSettings, micCaptureOptions, gateThreshold as sharedGateThreshold, noPushToTalkKey } from '@/composables/useVoiceSettings'
 import { createRnnoiseNode } from '@/composables/rnnoiseProcessor'
 import { useVoice } from '@/composables/useVoice'
 import { soundDeafen, soundUndeafen } from '@/composables/useSocket'
 import { useApi, type WireMyVoiceServer } from '@/composables/useApi'
-import { useViewport } from '@/composables/useViewport'
 
 const { voiceSettings, setVoiceSettings, resetVoiceSettings } = useVoiceSettings()
-const { isMobile } = useViewport()
 
 /**
  * The input mode as this screen shows it. A phone has no key to hold, so Push to
  * Talk is not offered there; if it is the saved choice (set on a desktop, or in a
  * browser), the screen shows Voice Activity as selected without rewriting the
  * saved setting — the preference stays the person's, this is only what they see.
+ * The mic follows the same rule (effectiveInputMode), so what is shown is what
+ * is in force.
  */
 const shownMode = computed(() =>
-  isMobile.value && voiceSettings.inputMode === 'ptt' ? 'voice' : voiceSettings.inputMode)
+  noPushToTalkKey.value && voiceSettings.inputMode === 'ptt' ? 'voice' : voiceSettings.inputMode)
 
 const NOISE_MODES = [
   { value: 'off'        as const, label: 'None',           hint: 'Send your mic through untouched.' },
@@ -306,7 +306,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
       <input type="radio" value="voice" :checked="shownMode==='voice'" @change="setVoiceSettings({ inputMode: 'voice' })" />
       <span><strong>Voice Activity</strong><em>Transmit whenever you speak.</em></span>
     </label>
-    <label v-if="!isMobile" class="vv-radio">
+    <label v-if="!noPushToTalkKey" class="vv-radio">
       <input type="radio" value="ptt" :checked="shownMode==='ptt'" @change="setVoiceSettings({ inputMode: 'ptt' })" />
       <span><strong>Push to Talk</strong><em>Hold a key to transmit.</em></span>
     </label>

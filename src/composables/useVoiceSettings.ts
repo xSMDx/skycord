@@ -3,8 +3,9 @@
  * livekit-client when publishing the mic (and, in Phase 2, the camera). Separate
  * from useAppearance — these are device/IO concerns, not theming.
  */
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 import { permits } from './voicePermits'
+import { useViewport } from './useViewport'
 
 export type InputMode = 'voice' | 'ptt'
 
@@ -50,6 +51,15 @@ export interface VoiceSettings {
   defaultVoiceServer: string
 }
 
+const { isMobile, isCoarse } = useViewport()
+
+/**
+ * A phone: a small screen with a finger for a pointer, so no key to hold. Both
+ * halves are asked — width alone would also catch a desktop window dragged
+ * narrow, which still has its keyboard.
+ */
+export const noPushToTalkKey = computed(() => isMobile.value && isCoarse.value)
+
 /**
  * The mode actually in force, as opposed to the one the person chose.
  *
@@ -58,9 +68,16 @@ export interface VoiceSettings {
  * into every DM afterwards — a permission in one room silently reconfiguring
  * their whole client. So the preference stays theirs and this is what the
  * capture path reads.
+ *
+ * The same goes for a Push to Talk that is saved but cannot be used: on a phone
+ * there is no key to hold, so the mic would stay shut for the whole call. There
+ * it reads as voice activity. A channel that itself requires push-to-talk is
+ * another matter and still wins — that is the hold-to-talk button, not a key.
  */
-export const effectiveInputMode = (): InputMode =>
-  permits.voiceActivity ? voiceSettings.inputMode : 'ptt'
+export const effectiveInputMode = (): InputMode => {
+  if (!permits.voiceActivity) return 'ptt'
+  return voiceSettings.inputMode === 'ptt' && noPushToTalkKey.value ? 'voice' : voiceSettings.inputMode
+}
 
 const KEY = 'sykord_voice'
 const DEFAULTS: VoiceSettings = {
