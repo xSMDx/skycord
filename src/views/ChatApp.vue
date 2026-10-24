@@ -388,7 +388,7 @@ watch(() => [voice.connected, voice.activeConvId, voice.activeKind] as const, ([
 })
 // Drop dismissals/engagements once the call actually ends, so a later call from
 // the same person (same stable room id) rings again instead of being swallowed.
-watch(activeCalls, (cur) => {
+const pruneCallMarks = (cur: Record<string, string[]>) => {
   const active = new Set(Object.keys(cur))
   if (dismissedCallRooms.value.size) {
     const next = new Set([...dismissedCallRooms.value].filter(r => active.has(r)))
@@ -402,7 +402,13 @@ watch(activeCalls, (cur) => {
     const next = new Set([...modalAckedRooms.value].filter(r => active.has(r)))
     if (next.size !== modalAckedRooms.value.size) modalAckedRooms.value = next
   }
-}, { deep: true })
+}
+// Not while the calls are being learned again after the Android socket's rest
+// (forgetCallsForWake): every room is gone from `activeCalls` for a moment, and
+// pruning then would forget that a call still going was declined or left.
+let callsRelearning: ReturnType<typeof setTimeout> | null = null
+watch(activeCalls, cur => { if (callsRelearning === null) pruneCallMarks(cur) }, { deep: true })
+onBeforeUnmount(() => { if (callsRelearning !== null) clearTimeout(callsRelearning) })
 
 // ── View state ─────────────────────────────────────────────────────────────
 const view          = ref<'friends' | 'dm' | 'server' | 'group' | 'discover'>('friends')
@@ -4498,6 +4504,30 @@ onBeforeUnmount(() => { stopOpenFromApp?.(); stopJoinFromApp?.(); if (joiningTim
 // coming back shows no "Reconnecting…". Nothing replays what the socket missed,
 // so the open conversation is topped up once the new socket is up.
 let pendingCatchUp: { c: { kind: ConvKind; id: string }; anchor: string | undefined } | null = null
+
+// What the page believes about calls is only as fresh as the socket that told
+// it. `call:state` says what changed, and the server's catch-up on connect skips
+// an empty room, so a call that ended while the socket rested was never heard to
+// end: it stayed in `activeCalls`, rang on return (Accept joined an empty room)
+// and kept its occupants in the voice channel list. So the calls are forgotten
+// before the new socket exists, and the catch-up, which names every room still
+// occupied, fills them in again. `resetCalls` clears the voice states and room
+// attribution along with the occupancy.
+//
+// The declined / left / joined marks outlive that for CALL_RELEARN_MS, so a call
+// that is still going and was turned down does not ring again from the catch-up;
+// then they are pruned against what came back, as the watch above does on every
+// change, and a call that really ended no longer swallows the next one.
+const CALL_RELEARN_MS = 20_000
+const forgetCallsForWake = () => {
+  // Armed before the reset, so the watch on activeCalls already finds it held.
+  if (callsRelearning !== null) clearTimeout(callsRelearning)
+  callsRelearning = setTimeout(() => {
+    callsRelearning = null
+    pruneCallMarks(activeCalls.value)
+  }, CALL_RELEARN_MS)
+  resetCalls()
+}
 const backgroundSocket = createBackgroundSocket({
   platform: appBridge()?.platform,
   rest: socketRest,
@@ -4508,6 +4538,10 @@ const backgroundSocket = createBackgroundSocket({
     if (c && windowOf(c.kind, c.id).live) {
       pendingCatchUp = { c, anchor: [...getMsgList()].reverse().find(m => m.dbId)?.dbId }
     }
+    // Never in a call of mine: the socket does not rest in one (shouldRestSocket),
+    // so this only guards a call begun in the meantime, whose state is live and
+    // not the page's to forget.
+    if (!voice.connected && !voice.connecting) forgetCallsForWake()
     socketConnect()
   },
 })

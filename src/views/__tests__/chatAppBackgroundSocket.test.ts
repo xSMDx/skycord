@@ -47,3 +47,45 @@ describe('resting the socket in the background', () => {
     expect(wiring).toContain('catchUpConversation(c, anchor)')
   })
 })
+
+/**
+ * What the page believes about calls after its socket has been away.
+ *
+ * `call:state` only says what changed, and the server's connect-time catch-up
+ * skips an empty room, so a call that ended while the socket rested was never
+ * heard to end: it stayed in `activeCalls` and rang on return (Accept joined an
+ * empty room). The answer is to forget the calls before the new socket exists,
+ * since the catch-up names every room still occupied.
+ */
+describe('calls after a rest', () => {
+  const wake = between('wake: () => {', 'socketConnect()')
+
+  it('forgets every call before the new socket exists', () => {
+    expect(wake).toContain('forgetCallsForWake()')
+    // ...and the helper is what clears them, through the one reset that also
+    // empties the voice states and room attribution.
+    const helper = between('const forgetCallsForWake', 'wake: () => {')
+    expect(helper).toContain('resetCalls()')
+  })
+
+  it('leaves the calls alone when I am in one, though the socket never rests then', () => {
+    expect(wake).toMatch(/if \(!voice\.connected && !voice\.connecting\) forgetCallsForWake\(\)/)
+  })
+
+  it('keeps the declined and left marks while the catch-up lands, then prunes them', () => {
+    // Forgetting the calls would otherwise prune every mark at once (the watch
+    // on activeCalls drops a mark whose room is gone), and the catch-up would
+    // ring a call that was declined or left minutes ago and is still going.
+    const prune = between('const pruneCallMarks', 'watch(activeCalls')
+    expect(prune).toContain('dismissedCallRooms')
+    expect(prune).toContain('engagedCallRooms')
+    expect(prune).toContain('modalAckedRooms')
+    expect(source).toMatch(/watch\(activeCalls, cur => \{\s*if \(callsRelearning === null\) pruneCallMarks\(cur\)/)
+    const helper = between('const forgetCallsForWake', 'wake: () => {')
+    expect(helper).toMatch(/setTimeout\(\(\) => \{[^}]*callsRelearning = null[^}]*pruneCallMarks\(activeCalls\.value\)/)
+  })
+
+  it('drops the timer with the view', () => {
+    expect(source).toMatch(/onBeforeUnmount\(\(\) => \{ if \(callsRelearning !== null\) clearTimeout\(callsRelearning\) \}\)/)
+  })
+})
