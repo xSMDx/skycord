@@ -27,6 +27,7 @@ import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
 import { ownEcho } from '@/composables/ownEcho'
 import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
+import { createBackgroundSocket, mergeCaughtUp } from '@/composables/backgroundSocket'
 import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates, emitCallDecline } from '@/composables/useSocket'
 import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
 import { filterMembers } from '@/composables/memberFilter'
@@ -227,6 +228,7 @@ const {
   typingUsers,
   connect:          socketConnect,
   disconnect:       socketDisconnect,
+  rest:             socketRest,
   sendDMSocket,
   sendReplySocket,
   sendEditSocket,
@@ -2262,6 +2264,34 @@ const loadNewerMessages = async () => {
     if (sameConv(c)) appendNewer(c.kind, c.id, toClient(page), page.hasNewer)
   } catch (e) { console.error('[loadNewerMessages]', e) }
   finally { loadingNewer.value = false }
+}
+
+/**
+ * After the page's connection was let go in the background and is back: pull in
+ * what a conversation missed, merged into what is already on screen
+ * (mergeCaughtUp keeps the order). Gentler than jumpToPresent — no skeleton, no
+ * jump to the bottom for someone reading up the page.
+ *
+ * `anchor` is the newest message the page had BEFORE the new socket came up:
+ * read after, it could be one that arrived live in the meantime, and everything
+ * between would be skipped. Pages are capped so a very long absence cannot loop;
+ * a window left short of the end stays non-live and offers "Jump to present".
+ */
+const CATCH_UP_PAGES = 20
+const catchUpConversation = async (c: { kind: ConvKind; id: string }, anchor: string | undefined) => {
+  try {
+    if (!anchor) { if (sameConv(c)) await jumpToPresent(); return }   // nothing to anchor on: load it as if opened
+    for (let i = 0; i < CATCH_UP_PAGES && anchor; i++) {
+      const page = await fetchHistory(c, { after: anchor })
+      if (!sameConv(c)) return
+      const got = toClient(page)
+      // The list is read again here: a message may have come over the new socket meanwhile.
+      setWindow(c.kind, c.id, mergeCaughtUp(getMsgList(), got),
+        { hasOlder: windowOf(c.kind, c.id).hasOlder, hasNewer: page.hasNewer })
+      if (!page.hasNewer) return
+      anchor = got[got.length - 1]?.dbId
+    }
+  } catch (e) { console.error('[catchUpConversation]', e) }
 }
 
 /** Back to the newest messages: reload the conversation as if just opened. */
@@ -4454,6 +4484,44 @@ const stopJoinFromApp = appBridge()?.onJoinCall?.(c => {
   void joinFromApp(c)
 })
 onBeforeUnmount(() => { stopOpenFromApp?.(); stopJoinFromApp?.(); if (joiningTimer) clearTimeout(joiningTimer) })
+
+// Android only: with the app in the background the page lets its own socket go
+// after a short grace (backgroundSocket.ts). The service keeps the phone's
+// connection for notifications and tells the server it is a background one, so
+// the person does not look online from a pocket and there is no second socket
+// and live renderer drawing battery. Not while in or joining a call: that rides
+// the socket (and a join answered from the notification arrives, then the
+// guard holds it until the voice state takes over). Windows and a browser never
+// rest, whatever they report.
+//
+// A deliberate rest does not touch the connection strip (useSocket.rest), so
+// coming back shows no "Reconnecting…". Nothing replays what the socket missed,
+// so the open conversation is topped up once the new socket is up.
+let pendingCatchUp: { c: { kind: ConvKind; id: string }; anchor: string | undefined } | null = null
+const backgroundSocket = createBackgroundSocket({
+  platform: appBridge()?.platform,
+  rest: socketRest,
+  wake: () => {
+    // Remember where the open conversation stood before anything new can arrive.
+    // A window back in history pages for itself and has its own "Jump to present".
+    const c = activeConv.value
+    if (c && windowOf(c.kind, c.id).live) {
+      pendingCatchUp = { c, anchor: [...getMsgList()].reverse().find(m => m.dbId)?.dbId }
+    }
+    socketConnect()
+  },
+})
+const socketNeededForCall = computed(() => voice.connected || voice.connecting || joiningFromApp.value !== null)
+// Synchronously: an answer from the notification must have its socket back
+// before the join's first emit, not a tick later.
+watch([backgrounded, socketNeededForCall], ([bg, inCall]) => backgroundSocket.sync(bg, inCall), { flush: 'sync' })
+watch(socketConnected, up => {
+  if (!up || !pendingCatchUp) return
+  const { c, anchor } = pendingCatchUp
+  pendingCatchUp = null
+  void catchUpConversation(c, anchor)
+})
+onBeforeUnmount(() => backgroundSocket.stop())
 
 // The conversation on screen, for the app to clear its notification and start
 // a fresh burst. Fires when the open conversation changes in front, and when the
