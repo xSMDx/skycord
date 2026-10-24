@@ -53,13 +53,14 @@ data class RuleState(
  * that name is already the bridge's page-to-app message in this package.)
  */
 sealed interface IncomingMessage {
+    val messageId: String
     val authorId: String
     val content: String
     /** A notice the server posts ("Ana joined"), not something a person said. */
     val system: Boolean
 
     data class Dm(
-        val messageId: String,
+        override val messageId: String,
         val partnerId: String,
         override val authorId: String,
         val authorName: String,
@@ -68,7 +69,7 @@ sealed interface IncomingMessage {
     ) : IncomingMessage
 
     data class Group(
-        val messageId: String,
+        override val messageId: String,
         val groupId: String,
         val groupName: String,
         override val authorId: String,
@@ -78,7 +79,7 @@ sealed interface IncomingMessage {
     ) : IncomingMessage
 
     data class Channel(
-        val messageId: String,
+        override val messageId: String,
         val channelId: String,
         val channelName: String,
         val categoryId: String?,

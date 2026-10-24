@@ -24,6 +24,7 @@ import xyz.skycord.android.core.ConvRef
 import xyz.skycord.android.core.IncomingMessage
 import xyz.skycord.android.core.Kind
 import xyz.skycord.android.core.NoticeText
+import xyz.skycord.android.core.freshLines
 
 /**
  * What a notification's buttons need to know about their conversation, carried in
@@ -69,8 +70,12 @@ internal data class Conv(val origin: String, val ref: ConvRef, val title: String
  */
 internal class Note(val e: IncomingMessage, val kind: Kind, val at: Long)
 
-/** One line of a conversation's notification. A null [sender] is the person themself (a reply). */
-private class Line(val text: String, val at: Long, val sender: Person?)
+/**
+ * One line of a conversation's notification. A null [sender] is the person themself (a reply). The [id] is
+ * the message's, kept in the notification itself (the line's extras) so that a notification a killed process
+ * left behind can still tell which messages it already has; a reply has none.
+ */
+private class Line(val text: String, val at: Long, val sender: Person?, val id: String? = null)
 
 /**
  * The phone's notifications: one per conversation, updated as messages arrive,
@@ -153,7 +158,7 @@ class Notifier(context: Context) {
         val noText = app.getString(R.string.notice_no_text)
         val added = notes.map { n ->
             val sender = Person.Builder().setName(NoticeText.authorName(n.e)).setKey("user:${n.e.authorId}").build()
-            Line(NoticeText.body(n.e.content, noText), n.at, sender)
+            Line(NoticeText.body(n.e.content, noText), n.at, sender, n.e.messageId.takeIf { it.isNotBlank() })
         }
         publish(
             conv, headline = NoticeText.title(newest.e), mentions = notes.any { it.kind == Kind.MENTION },
@@ -287,6 +292,11 @@ class Notifier(context: Context) {
         }
         val before = lines.held(key)
         if (before == null && !create) return@synchronized
+        // A message the notification already holds is not added again: after a process kill the notification is
+        // still showing, and the catch-up that follows lists messages that are in it. If that leaves nothing,
+        // there is nothing to say (and nothing to buzz about).
+        val fresh = freshLines(before?.lines.orEmpty(), added) { it.id }
+        if (added.isNotEmpty() && fresh.isEmpty()) return@synchronized
 
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName(app.getString(R.string.notice_you)).build())
         // A DM is between two people and needs no title; a group or a channel is named.
@@ -295,8 +305,12 @@ class Notifier(context: Context) {
             style.isGroupConversation = true
         }
         // Once a mention is in the notification it stays marked, even as plain messages join it.
-        val held = lines.append(key, added, mentions, now)
-        for (l in held.lines) style.addMessage(l.text, l.at, l.sender ?: style.user)
+        val held = lines.append(key, fresh, mentions, now)
+        for (l in held.lines) {
+            val message = NotificationCompat.MessagingStyle.Message(l.text, l.at, l.sender ?: style.user)
+            l.id?.let { message.extras.putString(EXTRA_MESSAGE_ID, it) }
+            style.addMessage(message)
+        }
         val mentioned = held.mentioned
         val builder = NotificationCompat.Builder(app, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
@@ -333,7 +347,9 @@ class Notifier(context: Context) {
         val shown = showing(key) ?: return
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(shown) ?: return
         // Lines with no key are the person's own (their user has none); every other sender has one.
-        val old = style.messages.map { m -> Line(m.text.toString(), m.timestamp, m.person?.takeIf { it.key != null }) }
+        val old = style.messages.map { m ->
+            Line(m.text.toString(), m.timestamp, m.person?.takeIf { it.key != null }, m.extras.getString(EXTRA_MESSAGE_ID))
+        }
         lines.seed(key, old, shown.extras.getBoolean(EXTRA_MENTIONED, false), now)
     }
 
@@ -405,6 +421,9 @@ class Notifier(context: Context) {
         private fun missedTag(convKey: String) = "missed:$convKey"
 
         private const val EXTRA_MENTIONED = "xyz.skycord.android.extra.MENTIONED"
+
+        /** On each message of a notification's MessagingStyle: the id of the message it shows. */
+        private const val EXTRA_MESSAGE_ID = "xyz.skycord.android.extra.MESSAGE_ID"
 
         private val LOCK = Any()
         @Volatile private var channelsMade = false

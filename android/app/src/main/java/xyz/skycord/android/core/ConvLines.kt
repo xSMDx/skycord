@@ -87,3 +87,15 @@ class ConvLines<L>(private val capacity: Int = 25, private val trustMs: Long = 5
         for (key in piles.keys.toList()) piles[key] = Pile(emptyList(), false, 0L)
     }
 }
+
+/**
+ * The lines of [added] that a notification holding [held] does not already have: the ones with no id
+ * (the person's own replies) always, the others only when no line held, or earlier in [added], has
+ * the same [idOf]. Order kept. A process Android killed leaves its notification showing; the next
+ * process takes its lines over, and the catch-up after it lists messages that are already in them.
+ */
+fun <L> freshLines(held: List<L>, added: List<L>, idOf: (L) -> String?): List<L> {
+    val known = HashSet<String>()
+    for (l in held) idOf(l)?.let(known::add)
+    return added.filter { l -> idOf(l)?.let(known::add) ?: true }
+}
