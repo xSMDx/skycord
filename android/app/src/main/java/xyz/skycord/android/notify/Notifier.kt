@@ -166,12 +166,16 @@ class Notifier(context: Context) {
         publish(conv, headline = conv.title, mentions = false, loud = false, at = at, create = false, added = listOf(Line(text, at, null)))
     }
 
-    /** Your reply did not go: say so in the conversation, even if the notice was swiped away meanwhile. */
+    /**
+     * Your reply did not go: the notification says so, even if it was swiped away meanwhile. The
+     * conversation's own lines and title stay as they are: a failure posted as a line from a "Skycord"
+     * sender made a one-to-one conversation's collapsed header read "Skycord". It goes in the sub-text and
+     * the content text instead, for this post only.
+     */
     internal fun replyFailed(conv: Conv, at: Long = System.currentTimeMillis()) {
-        val skycord = Person.Builder().setName(app.getString(R.string.app_name)).setKey("skycord").build()
         publish(
-            conv, headline = conv.title, mentions = false, loud = false, at = at, create = true,
-            added = listOf(Line(app.getString(R.string.notice_send_failed), at, skycord)),
+            conv, headline = conv.title, mentions = false, loud = false, at = at, create = true, added = emptyList(),
+            failure = app.getString(R.string.notice_send_failed),
         )
     }
 
@@ -259,7 +263,8 @@ class Notifier(context: Context) {
     /**
      * Adds [added] (oldest first) to the lines [conv]'s notification holds and posts the result. With
      * nothing held it starts a fresh one, unless [create] is false. One at a time: two posts for the
-     * same conversation must not both start from the old lines.
+     * same conversation must not both start from the old lines. A [failure] is shown for this post only
+     * (sub-text and content text), never kept as a line.
      */
     private fun publish(
         conv: Conv,
@@ -269,6 +274,7 @@ class Notifier(context: Context) {
         at: Long,
         create: Boolean,
         added: List<Line>,
+        failure: String? = null,
     ) = synchronized(LOCK) {
         ensureChannelsOnce()
         val key = conv.key
@@ -307,6 +313,12 @@ class Notifier(context: Context) {
             .addAction(replyAction(conv))
             .addExtras(Bundle().apply { putBoolean(EXTRA_MENTIONED, mentioned) })
         if (mentioned) builder.setSubText(app.getString(R.string.notice_mentioned))
+        if (failure != null) {
+            // Nothing held (swiped away meanwhile) leaves a MessagingStyle with nothing to show, so the
+            // failure is its one line, the person's own so that it never becomes the header's name. Not kept.
+            if (held.lines.isEmpty()) style.addMessage(failure, at, style.user)
+            builder.setSubText(failure).setContentText(failure)
+        }
         // Only-alert-once keeps an update quiet, but a notification that is new (catch-up, or one
         // swiped away a moment ago) alerts all the same. Silent covers that case.
         if (!loud && before == null) builder.setSilent(true)
