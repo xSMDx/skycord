@@ -236,7 +236,9 @@ class Notifier(context: Context) {
 
     /**
      * The person is signed out, so the connection is over: the message notifications
-     * (their replies would fail) give way to one quiet notice that opens the app.
+     * (their replies would fail) give way to one notice that opens the app. It is on the Messages
+     * channel, silent: the always-on Connection channel is the lowest importance there is, and a person who
+     * has stopped getting notifications has to be able to see why. No sound or buzz, but it is visible.
      */
     fun signedOut() {
         clearAll()
@@ -245,7 +247,7 @@ class Notifier(context: Context) {
             app, SIGNED_OUT_ID, Intent(app, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notice = NotificationCompat.Builder(app, CHANNEL_CONNECTION)
+        val notice = NotificationCompat.Builder(app, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(ContextCompat.getColor(app, R.color.accent))
             .setContentTitle(app.getString(R.string.app_name))
@@ -253,6 +255,7 @@ class Notifier(context: Context) {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
             .setContentIntent(tap)
             .build()
         nm.notify(SIGNED_OUT_ID, notice)
