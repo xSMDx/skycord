@@ -35,7 +35,7 @@ import {
   forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue,
   removeFromQueue, clearQueue, okToPlaySolo, type QueueContext,
 } from '@/composables/useMusicPlayer'
-import { openMenu, type MenuItem } from '@/composables/useContextMenu'
+import { openMenu, type MenuItem, type MenuAnchor } from '@/composables/useContextMenu'
 import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
@@ -63,11 +63,19 @@ const showQueue = ref(false)
  * The pane the queue covers. The drawer is absolutely positioned inside it, and
  * an absolute box inside a scrolling pane scrolls WITH the pane: open the queue
  * from halfway down a long library and it arrives shifted up by however far
- * you had scrolled, with the library showing through underneath. Now that a
- * phone can open it, that is the common case — so it opens from the top.
+ * you had scrolled, with the library showing through underneath. So the pane
+ * goes to the top while the drawer is open — and comes back to where it was
+ * when the drawer closes, so looking at the queue does not lose your place in
+ * the library.
  */
 const mainEl = ref<HTMLElement | null>(null)
-watch(showQueue, (open) => { if (open && mainEl.value) mainEl.value.scrollTop = 0 })
+let libraryScroll = 0
+watch(showQueue, (open) => {
+  const pane = mainEl.value
+  if (!pane) return
+  if (open) { libraryScroll = pane.scrollTop; pane.scrollTop = 0 }
+  else pane.scrollTop = libraryScroll
+})
 
 const search = ref('')
 const adding = ref<'' | 'link'>('')
@@ -174,7 +182,26 @@ const menuTail = (t: LibTrack, i: number): MenuItem[] => {
   return items
 }
 
+/**
+ * Where a row menu opens. A click that came from the keyboard (Enter or Space
+ * on the ⋯ button) has no pointer: it reports 0,0, which put the menu in the
+ * top-left corner of the window. With no pointer position the menu hangs off
+ * the control that was activated instead.
+ */
+const menuAnchor = (e: MouseEvent): MenuAnchor => {
+  const fromKeyboard = (e.type === 'click' && e.detail === 0) || (!e.clientX && !e.clientY)
+  const from = e.currentTarget instanceof HTMLElement ? e.currentTarget.getBoundingClientRect() : null
+  if (!fromKeyboard || !from) return e
+  return {
+    clientX: from.left,
+    clientY: from.bottom,
+    preventDefault: () => e.preventDefault(),
+    stopPropagation: () => e.stopPropagation(),
+  }
+}
+
 const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
+  const anchor = menuAnchor(e)
   // In a channel the menu leads with the channel, and "just for me" says
   // what it costs: it goes through playFrom, which asks before leaving.
   if (live.value) {
@@ -195,7 +222,7 @@ const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
       { label: 'Add to your own queue', icon: ListEnd, onSelect: () => addToQueue(t) },
       ...menuTail(t, i),
     )
-    openMenu(e, items)
+    openMenu(anchor, items)
     return
   }
   const items: MenuItem[] = [
@@ -223,7 +250,7 @@ const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
         })
   }
   items.push(...menuTail(t, i))
-  openMenu(e, items)
+  openMenu(anchor, items)
 }
 
 /*
@@ -1593,6 +1620,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
     scrollbar-width: none; overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
     --fade-l: 0px; --fade-r: 0px;
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--fade-l), black calc(100% - var(--fade-r)), transparent 100%);
     mask-image: linear-gradient(to right, transparent 0, black var(--fade-l), black calc(100% - var(--fade-r)), transparent 100%);
   }
   .mm-lists.fade-l { --fade-l: 28px; }
