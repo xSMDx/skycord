@@ -486,7 +486,9 @@ const navSections = computed<NavSection[]>(() => [
       { id: 'appearance', label: 'Appearance'    },
       { id: 'voice',      label: 'Voice & Video' },
       { id: 'notifications', label: 'Notifications' },
-      { id: 'keybinds',   label: 'Keybinds'      },
+      // Shortcuts need a keyboard; on a phone the page would only list keys
+      // nobody can press.
+      ...(isMobile.value ? [] : [{ id: 'keybinds', label: 'Keybinds' }]),
       { id: 'performance', label: 'Performance'  },
       // Only in the apps (Windows or Android), which keep the list of servers.
       ...(appBridge() ? [{ id: 'servers', label: 'Servers' }] : []),
@@ -544,7 +546,11 @@ if (props.initialPage && props.initialPage !== 'account') mobileDetail.value = t
 
 // Dragging the window across the breakpoint mid-session shouldn't strand the
 // user on a detail pane that no longer exists as a separate screen.
-watch(isMobile, m => { if (!m) mobileDetail.value = false })
+watch(isMobile, m => {
+  if (!m) mobileDetail.value = false
+  // Keybinds has no row on a phone, so the pane must not be left showing it.
+  else if (page.value === 'keybinds') page.value = 'account'
+})
 
 const currentPageLabel = computed(() => {
   for (const s of navSections.value) {
@@ -927,7 +933,7 @@ const handleSelfRevoked = () => handleLogout()
               <div class="pf-controls">
                 <div class="st-card">
 
-                  <div class="st-field">
+                  <div class="st-field pf-row-stack">
                     <div class="st-field-left">
                       <span class="st-field-label">Avatar</span>
                       <span class="st-field-value muted">Square, at least 128×128.</span>
@@ -940,7 +946,7 @@ const handleSelfRevoked = () => handleLogout()
                     </div>
                   </div>
 
-                  <div class="st-field">
+                  <div class="st-field pf-row-stack">
                     <div class="st-field-left">
                       <span class="st-field-label">Banner</span>
                       <!-- The colour stays live under an image, so say what
@@ -990,7 +996,7 @@ const handleSelfRevoked = () => handleLogout()
                     <div class="pf-count">{{ bioValue.length }} / 190</div>
                   </div>
 
-                  <div class="st-field">
+                  <div class="st-field pf-row-stack">
                     <div class="st-field-left">
                       <span class="st-field-label">Custom status</span>
                       <span class="st-field-value" :class="{ muted: !authUser?.customStatus?.text }">
@@ -1217,12 +1223,16 @@ const handleSelfRevoked = () => handleLogout()
               <div class="ap-ticks"><span v-for="g in GAP_STEPS" :key="g" :class="{ on: GAP_STEPS[gapIdx] === g }">{{ g }}px</span></div>
             </div>
 
-            <h3 class="ap-sub">Zoom level — {{ appearance.zoom }}%</h3>
-            <p class="ap-hint ap-hint-top">Adjust the size of the interface.</p>
-            <div class="ap-stepwrap">
-              <input class="ap-slider" aria-label="Interface zoom" type="range" min="0" :max="ZOOM_STEPS.length - 1" step="1" :value="zoomIdx" :style="{ '--fill': fillPct(zoomIdx, 0, ZOOM_STEPS.length - 1) }" @input="setAppearance({ zoom: ZOOM_STEPS[+($event.target as HTMLInputElement).value] })" />
-              <div class="ap-ticks ap-ticks-zoom"><span v-for="z in ZOOM_STEPS" :key="z" :class="{ on: ZOOM_STEPS[zoomIdx] === z }">{{ z }}</span></div>
-            </div>
+            <!-- Not on a phone: the screen is already the size it is, and a zoom
+                 over 100% turns a 360px phone into a 240px layout. -->
+            <template v-if="!isMobile">
+              <h3 class="ap-sub">Zoom level — {{ appearance.zoom }}%</h3>
+              <p class="ap-hint ap-hint-top">Adjust the size of the interface.</p>
+              <div class="ap-stepwrap">
+                <input class="ap-slider" aria-label="Interface zoom" type="range" min="0" :max="ZOOM_STEPS.length - 1" step="1" :value="zoomIdx" :style="{ '--fill': fillPct(zoomIdx, 0, ZOOM_STEPS.length - 1) }" @input="setAppearance({ zoom: ZOOM_STEPS[+($event.target as HTMLInputElement).value] })" />
+                <div class="ap-ticks ap-ticks-zoom"><span v-for="z in ZOOM_STEPS" :key="z" :class="{ on: ZOOM_STEPS[zoomIdx] === z }">{{ z }}</span></div>
+              </div>
+            </template>
 
             <div class="st-card">
               <div class="st-field">
@@ -2099,8 +2109,20 @@ img    { display: block; object-fit: cover; }
 }
 .sm-mhead-btn:active { background: var(--hover); color: var(--text-strong); }
 
-/* Page content needs its own gutter now that the pane padding is gone. */
-.sm-modal.mobile .sm-content > :not(.sm-mhead) { padding-left: 16px; padding-right: 16px; }
+/* Page content needs its own gutter now that the pane padding is gone.
+   A margin, not padding: padding on a page's first-level card put the card's
+   own background edge to edge and then padded its contents a second time, so
+   the text column was 32px narrower than it needed to be (Account,
+   Notifications, Performance). `clip` rather than `hidden` so a child that is a
+   hair too wide is cut where it ends instead of becoming something to scroll
+   sideways to — hidden is still programmatically scrollable, clip is not. */
+.sm-modal.mobile .sm-content > :not(.sm-mhead) {
+  margin-left: 16px; margin-right: 16px;
+  overflow-x: clip;
+}
+/* The scroller itself: only ever vertical. (Computes to hidden next to
+   overflow-y: auto; the clip above is what actually stops the drift.) */
+.sm-modal.mobile .sm-content { overflow-x: clip; overscroll-behavior-x: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .sm-modal.mobile .sm-nav,
@@ -2140,12 +2162,24 @@ img    { display: block; object-fit: cover; }
 }
 
 /* Phone: one column, and sticky would eat half the screen. */
+/* stretch, not the desktop flex-start: in a column, flex-start sizes each child
+   to its content, so one nowrap line made the whole controls column wider than
+   the phone (Appearance measured 698px at 360). */
 .sm-modal.mobile .pf-stage,
-.sm-modal.mobile .ap-stage { flex-direction: column; gap: 20px; }
+.sm-modal.mobile .ap-stage { flex-direction: column; align-items: stretch; gap: 20px; }
 .sm-modal.mobile .pf-stagecard,
 .sm-modal.mobile .ap-previewcol { width: 100%; max-width: none; position: static; }
 .sm-modal.mobile .pf-ctl { justify-content: flex-start; }
 .sm-modal.mobile .pf-stage .st-field { flex-wrap: wrap; gap: 10px; }
+/* Rows whose control is wider than half the screen (avatar + two buttons, a
+   banner swatch + two buttons, a status with Set and Clear): label above,
+   controls below, so nothing sits on top of its own label or gets cut. */
+.sm-modal.mobile .pf-row-stack { flex-direction: column; align-items: stretch; gap: 12px; }
+.sm-modal.mobile .pf-row-stack .st-field-left { flex: none; }
+.sm-modal.mobile .pf-row-stack .pf-ctl { gap: 10px; }
+.sm-modal.mobile .pf-row-stack .pf-ctl .st-btn { flex: 1 1 0; }
+.sm-modal.mobile .pf-row-stack .pf-ctl .pf-bnwrap { flex: 1 1 100%; width: auto; max-width: 260px; }
+.sm-modal.mobile .pf-row-stack .pf-ctl .pf-av { flex: none; }
 
 
 /* ── Saved themes ── */
@@ -2164,4 +2198,85 @@ img    { display: block; object-fit: cover; }
 .ap-saved-main:active { transform: scale(.99); }
 .ap-saved-chip { width: 44px; height: 28px; border-radius: var(--edge-sm); flex: none; border: 1px solid var(--border); }
 .ap-saved-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ══ PHONE: Appearance, and touch sizes ═══════════════════════════════════
+   Everything here sits under `.sm-modal.mobile`, so the desktop look is
+   untouched. Layout first: the controls column must be exactly as wide as the
+   screen (see the stretch above), so grids reflow, chips wrap and nothing
+   needs sideways scrolling. */
+
+/* Option cards: a grid that reflows rather than a row that overflows. */
+.sm-modal.mobile .ap-cards {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+/* Light / Dark are the two big previews: always two equal columns. */
+.sm-modal.mobile .ap-cards.ap-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sm-modal.mobile .ap-card { min-width: 0; text-align: center; overflow-wrap: anywhere; }
+.sm-modal.mobile .ap-mode-preview { width: 100%; }
+/* Segmented buttons: 44px to press, label centred however many lines it takes
+   ("JetBrains Mono" wraps in a third of the screen). */
+.sm-modal.mobile .ap-card-sm { min-height: 44px; justify-content: center; padding: 10px 8px; }
+
+/* Variant chips keep their pill shape, with a 44px hit height. */
+.sm-modal.mobile .ap-variants { gap: 10px; }
+.sm-modal.mobile .ap-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 18px;
+}
+
+/* Swatches wrap (they already did); the custom one matches the others' 44px. */
+.sm-modal.mobile .ap-custom { width: 44px; height: 44px; }
+.sm-modal.mobile .ap-custom:hover { transform: none; }
+.sm-modal.mobile .ap-custom:active { transform: scale(.94); }
+
+/* Custom colour pickers: each label wraps to its own line when it must, and the
+   whole label is the 44px target for the little colour well inside it. */
+.sm-modal.mobile .ap-tokens { gap: 4px 16px; }
+.sm-modal.mobile .ap-token { min-height: 44px; flex: 1 1 100%; }
+/* The inline "Reset" in a heading: a 44px hit box that does not grow the line. */
+.sm-modal.mobile .ap-reset { position: relative; }
+.sm-modal.mobile .ap-reset::after { content: ''; position: absolute; inset: -16px -10px; }
+
+/* Name fields: full width on their own line, 44px tall. */
+.sm-modal.mobile .ap-name-input { flex: 1 1 100%; min-width: 0; min-height: 44px; font-size: 16px; }
+.sm-modal.mobile .ap-save .st-btn,
+.sm-modal.mobile .ap-share .st-btn { flex: 1 1 140px; }
+.sm-modal.mobile .ap-share-input { max-width: none; }
+
+/* Saved themes: the name gets the whole row, Rename and Delete share the next. */
+.sm-modal.mobile .ap-saved { max-width: none; }
+.sm-modal.mobile .ap-saved-row { flex-wrap: wrap; }
+.sm-modal.mobile .ap-saved-main { flex: 1 1 100%; min-height: 44px; }
+.sm-modal.mobile .ap-saved-row .st-btn { flex: 1 1 0; }
+
+/* Sliders: a 44px-tall hit area with the same thin 6px track. The groove and
+   fill are drawn on the track pseudo-element instead of on the input, because
+   the input's own box is the drag area and it is now much taller than the line
+   it should look like. */
+.sm-modal.mobile .ap-slider { height: 44px; margin: 0 0 4px; background: none; max-width: none; }
+/* Two rules, not one selector list: a browser that does not know one of the
+   pseudo-elements throws the whole list away. */
+.sm-modal.mobile .ap-slider::-webkit-slider-runnable-track {
+  background:
+    linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat,
+    var(--bg-input);
+}
+.sm-modal.mobile .ap-slider::-moz-range-track {
+  background:
+    linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat,
+    var(--bg-input);
+}
+.sm-modal.mobile .ap-stepwrap { max-width: none; }
+
+/* Toggles: the same look as the settings switches (48 x 28), with the hit area
+   grown to 44px by a transparent box rather than by a bigger control. */
+.sm-modal.mobile .ap-toggle { width: 48px; height: 28px; }
+.sm-modal.mobile .ap-toggle span { width: 22px; height: 22px; }
+.sm-modal.mobile .ap-toggle.on span { transform: translateX(20px); }
+.sm-modal.mobile .ap-toggle::after { content: ''; position: absolute; inset: -8px -4px; }
+
+/* Text areas and fields typed into: 16px so the keyboard opens without a zoom. */
+.sm-modal.mobile .pf-textarea,
+.sm-modal.mobile .ap-share-input { font-size: 16px; }
 </style>
