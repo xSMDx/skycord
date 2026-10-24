@@ -4,6 +4,7 @@ import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import xyz.skycord.android.core.ConvPrefs
+import xyz.skycord.android.core.Deadline
 import xyz.skycord.android.core.Me
 import xyz.skycord.android.core.MessageEvents
 import xyz.skycord.android.core.RuleState
@@ -131,19 +132,24 @@ internal class Directory(private val api: ServerApi) : MessageEvents.Names {
      * The name a ring gives its caller: one already met, else asked of the server once (the person's
      * profile) and kept. A friend who has not written since the phone connected is not in [people], and
      * a ring that said "Someone" for them would be a poor one. Null when the server will not say
-     * (asked again after a minute at the earliest). Blocking, on the service's thread.
+     * (asked again after a minute at the earliest). Blocking, on the service's thread; with a [deadline]
+     * it asks only as long as that has left, because a phone is ringing in the meantime.
      */
-    fun callerName(userId: String): String? {
+    fun callerName(userId: String, deadline: Deadline? = null): String? {
         people[userId]?.let { return it }
-        if (!mayAsk("person:$userId")) return null
-        val user = (api.get("/users/${ServerApi.segment(userId)}/profile") as? ApiResult.Ok)?.body?.optJSONObject("user") ?: return null
+        if (deadline?.expired() == true || !mayAsk("person:$userId")) return null
+        val user = (api.get("/users/${ServerApi.segment(userId)}/profile", deadline) as? ApiResult.Ok)?.body?.optJSONObject("user") ?: return null
         val name = user.str("displayName") ?: user.str("username") ?: return null
         learnName(userId, name)
         return name
     }
 
-    /** For the ring (Task 12): whether the person is in [groupId], as far as the last fetch knows. */
-    fun isGroupMember(groupId: String): Boolean = me?.id?.let { groups[groupId]?.memberIds?.contains(it) } == true
+    /** A group's name for a ring: the one held, else asked of the server within [deadline] (the person is waiting). */
+    fun groupNameWithin(groupId: String, deadline: Deadline): String? {
+        groups[groupId]?.let { return it.name }
+        if (!deadline.expired() && mayAsk("groups")) fetchGroups(deadline)
+        return groups[groupId]?.name
+    }
 
     // ---- MessageEvents.Names: looked up only for a message that is going to be shown ----------
 
@@ -194,8 +200,8 @@ internal class Directory(private val api: ServerApi) : MessageEvents.Names {
         channels[serverId] = names
     }
 
-    private fun fetchGroups() {
-        val list = (api.get("/conversations/groups") as? ApiResult.Ok)?.body?.optJSONArray("groups") ?: return
+    private fun fetchGroups(deadline: Deadline? = null) {
+        val list = (api.get("/conversations/groups", deadline) as? ApiResult.Ok)?.body?.optJSONArray("groups") ?: return
         for (o in list.objects()) putGroup(o)
     }
 

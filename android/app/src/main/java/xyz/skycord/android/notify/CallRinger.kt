@@ -73,12 +73,18 @@ class CallRinger(context: Context, private val origin: String) {
         cancel(app, room)
     }
 
-    /** The ring for [room] went unanswered: it ends, and "Missed call from [name]" is left. */
+    /**
+     * The ring for [room] went unanswered: it ends, and "Missed call from [name]" is left — unless the
+     * ring had already ended some other way. Answer and Decline take a ring down on the main thread
+     * ([cancel]) while the timer may be firing on the service's: a call that was answered or declined
+     * in that moment is not a missed one.
+     */
     fun missed(room: String, name: String) {
         val ring = rings.remove(room)
+        val wasRinging = isRinging(room)
         cancel(app, room)
         // A ring this object did not start has no conversation to open; nothing to leave.
-        ring ?: return
+        if (ring == null || !wasRinging) return
         notifier.missedCall(
             Conv(origin, ConvRef(ring.kind, ring.convId), name),
             NoticeText.missedCallText(name, app.getString(R.string.notice_missed_call)),

@@ -27,6 +27,7 @@ import xyz.skycord.android.core.CallEvents
 import xyz.skycord.android.core.CallRooms
 import xyz.skycord.android.core.ConvGroups
 import xyz.skycord.android.core.CursorPolicy
+import xyz.skycord.android.core.Deadline
 import xyz.skycord.android.core.FrontGate
 import xyz.skycord.android.core.IncomingMessage
 import xyz.skycord.android.core.MessageEvents
@@ -115,6 +116,9 @@ class NotifyService : Service() {
         private const val CURSOR_EVERY_MS = 60_000L
         private const val PREFS_DEBOUNCE_MS = 1_000L
         private const val MAX_CATCH_UP_TRIES = 6
+
+        /** All the name lookups of one ring together (see startRing). */
+        private const val RING_LOOKUP_MS = 1_500L
 
         @Volatile private var instance: NotifyService? = null
 
@@ -324,7 +328,10 @@ class NotifyService : Service() {
             gate.onDeclined(room)
             val was = ended(room)
             ringer.stop(room)
-            if (was != null) connection.emit("call:decline", JSONObject().put("room", room))
+            if (was != null && !connection.emit("call:decline", JSONObject().put("room", room))) {
+                // Not connected right now: the caller is not told, and goes on seeing a ringing call until it ends.
+                Log.w(TAG, "a decline couldn’t be sent: the connection is down")
+            }
         }
 
         override fun onConnected() = onSessionConnected(this)
@@ -730,7 +737,9 @@ class NotifyService : Service() {
         val target = CallRooms.target(state.room, me.id)
         val isMember = when (target?.kind) {
             "dm" -> true // the room names the two people, and the person is one of them
-            "group" -> s.directory.isGroupMember(target.convId)
+            // The server sends a group's call:state only to the group's members, so getting one is the proof.
+            // (The group list is a best-effort fetch; asking it would silence a group's calls whenever it failed.)
+            "group" -> true
             else -> false
         }
         when (s.gate.onCallState(state.room, state.userIds, state.startedAt, me.id, isMember, s.api.serverNow())) {
@@ -755,10 +764,14 @@ class NotifyService : Service() {
         }
         // In a DM the caller is the other person; in a group, whoever is in the call first started it.
         val callerId = if (target.kind == "dm") target.convId else state.userIds.firstOrNull { it != me.id }
+        // Names that are not known yet are asked of the server, but only within one short deadline: the
+        // worker is blocked while it asks, the phone is silent, and a name is not worth a ring ten seconds late.
+        // What it could not find the label does without ("Someone", "a group").
+        val lookup = Deadline(RING_LOOKUP_MS)
         val label = CallRooms.callerLabel(
             kind = target.kind,
-            callerName = callerId?.let(s.directory::callerName),
-            groupName = if (target.kind == "group") s.directory.groupName(target.convId) else null,
+            callerName = callerId?.let { s.directory.callerName(it, lookup) },
+            groupName = if (target.kind == "group") s.directory.groupNameWithin(target.convId, lookup) else null,
             someone = getString(R.string.call_someone),
             unknownGroup = getString(R.string.notice_unknown_group),
         )
@@ -776,14 +789,20 @@ class NotifyService : Service() {
 
     /** Worker. The ring ran its 30 s unanswered. */
     private fun onRingTimeout(s: Session, room: String) {
-        if (s !== session) return
+        if (destroyed || s !== session) return
         if (s.gate.onTimeout(room) is RingAction.Missed) finishRing(s, room, missed = true)
     }
 
     /** Worker. A ring over: [missed] when nobody answered, else (joined elsewhere) quietly. */
     private fun finishRing(s: Session, room: String, missed: Boolean) {
         val name = s.ended(room)
-        if (missed && name != null) s.ringer.missed(room, name) else s.ringer.stop(room)
+        if (missed && name != null) {
+            // The ring ran out of time on the worker while a stop was being asked for: a "Missed call" posted
+            // after the stop's clear would outlive it, so it goes through the same gate as every post.
+            unlessStopped { s.ringer.missed(room, name) }
+        } else {
+            s.ringer.stop(room)
+        }
         Log.i(TAG, if (missed) "the call rang out: a missed call" else "the ring is over")
     }
 

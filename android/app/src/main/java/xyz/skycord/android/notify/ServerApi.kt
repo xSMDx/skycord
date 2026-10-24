@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.webkit.CookieManager
 import org.json.JSONObject
+import xyz.skycord.android.core.Deadline
 import xyz.skycord.android.core.RefreshCookie
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -61,9 +62,9 @@ internal class ServerApi(context: Context, val origin: String) {
     fun serverNow(): Long = System.currentTimeMillis() + (serverOffsetMs ?: 0L)
 
     /** The token to use: the one kept, or a fresh one when there is none. Blocking. */
-    fun token(): AuthResult {
+    fun token(deadline: Deadline? = null): AuthResult {
         token?.let { return AuthResult.Token(it, serverOffsetMs) }
-        return refresh()
+        return refresh(deadline)
     }
 
     /** Forget the token kept; the next [token] asks the server for a new one. */
@@ -80,24 +81,28 @@ internal class ServerApi(context: Context, val origin: String) {
         return currentCookie()?.hashCode() != mark
     }
 
-    /** A GET of [path] (with its query), as JSON. A refused token is refreshed once and the request tried again. */
-    fun get(path: String): ApiResult {
-        val first = when (val a = token()) {
-            is AuthResult.Token -> request(path, a.value)
+    /**
+     * A GET of [path] (with its query), as JSON. A refused token is refreshed once and the request tried again.
+     * With a [deadline] everything it takes — the token, the request, the retry — fits in what is left of it,
+     * and a lookup that someone is waiting on (a ringing phone) gives up as Unreachable instead of holding them.
+     */
+    fun get(path: String, deadline: Deadline? = null): ApiResult {
+        val first = when (val a = token(deadline)) {
+            is AuthResult.Token -> request(path, a.value, deadline)
             AuthResult.SignedOut -> return ApiResult.SignedOut
             AuthResult.Unreachable -> return ApiResult.Unreachable
         }
         if (first !is ApiResult.Status || first.code != 401) return first
-        return when (val a = refresh()) {
-            is AuthResult.Token -> request(path, a.value)
+        return when (val a = refresh(deadline)) {
+            is AuthResult.Token -> request(path, a.value, deadline)
             AuthResult.SignedOut -> ApiResult.SignedOut
             AuthResult.Unreachable -> ApiResult.Unreachable
         }
     }
 
-    private fun refresh(): AuthResult {
+    private fun refresh(deadline: Deadline? = null): AuthResult {
         token = null
-        val r = auth.accessToken(origin)
+        val r = auth.accessToken(origin, deadline)
         if (r is AuthResult.Token) {
             token = r.value
             r.serverOffsetMs?.let { serverOffsetMs = it }
@@ -113,13 +118,18 @@ internal class ServerApi(context: Context, val origin: String) {
         null
     }
 
-    private fun request(path: String, bearer: String): ApiResult {
+    private fun request(path: String, bearer: String, deadline: Deadline? = null): ApiResult {
+        val timeoutMs = deadline?.timeoutMs(TIMEOUT_MS) ?: TIMEOUT_MS
+        if (timeoutMs <= 0) return ApiResult.Unreachable
+        val callEnd = System.nanoTime() + timeoutMs * 1_000_000L
         var conn: HttpURLConnection? = null
         return try {
             conn = URL(origin + path).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
-            conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
+            // Alone, each wait gets the full time; under a deadline the two share what is left.
+            val (connectMs, readMs) = if (deadline == null) timeoutMs to timeoutMs else Deadline.connectAndRead(timeoutMs)
+            conn.connectTimeout = connectMs
+            conn.readTimeout = readMs
             // A redirect is not the server answering, and following one would carry the token elsewhere.
             conn.instanceFollowRedirects = false
             conn.useCaches = false
@@ -127,8 +137,8 @@ internal class ServerApi(context: Context, val origin: String) {
             conn.setRequestProperty("Accept", "application/json")
             val status = conn.responseCode
             if (status !in 200..299) return ApiResult.Status(status)
-            val deadline = System.nanoTime() + TIMEOUT_MS * 1_000_000L
-            val text = String(conn.inputStream.use { it.readBounded(MAX_BYTES, deadline) }, Charsets.UTF_8)
+            val bodyBy = if (deadline != null) callEnd else System.nanoTime() + TIMEOUT_MS * 1_000_000L
+            val text = String(conn.inputStream.use { it.readBounded(MAX_BYTES, bodyBy) }, Charsets.UTF_8)
             parse(text)?.let { ApiResult.Ok(it) } ?: ApiResult.Unreachable
         } catch (e: Exception) {
             // The class name only: some messages quote part of what was being read.

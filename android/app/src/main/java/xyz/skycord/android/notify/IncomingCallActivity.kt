@@ -69,7 +69,8 @@ class IncomingCallActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.call_answer).setOnClickListener { answer() }
         findViewById<View>(R.id.call_decline).setOnClickListener { decline() }
-        open[room] = this
+        // A second screen for the same call (a re-posted ring's full-screen intent) replaces the first.
+        open.put(room, this)?.finish()
     }
 
     override fun onDestroy() {
