@@ -285,6 +285,10 @@ class NotifyService : Service() {
             // `mention:everyone` needs nothing of its own: the message it accompanies is the
             // notification (a channel event carries mentionsEveryone; a DM or group always notifies).
             connection.on("presence:self") { directory.onPresenceSelf(it) }
+            // A mute or a level was written on another device (or the web client): read them again, the same
+            // debounced read as when this phone's own page writes one. Older servers never send it; the
+            // 15-minute read still covers them.
+            connection.onSignal("prefs:changed") { onPrefsChanged() }
             connection.on("group:created") { onGroup(this, it) }
             connection.on("group:updated") { onGroup(this, it) }
             connection.start()

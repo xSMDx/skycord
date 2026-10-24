@@ -64,6 +64,7 @@ internal class LiveConnection(
     }
 
     private val handlers = LinkedHashMap<String, (JSONObject) -> Unit>()
+    private val signals = LinkedHashMap<String, () -> Unit>()
     private var socket: Socket? = null
     private var generation = 0
     private val failures = ReconnectCounter()
@@ -87,6 +88,14 @@ internal class LiveConnection(
     /** Handle [event] (its first argument, a JSON object) on [worker]. Register before [start]. */
     fun on(event: String, handler: (JSONObject) -> Unit) {
         handlers[event] = handler
+    }
+
+    /**
+     * Handle [event] on [worker] when it says only that something happened: it carries no payload (`on` skips an
+     * event that has none), and whatever it does carry is ignored. Register before [start].
+     */
+    fun onSignal(event: String, handler: () -> Unit) {
+        signals[event] = handler
     }
 
     fun start() {
@@ -196,6 +205,12 @@ internal class LiveConnection(
                 val payload = args.firstOrNull() as? JSONObject ?: return@on
                 heard(gen)
                 post(gen) { handler(payload) }
+            }
+        }
+        for ((event, handler) in signals) {
+            s.on(event) {
+                heard(gen)
+                post(gen) { handler() }
             }
         }
         socket = s
