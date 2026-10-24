@@ -100,6 +100,12 @@ class NotifyRulesTest {
         assertEquals(Kind.MESSAGE, classify(dm(), state(isMuted = { it == "m1" || it == "me" || it == "g1" })))
     }
 
+    @Test fun aGroupIsMutedUnderItsOwnId_notTheAuthorsOrAnythingElse() {
+        // Only "g1" (the group) is muted; the author ("ana"), the message ("m2") and "me" do not matter for a group.
+        assertNull(classify(group(), state(isMuted = { it == "g1" })))
+        assertEquals(Kind.MESSAGE, classify(group(), state(isMuted = { it == "ana" || it == "m2" || it == "me" })))
+    }
+
     @Test fun aSystemMessageNeverNotifies() {
         assertNull(classify(dm(system = true), state()))
         assertNull(classify(group(system = true), state()))
@@ -289,6 +295,13 @@ class NotifyRulesTest {
         assertEquals("x".repeat(198) + "…", plainBody("x".repeat(198) + " yyyy"))
     }
 
+    @Test fun aCutNeverLeavesAHalfOfAnEmojiBeforeTheDots() {
+        // 😀 is two UTF-16 units; cutting at 4 would keep only its high half, which shows as a box on Android.
+        assertEquals("abc…", plainBody("abc😀def", 5))
+        // The cut landing after a whole pair keeps it.
+        assertEquals("ab😀…", plainBody("ab😀cdef", 5))
+    }
+
     @Test fun theLimitCanBeChosen() {
         assertEquals("hell…", plainBody("hello world", 5))
         assertEquals("hello", plainBody("hello", 5))
@@ -305,12 +318,12 @@ class NotifyRulesTest {
 
     @Test fun anyWhitespaceTheWebCollapsesIsCollapsedHere() {
         // JS \s: no-break space, ideographic space, line and paragraph separators, zero-width no-break space
-        assertEquals("a b c d e", plainBody("a b　c d﻿e"))
+        assertEquals("a b c d e", plainBody("a\u00A0b\u3000c\u2028d\uFEFFe"))
     }
 
     @Test fun charactersJavaScriptDoesNotCallWhitespaceAreLeftAlone() {
         // Java would collapse and trim these; the web does not, so neither does the phone.
-        assertEquals("a\u0085b\u001Fc᠎d", plainBody("a\u0085b\u001Fc᠎d"))
+        assertEquals("a\u0085b\u001Fc\u180Ed", plainBody("a\u0085b\u001Fc\u180Ed"))
         assertEquals("\u0085x\u001F", plainBody("\u0085x\u001F"))
     }
 

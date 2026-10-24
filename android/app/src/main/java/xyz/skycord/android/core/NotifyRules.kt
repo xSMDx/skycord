@@ -160,15 +160,19 @@ const val BODY_MAX = 200
  */
 fun plainBody(content: String, max: Int = BODY_MAX, time: TimeFormat = TimeFormat()): String {
     val flat = JS_SPACES.replace(stripMarkers(content, time), " ").trim(::isJsSpace)
-    return if (flat.length > max) flat.substring(0, (max - 1).coerceAtLeast(0)).trimEnd(::isJsSpace) + "…" else flat
+    if (flat.length <= max) return flat
+    var cut = (max - 1).coerceAtLeast(0)
+    // The web's slice may keep half an emoji before the dots; Android draws that as a box, so drop the half.
+    if (cut > 0 && flat[cut - 1].isHighSurrogate()) cut--
+    return flat.substring(0, cut).trimEnd(::isJsSpace) + "…"
 }
 
 // JavaScript's idea of whitespace (`\s`, `trim()`), not Java's: they differ on
 // a few characters (U+0085, U+FEFF, U+001C..U+001F), and a phone and a browser
 // must cut the same text in the same place.
 private fun isJsSpace(c: Char): Boolean = when (c) {
-    '\t', '\n', '\u000B', '\u000C', '\r', ' ', ' ', ' ', ' ', ' ', ' ', ' ', '　', '﻿' -> true
-    else -> c in ' '..' '
+    '\t', '\n', '\u000B', '\u000C', '\r', ' ', '\u00A0', '\u1680', '\u2028', '\u2029', '\u202F', '\u205F', '\u3000', '\uFEFF' -> true
+    else -> c in '\u2000'..'\u200A'
 }
 
 // The same set as the body of a regex character class, built from the function
