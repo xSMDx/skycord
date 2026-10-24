@@ -2,6 +2,9 @@
 /**
  * Someone else's profile: the card on the left, mutual friends on the right.
  *
+ * Your own is the same card on its own: no Message, no Add friend and no mutual
+ * friends (you have none with yourself), and an Edit profile button instead.
+ *
  * Everything comes from one GET /users/:id/profile — the person, your
  * relationship with them, when you became friends, and who you both know.
  * Splitting that across calls would show the card assembling itself in pieces.
@@ -9,13 +12,14 @@
  * Clicking a mutual friend re-targets this same modal rather than stacking a
  * second one, so you can walk the graph without a pile of dialogs behind you.
  */
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import {
-  X, MessageCircle, UserPlus, UserMinus, Ellipsis, IdCard, Check,
+  X, MessageCircle, UserPlus, UserMinus, Ellipsis, IdCard, Check, Pencil,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import ProfileCard from './ProfileCard.vue'
 import { useApi } from '@/composables/useApi'
+import { useAuth } from '@/composables/useAuth'
 import { avatarFor } from '@/composables/useAvatar'
 import StatusDot from '@/components/ui/StatusDot.vue'
 
@@ -23,9 +27,10 @@ const props = defineProps<{ userId: string }>()
 // Emits the whole user, not just an id: a mutual friend you aren't friends with
 // yet won't be in the caller's friends list, so an id alone would leave them
 // unable to build the DM entry.
-const emit  = defineEmits<{ close: []; message: [user: Record<string, any>]; toast: [msg: string] }>()
+const emit  = defineEmits<{ close: []; message: [user: Record<string, any>]; editProfile: []; toast: [msg: string] }>()
 
 const { getUserProfile, sendFriendRequest, removeFriend } = useApi()
+const { user: authUser } = useAuth()
 
 type Rel = 'none' | 'friends' | 'incoming' | 'outgoing' | 'blocked'
 const user         = ref<Record<string, any> | null>(null)
@@ -52,6 +57,9 @@ const load = async (id: string) => {
     error.value = e?.message || 'Couldn’t load that profile'
   } finally { loading.value = false }
 }
+// Keyed on the id on screen, not the fetched user, so the layout is right
+// before the profile has loaded.
+const isSelf     = computed(() => !!authUser.value?.id && authUser.value.id === currentId.value)
 const tab        = ref<'mutuals'>('mutuals')
 const moreOpen   = ref(false)
 const friendOpen = ref(false)
@@ -102,8 +110,8 @@ const copyId = () => {
 </script>
 
 <template>
-  <ModalBase width="960px" @close="emit('close')">
-    <div class="up">
+  <ModalBase :width="isSelf ? '440px' : '960px'" @close="emit('close')">
+    <div class="up" :class="{ solo: isSelf }">
       <button class="up-close" aria-label="Close" @click="emit('close')"><X :size="18" :stroke-width="2.25" /></button>
 
       <div v-if="loading" class="up-state">Loading…</div>
@@ -127,11 +135,14 @@ const copyId = () => {
           >
             <template #footer>
               <div class="up-actions">
-                <button class="up-btn primary up-grow" @click="emit('message', user)">
+                <button v-if="isSelf" class="up-btn primary up-grow" @click="emit('editProfile')">
+                  <Pencil :size="16" :stroke-width="2.25" /> Edit profile
+                </button>
+                <button v-else class="up-btn primary up-grow" @click="emit('message', user)">
                   <MessageCircle :size="16" :stroke-width="2.25" /> Message
                 </button>
 
-                <div class="up-anchor">
+                <div v-if="!isSelf" class="up-anchor">
                   <button
                     class="up-btn icon" v-tip="relationship === 'friends' ? 'Friend options' : 'Add friend'"
                     :disabled="busy"
@@ -178,8 +189,8 @@ const copyId = () => {
           </ProfileCard>
         </div>
 
-        <!-- right: mutual friends -->
-        <div class="up-right">
+        <!-- right: mutual friends (never for yourself) -->
+        <div v-if="!isSelf" class="up-right">
           <div class="up-tabs" role="tablist">
             <button class="up-tab" role="tab" :aria-selected="tab === 'mutuals'" @click="tab = 'mutuals'">
               {{ mutuals.length }} Mutual {{ mutuals.length === 1 ? 'Friend' : 'Friends' }}
@@ -229,6 +240,10 @@ img { display: block; object-fit: cover; }
 }
 .up-close:hover  { background: var(--media-veil-strong); }
 .up-close:active { transform: scale(.94); }
+
+/* Your own profile is the card alone, so it carries the margin on all sides. */
+.up.solo .up-cols { min-height: 0; }
+.up.solo .up-left { width: auto; margin: 14px; }
 
 .up-state { padding: 72px 24px; text-align: center; color: var(--text-3); font-size: 14px; }
 .up-state.err { color: var(--danger-text); }
