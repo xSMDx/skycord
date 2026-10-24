@@ -393,8 +393,6 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    and colour change carry the hover; :active below carries the press. */
 .ap:hover{background:var(--hover-strong);color:var(--text-1)}
 .ap:active{transform:scale(.9)}
-</style>
-
 /* Phone gutters. Desktop reserves 48px on the right for the hover toolbar and
    56px for the avatar column; on a 360px screen that is a third of the width
    gone before a word is set. Nothing is floated on the right on touch (the
@@ -406,3 +404,4 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   .msg-system{padding-right: 12px}
   .msg-left{width:44px}
 }
+</style>
