@@ -66,6 +66,15 @@ dependencies {
     implementation(libs.socketio.client) {
         exclude(group = "org.json", module = "json")
     }
+    // socket.io-client 2.1.1 reaches OkHttp through engine.io-client 2.1.0, which asks for 3.12.12 (the
+    // 3.12 line is the last that still runs on Android 5). 3.12.13 is the last release of that line, so
+    // it is pinned here: the newest patch, and strictly 3.x, whatever else may one day be added.
+    constraints {
+        implementation("com.squareup.okhttp3:okhttp") {
+            version { strictly("3.12.13") }
+            because("the last patch release of the 3.12 line socket.io's engine.io client builds on; engine.io asks for 3.12.12")
+        }
+    }
     testImplementation(libs.junit)
     // Android's own org.json is a stub in JVM unit tests; this is the real one.
     testImplementation(libs.orgjson)
