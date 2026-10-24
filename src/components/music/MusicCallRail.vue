@@ -115,7 +115,7 @@ const startWith = (): void => {
 </script>
 
 <template>
-  <aside class="cr">
+  <aside class="cr" :class="{ idle: !inCall && !rooms.length }">
     <span class="cr-head">
       <Radio :size="13" :stroke-width="2.25" />
       <span>{{ inCall ? 'In this call' : 'Where everyone is' }}</span>
@@ -153,9 +153,13 @@ const startWith = (): void => {
         </li>
       </ul>
 
+      <!-- Two lengths of the same answer. The long one says what to do about
+           it; a phone has one line to spare for this, and the short one is the
+           fact, which is what that line is for. -->
       <p v-else class="cr-empty">
-        Nobody is in a voice channel right now. Join one and whatever you play
-        here, everyone in it can tune into.
+        <span class="cr-long">Nobody is in a voice channel right now. Join one and whatever you play
+        here, everyone in it can tune into.</span>
+        <span class="cr-short">Nobody is in a voice channel right now.</span>
       </p>
     </template>
 
@@ -306,6 +310,7 @@ const startWith = (): void => {
 }
 .cr-empty { padding: 2px; font-size: 11.5px; line-height: 1.55; color: var(--text-3); }
 
+.cr-short { display: none; }
 .cr-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 
 /* ── outside a call: the rooms ──────────────────────────────────────── */
@@ -509,6 +514,31 @@ const startWith = (): void => {
 @media (max-width: 768px) {
   .cr-playnow { width: 40px; height: 40px; opacity: 1; }
   .cr-icon { width: 40px; height: 40px; }
+}
+
+/*
+ * Phone. With nobody in a call this card was three lines of advice taking a
+ * quarter of the screen above the player, to say "nobody is here" — so it
+ * becomes the one line that says it. With rooms or channels in it, it keeps
+ * its content but is capped, so a busy call cannot push the library out of
+ * the modal; it scrolls inside itself instead.
+ */
+@media (max-width: 680px) {
+  .cr { max-height: min(184px, 28vh); }
+  .cr.idle {
+    flex-wrap: nowrap; align-items: center; gap: 8px;
+    padding: 0 14px; min-height: 44px;
+  }
+  .cr.idle .cr-head { padding: 0; }
+  .cr.idle .cr-head > span { display: none; }
+  .cr.idle .cr-empty {
+    flex: 1; min-width: 0; padding: 0; font-size: 13px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cr-long { display: none; }
+  .cr-short { display: inline; }
+  .cr-playnow, .cr-icon { width: 44px; height: 44px; }
+  .cr-add, .cr-go, .cr-flat, .cr-in { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

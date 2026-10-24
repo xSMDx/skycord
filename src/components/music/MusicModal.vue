@@ -17,12 +17,12 @@
  * the room is a separate, deliberate action, because "everyone can hear
  * this" should never be the side effect of pressing play.
  */
-import { ref, computed, watch, onMounted, onBeforeUnmount, inject } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, inject, nextTick } from 'vue'
 import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
   Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert, ShieldCheck,
   Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
-  ListPlus, ListStart, ListEnd, LogOut,
+  ListPlus, ListStart, ListEnd, LogOut, Ellipsis,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import MusicCallRail from './MusicCallRail.vue'
@@ -59,6 +59,15 @@ const dismiss = inject<() => void>('modalClose', () => emit('close'))
 /** The queue drawer, over the centre pane. Closed by default: it answers
  *  a question you only sometimes have. */
 const showQueue = ref(false)
+/**
+ * The pane the queue covers. The drawer is absolutely positioned inside it, and
+ * an absolute box inside a scrolling pane scrolls WITH the pane: open the queue
+ * from halfway down a long library and it arrives shifted up by however far
+ * you had scrolled, with the library showing through underneath. Now that a
+ * phone can open it, that is the common case — so it opens from the top.
+ */
+const mainEl = ref<HTMLElement | null>(null)
+watch(showQueue, (open) => { if (open && mainEl.value) mainEl.value.scrollTop = 0 })
 
 const search = ref('')
 const adding = ref<'' | 'link'>('')
@@ -415,12 +424,51 @@ const removeHere = async (t: LibTrack, index: number): Promise<void> => {
   else { await deleteTrack(t.id); forget(t.id) }
 }
 
+/**
+ * Is there more of the playlist strip than fits?
+ *
+ * On a phone the playlists scroll sideways, and a scrolling row with no
+ * scrollbar is a row nobody knows scrolls. The strip fades out on whichever
+ * side still has chips past the edge, so the cut-off chip reads as "more this
+ * way" rather than as a mistake. Measured, not guessed: with two playlists
+ * that fit there is nothing to hint at and no fade is drawn.
+ */
+const listsEl = ref<HTMLElement | null>(null)
+const edge = ref({ l: false, r: false })
+const measureEdges = (): void => {
+  const el = listsEl.value
+  if (!el) return
+  const l = el.scrollLeft > 4
+  const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
+  if (l !== edge.value.l || r !== edge.value.r) edge.value = { l, r }
+}
+let listsWatch: ResizeObserver | null = null
+watch(() => library.playlists.length, () => { void nextTick(measureEdges) })
+// Opening a playlist from anywhere else should leave its chip in view.
+watch(() => library.open?.id, () => {
+  void nextTick(() => {
+    listsEl.value?.querySelector<HTMLElement>('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  })
+})
+
 onMounted(async () => {
+  if (listsEl.value && typeof ResizeObserver !== 'undefined') {
+    listsWatch = new ResizeObserver(measureEdges)
+    listsWatch.observe(listsEl.value)
+  }
+  void nextTick(measureEdges)
   await Promise.all([loadLibrary(), loadPlaylists()])
 })
 // The player keeps going when this closes — that is the point of it living
 // elsewhere — so only this component's own timer is cleaned up here.
-onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+  listsWatch?.disconnect()
+})
+
+/** How far through, 0–100, for the phone's seek bar to paint its own fill. */
+const pct = (at: number, dur: number | null | undefined): number =>
+  dur ? Math.max(0, Math.min(100, (at / dur) * 100)) : 0
 </script>
 
 <template>
@@ -468,7 +516,10 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           </div>
         </form>
 
-        <ul class="mm-lists">
+        <ul
+          ref="listsEl" class="mm-lists" :class="{ 'fade-l': edge.l, 'fade-r': edge.r }"
+          @scroll.passive="measureEdges"
+        >
           <li v-for="p in library.playlists" :key="p.id">
             <button class="mm-nav" :class="{ on: library.open?.id === p.id }" @click="openPlaylist(p.id)">
               <Music2 :size="15" :stroke-width="2.25" />
@@ -493,7 +544,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
       </aside>
 
       <!-- ── centre: the record you are looking at ───────────────────── -->
-      <section class="mm-main">
+      <section ref="mainEl" class="mm-main">
         <!-- The queue, over the centre pane rather than beside it: three
              columns is already the most this modal can hold, and what plays
              next is a question you ask occasionally, not a thing to watch. -->
@@ -741,6 +792,15 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
               >
                 <component :is="library.open ? X : Trash2" :size="14" :stroke-width="2.25" />
               </button>
+              <!-- Phone only. Three small buttons a row do not fit a phone, so
+                   they become this one, which opens the same menu a long press
+                   does — every action in one 44px target. -->
+              <button
+                class="mm-more" :aria-label="`More for ${t.title}`" aria-haspopup="menu"
+                @click="rowMenu($event, t, i)"
+              >
+                <Ellipsis :size="18" :stroke-width="2.25" />
+              </button>
             </span>
           </div>
         </div>
@@ -801,6 +861,15 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             <span class="mm-artist mm-ellip">{{ playing.artist || 'Unknown artist' }}</span>
           </span>
         </template>
+        <!-- Phone only: the bar keeps its height with nothing playing, and
+             empty space under a row of controls reads as something missing. -->
+        <span v-else class="mm-idle">
+          <span class="mm-nowart empty"><Music2 :size="20" :stroke-width="1.75" /></span>
+          <span class="mm-nownames">
+            <span class="mm-nowtitle mm-ellip">Nothing playing</span>
+            <span class="mm-artist mm-ellip">Pick a song to start</span>
+          </span>
+        </span>
       </div>
 
       <div v-if="live" class="mm-deck">
@@ -821,12 +890,12 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             <SkipBack :size="16" :stroke-width="2.25" />
           </button>
           <button
-            class="mm-pill" :disabled="!live.now"
+            class="mm-pill grow" :disabled="!live.now"
             :aria-label="`Skip for everyone in ${live.name}`" @click="skipMusic(live.id)"
           >
             <SkipForward :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Skip for everyone</span>
           </button>
-          <button class="mm-pill" :aria-label="`Leave ${live.name}`" @click="listenToMusic(null)">
+          <button class="mm-pill leave" :aria-label="`Leave ${live.name}`" @click="listenToMusic(null)">
             <LogOut :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Leave channel</span>
           </button>
         </div>
@@ -837,6 +906,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           <input
             class="mm-seek" type="range" min="0" step="1"
             :max="live.now?.durationSec || 1" :value="liveDrag ?? liveAt"
+            :style="{ '--p': pct(liveDrag ?? liveAt, live.now?.durationSec) + '%' }"
             :disabled="!live.now?.durationSec"
             :aria-label="`Move the song — for everyone in ${live.name}`"
             v-tip="'Moves the song for everyone listening'"
@@ -884,6 +954,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           <span class="mm-time">{{ clock(at) }}</span>
           <input
             class="mm-seek" type="range" min="0" :max="playing?.durationSec || 1" :value="at"
+            :style="{ '--p': pct(at, playing?.durationSec) + '%' }"
             step="1" aria-label="Seek" :disabled="!playing" @input="onSeek"
           />
           <span class="mm-time">{{ clock(playing?.durationSec ?? 0) }}</span>
@@ -1429,79 +1500,6 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 }
 
 /*
- * Phone.
- *
- * The left rail used to be display:none here, which took search, every
- * playlist and the storage meter with it — a third of the feature, gone,
- * on the device most people have. It becomes a horizontal strip instead:
- * the same controls, laid along the one axis a phone has to spare.
- */
-@media (max-width: 680px) {
-  .mm { grid-template-columns: minmax(0, 1fr); padding: 8px 8px 0; }
-
-  .mm-rail {
-    flex-direction: row; align-items: center; gap: 6px;
-    padding: 8px; overflow-x: auto; overflow-y: hidden;
-    /* Momentum, and no vertical rubber-banding fighting the sheet's own
-       drag-to-dismiss. */
-    -webkit-overflow-scrolling: touch;
-  }
-  .mm-rail::-webkit-scrollbar { display: none; }
-  .mm-search { margin-bottom: 0; flex: 0 0 150px; }
-  .mm-nav {
-    width: auto; flex: 0 0 auto; border-radius: var(--edge-pill);
-    background: var(--bg-input); padding: 8px 12px;
-  }
-  .mm-lists { flex-direction: row; gap: 6px; }
-  /* The meter and the empty note are what a phone can do without. The
-     heading stays, reduced to the button inside it — that button is the only
-     way to make a playlist, and it keeps its place in the markup rather than
-     being a second copy that exists only here. */
-  .mm-railempty, .mm-space { display: none; }
-  .mm-railhead { order: -1; flex: 0 0 auto; padding: 0; }
-  .mm-railhead > span { display: none; }
-  .mm-railhead .mm-mini { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-input); }
-
-  .mm-head { padding: 16px 16px 14px; gap: 14px; }
-  .mm-art { width: 92px; height: 92px; }
-  .mm-title { font-size: 26px; }
-  .mm-headacts { margin-top: 10px; gap: 6px; }
-  .mm-table { padding: 0 10px 16px; }
-  /*
-   * A head band for the close button.
-   *
-   * On a desktop it floats over the top-right of the call rail, which has
-   * room for it. On a phone that corner is the playlist strip, and every
-   * attempt to share the space failed in a different way: padding is not
-   * honoured at the scroll end of an overflowing flex row, and a margin
-   * just pushed the button out of the clip so it could only be reached by
-   * scrolling. So it gets its own row — which is what every other modal in
-   * the app has, and this one only lacked because the artwork is its header.
-   */
-  .mm-shell { padding-top: 34px; }
-  .mm-x { top: 2px; right: 8px; }
-
-  /* Names were truncating to four characters: a 40px thumbnail and a 86px
-     action column were spending a third of a phone screen on furniture.
-     The thumbnail shrinks and the columns give back what they do not need. */
-  .mm-tr { grid-template-columns: 36px minmax(0, 1fr) 44px 44px; gap: 8px; }
-  .mm-thumb { width: 32px; height: 32px; }
-  .mm-cell { gap: 8px; }
-  .mm-link, .mm-progress, .mm-err { margin-inline: 16px; padding-inline: 16px; }
-
-  /* Two zones, not three: what is playing, and the one control that matters.
-     A scrubber at this width is a 40px target for a three-minute track. */
-  .mm-foot { grid-template-columns: minmax(0, 1fr) auto; height: 68px; padding: 0 12px; gap: 10px; }
-  .mm-nowart { width: 44px; height: 44px; }
-  .mm-deck { flex-direction: row; gap: 0; width: auto; }
-  .mm-scrub, .mm-aside { display: none; }
-  /* Two worded pills would take the title's whole column on a phone. The
-     words go; the aria-labels already say exactly what each one does. */
-  .mm-pilltext { display: none; }
-  .mm-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
-}
-
-/*
  * Touch.
  *
  * Two separate problems, and only one of them is size.
@@ -1536,6 +1534,186 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   /* Two 40px controls need the room, and the time column can give it. */
   .mm-tr { grid-template-columns: 40px minmax(0, 1fr) 48px 86px; }
   .mm-bandleave { height: 40px; }
+}
+
+/* Phone-only furniture: absent from the desktop layout. */
+.mm-idle, .mm-more { display: none; }
+
+/*
+ * Phone.
+ *
+ * Last in the file on purpose: the touch rules above set the sizes every
+ * control has on any narrow screen, and this block then lays the phone out
+ * around them, so it has to win ties.
+ *
+ * The left rail used to be display:none here, then a sideways strip with its
+ * scrollbar hidden, a scrubber and a Queue button that were display:none, and
+ * a 34px empty band for the close button. A phone has less room, not fewer
+ * functions, so each of those is now laid out for the screen instead of
+ * removed from it:
+ *
+ *   top      search and close share one row; "All tracks" and the new-playlist
+ *            button stay put and only the playlists scroll, with a fade on the
+ *            edge that has more.
+ *   centre   the library, its actions on a row of their own so every one is a
+ *            full 44px target.
+ *   bottom   what is playing with Queue beside it, a seek bar, then the
+ *            transport, with the room the home indicator needs.
+ */
+@media (max-width: 680px) {
+  .mm-shell {
+    --mm-inset: env(safe-area-inset-bottom, 0px);
+    /* The sheet pads its own bottom edge for the home indicator, which leaves
+       a lighter band under the footer. Take that band into the footer, whose
+       padding then does the clearing. */
+    margin-bottom: calc(-1 * var(--mm-inset));
+  }
+  .mm { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; padding: 8px 8px 0; }
+
+  /* ── top: search + close, then the chips ───────────────────────────── */
+  .mm-rail {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center; gap: 8px 6px; padding: 8px; overflow: hidden;
+  }
+  /* The close button sits at the end of this row (it is positioned against
+     the shell: 8px of grid padding + 8px of rail padding from each edge), so
+     the search leaves room for it instead of the close taking a row of its
+     own. */
+  .mm-search { grid-column: 1 / -1; grid-row: 1; margin: 0 52px 0 0; }
+  .mm-x { top: 16px; right: 16px; width: 44px; height: 44px; }
+
+  .mm-rail > .mm-nav { grid-column: 1; grid-row: 2; }
+  .mm-nav {
+    width: auto; flex: 0 0 auto; border-radius: var(--edge-pill);
+    background: var(--bg-input); padding: 8px 12px; min-height: 44px;
+  }
+  .mm-lists {
+    grid-column: 2; grid-row: 2; min-width: 0;
+    flex-direction: row; gap: 6px; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    --fade-l: 0px; --fade-r: 0px;
+    mask-image: linear-gradient(to right, transparent 0, black var(--fade-l), black calc(100% - var(--fade-r)), transparent 100%);
+  }
+  .mm-lists.fade-l { --fade-l: 28px; }
+  .mm-lists.fade-r { --fade-r: 28px; }
+  .mm-lists::-webkit-scrollbar { display: none; }
+  .mm-lists > li { flex: 0 0 auto; max-width: 220px; display: flex; }
+  .mm-lists .mm-nav { width: 100%; }
+  .mm-railhead { grid-column: 3; grid-row: 2; padding: 0; }
+  .mm-railhead > span { display: none; }
+  .mm-railhead .mm-mini { width: 44px; height: 44px; border-radius: 50%; background: var(--bg-input); }
+  .mm-newlist { grid-column: 1 / -1; grid-row: 3; flex-direction: row; align-items: center; gap: 6px; padding: 0; }
+  .mm-newlist .mm-in { min-height: 44px; }
+  .mm-newlist-acts { flex-shrink: 0; }
+  /* The meter and the empty note are what a phone can do without. */
+  .mm-railempty, .mm-space { display: none; }
+
+  /* ── centre: the library ───────────────────────────────────────────── */
+  /* The text beside the cover is a grid so the actions can drop to a row of
+     their own below it: beside the cover there is 190px, and Play with three
+     or four round buttons needs more than that. */
+  .mm-head {
+    display: grid; grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto; gap: 0 14px;
+    padding: 16px 16px 14px;
+  }
+  .mm-headtext { display: contents; }
+  .mm-art { grid-column: 1; grid-row: 1 / 4; width: 92px; height: 92px; }
+  .mm-kind { grid-column: 2; grid-row: 1; align-self: end; }
+  .mm-title { grid-column: 2; grid-row: 2; font-size: 26px; margin-top: 2px; }
+  .mm-sub { grid-column: 2; grid-row: 3; margin-top: 4px; }
+  .mm-headacts { grid-column: 1 / -1; grid-row: 4; margin-top: 14px; gap: 4px; flex-wrap: wrap; }
+  .mm-play { flex: 0 0 auto; white-space: nowrap; padding: 12px 18px; min-height: 44px; justify-content: center; }
+  .mm-ghost { flex: 0 0 auto; }
+  /* 44px, a step above the 40px every narrow screen gets: these are thumbs. */
+  .mm-icon, .mm-num { width: 44px; height: 44px; }
+  .mm-search, .mm-search-in { min-height: 44px; }
+
+  .mm-table { padding: 0 8px 16px; }
+  /* Names were truncating to four characters. The row is play, the name, the
+     time and ONE menu button: every action a row has in a single 44px target
+     (it opens what a long press opens), instead of three squeezed to 21px. */
+  .mm-tr { grid-template-columns: 44px minmax(0, 1fr) 40px 44px; gap: 6px; padding: 0 4px; }
+  .mm-row { height: 64px; }
+  .mm-thumb { width: 32px; height: 32px; }
+  .mm-cell { gap: 8px; }
+  .mm-acts > .mm-icon, .mm-acts > .mm-add { display: none; }
+  .mm-more {
+    display: grid; place-items: center; width: 44px; height: 44px;
+    border: none; background: none; cursor: pointer; border-radius: 50%;
+    color: var(--text-2);
+  }
+  .mm-link, .mm-progress, .mm-err { margin-inline: 16px; padding-inline: 16px; }
+  /* A drag at the end of the queue must not carry on into the library under it. */
+  .mm-queue { overscroll-behavior: contain; }
+  .mm-in { min-height: 44px; }
+  .mm-go, .mm-flat { min-height: 44px; padding-inline: 16px; }
+  .mm-bandleave { height: 44px; }
+
+  /* ── bottom: now playing, seek, transport ──────────────────────────── */
+  /*
+   * Three rows rather than three columns. A phone is 336px of footer: five
+   * transport buttons take 244 of them, which left the title 28px. Stacked,
+   * the title gets the row, Queue sits beside it where its count reads as
+   * "what is next", the seek bar is as wide as it can be, and the transport
+   * is spread across the bottom where the thumb rests.
+   */
+  .mm-foot {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "now aside" "scrub scrub" "keys keys";
+    gap: 2px 8px; height: auto;
+    padding: 12px 16px calc(14px + var(--mm-inset));
+  }
+  .mm-now { grid-area: now; gap: 10px; }
+  .mm-idle { display: contents; }
+  .mm-nowart { width: 48px; height: 48px; }
+  .mm-nowtitle { font-size: 15px; }
+  .mm-aside { grid-area: aside; }
+  /* Volume is the hardware buttons here, and "only you" is said by the call
+     rail above. Queue is the one control the aside still has to carry. */
+  .mm-only, .mm-volico, .mm-vol { display: none; }
+  .mm-aside .mm-qbadge { top: 6px; right: 4px; }
+  .mm-deck { display: contents; }
+  .mm-scrub { grid-area: scrub; gap: 10px; }
+  .mm-keys {
+    grid-area: keys; justify-self: center; width: 100%; max-width: 340px;
+    justify-content: space-between; gap: 8px;
+  }
+  .mm-pp { width: 56px; height: 56px; }
+  .mm-pill { height: 44px; padding: 0 14px; }
+  .mm-pill.grow { flex: 1; justify-content: center; }
+  .mm-pill.leave { width: 44px; padding: 0; justify-content: center; }
+  .mm-pill.leave .mm-pilltext { display: none; }
+
+  /* A seek bar to drag: the 44px box is the hit area, the 4px rail is what
+     you see. It paints its own fill from --p, so progress reads at a glance
+     the way a thin bar does, and the thumb is only as big as a thumb needs. */
+  .mm-seek {
+    -webkit-appearance: none; appearance: none; background: transparent;
+    height: 44px; margin: 0; padding: 0;
+  }
+  .mm-seek::-webkit-slider-runnable-track {
+    height: 4px; border-radius: var(--edge-pill);
+    background: linear-gradient(to right, var(--art-accent, var(--accent)) var(--p, 0%), var(--track) var(--p, 0%));
+  }
+  .mm-seek::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; margin-top: -6px; border: none; border-radius: 50%;
+    background: var(--text-strong); box-shadow: var(--shadow-xs);
+  }
+  .mm-seek:active::-webkit-slider-thumb { transform: scale(1.25); }
+  .mm-seek::-moz-range-track { height: 4px; border-radius: var(--edge-pill); background: var(--track); }
+  .mm-seek::-moz-range-progress { height: 4px; border-radius: var(--edge-pill); background: var(--art-accent, var(--accent)); }
+  .mm-seek::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: var(--text-strong); }
+}
+
+/* A short phone cannot spend this much on chrome and still show a track. */
+@media (max-width: 680px) and (max-height: 700px) {
+  .mm-head { padding: 10px 16px 10px; }
+  .mm-headacts { margin-top: 10px; }
+  .mm-foot { padding-top: 8px; }
+  .mm-nowart { width: 40px; height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
