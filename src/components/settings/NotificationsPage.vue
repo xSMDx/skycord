@@ -8,10 +8,18 @@
  * server, category or channel — said once at the top so nobody hunts for it
  * here.
  */
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { notificationPrefs, setNotificationPref, type NotificationPrefKey } from '@/composables/notificationPrefs'
 import { appBridge, type AndroidNotifyState } from '@/composables/desktopBridge'
 import { soundMessage, soundRingOnce } from '@/composables/useSounds'
+import { useViewport } from '@/composables/useViewport'
+
+// A touch screen has no right-click, and its notifications are not "desktop"
+// ones. Coarse pointer rather than a narrow window: a small desktop window still
+// has a mouse.
+const { isCoarse } = useViewport()
+const gesture = computed(() => (isCoarse.value ? 'long-pressing' : 'right-clicking'))
+const popupLabel = computed(() => (isCoarse.value ? 'Enable notifications' : 'Enable desktop notifications'))
 
 const notifications = appBridge()?.notifications ?? null
 // The Android app notifies on its own while it is in the background, so the
@@ -67,7 +75,7 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
 
 <template>
   <p class="st-hint nt-lead">
-    Choose which servers, categories and channels notify you by right-clicking them: Mute, or Notification Settings.
+    Choose which servers, categories and channels notify you by {{ gesture }} them: Mute, or Notification Settings.
   </p>
 
   <h2 class="st-section">Notifications</h2>
@@ -107,12 +115,12 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
   <div v-else class="st-card">
     <div class="st-field">
       <div class="st-field-left">
-        <span class="st-field-label">Enable desktop notifications</span>
+        <span class="st-field-label">{{ popupLabel }}</span>
         <span class="st-field-value prose">The pop-ups for DMs, group messages, mentions, calls and friend requests, while Skycord isn't the window in front. Off, you still hear them.</span>
       </div>
       <button
         type="button" class="st-toggle" :class="{ on: notificationPrefs.enabled }" role="switch"
-        :aria-checked="notificationPrefs.enabled" aria-label="Enable desktop notifications"
+        :aria-checked="notificationPrefs.enabled" :aria-label="popupLabel"
         @click="flip('enabled')"
       ><span /></button>
     </div>
@@ -167,7 +175,7 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
 
   <h2 class="st-section">Sounds</h2>
   <div class="st-card">
-    <div class="st-field" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
+    <div class="st-field nt-pair" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
       <div class="st-field-left">
         <span class="st-field-label">New message</span>
         <span class="st-field-value prose">Messages, mentions and friend requests — the same ones that would notify you.</span>
@@ -194,7 +202,7 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
       ><span /></button>
     </div>
 
-    <div class="st-field" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
+    <div class="st-field nt-pair" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
       <div class="st-field-left">
         <span class="st-field-label">Incoming call</span>
         <span class="st-field-value prose">The ring when someone calls you. Do Not Disturb never rings.</span>
@@ -243,4 +251,17 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
 .nt-lead { margin: 0 0 6px; }
 /* A switch that does nothing while another is set: readable, plainly inert. */
 .nt-off .st-field-left { opacity: .55; }
+
+/* Phone: a row that carries Preview as well as the switch gives the sentence the
+   whole width and puts the two controls on a line of their own beneath it, Preview
+   on the left and the switch on the right. Squeezed beside both, the sentence was
+   a column about 120px wide and ran to six lines. */
+@media (max-width: 768px) {
+  .nt-pair { flex-wrap: wrap; row-gap: 12px; }
+  .nt-pair .st-field-left { flex: 1 1 100%; }
+  .nt-pair .st-toggle { margin-left: auto; }
+  /* On its own line a bare text button reads as a stray label; the outline
+     variant (the one .st-btn--outline gives) says it can be pressed. */
+  .nt-pair .st-btn { border: 1px solid var(--border); padding-left: 18px; padding-right: 18px; }
+}
 </style>

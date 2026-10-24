@@ -6,8 +6,19 @@ import { createRnnoiseNode } from '@/composables/rnnoiseProcessor'
 import { useVoice } from '@/composables/useVoice'
 import { soundDeafen, soundUndeafen } from '@/composables/useSocket'
 import { useApi, type WireMyVoiceServer } from '@/composables/useApi'
+import { useViewport } from '@/composables/useViewport'
 
 const { voiceSettings, setVoiceSettings, resetVoiceSettings } = useVoiceSettings()
+const { isMobile } = useViewport()
+
+/**
+ * The input mode as this screen shows it. A phone has no key to hold, so Push to
+ * Talk is not offered there; if it is the saved choice (set on a desktop, or in a
+ * browser), the screen shows Voice Activity as selected without rewriting the
+ * saved setting — the preference stays the person's, this is only what they see.
+ */
+const shownMode = computed(() =>
+  isMobile.value && voiceSettings.inputMode === 'ptt' ? 'voice' : voiceSettings.inputMode)
 
 const NOISE_MODES = [
   { value: 'off'        as const, label: 'None',           hint: 'Send your mic through untouched.' },
@@ -292,15 +303,15 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 
     <h3 class="vv-sub">Input Mode</h3>
     <label class="vv-radio">
-      <input type="radio" value="voice" :checked="voiceSettings.inputMode==='voice'" @change="setVoiceSettings({ inputMode: 'voice' })" />
+      <input type="radio" value="voice" :checked="shownMode==='voice'" @change="setVoiceSettings({ inputMode: 'voice' })" />
       <span><strong>Voice Activity</strong><em>Transmit whenever you speak.</em></span>
     </label>
-    <label class="vv-radio">
-      <input type="radio" value="ptt" :checked="voiceSettings.inputMode==='ptt'" @change="setVoiceSettings({ inputMode: 'ptt' })" />
+    <label v-if="!isMobile" class="vv-radio">
+      <input type="radio" value="ptt" :checked="shownMode==='ptt'" @change="setVoiceSettings({ inputMode: 'ptt' })" />
       <span><strong>Push to Talk</strong><em>Hold a key to transmit.</em></span>
     </label>
 
-    <template v-if="voiceSettings.inputMode==='voice'">
+    <template v-if="shownMode==='voice'">
       <h3 class="vv-sub">Input Sensitivity — {{ voiceSettings.sensitivity }}</h3>
       <input class="vv-slider" aria-label="Input sensitivity" type="range" min="0" max="100" :value="voiceSettings.sensitivity" @input="setVoiceSettings({ sensitivity: +($event.target as HTMLInputElement).value })" />
     </template>
@@ -345,7 +356,7 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
       </div>
     </label>
     <button v-if="camTesting" class="vv-btn vv-stopcam" @click="stopCamTest">Stop Test</button>
-    <p class="vv-hint">In-call video is coming in the next phase — this preview just checks your camera.</p>
+    <p class="vv-hint">This preview only checks that your camera works.</p>
 
     <div class="vv-divider" />
     <div class="vv-toggle-row">
@@ -385,6 +396,18 @@ onBeforeUnmount(() => { stopMicTest(); stopCamTest() })
 /* A range input cannot be padded — its box IS the drag area, so the height has
    to grow. The track stays centred and thin; only the reachable area changes. */
 .sm-modal.mobile .vv-slider { height: 44px; }
+.sm-modal.mobile .vv-btn { min-height: 44px; }
+/* The same switch as the rest of settings on a phone (48 x 28), with a 44px tall
+   hit area from a transparent box rather than a bigger control. */
+.sm-modal.mobile .vv-tog { width: 48px; height: 28px; }
+.sm-modal.mobile .vv-tog span { width: 22px; height: 22px; }
+.sm-modal.mobile .vv-tog.on span { transform: translateX(20px); }
+.sm-modal.mobile .vv-tog::after { content: ''; position: absolute; inset: -8px -4px; }
+/* Hints and option descriptions at 12px are the densest text on a phone. */
+.sm-modal.mobile .vv-hint, .sm-modal.mobile .vv-radio em { font-size: 13px; line-height: 1.45; }
+/* Rows that sit side by side on a desktop share a line only if each can have
+   220px; on a phone each takes its own line. */
+.sm-modal.mobile .vv-field { min-width: 0; flex-basis: 100%; }
 .vv-mictest { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
 .vv-meter { position: relative; flex: 1; height: 8px; border-radius: var(--edge-sm); background: var(--bg-input); overflow: hidden; }
 /* Dim until the gate opens, so you can SEE when you're actually transmitting */

@@ -18,7 +18,7 @@ const desktop: DesktopBridge | null = appBridge()
 
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
   { id: 'max', name: 'Max', line: 'Everything on. The default.' },
-  { id: 'light', name: 'Light', line: 'Two cameras, no motion, the plain Windows title bar, and the graphics card off — that last one does most of the work. Measured at 41% less memory than Max on this machine. Best on an old one, and video may look worse.' },
+  { id: 'light', name: 'Light', line: 'Two cameras at a time, no motion and lighter drawing — it uses a lot less memory than Max. Best on an older device, and video may look worse.' },
 ]
 
 const memory = ref<{ privateMb: number; workingSetMb: number } | null>(null)
@@ -223,7 +223,10 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
   background: var(--bg-input); color: var(--text-1); font: inherit;
   transition: background var(--dur-1) var(--ease-out);
 }
-.level:hover { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  .level:hover { background: var(--hover); }
+}
+@media (max-width: 768px) { .level { min-height: 44px; } }
 .level[aria-pressed="true"] { border-color: var(--accent); background: rgba(var(--accent-rgb), .12); }
 .level-name { font-weight: 700; font-size: 15px; }
 .level-line { font-size: 13px; color: var(--text-2); line-height: 1.4; }
