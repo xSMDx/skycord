@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.webkit.CookieManager
 import org.json.JSONObject
+import xyz.skycord.android.core.Deadline
 import xyz.skycord.android.core.RefreshCookie
 import xyz.skycord.android.core.RefreshStatus
 import xyz.skycord.android.core.ServerClock
@@ -43,8 +44,11 @@ sealed interface AuthResult {
  * Nothing here ever logs the cookie or the token.
  */
 class SessionAuth(@Suppress("unused") context: Context) {
-    /** Blocking — call off the main thread. */
-    fun accessToken(origin: String): AuthResult {
+    /**
+     * Blocking — call off the main thread. With a [deadline], the request takes only what is left of it
+     * (and gives up at once when nothing is), so two requests in a row can share one limit.
+     */
+    fun accessToken(origin: String, deadline: Deadline? = null): AuthResult {
         val cookies = try {
             CookieManager.getInstance().getCookie(origin)
         } catch (e: Exception) {
@@ -53,13 +57,18 @@ class SessionAuth(@Suppress("unused") context: Context) {
             return AuthResult.Unreachable
         }
         if (RefreshCookie.from(cookies) == null) return AuthResult.SignedOut
+        val timeoutMs = deadline?.timeoutMs(TIMEOUT_MS) ?: TIMEOUT_MS
+        if (timeoutMs <= 0) return AuthResult.Unreachable
+        val callEnd = System.nanoTime() + timeoutMs * 1_000_000L
 
         var conn: HttpURLConnection? = null
         try {
             conn = URL("$origin/auth/refresh").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
-            conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
+            // Alone, each wait gets the full time; under a deadline the two share it.
+            val (connectMs, readMs) = if (deadline == null) timeoutMs to timeoutMs else Deadline.connectAndRead(timeoutMs)
+            conn.connectTimeout = connectMs
+            conn.readTimeout = readMs
             // A redirect is not the server answering; following it would also carry the cookie to wherever it points.
             conn.instanceFollowRedirects = false
             conn.useCaches = false
@@ -79,8 +88,9 @@ class SessionAuth(@Suppress("unused") context: Context) {
             if (RefreshStatus.writesBack(status)) writeBack(origin, conn)
             return when (RefreshStatus.outcomeOf(status)) {
                 RefreshStatus.Outcome.TOKEN -> {
-                    val deadline = System.nanoTime() + TIMEOUT_MS * 1_000_000L
-                    val body = conn.inputStream.use { it.readBounded(MAX_BYTES, deadline) }
+                    // Under a deadline the body must be in by the call's end; alone it has the full time once the headers are in.
+                    val bodyBy = if (deadline != null) callEnd else System.nanoTime() + timeoutMs * 1_000_000L
+                    val body = conn.inputStream.use { it.readBounded(MAX_BYTES, bodyBy) }
                     val token = parseToken(String(body, Charsets.UTF_8))
                     if (token == null) {
                         Log.w(TAG, "the refresh answer had no access token")

@@ -23,7 +23,7 @@
     <string name="notice_mentioned">Mentioned you</string>
     <string name="notice_reply">Reply</string>
     <string name="notice_reply_hint">Write a reply</string>
-    <string name="notice_send_failed">Couldn\'t send — open Skycord to try again</string>
+    <string name="notice_send_failed">Couldn’t send — open Skycord to try again</string>
     <string name="notice_signed_out">Signed out — open Skycord to sign in</string>
 
     <!-- A call that rings (the Calls channel), the screen it opens, and the one left behind when nobody answered. -->

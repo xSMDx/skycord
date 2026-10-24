@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.core.app.RemoteInput
 import org.json.JSONObject
 import xyz.skycord.android.PrefsKeyValue
+import xyz.skycord.android.core.Deadline
 import xyz.skycord.android.core.NoticeText
 import xyz.skycord.android.core.ServerStore
 import java.net.HttpURLConnection
@@ -27,9 +28,9 @@ import kotlin.concurrent.thread
  *    is updated, because Android shows a spinner on it until the app does.
  *
  * A reply is network work, so it runs off the main thread, with the broadcast held
- * open (goAsync) until it is done. A broadcast started by a PendingIntent is a
- * background one, which Android lets run for a minute; the work here is bounded by the
- * timeouts of the token request and of the send, a few seconds each.
+ * open (goAsync) until it is done. goAsync does not lengthen the broadcast's time: Android
+ * can give it as little as ten seconds. The token request and the send share one
+ * [Deadline] of [REPLY_BUDGET_MS], so the notification is always updated well inside that.
  *
  * Nothing here logs the token, the cookie, or what anyone wrote.
  */
@@ -85,18 +86,25 @@ class NoticeActions : BroadcastReceiver() {
         // Only to a server the person saved: the token goes nowhere else, whatever an intent says.
         if (ServerStore(PrefsKeyValue(app)).find(conv.origin) == null) return false
         val path = NoticeText.replyPath(conv.ref) ?: return false
-        val token = when (val auth = SessionAuth(app).accessToken(conv.origin)) {
+        val deadline = Deadline(REPLY_BUDGET_MS)
+        val token = when (val auth = SessionAuth(app).accessToken(conv.origin, deadline)) {
             is AuthResult.Token -> auth.value
             // The service learns of a sign-in that has ended on its own; this reply just says it could not go.
             AuthResult.SignedOut, AuthResult.Unreachable -> return false
         }
 
+        // What the token took is gone: the send gets what is left, or does not start.
+        val timeoutMs = deadline.timeoutMs(TIMEOUT_MS)
+        if (timeoutMs <= 0) return false
+
         var conn: HttpURLConnection? = null
         return try {
             conn = URL(conv.origin + path).openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
-            conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
+            // Waiting to connect and waiting for the answer share the time that is left.
+            val (connectMs, readMs) = Deadline.connectAndRead(timeoutMs)
+            conn.connectTimeout = connectMs
+            conn.readTimeout = readMs
             // A redirect is not the server answering, and following one would carry the token elsewhere.
             conn.instanceFollowRedirects = false
             conn.useCaches = false
@@ -134,5 +142,8 @@ class NoticeActions : BroadcastReceiver() {
 
         private const val TAG = "NoticeActions"
         private const val TIMEOUT_MS = 5000
+
+        /** The token request and the send together; inside the ten seconds a broadcast may have. */
+        private const val REPLY_BUDGET_MS = 7000L
     }
 }
