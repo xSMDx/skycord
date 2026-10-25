@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { visibleTiles, qualityFor, type TileCandidate } from '../callLimits'
+import { visibleTiles, qualityFor, bySpeechRecency, type TileCandidate } from '../callLimits'
 
 const t = (id: string, o: Partial<TileCandidate> = {}): TileCandidate =>
   ({ id, isSelf: false, speaking: false, hasVideo: true, lastSpokeAt: 0, ...o })
@@ -27,6 +27,26 @@ describe('visibleTiles', () => {
   it('prefers a camera to an avatar when the rest are equal', () => {
     const tiles = [t('a', { hasVideo: false }), t('b', { hasVideo: true })]
     expect(visibleTiles(tiles, 1)).toEqual(['b'])
+  })
+})
+
+describe('bySpeechRecency', () => {
+  const order = (...c: TileCandidate[]) => c.sort(bySpeechRecency).map(x => x.id)
+
+  it('puts whoever is speaking first, whatever the rest say', () => {
+    expect(order(t('a', { lastSpokeAt: 9 }), t('b', { speaking: true }))).toEqual(['b', 'a'])
+  })
+
+  it('then whoever spoke most recently', () => {
+    expect(order(t('a', { lastSpokeAt: 1 }), t('b', { lastSpokeAt: 9 }))).toEqual(['b', 'a'])
+  })
+
+  it('then a camera before an avatar', () => {
+    expect(order(t('a', { hasVideo: false }), t('b', { hasVideo: true }))).toEqual(['b', 'a'])
+  })
+
+  it('leaves equals where they were', () => {
+    expect(order(t('a'), t('b'), t('c'))).toEqual(['a', 'b', 'c'])
   })
 })
 
