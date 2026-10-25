@@ -143,7 +143,7 @@ watch(expanded, on => emit('expanded', on))
 
 // ── The drag ────────────────────────────────────────────────────────────────
 // Follows the finger one for one and, on release, settles where it would have
-// coasted to (sheetDrag, BottomSheet's physics). No pointer capture: a touch
+// coasted to (sheetDrag, the physics BottomSheet shares). No pointer capture: a touch
 // is captured to whatever it landed on already, and taking it from a button
 // would read to the screen as that press ending.
 
@@ -376,14 +376,14 @@ onBeforeUnmount(() => {
 .pcsh.settling { transition: transform var(--dur-4) var(--ease-out); }
 .pcsh.settling:not(.open) { transition: transform var(--dur-3) var(--ease-out); }
 
-/* The material: a veil over whatever is behind (a video, or the stage),
-   softened so the controls read on any picture. Constant in every theme, as
-   everything drawn over media is. */
+/* The material: a veil over whatever is behind (a video, or the stage), dark
+   enough that the controls read on any picture, with a faint lift so the
+   sheet reads as one. Constant in every theme, as everything drawn over media
+   is. No blur: it would be redone over live video on every frame of a drag. */
 .pcsh-bg {
   position: absolute; inset: 0; z-index: -1;
   border-radius: 16px 16px 0 0;
   background: linear-gradient(var(--hover), var(--hover)), var(--media-veil-strong);
-  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
   box-shadow: inset 0 1px 0 var(--border), var(--shadow-sheet);
 }
 
@@ -429,6 +429,11 @@ onBeforeUnmount(() => {
   overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
   transition: opacity var(--dur-3) var(--ease-out), visibility 0s;
 }
+/* A scroll box decides its own touches — the sheet's `none` stops at it — so
+   it says which: a list that fits leaves the swipe to the sheet (or the
+   browser would take it as a scroll and cancel the drag), and one that is too
+   long to fit scrolls. */
+.pcsh-body:not(.scrolls) { touch-action: none; }
 .pcsh-body.scrolls { touch-action: pan-y; }
 /* Shut, the list is below the edge but for the inset's few px; it shows
    nothing there and takes nothing (it is inert too). */

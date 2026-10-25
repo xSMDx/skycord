@@ -1,5 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { project, sheetOffset, velocityOf, settlesOpen } from '../sheetDrag'
+import { project, rubber, sheetOffset, velocityOf, settlesOpen } from '../sheetDrag'
+import bottomSheet from '../../components/ui/BottomSheet.vue?raw'
+
+describe('one copy of the sheet physics', () => {
+  it('is what BottomSheet drags with, not a second set of constants beside it', () => {
+    expect(bottomSheet).toMatch(/import \{[^}]*\bproject\b[^}]*\} from '@\/composables\/sheetDrag'/)
+    expect(bottomSheet).toMatch(/import \{[^}]*\brubber\b[^}]*\} from '@\/composables\/sheetDrag'/)
+    expect(bottomSheet).toMatch(/import \{[^}]*\bvelocityOf\b[^}]*\} from '@\/composables\/sheetDrag'/)
+    expect(bottomSheet).not.toContain('DECELERATION')
+    expect(bottomSheet).not.toMatch(/const (project|rubber) =/)
+  })
+})
+
+describe('resistance past an edge', () => {
+  it('gives ground, less and less, and never stops dead', () => {
+    expect(rubber(0, 300)).toBe(0)
+    const a = rubber(50, 300)
+    const b = rubber(100, 300)
+    expect(a).toBeGreaterThan(0)
+    expect(a).toBeLessThan(50)
+    expect(b).toBeGreaterThan(a)
+    expect(b - a).toBeLessThan(a)
+    // However far it is pulled, it never passes the sheet's own size.
+    expect(rubber(1e6, 300)).toBeLessThan(300)
+    expect(rubber(1e6, 300)).toBeGreaterThan(290)
+  })
+})
 
 describe('where a released sheet would coast to', () => {
   it('is nowhere further at rest, and as far either way', () => {

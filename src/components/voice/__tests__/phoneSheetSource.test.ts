@@ -246,6 +246,20 @@ describe('the phone call sheet', () => {
     expect(tpl).toMatch(/\{\{ musicLabel\.n \}\} playing/)
   })
 
+  it('leaves a swipe on a list that fits to the sheet, and lets a long one scroll', () => {
+    // The list is a scroll box, which decides its own touches: the sheet's
+    // `touch-action: none` stops at it. Left at auto, a swipe on a short list
+    // is taken as a scroll, the drag is cancelled, and the sheet will not go down.
+    expect(openingTag(elementWith(tpl, 'class="pcsh-body"'))).toMatch(/:class="\{[^"]*\bscrolls\b[^"]*\}"/)
+    expect(ruleOf(css, '.pcsh-body')).toMatch(/overflow-y:\s*auto/)
+    expect(ruleOf(css, '.pcsh-body:not(.scrolls)')).toMatch(/touch-action:\s*none/)
+    expect(ruleOf(css, '.pcsh-body.scrolls')).toMatch(/touch-action:\s*pan-y/)
+  })
+
+  it('draws its material without a blur, which would be redone over live video on every frame of a drag', () => {
+    expect(css).not.toContain('backdrop-filter')
+  })
+
   it('decides a release from where the drag would coast to, not where it stopped', () => {
     expect(sheet).toMatch(/settlesOpen\(dragY\.value, velocityOf\(samples\), travel\.value\)/)
     expect(sheet).toMatch(/from '@\/composables\/sheetDrag'/)

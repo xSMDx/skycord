@@ -1,11 +1,15 @@
 /**
- * The maths of a sheet dragged between two resting places: open (offset 0)
- * and shut (offset `travel`, pushed down by that many px).
+ * The physics of a dragged sheet, in one place: BottomSheet's drag-to-dismiss
+ * and the phone call sheet's pull-up both read it.
  *
- * The same physics BottomSheet uses for drag-to-dismiss: the sheet follows the
- * finger one for one, resists past either end, and on release settles where
- * the drag would have coasted to rather than where the finger stopped — so a
- * short flick goes all the way, and a long drag that stalls springs back.
+ * The sheet follows the finger one for one, resists past an edge, and on
+ * release settles where the drag would have coasted to rather than where the
+ * finger stopped — so a short flick goes all the way, and a long drag that
+ * stalls springs back.
+ *
+ * The two-place helpers (`sheetOffset`, `settlesOpen`) are for a sheet with
+ * two resting places: open (offset 0) and shut (offset `travel`, pushed down
+ * by that many px).
  */
 
 /** How quickly a coasting sheet slows: the deceleration rate iOS scroll views use. */
@@ -15,8 +19,8 @@ const DECELERATION = 0.998
 export const project = (velocity: number): number =>
   (velocity / 1000) * DECELERATION / (1 - DECELERATION)
 
-/** Resistance past an edge: real things slow before they stop. */
-const rubber = (over: number, dim: number, c = 0.55): number =>
+/** Resistance past an edge: real things slow before they stop. `over` px past it, against a sheet `dim` px tall. */
+export const rubber = (over: number, dim: number, c = 0.55): number =>
   (over * dim * c) / (dim + c * Math.abs(over))
 
 /**

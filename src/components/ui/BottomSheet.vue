@@ -12,6 +12,7 @@
  * flick down closes it and a slow drag that stalls springs back.
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { project, rubber, velocityOf } from '@/composables/sheetDrag'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -30,16 +31,10 @@ const dragY = ref(0)
 const dragging = ref(false)
 
 const DISMISS_AT = 0.35      // fraction of sheet height past which we close
-const DECELERATION = 0.998
-const project = (v: number) => (v / 1000) * DECELERATION / (1 - DECELERATION)
 
 let startY = 0
 let samples: { y: number; t: number }[] = []
 let active = false
-
-/** Resistance past the top edge: real things slow before they stop. */
-const rubber = (over: number, dim: number, c = 0.55) =>
-  (over * dim * c) / (dim + c * Math.abs(over))
 
 const onDown = (e: PointerEvent) => {
   // A sheet whose body is scrolled must scroll, not drag — otherwise the two
@@ -65,10 +60,7 @@ const onUp = () => {
   active = false
   dragging.value = false
   const h = sheet.value?.offsetHeight || 1
-  const first = samples[0], last = samples[samples.length - 1]
-  const dt = Math.max(1, last.t - first.t)
-  const velocity = ((last.y - first.y) / dt) * 1000
-  const projected = dragY.value + project(velocity)
+  const projected = dragY.value + project(velocityOf(samples))
   if (projected > h * DISMISS_AT) emit('close')
   else dragY.value = 0
 }
