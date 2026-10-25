@@ -15,14 +15,22 @@ export interface FocusInput {
   lastSpokeAt: Record<string, number>
 }
 
-/** What is big on the screen. `id` is a participant; `since` is when they took the slot. */
+export type FocusKind = 'screen' | 'camera' | 'avatar'
+
+/**
+ * What is big on the screen. `id` is a participant; `since` is when they took
+ * the slot. `pending` is the newcomer who is being waited out, with the moment
+ * they were first wanted: pickFocus hands it back each time, so the caller keeps
+ * it and nothing else needs to be remembered.
+ */
 export interface FocusState {
-  kind: 'screen' | 'camera' | 'avatar'
+  kind: FocusKind
   id: string
   since: number
+  pending: { kind: FocusKind; id: string; since: number } | null
 }
 
-/** How long someone keeps the big slot before another may take it from them. */
+/** How long a newcomer must be wanted, without a break, before they take the slot. */
 export const FOCUS_HOLD_MS = 1500
 
 // People ranked by the same rule a capped call grid uses, best first. Whether
@@ -40,7 +48,7 @@ const ranked = (ids: string[], input: FocusInput, hasVideo: boolean): string[] =
 }
 
 // Who should be big right now, ignoring what was big a moment ago.
-const wanted = (input: FocusInput): Pick<FocusState, 'kind' | 'id'> => {
+const wanted = (input: FocusInput): { kind: FocusKind; id: string } => {
   // A screen is text that cannot be cropped: it beats every camera. Only one
   // somebody else is sharing counts — a phone cannot share, and a screen shared
   // from this device is not something to look at on it.
@@ -66,31 +74,43 @@ const present = (input: FocusInput, id: string): boolean =>
   input.tiles.some(t => t.id === id) ||
   input.videos.some(v => v.participantId === id)
 
+const sameFocus = (a: { kind: FocusKind; id: string }, b: { kind: FocusKind; id: string }): boolean =>
+  a.kind === b.kind && a.id === b.id
+
 /**
  * Who fills the screen, given who did a moment ago.
  *
- * The slot changes hands only after its holder has had it for FOCUS_HOLD_MS, so
- * two people talking over each other, or a camera switched on and straight off,
- * do not make the picture jump. Two things are not made to wait: a screen share
- * arriving over anything but another screen, which is what the viewer opened
- * the call to see; and a holder who has left the call, because there is nobody
- * left to keep the slot for.
+ * The slot changes hands only once a newcomer has been the one wanted for
+ * FOCUS_HOLD_MS without a break. The wait is the newcomer's, not the holder's:
+ * someone who says one word is not on screen for it, however long the holder
+ * has had the slot, and two people talking over each other do not make the
+ * picture jump. Each time the wanted pick changes, the wait starts again.
+ *
+ * Four things are not made to wait. A screen share arriving over anything but
+ * another screen, which is what the viewer opened the call to see. A holder who
+ * has left the call, because there is nobody left to keep the slot for. The
+ * first pick, when there is no holder. And the holder's own camera going on or
+ * off: it is the same person, so it changes what is drawn and keeps `since`.
  *
  * Staying is not a decision to stay. A caller whose input has stopped changing
- * must call this again once the hold is up (at `since + FOCUS_HOLD_MS`), or the
- * slot never moves. Nor does the holder's video have to still be there: someone
- * kept for a moment after their camera or share stopped is drawn as the person,
- * by whoever draws it.
+ * must call this again once the wait is up (at `pending.since + FOCUS_HOLD_MS`),
+ * or the slot never moves. Nor does the holder's video have to still be there:
+ * someone kept after their share stopped is drawn as the person, by whoever
+ * draws it.
  */
 export const pickFocus = (input: FocusInput, prev: FocusState | null, now: number): FocusState => {
   const next = wanted(input)
-  if (!prev) return { ...next, since: now }
-  if (prev.kind === next.kind && prev.id === next.id) return prev
+  if (!prev) return { ...next, since: now, pending: null }
 
-  const screenArrived = next.kind === 'screen' && prev.kind !== 'screen'
-  const holding = now - prev.since < FOCUS_HOLD_MS
-  if (holding && !screenArrived && present(input, prev.id)) return prev
-  return { ...next, since: now }
+  if (sameFocus(prev, next)) return prev.pending === null ? prev : { ...prev, pending: null }
+
+  if (next.kind === 'screen' && prev.kind !== 'screen') return { ...next, since: now, pending: null }
+  if (!present(input, prev.id)) return { ...next, since: now, pending: null }
+  if (next.id === prev.id) return { ...next, since: prev.since, pending: null }
+
+  if (!prev.pending || !sameFocus(prev.pending, next)) return { ...prev, pending: { ...next, since: now } }
+  if (now - prev.pending.since < FOCUS_HOLD_MS) return prev
+  return { ...next, since: now, pending: null }
 }
 
 // ── The Music card ──────────────────────────────────────────────────────────

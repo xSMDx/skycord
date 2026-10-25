@@ -11,6 +11,9 @@ const cam = (participantId: string, local = false) => ({ participantId, source: 
 const screen = (participantId: string) => ({ participantId, source: 'screen' as const, local: false })
 const input = (o: Partial<FocusInput> = {}): FocusInput =>
   ({ tiles: [], videos: [], selfId: 'me', lastSpokeAt: {}, ...o })
+/** A holder with nobody waiting behind them. */
+const focus = (kind: FocusState['kind'], id: string, since: number): FocusState =>
+  ({ kind, id, since, pending: null })
 
 describe('pickFocus: who fills a phone screen', () => {
   it('a remote screen share wins over cameras', () => {
@@ -18,7 +21,7 @@ describe('pickFocus: who fills a phone screen', () => {
       tiles: [tile('me'), tile('a', true), tile('b')],
       videos: [cam('me', true), cam('a'), screen('b')],
     }), null, 100)
-    expect(f).toEqual({ kind: 'screen', id: 'b', since: 100 })
+    expect(f).toEqual(focus('screen', 'b', 100))
   })
 
   it('the most recent speaker among camera owners fills the screen', () => {
@@ -28,7 +31,7 @@ describe('pickFocus: who fills a phone screen', () => {
       // c spoke most recently of all, but has no camera, so is not in the running.
       lastSpokeAt: { a: 5, b: 9, c: 99 },
     }), null, 100)
-    expect(f).toEqual({ kind: 'camera', id: 'b', since: 100 })
+    expect(f).toEqual(focus('camera', 'b', 100))
   })
 
   it('someone speaking now beats someone who spoke more recently', () => {
@@ -37,7 +40,7 @@ describe('pickFocus: who fills a phone screen', () => {
       videos: [cam('a'), cam('b')],
       lastSpokeAt: { a: 1, b: 9 },
     }), null, 100)
-    expect(f).toEqual({ kind: 'camera', id: 'a', since: 100 })
+    expect(f).toEqual(focus('camera', 'a', 100))
   })
 
   it('your own camera fills only when nobody else has video', () => {
@@ -45,14 +48,14 @@ describe('pickFocus: who fills a phone screen', () => {
       tiles: [tile('me'), tile('a')],
       videos: [cam('me', true)],
     }), null, 100)
-    expect(alone).toEqual({ kind: 'camera', id: 'me', since: 100 })
+    expect(alone).toEqual(focus('camera', 'me', 100))
 
     const withOther = pickFocus(input({
       tiles: [tile('me', true), tile('a')],
       videos: [cam('me', true), cam('a')],
       lastSpokeAt: { me: 99 },
     }), null, 100)
-    expect(withOther).toEqual({ kind: 'camera', id: 'a', since: 100 })
+    expect(withOther).toEqual(focus('camera', 'a', 100))
   })
 
   it("no video → the most recent remote speaker's avatar", () => {
@@ -60,7 +63,7 @@ describe('pickFocus: who fills a phone screen', () => {
       tiles: [tile('me'), tile('a'), tile('b')],
       lastSpokeAt: { a: 3, b: 8 },
     }), null, 100)
-    expect(f).toEqual({ kind: 'avatar', id: 'b', since: 100 })
+    expect(f).toEqual(focus('avatar', 'b', 100))
   })
 
   it('whoever is speaking right now has the avatar slot', () => {
@@ -68,7 +71,7 @@ describe('pickFocus: who fills a phone screen', () => {
       tiles: [tile('me'), tile('a', true), tile('b')],
       lastSpokeAt: { a: 3, b: 8 },
     }), null, 100)
-    expect(f).toEqual({ kind: 'avatar', id: 'a', since: 100 })
+    expect(f).toEqual(focus('avatar', 'a', 100))
   })
 
   it('you never take the avatar slot unless alone', () => {
@@ -77,12 +80,10 @@ describe('pickFocus: who fills a phone screen', () => {
       tiles: [tile('me', true), tile('a')],
       lastSpokeAt: { me: 99, a: 1 },
     }), null, 100)
-    expect(crowd).toEqual({ kind: 'avatar', id: 'a', since: 100 })
+    expect(crowd).toEqual(focus('avatar', 'a', 100))
 
-    expect(pickFocus(input({ tiles: [tile('me')] }), null, 100))
-      .toEqual({ kind: 'avatar', id: 'me', since: 100 })
-    expect(pickFocus(input(), null, 100))
-      .toEqual({ kind: 'avatar', id: 'me', since: 100 })
+    expect(pickFocus(input({ tiles: [tile('me')] }), null, 100)).toEqual(focus('avatar', 'me', 100))
+    expect(pickFocus(input(), null, 100)).toEqual(focus('avatar', 'me', 100))
   })
 
   it('a screen shared from this device is not the thing to look at', () => {
@@ -90,21 +91,67 @@ describe('pickFocus: who fills a phone screen', () => {
       tiles: [tile('me'), tile('a')],
       videos: [{ participantId: 'me', source: 'screen', local: true }],
     }), null, 100)
-    expect(f).toEqual({ kind: 'avatar', id: 'a', since: 100 })
+    expect(f).toEqual(focus('avatar', 'a', 100))
   })
 
-  describe('the hold', () => {
-    const both = input({
+  describe('the hold: a newcomer has to keep wanting the slot', () => {
+    // a holds it; b is the one the grid's ranking now wants.
+    const holder = focus('camera', 'a', 0)
+    const bWanted = input({
       tiles: [tile('me'), tile('a'), tile('b', true)],
       videos: [cam('a'), cam('b')],
       lastSpokeAt: { a: 1, b: 9 },
     })
-    const prev: FocusState = { kind: 'camera', id: 'a', since: 0 }
+    const aWanted = input({
+      tiles: [tile('me'), tile('a', true), tile('b')],
+      videos: [cam('a'), cam('b')],
+      lastSpokeAt: { a: 9, b: 1 },
+    })
 
-    it('a new candidate replaces the current one only after FOCUS_HOLD_MS (1499 ms keeps prev, 1500 ms switches)', () => {
+    it('a newcomer wanted continuously for 1500 ms takes the slot (pending at t, switch at t+1500, not at t+1499)', () => {
       expect(FOCUS_HOLD_MS).toBe(1500)
-      expect(pickFocus(both, prev, FOCUS_HOLD_MS - 1)).toBe(prev)
-      expect(pickFocus(both, prev, FOCUS_HOLD_MS)).toEqual({ kind: 'camera', id: 'b', since: FOCUS_HOLD_MS })
+      // The holder has had the slot since 0: how long THEY have had it is not the question.
+      const t = 60_000
+      const waiting = pickFocus(bWanted, holder, t)
+      expect(waiting).toEqual({ kind: 'camera', id: 'a', since: 0, pending: { kind: 'camera', id: 'b', since: t } })
+
+      expect(pickFocus(bWanted, waiting, t + FOCUS_HOLD_MS - 1)).toBe(waiting)
+      expect(pickFocus(bWanted, waiting, t + FOCUS_HOLD_MS)).toEqual(focus('camera', 'b', t + FOCUS_HOLD_MS))
+    })
+
+    it('a newcomer who speaks once does not take the slot (B wanted at 1600 then A wanted again at 1700 → A holds, pending cleared)', () => {
+      const waiting = pickFocus(bWanted, holder, 1600)
+      expect(waiting.id).toBe('a')
+      expect(waiting.pending).toMatchObject({ id: 'b', since: 1600 })
+
+      expect(pickFocus(aWanted, waiting, 1700)).toEqual(focus('camera', 'a', 0))
+    })
+
+    it('a different newcomer restarts the pending clock', () => {
+      const cWanted = input({
+        tiles: [tile('me'), tile('a'), tile('b'), tile('c', true)],
+        videos: [cam('a'), cam('b'), cam('c')],
+        lastSpokeAt: { a: 1, b: 2, c: 9 },
+      })
+      const b1 = pickFocus(bWanted, holder, 1000)
+      const c1 = pickFocus(cWanted, b1, 2000)
+      expect(c1.pending).toEqual({ kind: 'camera', id: 'c', since: 2000 })
+
+      // b's first sighting was 1500 ms ago; it does not count for a second go.
+      const b2 = pickFocus(bWanted, c1, 2500)
+      expect(b2.id).toBe('a')
+      expect(b2.pending).toEqual({ kind: 'camera', id: 'b', since: 2500 })
+
+      // And c, wanted again, starts from scratch too rather than from 2000.
+      const c2 = pickFocus(cWanted, b2, 3000)
+      expect(c2.pending).toEqual({ kind: 'camera', id: 'c', since: 3000 })
+      expect(pickFocus(cWanted, c2, 3000 + FOCUS_HOLD_MS - 1)).toBe(c2)
+      expect(pickFocus(cWanted, c2, 3000 + FOCUS_HOLD_MS)).toEqual(focus('camera', 'c', 3000 + FOCUS_HOLD_MS))
+    })
+
+    it('the same candidate keeps its original since, so the hold is not restarted', () => {
+      const same = input({ tiles: [tile('me'), tile('a', true)], videos: [cam('a')] })
+      expect(pickFocus(same, holder, 60_000)).toBe(holder)
     })
 
     it('a screen share switches immediately (no hold)', () => {
@@ -112,25 +159,58 @@ describe('pickFocus: who fills a phone screen', () => {
         tiles: [tile('me'), tile('a', true), tile('b')],
         videos: [cam('a'), screen('b')],
       })
-      expect(pickFocus(shared, prev, 10)).toEqual({ kind: 'screen', id: 'b', since: 10 })
+      expect(pickFocus(shared, holder, 10)).toEqual(focus('screen', 'b', 10))
     })
 
-    it('the same candidate keeps its original since, so the hold is not restarted', () => {
-      const same = input({ tiles: [tile('me'), tile('a', true)], videos: [cam('a')] })
-      expect(pickFocus(same, prev, 60_000)).toBe(prev)
+    it('a screen share arriving drops anyone who was waiting behind the holder', () => {
+      const waiting = pickFocus(bWanted, holder, 100)
+      const shared = input({
+        tiles: [tile('me'), tile('a'), tile('b', true)],
+        videos: [cam('a'), screen('b')],
+      })
+      expect(pickFocus(shared, waiting, 200)).toEqual(focus('screen', 'b', 200))
     })
 
-    it('a holder whose participant has left the call is replaced at once', () => {
-      const gone: FocusState = { kind: 'avatar', id: 'x', since: 0 }
+    it('a second screen share does not cut in on the first: it waits like any newcomer', () => {
+      const screens = input({
+        tiles: [tile('me'), tile('a'), tile('b', true)],
+        videos: [screen('a'), screen('b')],
+        lastSpokeAt: { a: 1, b: 9 },
+      })
+      const sharing = focus('screen', 'a', 0)
+      const waiting = pickFocus(screens, sharing, 100)
+      expect(waiting).toEqual({ kind: 'screen', id: 'a', since: 0, pending: { kind: 'screen', id: 'b', since: 100 } })
+      expect(pickFocus(screens, waiting, 100 + FOCUS_HOLD_MS)).toEqual(focus('screen', 'b', 100 + FOCUS_HOLD_MS))
+    })
+
+    it('a departed holder is replaced at once', () => {
+      const gone = focus('avatar', 'x', 0)
       const after = input({ tiles: [tile('me'), tile('a')] })
-      expect(pickFocus(after, gone, 10)).toEqual({ kind: 'avatar', id: 'a', since: 10 })
+      expect(pickFocus(after, gone, 10)).toEqual(focus('avatar', 'a', 10))
     })
 
-    it('a holder is kept while their video has stopped, until the hold is up', () => {
-      // a switched the camera off 300 ms after taking the slot: no flicker back.
+    it('the holder turning their camera on switches kind at once and keeps since', () => {
+      const talking = focus('avatar', 'a', 500)
+      const camOn = input({ tiles: [tile('me'), tile('a', true)], videos: [cam('a')] })
+      expect(pickFocus(camOn, talking, 700)).toEqual(focus('camera', 'a', 500))
+
+      // Someone who was waiting behind them is no longer waiting for anything.
+      const waiting: FocusState = { ...talking, pending: { kind: 'avatar', id: 'b', since: 600 } }
+      expect(pickFocus(camOn, waiting, 700)).toEqual(focus('camera', 'a', 500))
+    })
+
+    it('the holder turning their camera off switches back at once and keeps since', () => {
+      const onCamera = focus('camera', 'a', 500)
+      const camOff = input({ tiles: [tile('me'), tile('a', true)] })
+      expect(pickFocus(camOff, onCamera, 700)).toEqual(focus('avatar', 'a', 500))
+    })
+
+    it('a holder whose video has stopped stays until a newcomer has waited out the hold', () => {
+      // a switched the camera off, and someone else is the best of what is left.
       const camOff = input({ tiles: [tile('me'), tile('a'), tile('b', true)], lastSpokeAt: { a: 1, b: 9 } })
-      expect(pickFocus(camOff, prev, 300)).toBe(prev)
-      expect(pickFocus(camOff, prev, FOCUS_HOLD_MS)).toEqual({ kind: 'avatar', id: 'b', since: FOCUS_HOLD_MS })
+      const waiting = pickFocus(camOff, holder, 300)
+      expect(waiting).toEqual({ kind: 'camera', id: 'a', since: 0, pending: { kind: 'avatar', id: 'b', since: 300 } })
+      expect(pickFocus(camOff, waiting, 300 + FOCUS_HOLD_MS)).toEqual(focus('avatar', 'b', 300 + FOCUS_HOLD_MS))
     })
   })
 })
