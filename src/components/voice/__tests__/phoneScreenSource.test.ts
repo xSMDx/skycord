@@ -83,8 +83,20 @@ describe('the phone call screen', () => {
   it('reveals the controls on any touch, and the revealing tap presses nothing', () => {
     expect(screen).toContain('@pointerdown.capture="onPointerDown"')
     expect(screen).toContain('@click.capture="onClickCapture"')
-    expect(screen).toMatch(/const onPointerDown = \(\) => \{\s*swallowClick = hidden\.value\s*poke\(\)/)
+    // Whether they were hidden is read before the press is counted, since
+    // counting it shows them.
+    expect(screen).toMatch(/const onPointerDown = \(e: PointerEvent\) => \{\s*(\/\/[^\n]*\s*)*swallowClick = hidden\.value\s*pointers\.down\(e\.pointerId, e\.isPrimary\)\s*poke\(\)/)
     expect(screen).toMatch(/const onClickCapture = [\s\S]{0,160}stopPropagation\(\)[\s\S]{0,40}preventDefault\(\)/)
+  })
+
+  it('never fades the controls while a finger is down, and counts from the release', () => {
+    // Capture phase on the root, so a child holding pointer capture is still heard.
+    expect(screen).toContain('@pointerup.capture="onPointerUp"')
+    expect(screen).toContain('@pointercancel.capture="onPointerUp"')
+    expect(screen).toContain('@lostpointercapture.capture="onPointerUp"')
+    expect(screen).toMatch(/const onPointerUp = \(e: PointerEvent\) => \{\s*if \(pointers\.up\(e\.pointerId\)\) poke\(\)/)
+    const call = screen.slice(screen.indexOf('useAutoHide({'), screen.indexOf('})', screen.indexOf('useAutoHide({')))
+    expect(call).toContain('!pointers.held.value')
   })
 
   it('re-picks the focus once a newcomer has waited, and stops waiting on unmount', () => {

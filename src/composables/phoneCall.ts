@@ -78,6 +78,40 @@ export const useAutoHide = (opts: { enabled: () => boolean; delayMs?: number }):
   return { hidden, poke, stop }
 }
 
+/**
+ * Whether a finger (or the mouse) is down on the screen. Auto-hide counts from
+ * the last touch, and a press is one touch that can outlast the delay — Hold
+ * to talk is held for as long as you talk — so the controls must stay up until
+ * it ends.
+ *
+ * `down` and `up` take the pointer's id; `up` answers whether that was the
+ * last one, the moment the count should start. A primary pointer going down
+ * means no other is down, so a press whose release was never heard (lifted
+ * outside the screen) is dropped then, rather than holding the controls up
+ * for good.
+ */
+export const usePointersHeld = (): {
+  held: Ref<boolean>
+  down(id: number, primary: boolean): void
+  up(id: number): boolean
+} => {
+  const ids = new Set<number>()
+  const held = ref(false)
+  return {
+    held,
+    down(id, primary) {
+      if (primary) ids.clear()
+      ids.add(id)
+      held.value = true
+    },
+    up(id) {
+      if (!ids.delete(id)) return false
+      held.value = ids.size > 0
+      return !held.value
+    },
+  }
+}
+
 // ── The display stays on ───────────────────────────────────────────────────
 /**
  * Keep the display awake while `active()`. If it sleeps, Android puts the app

@@ -3,7 +3,7 @@ import { ref, effectScope, type EffectScope } from 'vue'
 import type { AudioRouteState } from '../desktopBridge'
 import {
   phoneCall, openPhoneCall, minimizePhoneCall,
-  useAutoHide, useCallKeepAwake,
+  useAutoHide, usePointersHeld, useCallKeepAwake,
   speaker, initSpeaker, setSpeaker, callAudioActive,
 } from '../phoneCall'
 
@@ -126,6 +126,59 @@ describe('useAutoHide', () => {
     enabled.value = true
     vi.advanceTimersByTime(60_000)
     expect(hidden.value).toBe(false)
+  })
+})
+
+describe('usePointersHeld', () => {
+  it('is held from the press to the release, and the release says it was the last', () => {
+    const p = usePointersHeld()
+    expect(p.held.value).toBe(false)
+    p.down(1, true)
+    expect(p.held.value).toBe(true)
+    expect(p.up(1)).toBe(true)
+    expect(p.held.value).toBe(false)
+  })
+
+  it('stays held until the last of several fingers is lifted', () => {
+    const p = usePointersHeld()
+    p.down(1, true)
+    p.down(2, false)
+    expect(p.up(1)).toBe(false)
+    expect(p.held.value).toBe(true)
+    expect(p.up(2)).toBe(true)
+    expect(p.held.value).toBe(false)
+  })
+
+  it('ignores the end of a press it never saw begin (lostpointercapture after pointerup)', () => {
+    const p = usePointersHeld()
+    p.down(1, true)
+    expect(p.up(1)).toBe(true)
+    expect(p.up(1)).toBe(false)
+    expect(p.held.value).toBe(false)
+  })
+
+  it('lets a new first finger drop a press whose release it missed', () => {
+    const p = usePointersHeld()
+    p.down(1, true)   // lifted where the screen could not hear it
+    p.down(2, true)   // primary: no other finger is down
+    expect(p.up(2)).toBe(true)
+    expect(p.held.value).toBe(false)
+  })
+
+  it('keeps auto-hide from fading the controls under a press, and counts from the release', () => {
+    vi.useFakeTimers()
+    const p = usePointersHeld()
+    const { hidden, poke } = scope.run(() => useAutoHide({ enabled: () => !p.held.value }))!
+    p.down(7, true)
+    poke()
+    vi.advanceTimersByTime(30_000)
+    expect(hidden.value).toBe(false)
+
+    if (p.up(7)) poke()
+    vi.advanceTimersByTime(3999)
+    expect(hidden.value).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(hidden.value).toBe(true)
   })
 })
 

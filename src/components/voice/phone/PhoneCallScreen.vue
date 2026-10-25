@@ -16,7 +16,7 @@ import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import PhoneStage from './PhoneStage.vue'
 import { pickFocus, FOCUS_HOLD_MS, type FocusState } from '@/composables/phoneCallRules'
-import { useAutoHide } from '@/composables/phoneCall'
+import { useAutoHide, usePointersHeld } from '@/composables/phoneCall'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import { userPref } from '@/composables/useVoice'
 import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
@@ -79,16 +79,31 @@ const refocus = () => {
 watch([() => props.tiles, shownVideos, () => props.selfId], refocus, { immediate: true })
 
 // ── Controls that fade over a video ─────────────────────────────────────────
-const { hidden, poke } = useAutoHide({ enabled: () => focus.value?.kind !== 'avatar' && !props.sheetExpanded })
+const pointers = usePointersHeld()
+const { hidden, poke } = useAutoHide({
+  enabled: () => focus.value?.kind !== 'avatar' && !props.sheetExpanded
+    // Never under a finger that is still down: a press can outlast the delay
+    // (Hold to talk is held for as long as you talk), and the count starts
+    // again from its release.
+    && !pointers.held.value,
+})
 
-// The tap that brings the controls back does only that: the click it ends in
-// is swallowed, so it cannot also press whatever reappears under the finger.
-// Hold to talk answers pointerdown, which is never stopped, so it works hidden
-// or not.
+// Hidden controls are inert: they take no taps, and the tap that brings them
+// back does only that. The click it ends in is swallowed, so it cannot also
+// press whatever reappears under the finger. The Hold to talk bar is not one
+// of them: the sheet keeps it outside what `hidden` fades, so it never goes
+// inert.
 let swallowClick = false
-const onPointerDown = () => {
+const onPointerDown = (e: PointerEvent) => {
+  // Read before the press is counted: counting it shows the controls.
   swallowClick = hidden.value
+  pointers.down(e.pointerId, e.isPrimary)
   poke()
+}
+// Lifted, cancelled, or its capture lost. Heard in the capture phase, so a
+// child that has taken the pointer (Hold to talk does) cannot hide it.
+const onPointerUp = (e: PointerEvent) => {
+  if (pointers.up(e.pointerId)) poke()
 }
 const onClickCapture = (e: MouseEvent) => {
   if (!swallowClick) return
@@ -124,6 +139,9 @@ onBeforeUnmount(clearHold)
       tabindex="-1"
       @keydown="onKey"
       @pointerdown.capture="onPointerDown"
+      @pointerup.capture="onPointerUp"
+      @pointercancel.capture="onPointerUp"
+      @lostpointercapture.capture="onPointerUp"
       @click.capture="onClickCapture"
     >
       <PhoneStage
