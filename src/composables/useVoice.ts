@@ -27,7 +27,7 @@ import {
 } from './useSocket'
 import {
   voiceSettings, setVoiceSettings, micCaptureOptions, gateThreshold, micChainNeeded,
-  effectiveInputMode, noiseNodeFor,
+  effectiveInputMode, noPushToTalkKey, noiseNodeFor,
 } from './useVoiceSettings'
 import { permits, setPermits, resetPermits, permitsFromGrant } from './voicePermits'
 import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia, media } from './useVoiceMedia'
@@ -55,6 +55,11 @@ interface VoiceState {
   connectAttempt: number           // 1 = first try, >1 = auto-retrying ("Trying again…")
   connectingConvId: string | null  // which conv is mid-join (activeConvId isn't set until connected)
   connected:    boolean
+  // When this call first connected (ms since the epoch): what the call timer
+  // counts from. A reconnect to the same conversation keeps it, because the
+  // media connection dropping and coming back is still one call, not a new one
+  // starting at 0:00. null while not in a call.
+  connectedAt:  number | null
   localMuted:   boolean
   localDeafened: boolean
   participants: VoiceParticipant[]
@@ -86,6 +91,7 @@ interface VoiceState {
 export const voice = reactive<VoiceState>({
   activeConvId: null, activeKind: null, activeName: '',
   connecting: false, connectStage: null, connectAttempt: 0, connectingConvId: null, connected: false,
+  connectedAt: null,
   localMuted: false, localDeafened: false, participants: [],
   ping: null, quality: 'unknown', mic: 'muted', voiceServer: null,
   serverMuted: false, serverDeafened: false,
@@ -721,6 +727,7 @@ const cleanup = () => {
   // call banner until your whole socket disconnects. Idempotent server-side.
   if (voice.activeConvId && voice.activeKind) emitCallLeave(voice.activeConvId, voice.activeKind)
   voice.connected = false
+  voice.connectedAt = null
   voice.connecting = false
   voice.connectStage = null
   voice.connectAttempt = 0
@@ -742,15 +749,62 @@ const cleanup = () => {
 }
 
 // ── Push-to-talk ────────────────────────────────────────────────────────────
+// The key and the phone's Hold to talk bar share one press and one release.
+// A press reports whether the microphone went on air, because the bar has to
+// know: "Talking…" over a refused microphone is exactly the lie `voice.mic`
+// exists to prevent. The key ignores the answer, as it always did, but a
+// refusal now lands in `voice.mic` for both, so the call panel says why the
+// press did nothing instead of it failing silently.
+
+/** Whether somebody is holding the press right now. A release can arrive while
+ *  the publish is still in flight — the first press waits on the browser's
+ *  permission prompt — and a publish that lands after its own release would
+ *  leave the microphone open with nobody holding anything. */
+let pttHeld = false
+
+/** Put the microphone on the air. True when it is; false when it cannot be —
+ *  deafened, not permitted, no call, a publish that failed, or a release that
+ *  beat the publish. Never rejects. */
+export const pttPress = async (): Promise<boolean> => {
+  const room = getRoom()
+  // Deafened: the key has always done nothing then, so the bar does nothing
+  // too. Not permitted: publishMic would decline as well, but quietly — and a
+  // press that resolves true over a microphone that never opened is the lie.
+  if (!room || voice.localDeafened || !permits.audio) return false
+  pttHeld = true
+  try {
+    await publishMic(room.localParticipant)
+  } catch (e) {
+    pttHeld = false
+    voice.mic = micFailureReason(e)
+    return false
+  }
+  if (!pttHeld) {
+    room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
+    return false
+  }
+  // A publish that worked is fresh evidence that whatever refused it before no
+  // longer applies (the microphone was allowed since, the other app let go), so
+  // that notice goes. Idle push-to-talk is 'muted', which the key never touched.
+  if (voice.mic !== 'live' && voice.mic !== 'muted') voice.mic = 'muted'
+  return true
+}
+
+/** Take the microphone off the air. Called from every way a hold can end, so it
+ *  must be harmless twice over, with no call, and for a microphone that will
+ *  not switch off. */
+export const pttRelease = (): void => {
+  pttHeld = false
+  getRoom()?.localParticipant.setMicrophoneEnabled(false).catch(() => {})
+}
+
 const onPttDown = (e: KeyboardEvent) => {
   if (e.code !== voiceSettings.pttKey || e.repeat) return
-  const room = getRoom()
-  if (room && !voice.localDeafened) publishMic(room.localParticipant).catch(() => {})
+  void pttPress()
 }
 const onPttUp = (e: KeyboardEvent) => {
   if (e.code !== voiceSettings.pttKey) return
-  const room = getRoom()
-  if (room) room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
+  pttRelease()
 }
 const bindPtt = () => {
   if (pttBound) return
@@ -759,6 +813,8 @@ const bindPtt = () => {
   pttBound = true
 }
 const unbindPtt = () => {
+  // A hold does not outlive its call, bound or not.
+  pttHeld = false
   if (!pttBound) return
   window.removeEventListener('keydown', onPttDown)
   window.removeEventListener('keyup', onPttUp)
@@ -908,6 +964,24 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       if (effectiveInputMode() === 'ptt') {
         bindPtt()
         voice.mic = 'muted'
+        // A phone's first Hold to talk must not be the moment Android asks for
+        // the microphone: the prompt would open under the finger and swallow
+        // the press. Asking now, at join, costs nothing — a capture stopped at
+        // once is enough to be granted it, and nothing is left recording.
+        // Desktop is never asked: its key press asks when it is first used.
+        if (noPushToTalkKey.value && canCapture) {
+          try {
+            const probe = await navigator.mediaDevices.getUserMedia({ audio: true })
+            probe.getTracks().forEach(t => t.stop())
+          } catch (e) {
+            // Still joins listen-only, as every other mic refusal does here.
+            voice.mic = micFailureReason(e)
+            console.warn('[voice] microphone not available — joining listen-only', e)
+          }
+          // The prompt can stay open as long as the person likes; a join
+          // cancelled meanwhile must stay cancelled, as with the connect above.
+          if (seq !== connectSeq) { r.disconnect().catch(() => {}); return }
+        }
       } else if (!canCapture) {
         // No getUserMedia at all: the page is not on a secure origin. This is
         // the one failure that is the host's to fix, not the member's.
@@ -932,6 +1006,11 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
         // slice has no reason to make.
         await applyMicChain()
       }
+      // Before activeConvId is overwritten below, which is what tells a rejoin
+      // from a first join: a drop or a media-server move comes through here with
+      // the call's identity still in place (teardownRoom keeps it), and that is
+      // the same call carrying on, so its clock must not restart.
+      if (voice.connectedAt === null || voice.activeConvId !== convId) voice.connectedAt = Date.now()
       voice.connected = true
       voice.connecting = false
       voice.connectStage = 'connected'
@@ -971,6 +1050,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
   const giveUp = () => {
     voice.connecting = false
     voice.connected = false
+    voice.connectedAt = null   // the call is over; the strip that remains is the failure, not a running timer
     voice.connectStage = 'failed'
     voice.connectAttempt = 0
     if (failTimer) clearTimeout(failTimer)
@@ -1088,4 +1168,4 @@ watch(callServerMoved, m => {
   void attemptConnect(convId, kind, name, 1)
 })
 
-export const useVoice = () => ({ voice, voiceRoomName, connect, leave, toggleMute, toggleDeafen, applyOutput, switchVoiceServer })
+export const useVoice = () => ({ voice, voiceRoomName, connect, leave, toggleMute, toggleDeafen, applyOutput, switchVoiceServer, pttPress, pttRelease })
