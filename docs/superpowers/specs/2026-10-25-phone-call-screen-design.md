@@ -100,20 +100,42 @@ Desktop and wide windows keep today's `CallBar` exactly as it is.
 
 ## Decided by me (the owner can overrule)
 
-1. **Phones only:**
-   - `CallBar` keeps rendering on phones only for its *not-joined* state: an ongoing call you can join,
-     with Join (and Dismiss for a DM). On a phone those two buttons become at least 44 px tall.
+1. **Which devices get it:**
+   - A **touch phone**: the same test push-to-talk already uses, `noPushToTalkKey` (`isMobile && isCoarse`).
+     A narrow desktop window or a tablet keeps the desktop `CallBar`, screen share included.
+   - On a touch phone, `CallBar` still renders its *not-joined* state: an ongoing call you can join, with
+     Join (and Dismiss for a DM). Those two buttons become at least 44 px tall.
    - Once you are in, or connecting to, a call, the phone call screen takes over.
-2. **Opening, minimising, returning:**
-   - The screen opens full screen when you join, answer, or open a voice channel you are in.
-   - A chevron-down button at the top left, or Android Back, **minimises** it. It is `role="dialog"`, so
-     the existing `androidBack` handling sends it Escape first. Minimising does not leave the call.
-   - While minimised and still in a call, a slim **return-to-call bar** shows on every phone screen:
+2. **Where it lives:**
+   - The screen is hosted by `CallBar` and drawn as a fixed full-screen layer. It is not a new app-level
+     component.
+   - That keeps everything `CallBar` already owns and scopes to the call's conversation: the ring timer
+     and dial tone, the callee, avatars, and Invite's member lists.
+   - Opening it always means being on the call's own conversation, exactly as `returnToCall()` navigates
+     today.
+3. **Opening, minimising, returning:**
+   - **Opens:** the screen opens full screen when you join, answer, or open a voice channel you are in.
+   - **Minimising:**
+     - A chevron-down button at the top left, or Android Back, minimises it. It is `role="dialog"`, so
+       the existing `androidBack` handling sends it Escape first.
+     - Minimising does not leave the call.
+     - In a voice channel, minimising also clears `viewedVoiceId`: emit the `minimize` ChatApp already
+       listens for. You land on the server's text side instead of an empty stage column.
+     - In a DM or group call, the conversation's messages are behind it.
+   - **Return-to-call bar:** while you are in a call and the screen is not showing, a slim bar shows on
+     every phone screen:
      - 44 px tall, at the top, pushing content down rather than covering it;
      - the call name, a green talking dot when someone is talking, and the timer;
-     - tapping it reopens the screen.
-   - Leaving the call removes both.
-3. **Speaker:**
+     - tapping it runs `returnToCall()` and opens the screen.
+   - **`VoiceConnectedPanel`** is hidden on touch phones. The return bar replaces it, and its
+     screen-share button cannot work there.
+   - Leaving the call removes the screen and the bar.
+4. **Speaker:**
+   - **The plan's first task is a spike on the emulator.** It confirms where WebView call audio comes out
+     today, and whether switching the communication device or the speakerphone moves Chromium's call
+     audio.
+   - If routing does not take effect, the speaker circle is not built: three circles, and the owner is
+     told why.
    - Works in the **Android app only**, through a new bridge member. Natively it uses `AudioManager`:
      communication mode and the speakerphone (`setCommunicationDevice` on Android 12+,
      `setSpeakerphoneOn` before). `MODIFY_AUDIO_SETTINGS` is already declared.
@@ -123,7 +145,7 @@ Desktop and wide windows keep today's `CallBar` exactly as it is.
      headphones icon and is disabled with the label "Using headset".
    - In a phone browser, or an older app build without the bridge member, the speaker circle is left
      out, so the row is three circles. A control that cannot work is worse than an absent one.
-4. **Mic button under push-to-talk:**
+5. **Mic button under push-to-talk:**
    - It shows mic-off and is disabled, labelled "This channel uses push to talk". The Hold to talk bar
      is the only way to transmit.
    - While held, the bar fills with the accent and reads "Talking…".
@@ -132,21 +154,34 @@ Desktop and wide windows keep today's `CallBar` exactly as it is.
    - Release on pointerup, pointercancel, lost pointer capture, or the page being hidden, so the mic can
      never stick open.
    - While deafened the bar is disabled, matching the key, which does nothing while deafened.
+   - While server-muted (`permits.audio` false) it is disabled too, reading "Muted by the server".
+   - **A press that cannot transmit says so.** `pttPress()` reports failure: permission denied, mic
+     busy, or no mic.
+     - It sets `voice.mic`, so the existing `micNotice` line shows the reason.
+     - The bar goes back to "Hold to talk" instead of claiming "Talking…".
+     - The desktop key behaves as before.
+   - **On joining a push-to-talk channel from a phone, ask for the mic up front.** A capture that is
+     stopped at once is enough, so the first press is not interrupted by Android's permission prompt
+     appearing under the finger.
    - A 10 ms vibration on press where `navigator.vibrate` exists.
-5. **Who fills the screen:**
+6. **Who fills the screen:**
    - A **screen share** wins over cameras. It is shown fitted (letterboxed, `contain`), because it is
      text that cannot be cropped.
    - Otherwise, the camera of the most recent speaker among those with cameras on, filled (`cover`).
    - Your own camera fills the screen only when nobody else has video.
-   - With no video at all, the most recent speaker's avatar is the big one, as in goal 1.
+   - With no video at all, the most recent speaker's avatar is the big one, as in goal 1. **You never
+     take the big slot unless you are alone.**
+   - **No flicker:** the big slot changes only after the new speaker has held it for 1.5 s.
    - Reuse the existing ordering helpers (`callLimits.visibleTiles`, the last-spoke tracking in
      `CallStage`) rather than inventing a second rule.
-6. **Auto-hide:**
+7. **Auto-hide:**
    - Only while a video fills the screen, and never while the sheet is pulled up.
    - Four seconds after the last touch.
    - The top text, the sheet and the small tiles fade together; the self-view stays.
+   - **The Hold to talk bar never hides**, so you can always speak without a tap first.
+   - While hidden, the controls are inert. The tap that reveals them does not also press a button.
    - With reduced motion they appear and disappear without fading.
-7. **Music card:**
+8. **Music card:**
    - Shown only when the server runs music (`musicAvailable`).
    - The song is that of the channel you are tuned into (`musicChannel.now`).
    - If you are tuned in but nothing is queued, or not tuned in and no channel in the call has a song,
@@ -155,20 +190,30 @@ Desktop and wide windows keep today's `CallBar` exactly as it is.
      (channels with who is listening, listen and stop, queue, skip, create, close), laid out as a
      full-height phone sheet. It has a "Your library" row that opens the existing phone `MusicModal`.
    - The desktop flyout is not shown on phones.
-8. **Invite people:**
+9. **Invite people:**
    - A voice channel opens the existing `InviteToVoice` (modal shape).
    - A group call opens the existing add-friends-to-group sheet.
    - **Hidden in a DM call**: a third person would turn it into a group, which is not this screen's job.
-9. **Voice settings ›** opens Settings › Voice & Video.
-10. **Call states the screen must carry**, all of them existing behaviour in `CallBar` and `useVoice`:
-    - **Connecting:** the subtitle reads "Connecting…"; camera is disabled until joined, as today.
+10. **Voice settings ›** opens Settings › Voice & Video.
+11. **Call states the screen must carry**, all of them existing behaviour in `CallBar` and `useVoice`:
+    - **Connecting:**
+      - The subtitle shows the same join-progress text the desktop `VoiceConnectedPanel` shows today for
+        `voice.connectStage`: connecting, trying again, couldn't connect. Hang-up cancels.
+      - Camera is disabled until joined, as today.
+    - **Timer:** counts from the moment you connected. A reconnect inside the same call keeps counting.
     - **Ringing (DM, before they answer):** their avatar is the big one, with the subtitle "Ringing…".
       After the ring times out it reads "No answer", with a **Ring again** button under the avatar, which
       the desktop has only on right-click.
     - **Mic failures:** the existing `micNotice(voice.mic)` line under the subtitle (blocked, missing,
       insecure, muted by the server).
     - **Server-muted:** the mute circle is disabled with "Muted by the server".
-11. **Icons** come from the app's set (`lucide-vue-next`): Mic / MicOff, Volume2 (speaker), Headphones,
+12. **The screen stays on during a call.** If the display sleeps, Android backgrounds the app and the mic
+    goes quiet. Calls on a locked phone are a later release.
+    - While you are connected to a call and the app is in front (screen open or minimised), the display
+      is kept awake.
+    - The Android app uses a new bridge member that sets `FLAG_KEEP_SCREEN_ON` on the activity.
+    - A browser uses the Screen Wake Lock API where it exists, and nothing where it does not.
+13. **Icons** come from the app's set (`lucide-vue-next`): Mic / MicOff, Volume2 (speaker), Headphones,
     Video / VideoOff, PhoneOff, ChevronDown, Music2, UserPlus, SlidersHorizontal.
     **Colours** come from existing tokens only; the hard-coded-colour guards must stay green. The
     hang-up circle uses the app's danger role.
