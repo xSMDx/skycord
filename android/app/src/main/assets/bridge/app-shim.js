@@ -96,6 +96,10 @@
     onJoinCall: onRequest('joinCall', joinHandlers),
     seen: (c) => fire('seen', c),
     prefsChanged: () => fire('prefsChanged'),
+    // The phone call screen is up (true) or gone: the app keeps the screen lit while it is.
+    keepScreenOn: (on) => fire('screen.keepOn', on === true),
+    // No `audio` here, on purpose: WebView plays call audio as media, which the call-route calls of
+    // CallAudio do not move (see its notes), so a speaker button would do nothing.
     androidNotifications: Object.freeze({
       state: () => call('androidNotifications.state'),
       setEnabled: (on) => fire('androidNotifications.setEnabled', on === true),

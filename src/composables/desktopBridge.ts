@@ -147,6 +147,29 @@ export interface DesktopBridge {
     openSystemSettings(): void
     requestBatteryExemption(): void
   }
+  /**
+   * Android only: where the call's sound comes out, for a speaker button. `setCall(true)` starts a
+   * call on the speaker and `setCall(false)` hands the route back; a headset overrides the choice.
+   * Absent while the app cannot move WebView's call audio, which is every build so far, so the page
+   * leaves the button out.
+   */
+  audio?: {
+    state(): Promise<AudioRouteState>
+    setCall(active: boolean): void
+    setSpeaker(on: boolean): void
+  }
+  /** Android only: the audio route changed (a headset was plugged in or out). Returns a function that stops listening. */
+  onAudioRoute?(cb: (s: AudioRouteState) => void): () => void
+  /** Android only: keep the screen from dimming and locking (true) while the phone call screen is up, or let it (false). */
+  keepScreenOn?(on: boolean): void
+}
+
+/** Where a call's sound comes out, as the app reports it. */
+export interface AudioRouteState {
+  /** The loudspeaker is on. */
+  speaker: boolean
+  /** A wired or Bluetooth headset is connected, and has taken the sound. */
+  headset: boolean
 }
 
 /** What Android lets the app do about notifications, and whether it is on. */

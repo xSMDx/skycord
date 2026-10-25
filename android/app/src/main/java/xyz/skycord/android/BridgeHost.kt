@@ -15,6 +15,7 @@ import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
 import org.json.JSONArray
 import org.json.JSONObject
+import xyz.skycord.android.core.AudioRoute
 import xyz.skycord.android.core.BridgeProtocol
 import xyz.skycord.android.core.Incoming
 import xyz.skycord.android.core.Origins
@@ -45,6 +46,9 @@ class BridgeHost(private val activity: MainActivity) {
     private val launcherShim = activity.assets.open("bridge/launcher-shim.js").use { String(it.readBytes()) }
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
+
+    /** The speaker button's side of a call (the `audio` bridge namespace); it tells the page when the route changes. */
+    private val callAudio = CallAudio(activity, ::pushAudioRoute)
 
     private var listening = false
     private var appScript: ScriptHandler? = null
@@ -98,6 +102,7 @@ class BridgeHost(private val activity: MainActivity) {
     fun refresh() {
         generation++
         appProxy = null
+        pageLeft()
         unregister()
         val saved = activity.store.list().map { it.origin }.toSet()
         val attempts = listOf(saved, setOfNotNull(activity.currentServer), emptySet<String>()).distinct()
@@ -136,6 +141,7 @@ class BridgeHost(private val activity: MainActivity) {
         closed = true
         generation++
         appProxy = null
+        callAudio.setCall(false)
         main.removeCallbacksAndMessages(null)
         io.shutdownNow()
     }
@@ -158,6 +164,29 @@ class BridgeHost(private val activity: MainActivity) {
             appProxy = null
         }
     }
+
+    /**
+     * The document that may have held a call is gone (a server switch, a reload, a page that has just said
+     * hello): the call's sound goes back to the system and the screen may sleep again, whatever the page
+     * had asked for, since it can no longer say so itself. Nothing is pushed to it.
+     */
+    private fun pageLeft() {
+        callAudio.setCall(false)
+        activity.keepScreenOn(false)
+    }
+
+    private fun pushAudioRoute(route: AudioRoute) {
+        // Runs from the audio system's callback as well as from a call: a page that has gone away must
+        // never turn a headset being plugged in into a crash.
+        try {
+            appProxy?.postMessage(BridgeProtocol.event("audioRoute", route.toJson()))
+        } catch (e: Exception) {
+            Log.w(TAG, "could not push the audio route to the page", e)
+            appProxy = null
+        }
+    }
+
+    private fun AudioRoute.toJson(): JSONObject = JSONObject().put("speaker", speaker).put("headset", headset)
 
     /** The app went to the background (true) or came back. The page keeps quiet while it is away. */
     fun setBackground(away: Boolean) {
@@ -266,6 +295,8 @@ class BridgeHost(private val activity: MainActivity) {
                 // anything waiting for it.
                 sentBackground = null
                 scheduleFlush()
+                // A reload ends the call its old document held; the new one starts from nothing.
+                pageLeft()
             }
             // The web client subscribed to the background state (it does that only once signed in), or let go
             // of it (signed out, the chat closed). Only now is the page "in front": see FrontGate.
@@ -290,6 +321,11 @@ class BridgeHost(private val activity: MainActivity) {
                         NotifyService.setEnabled(activity, on)
                         later { activity.syncNotifyService(leaving = false) }
                     }
+                    "audio.state" -> reply(callAudio.state().toJson())
+                    "audio.setCall" -> (m.args.opt(0) as? Boolean)?.let(callAudio::setCall)
+                    "audio.setSpeaker" -> (m.args.opt(0) as? Boolean)?.let(callAudio::setSpeaker)
+                    // The phone call screen: the screen stays lit while it is up.
+                    "screen.keepOn" -> (m.args.opt(0) as? Boolean)?.let(activity::keepScreenOn)
                     "androidNotifications.openSystemSettings" -> later { activity.openNotificationSettings() }
                     "androidNotifications.requestBatteryExemption" -> later { activity.requestBatteryExemption() }
                     else -> m.id?.let { proxy.postMessage(BridgeProtocol.error(it, "unknown method")) }

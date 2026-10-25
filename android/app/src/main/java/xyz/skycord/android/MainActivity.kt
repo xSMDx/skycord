@@ -291,6 +291,7 @@ class MainActivity : AppCompatActivity() {
         fileCallback = null
         // A back offer still waiting for its 300 ms timeout has nothing left to act on.
         main.removeCallbacksAndMessages(null)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // onCreate returns early on the old-WebView screen, before updates exists.
         if (::updates.isInitialized) updates.close()
         if (::bridge.isInitialized) bridge.close()
@@ -667,6 +668,17 @@ class MainActivity : AppCompatActivity() {
         unreachable.visibility = View.VISIBLE
         // This screen covers the page: it is not on screen, whatever it said before, so the phone notifies.
         NotifyService.pageShown(this, null)
+    }
+
+    /**
+     * The phone call screen is up (true) or gone: while it is, the screen must not dim and lock in the
+     * middle of a call. Cleared when the page goes away (BridgeHost.pageLeft) and with the activity.
+     */
+    fun keepScreenOn(on: Boolean) {
+        runOnUiThread {
+            if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     fun applyBarColour(css: String) {
