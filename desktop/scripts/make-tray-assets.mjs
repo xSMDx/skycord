@@ -1,8 +1,8 @@
 /**
- * The tray icon (plain and with an unread dot) and the taskbar badges 1–9 and
- * 9+. Generated rather than drawn at run time: Electron's nativeImage cannot
- * draw, and a badge is the same eleven images forever. Each is rendered at 4x
- * and scaled down, so the circle's edge is smooth.
+ * The taskbar badges 1–9 and 9+. Generated rather than drawn at run time:
+ * Electron's nativeImage cannot draw, and a badge is the same ten images
+ * forever. Each is rendered at 4x and scaled down, so the circle's edge is
+ * smooth. The tray icons come from the brand masters: render-icon.cjs.
  *
  *   node desktop/scripts/make-tray-assets.mjs
  *
@@ -16,7 +16,6 @@ import { fileURLToPath } from 'url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const out = join(here, '..', 'static', 'tray')
-const icon = join(here, '..', 'build', 'icon.png')
 const FONT = 'C\\:/Windows/Fonts/segoeuib.ttf'
 const RED = { r: 242, g: 63, b: 67 }   // the app's danger red, #f23f43
 mkdirSync(out, { recursive: true })
@@ -26,15 +25,6 @@ const run = (args) => {
   if (r.status !== 0) { console.error(r.stderr.toString()); process.exit(1) }
 }
 const disc = (cx, cy, rad) => `lte(hypot(X-${cx},Y-${cy}),${rad})`
-
-// Tray, 32x32, plain.
-run(['-i', icon, '-vf', 'scale=32:32:flags=lanczos', join(out, 'tray.png')])
-
-// Tray with a red dot top-right, at 4x then down.
-const dot = disc(100, 28, 26)
-run(['-i', icon, '-vf',
-  `scale=128:128:flags=lanczos,format=rgba,geq=r='if(${dot},${RED.r},r(X,Y))':g='if(${dot},${RED.g},g(X,Y))':b='if(${dot},${RED.b},b(X,Y))':a='if(${dot},255,alpha(X,Y))',scale=32:32:flags=lanczos`,
-  join(out, 'tray-unread.png')])
 
 // Badges: a red disc with a white number, 4x then 32x32.
 for (const label of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '9+']) {
