@@ -1,0 +1,280 @@
+<script setup lang="ts">
+/**
+ * What fills the phone call screen: the big slot, a row of small tiles for
+ * everyone else, and your own camera in the top-right corner.
+ *
+ * Presentational. PhoneCallScreen decides who is big (pickFocus, with its
+ * newcomer hold) and when the controls hide, and passes both down. This only
+ * draws them, with one rule of its own: a focus whose video has gone — someone
+ * kept in the slot after their camera went off — is drawn as the person.
+ */
+import { computed } from 'vue'
+import { MicOff } from 'lucide-vue-next'
+import VideoTile from '../VideoTile.vue'
+import Avatar from '@/components/ui/Avatar.vue'
+import { defaultAvatar } from '@/composables/useAvatar'
+import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
+import { perf } from '@/composables/usePerformance'
+import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
+import type { FocusState } from '@/composables/phoneCallRules'
+
+/** CallStage's tile. `ring` = someone being called who has not picked up. */
+type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ring?: 'ringing' | 'no-answer' }
+
+const props = defineProps<{
+  tiles: Tile[]
+  videos: VideoTrackInfo[]
+  selfId: string
+  focus: FocusState | null
+  /** The controls are hidden over a video: the small tiles fade with them. */
+  hidden: boolean
+  /** When each person last spoke, kept by the screen, so the row is ranked the way the focus is. */
+  lastSpokeAt: Record<string, number>
+}>()
+
+defineSlots<{
+  /** Under the person being rung: the screen's way to ring them again. */
+  ringing?(): unknown
+}>()
+
+const camera = (id: string): VideoTrackInfo | null =>
+  props.videos.find(v => v.participantId === id && v.source === 'camera') ?? null
+
+const avatarOf = (t: Tile): string => t.avatar || defaultAvatar(t.name)
+
+// ── The big slot ────────────────────────────────────────────────────────────
+const bigVideo = computed<VideoTrackInfo | null>(() => {
+  const f = props.focus
+  if (!f || f.kind === 'avatar') return null
+  return props.videos.find(v => v.participantId === f.id && v.source === f.kind) ?? null
+})
+
+// Someone in the slot with no tile yet (their video arrived before presence)
+// still has a name to show.
+const bigPerson = computed<Tile | null>(() => {
+  const f = props.focus
+  if (!f) return null
+  return props.tiles.find(t => t.id === f.id) ?? {
+    id: f.id, name: props.videos.find(v => v.participantId === f.id)?.name ?? '',
+    avatar: '', speaking: false, muted: false,
+  }
+})
+
+// The person being called. Under their big avatar while nobody has video; if
+// your own camera fills the screen meanwhile, the line still shows above the
+// row, so Ring again never disappears behind your own face. Never under
+// someone else's avatar, as it could be for the moment the slot takes to move.
+const ringing = computed(() => {
+  const t = props.tiles.find(x => x.ring)
+  return t && (bigVideo.value || bigPerson.value?.id === t.id) ? t : null
+})
+
+// ── Your own camera ─────────────────────────────────────────────────────────
+// A corner tile, unless it is the big picture already (nobody else has video).
+const selfVideo = computed<VideoTrackInfo | null>(() => {
+  const own = props.videos.find(v => v.local && v.source === 'camera')
+  return own && own !== bigVideo.value ? own : null
+})
+
+// ── The row ─────────────────────────────────────────────────────────────────
+// Not on it: whoever is big, and you while your camera is in the corner.
+const offRow = (id: string): boolean =>
+  id === props.focus?.id || (selfVideo.value !== null && id === props.selfId)
+
+// The cap counts the big slot as one of the call's tiles, so the row gets one
+// fewer: on a phone that can afford two, that is the big picture and you.
+const kept = computed(() => {
+  const candidates: TileCandidate[] = props.tiles
+    .filter(t => t.id !== props.focus?.id)
+    .map(t => ({
+      id: t.id,
+      isSelf: t.id === props.selfId,
+      speaking: t.speaking,
+      hasVideo: camera(t.id) !== null,
+      lastSpokeAt: props.lastSpokeAt[t.id] ?? 0,
+    }))
+  return new Set(visibleTiles(candidates, perf.maxCallTiles - (props.focus ? 1 : 0)))
+})
+
+// In the order the call gives, not by who spoke last: a row that reshuffles
+// every time someone talks is a row you cannot find anyone in.
+const row = computed(() => props.tiles
+  .filter(t => kept.value.has(t.id) && !offRow(t.id))
+  .map(t => ({ tile: t, camera: camera(t.id) })))
+
+// Left off by the cap, not out of the call: counted, so the row never reads
+// as people leaving.
+const notShown = computed(() => props.tiles.filter(t => !kept.value.has(t.id) && !offRow(t.id)).length)
+
+const label = (t: Tile): string => (t.muted ? `${t.name}, muted` : t.name)
+</script>
+
+<template>
+  <div class="ps">
+    <!-- The focus fills the stage. A shared screen is text, which cannot be
+         cropped, so it is letterboxed; a face can be, so it fills. -->
+    <template v-if="bigVideo">
+      <VideoTile v-if="bigVideo.source === 'screen'" :key="`${bigVideo.participantId}:screen`" class="ps-fill" :track="bigVideo.track" fit="contain" />
+      <VideoTile v-else :key="`${bigVideo.participantId}:camera`" class="ps-fill" :class="{ 'is-own': bigVideo.local }" :track="bigVideo.track" fit="cover" />
+      <!-- Keeps the top text readable on a bright picture; goes with it. -->
+      <div class="ps-scrim" :class="{ 'is-hidden': hidden }"></div>
+    </template>
+
+    <div class="ps-main" :class="{ 'over-video': bigVideo }">
+      <div v-if="!bigVideo && bigPerson" :key="bigPerson.id" class="ps-solo">
+        <div class="ps-av" :class="{ speaking: bigPerson.speaking, unanswered: bigPerson.ring === 'no-answer' }">
+          <span v-if="bigPerson.ring === 'ringing'" class="ps-wave"></span>
+          <Avatar :src="avatarOf(bigPerson)" :alt="bigPerson.name" />
+          <span v-if="bigPerson.muted" class="ps-av-mute"><MicOff :size="14" :stroke-width="2.25" /></span>
+        </div>
+      </div>
+
+      <div v-if="ringing" class="ps-ringing" :class="{ 'is-hidden': hidden }">
+        <p class="ps-ring-label">{{ ringing.ring === 'ringing' ? 'Ringing…' : 'No answer' }}</p>
+        <slot name="ringing" />
+      </div>
+
+      <div v-if="row.length || notShown" class="ps-row" :class="{ 'is-hidden': hidden }">
+        <div class="ps-row-inner">
+          <div v-for="r in row" :key="r.tile.id" class="ps-tile" :class="{ speaking: r.tile.speaking }" role="img" :aria-label="label(r.tile)">
+            <VideoTile v-if="r.camera" :track="r.camera.track" fit="cover" />
+            <span v-else class="ps-tile-av"><Avatar :src="avatarOf(r.tile)" alt="" /></span>
+            <span v-if="r.tile.muted" class="ps-tile-mute"><MicOff :size="10" :stroke-width="2.5" /></span>
+          </div>
+          <div v-if="notShown" class="ps-tile ps-more" role="img" :aria-label="`${notShown} more in the call`">+{{ notShown }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Yours, and it stays when the controls hide: it is how you know what
+         the others see. -->
+    <div v-if="selfVideo" class="ps-self">
+      <VideoTile class="is-own" :track="selfVideo.track" fit="cover" />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+/* The layout insets (--pcs-top-inset, --pcs-top-h, --pcs-sheet-h) belong to
+   PhoneCallScreen, which knows where its top text and sheet sit. */
+.ps { position: absolute; inset: 0; overflow: hidden; background: var(--bg-floor); }
+
+/* A fade only: a transform here would fight the mirror on your own camera. */
+.ps-fill { position: absolute; inset: 0; animation: ps-fade var(--dur-3) var(--ease-out); }
+@keyframes ps-fade { from { opacity: 0; } }
+/* The front camera, as a mirror shows you. A camera you see unmirrored reads as wrong. */
+.is-own { transform: scaleX(-1); }
+
+.ps-scrim {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: calc(var(--pcs-top-h, 0px) + 56px);
+  background: linear-gradient(to bottom, var(--media-veil-strong), transparent);
+  pointer-events: none;
+}
+
+/* Between the top text and the sheet. With no video the big avatar and the row
+   sit together in the middle; over a video only the row is left, just above
+   the sheet. */
+.ps-main {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: var(--pcs-top-h, 0px) 16px var(--pcs-sheet-h, 0px);
+}
+.ps-main.over-video { justify-content: flex-end; padding-bottom: calc(var(--pcs-sheet-h, 0px) + 12px); }
+
+/* ── The big avatar ── */
+.ps-solo { display: flex; flex-direction: column; align-items: center; animation: ps-in var(--dur-3) var(--ease-out); }
+@keyframes ps-in { from { opacity: 0; transform: scale(.96); } }
+
+.ps-av {
+  position: relative; display: flex; width: 96px; height: 96px; border-radius: 50%;
+  box-shadow: 0 0 0 3px transparent, 0 0 0 6px transparent;
+  transition: box-shadow var(--dur-2) var(--ease-out);
+}
+/* The talking ring, set off from the face by a sliver of the stage. */
+.ps-av.speaking { box-shadow: 0 0 0 3px var(--bg-floor), 0 0 0 6px var(--green); }
+.ps-av.unanswered :deep(.av) { opacity: .6; }
+.ps-av-mute {
+  position: absolute; right: 0; bottom: 0;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-panel); color: var(--text-1); border: 3px solid var(--bg-floor);
+}
+/* One slow ring outward while the call goes out: calm, not an alarm. */
+.ps-wave {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: ps-wave 2.2s var(--ease-out) infinite;
+  pointer-events: none;
+}
+@keyframes ps-wave {
+  0%   { transform: scale(1);   opacity: .7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.ps-ringing { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.ps-ring-label {
+  margin: 0; font-size: 15px; line-height: 20px; color: var(--text-2);
+  text-shadow: 0 1px 2px var(--media-veil);
+}
+
+/* ── The row ── */
+/* Full width so it can scroll sideways in a big call; the inner strip centres
+   itself while it fits and starts at the left edge once it does not. */
+.ps-row {
+  align-self: stretch; overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.ps-row::-webkit-scrollbar { display: none; }
+.ps-row-inner { display: flex; gap: 8px; width: max-content; margin: 0 auto; padding: 8px 0; }
+/* Under a big avatar, set apart from it: these are the others, not more of them. */
+.ps-main:not(.over-video) .ps-row { margin-top: 16px; }
+
+.ps-tile {
+  position: relative; flex: none; width: 44px; height: 58px;
+  border-radius: var(--edge-lg); overflow: hidden; background: var(--bg-panel);
+  display: flex; align-items: center; justify-content: center;
+}
+/* The talking ring as an overlay, so a video in the tile cannot paint over it. */
+.ps-tile::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 2px transparent;
+  transition: box-shadow var(--dur-2) var(--ease-out);
+}
+.ps-tile.speaking::after { box-shadow: inset 0 0 0 2px var(--green); }
+.ps-tile-av { display: flex; width: 30px; height: 30px; }
+.ps-tile-mute {
+  position: absolute; right: 3px; bottom: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--media-veil-strong); color: var(--on-media);
+}
+.ps-more { font-size: 13px; font-weight: 600; color: var(--text-2); }
+
+/* Fades with the top text and the sheet, and lets taps through while gone. */
+.ps-scrim, .ps-ringing, .ps-row { transition: opacity var(--dur-3) var(--ease-inout), visibility 0s; }
+.ps-scrim.is-hidden, .ps-ringing.is-hidden, .ps-row.is-hidden {
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--dur-3) var(--ease-inout), visibility 0s linear var(--dur-3);
+}
+
+/* ── Your own camera ── */
+/* An explicit height, not aspect-ratio: the Android app's WebView floor is
+   Chromium 86, which predates it. No z-index: last in the stage, it is above
+   the picture, and the sheet that follows the stage may still rise over it. */
+.ps-self {
+  position: absolute;
+  top: calc(var(--pcs-top-inset, 0px) + 8px); right: 12px;
+  width: 84px; height: 112px;
+  border-radius: var(--edge-xl); overflow: hidden;
+  background: var(--letterbox); box-shadow: var(--shadow-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-fill, .ps-solo { animation: none; }
+  /* Still plainly "calling", without the motion. */
+  .ps-wave { animation: none; opacity: .5; }
+  .ps-scrim, .ps-ringing, .ps-row,
+  .ps-scrim.is-hidden, .ps-ringing.is-hidden, .ps-row.is-hidden { transition: none; }
+}
+</style>
