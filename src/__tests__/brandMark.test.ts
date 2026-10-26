@@ -56,6 +56,18 @@ describe('every copy of the Skycord mark matches src/brand/mark.ts', () => {
     expect(mark.find((s: { ty: string }) => s.ty === 'fl').r).toBe(2)
   })
 
+  it('installed web apps fetch the new icon: every icon address carries the same ?v= tag', () => {
+    const manifest = JSON.parse(read('public/manifest.webmanifest')) as { icons: { src: string }[] }
+    const html = read('index.html')
+    const tags = [
+      ...manifest.icons.map(i => /\?v=(\w+)$/.exec(i.src)?.[1]),
+      /href="\/skycord-icon\.svg\?v=(\w+)"/.exec(html)?.[1],
+      /href="\/apple-touch-icon\.png\?v=(\w+)"/.exec(html)?.[1],
+    ]
+    expect(tags.every(Boolean), 'every icon address is tagged').toBe(true)
+    expect(new Set(tags).size, 'one tag for all of them').toBe(1)
+  })
+
   it('no file still draws the old outline creature or the speech-bubble draft', () => {
     for (const file of [
       'src/components/SkycordIcon.vue', 'src/composables/useAvatar.ts', 'index.html', 'public/skycord-icon.svg',

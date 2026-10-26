@@ -25,6 +25,9 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   artifactName: Skycord-Setup-${version}.${ext}
+  # Refreshes the shell's icon cache after every install and update, so a changed
+  # icon shows on pinned and Start-menu shortcuts straight away.
+  include: build/installer.nsh
 publish:
   provider: github
   owner: xSMDx
