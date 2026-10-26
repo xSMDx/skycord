@@ -39,7 +39,16 @@ const props = withDefaults(defineProps<{
   /** Opt out of the motion policy — the profile editor wants to see the real
    *  thing move while you're choosing it. */
   alwaysAnimate?: boolean
-}>(), { alt: '', size: null, crop: null, square: false, ring: null, alwaysAnimate: false })
+  /**
+   * Never a control. Where the policy would make an animated avatar wait for a
+   * tap (the Light performance level), it holds its first frame instead of
+   * drawing a play button: for an avatar that is decoration, or that sits
+   * inside something which takes taps itself — a button inside a button, or
+   * inside an image, is invalid, and a small play target there is under the
+   * 44px floor a phone needs. Every other policy is unchanged.
+   */
+  still?: boolean
+}>(), { alt: '', size: null, crop: null, square: false, ring: null, alwaysAnimate: false, still: false })
 
 const animated = computed(() => isAnimated(props.src))
 const { bursting } = useGifBurst()
@@ -57,10 +66,14 @@ const loadPoster = async () => {
 onMounted(loadPoster)
 watch(() => props.src, loadPoster)
 
-const reason = computed(() => playbackPolicy({
-  animated: animated.value, alwaysAnimate: props.alwaysAnimate,
-  reduced: !motionAllowed, tapOnly: tapOnly.value, hasHover,
-}))
+const reason = computed(() => {
+  const r = playbackPolicy({
+    animated: animated.value, alwaysAnimate: props.alwaysAnimate,
+    reduced: !motionAllowed, tapOnly: tapOnly.value, hasHover,
+  })
+  // A still avatar offers no tap, so the one way it would have played is gone.
+  return props.still && r === 'tap' ? 'never' : r
+})
 
 /**
  * Show the live image when it should be moving, the poster when it shouldn't.

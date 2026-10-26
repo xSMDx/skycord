@@ -1240,9 +1240,13 @@ watch(() => callVoiceChannel.value?.id ?? null, (id, prev) => {
  * VoiceConnectedPanel's red "Couldn't connect" label is easy to miss once
  * you've looked away from it. Fires once per failed attempt, not on every
  * render while the fail-hold is showing.
+ *
+ * Not on a touch phone: there the call screen's subtitle, or the return bar
+ * when it is minimised, already says "Couldn't connect" for the whole hold, and
+ * the toast landed on the call screen's own controls.
  */
 watch(() => voice.connectStage, (stage, prev) => {
-  if (stage === 'failed' && prev !== 'failed') showToast('Couldn’t connect to voice')
+  if (stage === 'failed' && prev !== 'failed' && !noPushToTalkKey.value) showToast('Couldn’t connect to voice')
 })
 
 // Presence userIds for the open conversation's call, resolved to display info

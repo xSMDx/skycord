@@ -272,6 +272,32 @@ describe('the phone call sheet', () => {
     expect(sheet).toMatch(/onBeforeUnmount\(\(\) => \{[\s\S]{0,200}ro\?\.disconnect\(\)/)
   })
 
+  it('turns its veil solid as it is pulled up, so names and titles are never read through a moving picture', () => {
+    expect(elementWith(tpl, 'class="pcsh-bg"')).toContain('<div class="pcsh-solid" :style="solidStyle"></div>')
+    expect(sheet).toMatch(/const solidStyle = computed\(\(\) => \(dragging\.value \? \{ opacity: String\(progress\.value\) \} : undefined\)\)/)
+    expect(ruleOf(css, '.pcsh-solid')).toMatch(/background: var\(--bg-deep\)/)
+    expect(ruleOf(css, '.pcsh-solid')).toMatch(/opacity: 0/)
+    expect(ruleOf(css, '.pcsh.open .pcsh-solid')).toMatch(/opacity: 1/)
+    expect(ruleOf(css, '.pcsh.dragging .pcsh-solid')).toMatch(/transition: none/)
+  })
+
+  it('reports its height pulled up too, for the stage to keep the big avatar clear of', () => {
+    expect(sheet).toMatch(/openHeight: \[px: number\]/)
+    expect(sheet).toContain("emit('openHeight', r.offsetHeight)")
+  })
+
+  it('says the call is not coming, not that it is on its way, while a failed join is held', () => {
+    expect(sheet).toMatch(/failed\?: boolean/)
+    expect(sheet).toContain("const notJoined = computed(() => (props.failed ? 'Couldn’t connect' : 'Connecting…'))")
+    expect(sheet).toMatch(/!props\.joined \? notJoined\.value\s*:\s*null/)
+    expect(sheet).toMatch(/const cameraLabel = computed\(\(\) =>\s*!props\.joined \? notJoined\.value :/)
+  })
+
+  it('draws the people as pictures, never as play buttons inside a row', () => {
+    const row = elementWith(tpl, 'class="pcsh-person"')
+    expect(componentTag(row, 'Avatar')).toMatch(/\sstill\b/)
+  })
+
   it('is a toggle for a screen reader too', () => {
     const grab = openingTag(elementWith(tpl, 'class="pcsh-grab"'))
     expect(grab).toContain(':aria-expanded="expanded"')
@@ -285,7 +311,24 @@ describe('the sliding title', () => {
   it('ping-pongs only when the text does not fit', () => {
     expect(ruleOf(css, '.mq-text.is-moving')).toMatch(/animation:[^;]*\binfinite\b[^;]*\balternate\b/)
     expect(marquee).toContain(":class=\"{ 'is-moving': moving }\"")
-    expect(marquee).toMatch(/const moving = computed\(\(\) => overflow\.value > 0/)
+    expect(marquee).toMatch(/const moving = computed\(\(\) => props\.active && overflow\.value > 0/)
+  })
+
+  it('slides only while it is wanted, so it is never met mid-slide', () => {
+    expect(marquee).toMatch(/withDefaults\(defineProps<\{ text: string; active\?: boolean \}>\(\), \{ active: true \}\)/)
+    // The sheet's title is out of view until the list is pulled up.
+    expect(componentTag(templateOf(sheet), 'MarqueeText')).toContain(':active="expanded"')
+  })
+
+  it('fades its edges while sliding, outside the line, so the first letter rests where the still text does', () => {
+    const sliding = ruleOf(css, '.mq.is-sliding')
+    expect(sliding).toMatch(/margin:\s*0 -12px/)
+    expect(sliding).toMatch(/(?:^|[;\s])mask-image:\s*linear-gradient\(to right, transparent, black 12px, black calc\(100% - 12px\), transparent\)/)
+    expect(sliding).toContain('-webkit-mask-image:')
+    expect(ruleOf(css, '.mq.is-sliding .mq-text')).toMatch(/padding:\s*0 12px/)
+    expect(marquee).toContain(":class=\"{ 'is-still': !moving, 'is-sliding': moving }\"")
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+    expect(reduced).toMatch(/mask-image:\s*none/)
   })
 
   it('holds still with an ellipsis under reduced motion', () => {

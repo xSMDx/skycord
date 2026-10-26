@@ -121,6 +121,27 @@ describe('the sheet, as CallBar wires it', () => {
     expect(screenTag()).toContain(':sheet-height="sheetHeight"')
   })
 
+  it('tells the screen how tall the sheet is pulled up, for the stage to keep clear of', () => {
+    expect(sheetTag()).toContain('@open-height="sheetOpenHeight = $event"')
+    expect(screenTag()).toContain(':sheet-open-height="sheetOpenHeight"')
+  })
+
+  it('tells the sheet when the join has failed, so its controls stop saying "Connecting…"', () => {
+    expect(sheetTag()).toContain(':failed="failedHere"')
+  })
+
+  it('marks the subtitle as bad news when joinProgress says it is failing', () => {
+    expect(screenTag()).toContain(':subtitle-failing="phoneSubtitleFailing"')
+    expect(between(bar, 'const phoneSubtitleFailing = computed(', '\n\n')).toMatch(/\(connectingHere\.value \|\| failedHere\.value\) && joinProgress\(voice\)\?\.failing === true/)
+  })
+
+  it('times nothing while a DM rings: nobody has answered yet', () => {
+    const sub = between(bar, 'const phoneSubtitle = computed(', '\n})')
+    expect(sub).toMatch(/if \(dialing\.value\) return ''/)
+    // After the join progress, which still speaks for a join under way.
+    expect(sub.indexOf('joinProgress(voice)')).toBeLessThan(sub.indexOf('dialing.value'))
+  })
+
   it('writes the measured height where the stage reads it', () => {
     expect(screen).toMatch(/'--pcs-sheet-h': `\$\{props\.sheetHeight\}px`/)
   })

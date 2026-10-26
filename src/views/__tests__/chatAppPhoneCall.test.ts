@@ -151,6 +151,16 @@ describe('the return-to-call bar', () => {
       expect(returnBar).toMatch(/onBeforeUnmount\([\s\S]{0,80}clearInterval/)
     })
 
+    it('is the call screen’s dark, with a green dot when someone talks', () => {
+      // A green dot on a green strip could not be seen; on the call's own dark it reads.
+      expect(returnBar).toMatch(/<button[^>]*class="rtc"[^>]*data-surface="media"/)
+      const css = styleOf(returnBar)
+      expect(css).toMatch(/\.rtc\s*\{[^}]*background: var\(--bg-floor\);[^}]*color: var\(--text-strong\)/)
+      expect(css).toMatch(/\.rtc-dot\s*\{[^}]*background: var\(--green\)/)
+      expect(css).toMatch(/\.rtc-dot\.talking\s*\{[^}]*opacity: 1/)
+      expect(returnBar).toContain(":class=\"{ talking: talking && !failure }\"")
+    })
+
     it('honours reduced motion and writes no hex', () => {
       expect(styleOf(returnBar)).toContain('@media (prefers-reduced-motion: reduce)')
       expect(returnBar).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
@@ -206,6 +216,12 @@ describe('a failed join on a touch phone', () => {
     const failed = between('const failedVoiceChannel = computed', '\n})')
     expect(failed).toContain('callFailedId.value')
     expect(failed).toContain("c.type === 'voice'")
+  })
+
+  it('says so on the screen or the return bar, not in a toast over the call’s controls', () => {
+    const w = between('watch(() => voice.connectStage, (stage, prev) => {', '\n})')
+    expect(w).toContain("showToast('Couldn’t connect to voice')")
+    expect(w).toMatch(/stage === 'failed' && prev !== 'failed' && !noPushToTalkKey\.value/)
   })
 
   it('keeps its stage, its CallBar, the way back to it and the landing at its end on that channel', () => {

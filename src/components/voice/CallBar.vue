@@ -470,9 +470,12 @@ onBeforeUnmount(() => { if (clock !== null) clearInterval(clock) })
  * The line under the call's name. Joining, or failed to, the same words the
  * desktop's connection strip shows (connecting, trying again, couldn't
  * connect); in the call, the head count and the timer, or who is on camera.
+ * Nothing while a DM rings: nobody has answered, so there is no call to time
+ * yet, and "Ringing…" / "No answer" already sit under their avatar.
  */
 const phoneSubtitle = computed(() => {
   if (connectingHere.value || failedHere.value) return joinProgress(voice)?.label ?? ''
+  if (dialing.value) return ''
   return callSubtitle({
     kind: props.kind,
     count: phonePeople.value.length,
@@ -481,10 +484,16 @@ const phoneSubtitle = computed(() => {
   })
 })
 
+/** The subtitle is a join going wrong (no route, couldn't connect): the screen draws it in red. */
+const phoneSubtitleFailing = computed(() =>
+  (connectingHere.value || failedHere.value) && joinProgress(voice)?.failing === true)
+
 /** The sheet is pulled up: the controls never fade while it is. */
 const sheetExpanded = ref(false)
 /** The shut sheet's measured height, which the stage keeps its small tiles above. */
 const sheetHeight = ref<number | null>(null)
+/** Its height pulled up, which the stage keeps its big avatar clear of. */
+const sheetOpenHeight = ref<number | null>(null)
 /** The call's music, as a phone sheet over the screen. */
 const phoneMusicOpen = ref(false)
 
@@ -539,6 +548,7 @@ onBeforeUnmount(() => {
     v-if="noPushToTalkKey && (inCall || failedHere) && phoneCall.open"
     :name="name"
     :subtitle="phoneSubtitle"
+    :subtitle-failing="phoneSubtitleFailing"
     :notice="joinedHere ? micNotice(voice.mic) : null"
     :tiles="stageTiles"
     :videos="videoList"
@@ -546,6 +556,7 @@ onBeforeUnmount(() => {
     :ring-again="dialing && rangOut"
     :sheet-expanded="sheetExpanded"
     :sheet-height="sheetHeight"
+    :sheet-open-height="sheetOpenHeight"
     @minimize="onPhoneMinimize"
     @ring-again="ringAgain"
     @focus="phoneFocus = $event"
@@ -555,6 +566,7 @@ onBeforeUnmount(() => {
         :participants="phonePeople"
         :can-invite="kind !== 'dm'"
         :joined="joinedHere"
+        :failed="failedHere"
         :hidden="hidden"
         @camera="onCamera"
         @invite="emit('invite')"
@@ -563,6 +575,7 @@ onBeforeUnmount(() => {
         @leave="leave"
         @expanded="sheetExpanded = $event"
         @height="sheetHeight = $event"
+        @open-height="sheetOpenHeight = $event"
       />
       <!-- A sheet of its own, teleported over the screen; mounted with it so
            it can never outlive it. -->

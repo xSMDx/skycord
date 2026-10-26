@@ -27,6 +27,12 @@ type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted
 const props = defineProps<{
   name: string
   subtitle: string
+  /**
+   * The subtitle is bad news — no route, couldn't connect (joinProgress's
+   * `failing`) — and is drawn in the danger role, as the desktop strip draws
+   * the same words. The words still say it on their own.
+   */
+  subtitleFailing?: boolean
   /** The microphone's trouble (micNotice), or null when there is none. */
   notice: string | null
   tiles: Tile[]
@@ -42,6 +48,11 @@ const props = defineProps<{
    * when an estimate stands in.
    */
   sheetHeight?: number | null
+  /**
+   * The sheet's height pulled all the way up (its `openHeight` event). While
+   * it is up, the stage keeps its big avatar clear of it.
+   */
+  sheetOpenHeight?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -61,8 +72,6 @@ defineSlots<{
 const shownVideos = computed(() => props.videos.filter(v =>
   v.local ? v.source !== 'camera' || voiceSettings.showOwnCamera : !userPref(v.participantId).videoOff))
 
-// Your camera has the top-right corner, so the top text stops short of it.
-const ownCameraOn = computed(() => shownVideos.value.some(v => v.local && v.source === 'camera'))
 
 // ── Who fills the stage ─────────────────────────────────────────────────────
 const lastSpokeAt = reactive<Record<string, number>>({})
@@ -94,6 +103,18 @@ watch(() => (focus.value ? `${focus.value.kind}:${focus.value.id}` : ''), () => 
   const f = focus.value
   emit('focus', f ? { kind: f.kind, id: f.id } : null)
 }, { immediate: true })
+
+// Your camera has the top-right corner, so the top text stops short of it —
+// but only while it is in the corner. When nobody else has video it fills the
+// screen instead (pickFocus), the corner is empty, and the name gets the width.
+const selfViewShown = computed(() => {
+  const own = shownVideos.value.some(v => v.local && v.source === 'camera')
+  const f = focus.value
+  return own && !(f?.kind === 'camera' && f.id === props.selfId)
+})
+
+// The pulled-up sheet, for the stage to keep clear of; nothing while it is down.
+const raisedSheet = computed(() => (props.sheetExpanded && props.sheetOpenHeight ? props.sheetOpenHeight : null))
 
 // The measured sheet replaces the stylesheet's estimate.
 const rootStyle = computed(() =>
@@ -169,19 +190,20 @@ onBeforeUnmount(clearHold)
       <PhoneStage
         :tiles="tiles" :videos="shownVideos" :self-id="selfId"
         :focus="focus" :hidden="hidden" :last-spoke-at="lastSpokeAt"
+        :raised-sheet="raisedSheet"
       >
         <template #ringing>
           <button v-if="ringAgain" type="button" class="pcs-ring" @click="emit('ringAgain')">Ring again</button>
         </template>
       </PhoneStage>
 
-      <header class="pcs-top" :class="{ 'is-hidden': hidden, 'beside-self': ownCameraOn }">
+      <header class="pcs-top" :class="{ 'is-hidden': hidden, 'beside-self': selfViewShown }">
         <button type="button" class="pcs-min" aria-label="Minimise call" @click="emit('minimize')">
           <ChevronDown :size="28" :stroke-width="2.25" />
         </button>
         <div class="pcs-titles">
           <h2 class="pcs-name">{{ name }}</h2>
-          <p v-if="subtitle" class="pcs-sub">{{ subtitle }}</p>
+          <p v-if="subtitle" class="pcs-sub" :class="{ failing: subtitleFailing }">{{ subtitle }}</p>
           <p v-if="notice" class="pcs-notice">{{ notice }}</p>
         </div>
       </header>
@@ -242,8 +264,13 @@ onBeforeUnmount(clearHold)
 .pcs-min:active { background: var(--press-veil); }
 .pcs-min:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
-/* Two lines beside a 44px button: 22 + 18 + the 2 that centres them on it. */
-.pcs-titles { flex: 1; min-width: 0; padding-top: 2px; text-shadow: 0 1px 2px var(--media-veil); }
+/* Centred on the 44px button whether it is one line (the name alone, while a
+   DM rings) or two (22 + 18); a notice line below them grows it downwards. */
+.pcs-titles {
+  flex: 1; min-width: 0; min-height: 44px;
+  display: flex; flex-direction: column; justify-content: center;
+  text-shadow: 0 1px 2px var(--media-veil);
+}
 .pcs-name {
   margin: 0; font-size: 17px; line-height: 22px; font-weight: 500; letter-spacing: -0.01em;
   color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -253,6 +280,7 @@ onBeforeUnmount(clearHold)
   font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.pcs-sub.failing { color: var(--danger-text); }
 .pcs-notice { margin: 4px 0 0; font-size: 13px; line-height: 18px; color: var(--warning-text); }
 
 /* ── Ring again, under the person being rung ── */

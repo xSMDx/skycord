@@ -47,6 +47,27 @@ const elementsWith = (src: string, marker: string): string[] => {
   return found
 }
 
+/** The opening tag alone: from `<` to the `>` that ends it. */
+const openingTag = (element: string): string => {
+  let quote = ''
+  for (let i = 0; i < element.length; i++) {
+    const c = element[i]
+    if (quote) { if (c === quote) quote = ''; continue }
+    if (c === '"' || c === "'") quote = c
+    else if (c === '>') return element.slice(0, i + 1)
+  }
+  return element
+}
+
+/** The source from `start` up to the first `end` after it. */
+const between = (src: string, start: string, end: string): string => {
+  const from = src.indexOf(start)
+  expect(from, `"${start}" is in the source`).toBeGreaterThan(-1)
+  const to = src.indexOf(end, from + start.length)
+  expect(to, `"${end}" follows it`).toBeGreaterThan(from)
+  return src.slice(from, to)
+}
+
 /** What fades when the controls hide. */
 const FADES = "'is-hidden': hidden"
 
@@ -137,6 +158,54 @@ describe('the phone stage', () => {
   it('picks the small tiles by the call cap, as the desktop grid does', () => {
     expect(stage).toContain('visibleTiles(')
     expect(stage).toContain('perf.maxCallTiles')
+  })
+
+  it('draws its faces as pictures, never as play buttons inside an image', () => {
+    // On the Light level an animated avatar would otherwise wait for a tap
+    // behind a small play button: invalid inside role="img", and under 44px.
+    expect(elementWith(stage, 'class="ps-av"')).toMatch(/<Avatar\s[^>]*\sstill\b/)
+    expect(elementWith(stage, 'class="ps-tile-av"')).toMatch(/<Avatar\s[^>]*\sstill\b/)
+  })
+
+  it('keeps out from under the pulled-up sheet', () => {
+    expect(stage).toMatch(/raisedSheet\?: number \| null/)
+    // The small tiles are in the sheet's list by then, and the ring line goes with them.
+    expect(elementWith(stage, 'class="ps-row"')).toContain("'is-hidden': hidden || raised")
+    expect(elementWith(stage, 'class="ps-ringing"')).toContain("'is-hidden': hidden || raised")
+    // The big avatar moves to the middle of what is left, measured from layout
+    // positions a transform does not change; with no room left it fades.
+    expect(stage).toMatch(/const bottom = m\.clientHeight - props\.raisedSheet/)
+    expect(stage).toContain('el.offsetTop + h / 2')
+    expect(stage).toMatch(/transform: `translateY\(\$\{lift\.value\}px\)`/)
+    const solo = openingTag(elementWith(stage, 'class="ps-solo"'))
+    expect(solo).toContain(":class=\"{ raised, 'no-room': raised && noRoom }\"")
+    expect(solo).toContain(':style="soloStyle"')
+    const css = styleOf(stage)
+    expect(css).toMatch(/\.ps-solo\s*\{[^}]*transition: transform var\(--dur-3\) var\(--ease-out\)/)
+    expect(css).toMatch(/\.ps-solo\.raised\s*\{[^}]*transition-duration: var\(--dur-4\)/)
+    expect(css).toMatch(/\.ps-solo\.no-room\s*\{[^}]*opacity: 0/)
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.ps-solo, \.ps-solo\.raised \{ transition: none; \}/)
+  })
+})
+
+describe('the screen and its stage, together', () => {
+  it('hands the stage the pulled-up sheet, and nothing while it is down', () => {
+    expect(screen).toMatch(/sheetOpenHeight\?: number \| null/)
+    expect(screen).toContain('const raisedSheet = computed(() => (props.sheetExpanded && props.sheetOpenHeight ? props.sheetOpenHeight : null))')
+    expect(screen).toMatch(/<PhoneStage[\s\S]*?:raised-sheet="raisedSheet"/)
+  })
+
+  it('draws a join going wrong in the danger role, as the desktop strip does', () => {
+    expect(screen).toMatch(/subtitleFailing\?: boolean/)
+    expect(elementWith(screen, 'class="pcs-sub"')).toContain(':class="{ failing: subtitleFailing }"')
+    expect(styleOf(screen)).toMatch(/\.pcs-sub\.failing\s*\{\s*color: var\(--danger-text\);\s*\}/)
+  })
+
+  it('stops the name short of your camera only while it is in the corner', () => {
+    expect(elementWith(screen, 'class="pcs-top"')).toContain("'beside-self': selfViewShown")
+    const shown = between(screen, 'const selfViewShown = computed(() => {', '\n})')
+    // Filling the screen (nobody else has video), it leaves the corner empty.
+    expect(shown).toContain("!(f?.kind === 'camera' && f.id === props.selfId)")
   })
 })
 

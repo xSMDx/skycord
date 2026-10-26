@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * The way back into a minimised call on a phone: a slim green strip across
- * the top of every screen while you are in a call and the call screen is not
- * showing. The green iOS uses for a call going on behind the app, so it reads
- * as "your call" at a glance; it names the call, says when someone is talking,
- * and keeps the call's time.
+ * The way back into a minimised call on a phone: a slim dark strip across the
+ * top of every screen while you are in a call and the call screen is not
+ * showing — the call screen's own dark, carried up, as a phone's call pill is
+ * dark with the call's green inside it. It names the call, keeps the call's
+ * time, and shows a green dot when someone is talking: green on the dark, which
+ * reads at a glance where a green dot on a green strip could not be seen at all.
  *
  * One button, all of it. Tapping it is the host's to act on (`open`): ChatApp
  * goes back to the call's conversation and brings the screen up.
@@ -44,7 +45,7 @@ const time = computed(() => (props.startedAt === null ? null : formatElapsed(now
 
 <template>
   <button
-    type="button" class="rtc" :class="{ failed: !!failure }"
+    type="button" class="rtc" :class="{ failed: !!failure }" data-surface="media"
     :aria-label="failure ? `Return to call: ${name}, ${failure}` : `Return to call: ${name}`"
     @click="emit('open')"
   >
@@ -67,9 +68,10 @@ const time = computed(() => (props.startedAt === null ? null : formatElapsed(now
   padding: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px)) 16px 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   border: none; border-radius: 0;
-  /* A fixed fill in every theme, as the connection strip's are: it is a
-     status, not a surface, and white on it is measured (4.94:1). */
-  background: var(--green-deep); color: var(--text-on-green-deep);
+  /* The call screen's ground in every theme (data-surface="media" keeps the
+     dark values on the light themes): it is the call, minimised, not a
+     surface of the page under it. */
+  background: var(--bg-floor); color: var(--text-strong);
   font-family: inherit; font-size: 14px; line-height: 20px; font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -80,24 +82,22 @@ const time = computed(() => (props.startedAt === null ? null : formatElapsed(now
 }
 @keyframes rtc-in { from { opacity: 0; } }
 
-/* Lands on the press: late feedback is no feedback. */
-.rtc:active { background: var(--green-deep-hover); }
+/* Pressed, the app-wide press veil lands on it with no easing (style.css). */
 
-/* The join failed: the strip is no longer a call going on, so it drops the
-   green for the red the connection strip uses for "can't reach" (white on it
-   measured), and the dot goes quiet. Tapping it still opens the screen, whose
+/* The join failed: the strip is no longer a call going on, so it takes the
+   red the connection strip uses for "can't reach" (white on it measured), and
+   the dot goes. Tapping it still opens the screen, whose
    hang-up dismisses the failure. */
 .rtc.failed { background: var(--danger-hover); color: var(--text-on-danger-hover); }
-.rtc.failed:active { background: var(--danger-hover); filter: brightness(.9); }
 .rtc.failed .rtc-dot { opacity: 0; }
 .rtc:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -4px; }
 
-/* Someone talking: the dot comes up to full size and strength. Drawn in the
-   strip's own ink, the one mark that reads on the green. */
+/* The call's green, quiet while nobody talks; someone talking brings it up to
+   full size and strength. */
 .rtc-dot {
   flex: none; width: 8px; height: 8px; border-radius: 50%;
-  background: currentColor;
-  opacity: .5; transform: scale(.75);
+  background: var(--green);
+  opacity: .4; transform: scale(.75);
   transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
 }
 .rtc-dot.talking { opacity: 1; transform: none; }
@@ -106,7 +106,8 @@ const time = computed(() => (props.startedAt === null ? null : formatElapsed(now
    cut-off time is no time at all. */
 .rtc-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A step further off than the dot is from the name: two facts, not one phrase. */
-.rtc-time { flex: none; margin-left: 4px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.rtc-time { flex: none; margin-left: 4px; font-weight: 500; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.rtc.failed .rtc-time { color: inherit; }
 
 /* Arrives in place, and the dot changes without moving. */
 @media (prefers-reduced-motion: reduce) {

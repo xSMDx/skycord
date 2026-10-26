@@ -43,6 +43,12 @@ const props = defineProps<{
   canInvite: boolean
   /** In the call, as opposed to still connecting to it. */
   joined: boolean
+  /**
+   * The join failed and the failure is still held on screen. Neither joined nor
+   * connecting: the controls that wait for the call say it is not coming, in
+   * the subtitle's own words, rather than that it is on its way.
+   */
+  failed?: boolean
   /** The controls have faded over a video. Everything but Hold to talk goes with them. */
   hidden: boolean
 }>()
@@ -59,6 +65,8 @@ const emit = defineEmits<{
   expanded: [on: boolean]
   /** The shut sheet's height in px, Hold to talk and the home-indicator inset included. */
   height: [px: number]
+  /** Its height pulled all the way up, list included: where the stage keeps its big avatar clear of it. */
+  openHeight: [px: number]
 }>()
 
 const { voice, toggleMute } = useVoice()
@@ -78,16 +86,19 @@ const micLabel = computed(() =>
     : pushToTalk.value ? 'This channel uses push to talk'
       : voice.localMuted ? 'Unmute' : 'Mute')
 
+/** Why a control that needs the call cannot act yet: on its way, or not coming. */
+const notJoined = computed(() => (props.failed ? 'Couldn’t connect' : 'Connecting…'))
+
 /** Why Hold to talk cannot transmit right now, or null when it can. */
 const pttBlocked = computed<string | null>(() =>
   serverMuted.value ? 'Muted by the server'
     // The push-to-talk key does nothing while deafened; the bar matches it.
     : voice.localDeafened ? 'Deafened'
-      : !props.joined ? 'Connecting…'
+      : !props.joined ? notJoined.value
         : null)
 
 const cameraLabel = computed(() =>
-  !props.joined ? 'Connecting…' : media.localCamOn ? 'Turn off camera' : 'Turn on camera')
+  !props.joined ? notJoined.value : media.localCamOn ? 'Turn off camera' : 'Turn on camera')
 
 // ── The swiped-up list ──────────────────────────────────────────────────────
 const musicLabel = computed(() => musicCardLabel({
@@ -126,6 +137,8 @@ const progress = computed(() => {
 // Under the finger the hint gives way to the list as far as it has been drawn.
 const hintStyle = computed(() => (dragging.value ? { opacity: String(1 - progress.value) } : undefined))
 const bodyStyle = computed(() => (dragging.value ? { opacity: String(progress.value) } : undefined))
+// The material firms up with it, so text is never read through a moving picture.
+const solidStyle = computed(() => (dragging.value ? { opacity: String(progress.value) } : undefined))
 
 let settleTimer: ReturnType<typeof setTimeout> | null = null
 const settleTo = (open: boolean) => {
@@ -210,6 +223,7 @@ const onClickCapture = (e: MouseEvent) => {
 
 // ── Measuring ───────────────────────────────────────────────────────────────
 let lastHeight = -1
+let lastOpenHeight = -1
 const measure = () => {
   const r = root.value
   const b = body.value
@@ -223,6 +237,11 @@ const measure = () => {
   if (h !== lastHeight) {
     lastHeight = h
     emit('height', h)
+  }
+  // Pulled up, all of it shows: the transform that hides the list is gone.
+  if (r.offsetHeight !== lastOpenHeight) {
+    lastOpenHeight = r.offsetHeight
+    emit('openHeight', r.offsetHeight)
   }
 }
 
@@ -255,7 +274,7 @@ onBeforeUnmount(() => {
     @pointercancel="onUp"
     @click.capture="onClickCapture"
   >
-    <div class="pcsh-bg" :class="{ 'is-hidden': hidden }" aria-hidden="true"></div>
+    <div class="pcsh-bg" :class="{ 'is-hidden': hidden }" aria-hidden="true"><div class="pcsh-solid" :style="solidStyle"></div></div>
 
     <button
       ref="grab"
@@ -315,7 +334,7 @@ onBeforeUnmount(() => {
           <h3 class="pcsh-h">In this call · {{ participants.length }}</h3>
           <ul class="pcsh-ppl">
             <li v-for="p in participants" :key="p.id" class="pcsh-person">
-              <span class="pcsh-av" :class="{ speaking: p.speaking }"><Avatar :src="p.avatar || defaultAvatar(p.name)" alt="" /></span>
+              <span class="pcsh-av" :class="{ speaking: p.speaking }"><Avatar :src="p.avatar || defaultAvatar(p.name)" alt="" still /></span>
               <span class="pcsh-name">{{ p.name }}</span>
               <span v-if="p.muted" class="pcsh-state muted" role="img" aria-label="Muted"><MicOff :size="16" :stroke-width="2.25" /></span>
               <span v-else-if="p.speaking" class="pcsh-state talking" role="img" aria-label="Talking"><Mic :size="16" :stroke-width="2.25" /></span>
@@ -333,7 +352,9 @@ onBeforeUnmount(() => {
             <template v-if="musicLabel.kind === 'song'">
               <img v-if="musicLabel.cover" class="pcsh-cover" :src="musicLabel.cover" alt="" draggable="false" />
               <span v-else class="pcsh-cover is-blank"><Music2 :size="16" :stroke-width="2.25" /></span>
-              <MarqueeText class="pcsh-song" :text="musicLabel.title" />
+              <!-- Slides only while the list is up, so it starts from the
+                   beginning when it comes into view rather than mid-way. -->
+              <MarqueeText class="pcsh-song" :text="musicLabel.title" :active="expanded" />
             </template>
             <span v-else-if="musicLabel.kind === 'count'" class="pcsh-now-text">{{ musicLabel.n }} playing</span>
             <span v-else class="pcsh-now-text pcsh-quiet">Not playing</span>
@@ -386,6 +407,20 @@ onBeforeUnmount(() => {
   background: linear-gradient(var(--hover), var(--hover)), var(--media-veil-strong);
   box-shadow: inset 0 1px 0 var(--border), var(--shadow-sheet);
 }
+/* Pulled up, the veil turns solid. Shut, it holds four circles, which read on
+   any picture; up, it holds names and a song title, which over a bright video
+   seen through a 65% veil fall well short of legible. Without a blur to carry
+   them (Apple's answer, too costly over live video), a solid ground is — as
+   on a phone set to reduce transparency. The stage's own ground, so over the
+   dark stage the change is not seen at all. */
+.pcsh-solid {
+  position: absolute; inset: 0; border-radius: inherit;
+  background: var(--bg-deep); box-shadow: inset 0 1px 0 var(--border);
+  opacity: 0;
+  transition: opacity var(--dur-3) var(--ease-out);
+}
+.pcsh.open .pcsh-solid { opacity: 1; transition-duration: var(--dur-4); }
+.pcsh.dragging .pcsh-solid { transition: none; }
 
 /* A 44px target around a 36px bar: pulled, or tapped to open and close. */
 .pcsh-grab {
@@ -419,6 +454,8 @@ onBeforeUnmount(() => {
 .pcsh-hint {
   flex: none; margin: 12px 0 0; padding-bottom: 12px;
   font-size: 13px; line-height: 18px; text-align: center; color: var(--text-3);
+  /* Over a bright picture, the same lift the call's name has (PhoneCallScreen). */
+  text-shadow: 0 1px 2px var(--media-veil);
   transition: opacity var(--dur-3) var(--ease-out), visibility 0s;
 }
 .pcsh.open .pcsh-hint { opacity: 0; }
@@ -506,6 +543,7 @@ onBeforeUnmount(() => {
 /* The sheet snaps between its places, and the controls come and go, without moving. */
 @media (prefers-reduced-motion: reduce) {
   .pcsh.settling, .pcsh.settling:not(.open) { transition: none; }
-  .pcsh-bg, .pcsh-grab, .pcsh-row, .pcsh-hint, .pcsh-body, .pcsh .is-hidden, .pcsh-av { transition: none; }
+  .pcsh-bg, .pcsh-grab, .pcsh-row, .pcsh-hint, .pcsh-body, .pcsh .is-hidden, .pcsh-av,
+  .pcsh-solid, .pcsh.open .pcsh-solid { transition: none; }
 }
 </style>

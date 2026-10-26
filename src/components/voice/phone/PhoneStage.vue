@@ -8,7 +8,7 @@
  * draws them, with one rule of its own: a focus whose video has gone — someone
  * kept in the slot after their camera went off — is drawn as the person.
  */
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { MicOff } from 'lucide-vue-next'
 import VideoTile from '../VideoTile.vue'
 import Avatar from '@/components/ui/Avatar.vue'
@@ -30,6 +30,13 @@ const props = defineProps<{
   hidden: boolean
   /** When each person last spoke, kept by the screen, so the row is ranked the way the focus is. */
   lastSpokeAt: Record<string, number>
+  /**
+   * The sheet is pulled up, and this is its height in px; null while it is
+   * down. It covers the bottom of the stage then, so the small tiles (listed in
+   * the sheet now) and the ring line step aside, and the big avatar moves up
+   * to the middle of what is left — or, with no room left for it, fades.
+   */
+  raisedSheet?: number | null
 }>()
 
 defineSlots<{
@@ -107,6 +114,33 @@ const row = computed(() => props.tiles
 const notShown = computed(() => props.tiles.filter(t => !kept.value.has(t.id) && !offRow(t.id)).length)
 
 const label = (t: Tile): string => (t.muted ? `${t.name}, muted` : t.name)
+
+// ── Clear of the pulled-up sheet ────────────────────────────────────────────
+const main = ref<HTMLElement | null>(null)
+const solo = ref<HTMLElement | null>(null)
+const raised = computed(() => props.raisedSheet != null)
+/** How far up the big avatar moves, in px (0 or less). */
+const lift = ref(0)
+/** No room for it above the sheet: it fades rather than sit half under it. */
+const noRoom = ref(false)
+
+// Layout positions (offsetTop), which a transform does not change, so a lift
+// measured mid-move is the same as one measured at rest. The row and the ring
+// line step aside by fading, not by leaving the layout, for the same reason.
+const place = () => {
+  const m = main.value
+  const el = solo.value
+  if (props.raisedSheet == null || !m || !el) { lift.value = 0; noRoom.value = false; return }
+  const top = parseFloat(getComputedStyle(m).paddingTop) || 0
+  const bottom = m.clientHeight - props.raisedSheet
+  const h = el.offsetHeight
+  // Half the 16px the stage keeps between things, above and below.
+  if (bottom - top < h + 16) { lift.value = 0; noRoom.value = true; return }
+  noRoom.value = false
+  lift.value = Math.min(0, Math.round((top + bottom) / 2 - (el.offsetTop + h / 2)))
+}
+watch(() => [props.raisedSheet, bigPerson.value?.id, !!bigVideo.value, ringing.value?.ring], () => { void nextTick(place) })
+const soloStyle = computed(() => (lift.value ? { transform: `translateY(${lift.value}px)` } : undefined))
 </script>
 
 <template>
@@ -120,25 +154,28 @@ const label = (t: Tile): string => (t.muted ? `${t.name}, muted` : t.name)
       <div class="ps-scrim" :class="{ 'is-hidden': hidden }"></div>
     </template>
 
-    <div class="ps-main" :class="{ 'over-video': bigVideo }">
-      <div v-if="!bigVideo && bigPerson" :key="bigPerson.id" class="ps-solo">
+    <div ref="main" class="ps-main" :class="{ 'over-video': bigVideo }">
+      <div
+        v-if="!bigVideo && bigPerson" ref="solo" :key="bigPerson.id"
+        class="ps-solo" :class="{ raised, 'no-room': raised && noRoom }" :style="soloStyle"
+      >
         <div class="ps-av" :class="{ speaking: bigPerson.speaking, unanswered: bigPerson.ring === 'no-answer' }">
           <span v-if="bigPerson.ring === 'ringing'" class="ps-wave"></span>
-          <Avatar :src="avatarOf(bigPerson)" :alt="bigPerson.name" />
+          <Avatar :src="avatarOf(bigPerson)" :alt="bigPerson.name" still />
           <span v-if="bigPerson.muted" class="ps-av-mute"><MicOff :size="14" :stroke-width="2.25" /></span>
         </div>
       </div>
 
-      <div v-if="ringing" class="ps-ringing" :class="{ 'is-hidden': hidden }">
+      <div v-if="ringing" class="ps-ringing" :class="{ 'is-hidden': hidden || raised }">
         <p class="ps-ring-label">{{ ringing.ring === 'ringing' ? 'Ringing…' : 'No answer' }}</p>
         <slot name="ringing" />
       </div>
 
-      <div v-if="row.length || notShown" class="ps-row" :class="{ 'is-hidden': hidden }">
+      <div v-if="row.length || notShown" class="ps-row" :class="{ 'is-hidden': hidden || raised }">
         <div class="ps-row-inner">
           <div v-for="r in row" :key="r.tile.id" class="ps-tile" :class="{ speaking: r.tile.speaking }" role="img" :aria-label="label(r.tile)">
             <VideoTile v-if="r.camera" :track="r.camera.track" fit="cover" />
-            <span v-else class="ps-tile-av"><Avatar :src="avatarOf(r.tile)" alt="" /></span>
+            <span v-else class="ps-tile-av"><Avatar :src="avatarOf(r.tile)" alt="" still /></span>
             <span v-if="r.tile.muted" class="ps-tile-mute"><MicOff :size="10" :stroke-width="2.5" /></span>
           </div>
           <div v-if="notShown" class="ps-tile ps-more" role="img" :aria-label="`${notShown} more in the call`">+{{ notShown }}</div>
@@ -183,7 +220,15 @@ const label = (t: Tile): string => (t.muted ? `${t.name}, muted` : t.name)
 .ps-main.over-video { justify-content: flex-end; padding-bottom: calc(var(--pcs-sheet-h, 0px) + 12px); }
 
 /* ── The big avatar ── */
-.ps-solo { display: flex; flex-direction: column; align-items: center; animation: ps-in var(--dur-3) var(--ease-out); }
+/* It moves with the sheet: up as the sheet settles open (--dur-4), back down
+   as it settles shut (--dur-3), on the sheet's own curve. */
+.ps-solo {
+  display: flex; flex-direction: column; align-items: center;
+  animation: ps-in var(--dur-3) var(--ease-out);
+  transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);
+}
+.ps-solo.raised { transition-duration: var(--dur-4); }
+.ps-solo.no-room { opacity: 0; }
 @keyframes ps-in { from { opacity: 0; transform: scale(.96); } }
 
 .ps-av {
@@ -272,8 +317,10 @@ const label = (t: Tile): string => (t.muted ? `${t.name}, muted` : t.name)
 
 @media (prefers-reduced-motion: reduce) {
   .ps-fill, .ps-solo { animation: none; }
-  /* Still plainly "calling", without the motion. */
-  .ps-wave { animation: none; opacity: .5; }
+  .ps-solo, .ps-solo.raised { transition: none; }
+  /* Still plainly "calling", without the motion: one still ring, just clear
+     of the face (at its resting size it would sit hidden behind it). */
+  .ps-wave { animation: none; opacity: .5; transform: scale(1.16); }
   .ps-scrim, .ps-ringing, .ps-row,
   .ps-scrim.is-hidden, .ps-ringing.is-hidden, .ps-row.is-hidden { transition: none; }
 }
