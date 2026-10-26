@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { joinProgress } from '../callStatus'
+import { joinProgress, failedCallId } from '../callStatus'
 import type { ConnectStage } from '../useVoice'
 
 // The shape useVoice keeps while a join is under way: connecting is true for the
@@ -60,5 +60,36 @@ describe('joinProgress', () => {
 
   it('not in a call at all → null', () => {
     expect(joinProgress(v({ connecting: false, connectStage: null, connectAttempt: 0 }))).toBeNull()
+  })
+})
+
+// What giveUp leaves behind: connecting and connected are cleared, the stage is
+// held at 'failed' until leave() runs, and the ids are kept — connectingConvId
+// from the attempt (cleared only by a success or cleanup), activeConvId too
+// when the failure was a rejoin of a call that had been up.
+const f = (o: Partial<{ connectStage: ConnectStage; connectingConvId: string | null; activeConvId: string | null }> = {}) =>
+  ({ connectStage: 'failed' as ConnectStage, connectingConvId: null, activeConvId: null, ...o })
+
+describe('failedCallId', () => {
+  it('names the conversation of a first join that failed', () => {
+    expect(failedCallId(f({ connectingConvId: 'dm1' }))).toBe('dm1')
+  })
+
+  it('names the conversation of a rejoin that failed', () => {
+    expect(failedCallId(f({ connectingConvId: 'ch1', activeConvId: 'ch1' }))).toBe('ch1')
+  })
+
+  it('falls back to the call that was up when only that is left', () => {
+    expect(failedCallId(f({ activeConvId: 'g1' }))).toBe('g1')
+  })
+
+  it('is null outside the failed hold, whatever ids are set', () => {
+    for (const connectStage of [null, 'connected', 'connecting', 'no-route'] as ConnectStage[]) {
+      expect(failedCallId(f({ connectStage, connectingConvId: 'dm1', activeConvId: 'dm1' }))).toBeNull()
+    }
+  })
+
+  it('is null once leave() has cleared the ids', () => {
+    expect(failedCallId(f())).toBeNull()
   })
 })

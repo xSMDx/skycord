@@ -31,7 +31,7 @@ import PhoneCallSheet from './phone/PhoneCallSheet.vue'
 import PhoneMusicSheet from './phone/PhoneMusicSheet.vue'
 import { phoneCall, minimizePhoneCall } from '@/composables/phoneCall'
 import { callSubtitle, type FocusKind } from '@/composables/phoneCallRules'
-import { joinProgress } from '@/composables/callStatus'
+import { joinProgress, failedCallId } from '@/composables/callStatus'
 import { micNotice } from '@/composables/micState'
 import { soundDialStart, soundDialStop } from '@/composables/useSocket'
 // Aliased: this component already has its own `openMenu` ref for the flyouts.
@@ -426,6 +426,15 @@ onBeforeUnmount(() => { clearRingTimer(); soundDialStop() })
 // Whether it is open is ChatApp's to decide (phoneCall.open); minimising is
 // the one thing decided here, because the screen's chevron is here.
 
+/**
+ * This conversation's join has failed, and the failure is still held (the
+ * seconds before useVoice leaves on its own). Not in the call any more, but
+ * on a phone the screen stays up through it, saying so, until it is
+ * dismissed or the hold ends: the desktop's VoiceConnectedPanel, the one
+ * other place that says it, is not drawn on a phone.
+ */
+const failedHere = computed(() => failedCallId(voice) === props.convId)
+
 /** You, as the screen's stage knows you: your LiveKit id once joined, the optimistic tile's before. */
 const selfId = computed(() =>
   (joinedHere.value ? voice.participants.find(p => p.local)?.id : null) ?? 'me')
@@ -444,7 +453,7 @@ const onCameraName = computed(() => {
   return v ? (stageTiles.value.find(t => t.id === f.id)?.name || v.name || null) : null
 })
 
-const phoneOpen = computed(() => noPushToTalkKey.value && inCall.value && phoneCall.open)
+const phoneOpen = computed(() => noPushToTalkKey.value && (inCall.value || failedHere.value) && phoneCall.open)
 
 // The call's timer reads a clock that ticks only while the screen is up.
 const now = ref(Date.now())
@@ -458,12 +467,12 @@ watch(phoneOpen, on => {
 onBeforeUnmount(() => { if (clock !== null) clearInterval(clock) })
 
 /**
- * The line under the call's name. Joining, the same progress the desktop's
- * connection strip shows (connecting, trying again); in the call, the head
- * count and the timer, or who is on camera.
+ * The line under the call's name. Joining, or failed to, the same words the
+ * desktop's connection strip shows (connecting, trying again, couldn't
+ * connect); in the call, the head count and the timer, or who is on camera.
  */
 const phoneSubtitle = computed(() => {
-  if (connectingHere.value) return joinProgress(voice)?.label ?? ''
+  if (connectingHere.value || failedHere.value) return joinProgress(voice)?.label ?? ''
   return callSubtitle({
     kind: props.kind,
     count: phonePeople.value.length,
@@ -491,6 +500,9 @@ const onPhoneMinimize = () => {
   // Escape from a keyboard lands on the screen even with the music sheet over
   // it; it closes what is on top first, as Android Back does.
   if (phoneMusicOpen.value) { phoneMusicOpen.value = false; return }
+  // A join that failed has no call to go back to: closing the screen
+  // dismisses it, as hanging up does, rather than leaving a bar that says so.
+  if (failedHere.value) { void leave(); return }
   minimizePhoneCall()
   // A voice channel's stage would be an empty column without the screen, so
   // ChatApp closes it too (viewedVoiceId), landing on the server's text side.
@@ -524,7 +536,7 @@ onBeforeUnmount(() => {
        Full screen, teleported to the body. Minimised, nothing is drawn here:
        the return bar at the top of the app stands in for it. -->
   <PhoneCallScreen
-    v-if="noPushToTalkKey && inCall && phoneCall.open"
+    v-if="noPushToTalkKey && (inCall || failedHere) && phoneCall.open"
     :name="name"
     :subtitle="phoneSubtitle"
     :notice="joinedHere ? micNotice(voice.mic) : null"
@@ -566,7 +578,7 @@ onBeforeUnmount(() => {
        Never on a touch phone in the call (the screen above, or the return
        bar), so none of the desktop controls below reach a phone mid-call. A
        call you have not joined still draws here on a phone, with its Join. -->
-  <div v-else-if="visible && !(noPushToTalkKey && inCall)" ref="callbarRef" class="callbar" data-surface="media" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': chatHidden, 'is-fs': isFullscreen, 'is-dragging': dragging, 'is-touch-phone': noPushToTalkKey }">
+  <div v-else-if="visible && !(noPushToTalkKey && (inCall || failedHere))" ref="callbarRef" class="callbar" data-surface="media" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': chatHidden, 'is-fs': isFullscreen, 'is-dragging': dragging, 'is-touch-phone': noPushToTalkKey }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the

@@ -77,6 +77,7 @@ import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import ReturnToCallBar       from '@/components/voice/phone/ReturnToCallBar.vue'
 import { phoneCall, openPhoneCall, minimizePhoneCall, useCallKeepAwake, initSpeaker, callAudioActive } from '@/composables/phoneCall'
+import { joinProgress, failedCallId } from '@/composables/callStatus'
 import { noPushToTalkKey }   from '@/composables/useVoiceSettings'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance, accentHex, chooseVariant, chooseStudio } from '@/composables/useAppearance'
@@ -661,6 +662,29 @@ const liveVoiceChannel = computed<Channel | null>(() => {
   return null
 })
 
+/** The conversation whose join has failed, while useVoice holds the failure on screen. */
+const callFailedId = computed(() => failedCallId(voice))
+/** The voice channel whose join has failed, for that hold. */
+const failedVoiceChannel = computed<Channel | null>(() => {
+  const id = callFailedId.value
+  if (!id) return null
+  for (const list of Object.values(channelsByServer.value)) {
+    const ch = list.find(c => c.id === id && c.type === 'voice')
+    if (ch) return ch
+  }
+  return null
+})
+/**
+ * The voice channel the call surface belongs to: the live call's, and on a
+ * touch phone a failed join's too, for its hold. There the phone call screen
+ * is the only thing that says the join failed, and it lives in the channel's
+ * CallBar, which needs the stage kept for it. Everything that shows where you
+ * ARE — the sidebar row, the occupants, the rail badge — keeps reading
+ * liveVoiceChannel, so those still retract the moment the join fails. On a
+ * desktop the two are the same.
+ */
+const callVoiceChannel = computed(() => liveVoiceChannel.value ?? (noPushToTalkKey.value ? failedVoiceChannel.value : null))
+
 /**
  * What the Voice Connected panel calls this channel.
  *
@@ -690,7 +714,7 @@ const voiceChannelLabel = (ch: Channel) => {
  * server is already named by the rail and the sidebar right next to it.
  */
 const viewedVoiceChannel = computed<Channel | null>(() => {
-  const vc = liveVoiceChannel.value
+  const vc = callVoiceChannel.value
   if (!vc || vc.id !== viewedVoiceId.value) return null
   if (view.value !== 'server' || vc.serverId !== activeServerId.value) return null
   return vc
@@ -707,7 +731,7 @@ const currentCall = computed<{ id: string; kind: 'dm' | 'group' | 'channel'; nam
   // unrelated conversation, and to a call you have actually joined: an ongoing
   // channel call you haven't joined belongs to the sidebar's occupant list,
   // which names it, rather than to a banner that couldn't say which channel.
-  const vc = liveVoiceChannel.value
+  const vc = callVoiceChannel.value
   if (view.value === 'server' && vc && vc.serverId === activeServerId.value)
     return { id: vc.id, kind: 'channel', name: voiceChannelLabel(vc) }
   return null
@@ -730,7 +754,7 @@ const returnToCall = () => {
   // channel happens to be selected underneath it (openServer's `selectLanding`
   // always picks a text channel and clears `viewedVoiceId`, so without this
   // "return to call" would land you next to the call instead of on it).
-  const vc = liveVoiceChannel.value
+  const vc = callVoiceChannel.value
   if (vc) {
     const showStage = () => viewVoiceChannel(vc.id)
     // Already in the right server: no navigation needed, but the stage may
@@ -793,10 +817,20 @@ const showPhoneCall = () => {
   openPhoneCall()
 }
 
-// Joining or connecting opens it; the call ending (left, or given up on) puts it away.
-watch(() => voice.connected || voice.connecting, (inCall, was) => {
-  if (inCall && !was && noPushToTalkKey.value) showPhoneCall()
-  if (!inCall) { phoneCallWanted = false; minimizePhoneCall() }
+/**
+ * The call surface has something to show: a call up or joining, or a join
+ * that has failed and whose failure useVoice is still holding. giveUp clears
+ * connected and connecting at once, and the phone has no VoiceConnectedPanel
+ * to say why the call went, so the screen (or the return bar) stays through
+ * the hold, saying "Couldn't connect", until it is dismissed or the hold ends.
+ */
+const callSurfaceUp = computed(() => voice.connected || voice.connecting || callFailedId.value !== null)
+
+// Joining or connecting opens it; the call ending (left, or a failed join's
+// hold over) puts it away.
+watch(callSurfaceUp, (up, was) => {
+  if (up && !was && noPushToTalkKey.value) showPhoneCall()
+  if (!up) { phoneCallWanted = false; minimizePhoneCall() }
 })
 // Opening the voice channel you are in: its stage is the screen on a phone.
 watch(voiceStageOpen, open => { if (open && noPushToTalkKey.value) showPhoneCall() })
@@ -807,19 +841,24 @@ watch(callInView, inView => {
   else if (phoneCallWanted) showPhoneCall()
 })
 
-/** The return bar: in a call on a touch phone, whenever the screen is not up. */
-const returnBarShown = computed(() => noPushToTalkKey.value && (voice.connected || voice.connecting) && !phoneCall.open)
+/** The return bar: in a call (or its failed join) on a touch phone, whenever the screen is not up. */
+const returnBarShown = computed(() => noPushToTalkKey.value && callSurfaceUp.value && !phoneCall.open)
 /** Anyone in the call talking, for the return bar's dot. */
 const callTalking = computed(() => voice.participants.some(p => p.speaking && !p.muted))
+/** Why the call is not up, in the words the screen uses ("Couldn't connect"), during a failed join's hold. */
+const callFailure = computed(() => (callFailedId.value !== null ? joinProgress(voice)?.label ?? null : null))
 
-// What a touch phone needs while a call is up. Decided once: a phone does not
-// become a desktop, and a desktop never keeps its display awake for a call.
-if (noPushToTalkKey.value) {
-  // The display must not sleep mid-call: Android would background the app and silence the mic.
-  useCallKeepAwake(() => voice.connected || voice.connecting)
-  // The app routes a call's audio while one is up (a no-op in builds without the route bridge).
-  watch(() => voice.connected, on => callAudioActive(on))
-}
+// What a touch phone needs while a call is up. Read live, not decided once:
+// noPushToTalkKey is a width (768px) as well as a finger, and most phones are
+// wider than that turned on their side.
+// The display must not sleep mid-call: Android would background the app and silence the mic.
+useCallKeepAwake(() => noPushToTalkKey.value && (voice.connected || voice.connecting))
+// The app routes a call's audio while one is up (a no-op in builds without the
+// route bridge), and gets the route back if this view goes first.
+let callAudioOn = false
+const setCallAudio = (on: boolean) => { if (on !== callAudioOn) { callAudioOn = on; callAudioActive(on) } }
+watch(() => noPushToTalkKey.value && voice.connected, setCallAudio, { immediate: true })
+onBeforeUnmount(() => setCallAudio(false))
 // The speaker circle follows the app's audio route from the start.
 let stopSpeaker: (() => void) | null = null
 onMounted(() => { if (noPushToTalkKey.value) stopSpeaker = initSpeaker() })
@@ -1177,8 +1216,12 @@ const joinVoiceChannel = (ch: Channel) => {
  * straight from one voice channel to another: `viewVoiceChannel` has already
  * pointed at the new one by the time the old call tears down, so there is
  * nothing to rescue.
+ *
+ * The call SURFACE's channel (callVoiceChannel), so on a touch phone a failed
+ * join keeps its stage, and the phone call screen on it saying so, until the
+ * failure is dismissed or its hold ends. On a desktop it is the live call.
  */
-watch(() => liveVoiceChannel.value?.id ?? null, (id, prev) => {
+watch(() => callVoiceChannel.value?.id ?? null, (id, prev) => {
   if (!prev || id === prev) return
   if (viewedVoiceId.value !== prev) return
   if (view.value !== 'server' || !activeServerId.value) return
@@ -1356,7 +1399,7 @@ const inviteVoiceModal   = ref<Channel | null>(null)
  * to do — so it never asks. Both open over the screen, which stays up beneath.
  */
 const inviteFromCall = () => {
-  const vc = liveVoiceChannel.value
+  const vc = callVoiceChannel.value
   if (currentCall.value?.kind === 'channel' && vc) { inviteVoiceModal.value = vc; return }
   if (currentCall.value?.kind === 'group') showInviteGroup.value = true
 }
@@ -5085,6 +5128,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
       :name="voice.activeName"
       :talking="callTalking"
       :started-at="voice.connectedAt"
+      :failure="callFailure"
       @open="showPhoneCall"
     />
     <!-- ══ SHELL ════════════════════════════════════════════════════════════ -->

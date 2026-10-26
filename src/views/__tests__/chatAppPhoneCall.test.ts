@@ -29,8 +29,9 @@ const styleOf = (src: string): string =>
 
 describe('opening the phone call screen', () => {
   it('opens it on a touch phone when a call is joined or starts connecting', () => {
-    const w = between('watch(() => voice.connected || voice.connecting, (inCall, was) =>', '\n})')
-    expect(w).toMatch(/if \(inCall && !was && noPushToTalkKey\.value\) showPhoneCall\(\)/)
+    expect(source).toContain('const callSurfaceUp = computed(() => voice.connected || voice.connecting || callFailedId.value !== null)')
+    const w = between('watch(callSurfaceUp, (up, was) =>', '\n})')
+    expect(w).toMatch(/if \(up && !was && noPushToTalkKey\.value\) showPhoneCall\(\)/)
   })
 
   it('opens it when the voice channel you are in is opened', () => {
@@ -51,9 +52,12 @@ describe('opening the phone call screen', () => {
 })
 
 describe('minimising it', () => {
-  it('follows the call itself: the call ending (or failing) minimises it', () => {
-    const w = between('watch(() => voice.connected || voice.connecting, (inCall, was) =>', '\n})')
-    expect(w).toMatch(/if \(!inCall\) \{[^}]*minimizePhoneCall\(\)/)
+  it('follows the call itself: the call ending minimises it, and a failed join only once its hold is over', () => {
+    // giveUp clears connected and connecting but holds 'failed' until leave():
+    // the surface stays up through the hold, so the failure can be read.
+    expect(source).toContain('const callFailedId = computed(() => failedCallId(voice))')
+    const w = between('watch(callSurfaceUp, (up, was) =>', '\n})')
+    expect(w).toMatch(/if \(!up\) \{[^}]*minimizePhoneCall\(\)/)
   })
 
   it('minimises when the viewed conversation moves away from the call\u2019s', () => {
@@ -80,7 +84,7 @@ describe('minimising it', () => {
 
 describe('the return-to-call bar', () => {
   it('shows on a touch phone in a call, whenever the screen is not', () => {
-    expect(source).toContain('const returnBarShown = computed(() => noPushToTalkKey.value && (voice.connected || voice.connecting) && !phoneCall.open)')
+    expect(source).toContain('const returnBarShown = computed(() => noPushToTalkKey.value && callSurfaceUp.value && !phoneCall.open)')
     const tag = openingTags('ReturnToCallBar')
     expect(tag).toHaveLength(1)
     expect(tag[0]).toContain('v-if="returnBarShown"')
@@ -98,6 +102,14 @@ describe('the return-to-call bar', () => {
     expect(tag).toContain(':started-at="voice.connectedAt"')
   })
 
+  it('says the join failed, in joinProgress’s words, for as long as the failure is held', () => {
+    const tag = openingTags('ReturnToCallBar')[0]
+    expect(tag).toContain(':failure="callFailure"')
+    const failure = between('const callFailure = computed(', '\n')
+    expect(failure).toContain('callFailedId.value !== null')
+    expect(failure).toContain('joinProgress(voice)?.label')
+  })
+
   it('sits beside the connection strip, at app level', () => {
     expect(source).toMatch(/<ConnectionBanner \/>\s*(<!--[\s\S]*?-->\s*)*<ReturnToCallBar/)
   })
@@ -112,7 +124,7 @@ describe('the return-to-call bar', () => {
 
   describe('the bar itself', () => {
     it('takes the name, whether anyone is talking, and when the call started', () => {
-      expect(returnBar).toMatch(/defineProps<\{\s*name: string\s*talking: boolean\s*startedAt: number \| null\s*\}>\(\)/)
+      expect(returnBar).toMatch(/defineProps<\{\s*name: string\s*talking: boolean\s*startedAt: number \| null\s*failure\?: string \| null\s*\}>\(\)/)
       expect(returnBar).toMatch(/defineEmits<\{ open: \[\] \}>\(\)/)
     })
 
@@ -127,6 +139,12 @@ describe('the return-to-call bar', () => {
       expect(returnBar).toContain("import { formatElapsed } from '@/composables/phoneCallRules'")
       expect(returnBar).toContain('formatElapsed(')
       expect(returnBar).toContain('font-variant-numeric: tabular-nums')
+    })
+
+    it('shows a failure in place of the timer, on the danger fill', () => {
+      expect(returnBar).toContain("{{ failure ?? time ?? 'Connecting…' }}")
+      expect(returnBar).toContain(':class="{ failed: !!failure }"')
+      expect(styleOf(returnBar)).toMatch(/\.rtc\.failed\s*\{[^}]*background: var\(--danger-hover\);[^}]*color: var\(--text-on-danger-hover\)/)
     })
 
     it('stops its clock when it goes', () => {
@@ -154,20 +172,47 @@ describe('the desktop pieces a touch phone does without', () => {
 })
 
 describe('a touch phone during a call', () => {
-  const phoneOnly = between('if (noPushToTalkKey.value) {', '\n}')
-
-  it('keeps the display awake while connected or connecting, on a touch phone only', () => {
-    expect(phoneOnly).toContain('useCallKeepAwake(() => voice.connected || voice.connecting)')
+  // noPushToTalkKey is (max-width: 768px) and a finger, and most phones are
+  // wider than that in landscape: it is read live, never decided once at setup.
+  it('keeps the display awake while connected or connecting, whenever it is a touch phone', () => {
+    expect(source).toContain('useCallKeepAwake(() => noPushToTalkKey.value && (voice.connected || voice.connecting))')
     expect(source.match(/useCallKeepAwake\(/g)).toHaveLength(1)
+    expect(source).not.toMatch(/if \(noPushToTalkKey\.value\) \{\s*(\/\/[^\n]*\s*)*useCallKeepAwake/)
   })
 
-  it('tells the app when the call\u2019s audio starts and stops', () => {
-    expect(phoneOnly).toMatch(/watch\(\(\) => voice\.connected, on => callAudioActive\(on\)\)/)
+  it('routes the call\u2019s audio while connected on a touch phone, and hands it back on unmount', () => {
+    expect(source).toMatch(/watch\(\(\) => noPushToTalkKey\.value && voice\.connected, setCallAudio, \{ immediate: true \}\)/)
+    expect(between('const setCallAudio = (on: boolean) =>', '\n')).toContain('callAudioActive(on)')
+    expect(source).toMatch(/onBeforeUnmount\(\(\) => setCallAudio\(false\)\)/)
+  })
+
+  it('no longer claims a phone never becomes a desktop', () => {
+    expect(source).not.toContain('a phone does not')
   })
 
   it('follows the speaker route from mount, on a touch phone, and stops on unmount', () => {
     expect(source).toMatch(/onMounted\(\(\) => \{ if \(noPushToTalkKey\.value\) stopSpeaker = initSpeaker\(\) \}\)/)
     expect(source).toMatch(/onBeforeUnmount\(\(\) => stopSpeaker\?\.\(\)\)/)
+  })
+})
+
+describe('a failed join on a touch phone', () => {
+  // liveVoiceChannel drops a failed join at once (the sidebar row retracts),
+  // which would unmount the channel's CallBar, and the screen with it, the
+  // moment the join fails. On a touch phone the call surface keeps the failing
+  // channel through the hold; the desktop is untouched.
+  it('keeps the failing channel as the call’s channel, on a touch phone only', () => {
+    expect(source).toContain('const callVoiceChannel = computed(() => liveVoiceChannel.value ?? (noPushToTalkKey.value ? failedVoiceChannel.value : null))')
+    const failed = between('const failedVoiceChannel = computed', '\n})')
+    expect(failed).toContain('callFailedId.value')
+    expect(failed).toContain("c.type === 'voice'")
+  })
+
+  it('keeps its stage, its CallBar, the way back to it and the landing at its end on that channel', () => {
+    expect(between('const viewedVoiceChannel = computed', '\n})')).toContain('callVoiceChannel.value')
+    expect(between('const currentCall = computed', '\n})')).toContain('callVoiceChannel.value')
+    expect(between('const returnToCall = () => {', '\n}')).toContain('callVoiceChannel.value')
+    expect(source).toMatch(/watch\(\(\) => callVoiceChannel\.value\?\.id \?\? null, \(id, prev\) =>/)
   })
 })
 

@@ -16,7 +16,10 @@
  *
  * Props: `name` is the call's (the DM's person, the group, "Channel / Server");
  * `talking` is whether anyone in it is talking now; `startedAt` is when you
- * connected (voice.connectedAt), null while the first connect is under way.
+ * connected (voice.connectedAt), null while the first connect is under way;
+ * `failure` is why the call is not up ("Couldn't connect") while a failed
+ * join is held, shown in place of the timer on the danger fill — the strip
+ * then says the call went, rather than that it is going on.
  */
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { formatElapsed } from '@/composables/phoneCallRules'
@@ -25,6 +28,7 @@ const props = defineProps<{
   name: string
   talking: boolean
   startedAt: number | null
+  failure?: string | null
 }>()
 
 const emit = defineEmits<{ open: [] }>()
@@ -39,12 +43,16 @@ const time = computed(() => (props.startedAt === null ? null : formatElapsed(now
 </script>
 
 <template>
-  <button type="button" class="rtc" :aria-label="`Return to call: ${name}`" @click="emit('open')">
+  <button
+    type="button" class="rtc" :class="{ failed: !!failure }"
+    :aria-label="failure ? `Return to call: ${name}, ${failure}` : `Return to call: ${name}`"
+    @click="emit('open')"
+  >
     <!-- Always there, so the name never shifts when someone starts talking:
          it only wakes up. -->
-    <span class="rtc-dot" :class="{ talking }" aria-hidden="true"></span>
+    <span class="rtc-dot" :class="{ talking: talking && !failure }" aria-hidden="true"></span>
     <span class="rtc-name">{{ name }}</span>
-    <span class="rtc-time">{{ time ?? 'Connecting…' }}</span>
+    <span class="rtc-time">{{ failure ?? time ?? 'Connecting…' }}</span>
   </button>
 </template>
 
@@ -74,6 +82,14 @@ const time = computed(() => (props.startedAt === null ? null : formatElapsed(now
 
 /* Lands on the press: late feedback is no feedback. */
 .rtc:active { background: var(--green-deep-hover); }
+
+/* The join failed: the strip is no longer a call going on, so it drops the
+   green for the red the connection strip uses for "can't reach" (white on it
+   measured), and the dot goes quiet. Tapping it still opens the screen, whose
+   hang-up dismisses the failure. */
+.rtc.failed { background: var(--danger-hover); color: var(--text-on-danger-hover); }
+.rtc.failed:active { background: var(--danger-hover); filter: brightness(.9); }
+.rtc.failed .rtc-dot { opacity: 0; }
 .rtc:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -4px; }
 
 /* Someone talking: the dot comes up to full size and strength. Drawn in the

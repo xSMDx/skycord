@@ -35,3 +35,19 @@ export const joinProgress = (
   if (v.connectAttempt > 1)          return { label: 'Trying again…', failing: false }
   return { label: STAGE_LABEL[v.connectStage ?? 'connecting'] ?? 'Connecting…', failing: false }
 }
+
+/**
+ * The conversation whose join has just failed, for as long as the failure is
+ * held on screen; null at any other time.
+ *
+ * useVoice's giveUp clears `connecting` and `connected` and holds
+ * `connectStage` at 'failed' until leave() runs at the end of the hold. The
+ * ids it keeps say whose join it was: `connectingConvId`, set by the attempt
+ * and cleared only by a success or a leave, and `activeConvId` too when the
+ * failure was a rejoin of a call that had been up. A surface keyed on
+ * "connected or connecting" alone vanishes the instant a join fails, before
+ * anyone has read why; this is what keeps it up.
+ */
+export const failedCallId = (
+  v: { connectStage: ConnectStage; connectingConvId: string | null; activeConvId: string | null },
+): string | null => (v.connectStage === 'failed' ? (v.connectingConvId ?? v.activeConvId) : null)

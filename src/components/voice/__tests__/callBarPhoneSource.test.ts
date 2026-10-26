@@ -46,13 +46,17 @@ const screenTag = () => openingTagWith(template, '<PhoneCallScreen')
 const sheetTag = () => openingTagWith(template, '<PhoneCallSheet')
 
 describe('CallBar on a touch phone in a call', () => {
-  it('draws the phone call screen only on a touch phone, in this call, with the screen open', () => {
-    expect(screenTag()).toContain('v-if="noPushToTalkKey && inCall && phoneCall.open"')
+  it('draws the phone call screen only on a touch phone, in this call (or its failed join), with the screen open', () => {
+    expect(screenTag()).toContain('v-if="noPushToTalkKey && (inCall || failedHere) && phoneCall.open"')
+  })
+
+  it('knows this conversation’s join has failed for as long as the failure is held', () => {
+    expect(bar).toContain('const failedHere = computed(() => failedCallId(voice) === props.convId)')
   })
 
   it('never draws the desktop bar (and its controls) on a touch phone while in the call', () => {
     const root = openingTagWith(template, 'class="callbar"')
-    expect(root).toMatch(/v-else-if="visible && !\(noPushToTalkKey && inCall\)"/)
+    expect(root).toMatch(/v-else-if="visible && !\(noPushToTalkKey && \(inCall \|\| failedHere\)\)"/)
     // The control row lives inside that root, not beside it.
     expect(template.indexOf('class="cb-bar"')).toBeGreaterThan(template.indexOf('class="callbar"'))
   })
@@ -71,10 +75,22 @@ describe('CallBar on a touch phone in a call', () => {
     expect(bar).toMatch(/defineEmits<\{[\s\S]*?minimize: \[\][\s\S]*?\}>\(\)/)
   })
 
-  it('shows the join progress while connecting, else the call subtitle timed from connectedAt', () => {
+  it('dismisses a failed join, rather than minimising it, when the screen is closed', () => {
+    const min = between(bar, 'const onPhoneMinimize = ', '\n}')
+    expect(min).toMatch(/if \(failedHere\.value\) \{ void leave\(\); return \}/)
+    expect(min.indexOf('failedHere.value')).toBeLessThan(min.indexOf('minimizePhoneCall()'))
+  })
+
+  it('hangs up a failed join with the same leave', () => {
+    // The sheet's red circle is the only way out it offers; leave() ends the hold.
+    expect(sheetTag()).toContain('@leave="leave"')
+  })
+
+  it('shows the join progress while connecting or failed, else the call subtitle timed from connectedAt', () => {
     expect(screenTag()).toContain(':subtitle="phoneSubtitle"')
     const sub = between(bar, 'const phoneSubtitle = computed(', '\n})')
-    expect(sub).toMatch(/if \(connectingHere\.value\) return joinProgress\(voice\)\?\.label/)
+    // joinProgress reads 'Couldn’t connect' for the failed stage.
+    expect(sub).toMatch(/if \(connectingHere\.value \|\| failedHere\.value\) return joinProgress\(voice\)\?\.label/)
     expect(sub).toContain('callSubtitle(')
     expect(sub).toContain('voice.connectedAt')
   })
