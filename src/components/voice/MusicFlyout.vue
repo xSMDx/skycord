@@ -13,63 +13,22 @@
  * sidebar, where it sat while this was being built and where it was a
  * second place to look during a call.
  */
-import { ref, computed } from 'vue'
 import { Music2, Plus, SkipForward, X, Library } from 'lucide-vue-next'
 import CallFlyout from './CallFlyout.vue'
 import { voice } from '@/composables/useVoice'
-import {
-  music, createMusicChannel, queueMusic, skipMusic,
-  closeMusicChannel, listenToMusic, clearMusicError,
-} from '@/composables/useMusic'
+import { music, skipMusic, closeMusicChannel } from '@/composables/useMusic'
+import { useCallMusic } from '@/composables/callMusic'
 
 defineProps<{ dir?: 'down' | 'up' }>()
 const emit = defineEmits<{ close: []; openLibrary: [] }>()
 
-const adding = ref(false)
-const name = ref('')
-const url = ref('')
-const queueFor = ref<string | null>(null)
-const queueUrl = ref('')
-
-/**
- * Who is listening, by name.
- *
- * A count is the easy answer and the less useful one: this is a crew of
- * people who know each other, so "Ana, Ben" says something "2 listening"
- * does not. Every listener is by definition in the call, so the names are
- * already here in `voice.participants` and nothing extra is fetched.
- */
-const nameOf = (id: string): string =>
-  voice.participants.find(p => p.id === id)?.name ?? 'Someone'
-
-const listeners = (ids: string[]): string => {
-  if (!ids.length) return 'Nobody yet'
-  const names = ids.map(nameOf)
-  if (names.length <= 2) return names.join(' and ')
-  return `${names[0]}, ${names[1]} and ${names.length - 2} more`
-}
-
-const canAdd = computed(() => name.value.trim() !== '' && url.value.trim() !== '')
-
-const submitNew = () => {
-  if (!canAdd.value) return
-  clearMusicError()
-  createMusicChannel(name.value.trim(), { url: url.value.trim() })
-  // Cleared on submit, not on success: the server answers a create with a
-  // music:state rather than an ack, so a form waiting for one would sit
-  // there looking stuck. A refusal appears below instead.
-  name.value = ''; url.value = ''; adding.value = false
-}
-
-const submitQueue = (id: string) => {
-  const u = queueUrl.value.trim()
-  if (!u) return
-  clearMusicError()
-  queueMusic(id, { url: u })
-  queueUrl.value = ''; queueFor.value = null
-}
-
-const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : id)
+// The listeners line, the create and queue forms and the tune-in tap are
+// callMusic's, shared with the phone sheet. Only the layout is here.
+const {
+  adding, name, url, queueFor, queueUrl,
+  listeners, canAdd,
+  openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen,
+} = useCallMusic(() => voice.participants)
 </script>
 
 <template>
@@ -82,7 +41,7 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
           class="mf-tune"
           :aria-pressed="music.listeningTo === c.id"
           :aria-label="music.listeningTo === c.id ? `Stop listening to ${c.name}` : `Listen to ${c.name}`"
-          @click="toggle(c.id)"
+          @click="toggleListen(c.id)"
         >
           <!-- The song's cover where it has one; the glyph only for a link,
                which arrives with no art to show. -->
@@ -109,8 +68,7 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
           <button class="mf-icon" :aria-label="`Skip the track in ${c.name}`" @click="skipMusic(c.id)">
             <SkipForward :size="14" :stroke-width="2.25" />
           </button>
-          <button class="mf-icon" :aria-label="`Add a track to ${c.name}`"
-                  @click="queueFor = queueFor === c.id ? null : c.id">
+          <button class="mf-icon" :aria-label="`Add a track to ${c.name}`" @click="toggleQueue(c.id)">
             <Plus :size="14" :stroke-width="2.25" />
           </button>
           <button class="mf-icon danger" :aria-label="`Close ${c.name} for everyone`" @click="closeMusicChannel(c.id)">
@@ -136,11 +94,11 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
       <label class="mf-label" for="mf-url">Link to an audio file</label>
       <input id="mf-url" v-model="url" class="mf-input" placeholder="https://…/track.mp3" />
       <div class="mf-new-acts">
-        <button type="button" class="mf-cancel" @click="adding = false; clearMusicError()">Cancel</button>
+        <button type="button" class="mf-cancel" @click="cancelNew">Cancel</button>
         <button type="submit" class="mf-go" :disabled="!canAdd">Start</button>
       </div>
     </form>
-    <button v-else class="fr mf-add" @click="adding = true">
+    <button v-else class="fr mf-add" @click="openNew">
       <span>New music channel</span>
       <Plus :size="14" :stroke-width="2.25" />
     </button>
