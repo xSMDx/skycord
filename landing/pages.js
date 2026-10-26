@@ -8,18 +8,19 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
 
   var SPRITE =
-    '<symbol id="i-mark" viewBox="0 0 256 256"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/><g class="eyes"><circle class="eye" cx="92" cy="140" r="13" fill="currentColor"/><circle class="eye" cx="164" cy="140" r="13" fill="currentColor"/></g></symbol>' +
+    '<symbol id="i-mark" viewBox="0 0 256 256"><path fill="currentColor" fill-rule="evenodd" d="M56,150A72,72 0 0 1 200,150V170A48,48 0 0 1 152,218H104A48,48 0 0 1 56,170ZM90,156a14,14 0 1 0 28,0a14,14 0 1 0 -28,0ZM138,156a14,14 0 1 0 28,0a14,14 0 1 0 -28,0ZM12,170V130A17,17 0 0 1 26.47,113.19A108,108 0 0 1 229.53,113.19A17,17 0 0 1 244,130V170A17,17 0 0 1 210,170V130A17,17 0 0 1 212.99,120.38A90,90 0 0 0 43.01,120.38A17,17 0 0 1 46,130V170A17,17 0 0 1 12,170Z"/></symbol>' +
     '<symbol id="i-chevron" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></symbol>';
 
-  var BRAND =
-    '<a class="brand" href="/" aria-label="Skycord">' +
-      '<span class="brand-mark"><svg viewBox="0 0 256 256" aria-hidden="true">' +
-        // Inlined, not <use>: shadow content is unreachable to both
-        // querySelector and CSS, which silently kills the eye tracking.
-        '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>' +
-        '<g class="eyes"><circle class="eye" cx="92" cy="140" r="13" fill="currentColor"/>' +
-        '<circle class="eye" cx="164" cy="140" r="13" fill="currentColor"/></g></svg></span><b>Skycord</b>' +
+  // The live mark, inlined rather than <use>d: shadow content is unreachable to
+  // both querySelector and CSS, which silently kills the eye tracking. The bar
+  // and the footer each get one, so each needs its own mask id.
+  function brand(id) {
+    return '<a class="brand" href="/" aria-label="Skycord">' +
+      '<span class="brand-mark">' +
+        '<svg viewBox="0 0 256 256" aria-hidden="true"><mask id="' + id + '" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><g class="eyes"><circle class="eye" cx="104" cy="156" r="14"/><circle class="eye" cx="152" cy="156" r="14"/></g></mask><path fill="currentColor" mask="url(#' + id + ')" d="M56,150A72,72 0 0 1 200,150V170A48,48 0 0 1 152,218H104A48,48 0 0 1 56,170ZM12,170V130A17,17 0 0 1 26.47,113.19A108,108 0 0 1 229.53,113.19A17,17 0 0 1 244,130V170A17,17 0 0 1 210,170V130A17,17 0 0 1 212.99,120.38A90,90 0 0 0 43.01,120.38A17,17 0 0 1 46,130V170A17,17 0 0 1 12,170Z"/></svg>' +
+      '</span><b>Skycord</b>' +
     '</a>';
+  }
 
   function chrome(active) {
     // insertAdjacentHTML, not createElement('svg'): createElement makes an
@@ -35,7 +36,7 @@
     ];
     var bar = $('#topbar');
     if (bar) {
-      bar.innerHTML = '<div class="shell bar">' + BRAND +
+      bar.innerHTML = '<div class="shell bar">' + brand('brand-eyes-top') +
         '<nav class="links" aria-label="Sections">' +
           links.map(function (l) {
             return '<a href="' + l[0] + '"' + (l[1].toLowerCase() === active ? ' aria-current="page"' : '') + '>' + l[1] + '</a>';
@@ -44,7 +45,7 @@
     }
     var foot = $('#foot');
     if (foot) {
-      foot.innerHTML = '<div class="shell foot-in">' + BRAND +
+      foot.innerHTML = '<div class="shell foot-in">' + brand('brand-eyes-foot') +
         '<nav aria-label="Footer">' +
           '<a href="https://app.skycord.xyz">Open the app</a><a href="/#selfhost">Self-host</a>' +
           '<a href="/roadmap/">Roadmap</a><a href="/changelog/">Changelog</a>' +

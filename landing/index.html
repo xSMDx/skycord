@@ -6,7 +6,7 @@
 <title>Skycord — your crew's place to talk</title>
 <meta name="description" content="Text and voice channels, DMs, video calls and screen share, for people who already know each other. On our server, or on one you run yourself." />
 <meta name="theme-color" content="#0a0b0d" />
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='%2338b6f1' stroke-linecap='round' stroke-linejoin='round' stroke-width='18' d='M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z'/%3E%3Ccircle cx='92' cy='140' r='13' fill='%2338b6f1'/%3E%3Ccircle cx='164' cy='140' r='13' fill='%2338b6f1'/%3E%3C/svg%3E" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%3E%3Cpath%20fill='%2338b6f1'%20fill-rule='evenodd'%20d='M60,150A68,68%200%200%201%20196,150V170A46,46%200%200%201%20150,216H106A46,46%200%200%201%2060,170ZM84,156a19,19%200%201%200%2038,0a19,19%200%201%200%20-38,0ZM134,156a19,19%200%201%200%2038,0a19,19%200%201%200%20-38,0ZM9,172V128A18,18%200%200%201%2023.24,110.4A112,112%200%200%201%20232.76,110.4A18,18%200%200%201%20247,128V172A18,18%200%200%201%20211,172V128A18,18%200%200%201%20212.86,120.03A90,90%200%200%200%2043.14,120.03A18,18%200%200%201%2045,128V172A18,18%200%200%201%209,172Z'/%3E%3C/svg%3E" />
 <link rel="canonical" href="https://skycord.xyz/" />
 
 <!-- Most people meet this page as a link someone pasted into a chat window,
@@ -35,7 +35,8 @@
 
 <!-- Icons ---------------------------------------------------------------->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-mark" viewBox="0 0 256 256"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/><g class="eyes"><circle class="eye" cx="92" cy="140" r="13" fill="currentColor"/><circle class="eye" cx="164" cy="140" r="13" fill="currentColor"/></g></symbol>
+  <symbol id="i-mark" viewBox="0 0 256 256"><path fill="currentColor" fill-rule="evenodd" d="M56,150A72,72 0 0 1 200,150V170A48,48 0 0 1 152,218H104A48,48 0 0 1 56,170ZM90,156a14,14 0 1 0 28,0a14,14 0 1 0 -28,0ZM138,156a14,14 0 1 0 28,0a14,14 0 1 0 -28,0ZM12,170V130A17,17 0 0 1 26.47,113.19A108,108 0 0 1 229.53,113.19A17,17 0 0 1 244,130V170A17,17 0 0 1 210,170V130A17,17 0 0 1 212.99,120.38A90,90 0 0 0 43.01,120.38A17,17 0 0 1 46,130V170A17,17 0 0 1 12,170Z"/></symbol>
+  <symbol id="i-mark-s" viewBox="0 0 256 256"><path fill="currentColor" fill-rule="evenodd" d="M60,150A68,68 0 0 1 196,150V170A46,46 0 0 1 150,216H106A46,46 0 0 1 60,170ZM84,156a19,19 0 1 0 38,0a19,19 0 1 0 -38,0ZM134,156a19,19 0 1 0 38,0a19,19 0 1 0 -38,0ZM9,172V128A18,18 0 0 1 23.24,110.4A112,112 0 0 1 232.76,110.4A18,18 0 0 1 247,128V172A18,18 0 0 1 211,172V128A18,18 0 0 1 212.86,120.03A90,90 0 0 0 43.14,120.03A18,18 0 0 1 45,128V172A18,18 0 0 1 9,172Z"/></symbol>
   <symbol id="i-hash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M10 3.5 8 20.5M16 3.5l-2 17M4.5 8.5h16M3.5 15.5h16"/></symbol>
   <symbol id="i-volume" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M11 5 6.5 9H3.5v6h3L11 19zM15.5 9a4.5 4.5 0 0 1 0 6M18.5 6a8.5 8.5 0 0 1 0 12"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3.5v12M7 11l5 5 5-5M4.5 20.5h15"/></symbol>
@@ -57,7 +58,7 @@
 <header class="topbar" id="topbar">
   <div class="shell bar">
     <a class="brand" href="#top" aria-label="Skycord">
-      <span class="brand-mark"><svg viewBox="0 0 256 256" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/><g class="eyes"><circle class="eye" cx="92" cy="140" r="13" fill="currentColor"/><circle class="eye" cx="164" cy="140" r="13" fill="currentColor"/></g></svg></span>
+      <span class="brand-mark"><svg viewBox="0 0 256 256" aria-hidden="true"><mask id="brand-eyes-top" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><g class="eyes"><circle class="eye" cx="104" cy="156" r="14"/><circle class="eye" cx="152" cy="156" r="14"/></g></mask><path fill="currentColor" mask="url(#brand-eyes-top)" d="M56,150A72,72 0 0 1 200,150V170A48,48 0 0 1 152,218H104A48,48 0 0 1 56,170ZM12,170V130A17,17 0 0 1 26.47,113.19A108,108 0 0 1 229.53,113.19A17,17 0 0 1 244,130V170A17,17 0 0 1 210,170V130A17,17 0 0 1 212.99,120.38A90,90 0 0 0 43.01,120.38A17,17 0 0 1 46,130V170A17,17 0 0 1 12,170Z"/></svg></span>
       <b>Skycord</b>
     </a>
     <nav class="links" aria-label="Sections">
@@ -296,7 +297,7 @@
   <section class="feat" data-flip="1">
     <div class="shell feat-in">
       <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-mark"/></svg> Themes</span>
+        <span class="eyebrow"><svg class="ic"><use href="#i-mark-s"/></svg> Themes</span>
         <h2>Make it look<br/>like yours.</h2>
         <p>Pick an accent and the whole app follows — not a preview tile, the actual interface.
           Share a theme in chat and your friends can apply it in one click.</p>
@@ -308,7 +309,7 @@
       </div>
       <div class="feat-demo reveal">
         <div class="demo" data-demo="themes">
-          <div class="demo-head"><span class="ic"><svg><use href="#i-mark"/></svg></span><b>Accent</b><span class="hint">this page too — click one</span></div>
+          <div class="demo-head"><span class="ic"><svg><use href="#i-mark-s"/></svg></span><b>Accent</b><span class="hint">this page too — click one</span></div>
           <div class="demo-body">
             <div class="swatches" role="group" aria-label="Accent colour"></div>
             <div class="sw-name">Accent: <b id="sw-current">Sky</b></div>
@@ -476,7 +477,7 @@
 <footer class="foot">
   <div class="shell foot-in">
     <a class="brand" href="#top" aria-label="Skycord">
-      <span class="brand-mark"><svg viewBox="0 0 256 256" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/><g class="eyes"><circle class="eye" cx="92" cy="140" r="13" fill="currentColor"/><circle class="eye" cx="164" cy="140" r="13" fill="currentColor"/></g></svg></span>
+      <span class="brand-mark"><svg viewBox="0 0 256 256" aria-hidden="true"><mask id="brand-eyes-foot" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><g class="eyes"><circle class="eye" cx="104" cy="156" r="14"/><circle class="eye" cx="152" cy="156" r="14"/></g></mask><path fill="currentColor" mask="url(#brand-eyes-foot)" d="M56,150A72,72 0 0 1 200,150V170A48,48 0 0 1 152,218H104A48,48 0 0 1 56,170ZM12,170V130A17,17 0 0 1 26.47,113.19A108,108 0 0 1 229.53,113.19A17,17 0 0 1 244,130V170A17,17 0 0 1 210,170V130A17,17 0 0 1 212.99,120.38A90,90 0 0 0 43.01,120.38A17,17 0 0 1 46,130V170A17,17 0 0 1 12,170Z"/></svg></span>
       <b>Skycord</b>
     </a>
     <nav aria-label="Footer">

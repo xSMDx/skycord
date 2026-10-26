@@ -1,5 +1,9 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#38B6F1"
-        android:pathData="M34,36h40a8,8 0 0 1 8,8v18a8,8 0 0 1 -8,8H52l-10,9v-9h-8a8,8 0 0 1 -8,-8V44a8,8 0 0 1 8,-8z" />
+    <!-- The Skycord mark (src/brand/mark.ts), from its 256 box: scaled so its farthest
+         point stays inside the 66dp circle every launcher mask keeps, centred on its own box. -->
+    <group android:scaleX="0.25" android:scaleY="0.25" android:translateX="22" android:translateY="21.5">
+        <path android:fillColor="#38B6F1" android:fillType="evenOdd"
+            android:pathData="M56,150A72,72 0 0 1 200,150V170A48,48 0 0 1 152,218H104A48,48 0 0 1 56,170ZM90,156a14,14 0 1 0 28,0a14,14 0 1 0 -28,0ZM138,156a14,14 0 1 0 28,0a14,14 0 1 0 -28,0ZM12,170V130A17,17 0 0 1 26.47,113.19A108,108 0 0 1 229.53,113.19A17,17 0 0 1 244,130V170A17,17 0 0 1 210,170V130A17,17 0 0 1 212.99,120.38A90,90 0 0 0 43.01,120.38A17,17 0 0 1 46,130V170A17,17 0 0 1 12,170Z" />
+    </group>
 </vector>
