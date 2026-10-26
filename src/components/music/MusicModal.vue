@@ -571,7 +571,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
       </aside>
 
       <!-- ── centre: the record you are looking at ───────────────────── -->
-      <section ref="mainEl" class="mm-main">
+      <section ref="mainEl" class="mm-main" :class="{ 'queue-open': showQueue }">
         <!-- The queue, over the centre pane rather than beside it: three
              columns is already the most this modal can hold, and what plays
              next is a question you ask occasionally, not a thing to watch. -->
@@ -1154,6 +1154,11 @@ const pct = (at: number, dur: number | null | undefined): number =>
   display: flex; flex-direction: column; min-width: 0; overflow-y: auto;
   background: var(--bg-panel); border-radius: var(--edge-lg);
 }
+/* The queue drawer is positioned inside this pane, so anything that scrolls the
+   pane moves the drawer with it: a wheel that ran past the end of the queue
+   carried on into the library and took the rest of the queue off screen. While
+   the drawer is open the pane stays where showQueue's watch put it. */
+.mm-main.queue-open { overflow: hidden; }
 
 /*
  * The one place colour comes from content rather than tokens. The wash is
@@ -1353,6 +1358,8 @@ const pct = (at: number, dur: number | null | undefined): number =>
 .mm-queue {
   position: absolute; inset: 0; z-index: 2;
   overflow-y: auto;
+  /* A scroll that reaches the end of the queue stops there, at every width. */
+  overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 2px;
   padding: 14px 14px 18px;
   background: var(--bg-panel); border-radius: var(--edge-lg);
@@ -1673,8 +1680,6 @@ const pct = (at: number, dur: number | null | undefined): number =>
     color: var(--text-2);
   }
   .mm-link, .mm-progress, .mm-err { margin-inline: 16px; padding-inline: 16px; }
-  /* A drag at the end of the queue must not carry on into the library under it. */
-  .mm-queue { overscroll-behavior: contain; }
   .mm-in { min-height: 44px; }
   .mm-go, .mm-flat { min-height: 44px; padding-inline: 16px; }
   .mm-bandleave { height: 44px; }
