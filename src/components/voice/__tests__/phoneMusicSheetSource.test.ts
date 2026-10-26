@@ -100,15 +100,15 @@ describe('the phone music sheet', () => {
     expect(sheet).toMatch(/from '@\/composables\/callMusic'/)
     expect(sheet).toContain('useCallMusic(')
     // Imported only by callMusic.ts: a second copy here is the duplication this avoids.
-    expect(sheet).not.toMatch(/\b(createMusicChannel|queueMusic|listenToMusic|clearMusicError)\b/)
+    expect(sheet).not.toMatch(/\b(createMusicChannel|queueMusic|listenToMusic|clearMusicError|skipMusic|closeMusicChannel)\b/)
     expect(sheet).not.toMatch(/const (listeners|nameOf|submitNew|submitQueue|canAdd) =/)
   })
 
   it('acts on a channel: listen or stop, skip, add a track, close', () => {
     expect(openingTag(elementWith(tpl, '@click="toggleListen(c.id)"'))).toContain(':aria-pressed="music.listeningTo === c.id"')
-    expect(tpl).toContain('@click="skipMusic(c.id)"')
+    expect(tpl).toContain('@click="skipTrack(c.id)"')
     expect(tpl).toContain('@click="toggleQueue(c.id)"')
-    expect(tpl).toContain('@click="closeMusicChannel(c.id)"')
+    expect(tpl).toContain('@click="closeChannel(c.id)"')
     expect(openingTag(elementWith(tpl, '@submit.prevent="submitQueue(c.id)"'))).toContain('v-if="queueFor === c.id"')
     expect(tpl).toContain('@submit.prevent="submitNew"')
   })
@@ -144,9 +144,66 @@ describe('the phone music sheet', () => {
     expect(tagWith(tpl, 'v-model="name"')).toContain('v-focus')
   })
 
-  it('shows a refusal as an alert, and an empty call as an invitation', () => {
-    expect(openingTag(elementWith(tpl, 'v-if="music.error"'))).toContain('role="alert"')
+  it('shows an empty call as an invitation', () => {
     expect(tpl).toContain('Nothing playing. Start a channel and anyone in the call can tune in.')
+  })
+
+  it('shows a refusal inside the card whose action it answered, so it is where the finger was', () => {
+    // A channel's action: the card keyed by the channel the action came from.
+    const card = elementWith(tpl, 'class="pms-ch"')
+    const inCard = tagWith(card, 'refusedAt === c.id')
+    expect(inCard).toContain('v-if="music.error && refusedAt === c.id"')
+    expect(inCard).toContain('role="alert"')
+    expect(card).toContain('{{ music.error }}')
+    // A create: the new-channel card.
+    const group = elementWith(tpl, 'class="pms-card"')
+    const inGroup = tagWith(group, "refusedAt === 'new'")
+    expect(inGroup).toContain('v-if="music.error && refusedAt === \'new\'"')
+    expect(inGroup).toContain('role="alert"')
+    expect(group).toContain('{{ music.error }}')
+    // Both read callMusic's record of where the last action started.
+    expect(sheet).toMatch(/\{[^}]*\brefusedAt\b[^}]*\} = useCallMusic\(/)
+  })
+
+  it('still shows a refusal that has no card to sit in, rather than swallowing it', () => {
+    expect(sheet).toMatch(/const orphaned = computed\(/)
+    expect(tagWith(tpl, 'v-if="orphaned"')).toContain('role="alert"')
+    // Three places, one shown at a time: the channel's card, the new-channel card, and here.
+    expect(tpl.match(/role="alert"/g)).toHaveLength(3)
+  })
+
+  it('scrolls a refusal into view as it appears', () => {
+    expect(sheet).toMatch(/const vReveal = \{[\s\S]{0,200}scrollIntoView\(\{ block: 'nearest' \}\)/)
+    for (const marker of ['refusedAt === c.id', "refusedAt === 'new'", 'v-if="orphaned"']) {
+      expect(tagWith(tpl, marker), marker).toContain('v-reveal')
+    }
+  })
+
+  it('takes two taps to close a channel: the first arms it and says so, the second closes', () => {
+    const close = elementWith(tpl, '@click="closeChannel(c.id)"')
+    const tag = openingTag(close)
+    expect(tag).toContain(':class="{ armed: closing === c.id }"')
+    expect(tag).toContain('class="pms-act danger"')
+    // The channel is named either way, and "Close" is still in the unarmed label.
+    expect(tag).toContain('`Tap again to close ${c.name} for everyone`')
+    expect(tag).toContain('`Close ${c.name} for everyone`')
+    expect(close).toContain("closing === c.id ? 'Tap again to close' : 'Close'")
+    expect(close).toContain('<X ')
+  })
+
+  it('keeps the armed button red, on the danger role, and as tall as the others', () => {
+    expect(ruleOf(css, '.pms-act.danger')).toMatch(/color:\s*var\(--danger-text\)/)
+    const armed = ruleOf(css, '.pms-act.armed')
+    expect(armed).toMatch(/background:\s*var\(--danger\)/)
+    expect(armed).toMatch(/color:\s*var\(--text-on-danger\)/)
+    // Wider, not taller: "Tap again to close" does not fit in a third of the row.
+    expect(armed).toMatch(/flex:\s*3 1 0/)
+    expect(px(ruleOf(css, '.pms-act'), 'min-height')).toBeGreaterThanOrEqual(44)
+  })
+
+  it('drops the arm when the sheet closes, and when the way to the library is taken', () => {
+    expect(sheet).toMatch(/watch\(\(\) => props\.open, o => \{ if \(!o\) \{[^}]*\bdisarm\(\)/)
+    expect(elementAt(tpl, tpl.lastIndexOf('<button'))).toContain('disarm()')
   })
 
   it('ends with the library row, which hands the opening to its host', () => {
@@ -224,6 +281,13 @@ describe('the desktop flyout', () => {
     for (const cls of ['mf-list', 'mf-row', 'mf-tune', 'mf-acts', 'mf-icon', 'mf-inline', 'mf-new', 'mf-add', 'mf-lib', 'mf-vol']) {
       expect(tpl, cls).toContain(cls)
     }
+  })
+
+  it('keeps closing and skipping as they were: one tap, straight to useMusic, one refusal line', () => {
+    expect(tpl).toContain('@click="skipMusic(c.id)"')
+    expect(tpl).toContain('@click="closeMusicChannel(c.id)"')
+    expect(flyout).not.toMatch(/\b(closeChannel|skipTrack|refusedAt|closing|origin|disarm)\b/)
+    expect(tpl.match(/role="alert"/g)).toHaveLength(1)
   })
 
   it('takes its listeners line, form state and handlers from callMusic, not a second copy', () => {

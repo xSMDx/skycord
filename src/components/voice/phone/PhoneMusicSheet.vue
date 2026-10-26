@@ -14,11 +14,11 @@
  * sheet. It ends with the way into the library, which is not ours to open: the
  * host decides what "Your library" shows and whether this stays up behind it.
  */
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { Music2, Plus, SkipForward, X, Library, ChevronRight } from 'lucide-vue-next'
 import BottomSheet from '@/components/ui/BottomSheet.vue'
 import { voice } from '@/composables/useVoice'
-import { music, skipMusic, closeMusicChannel } from '@/composables/useMusic'
+import { music } from '@/composables/useMusic'
 import { useCallMusic } from '@/composables/callMusic'
 
 const props = defineProps<{ open: boolean }>()
@@ -27,8 +27,18 @@ const emit = defineEmits<{ close: []; openLibrary: [] }>()
 const {
   adding, name, url, queueFor, queueUrl,
   listeners, canAdd,
+  refusedAt, closing,
   openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen,
+  skipTrack, closeChannel, disarm,
 } = useCallMusic(() => voice.participants)
+
+/**
+ * A refusal with no card to sit in: it arrived before anything was sent from
+ * here, or the channel it answered is gone. It is shown above the cards
+ * rather than dropped.
+ */
+const orphaned = computed(() =>
+  !!music.error && refusedAt.value !== 'new' && !music.channels.some(c => c.id === refusedAt.value))
 
 /**
  * Focus a field as the form around it opens, which also scrolls it into view.
@@ -39,9 +49,18 @@ const {
  */
 const vFocus = { mounted: (el: HTMLElement) => el.focus() }
 
-// Closed means done with: a form left open, or a refusal from last time,
-// would otherwise greet the next visit.
-watch(() => props.open, o => { if (!o) { cancelNew(); queueFor.value = null } })
+/**
+ * Bring a refusal into view as it appears. It is drawn in the card whose
+ * button was tapped, and on a long list that card can be off-screen by the time
+ * the server answers. `nearest` moves the list by no more than it has to, and
+ * not at all when the card is already in view. Only on arrival: scrolling again
+ * on every redraw would fight a thumb dragging the volume.
+ */
+const vReveal = { mounted: (el: HTMLElement) => el.scrollIntoView({ block: 'nearest' }) }
+
+// Closed means done with: a form left open, a refusal from last time, or a
+// Close still armed would otherwise greet the next visit.
+watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value = null } })
 </script>
 
 <template>
@@ -83,7 +102,7 @@ watch(() => props.open, o => { if (!o) { cancelNew(); queueFor.value = null } })
           </button>
 
           <div class="pms-acts">
-            <button type="button" class="pms-act" :aria-label="`Skip the track in ${c.name}`" @click="skipMusic(c.id)">
+            <button type="button" class="pms-act" :aria-label="`Skip the track in ${c.name}`" @click="skipTrack(c.id)">
               <SkipForward :size="16" :stroke-width="2.25" />
               <span>Skip</span>
             </button>
@@ -94,13 +113,22 @@ watch(() => props.open, o => { if (!o) { cancelNew(); queueFor.value = null } })
               <Plus :size="16" :stroke-width="2.25" />
               <span>Add</span>
             </button>
-            <!-- Closing stops it for everyone listening, not just you, so it is
-                 red before the tap rather than only on hover. -->
-            <button type="button" class="pms-act danger" :aria-label="`Close ${c.name} for everyone`" @click="closeMusicChannel(c.id)">
+            <!-- Closing stops it for everyone listening and drops its queue, so
+                 it is red before the tap rather than only on hover, and takes
+                 two: the first arms it and says so, the second closes. -->
+            <button
+              type="button" class="pms-act danger" :class="{ armed: closing === c.id }"
+              :aria-label="closing === c.id ? `Tap again to close ${c.name} for everyone` : `Close ${c.name} for everyone`"
+              @click="closeChannel(c.id)"
+            >
               <X :size="16" :stroke-width="2.25" />
-              <span>Close</span>
+              <span>{{ closing === c.id ? 'Tap again to close' : 'Close' }}</span>
             </button>
           </div>
+
+          <!-- A refusal sits in the card whose button was tapped, not below
+               every card where a long list would leave it off-screen. -->
+          <p v-if="music.error && refusedAt === c.id" v-reveal class="pms-err" role="alert">{{ music.error }}</p>
 
           <form v-if="queueFor === c.id" class="pms-inline" @submit.prevent="submitQueue(c.id)">
             <input
@@ -129,9 +157,7 @@ watch(() => props.open, o => { if (!o) { cancelNew(); queueFor.value = null } })
         Nothing playing. Start a channel and anyone in the call can tune in.
       </p>
 
-      <!-- Above the rows rather than at the bottom: a refusal to a create or a
-           queue would otherwise sit below the fold of a long list. -->
-      <p v-if="music.error" class="pms-err" role="alert">{{ music.error }}</p>
+      <p v-if="orphaned" v-reveal class="pms-err pms-err-loose" role="alert">{{ music.error }}</p>
 
       <div class="pms-card">
         <form v-if="adding" class="pms-new" @submit.prevent="submitNew">
@@ -152,7 +178,9 @@ watch(() => props.open, o => { if (!o) { cancelNew(); queueFor.value = null } })
           <span class="pms-grow">New music channel</span>
         </button>
 
-        <button type="button" class="pms-link" @click="emit('openLibrary')">
+        <p v-if="music.error && refusedAt === 'new'" v-reveal class="pms-err" role="alert">{{ music.error }}</p>
+
+        <button type="button" class="pms-link" @click="disarm(); emit('openLibrary')">
           <Library class="pms-ic" :size="18" :stroke-width="2.25" />
           <span class="pms-grow">Your library</span>
           <ChevronRight class="pms-chev" :size="16" :stroke-width="2.25" />
@@ -238,6 +266,10 @@ watch(() => props.open, o => { if (!o) { cancelNew(); queueFor.value = null } })
 .pms-act svg { flex: none; }
 .pms-act span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pms-act.danger { color: var(--danger-text); }
+/* Armed: filled on the danger role, as the hang-up button is, and wider, not
+   taller, because "Tap again to close" does not fit in a third of the row. It
+   grows leftwards from the edge the thumb is on. Instant: it answers a tap. */
+.pms-act.armed { flex: 3 1 0; background: var(--danger); color: var(--text-on-danger); }
 
 .pms-inline { display: flex; gap: 8px; padding: 12px 16px; }
 
@@ -261,7 +293,9 @@ watch(() => props.open, o => { if (!o) { cancelNew(); queueFor.value = null } })
 .pms-cancel { background: var(--bg-input); color: var(--text-2); }
 
 .pms-empty { margin: 0; padding: 4px 4px 0; font-size: 15px; line-height: 22px; color: var(--text-2); }
-.pms-err { margin: 0; padding: 0 4px; font-size: 14px; line-height: 20px; color: var(--danger-text); }
+/* In a card, a refusal is a row of it, set off by the hairline like the rest. */
+.pms-err { margin: 0; padding: 12px 16px; font-size: 14px; line-height: 20px; color: var(--danger-text); }
+.pms-err-loose { padding: 0 4px; }
 
 /* The rows that are not a channel: start one, the library. One rounded group,
    each row a full-width target. */

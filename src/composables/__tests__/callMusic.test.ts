@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { listenersText, useCallMusic } from '../callMusic'
-import { music, setMusicTarget } from '../useMusic'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { listenersText, useCallMusic, CLOSE_ARM_MS } from '../callMusic'
+import { music, setMusicTarget, onMusicError } from '../useMusic'
 
 const emit = vi.fn()
 vi.mock('../useSocket', () => ({ getSocket: () => ({ emit }) }))
@@ -19,6 +19,8 @@ const dee = { id: 'd', name: 'Dee' }
 const people = [ana, ben, cy, dee]
 
 const sent = (event: string) => emit.mock.calls.filter(([e]) => e === event).map(([, p]) => p)
+
+afterEach(() => { vi.useRealTimers() })
 
 beforeEach(() => {
   emit.mockClear()
@@ -190,5 +192,192 @@ describe('two forms, no shared drafts', () => {
     a.openNew()
     expect(b.name.value).toBe('')
     expect(b.adding.value).toBe(false)
+  })
+})
+
+describe('where an action came from', () => {
+  it('records "new" for a create, and the channel for a queue, skip, close and listen', () => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    expect(m.origin.value).toBeNull()
+
+    m.name.value = 'Chill'; m.url.value = 'https://x.test/a.mp3'
+    m.submitNew()
+    expect(m.origin.value).toBe('new')
+
+    m.queueUrl.value = 'https://x.test/next.mp3'
+    m.submitQueue('q1')
+    expect(m.origin.value).toBe('q1')
+
+    m.skipTrack('s1')
+    expect(m.origin.value).toBe('s1')
+
+    m.closeChannel('c9'); m.closeChannel('c9')
+    expect(m.origin.value).toBe('c9')
+
+    m.toggleListen('l1')
+    expect(m.origin.value).toBe('l1')
+  })
+
+  it('does not record an action that sent nothing', () => {
+    const m = useCallMusic(() => people)
+    m.toggleListen('l1')
+    m.submitNew()             // nothing typed
+    m.submitQueue('q1')       // blank link
+    expect(m.origin.value).toBe('l1')
+  })
+
+  it('skipTrack sends the skip for that channel and clears an old refusal first', () => {
+    music.error = 'Old.'
+    const m = useCallMusic(() => people)
+    m.skipTrack('s1')
+    expect(sent('music:skip')).toEqual([{ conversationId: 'c1', kind: 'channel', channelId: 's1' }])
+    expect(music.error).toBe('')
+  })
+})
+
+describe('where a refusal belongs', () => {
+  it('belongs to the action that was last sent when it arrived', () => {
+    const m = useCallMusic(() => people)
+    m.skipTrack('s1')
+    expect(m.refusedAt.value).toBeNull()
+    onMusicError({ reason: 'You are doing that too fast. Give it a moment.' })
+    expect(m.refusedAt.value).toBe('s1')
+  })
+
+  it('stays with the card it answered when you go on to do something else', () => {
+    const m = useCallMusic(() => people)
+    m.skipTrack('s1')
+    onMusicError({ reason: 'Nothing to skip.' })
+    m.toggleListen('l1')       // a listen does not clear a refusal
+    expect(m.origin.value).toBe('l1')
+    expect(m.refusedAt.value).toBe('s1')
+  })
+
+  it('moves to the new card when the next action is refused too, even with the same words', () => {
+    const m = useCallMusic(() => people)
+    m.skipTrack('s1')
+    onMusicError({ reason: 'You are doing that too fast. Give it a moment.' })
+    m.skipTrack('s2')          // clears the old one, so the next arrival is a change
+    onMusicError({ reason: 'You are doing that too fast. Give it a moment.' })
+    expect(m.refusedAt.value).toBe('s2')
+  })
+
+  it('belongs to the new-channel card for a refused create', () => {
+    const m = useCallMusic(() => people)
+    m.name.value = 'Chill'; m.url.value = 'https://x.test/a.mp3'
+    m.submitNew()
+    onMusicError({ reason: 'That link did not work.' })
+    expect(m.refusedAt.value).toBe('new')
+  })
+
+  it('belongs to nobody once it is cleared, and when it arrived before there was an action', () => {
+    const m = useCallMusic(() => people)
+    onMusicError({ reason: 'Early.' })
+    expect(m.refusedAt.value).toBeNull()          // the sheet shows it elsewhere
+    m.skipTrack('s1')
+    onMusicError({ reason: 'Late.' })
+    expect(m.refusedAt.value).toBe('s1')
+    m.cancelNew()
+    expect(m.refusedAt.value).toBeNull()
+  })
+})
+
+describe('closing a channel takes two taps', () => {
+  type Form = ReturnType<typeof useCallMusic>
+
+  it('arms on the first tap and sends nothing', () => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    expect(m.closing.value).toBe('x')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('closes on a second tap on the same channel within the window, and disarms', () => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    vi.advanceTimersByTime(CLOSE_ARM_MS - 1)
+    expect(m.closing.value).toBe('x')
+    m.closeChannel('x')
+    expect(sent('music:close')).toEqual([{ conversationId: 'c1', kind: 'channel', channelId: 'x' }])
+    expect(m.closing.value).toBeNull()
+  })
+
+  it('drops the arm after three seconds, so the next tap arms again rather than closing', () => {
+    vi.useFakeTimers()
+    expect(CLOSE_ARM_MS).toBe(3000)
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    vi.advanceTimersByTime(CLOSE_ARM_MS)
+    expect(m.closing.value).toBeNull()
+    m.closeChannel('x')
+    expect(emit).not.toHaveBeenCalled()
+    expect(m.closing.value).toBe('x')
+  })
+
+  it('counts the window from the arming tap, not from a tap elsewhere', () => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    vi.advanceTimersByTime(2000)
+    m.closeChannel('y')                 // a different channel: arms y, does not close x
+    expect(m.closing.value).toBe('y')
+    vi.advanceTimersByTime(2000)        // 4s since x, 2s since y
+    expect(m.closing.value).toBe('y')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('arming one channel disarms another, and a tap on the first arms it fresh', () => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    m.closeChannel('y')
+    m.closeChannel('x')
+    expect(m.closing.value).toBe('x')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['skipping a track', (m: Form) => m.skipTrack('z')],
+    ['opening a track link', (m: Form) => m.toggleQueue('z')],
+    ['tuning in', (m: Form) => m.toggleListen('z')],
+    ['opening the new-channel form', (m: Form) => m.openNew()],
+    ['cancelling it', (m: Form) => m.cancelNew()],
+    ['being asked to disarm', (m: Form) => m.disarm()],
+  ])('disarms on %s', (_what, act) => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    act(m)
+    expect(m.closing.value).toBeNull()
+    emit.mockClear()
+    m.closeChannel('x')                 // arms again; it does not close
+    expect(sent('music:close')).toEqual([])
+  })
+
+  it('disarms on sending a link and on starting a channel', () => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    m.queueUrl.value = 'https://x.test/next.mp3'
+    m.submitQueue('q1')
+    expect(m.closing.value).toBeNull()
+
+    m.closeChannel('x')
+    m.name.value = 'Chill'; m.url.value = 'https://x.test/a.mp3'
+    m.submitNew()
+    expect(m.closing.value).toBeNull()
+  })
+
+  it('clears an old refusal when it closes, and records the channel as the origin', () => {
+    vi.useFakeTimers()
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    music.error = 'Old.'
+    m.closeChannel('x')
+    expect(music.error).toBe('')
+    expect(m.origin.value).toBe('x')
   })
 })

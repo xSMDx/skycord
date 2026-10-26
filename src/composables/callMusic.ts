@@ -7,14 +7,21 @@
  * layout differs, so the rest lives here, once. useMusic owns the state and
  * the socket; this is the small amount of form state and wording between that
  * and either panel.
+ *
+ * Two things here are for the phone sheet and are ignored by the flyout:
+ * where a refusal belongs, and closing a channel in two taps.
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch, getCurrentScope, onScopeDispose } from 'vue'
 import {
-  music, createMusicChannel, queueMusic, listenToMusic, clearMusicError,
+  music, createMusicChannel, queueMusic, skipMusic, closeMusicChannel,
+  listenToMusic, clearMusicError,
 } from './useMusic'
 
 /** Who is in the call: all `listenersText` needs of a participant. */
 export interface CallPerson { id: string; name: string }
+
+/** How long a first tap on Close stays armed. */
+export const CLOSE_ARM_MS = 3000
 
 /**
  * Who is listening, by name.
@@ -49,13 +56,50 @@ export const useCallMusic = (people: () => readonly CallPerson[]) => {
 
   const canAdd = computed(() => name.value.trim() !== '' && url.value.trim() !== '')
 
-  const openNew = () => { adding.value = true }
+  // ── Where a refusal belongs ───────────────────────────────────────────────
+  // The server answers a refused action with one `music:error` and nothing that
+  // says which action it was. A panel that shows it in one place, far from the
+  // control that was tapped, leaves it off-screen on a long list, so this keeps
+  // the one thing that can be known: where the last action that was sent came
+  // from. 'new' is a create; anything else is the channel's id.
+  const origin = ref<string | null>(null)
 
-  const cancelNew = () => { adding.value = false; clearMusicError() }
+  /**
+   * Where the refusal on screen belongs, or null when there is none or it
+   * cannot be placed (it arrived before any action here was sent).
+   *
+   * Taken as the refusal arrives rather than read off `origin` later: a tap
+   * that does not clear the refusal (tuning in) moves `origin` on, and the
+   * refusal must stay with the card it answered.
+   */
+  const refusedAt = ref<string | null>(null)
+  watch(() => music.error, e => { refusedAt.value = e ? origin.value : null }, { flush: 'sync' })
+
+  // ── Close, in two taps ────────────────────────────────────────────────────
+  // Closing a channel ends it for everyone listening and drops its queue, so
+  // the phone sheet will not do it on one tap, which a thumb can land by
+  // mistake. The first tap arms; a second on the same channel within
+  // CLOSE_ARM_MS closes. The arm also drops on any other action.
+  const closing = ref<string | null>(null)
+  let closingTimer: ReturnType<typeof setTimeout> | null = null
+
+  const disarm = () => {
+    if (closingTimer !== null) { clearTimeout(closingTimer); closingTimer = null }
+    closing.value = null
+  }
+  // A sheet that goes away with the arm still ticking must not fire into nothing.
+  if (getCurrentScope()) onScopeDispose(disarm)
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  const openNew = () => { disarm(); adding.value = true }
+
+  const cancelNew = () => { disarm(); adding.value = false; clearMusicError() }
 
   const submitNew = () => {
     if (!canAdd.value) return
+    disarm()
     clearMusicError()
+    origin.value = 'new'
     createMusicChannel(name.value.trim(), { url: url.value.trim() })
     // Cleared on submit, not on success: the server answers a create with a
     // music:state rather than an ack, so a form waiting for one would sit
@@ -64,22 +108,61 @@ export const useCallMusic = (people: () => readonly CallPerson[]) => {
   }
 
   /** Open the add-a-link form for a channel, or shut it on a second tap. */
-  const toggleQueue = (id: string) => { queueFor.value = queueFor.value === id ? null : id }
+  const toggleQueue = (id: string) => { disarm(); queueFor.value = queueFor.value === id ? null : id }
 
   const submitQueue = (id: string) => {
     const u = queueUrl.value.trim()
     if (!u) return
+    disarm()
     clearMusicError()
+    origin.value = id
     queueMusic(id, { url: u })
     queueUrl.value = ''; queueFor.value = null
   }
 
-  /** Tune into a channel, or out of it when it is the one you are on. */
-  const toggleListen = (id: string) => listenToMusic(music.listeningTo === id ? null : id)
+  /**
+   * Tune into a channel, or out of it when it is the one you are on.
+   *
+   * Leaves an earlier refusal where it is, as the flyout always has: the
+   * refusal keeps its own card (see refusedAt), so nothing is misplaced.
+   */
+  const toggleListen = (id: string) => {
+    disarm()
+    origin.value = id
+    listenToMusic(music.listeningTo === id ? null : id)
+  }
+
+  /** Skip the track in a channel, dismissing the last refusal so a new one is plain to see. */
+  const skipTrack = (id: string) => {
+    disarm()
+    clearMusicError()
+    origin.value = id
+    skipMusic(id)
+  }
+
+  /**
+   * Close a channel for everyone, on the second tap. The first arms it (see
+   * `closing`) and sends nothing; tapping another channel arms that one
+   * instead.
+   */
+  const closeChannel = (id: string) => {
+    if (closing.value !== id) {
+      disarm()
+      closing.value = id
+      closingTimer = setTimeout(disarm, CLOSE_ARM_MS)
+      return
+    }
+    disarm()
+    clearMusicError()
+    origin.value = id
+    closeMusicChannel(id)
+  }
 
   return {
     adding, name, url, queueFor, queueUrl,
     listeners, canAdd,
+    origin, refusedAt, closing,
     openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen,
+    skipTrack, closeChannel, disarm,
   }
 }
