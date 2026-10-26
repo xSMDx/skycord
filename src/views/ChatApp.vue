@@ -75,6 +75,9 @@ import ConversationDetails    from '@/components/chat/ConversationDetails.vue'
 import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
+import ReturnToCallBar       from '@/components/voice/phone/ReturnToCallBar.vue'
+import { phoneCall, openPhoneCall, minimizePhoneCall, useCallKeepAwake, initSpeaker, callAudioActive } from '@/composables/phoneCall'
+import { noPushToTalkKey }   from '@/composables/useVoiceSettings'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance, accentHex, chooseVariant, chooseStudio } from '@/composables/useAppearance'
 import { familyOf, type DarkVariant, type LightVariant } from '@/composables/themeMode'
@@ -744,6 +747,87 @@ const returnToCall = () => {
   const dm = dmsData.value.find(d => d.id === id)
   if (dm) openDM(dm)
 }
+// ── The phone call screen ───────────────────────────────────────────────────
+// On a touch phone (noPushToTalkKey: a small screen AND a finger — never the
+// width alone, so a narrow desktop window keeps the desktop call) a call you
+// are in or joining is a full-screen layer, or, minimised, a slim bar across
+// the top of every screen. CallBar draws the screen; this decides when it is
+// up (phoneCall.open), and draws the return bar.
+//
+// The screen only ever draws on the call's own conversation: CallBar is
+// mounted only there. So it opens there, and minimises the moment the view
+// moves anywhere else — never left "open" where nothing can draw it, with no
+// return bar to get back by.
+
+/** The call you are in or joining, whatever is on screen. */
+const callConvId = computed(() => voice.activeConvId || voice.connectingConvId)
+/**
+ * The conversation on screen, as the call screen counts it: a DM, a group, or
+ * a voice channel while its stage is open. A server's text channel is never a
+ * call's conversation, but it is a move away from one.
+ */
+const viewedConvId = computed<string | null>(() => {
+  if (view.value === 'dm') return activeDM.value?.id ?? null
+  if (view.value === 'group') return activeGroup.value?.id ?? null
+  if (view.value === 'server') return viewedVoiceChannel.value?.id ?? activeChannelId.value ?? null
+  return null
+})
+/** The call's own conversation is on screen: where CallBar, and so the screen, can draw. */
+const callInView = computed(() => callConvId.value !== null && viewedConvId.value === callConvId.value)
+
+/**
+ * The screen was asked for while its conversation was still on the way: a
+ * server loading for a voice channel, or a conversation the Android app is
+ * opening for a call answered there. It comes up when the conversation does.
+ */
+let phoneCallWanted = false
+
+/** Bring the screen up, going to the call's conversation first if need be. */
+const showPhoneCall = () => {
+  if (!callInView.value) returnToCall()
+  if (!callInView.value) { phoneCallWanted = true; return }
+  phoneCallWanted = false
+  // The members sheet and its scrim sit above the call screen; nothing may be
+  // left on top of it, unseen behind its own layer.
+  closeMembersSheet()
+  openPhoneCall()
+}
+
+// Joining or connecting opens it; the call ending (left, or given up on) puts it away.
+watch(() => voice.connected || voice.connecting, (inCall, was) => {
+  if (inCall && !was && noPushToTalkKey.value) showPhoneCall()
+  if (!inCall) { phoneCallWanted = false; minimizePhoneCall() }
+})
+// Opening the voice channel you are in: its stage is the screen on a phone.
+watch(voiceStageOpen, open => { if (open && noPushToTalkKey.value) showPhoneCall() })
+// Leaving the call's conversation minimises it (a notification tap, a link, the
+// Friends button); arriving at one still being waited for brings it up.
+watch(callInView, inView => {
+  if (!inView) minimizePhoneCall()
+  else if (phoneCallWanted) showPhoneCall()
+})
+
+/** The return bar: in a call on a touch phone, whenever the screen is not up. */
+const returnBarShown = computed(() => noPushToTalkKey.value && (voice.connected || voice.connecting) && !phoneCall.open)
+/** Anyone in the call talking, for the return bar's dot. */
+const callTalking = computed(() => voice.participants.some(p => p.speaking && !p.muted))
+
+// What a touch phone needs while a call is up. Decided once: a phone does not
+// become a desktop, and a desktop never keeps its display awake for a call.
+if (noPushToTalkKey.value) {
+  // The display must not sleep mid-call: Android would background the app and silence the mic.
+  useCallKeepAwake(() => voice.connected || voice.connecting)
+  // The app routes a call's audio while one is up (a no-op in builds without the route bridge).
+  watch(() => voice.connected, on => callAudioActive(on))
+}
+// The speaker circle follows the app's audio route from the start.
+let stopSpeaker: (() => void) | null = null
+onMounted(() => { if (noPushToTalkKey.value) stopSpeaker = initSpeaker() })
+onBeforeUnmount(() => stopSpeaker?.())
+// The open flag is module state; it must not outlive this view (a sign-out
+// mid-call) and greet the next one with a screen nobody asked for.
+onBeforeUnmount(minimizePhoneCall)
+
 const toggleCall = async () => {
   const c = currentCall.value; if (!c) return
   if (callActiveHere.value) { await vLeave(); return }
@@ -1264,6 +1348,18 @@ const toggleInviteVoice = (e: MouseEvent, ch: Channel) => {
   inviteVoiceAnchor.value  = open ? null : (e.currentTarget as HTMLElement)
 }
 const inviteVoiceModal   = ref<Channel | null>(null)
+
+/**
+ * Invite people, from the phone call screen: a voice channel's invite (the
+ * modal behind "See more…"), or a group's add-friends sheet. A DM has no such
+ * row — a third person would make it a group, which is not the call screen's
+ * to do — so it never asks. Both open over the screen, which stays up beneath.
+ */
+const inviteFromCall = () => {
+  const vc = liveVoiceChannel.value
+  if (currentCall.value?.kind === 'channel' && vc) { inviteVoiceModal.value = vc; return }
+  if (currentCall.value?.kind === 'group') showInviteGroup.value = true
+}
 
 /** Friends first for the inline peek — that is who you actually pull into a
  *  call. The modal widens to every member of the server. */
@@ -4631,7 +4727,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
 </script>
 
 <template>
-  <div class="app" @click="onClick">
+  <div class="app" :class="{ 'has-call-bar': returnBarShown }" @click="onClick">
 
     <!--
       Skip to the composer. It sits 42 tab stops into the page — the rail,
@@ -4981,6 +5077,16 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
     <!-- Connection status. Mounted at app level rather than inside a pane so it
          survives navigation and can't be covered by a modal. -->
     <ConnectionBanner />
+    <!-- The way back into a minimised call on a touch phone. Beside the strip,
+         at app level, for the same reasons: it is on every screen, and .app
+         steps down by its height (has-call-bar) so it covers nothing. -->
+    <ReturnToCallBar
+      v-if="returnBarShown"
+      :name="voice.activeName"
+      :talking="callTalking"
+      :started-at="voice.connectedAt"
+      @open="showPhoneCall"
+    />
     <!-- ══ SHELL ════════════════════════════════════════════════════════════ -->
     <!-- `--m` is the 0..1 pane position. The CSS below reads it, so a drag can
          sit anywhere between the two screens instead of only at the ends.
@@ -5151,7 +5257,10 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
              modal, so something on screen has to say so. -->
         <MiniPlayer @open="musicModal = true" />
         <!-- Voice connected strip + user panel -->
+        <!-- Not on a touch phone: the return bar stands in for it there, and
+             its screen share cannot work on a phone. -->
         <VoiceConnectedPanel
+          v-if="!noPushToTalkKey"
           @return-to-call="returnToCall"
           @preview-camera="openCameraPreview('camera')"
           @open-debug="showRtcDebug = true"
@@ -5428,7 +5537,10 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
           <div v-if="dragCategoryId && categoryDropBefore === null" class="ch-drop-line cat" aria-hidden="true" />
         </div>
         <MiniPlayer @open="musicModal = true" />
+        <!-- Not on a touch phone: the return bar stands in for it there, and
+             its screen share cannot work on a phone. -->
         <VoiceConnectedPanel
+          v-if="!noPushToTalkKey"
           @return-to-call="returnToCall"
           @preview-camera="openCameraPreview('camera')"
           @open-debug="showRtcDebug = true"
@@ -5889,6 +6001,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
             @profile="showUserProfile = $event.id"
             @preview-camera="openCameraPreview('camera')"
             @open-music-library="musicModal = true"
+            @invite="inviteFromCall"
           />
 
           <!-- Pinned messages panel -->
@@ -6064,13 +6177,20 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   /* --conn-h is the connection strip's measured height (0 when it's hidden).
      Shifting down by it, and shrinking to match, keeps the strip from covering
      the chat header — it was hiding the back button. */
-  height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
-  margin-top: var(--conn-h, 0px);
+  /* --call-bar-h is the return-to-call bar's, on a touch phone in a call with
+     the call screen minimised (below), and stacks under the strip the same way. */
+  height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px) - var(--call-bar-h, 0px)) / var(--zoom-factor, 1));
+  margin-top: calc(var(--conn-h, 0px) + var(--call-bar-h, 0px));
   overflow:hidden;overflow:clip;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
   /* No transition. Height and margin follow --conn-h and --keyboard-h, and
      animating them reflowed the whole app on every frame; the connection
      strip animates its own entrance, by transform. */
 }
+/* The return-to-call bar's height: its 44px row, plus the status-bar inset it
+   carries as the top edge — none while the connection strip is above it,
+   which carries the inset then (ReturnToCallBar draws the same sum). Written
+   in CSS rather than measured, so it follows the strip coming and going. */
+.app.has-call-bar{ --call-bar-h: calc(44px + max(0px, env(safe-area-inset-top) - var(--conn-h, 0px))); }
 /* `overflow:hidden` still leaves this a scroll container, and focus landing on
    something off-screen scrolls it: measured scrollLeft 158 on a phone, the whole
    app slid left. `clip` cuts without being scrollable. `hidden` stays on the line

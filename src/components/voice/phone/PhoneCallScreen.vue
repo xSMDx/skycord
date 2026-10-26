@@ -15,7 +15,7 @@
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import PhoneStage from './PhoneStage.vue'
-import { pickFocus, FOCUS_HOLD_MS, type FocusState } from '@/composables/phoneCallRules'
+import { pickFocus, FOCUS_HOLD_MS, type FocusState, type FocusKind } from '@/composables/phoneCallRules'
 import { useAutoHide, usePointersHeld } from '@/composables/phoneCall'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import { userPref } from '@/composables/useVoice'
@@ -36,9 +36,20 @@ const props = defineProps<{
   ringAgain: boolean
   /** The sheet is pulled up. The controls never hide while it is. */
   sheetExpanded: boolean
+  /**
+   * The shut sheet's measured height in px (its `height` event), where the
+   * stage keeps its small tiles above it. Null until it has been measured,
+   * when an estimate stands in.
+   */
+  sheetHeight?: number | null
 }>()
 
-const emit = defineEmits<{ minimize: []; ringAgain: [] }>()
+const emit = defineEmits<{
+  minimize: []
+  ringAgain: []
+  /** Who fills the screen, as it changes: the host names them in the subtitle. */
+  focus: [f: { kind: FocusKind; id: string } | null]
+}>()
 
 defineSlots<{
   /** The sheet. `hidden` = the controls have faded over a video. */
@@ -77,6 +88,16 @@ const refocus = () => {
   if (pending) holdTimer = setTimeout(refocus, Math.max(0, pending.since + FOCUS_HOLD_MS - now))
 }
 watch([() => props.tiles, shownVideos, () => props.selfId], refocus, { immediate: true })
+
+// Only a change of who or what: the newcomer being waited out is not news.
+watch(() => (focus.value ? `${focus.value.kind}:${focus.value.id}` : ''), () => {
+  const f = focus.value
+  emit('focus', f ? { kind: f.kind, id: f.id } : null)
+}, { immediate: true })
+
+// The measured sheet replaces the stylesheet's estimate.
+const rootStyle = computed(() =>
+  props.sheetHeight ? { '--pcs-sheet-h': `${props.sheetHeight}px` } : undefined)
 
 // ── Controls that fade over a video ─────────────────────────────────────────
 const pointers = usePointersHeld()
@@ -132,6 +153,7 @@ onBeforeUnmount(clearHold)
     <div
       ref="root"
       class="pcs"
+      :style="rootStyle"
       data-surface="media"
       role="dialog"
       aria-modal="true"
@@ -178,8 +200,9 @@ onBeforeUnmount(clearHold)
   --pcs-top-inset: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px));
   /* Where the stage's middle begins: the chevron row and two lines of text. */
   --pcs-top-h: calc(var(--pcs-top-inset) + 72px);
-  /* The collapsed sheet: its handle, the row of circles and the hint. The
-     sheet may set its own measured height here. */
+  /* The collapsed sheet: its handle, the row of circles and the hint. An
+     estimate until the host passes the sheet's measured height (sheetHeight),
+     which the root's inline style then writes over this. */
   --pcs-sheet-h: calc(152px + env(safe-area-inset-bottom));
 
   position: fixed; left: 0; right: 0; bottom: 0; top: var(--conn-h, 0px);

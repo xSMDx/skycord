@@ -24,8 +24,15 @@ const musicTip = computed(() => {
 import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia, canScreenShare, type VideoTrackInfo } from '@/composables/useVoiceMedia'
-import { voiceSettings, setVoiceSettings } from '@/composables/useVoiceSettings'
+import { voiceSettings, setVoiceSettings, noPushToTalkKey } from '@/composables/useVoiceSettings'
 import { userPref, setUserPref } from '@/composables/useVoice'
+import PhoneCallScreen from './phone/PhoneCallScreen.vue'
+import PhoneCallSheet from './phone/PhoneCallSheet.vue'
+import PhoneMusicSheet from './phone/PhoneMusicSheet.vue'
+import { phoneCall, minimizePhoneCall } from '@/composables/phoneCall'
+import { callSubtitle, type FocusKind } from '@/composables/phoneCallRules'
+import { joinProgress } from '@/composables/callStatus'
+import { micNotice } from '@/composables/micState'
 import { soundDialStart, soundDialStop } from '@/composables/useSocket'
 // Aliased: this component already has its own `openMenu` ref for the flyouts.
 import { openMenu as openCtxMenu } from '@/composables/useContextMenu'
@@ -68,6 +75,10 @@ const emit = defineEmits<{
   dismiss: []; toast: [msg: string]; openSettings: [page?: 'voice']
   expand: [on: boolean]; profile: [u: { id: string; displayName: string; avatar: string }]
   previewCamera: []; openMusicLibrary: []
+  /** The phone call screen was minimised. A voice channel's stage closes with it. */
+  minimize: []
+  /** Invite people, from the phone call screen: ChatApp owns the invite sheets. */
+  invite: []
 }>()
 
 const { voice, connect, leave, toggleMute, toggleDeafen } = useVoice()
@@ -403,6 +414,95 @@ watch(dialing, (on) => {
 
 onBeforeUnmount(() => { clearRingTimer(); soundDialStop() })
 
+// ── The phone call screen ───────────────────────────────────────────────────
+// On a touch phone in this call, the full-screen phone call screen takes over
+// from the bar: the template draws it, or nothing while it is minimised (the
+// return bar at the top of the app stands in). It is hosted here, not by
+// ChatApp, because everything it shows is already this component's — the ring
+// and its timer, the callee, the faces, the camera action with its preview.
+//
+// "Touch phone" is noPushToTalkKey (a small screen AND a finger), never the
+// width alone: a narrow desktop window keeps this bar, screen share included.
+// Whether it is open is ChatApp's to decide (phoneCall.open); minimising is
+// the one thing decided here, because the screen's chevron is here.
+
+/** You, as the screen's stage knows you: your LiveKit id once joined, the optimistic tile's before. */
+const selfId = computed(() =>
+  (joinedHere.value ? voice.participants.find(p => p.local)?.id : null) ?? 'me')
+
+/** Who is in the call, for the sheet's list: everyone on the stage but the person being rung. */
+const phonePeople = computed(() => stageTiles.value.filter(t => !t.ring))
+
+/** What the screen has put in its big slot, as it reports it. */
+const phoneFocus = ref<{ kind: FocusKind; id: string } | null>(null)
+
+/** Whose camera fills the screen, when it is someone else's — the subtitle names them. */
+const onCameraName = computed(() => {
+  const f = phoneFocus.value
+  if (f?.kind !== 'camera') return null
+  const v = videoList.value.find(x => x.participantId === f.id && x.source === 'camera' && !x.local)
+  return v ? (stageTiles.value.find(t => t.id === f.id)?.name || v.name || null) : null
+})
+
+const phoneOpen = computed(() => noPushToTalkKey.value && inCall.value && phoneCall.open)
+
+// The call's timer reads a clock that ticks only while the screen is up.
+const now = ref(Date.now())
+let clock: ReturnType<typeof setInterval> | null = null
+watch(phoneOpen, on => {
+  if (clock !== null) { clearInterval(clock); clock = null }
+  if (!on) return
+  now.value = Date.now()
+  clock = setInterval(() => { now.value = Date.now() }, 1000)
+}, { immediate: true })
+onBeforeUnmount(() => { if (clock !== null) clearInterval(clock) })
+
+/**
+ * The line under the call's name. Joining, the same progress the desktop's
+ * connection strip shows (connecting, trying again); in the call, the head
+ * count and the timer, or who is on camera.
+ */
+const phoneSubtitle = computed(() => {
+  if (connectingHere.value) return joinProgress(voice)?.label ?? ''
+  return callSubtitle({
+    kind: props.kind,
+    count: phonePeople.value.length,
+    onCamera: onCameraName.value,
+    elapsedMs: voice.connectedAt === null ? null : now.value - voice.connectedAt,
+  })
+})
+
+/** The sheet is pulled up: the controls never fade while it is. */
+const sheetExpanded = ref(false)
+/** The shut sheet's measured height, which the stage keeps its small tiles above. */
+const sheetHeight = ref<number | null>(null)
+/** The call's music, as a phone sheet over the screen. */
+const phoneMusicOpen = ref(false)
+
+// Closed is done with: the next screen starts with its sheets down.
+watch(phoneOpen, on => {
+  if (on) return
+  phoneMusicOpen.value = false
+  sheetExpanded.value = false
+  phoneFocus.value = null
+})
+
+const onPhoneMinimize = () => {
+  // Escape from a keyboard lands on the screen even with the music sheet over
+  // it; it closes what is on top first, as Android Back does.
+  if (phoneMusicOpen.value) { phoneMusicOpen.value = false; return }
+  minimizePhoneCall()
+  // A voice channel's stage would be an empty column without the screen, so
+  // ChatApp closes it too (viewedVoiceId), landing on the server's text side.
+  emit('minimize')
+}
+
+/** "Your library" hands over to the music modal, which takes the screen's place on top. */
+const openPhoneMusicLibrary = () => {
+  phoneMusicOpen.value = false
+  emit('openMusicLibrary')
+}
+
 const syncFullscreen = () => { isFullscreen.value = document.fullscreenElement === callbarRef.value }
 const toggleFullscreen = () => {
   if (!isFullscreen.value) callbarRef.value?.requestFullscreen?.().catch(() => {})
@@ -420,7 +520,53 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="visible" ref="callbarRef" class="callbar" data-surface="media" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': chatHidden, 'is-fs': isFullscreen, 'is-dragging': dragging }">
+  <!-- ── A touch phone in this call: the phone call screen ──────────────────
+       Full screen, teleported to the body. Minimised, nothing is drawn here:
+       the return bar at the top of the app stands in for it. -->
+  <PhoneCallScreen
+    v-if="noPushToTalkKey && inCall && phoneCall.open"
+    :name="name"
+    :subtitle="phoneSubtitle"
+    :notice="joinedHere ? micNotice(voice.mic) : null"
+    :tiles="stageTiles"
+    :videos="videoList"
+    :self-id="selfId"
+    :ring-again="dialing && rangOut"
+    :sheet-expanded="sheetExpanded"
+    :sheet-height="sheetHeight"
+    @minimize="onPhoneMinimize"
+    @ring-again="ringAgain"
+    @focus="phoneFocus = $event"
+  >
+    <template #default="{ hidden }">
+      <PhoneCallSheet
+        :participants="phonePeople"
+        :can-invite="kind !== 'dm'"
+        :joined="joinedHere"
+        :hidden="hidden"
+        @camera="onCamera"
+        @invite="emit('invite')"
+        @voice-settings="emit('openSettings', 'voice')"
+        @music="phoneMusicOpen = true"
+        @leave="leave"
+        @expanded="sheetExpanded = $event"
+        @height="sheetHeight = $event"
+      />
+      <!-- A sheet of its own, teleported over the screen; mounted with it so
+           it can never outlive it. -->
+      <PhoneMusicSheet
+        :open="phoneMusicOpen"
+        @close="phoneMusicOpen = false"
+        @open-library="openPhoneMusicLibrary"
+      />
+    </template>
+  </PhoneCallScreen>
+
+  <!-- ── Everywhere else: the bar ─────────────────────────────────────────
+       Never on a touch phone in the call (the screen above, or the return
+       bar), so none of the desktop controls below reach a phone mid-call. A
+       call you have not joined still draws here on a phone, with its Join. -->
+  <div v-else-if="visible && !(noPushToTalkKey && inCall)" ref="callbarRef" class="callbar" data-surface="media" :style="barStyle" :class="{ 'has-video': inCall && videoList.length, 'sharing': inCall && hasScreen, 'is-expanded': chatHidden, 'is-fs': isFullscreen, 'is-dragging': dragging, 'is-touch-phone': noPushToTalkKey }">
     <!-- ── In a call (joined or connecting): stage + controls ────────────── -->
     <template v-if="inCall">
       <!-- stage wrapper is the positioning context for the ⛶ overlay, so the
@@ -723,6 +869,20 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out);
 }
 .cb-dismiss:hover { background: var(--hover-strong); }
+
+/* A touch phone (noPushToTalkKey, bound as .is-touch-phone): the two things a
+   call you have not joined offers become thumb targets. 44px is the floor the
+   phone call screen holds every control to, so the step from this row into the
+   call does not change the size of a press. Join keeps its width from its
+   label; the 12px between them is a buffer, so a Join that misses lands on
+   nothing rather than on Dismiss. No lift on hover: on touch a hover sticks
+   after the tap, and the bar would sit raised a pixel for no reason. */
+.callbar.is-touch-phone .cb-join-row { gap: 12px; }
+.callbar.is-touch-phone .cb-join { height: 44px; padding: 0 24px; font-size: 15px; }
+.callbar.is-touch-phone .cb-join:hover { transform: none; }
+.callbar.is-touch-phone .cb-join:active { transform: scale(.96); }
+.callbar.is-touch-phone .cb-dismiss { width: 44px; height: 44px; }
+.callbar.is-touch-phone .cb-dismiss:active { background: var(--press-veil); }
 
 /* Active camera / screen share — green like Discord */
 /*
