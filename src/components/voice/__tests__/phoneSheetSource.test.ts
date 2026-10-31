@@ -124,6 +124,11 @@ describe('the Hold to talk bar', () => {
     expect(hold).toContain('navigator.vibrate?.(10)')
   })
 
+  it('has the permission the Android app needs for that buzz, or Chromium silently does nothing', () => {
+    const manifest = readFileSync(resolve(__dirname, '../../../../android/app/src/main/AndroidManifest.xml'), 'utf8')
+    expect(manifest).toContain('<uses-permission android:name="android.permission.VIBRATE" />')
+  })
+
   it('presses and releases through the push-to-talk key\'s own code', () => {
     expect(hold).toMatch(/createHoldToTalk\(\{[\s\S]*press: pttPress,[\s\S]*release: pttRelease,/)
   })
@@ -189,6 +194,23 @@ describe('the phone call sheet', () => {
       expect(tag.includes('inert') || tag.includes('aria-hidden="true"'), tag).toBe(true)
     }
     expect(css).toMatch(/\.is-hidden\s*\{[^}]*visibility:\s*hidden[^}]*pointer-events:\s*none/)
+  })
+
+  it('hides the shut list from a screen reader without leaning on inert, which a WebView before Chromium 102 ignores', () => {
+    // Still inert as well, for the WebViews that honour it.
+    expect(openingTag(elementWith(tpl, 'class="pcsh-body"'))).toContain(':inert="hidden || !expanded || undefined"')
+    const shut = ruleOf(css, '.pcsh:not(.open):not(.dragging) .pcsh-body')
+    expect(shut).toMatch(/visibility:\s*hidden/)
+    // Hidden only once the fade down is done, so the fade still plays...
+    expect(shut).toMatch(/transition:[^;]*opacity var\(--dur-3\)[^;]*visibility 0s linear var\(--dur-3\)/)
+    // ...and lifted at once on the way up (the base rule has no delay), so the reveal fades in.
+    expect(ruleOf(css, '.pcsh-body')).toMatch(/transition:[^;]*visibility 0s\s*;/)
+    // Never under a finger: a drag shows the list by its inline opacity, and a hidden list shows nothing.
+    expect(css).not.toMatch(/\.pcsh:not\(\.open\)\s+\.pcsh-body\s*\{[^}]*visibility/)
+    expect(sheet).toContain('const bodyStyle = computed(() => (dragging.value ? { opacity: String(progress.value) } : undefined))')
+    // Holds still under reduced motion, as everything that fades does.
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+    expect(reduced).toContain('.pcsh:not(.open):not(.dragging) .pcsh-body')
   })
 
   it('shows the Music card only when the server runs music', () => {

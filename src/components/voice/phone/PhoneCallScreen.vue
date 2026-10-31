@@ -15,7 +15,7 @@
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import PhoneStage from './PhoneStage.vue'
-import { pickFocus, FOCUS_HOLD_MS, type FocusState, type FocusKind } from '@/composables/phoneCallRules'
+import { pickFocus, focusedVideo, FOCUS_HOLD_MS, type FocusState, type FocusKind } from '@/composables/phoneCallRules'
 import { useAutoHide, usePointersHeld } from '@/composables/phoneCall'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import { userPref } from '@/composables/useVoice'
@@ -122,8 +122,13 @@ const rootStyle = computed(() =>
 
 // ── Controls that fade over a video ─────────────────────────────────────────
 const pointers = usePointersHeld()
+// Only while a picture is what fills the screen. `focus.kind` is not that: a
+// camera holder whose video has stopped keeps kind 'camera' while a newcomer
+// waits out the hold, and the stage draws them as an avatar. The same lookup
+// the stage draws by (focusedVideo), so the two cannot disagree.
+const videoFillsScreen = computed(() => focusedVideo(shownVideos.value, focus.value) !== null)
 const { hidden, poke } = useAutoHide({
-  enabled: () => focus.value?.kind !== 'avatar' && !props.sheetExpanded
+  enabled: () => videoFillsScreen.value && !props.sheetExpanded
     // Never under a finger that is still down: a press can outlast the delay
     // (Hold to talk is held for as long as you talk), and the count starts
     // again from its release.

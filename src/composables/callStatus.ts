@@ -51,3 +51,30 @@ export const joinProgress = (
 export const failedCallId = (
   v: { connectStage: ConnectStage; connectingConvId: string | null; activeConvId: string | null },
 ): string | null => (v.connectStage === 'failed' ? (v.connectingConvId ?? v.activeConvId) : null)
+
+/**
+ * The group or DM a call's id belongs to, for "return to call"; null for a
+ * voice channel's id (the caller finds channels first) or an id that is not in
+ * either list.
+ *
+ * `activeKind` is set only once a join has succeeded: through "Connecting…",
+ * "Trying again…" and the red failed hold the call is known by its id alone
+ * (connectingConvId) and `activeKind` is still null. Asking for a group only
+ * when `activeKind === 'group'` therefore found nothing to return to, in the
+ * one stretch where the return bar is the only way back on a phone. Ids are
+ * unique across kinds, so looking an id up cannot land on a different
+ * conversation; only a call known to be a DM skips the groups.
+ */
+export const callConversation = <G extends { id: string }, D extends { id: string }>(
+  id: string,
+  activeKind: 'dm' | 'group' | 'channel' | null,
+  groups: readonly G[],
+  dms: readonly D[],
+): { kind: 'group'; group: G } | { kind: 'dm'; dm: D } | null => {
+  if (activeKind !== 'dm') {
+    const group = groups.find(g => g.id === id)
+    if (group) return { kind: 'group', group }
+  }
+  const dm = dms.find(d => d.id === id)
+  return dm ? { kind: 'dm', dm } : null
+}

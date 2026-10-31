@@ -224,6 +224,25 @@ describe('a failed join on a touch phone', () => {
     expect(w).toMatch(/stage === 'failed' && prev !== 'failed' && !noPushToTalkKey\.value/)
   })
 
+  it('goes back to a group or DM whose call is still joining or has failed, not only one that is up', () => {
+    // activeKind is set by a join that has succeeded, so it is null through
+    // "Connecting…", "Trying again…" and the failed hold: the lookup is
+    // callConversation's (callStatus.test), and returnToCall must not gate it.
+    const back = between('const returnToCall = () => {', '\n}')
+    expect(back).toContain('callConversation(id, voice.activeKind, groupsData.value, dmsData.value)')
+    expect(back).not.toContain("voice.activeKind === 'group'")
+    expect(back).toMatch(/target\?\.kind === 'group'\) openGroup\(target\.group\)/)
+    expect(back).toMatch(/target\?\.kind === 'dm'\) openDM\(target\.dm\)/)
+    expect(source).toMatch(/import \{[^}]*\bcallConversation\b[^}]*\} from '@\/composables\/callStatus'/)
+  })
+
+  it('says, in the stage’s docblock, that a touch phone keeps the stage through the failed hold', () => {
+    const doc = source.slice(source.lastIndexOf('/**', source.indexOf('const viewedVoiceChannel = computed')), source.indexOf('const viewedVoiceChannel = computed'))
+    expect(doc).toContain('callVoiceChannel')
+    expect(doc).toContain('hold running out')
+    expect(doc).not.toContain('spent its retries) this')
+  })
+
   it('keeps its stage, its CallBar, the way back to it and the landing at its end on that channel', () => {
     expect(between('const viewedVoiceChannel = computed', '\n})')).toContain('callVoiceChannel.value')
     expect(between('const currentCall = computed', '\n})')).toContain('callVoiceChannel.value')

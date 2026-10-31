@@ -94,7 +94,18 @@ describe('the phone call screen', () => {
   })
 
   it('hides only while a video fills the screen and the sheet is down', () => {
-    expect(screen).toMatch(/useAutoHide\(\{\s*enabled: \(\) => focus\.value\?\.kind !== 'avatar' && !props\.sheetExpanded/)
+    expect(screen).toMatch(/useAutoHide\(\{\s*enabled: \(\) => videoFillsScreen\.value && !props\.sheetExpanded/)
+  })
+
+  it('counts a video as filling the screen only when the stage draws it, never by the focus kind alone', () => {
+    // A camera holder whose video stopped keeps kind 'camera' while a newcomer
+    // waits out the hold, and is drawn as an avatar: the controls must stay up.
+    expect(screen).toContain('const videoFillsScreen = computed(() => focusedVideo(shownVideos.value, focus.value) !== null)')
+    const call = screen.slice(screen.indexOf('useAutoHide({'), screen.indexOf('})', screen.indexOf('useAutoHide({')))
+    expect(call).not.toContain('.kind')
+    // The stage draws the big slot by the same lookup, from the same videos.
+    expect(stage).toContain('focusedVideo(props.videos, props.focus)')
+    expect(screen).toMatch(/<PhoneStage[^>]*:videos="shownVideos"/)
   })
 
   it('hands the sheet whether the controls are hidden', () => {

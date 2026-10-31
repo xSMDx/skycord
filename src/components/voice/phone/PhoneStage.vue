@@ -16,7 +16,7 @@ import { defaultAvatar } from '@/composables/useAvatar'
 import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
 import { perf } from '@/composables/usePerformance'
 import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
-import type { FocusState } from '@/composables/phoneCallRules'
+import { focusedVideo, type FocusState } from '@/composables/phoneCallRules'
 
 /** CallStage's tile. `ring` = someone being called who has not picked up. */
 type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ring?: 'ringing' | 'no-answer' }
@@ -50,11 +50,7 @@ const camera = (id: string): VideoTrackInfo | null =>
 const avatarOf = (t: Tile): string => t.avatar || defaultAvatar(t.name)
 
 // ── The big slot ────────────────────────────────────────────────────────────
-const bigVideo = computed<VideoTrackInfo | null>(() => {
-  const f = props.focus
-  if (!f || f.kind === 'avatar') return null
-  return props.videos.find(v => v.participantId === f.id && v.source === f.kind) ?? null
-})
+const bigVideo = computed<VideoTrackInfo | null>(() => focusedVideo(props.videos, props.focus))
 
 // Someone in the slot with no tile yet (their video arrived before presence)
 // still has a name to show.

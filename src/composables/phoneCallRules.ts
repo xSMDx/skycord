@@ -113,6 +113,23 @@ export const pickFocus = (input: FocusInput, prev: FocusState | null, now: numbe
   return { ...next, since: now, pending: null }
 }
 
+/**
+ * The video the big slot actually draws: the focused person's track of the
+ * focused kind among `videos`, the ones the stage is given — or null when the
+ * slot is an avatar, or a person with nothing to show. pickFocus keeps someone
+ * in the slot after their camera or share has stopped (and while a newcomer
+ * waits out the hold), so `focus.kind` alone cannot say whether a picture is
+ * on screen; whoever draws the slot and whoever decides what to do over it
+ * both ask this, so they cannot disagree.
+ */
+export const focusedVideo = <V extends { participantId: string; source: 'camera' | 'screen' }>(
+  videos: readonly V[],
+  focus: Pick<FocusState, 'kind' | 'id'> | null,
+): V | null => {
+  if (!focus || focus.kind === 'avatar') return null
+  return videos.find(v => v.participantId === focus.id && v.source === focus.kind) ?? null
+}
+
 // ── The Music card ──────────────────────────────────────────────────────────
 export type MusicCardLabel =
   | null

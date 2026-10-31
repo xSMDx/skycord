@@ -77,7 +77,7 @@ import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
 import ReturnToCallBar       from '@/components/voice/phone/ReturnToCallBar.vue'
 import { phoneCall, openPhoneCall, minimizePhoneCall, useCallKeepAwake, initSpeaker, callAudioActive } from '@/composables/phoneCall'
-import { joinProgress, failedCallId } from '@/composables/callStatus'
+import { joinProgress, failedCallId, callConversation } from '@/composables/callStatus'
 import { noPushToTalkKey }   from '@/composables/useVoiceSettings'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance, accentHex, chooseVariant, chooseStudio } from '@/composables/useAppearance'
@@ -702,12 +702,16 @@ const voiceChannelLabel = (ch: Channel) => {
  *
  * Two conditions, and both matter. `viewedVoiceId` is the intent — the channel
  * you asked to look at (see its declaration in useServers for why that is not
- * `activeChannelId`). `liveVoiceChannel` is the reality — the call that is
- * actually up. A stage with no call behind it is an empty pane, so the moment
- * the call stops being live (you left, or the join spent its retries) this
- * goes null and the column falls back to the text channel underneath. The
- * server/`activeServerId` check keeps a call in one server from taking over
- * another server's column, exactly as `currentCall` does below.
+ * `activeChannelId`). `callVoiceChannel` is the reality — the call that is
+ * actually up, or joining. A stage with no call behind it is an empty pane, so
+ * the moment the call stops being there this goes null and the column falls
+ * back to the text channel underneath. What ends it depends on the device: on
+ * a desktop, you leaving or the join spending its retries; on a touch phone,
+ * you leaving or the red "Couldn't connect" hold running out, because the
+ * phone call screen is what says the join failed, and it lives on the stage
+ * (see `callVoiceChannel`). The server/`activeServerId` check keeps a call in
+ * one server from taking over another server's column, exactly as
+ * `currentCall` does below.
  *
  * Returning the channel rather than a boolean is deliberate: the header needs
  * its bare `name`, not `voiceChannelLabel`'s "Channel / Server" form — the
@@ -764,12 +768,13 @@ const returnToCall = () => {
     if (srv) void openServer(srv).then(showStage)
     return
   }
-  if (voice.activeKind === 'group') {
-    const g = groupsData.value.find(x => x.id === id)
-    if (g) { openGroup(g); return }
-  }
-  const dm = dmsData.value.find(d => d.id === id)
-  if (dm) openDM(dm)
+  // A group or a DM. The kind is not asked for first: `activeKind` is set only
+  // once a join has succeeded, so it is still null through "Connecting…",
+  // "Trying again…" and the failed hold, which is exactly when the return bar
+  // is the only way back (callConversation has the rule).
+  const target = callConversation(id, voice.activeKind, groupsData.value, dmsData.value)
+  if (target?.kind === 'group') openGroup(target.group)
+  else if (target?.kind === 'dm') openDM(target.dm)
 }
 // ── The phone call screen ───────────────────────────────────────────────────
 // On a touch phone (noPushToTalkKey: a small screen AND a finger — never the

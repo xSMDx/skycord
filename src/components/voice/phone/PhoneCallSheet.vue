@@ -475,6 +475,16 @@ onBeforeUnmount(() => {
 /* Shut, the list is below the edge but for the inset's few px; it shows
    nothing there and takes nothing (it is inert too). */
 .pcsh:not(.open) .pcsh-body { opacity: 0; pointer-events: none; }
+/* Inert is not enough on its own: a WebView older than Chromium 102 ignores
+   it, and TalkBack then walks into rows nobody can see. Hidden is heard by
+   every WebView. It waits for the fade going down (the delay, as .is-hidden
+   below does) and is lifted at once going up, so the reveal still fades in.
+   Not under a finger: a drag shows the list as far as it has been drawn
+   (opacity, inline), and a hidden list would show nothing. */
+.pcsh:not(.open):not(.dragging) .pcsh-body {
+  visibility: hidden;
+  transition: opacity var(--dur-3) var(--ease-out), visibility 0s linear var(--dur-3);
+}
 .pcsh.dragging .pcsh-hint, .pcsh.dragging .pcsh-body { transition: none; }
 
 .pcsh-list { display: flex; flex-direction: column; gap: 16px; padding: 4px 0 16px; }
@@ -544,6 +554,6 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .pcsh.settling, .pcsh.settling:not(.open) { transition: none; }
   .pcsh-bg, .pcsh-grab, .pcsh-row, .pcsh-hint, .pcsh-body, .pcsh .is-hidden, .pcsh-av,
-  .pcsh-solid, .pcsh.open .pcsh-solid { transition: none; }
+  .pcsh-solid, .pcsh.open .pcsh-solid, .pcsh:not(.open):not(.dragging) .pcsh-body { transition: none; }
 }
 </style>

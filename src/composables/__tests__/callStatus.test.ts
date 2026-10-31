@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { joinProgress, failedCallId } from '../callStatus'
+import { joinProgress, failedCallId, callConversation } from '../callStatus'
 import type { ConnectStage } from '../useVoice'
 
 // The shape useVoice keeps while a join is under way: connecting is true for the
@@ -91,5 +91,48 @@ describe('failedCallId', () => {
 
   it('is null once leave() has cleared the ids', () => {
     expect(failedCallId(f())).toBeNull()
+  })
+})
+
+// "Return to call" finds its conversation from the call's id. The group lookup
+// used to wait for voice.activeKind === 'group', which only a successful join
+// sets, so the return bar did nothing for a group still being joined.
+describe('callConversation', () => {
+  const groups = [{ id: 'g1', name: 'Band' }, { id: 'g2', name: 'Climbing' }]
+  const dms = [{ id: 'd1', name: 'Ana' }]
+
+  it('finds a group whose call is still connecting, while activeKind is still null', () => {
+    // A first join: connect() has set connectingConvId, and activeConvId and
+    // activeKind wait for the join to succeed. ChatApp's id is the first of the two.
+    const joining = { activeConvId: null, activeKind: null, connectingConvId: 'g2' }
+    const id = joining.activeConvId || joining.connectingConvId
+    expect(callConversation(id, joining.activeKind, groups, dms)).toEqual({ kind: 'group', group: groups[1] })
+  })
+
+  it('finds a group whose join has failed, for as long as the failure is held', () => {
+    // giveUp: not connecting, not connected, stage 'failed', the ids kept, activeKind still null.
+    const held = f({ connectingConvId: 'g1' })
+    expect(failedCallId(held)).toBe('g1')
+    expect(callConversation(held.connectingConvId!, null, groups, dms)).toEqual({ kind: 'group', group: groups[0] })
+  })
+
+  it('finds a group whose call is up', () => {
+    expect(callConversation('g1', 'group', groups, dms)).toEqual({ kind: 'group', group: groups[0] })
+    expect(callConversation('g2', 'group', groups, dms)).toEqual({ kind: 'group', group: groups[1] })
+  })
+
+  it('finds a DM, whether its call is up or still connecting', () => {
+    expect(callConversation('d1', 'dm', groups, dms)).toEqual({ kind: 'dm', dm: dms[0] })
+    expect(callConversation('d1', null, groups, dms)).toEqual({ kind: 'dm', dm: dms[0] })
+  })
+
+  it('leaves the groups alone once the call is known to be a DM', () => {
+    const dm = { id: 'x', name: 'a DM' }
+    expect(callConversation('x', 'dm', [{ id: 'x', name: 'a group' }], [dm])).toEqual({ kind: 'dm', dm })
+  })
+
+  it('is null for a voice channel’s id, which the caller finds first, and for an id in neither list', () => {
+    expect(callConversation('voice-ch', 'channel', groups, dms)).toBeNull()
+    expect(callConversation('gone', null, groups, dms)).toBeNull()
   })
 })

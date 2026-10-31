@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pickFocus, FOCUS_HOLD_MS, musicCardLabel, formatElapsed, callSubtitle,
+  pickFocus, focusedVideo, FOCUS_HOLD_MS, musicCardLabel, formatElapsed, callSubtitle,
   type FocusInput, type FocusState,
 } from '../phoneCallRules'
 import type { MusicChannelView } from '../useMusic'
@@ -215,8 +215,53 @@ describe('pickFocus: who fills a phone screen', () => {
   })
 })
 
+// Whether the big slot is a picture or a person. The screen fades its controls
+// over a picture only, and the stage draws the slot by the same rule.
+describe('focusedVideo: is a picture what fills the screen', () => {
+  const track = (participantId: string, source: 'camera' | 'screen') => ({ participantId, source })
+
+  it('is the focused person’s track of the focused kind', () => {
+    const a = track('a', 'camera')
+    expect(focusedVideo([track('b', 'camera'), a], focus('camera', 'a', 0))).toBe(a)
+    const share = track('b', 'screen')
+    expect(focusedVideo([track('b', 'camera'), share], focus('screen', 'b', 0))).toBe(share)
+  })
+
+  it('is null for an avatar, even when that person has a video of their own', () => {
+    expect(focusedVideo([track('a', 'camera')], focus('avatar', 'a', 0))).toBeNull()
+  })
+
+  it('is null with no focus yet, and with no videos at all', () => {
+    expect(focusedVideo([track('a', 'camera')], null)).toBeNull()
+    expect(focusedVideo([], focus('camera', 'a', 0))).toBeNull()
+  })
+
+  it('is null when the track is of another kind than the focus, or another person’s', () => {
+    expect(focusedVideo([track('a', 'screen')], focus('camera', 'a', 0))).toBeNull()
+    expect(focusedVideo([track('b', 'camera')], focus('camera', 'a', 0))).toBeNull()
+  })
+
+  it('is null for a camera holder whose video has stopped, while a newcomer waits out the hold', () => {
+    // a held the slot on camera and switched it off; b is who the ranking now wants.
+    const held = focus('camera', 'a', 0)
+    const camOff = input({ tiles: [tile('me'), tile('a'), tile('b', true)], lastSpokeAt: { a: 1, b: 9 } })
+    const waiting = pickFocus(camOff, held, 300)
+    // pickFocus still says 'camera' for a: that is the case focus.kind gets wrong.
+    expect(waiting).toMatchObject({ kind: 'camera', id: 'a', pending: { id: 'b' } })
+    expect(focusedVideo([], waiting)).toBeNull()
+    // The same holder with their camera on is a picture.
+    const withVideo = [track('a', 'camera')]
+    const camOn = pickFocus(input({ tiles: [tile('me'), tile('a')], videos: [cam('a')] }), held, 300)
+    expect(focusedVideo(withVideo, camOn)).toBe(withVideo[0])
+  })
+
+  it('is null for a share that has ended, with a camera still on', () => {
+    expect(focusedVideo([track('a', 'camera')], focus('screen', 'a', 0))).toBeNull()
+  })
+})
+
 // ── the Music card ──────────────────────────────────────────────────────────
-type Now = NonNullable<MusicChannelView['now']>
+type Now =NonNullable<MusicChannelView['now']>
 const song = (o: Partial<Now> = {}): Now => ({
   id: 'e1', kind: 'library', title: 'Midnight City', artist: 'M83', durationSec: 243, addedBy: 'u1',
   url: null, cover: '/covers/e1.jpg', elapsedMs: 0, ...o,

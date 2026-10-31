@@ -129,6 +129,46 @@ describe('queueing a link', () => {
     expect(m.queueFor.value).toBeNull()
   })
 
+  it('does not carry a link typed for one channel over to another', () => {
+    const m = useCallMusic(() => people)
+    m.toggleQueue('a')
+    m.queueUrl.value = 'https://x.test/for-a.mp3'
+    m.toggleQueue('b')
+    expect(m.queueFor.value).toBe('b')
+    expect(m.queueUrl.value).toBe('')
+    // The tap on Add under B sends nothing: there is nothing there for B.
+    m.submitQueue('b')
+    expect(emit).not.toHaveBeenCalled()
+    // And a link typed now goes to B alone.
+    m.queueUrl.value = 'https://x.test/for-b.mp3'
+    m.submitQueue('b')
+    expect(sent('music:queue')).toEqual([
+      { conversationId: 'c1', kind: 'channel', channelId: 'b', url: 'https://x.test/for-b.mp3' },
+    ])
+  })
+
+  it('opens a form empty after the sheet shut one with its text still in it', () => {
+    // PhoneMusicSheet shuts a form by clearing queueFor on close, not through toggleQueue.
+    const m = useCallMusic(() => people)
+    m.toggleQueue('a')
+    m.queueUrl.value = 'https://x.test/for-a.mp3'
+    m.queueFor.value = null
+    m.toggleQueue('b')
+    expect(m.queueUrl.value).toBe('')
+    m.submitQueue('b')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('keeps what was typed while the form stays open on the same channel', () => {
+    const m = useCallMusic(() => people)
+    m.toggleQueue('a')
+    m.queueUrl.value = 'https://x.test/for-a.mp3'
+    m.skipTrack('a')                         // other actions leave the draft alone
+    m.toggleListen('a')
+    expect(m.queueFor.value).toBe('a')
+    expect(m.queueUrl.value).toBe('https://x.test/for-a.mp3')
+  })
+
   it('sends nothing for a blank link', () => {
     const m = useCallMusic(() => people)
     m.toggleQueue('x')

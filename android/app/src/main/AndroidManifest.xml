@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The tick under a finger on Hold to talk (navigator.vibrate): without this, Chromium does nothing.
+         A normal permission, granted at install, with no prompt. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- The background connection (notify/NotifyService): a foreground service of type remoteMessaging. -->

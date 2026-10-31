@@ -107,8 +107,21 @@ export const useCallMusic = (people: () => readonly CallPerson[]) => {
     name.value = ''; url.value = ''; adding.value = false
   }
 
-  /** Open the add-a-link form for a channel, or shut it on a second tap. */
-  const toggleQueue = (id: string) => { disarm(); queueFor.value = queueFor.value === id ? null : id }
+  /**
+   * Open the add-a-link form for a channel, or shut it on a second tap.
+   *
+   * A form opens empty. `queueUrl` is one box shared by whichever channel's form
+   * is open, so a link typed for channel A would otherwise still be there when
+   * Add is tapped on channel B, and be sent to B. (Opening from shut counts too:
+   * the phone sheet shuts the form by clearing `queueFor` directly, leaving its
+   * text behind.) Shutting a form leaves what was typed where it is, unseen.
+   */
+  const toggleQueue = (id: string) => {
+    disarm()
+    if (queueFor.value === id) { queueFor.value = null; return }
+    queueUrl.value = ''
+    queueFor.value = id
+  }
 
   const submitQueue = (id: string) => {
     const u = queueUrl.value.trim()
