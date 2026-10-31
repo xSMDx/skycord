@@ -17,6 +17,7 @@ import { useAuth } from './useAuth'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import { MUSIC_IDENTITY, music, musicAvailable, setMusicTarget } from './useMusic'
+import { applySubscriptions } from './subscriptionPolicy'
 import { qualityFor } from './callLimits'
 import { perf } from './usePerformance'
 import {
@@ -480,36 +481,30 @@ watch(
 )
 
 /**
- * Follow the member's choice of channel.
+ * Whose screen share this member chose to watch, by identity.
  *
- * Subscription is the whole mechanism: tuning in is subscribing to one track
- * and dropping the rest, which is why nobody downloads audio they are not
- * listening to and why the cost is per channel rather than per listener.
+ * A shared screen is not downloaded until you tap Join stream on it — no
+ * video, no stream audio — and this set is that choice. It belongs to one
+ * call: cleared when you leave, kept across a reconnect, because a dropped
+ * connection coming back is still the same call. See subscriptionPolicy.ts.
  */
-/**
- * Subscribe to the one music track this member chose, and to no others.
- *
- * Swept over every publication rather than driven only by events, because
- * TrackPublished fires only for tracks published AFTER this client joined.
- * Music channels that were already running when you walked into the call
- * arrive with the room, get auto-subscribed, and would never be
- * reconsidered — so joining a call with three channels playing subscribed
- * you to all three. Found by the live publisher test, which is the first
- * thing in this feature that moved real audio.
- */
-const syncMusicSubscriptions = (): void => {
-  const room = getRoom()
-  if (!room) return
-  const want = music.listeningTo
-  room.remoteParticipants.forEach((p) => {
-    if (p.identity !== MUSIC_IDENTITY) return
-    p.trackPublications.forEach((pub) => {
-      void (pub as RemoteTrackPublication).setSubscribed(pub.trackName === want)
-    })
-  })
-}
+export const joinedStreams = reactive(new Set<string>())
 
-watch(() => music.listeningTo, syncMusicSubscriptions)
+/** The member's choices, as the subscription policy reads them. */
+const subscriptionChoices = () => ({ listeningTo: music.listeningTo, joinedStreams })
+
+/*
+ * A changed choice re-sweeps the room.
+ *
+ * Tuning in is subscribing to one music track and dropping the rest, which
+ * is why nobody downloads audio they are not listening to and why the cost
+ * is per channel rather than per listener. Join stream works the same way
+ * for a screen. The room events that sweep too are in wireRoom.
+ */
+watch([() => music.listeningTo, () => [...joinedStreams]], () => {
+  const room = getRoom()
+  if (room) applySubscriptions(room, subscriptionChoices())
+})
 
 const syncParticipants = () => {
   const room = getRoom()
@@ -540,8 +535,12 @@ const applyQuality = (pub: RemoteTrackPublication) => {
   if (q) pub.setVideoQuality(QUALITY[q])
 }
 
+// Only the ones this member subscribes to. A screen share nobody joined is a
+// video publication too, and LiveKit refuses track settings on it with a
+// warning per call; a join gets quality and pause from TrackSubscribed.
 const remoteVideoPubs = (r: Room) => [...r.remoteParticipants.values()]
   .flatMap(p => [...p.videoTrackPublications.values()])
+  .filter(pub => pub.isDesired)
 
 const applyQualityToAll = () => {
   const r = getRoom(); if (!r) return
@@ -619,25 +618,30 @@ const wireRoom = (r: Room) => {
     if (p === r.localParticipant) onLocalPermissionsChanged(r)
   })
   /*
-   * A music track arriving is not a person arriving.
+   * Every point a publication can appear, swept through the one policy.
    *
-   * autoSubscribe defaults to true, so without this every member downloads
-   * every music channel in the call — five channels, five audio streams,
-   * four of them unwanted. Turning autoSubscribe off globally would mean
-   * managing microphone subscription by hand, which is a change to the voice
-   * path and not worth it for this; unsubscribing the moment a music track
-   * is published is narrower and costs only a brief window at the start.
+   * The room connects with autoSubscribe off, so these are the only way
+   * anything — a voice included — reaches this member. Each is a different
+   * door, and a missed one is silence:
+   * - Connected: everything already in the room. It arrives with the join,
+   *   raising no TrackPublished.
+   * - Reconnected: a full reconnect inside LiveKit rebuilds every remote
+   *   participant, so every publication is new and unsubscribed.
+   * - ParticipantConnected: someone joining after us. LiveKit 2.20 follows
+   *   it with a TrackPublished per track, but its own source comment says
+   *   it does not, and older versions did not; sweeping on arrival too means
+   *   an upgrade that changes the order again cannot cost anyone a voice.
+   * - TrackPublished: a mic, camera, screen or song published later.
+   *
+   * `r`, never getRoom(): Connected fires inside r.connect(), before
+   * setRoom. Reading getRoom() there is exactly how the old music sweep
+   * found no room, did nothing, and let autoSubscribe play everyone the song.
    */
-  r.on(RoomEvent.TrackPublished, (pub: RemoteTrackPublication, p: RemoteParticipant) => {
-    if (p.identity !== MUSIC_IDENTITY) return
-    void pub.setSubscribed(pub.trackName === music.listeningTo)
-  })
-  // The tracks that were already playing when we arrived. They never raise
-  // TrackPublished for us, and autoSubscribe has taken all of them.
-  r.on(RoomEvent.Connected, syncMusicSubscriptions)
-  r.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
-    if (p.identity === MUSIC_IDENTITY) syncMusicSubscriptions()
-  })
+  const subscribe = () => applySubscriptions(r, subscriptionChoices())
+  r.on(RoomEvent.Connected, subscribe)
+  r.on(RoomEvent.Reconnected, subscribe)
+  r.on(RoomEvent.ParticipantConnected, subscribe)
+  r.on(RoomEvent.TrackPublished, subscribe)
 
   r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
     // Music has its own gain, so that music volume is not voice volume and
@@ -715,6 +719,8 @@ const cleanup = () => {
   // button dead in the next call — including in a DM, where nobody has the
   // authority to have forbidden anything.
   resetPermits()
+  // Joining a stream is a choice for this call. The next one asks again.
+  joinedStreams.clear()
   liveWhenAllowed = false
   voice.serverMuted = false
   voice.serverDeafened = false
@@ -951,9 +957,16 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       // Signal channel up (token accepted by the server) → past auth, now negotiating media.
       r.on(RoomEvent.SignalConnected, () => { if (seq === connectSeq) voice.connectStage = 'rtc-connecting' })
       voice.connectStage = 'authenticating'
-      await r.connect(url, token)
+      // Nothing is downloaded that subscriptionPolicy did not choose: wireRoom
+      // subscribes voices and cameras itself, and music and screens wait for
+      // the member. See the sweep handlers there.
+      await r.connect(url, token, { autoSubscribe: false })
       if (seq !== connectSeq) { r.disconnect().catch(() => {}); return } // superseded mid-connect
       setRoom(r)
+      // The choice watchers read getRoom(), which was null from Connected
+      // until now. A Listen or Join stream that landed in between is applied
+      // here rather than lost; the sweep sends nothing if nothing changed.
+      applySubscriptions(r, subscriptionChoices())
       // Mic capture needs a secure context (HTTPS or localhost); over plain
       // http on an IP, navigator.mediaDevices is undefined. Rather than throw
       // (which orphaned the room → reconnect loop), join LISTEN-ONLY so the
