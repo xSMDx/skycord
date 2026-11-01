@@ -25,7 +25,7 @@ import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia, canScreenShare, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { voiceSettings, setVoiceSettings, noPushToTalkKey } from '@/composables/useVoiceSettings'
-import { userPref, setUserPref } from '@/composables/useVoice'
+import { userPref, setUserPref, setStreamVolume } from '@/composables/useVoice'
 import PhoneCallScreen from './phone/PhoneCallScreen.vue'
 import PhoneCallSheet from './phone/PhoneCallSheet.vue'
 import PhoneMusicSheet from './phone/PhoneMusicSheet.vue'
@@ -321,6 +321,7 @@ const menuHandlers = {
   openVoiceSettings: () => emit('openSettings', 'voice'),
   copy:            copyText,
   setUserVolume:   (id: string, v: number) => setUserPref(id, { volume: v }),
+  setStreamVolume: (id: string, v: number) => setStreamVolume(id, v),
   toggleUserMute:  (id: string) => setUserPref(id, { muted: !userPref(id).muted }),
   toggleUserVideo: (id: string) => setUserPref(id, { videoOff: !userPref(id).videoOff }),
   toggleShowNonVideo:  () => setVoiceSettings({ showNonVideo:  !voiceSettings.showNonVideo }),
@@ -349,7 +350,10 @@ const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string;
   if (t.local) openCtxMenu(e, () => ownTileMenu(u, base(), menuHandlers))
   else openCtxMenu(e, () => {
     const p = userPref(t.id)
-    return participantMenu(u, { ...base(), volume: p.volume, muted: p.muted, videoOff: p.videoOff }, menuHandlers)
+    // Read inside the builder: the Stream Volume slider comes and goes as they
+    // start or stop sharing sound, even while the menu is open.
+    return participantMenu(u, { ...base(), volume: p.volume, muted: p.muted, videoOff: p.videoOff,
+      streamVolume: p.streamVolume, sharesScreenAudio: media.streamsWithAudio.has(t.id) }, menuHandlers)
   })
 }
 

@@ -8,7 +8,7 @@
  * they do share — the local volume/mute/video controls — is shared by taking
  * the same handler interface rather than by copying rows.
  *
- * **Local means local.** User Volume, Mute and Disable Video here change only
+ * **Local means local.** User Volume, Stream Volume, Mute and Disable Video here change only
  * what THIS client hears and shows. Nothing is sent, and the other person is
  * never told.
  *
@@ -36,6 +36,7 @@ import {
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
+import { streamVolumeRow } from './callMenu'
 
 export interface VoiceOccupantHandlers {
   openProfile:    (u: MenuUser) => void
@@ -46,6 +47,8 @@ export interface VoiceOccupantHandlers {
   copy:           (text: string, what: string) => void
   /** Per-participant, local to this client. */
   setUserVolume:  (id: string, v: number) => void
+  /** Their shared screen's sound, not their voice. */
+  setStreamVolume:(id: string, v: number) => void
   toggleUserMute: (id: string) => void
   toggleUserVideo:(id: string) => void
   /** Your own controls, for the self menu. */
@@ -64,6 +67,9 @@ export interface VoiceOccupantState {
   volume:    number
   muted:     boolean
   videoOff:  boolean
+  /** Their Stream Volume, and whether they share a screen with sound right now. */
+  streamVolume?:      number
+  sharesScreenAudio?: boolean
   isFriend?: boolean
   /** Whether this client can actually act on them — i.e. we share the call.
    *  Volume and local mute have nothing to act on otherwise. */
@@ -101,6 +107,7 @@ export const voiceOccupantMenu = (
       // is the only fix available from this side.
       { slider: true, label: 'User Volume', value: s.volume, min: 0, max: 200,
         format: v => `${v}%`, onInput: v => h.setUserVolume(u.id, v) },
+      ...streamVolumeRow(u.id, s, h.setStreamVolume),
       { label: 'Mute', icon: MicOff, check: s.muted, keepOpen: true,
         onSelect: () => h.toggleUserMute(u.id) },
       { label: 'Disable Video', icon: VideoOff, check: s.videoOff, keepOpen: true,

@@ -9,7 +9,7 @@ import {
   Track,
   type ScreenShareCaptureOptions, type TrackPublishOptions,
   type RemoteTrack, type LocalVideoTrack, type LocalTrackPublication,
-  type TrackPublication, type Participant, type RemoteParticipant,
+  type TrackPublication, type Participant, type RemoteParticipant, type Room,
 } from 'livekit-client'
 import { getRoom } from './voiceRoom'
 import { voiceSettings } from './useVoiceSettings'
@@ -34,6 +34,17 @@ interface MediaState {
    *  screen share isn't drawn for you. Others still see it. */
   hideOwnScreen: boolean
   videoTracks:   Map<string, VideoTrackInfo>   // key = `${identity}:${source}`
+  /**
+   * Who in the call is sharing a screen, by identity — joined or not.
+   *
+   * `videoTracks` only holds what this member downloads, and a share is not
+   * downloaded until Join stream, so without this a share you have not joined
+   * would be invisible: no tile, and no button to join it from. Remote only;
+   * your own share is in `videoTracks` as it always was.
+   */
+  streamsAvailable: Set<string>
+  /** The ones among them sharing sound too — what Stream Volume acts on. */
+  streamsWithAudio: Set<string>
 }
 
 export const media = reactive<MediaState>({
@@ -41,6 +52,8 @@ export const media = reactive<MediaState>({
   localScreenOn: false,
   hideOwnScreen: false,
   videoTracks: new Map(),
+  streamsAvailable: new Set(),
+  streamsWithAudio: new Set(),
 })
 
 // Fixed P1 encodings (picker is P2).
@@ -288,6 +301,36 @@ export const onLocalTrackUnpublished = (pub: LocalTrackPublication) => {
   media.localScreenOn = room.localParticipant.isScreenShareEnabled
 }
 
+/** Make `into` hold exactly `want`, touching only what differs, so a re-read
+ *  that changes nothing wakes nothing that renders from it. */
+const setTo = (into: Set<string>, want: Set<string>) => {
+  for (const id of [...into]) if (!want.has(id)) into.delete(id)
+  for (const id of want) into.add(id)
+}
+
+/**
+ * Re-read who is sharing from the room's publications.
+ *
+ * Read from the room rather than kept up per event, because the events that
+ * change it do not agree on what they carry: Connected and Reconnected bring
+ * a whole room at once, and LiveKit removes a leaving participant before it
+ * says so. useVoice calls this wherever a publication can appear or go.
+ */
+export const syncRemoteStreams = (room: Pick<Room, 'remoteParticipants'> | null) => {
+  const sharing = new Set<string>(), withAudio = new Set<string>()
+  room?.remoteParticipants.forEach((p) => {
+    let screen = false, sound = false
+    p.trackPublications.forEach((pub) => {
+      if (pub.source === Track.Source.ScreenShare) screen = true
+      else if (pub.source === Track.Source.ScreenShareAudio) sound = true
+    })
+    if (screen) sharing.add(p.identity)
+    if (screen && sound) withAudio.add(p.identity)
+  })
+  setTo(media.streamsAvailable, sharing)
+  setTo(media.streamsWithAudio, withAudio)
+}
+
 // State-only reset for teardown/cleanup. The Room disconnect (in useVoice)
 // tears down the actual tracks; we just clear flags + the map, and never
 // auto-republish on reconnect.
@@ -295,6 +338,8 @@ export const stopMedia = () => {
   media.localCamOn = false
   media.localScreenOn = false
   media.videoTracks.clear()
+  media.streamsAvailable.clear()
+  media.streamsWithAudio.clear()
 }
 
 export const useVoiceMedia = () => ({

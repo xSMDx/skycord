@@ -31,7 +31,7 @@ import {
   effectiveInputMode, noPushToTalkKey, noiseNodeFor,
 } from './useVoiceSettings'
 import { permits, setPermits, resetPermits, permitsFromGrant } from './voicePermits'
-import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia, media } from './useVoiceMedia'
+import { addRemoteVideo, removeRemoteVideo, onRemoteVideoMuted, onRemoteVideoUnmuted, purgeParticipantVideos, onLocalTrackUnpublished, stopMedia, syncRemoteStreams, media } from './useVoiceMedia'
 import { resetRtcStats } from './useRtcStats'
 
 export interface VoiceParticipant {
@@ -151,7 +151,7 @@ const FAIL_HOLD_MS   = 10000  // show "Couldn't connect" this long, then auto-le
 const teardownRoom = () => {
   const r = getRoom(); setRoom(null)
   if (r) r.disconnect().catch(() => {})
-  audioEls.forEach(el => el.remove()); audioEls.clear()
+  audioEls.forEach(el => el.remove()); audioEls.clear(); streamSids.clear()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
   stopLocalLevel()
@@ -341,15 +341,29 @@ export const isConnectedVoiceRoom = (channelId: string) => voice.activeConvId ==
 // Purely local: muting someone or dropping their volume affects only your ears,
 // and disabling their video only your screen. Nothing is sent to the server, so
 // the other person is never told — which is the point.
-export interface UserAudioPref { volume: number; muted: boolean; videoOff: boolean }
+//
+// `volume` and `muted` are the person's VOICE. `streamVolume` is the sound of
+// the screen they share, 0–100: it only needs to go down (spec 12), and it is
+// its own number because a game turned down to hear the person over it must
+// not turn the person down with it.
+export interface UserAudioPref { volume: number; muted: boolean; videoOff: boolean; streamVolume: number }
 export const userPrefs = reactive<Record<string, UserAudioPref>>({})
 
+const DEFAULT_PREF: Readonly<UserAudioPref> = { volume: 100, muted: false, videoOff: false, streamVolume: 100 }
+
 export const userPref = (identity: string): UserAudioPref =>
-  userPrefs[identity] ?? { volume: 100, muted: false, videoOff: false }
+  userPrefs[identity] ?? { ...DEFAULT_PREF }
 
 // audioEls is keyed by track sid; this maps a sid back to whose track it is, so
 // a per-user volume change can find the right elements.
 const audioOwner = new Map<string, string>()
+
+/**
+ * The elements in audioEls that are a screen share's sound rather than a
+ * voice, by track sid. Same map, same lifecycle — every path that removes or
+ * re-applies an element covers both — but different rules; see applyAudio.
+ */
+const streamSids = new Set<string>()
 
 export const setUserPref = (identity: string, patch: Partial<UserAudioPref>) => {
   userPrefs[identity] = { ...userPref(identity), ...patch }
@@ -358,7 +372,16 @@ export const setUserPref = (identity: string, patch: Partial<UserAudioPref>) => 
   // idempotent for the others — and it means a missing owner entry (a track
   // subscribed before the map existed, a reconnect) degrades to "applies late"
   // rather than "unmute silently does nothing".
-  audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
+  applyAllAudio()
+}
+
+/** How loud this person's shared screen is for you, 0–100. */
+export const streamVolumeOf = (identity: string): number => userPref(identity).streamVolume
+
+/** Set it. Clamped to 0–100 and whole, since it is a slider's percentage. */
+export const setStreamVolume = (identity: string, v: number): void => {
+  if (!Number.isFinite(v)) return
+  setUserPref(identity, { streamVolume: Math.round(Math.min(100, Math.max(0, v))) })
 }
 
 /**
@@ -378,6 +401,7 @@ export const debugAudio = () => {
     const owner = audioOwner.get(sid)
     els.push({
       sid,
+      kind: streamSids.has(sid) ? 'stream' : 'voice',
       owner: owner ?? '(NO OWNER — mute cannot target this element)',
       prefForOwner: owner ? userPref(owner) : null,
       liveElementMuted:  el.muted,
@@ -399,29 +423,76 @@ export const debugAudio = () => {
   }
 }
 
-const applyAudioEl = (el: HTMLAudioElement, identity?: string) => {
-  const u = identity ? userPref(identity) : { volume: 100, muted: false, videoOff: false }
-  // Per-user volume multiplies the global output level rather than replacing it.
-  el.volume = ((voiceSettings.outputVolume ?? 100) / 100) * (u.volume / 100)
+/** The output device the member chose, where the browser lets an element pick one. */
+const routeToOutput = (el: HTMLAudioElement) => {
   const sink = voiceSettings.outputDeviceId
   if (sink && typeof (el as any).setSinkId === 'function') (el as any).setSinkId(sink).catch(() => {})
+}
+
+const applyAudioEl = (el: HTMLAudioElement, identity?: string) => {
+  const u = identity ? userPref(identity) : DEFAULT_PREF
+  // Per-user volume multiplies the global output level rather than replacing it.
+  el.volume = ((voiceSettings.outputVolume ?? 100) / 100) * (u.volume / 100)
+  routeToOutput(el)
   el.muted = voice.localDeafened || u.muted
 }
 
-const attachTrack = (track: RemoteTrack, identity?: string) => {
+/*
+ * A screen share's sound: the sharer's Stream Volume and the global output
+ * level, and Deafen. Not their User Volume, and not muting them — those are
+ * about their voice. Muting someone who talks over a film they are showing
+ * is a reason to want the film, not a reason to lose it.
+ *
+ * Clamped into 0..1 because the element throws outside it; Stream Volume
+ * tops out at 100 and the output level at 100, so the clamp is a guard.
+ */
+const applyStreamEl = (el: HTMLAudioElement, identity?: string) => {
+  const pct = identity ? streamVolumeOf(identity) : DEFAULT_PREF.streamVolume
+  el.volume = Math.min(1, Math.max(0, ((voiceSettings.outputVolume ?? 100) / 100) * (pct / 100)))
+  routeToOutput(el)
+  el.muted = voice.localDeafened
+}
+
+/** Apply whichever rules this element is under, from its own owner. */
+const applyAudio = (el: HTMLAudioElement, sid: string) =>
+  streamSids.has(sid) ? applyStreamEl(el, audioOwner.get(sid)) : applyAudioEl(el, audioOwner.get(sid))
+const applyAllAudio = () => audioEls.forEach((el, sid) => applyAudio(el, sid))
+
+/**
+ * A remote audio track, played. `source` says whose rules it is under: a
+ * ScreenShareAudio track is a stream, everything else a voice.
+ */
+const attachTrack = (track: RemoteTrack, identity?: string, source: Track.Source = track.source) => {
   if (track.kind !== Track.Kind.Audio) return
   const el = track.attach() as HTMLAudioElement
   el.autoplay = true
   ;(el as any).playsInline = true
   el.style.display = 'none'
-  if (track.sid && identity) audioOwner.set(track.sid, identity)
-  applyAudioEl(el, identity)
+  const sid = track.sid!
+  if (identity) audioOwner.set(sid, identity)
+  if (source === Track.Source.ScreenShareAudio) streamSids.add(sid)
+  applyAudio(el, sid)
   document.body.appendChild(el)
-  audioEls.set(track.sid!, el)
+  audioEls.set(sid, el)
 }
 const detachTrack = (track: RemoteTrack) => {
   track.detach().forEach(el => el.remove())
-  if (track.sid) { audioEls.delete(track.sid); audioOwner.delete(track.sid) }
+  if (track.sid) { audioEls.delete(track.sid); audioOwner.delete(track.sid); streamSids.delete(track.sid) }
+}
+
+/**
+ * Everything someone was heard through, for a departure that skipped
+ * TrackUnsubscribed — the abrupt drop purgeParticipantVideos exists for. A
+ * stream element left behind would be a dead node per share; a voice one, the
+ * same per voice. LiveKit's ordinary leave unsubscribes first, so this
+ * usually finds nothing.
+ */
+const purgeParticipantAudio = (identity: string) => {
+  audioOwner.forEach((owner, sid) => {
+    if (owner !== identity) return
+    audioEls.get(sid)?.remove()
+    audioEls.delete(sid); audioOwner.delete(sid); streamSids.delete(sid)
+  })
 }
 
 /*
@@ -490,8 +561,83 @@ watch(
  */
 export const joinedStreams = reactive(new Set<string>())
 
+/**
+ * Which share each joined stream is, by the sid of its screen publication.
+ *
+ * Joining is a choice about one share, not about one person (spec 18): stop
+ * sharing and share again, and everyone who was watching is asked again
+ * rather than pulled into whatever comes next. A publication's sid is the
+ * server's name for one share — the same for every viewer, the same across
+ * this member's reconnects, new each time the sharer starts again — so it
+ * is what tells "the share I joined" from "a share by the same person".
+ */
+const joinedShare = new Map<string, string>()
+
+const screenSidOf = (p: RemoteParticipant | undefined): string | undefined => {
+  if (!p) return undefined
+  for (const pub of p.trackPublications.values()) {
+    if (pub.source === Track.Source.ScreenShare) return pub.trackSid
+  }
+  return undefined
+}
+
+/** Join stream: download this person's shared screen and its sound. */
+export const joinStream = (identity: string): void => {
+  const sid = screenSidOf(getRoom()?.remoteParticipants.get(identity))
+  if (sid) joinedShare.set(identity, sid)
+  joinedStreams.add(identity)
+}
+
+/** Leave stream: stop downloading it. The call, and their voice, carry on. */
+export const leaveStream = (identity: string): void => {
+  joinedShare.delete(identity)
+  joinedStreams.delete(identity)
+}
+
+/**
+ * Forget every joined stream whose share has ended.
+ *
+ * Compared against what the room holds, not driven by the event that ended
+ * it, because the one case that matters most raises no event at all: a share
+ * that stopped and started again while this member's own connection was
+ * down. The rejoined room just holds a different publication, and without
+ * this the old choice would quietly join the new share.
+ *
+ * - The sharer is here with no screen: the share stopped. Forget it.
+ * - The sharer is here with a different screen: a new share. Forget it.
+ * - The sharer is not in the room: say nothing yet. LiveKit's own full
+ *   reconnect removes every participant before rebuilding them with the
+ *   same publications, and a stream must survive that; if they really left,
+ *   whatever they publish on return is compared when it arrives.
+ * - A stream joined before its share could be seen (no sid on record)
+ *   adopts the first screen that appears.
+ */
+const forgetEndedShares = (r: Room) => {
+  for (const id of [...joinedShare.keys()]) if (!joinedStreams.has(id)) joinedShare.delete(id)
+  for (const id of [...joinedStreams]) {
+    const p = r.remoteParticipants.get(id)
+    if (!p) continue
+    const now = screenSidOf(p), chosen = joinedShare.get(id)
+    if (!chosen) { if (now) joinedShare.set(id, now) }
+    else if (now !== chosen) leaveStream(id)
+  }
+}
+
 /** The member's choices, as the subscription policy reads them. */
 const subscriptionChoices = () => ({ listeningTo: music.listeningTo, joinedStreams })
+
+/**
+ * Bring this member's view of the room up to date and download what the
+ * policy says: who is sharing (for the stage's Join stream tiles), which
+ * joined streams have ended, then every subscription. In that order — a
+ * stream that ended must be forgotten before the sweep, or the sweep would
+ * subscribe the share that replaced it.
+ */
+const sweepRoom = (r: Room) => {
+  syncRemoteStreams(r)
+  forgetEndedShares(r)
+  applySubscriptions(r, subscriptionChoices())
+}
 
 /*
  * A changed choice re-sweeps the room.
@@ -503,7 +649,7 @@ const subscriptionChoices = () => ({ listeningTo: music.listeningTo, joinedStrea
  */
 watch([() => music.listeningTo, () => [...joinedStreams]], () => {
   const room = getRoom()
-  if (room) applySubscriptions(room, subscriptionChoices())
+  if (room) sweepRoom(room)
 })
 
 const syncParticipants = () => {
@@ -632,16 +778,20 @@ const wireRoom = (r: Room) => {
    *   it does not, and older versions did not; sweeping on arrival too means
    *   an upgrade that changes the order again cannot cost anyone a voice.
    * - TrackPublished: a mic, camera, screen or song published later.
+   * - TrackUnpublished and ParticipantDisconnected: nothing to subscribe,
+   *   but a share that stopped leaves the stage's Join stream tiles and
+   *   ends a joined stream (sweepRoom).
    *
    * `r`, never getRoom(): Connected fires inside r.connect(), before
    * setRoom. Reading getRoom() there is exactly how the old music sweep
    * found no room, did nothing, and let autoSubscribe play everyone the song.
    */
-  const subscribe = () => applySubscriptions(r, subscriptionChoices())
-  r.on(RoomEvent.Connected, subscribe)
-  r.on(RoomEvent.Reconnected, subscribe)
-  r.on(RoomEvent.ParticipantConnected, subscribe)
-  r.on(RoomEvent.TrackPublished, subscribe)
+  const sweep = () => sweepRoom(r)
+  r.on(RoomEvent.Connected, sweep)
+  r.on(RoomEvent.Reconnected, sweep)
+  r.on(RoomEvent.ParticipantConnected, sweep)
+  r.on(RoomEvent.TrackPublished, sweep)
+  r.on(RoomEvent.TrackUnpublished, sweep)
 
   r.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
     // Music has its own gain, so that music volume is not voice volume and
@@ -655,7 +805,7 @@ const wireRoom = (r: Room) => {
       // just tracks that were already live when visibility last changed.
       applyHiddenPause()
     } else {
-      attachTrack(track, participant.identity)
+      attachTrack(track, participant.identity, pub.source)
     }
     syncParticipants()
   })
@@ -673,7 +823,13 @@ const wireRoom = (r: Room) => {
     if (pub.source === Track.Source.Microphone) void applyMicChain()
   })
   r.on(RoomEvent.ParticipantConnected, () => { soundUserJoin(); syncParticipants() })
-  r.on(RoomEvent.ParticipantDisconnected, (p) => { purgeParticipantVideos(p.identity); soundUserLeave(); syncParticipants() })
+  r.on(RoomEvent.ParticipantDisconnected, (p) => {
+    purgeParticipantVideos(p.identity)
+    purgeParticipantAudio(p.identity)
+    sweep()
+    soundUserLeave()
+    syncParticipants()
+  })
   // Camera-off MUTES the publication (no unpublish → no TrackUnsubscribed on the
   // far side), so mirror video mute/unmute into the tile map or remote viewers
   // keep a frozen black tile.
@@ -711,6 +867,7 @@ const cleanup = () => {
   if (r) r.disconnect().catch(() => {})
   audioEls.forEach(el => el.remove())
   audioEls.clear()
+  streamSids.clear()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
@@ -721,6 +878,7 @@ const cleanup = () => {
   resetPermits()
   // Joining a stream is a choice for this call. The next one asks again.
   joinedStreams.clear()
+  joinedShare.clear()
   liveWhenAllowed = false
   voice.serverMuted = false
   voice.serverDeafened = false
@@ -966,7 +1124,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       // The choice watchers read getRoom(), which was null from Connected
       // until now. A Listen or Join stream that landed in between is applied
       // here rather than lost; the sweep sends nothing if nothing changed.
-      applySubscriptions(r, subscriptionChoices())
+      sweepRoom(r)
       // Mic capture needs a secure context (HTTPS or localhost); over plain
       // http on an IP, navigator.mediaDevices is undefined. Rather than throw
       // (which orphaned the room → reconnect loop), join LISTEN-ONLY so the
@@ -1133,13 +1291,13 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
         .catch(e => { voice.mic = micFailureReason(e); voice.localMuted = true })
       // Not a blanket unmute: someone you muted individually must STAY muted
       // when you undeafen, or undeafening silently undoes those choices.
-      audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
+      applyAllAudio()
     }
     syncParticipants()
   }
 
 // Re-apply output volume / sink to live audio elements (called from settings).
-const applyOutput = () => audioEls.forEach((el, sid) => applyAudioEl(el, audioOwner.get(sid)))
+const applyOutput = () => applyAllAudio()
 
 /**
  * Move the call I am in to a different media server.

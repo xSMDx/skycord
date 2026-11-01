@@ -1,7 +1,8 @@
 /**
  * Call-bar tile menus: one for your own tile, one for everybody else's.
  *
- * Everything here that says "Mute", "Disable Video" or "User Volume" is LOCAL —
+ * Everything here that says "Mute", "Disable Video", "User Volume" or "Stream
+ * Volume" is LOCAL —
  * it changes what you hear and see, is never sent to the server, and the other
  * person is never told. That's deliberate, and it's why none of these need a
  * backend.
@@ -32,6 +33,8 @@ export interface CallMenuHandlers {
   copy:           (text: string, what: string) => void
   /** Per-participant local controls. */
   setUserVolume:  (id: string, v: number) => void
+  /** Their shared screen's sound, not their voice. */
+  setStreamVolume:(id: string, v: number) => void
   toggleUserMute: (id: string) => void
   toggleUserVideo:(id: string) => void
   removeFriend?:  (id: string) => void
@@ -94,10 +97,29 @@ export const calleeMenu = (
     : []),
 ]
 
+/**
+ * Stream Volume: the sound of the screen this person shares, apart from their
+ * voice. Offered only while they share one WITH sound — a slider for a stream
+ * that has none is a control with nothing behind it. 0–100, because it only
+ * ever needs to go down (spec 12). Shared by both menus that offer User
+ * Volume, so the two cannot drift.
+ */
+export const streamVolumeRow = (
+  id: string, s: { streamVolume?: number; sharesScreenAudio?: boolean },
+  setStreamVolume: (id: string, v: number) => void,
+): MenuItem[] => s.sharesScreenAudio
+  ? [{ slider: true, label: 'Stream Volume', value: s.streamVolume ?? 100, min: 0, max: 100,
+       format: v => `${v}%`, onInput: v => setStreamVolume(id, v) }]
+  : []
+
 /** Another participant's tile. */
 export const participantMenu = (
   p: MenuUser,
-  s: CallMenuState & { volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean },
+  s: CallMenuState & {
+    volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean
+    /** Their Stream Volume, and whether they are sharing a screen with sound right now. */
+    streamVolume?: number; sharesScreenAudio?: boolean
+  },
   h: CallMenuHandlers,
 ): MenuItem[] => [
   { label: 'Profile', icon: User, onSelect: () => h.openProfile(p) },
@@ -106,6 +128,7 @@ export const participantMenu = (
   // only fix available from this side.
   { slider: true, label: 'User Volume', value: s.volume, min: 0, max: 200,
     format: v => `${v}%`, onInput: v => h.setUserVolume(p.id, v) },
+  ...streamVolumeRow(p.id, s, h.setStreamVolume),
   { sep: true },
   { label: 'Mute',          icon: MicOff,  check: s.muted, keepOpen: true,
     onSelect: () => h.toggleUserMute(p.id) },
