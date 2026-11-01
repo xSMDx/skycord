@@ -15,9 +15,13 @@ import {
 } from './helpers'
 import { Types } from 'mongoose'
 import { Readable } from 'stream'
+import http from 'http'
+import type { AddressInfo } from 'net'
 import { Server } from '../models/Server'
 import { Track } from '../models/Track'
 import { trackStore } from '../utils/trackStore'
+import { config } from '../config/env'
+import { forgetMusicCapabilities } from '../utils/musicService'
 import { cancelAllCallEnds, musicRooms, musicTrackEnded } from '../sockets/chatSocket'
 
 let sockets: { url: string; close: () => Promise<void> }
@@ -526,5 +530,267 @@ describe('going back, from the socket', () => {
     sa.emit('music:previous', { conversationId: voice.id, kind: 'channel', channelId: ch })
     const err = await nextEvent(sa, 'music:error') as { reason: string }
     expect(err.reason).toMatch(/nothing played before/i)
+  })
+})
+
+describe('pausing a shared song', () => {
+  // Pause needs the music service to hold the song, so these run against a
+  // stand-in service on a real port: it records what it was asked and
+  // answers whatever status a test sets. The server is told about it the
+  // way a host tells it, through the music config.
+  const stub = {
+    calls: [] as { path: string; body: Record<string, unknown> }[],
+    status: {} as Record<string, number>,
+  }
+  let service: http.Server
+  const saved = { url: config.music.url, secret: config.music.secret }
+
+  beforeAll(async () => {
+    service = http.createServer((req, res) => {
+      let raw = ''
+      req.on('data', c => { raw += c })
+      req.on('end', () => {
+        const path = new URL(req.url ?? '/', 'http://music').pathname
+        let body: Record<string, unknown> = {}
+        try { body = raw ? JSON.parse(raw) : {} } catch { /* recorded as empty */ }
+        stub.calls.push({ path, body })
+        const status = stub.status[path] ?? 200
+        res.writeHead(status, { 'content-type': 'application/json' })
+        res.end(JSON.stringify(path === '/capabilities' && status === 200 ? { ok: true, pause: true } : { ok: status === 200 }))
+      })
+    })
+    await new Promise<void>(r => service.listen(0, '127.0.0.1', () => r()))
+    Object.assign(config.music, {
+      url: `http://127.0.0.1:${(service.address() as AddressInfo).port}`,
+      secret: 'stub-secret',
+    })
+  })
+  afterAll(async () => {
+    Object.assign(config.music, saved)
+    forgetMusicCapabilities()
+    await new Promise<void>(r => service.close(() => r()))
+  })
+  beforeEach(() => {
+    stub.calls.length = 0
+    stub.status = {}
+    forgetMusicCapabilities()
+  })
+
+  const giveTrack = async (owner: TestUser, title: string) => {
+    const ownerId = new Types.ObjectId(owner.id)
+    const stored = await trackStore.put(Readable.from([Buffer.from('bytes')]), { ownerId, mimeType: 'audio/webm' })
+    const doc = await Track.create({
+      ownerId, title, artist: 'X', album: 'Y', durationSec: 270,
+      bytes: stored.bytes, store: stored.ref, source: 'upload', scan: 'skipped',
+    })
+    return String(doc._id)
+  }
+  type Ch = {
+    id: string; now: { title?: string; elapsedMs?: number } | null
+    queue: { title: string | null }[]; queued: number; paused?: boolean; pausable?: boolean
+  }
+  const chans = (v: MusicView) => v.channels as unknown as Ch[]
+  const paths = () => stub.calls.map(c => c.path)
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+  /** Two members in a call with a song playing that the service says it can pause. */
+  const playing = async () => {
+    const a = await register(); const b = await register()
+    const { voice } = await seed(a, b)
+    const sa = await inCall(a, voice.id); const sb = await inCall(b, voice.id)
+    const one = await giveTrack(a, 'One')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: one })
+    const v = await musicStateWhere(sb, x => chans(x)[0]?.pausable === true)
+    const ch = v.channels[0].id
+    const at = { conversationId: voice.id, kind: 'channel', channelId: ch }
+    return { a, b, sa, sb, voice, ch, at, room: `voice:${voice.id}` }
+  }
+
+  it('pause and resume reach everyone, and the service is asked first', async () => {
+    const { sa, sb, ch, at, room } = await playing()
+    stub.calls.length = 0
+    sb.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+    expect(stub.calls).toContainEqual({ path: '/pause', body: { room, channelId: ch } })
+
+    sa.emit('music:resume', at)
+    await musicStateWhere(sb, x => chans(x)[0]?.paused === false)
+    expect(stub.calls).toContainEqual({ path: '/resume', body: { room, channelId: ch } })
+    // Released where the service held it, not started over.
+    expect(paths()).not.toContain('/play-track')
+  })
+
+  it('a refused service call refuses the pause and broadcasts nothing', async () => {
+    const { sa, sb, at, room } = await playing()
+    stub.status['/pause'] = 500
+    let benSaw = 0
+    sb.on('music:state', () => { benSaw++ })
+    const err = nextEvent(sa, 'music:error')
+    sa.emit('music:pause', at)
+    expect((await err).reason).toMatch(/could not be paused/i)
+    await sleep(300)
+    expect(benSaw).toBe(0)
+    expect(musicRooms.view(room).channels[0].paused).toBe(false)
+  })
+
+  it('a refused resume leaves it paused', async () => {
+    const { sa, at, room } = await playing()
+    sa.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+    stub.status['/resume'] = 500
+    const err = nextEvent(sa, 'music:error')
+    sa.emit('music:resume', at)
+    expect((await err).reason).toMatch(/could not be resumed/i)
+    expect(musicRooms.view(room).channels[0].paused).toBe(true)
+  })
+
+  it('an older service (no capability) → no pausable, and a pause is refused', async () => {
+    // An older service has no /capabilities route and no /pause either.
+    stub.status['/capabilities'] = 404
+    stub.status['/pause'] = 404
+    const a = await register()
+    const { voice } = await seed(a)
+    const sa = await inCall(a, voice.id)
+    const seen: Ch[][] = []
+    sa.on('music:state', (v: MusicView) => { seen.push(chans(v)) })
+    const one = await giveTrack(a, 'One')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: one })
+    await musicStateWhere(sa, x => x.channels.length === 1)
+    await sleep(300)
+    expect(paths()).toContain('/capabilities')
+    expect(seen.flat().some(c => 'pausable' in c)).toBe(false)
+    expect(musicRooms.view(`voice:${voice.id}`).channels[0]).not.toHaveProperty('pausable')
+
+    const err = nextEvent(sa, 'music:error')
+    sa.emit('music:pause', { conversationId: voice.id, kind: 'channel', channelId: seen.flat()[0].id })
+    expect((await err).reason).toMatch(/could not be paused/i)
+    expect(musicRooms.view(`voice:${voice.id}`).channels[0].paused).toBe(false)
+  })
+
+  it('pause is rate-limited like seek', async () => {
+    // The same bucket as seek: ten moves a minute between them, then no more.
+    const { sb, at, room } = await playing()
+    for (let i = 0; i < 10; i++) sb.emit('music:seek', { ...at, sec: 10 + i })
+    await musicStateWhere(sb, x => (chans(x)[0]?.now?.elapsedMs ?? 0) >= 19_000)
+    stub.calls.length = 0
+    const err = nextEvent(sb, 'music:error')
+    sb.emit('music:pause', at)
+    expect((await err).reason).toMatch(/too fast/i)
+    await sleep(200)
+    expect(paths()).not.toContain('/pause')
+    expect(musicRooms.view(room).channels[0].paused).toBe(false)
+  })
+
+  it('resume is rate-limited too', async () => {
+    const { sb, at } = await playing()
+    sb.emit('music:pause', at)
+    await musicStateWhere(sb, x => chans(x)[0]?.paused === true)
+    for (let i = 0; i < 9; i++) sb.emit('music:seek', { ...at, sec: 10 + i })
+    await musicStateWhere(sb, x => (chans(x)[0]?.now?.elapsedMs ?? 0) >= 18_000)
+    const err = nextEvent(sb, 'music:error')
+    sb.emit('music:resume', at)
+    expect((await err).reason).toMatch(/too fast/i)
+  })
+
+  it('a late joiner gets paused:true and the frozen elapsed', async () => {
+    const a = await register(); const b = await register()
+    const { voice } = await seed(a, b)
+    const sa = await inCall(a, voice.id)
+    const one = await giveTrack(a, 'One')
+    sa.emit('music:create', { conversationId: voice.id, kind: 'channel', name: 'C', trackId: one })
+    const ch = (await musicStateWhere(sa, x => chans(x)[0]?.pausable === true)).channels[0].id
+    const at = { conversationId: voice.id, kind: 'channel', channelId: ch }
+    sa.emit('music:seek', { ...at, sec: 60 })
+    await musicStateWhere(sa, x => (chans(x)[0]?.now?.elapsedMs ?? 0) >= 60_000)
+    sa.emit('music:pause', at)
+    const paused = await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+    const frozen = chans(paused)[0].now!.elapsedMs!
+    expect(frozen).toBeGreaterThanOrEqual(60_000)
+
+    await sleep(400)
+    // Connected after every broadcast, so the join's own state is all it gets.
+    const sb = track(await connectSocket(sockets.url, b.token))
+    const told = musicStateWhere(sb, x => x.channels.length === 1)
+    sb.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    const late = chans(await told)[0]
+    expect(late.paused).toBe(true)
+    expect(late.now!.elapsedMs).toBe(frozen)
+  })
+
+  it('a song does not end while paused', async () => {
+    // The service holds a paused song, so an end reported meanwhile is stale:
+    // acting on it would skip the song somebody is about to resume.
+    const { a, sa, ch, at, room } = await playing()
+    const two = await giveTrack(a, 'Two')
+    sa.emit('music:queue', { ...at, trackId: two })
+    await musicStateWhere(sa, x => chans(x)[0]?.queue.length === 1)
+    sa.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+
+    musicTrackEnded(room, ch)
+    await sleep(200)
+    const c = musicRooms.view(room).channels[0]
+    expect(c.now?.title).toBe('One')
+    expect(c.paused).toBe(true)
+    expect(c.queued).toBe(1)
+  })
+
+  it('resume after the service lost the song starts it again where it stopped', async () => {
+    // A service restarted during the pause holds nothing; it says so with a
+    // 409, and the song is started again from the room's frozen point.
+    const { sa, at, room } = await playing()
+    sa.emit('music:seek', { ...at, sec: 90 })
+    await musicStateWhere(sa, x => (chans(x)[0]?.now?.elapsedMs ?? 0) >= 90_000)
+    sa.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+
+    stub.calls.length = 0
+    stub.status['/resume'] = 409
+    sa.emit('music:resume', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === false)
+    expect(paths()).toEqual(['/resume', '/play-track'])
+    expect(stub.calls[1].body).toMatchObject({ room, startSec: 90 })
+  })
+
+  it('seek while paused moves the point without playing, and resume starts there', async () => {
+    const { sa, sb, at } = await playing()
+    sa.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+
+    stub.calls.length = 0
+    sb.emit('music:seek', { ...at, sec: 120 })
+    const moved = await musicStateWhere(sa, x => chans(x)[0]?.now?.elapsedMs === 120_000)
+    expect(chans(moved)[0].paused).toBe(true)
+    await sleep(200)
+    expect(paths()).not.toContain('/play-track')
+
+    sa.emit('music:resume', at)
+    await musicStateWhere(sb, x => chans(x)[0]?.paused === false)
+    // The service still holds the old point, so it is not merely released.
+    expect(paths()).toEqual(['/play-track'])
+    expect(stub.calls[0].body).toMatchObject({ startSec: 120 })
+  })
+
+  it('skip while paused plays the next song, unpaused, for everyone', async () => {
+    const { a, sa, sb, at } = await playing()
+    const two = await giveTrack(a, 'Two')
+    sa.emit('music:queue', { ...at, trackId: two })
+    await musicStateWhere(sa, x => chans(x)[0]?.queue.length === 1)
+    sa.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+    sb.emit('music:skip', at)
+    const next = await musicStateWhere(sa, x => chans(x)[0]?.now?.title === 'Two')
+    expect(chans(next)[0].paused).toBe(false)
+  })
+
+  it('ignores a member who is not in the call', async () => {
+    // Connected, never joined the call: the same gate as every music event.
+    const { at, room } = await playing()
+    const outsider = await register()
+    const so = track(await connectSocket(sockets.url, outsider.token))
+    so.emit('music:pause', at)
+    await sleep(300)
+    expect(paths()).not.toContain('/pause')
+    expect(musicRooms.view(room).channels[0].paused).toBe(false)
   })
 })

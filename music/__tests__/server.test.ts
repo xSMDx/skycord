@@ -16,6 +16,8 @@ const SECRET = 'a-shared-secret-of-some-length'
 
 const calls: string[] = []
 const ended: string[] = []
+/** The channels the stub says have a song it can hold. */
+const playingHere = new Set<string>()
 
 /** Enough of a publisher to record what the server asked it to do. */
 const stubPublisher = {
@@ -25,6 +27,8 @@ const stubPublisher = {
     return 'ended' as const
   },
   close: async (room: string, id: string) => { calls.push(`close ${room}/${id}`) },
+  pause: (room: string, id: string) => { calls.push(`pause ${room}/${id}`); return playingHere.has(`${room}/${id}`) },
+  resume: (room: string, id: string) => { calls.push(`resume ${room}/${id}`); return playingHere.has(`${room}/${id}`) },
 } as unknown as MusicPublisher
 
 let server: Server
@@ -133,6 +137,43 @@ describe('/close', () => {
 
   it('requires room and channelId', async () => {
     expect((await post('/close', { room: 'r' }, SECRET)).status).toBe(400)
+  })
+})
+
+describe('what this service can do', () => {
+  it('says it can pause, to the API and nobody else', async () => {
+    // The API sends `pausable` only when this answers. An older service has
+    // no such route and 404s, which is how the API knows not to.
+    expect((await fetch(base + '/capabilities')).status).toBe(401)
+    const r = await fetch(base + '/capabilities', { headers: { 'x-music-secret': SECRET } })
+    expect(r.status).toBe(200)
+    expect(await r.json()).toMatchObject({ pause: true })
+  })
+})
+
+describe('/pause and /resume', () => {
+  it('hold and release the song on that channel, answering 200 when done', async () => {
+    calls.length = 0
+    playingHere.add('voice:1/chill')
+    expect((await post('/pause', { room: 'voice:1', channelId: 'chill' }, SECRET)).status).toBe(200)
+    expect((await post('/resume', { room: 'voice:1', channelId: 'chill' }, SECRET)).status).toBe(200)
+    expect(calls).toEqual(['pause voice:1/chill', 'resume voice:1/chill'])
+    playingHere.clear()
+  })
+
+  it('answer 409 when nothing is playing there to hold', async () => {
+    // What a restarted service says: it holds nothing. The API then starts
+    // the song again from where the room paused it.
+    expect((await post('/pause', { room: 'voice:1', channelId: 'gone' }, SECRET)).status).toBe(409)
+    expect((await post('/resume', { room: 'voice:1', channelId: 'gone' }, SECRET)).status).toBe(409)
+  })
+
+  it('require room and channelId, and the secret', async () => {
+    for (const path of ['/pause', '/resume']) {
+      expect((await post(path, { room: 'r' }, SECRET)).status).toBe(400)
+      expect((await post(path, { channelId: 'c' }, SECRET)).status).toBe(400)
+      expect((await post(path, { room: 'r', channelId: 'c' })).status).toBe(401)
+    }
   })
 })
 

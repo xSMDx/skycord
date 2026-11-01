@@ -23,10 +23,14 @@ export interface MusicServiceConfig {
 export const musicConfigured = (): boolean =>
   Boolean(config.music?.url && config.music?.secret)
 
-const post = async (path: string, body: unknown): Promise<boolean> => {
+/**
+ * Send one playback call. The status it was answered with, or null when
+ * music is not configured or the service could not be reached.
+ */
+const send = async (path: string, body: unknown): Promise<number | null> => {
   const url = config.music?.url
   const secret = config.music?.secret
-  if (!url || !secret) return false
+  if (!url || !secret) return null
   try {
     const res = await fetch(`${url.replace(/\/$/, '')}${path}`, {
       method: 'POST',
@@ -34,17 +38,24 @@ const post = async (path: string, body: unknown): Promise<boolean> => {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(config.music?.timeoutMs ?? 5_000),
     })
-    if (!res.ok) {
-      console.warn(`[music] ${path} answered ${res.status}`)
-      return false
-    }
-    return true
+    // Read and dropped, so the connection goes back to the pool.
+    await res.arrayBuffer().catch(() => {})
+    if (!res.ok) console.warn(`[music] ${path} answered ${res.status}`)
+    return res.status
   } catch (err) {
     // Unreachable, slow, or not running. Said once, plainly, without a stack
     // — a host who has not started the container does not need a trace.
     console.warn(`[music] ${path} failed: ${err instanceof Error ? err.message : String(err)}`)
-    return false
+    // Possibly restarting, possibly as a different version: what it said it
+    // could do is asked again rather than trusted.
+    staleCapabilities()
+    return null
   }
+}
+
+const post = async (path: string, body: unknown): Promise<boolean> => {
+  const status = await send(path, body)
+  return status !== null && status >= 200 && status < 300
 }
 
 /**
@@ -67,6 +78,123 @@ export const musicPlayTrack = (room: string, channelId: string, trackId: string,
 /** Stop a channel and unpublish its track. */
 export const musicClose = (room: string, channelId: string): Promise<boolean> =>
   post('/close', { room, channelId })
+
+/**
+ * Hold the song on a channel where it is. True once the service has.
+ *
+ * Listeners stay subscribed to the track and hear silence; nothing is torn
+ * down. A 404 is an older service with no such route, which also settles
+ * the capability question: it cannot pause, whatever was cached.
+ */
+export const musicPause = async (room: string, channelId: string): Promise<boolean> => {
+  const status = await send('/pause', { room, channelId })
+  if (status === 404) settle(false)
+  return status === 200
+}
+
+/**
+ * Release a held song. `not-held` is the service saying it holds nothing on
+ * that channel — it restarted during the pause, or the song stopped — and
+ * the caller then starts the song again from the room's frozen point.
+ */
+export const musicResume = async (room: string, channelId: string): Promise<'resumed' | 'not-held' | 'failed'> => {
+  const status = await send('/resume', { room, channelId })
+  if (status === 200) return 'resumed'
+  if (status === 409) return 'not-held'
+  if (status === 404) settle(false)
+  return 'failed'
+}
+
+// ── What the service can do ─────────────────────────────────────────────────
+
+/**
+ * Whether the service can pause, learned from `GET /capabilities` and cached.
+ *
+ * Every state broadcast asks, so the answer has to be synchronous; the probe
+ * runs beside it and a change is announced through onMusicCapabilitiesChange
+ * so the rooms can be told again. Stale-while-revalidate, in short.
+ *
+ * Kept for different lengths by what it says. A yes holds for ten minutes:
+ * a service that stops being able to pause is a downgrade, rare, and a
+ * refused pause catches it at once anyway (a 404 above). A no is asked
+ * again after a minute, because the normal way to get one is a host who
+ * updated the server before the service — the next minute after they
+ * update the service, Pause appears without restarting anything. A probe
+ * that fails outright says nothing either way, and is retried shortly.
+ */
+const KEEP_YES_MS = 10 * 60_000
+const KEEP_NO_MS = 60_000
+const RETRY_MS = 15_000
+const PROBE_TIMEOUT_MS = 2_000
+
+let known: { pause: boolean; until: number } | null = null
+let retryAt = 0
+let probing: Promise<boolean> | null = null
+let changed: () => void = () => {}
+
+const canPauseNow = (): boolean => known?.pause ?? false
+
+/** Record an answer. Null is no answer: unknown, so no pausable, and retried soon. */
+function settle(pause: boolean | null): void {
+  const before = canPauseNow()
+  const now = Date.now()
+  if (pause === null) { known = null; retryAt = now + RETRY_MS }
+  else known = { pause, until: now + (pause ? KEEP_YES_MS : KEEP_NO_MS) }
+  if (canPauseNow() !== before) changed()
+}
+
+/** Keep what is known, but ask again on the next look. */
+function staleCapabilities(): void {
+  if (known) known.until = 0
+  retryAt = 0
+}
+
+/** Called when the answer changes, so every room's state can be sent again. */
+export const onMusicCapabilitiesChange = (fn: () => void): void => { changed = fn }
+
+/** Ask the service what it can do. One probe at a time; callers share it. */
+export const refreshMusicCapabilities = (): Promise<boolean> => {
+  if (!musicConfigured()) return Promise.resolve(false)
+  if (probing) return probing
+  probing = (async () => {
+    try {
+      const res = await fetch(`${config.music.url.replace(/\/$/, '')}/capabilities`, {
+        headers: { 'x-music-secret': config.music.secret },
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      })
+      const body = await res.json().catch(() => null) as { pause?: unknown } | null
+      // 404: a service from before this route existed, which cannot pause.
+      if (res.status === 404) settle(false)
+      else if (!res.ok) settle(null)
+      else settle(body?.pause === true)
+    } catch {
+      settle(null)
+    } finally {
+      probing = null
+    }
+    return canPauseNow()
+  })()
+  return probing
+}
+
+/**
+ * Whether to tell clients they can pause. Synchronous and cheap; starts a
+ * probe in the background when the cached answer is missing or old.
+ */
+export const musicCanPause = (): boolean => {
+  if (musicConfigured() && !probing) {
+    const now = Date.now()
+    if (known ? now >= known.until : now >= retryAt) void refreshMusicCapabilities()
+  }
+  return canPauseNow()
+}
+
+/** Forget everything learned. For tests, which point music at a service of their own. */
+export const forgetMusicCapabilities = (): void => {
+  known = null
+  retryAt = 0
+  probing = null
+}
 
 // ── Ingest ──────────────────────────────────────────────────────────────────
 

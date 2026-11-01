@@ -15,8 +15,11 @@ import { wellFormed } from '../utils/wellFormed'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
 import { MusicRooms } from './musicState'
-import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape } from '../utils/musicLimits'
-import { musicPlay, musicPlayTrack, musicClose } from '../utils/musicService'
+import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape, type Check } from '../utils/musicLimits'
+import {
+  musicPlay, musicPlayTrack, musicClose, musicPause, musicResume,
+  musicCanPause, onMusicCapabilitiesChange,
+} from '../utils/musicService'
 import { Track as LibraryTrack } from '../models/Track'
 import type { Source as MusicSource } from './musicState'
 
@@ -80,7 +83,16 @@ export const musicRooms = new MusicRooms(
     broadcastMusic(room)
     void musicClose(room, channelId)
   },
+  Date.now,
+  musicCanPause,
 )
+
+// The service turned out able to pause, or stopped being able to: every room
+// with music is told again, so Pause appears or goes without waiting for the
+// next change in that room.
+onMusicCapabilitiesChange(() => {
+  for (const room of musicRooms.roomsWithMusic()) broadcastMusic(room)
+})
 
 /**
  * A track finished on its own: advance that channel's queue.
@@ -147,25 +159,99 @@ const resolveSource = async (
  * replaced play reports no end — so a seek restarts the song at the new
  * point without advancing the queue.
  */
-const startSource = (room: string, channelId: string, now: MusicSource, startSec = 0): void => {
+const playFrom = (room: string, channelId: string, now: MusicSource, startSec = 0): Promise<boolean> => {
   switch (now.kind) {
-    case 'library': void musicPlayTrack(room, channelId, now.trackId, startSec); break
-    case 'link':    void musicPlay(room, channelId, now.url, startSec); break
+    case 'library': return musicPlayTrack(room, channelId, now.trackId, startSec)
+    case 'link':    return musicPlay(room, channelId, now.url, startSec)
     default: {
       // Exhaustiveness, and it has to be written down to be true: a switch
       // with no default compiles happily when a new kind appears and then
       // plays silence. Assigning to never is what makes the compiler object.
       const unhandled: never = now
       void unhandled
+      return Promise.resolve(false)
     }
   }
 }
 
+/** playFrom without waiting: most callers have nothing to do with the answer. */
+const startSource = (room: string, channelId: string, now: MusicSource, startSec = 0): void => {
+  void playFrom(room, channelId, now, startSec)
+}
+
 export const musicTrackEnded = (room: string, channelId: string): void => {
-  if (!musicRooms.get(room, channelId)) return
+  const channel = musicRooms.get(room, channelId)
+  if (!channel) return
+  // The service holds a paused song and reports no end for it, so an end
+  // that arrives while paused raced the pause and is stale. Acting on it
+  // would skip the song everyone is about to resume. Should the service
+  // really have lost the song, resume finds out (a 409) and starts it again
+  // from the frozen point — see resumeMusic.
+  if (channel.pausedAt !== null) return
   const next = musicRooms.skip(room, channelId)
   broadcastMusic(room)
   if (next.ok && next.now) startSource(room, channelId, next.now)
+}
+
+/**
+ * Put the service back in line with the room after a commit was refused.
+ *
+ * Both calls are harmless when already true — pausing a held song and
+ * resuming a playing one change nothing — so this does not need to know
+ * which way the race went, only what the room now says.
+ */
+const resyncMusic = (room: string, channelId: string): void => {
+  const channel = musicRooms.get(room, channelId)
+  if (!channel?.now) return
+  if (channel.pausedAt !== null) void musicPause(room, channelId)
+  else void musicResume(room, channelId)
+}
+
+/**
+ * Pause a channel for everyone: ask the service, then commit.
+ *
+ * The room is told only once the service has actually stopped sending, so a
+ * refusal or a failure changes nothing and broadcasts nothing — a channel
+ * that said Paused while still playing would be worse than a refusal.
+ */
+const pauseMusic = async (room: string, channelId: string): Promise<Check> => {
+  const ask = musicRooms.pauseCheck(room, channelId)
+  if (!ask.ok) return ask
+  if (!(await musicPause(room, channelId))) {
+    return { ok: false, reason: 'The music could not be paused. Try again in a moment.' }
+  }
+  const done = musicRooms.pause(room, channelId, ask.ticket)
+  // The song moved while the service was asked (a skip, a seek): the service
+  // may now be holding the new one, which the room thinks is playing.
+  if (!done.ok) resyncMusic(room, channelId)
+  return done
+}
+
+/**
+ * Resume a channel for everyone, from where it was frozen.
+ *
+ * Usually the service releases the song it is holding. Two cases start it
+ * again instead, through the same path a seek uses: a seek moved the point
+ * while paused, so what the service holds is the wrong place; or the
+ * service says it holds nothing (409) — it restarted during the pause, say.
+ */
+const resumeMusic = async (room: string, channelId: string): Promise<Check> => {
+  const ask = musicRooms.resumeCheck(room, channelId)
+  if (!ask.ok) return ask
+  let fromSec: number | undefined
+  if (ask.restart) {
+    fromSec = ask.sec
+  } else {
+    const how = await musicResume(room, channelId)
+    if (how === 'failed') return { ok: false, reason: 'The music could not be resumed. Try again in a moment.' }
+    if (how === 'not-held') fromSec = ask.sec
+  }
+  if (fromSec !== undefined && !(await playFrom(room, channelId, ask.now!, fromSec))) {
+    return { ok: false, reason: 'The music could not be resumed. Try again in a moment.' }
+  }
+  const done = musicRooms.resume(room, channelId, ask.ticket, fromSec)
+  if (!done.ok) resyncMusic(room, channelId)
+  return done
 }
 
 /**
@@ -1642,7 +1728,33 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const r = musicRooms.seek(gate.room, channelId, data?.sec)
       if (!r.ok) return musicRefuse(r.reason)
       broadcastMusic(gate.room)
-      startSource(gate.room, channelId, r.now!, r.sec)
+      // Paused, it stays paused at the new point: resume starts it there.
+      if (!r.paused) startSource(gate.room, channelId, r.now!, r.sec)
+    })
+
+    /**
+     * Pause and resume, for everyone, as anyone may skip. The service is
+     * asked first and the room told only once it has done it — see
+     * pauseMusic. Rate limited in the same bucket as seek.
+     */
+    socket.on('music:pause', (data: { conversationId: string; kind: string; channelId: string }) => {
+      void (async () => {
+        const gate = musicGate(data); if (!gate) return
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+        const r = await pauseMusic(gate.room, String(data?.channelId ?? ''))
+        if (!r.ok) return musicRefuse(r.reason)
+        broadcastMusic(gate.room)
+      })()
+    })
+
+    socket.on('music:resume', (data: { conversationId: string; kind: string; channelId: string }) => {
+      void (async () => {
+        const gate = musicGate(data); if (!gate) return
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
+        const r = await resumeMusic(gate.room, String(data?.channelId ?? ''))
+        if (!r.ok) return musicRefuse(r.reason)
+        broadcastMusic(gate.room)
+      })()
     })
 
     socket.on('music:previous', (data: { conversationId: string; kind: string; channelId: string }) => {

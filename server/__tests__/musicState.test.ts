@@ -515,3 +515,189 @@ describe('going back in a shared channel', () => {
     expect(m.view(ROOM).channels[0].previous).toBe(true)
   })
 })
+
+describe('pausing a shared song', () => {
+  // One position per channel, so a pause is the room's, not one listener's.
+  // These are the bookkeeping halves; the socket tests cover asking the
+  // music service first and who may ask.
+  const lib = (title: string, durationSec = 200) => ({
+    kind: 'library' as const, trackId: 'a'.repeat(24), title, artist: 'X', durationSec, cover: null,
+  })
+  const clockRooms = (canPause = true) => {
+    let t = 1_000_000
+    const m = new MusicRooms({ ...DEFAULT_CAPS }, () => {}, () => t, () => canPause)
+    return { m, tick: (ms: number) => { t += ms } }
+  }
+  const ch = (m: MusicRooms) => m.view(ROOM).channels[0]
+
+  it('pause freezes elapsed', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    tick(30_000)
+    expect(m.pause(ROOM, id).ok).toBe(true)
+    expect(ch(m).paused).toBe(true)
+    expect(ch(m).now?.elapsedMs).toBe(30_000)
+    tick(60_000)
+    // A listener who looks a minute later still sees the point it stopped at.
+    expect(ch(m).now?.elapsedMs).toBe(30_000)
+  })
+
+  it('resume continues from the frozen point', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    tick(30_000)
+    m.pause(ROOM, id)
+    tick(60_000)
+    expect(m.resume(ROOM, id).ok).toBe(true)
+    expect(ch(m).paused).toBe(false)
+    expect(ch(m).now?.elapsedMs).toBe(30_000)
+    tick(5_000)
+    expect(ch(m).now?.elapsedMs).toBe(35_000)
+  })
+
+  it('skip while paused plays the next song unpaused', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1')
+    tick(10_000)
+    m.pause(ROOM, id)
+    tick(10_000)
+    m.skip(ROOM, id)
+    expect(ch(m).now?.title).toBe('Two')
+    expect(ch(m).paused).toBe(false)
+    tick(2_000)
+    expect(ch(m).now?.elapsedMs).toBe(2_000)
+  })
+
+  it('previous and play now start their song playing too', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1'); m.queue(ROOM, id, lib('Three'), 'u1')
+    m.skip(ROOM, id)                                   // now Two
+    m.pause(ROOM, id)
+    m.previous(ROOM, id)                               // back to One
+    expect(ch(m).now?.title).toBe('One')
+    expect(ch(m).paused).toBe(false)
+
+    m.pause(ROOM, id)
+    const three = ch(m).queue.find(e => e.title === 'Three')!.id
+    m.playNow(ROOM, id, three)
+    expect(ch(m).now?.title).toBe('Three')
+    expect(ch(m).paused).toBe(false)
+    tick(1_000)
+    expect(ch(m).now?.elapsedMs).toBe(1_000)
+  })
+
+  it('previous reads the frozen position, not the wall clock', () => {
+    // Paused one second in and left for a minute: that is still the start
+    // of the song, so "previous" goes back rather than restarting.
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1')
+    m.skip(ROOM, id)
+    tick(1_000)
+    m.pause(ROOM, id)
+    tick(60_000)
+    expect(m.previous(ROOM, id).restart).toBeFalsy()
+    expect(ch(m).now?.title).toBe('One')
+  })
+
+  it('seek while paused stays paused at the new point', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    tick(30_000)
+    m.pause(ROOM, id)
+    const r = m.seek(ROOM, id, 120)
+    expect(r.ok).toBe(true)
+    expect(r.paused).toBe(true)
+    expect(ch(m).paused).toBe(true)
+    expect(ch(m).now?.elapsedMs).toBe(120_000)
+    tick(30_000)
+    expect(ch(m).now?.elapsedMs).toBe(120_000)
+    // The service still holds the old point, so resuming has to start the
+    // song again where the room now is rather than releasing the hold.
+    const ask = m.resumeCheck(ROOM, id)
+    expect(ask).toMatchObject({ ok: true, restart: true, sec: 120 })
+    m.resume(ROOM, id)
+    expect(ch(m).now?.elapsedMs).toBe(120_000)
+    expect(m.seek(ROOM, id, 10).paused).toBe(false)
+  })
+
+  it('a plain pause resumes from the service, without starting the song again', () => {
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    tick(42_500)
+    m.pause(ROOM, id)
+    expect(m.resumeCheck(ROOM, id)).toMatchObject({ ok: true, restart: false, sec: 42 })
+  })
+
+  it('refuses a second pause, a resume of a playing song, and a pause of nothing', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    expect(m.resume(ROOM, id).ok).toBe(false)
+    expect(m.resumeCheck(ROOM, id).ok).toBe(false)
+    expect(m.pause(ROOM, id).ok).toBe(true)
+    const again = m.pause(ROOM, id)
+    expect(again.ok).toBe(false)
+    expect(m.pauseCheck(ROOM, id).ok).toBe(false)
+    m.skip(ROOM, id)                                   // the queue is empty: nothing plays
+    expect(ch(m).paused).toBe(false)
+    expect(m.pause(ROOM, id).ok).toBe(false)
+    expect(m.pause(ROOM, 'nope').ok).toBe(false)
+    expect(m.resume(ROOM, 'nope').ok).toBe(false)
+  })
+
+  it('refuses to commit a pause when the song moved while the service was asked', () => {
+    // The service is asked between the check and the commit. A skip, seek or
+    // restart in that gap means the pause was for a song that is no longer
+    // the one playing, and committing it would freeze the wrong thing.
+    const { m, tick } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.queue(ROOM, id, lib('Two'), 'u1')
+    const ask = m.pauseCheck(ROOM, id)
+    expect(ask.ok).toBe(true)
+    m.skip(ROOM, id)
+    expect(m.pause(ROOM, id, ask.ticket).ok).toBe(false)
+    expect(ch(m).paused).toBe(false)
+
+    const seekAsk = m.pauseCheck(ROOM, id)
+    tick(1_000)
+    m.seek(ROOM, id, 50)
+    expect(m.pause(ROOM, id, seekAsk.ticket).ok).toBe(false)
+
+    const fine = m.pauseCheck(ROOM, id)
+    expect(m.pause(ROOM, id, fine.ticket).ok).toBe(true)
+    const res = m.resumeCheck(ROOM, id)
+    m.seek(ROOM, id, 20)                               // moved while paused
+    expect(m.resume(ROOM, id, res.ticket).ok).toBe(false)
+    expect(ch(m).paused).toBe(true)
+  })
+
+  it('an older service (no capability) → no pausable in the view', () => {
+    const old = clockRooms(false)
+    old.m.create(ROOM, 'C', lib('One'), 'u1')
+    expect(ch(old.m)).not.toHaveProperty('pausable')
+    expect(ch(old.m).paused).toBe(false)
+
+    const now = clockRooms(true)
+    now.m.create(ROOM, 'C', lib('One'), 'u1')
+    expect(ch(now.m).pausable).toBe(true)
+  })
+
+  it('a paused channel is torn down like any other when its listeners go', () => {
+    const { m } = clockRooms()
+    const id = idOf(m.create(ROOM, 'C', lib('One'), 'u1'))
+    m.listen(ROOM, 'u1', id)
+    m.pause(ROOM, id)
+    m.forget('u1')
+    vi.advanceTimersByTime(EMPTY_GRACE_MS + 1)
+    expect(m.get(ROOM, id)).toBeUndefined()
+  })
+
+  it('lists the rooms that have music, for re-telling them all at once', () => {
+    const { m } = clockRooms()
+    m.create(ROOM, 'C', lib('One'), 'u1')
+    m.create(OTHER, 'D', lib('Two'), 'u2')
+    expect(m.roomsWithMusic().sort()).toEqual([ROOM, OTHER].sort())
+  })
+})

@@ -127,9 +127,23 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
       return
     }
 
+    // A paused link's socket times out after seconds of silence, so a long
+    // pause ends with this: the same link, through the same guard, again.
+    let tooBig = got.tooBig
+    const reopen = async () => {
+      log(`${room}/${channelId}: the link went away during a pause; fetching it again`)
+      const again = await fetchFollowing(url, guard, { maxBytes: cfg.maxBytes })
+      if (again.kind !== 'stream') {
+        log(`${room}/${channelId}: ${again.kind === 'error' ? again.reason : 'unexpected redirect'}`)
+        return null
+      }
+      tooBig = again.tooBig
+      return again.body
+    }
+
     if (startSec) log(`${room}/${channelId}: starting at ${startSec}s`)
-    const how = await pub.play(room, channelId, got.body, startSec)
-    if (got.tooBig()) log(`${room}/${channelId}: stopped at the size limit`)
+    const how = await pub.play(room, channelId, got.body, startSec, reopen)
+    if (tooBig()) log(`${room}/${channelId}: stopped at the size limit`)
     // 'replaced' means something else is already playing on this channel —
     // reporting an end then would advance a queue that has already moved.
     if (how !== 'replaced') cfg.onEnded?.(room, channelId)
@@ -155,18 +169,31 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
       cfg.onEnded?.(room, channelId)
       return
     }
-    try {
+    const read = async (): Promise<Readable | null> => {
       const res = await fetch(`${base.replace(/\/$/, '')}/internal/music/track/${trackId}/audio`, {
         headers: { 'x-music-secret': cfg.secret },
       })
       if (!res.ok || !res.body) {
         log(`${room}/${channelId}: the API answered ${res.status} for track ${trackId}`)
+        return null
+      }
+      return Readable.fromWeb(res.body as never)
+    }
+    // fetch() gives up on a body nobody reads for five minutes, which is
+    // what a long pause does to it. Read again, from the top; the publisher
+    // decodes from the held point.
+    const reopen = async () => {
+      log(`${room}/${channelId}: track ${trackId} went away during a pause; reading it again`)
+      return read().catch(() => null)
+    }
+    try {
+      const body = await read()
+      if (!body) {
         cfg.onEnded?.(room, channelId)
         return
       }
-      const body = Readable.fromWeb(res.body as never)
       if (startSec) log(`${room}/${channelId}: starting at ${startSec}s`)
-      const how = await pub.play(room, channelId, body, startSec)
+      const how = await pub.play(room, channelId, body, startSec, reopen)
       if (how !== 'replaced') cfg.onEnded?.(room, channelId)
     } catch (e) {
       log(`${room}/${channelId}: could not read track ${trackId}: ${String(e).slice(0, 160)}`)
@@ -215,6 +242,28 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
           if (!b.room || !b.channelId) return fail(res, 400, 'room and channelId are required')
           await pub.close(b.room, b.channelId)
           return ok(res)
+        }
+
+        /*
+         * What this service can do, so the API knows whether to offer Pause.
+         *
+         * A route rather than a version number: the API asks about the one
+         * thing it needs. A service from before this existed answers 404,
+         * and the API reads that as "cannot pause" and sends no `pausable`.
+         * Behind the secret like everything but /health.
+         */
+        if (req.method === 'GET' && url.pathname === '/capabilities') return ok(res, { ok: true, pause: true })
+
+        // Hold or release the song on a channel. 200 once done; 409 when
+        // there is no song there to act on — a service restarted during a
+        // pause says this, and the API then starts the song again itself.
+        if (req.method === 'POST' && (url.pathname === '/pause' || url.pathname === '/resume')) {
+          const b = await readJson(req) as { room?: string; channelId?: string }
+          if (!b.room || !b.channelId) return fail(res, 400, 'room and channelId are required')
+          const done = url.pathname === '/pause'
+            ? pub.pause(b.room, b.channelId)
+            : pub.resume(b.room, b.channelId)
+          return done ? ok(res) : fail(res, 409, 'nothing is playing there')
         }
 
         // ── ingest ──────────────────────────────────────────────────────
