@@ -14,7 +14,11 @@
  * have not tuned into. It used to show nothing at all, so a song everyone
  * else was listening to was invisible unless you opened the music room.
  *
- * Deliberately small: art, a name, two buttons, a hairline of progress.
+ * Deliberately small: art, a name, a few buttons, a hairline of progress.
+ * On a channel whose server can pause, the buttons are Pause (or Resume),
+ * Skip and Leave — the same three a preview of your own gets, in the same
+ * order, because they are the same three acts; only these ones reach
+ * everyone listening.
  * Everything else is a click away in the room, and this sits directly above
  * the voice panel, the busiest corner of the app.
  */
@@ -23,7 +27,7 @@ import { LogOut, Music2, Pause, Play, Radio, SkipForward, X } from 'lucide-vue-n
 import { player, toggle, next, stop } from '@/composables/useMusicPlayer'
 import {
   music, musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic,
-  type MusicChannelView,
+  togglePauseMusic, isPaused, canPause, type MusicChannelView,
 } from '@/composables/useMusic'
 
 const emit = defineEmits<{ open: [] }>()
@@ -38,11 +42,15 @@ const soloPlaying = computed(() => !!player.current && !player.paused)
  * Music in your call that you are not hearing — shown when nothing you
  * hear is. The busiest channel if there are several: that is the one most
  * people are in. A paused song of your own does not hide it; one playing does.
+ * A channel that is playing comes before one that is held, whatever the
+ * crowd: the strip is for music you could be hearing, and held music is
+ * silent for everyone.
  */
 const playingHere = computed(() => music.channels.filter(c => c.now))
 const nearby = computed(() => {
   if (live.value || soloPlaying.value || !playingHere.value.length) return null
-  return [...playingHere.value].sort((a, b) => b.listeners.length - a.listeners.length)[0]
+  return [...playingHere.value].sort((a, b) =>
+    Number(isPaused(a)) - Number(isPaused(b)) || b.listeners.length - a.listeners.length)[0]
 })
 const local = computed(() => (live.value || nearby.value ? null : player.current))
 
@@ -98,13 +106,27 @@ const progress = computed(() =>
         <span class="mp-text">
           <span class="mp-title">{{ liveTitle }}</span>
           <!-- Live, and where: the one thing that tells you this is shared
-               rather than yours. -->
-          <span class="mp-artist"><span class="mp-pulse" aria-hidden="true" /><span class="mp-where">{{ live.name }}</span></span>
+               rather than yours. Held, the dot stops and the line says so,
+               because the silence is the room's, not a fault in your ear. -->
+          <span class="mp-artist">
+            <span class="mp-pulse" :class="{ still: isPaused(live) }" aria-hidden="true" />
+            <span class="mp-where">{{ isPaused(live) ? `Paused · ${live.name}` : live.name }}</span>
+          </span>
         </span>
       </button>
 
-      <!-- Skipping a shared channel skips it for everyone, so the label
-           says so rather than looking like the private next button. -->
+      <!-- Pause and Skip reach everyone listening, so their labels say so
+           rather than looking like the private keys. One control, Pause
+           while it plays and Resume while it is held; absent when the
+           server's music service cannot pause. -->
+      <button
+        v-if="canPause(live)" class="mp-btn"
+        :aria-label="isPaused(live) ? `Resume for everyone in ${live.name}` : `Pause for everyone in ${live.name}`"
+        v-tip="isPaused(live) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
+        @click="togglePauseMusic(live)"
+      >
+        <component :is="isPaused(live) ? Play : Pause" :size="14" :stroke-width="2.5" />
+      </button>
       <button
         v-if="live.now" class="mp-btn" :aria-label="`Skip for everyone in ${live.name}`"
         v-tip="'Skip — for everyone listening'" @click="skipMusic(live.id)"
@@ -129,7 +151,7 @@ const progress = computed(() =>
         <span class="mp-text">
           <span class="mp-title">{{ nearbyTitle }}</span>
           <!-- No live dot: you are not hearing this. Where, and how many are. -->
-          <span class="mp-artist"><span class="mp-where">Playing in {{ nearby.name }}{{ nearbyWho }}</span></span>
+          <span class="mp-artist"><span class="mp-where">{{ isPaused(nearby) ? 'Paused' : 'Playing' }} in {{ nearby.name }}{{ nearbyWho }}</span></span>
         </span>
       </button>
       <button class="mp-join" :aria-label="`Join ${nearby.name}`" @click="listenToMusic(nearby.id)">Join</button>
@@ -217,6 +239,9 @@ const progress = computed(() =>
   animation: mp-breathe 2.4s var(--ease-out) infinite;
 }
 @keyframes mp-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+/* Held: still, and dimmed as well, so it reads apart from a live dot that
+   reduced motion has stopped — that one stays at full strength. */
+.mp-pulse.still { animation: none; opacity: .4; }
 
 /* Join: the one thing to do about music you can see and not hear. */
 .mp-join {
@@ -258,9 +283,9 @@ const progress = computed(() =>
   transition: transform 1s linear;
 }
 
-/* Touch targets, per DESIGN.md. */
+/* Touch targets: 44px, the floor for a thumb. */
 @media (max-width: 768px) {
-  .mp-btn { width: 40px; height: 40px; }
+  .mp-btn { width: 44px; height: 44px; }
   .mp-join { height: 40px; padding: 0 16px; }
   .mp-art { width: 34px; height: 34px; }
 }

@@ -14,7 +14,7 @@
 import { ref, computed, watch, getCurrentScope, onScopeDispose } from 'vue'
 import {
   music, createMusicChannel, queueMusic, skipMusic, closeMusicChannel,
-  listenToMusic, clearMusicError,
+  listenToMusic, clearMusicError, togglePauseMusic, canPause,
 } from './useMusic'
 
 /** Who is in the call: all `listenersText` needs of a participant. */
@@ -154,6 +154,23 @@ export const useCallMusic = (people: () => readonly CallPerson[]) => {
   }
 
   /**
+   * Pause the song in a channel for everyone, or resume it — whichever it is
+   * now, read from the channel as the tap lands rather than from a copy the
+   * panel drew. Like skip, it dismisses the last refusal first, so a new one
+   * (the service could not pause) is plain to see and lands on this card.
+   * Nothing is sent for a channel that cannot pause: an older server, or no
+   * song.
+   */
+  const togglePause = (id: string) => {
+    disarm()
+    const c = music.channels.find(x => x.id === id)
+    if (!c || !canPause(c)) return
+    clearMusicError()
+    origin.value = id
+    togglePauseMusic(c)
+  }
+
+  /**
    * Close a channel for everyone, on the second tap. The first arms it (see
    * `closing`) and sends nothing; tapping another channel arms that one
    * instead.
@@ -176,6 +193,6 @@ export const useCallMusic = (people: () => readonly CallPerson[]) => {
     listeners, canAdd,
     origin, refusedAt, closing,
     openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen,
-    skipTrack, closeChannel, disarm,
+    skipTrack, togglePause, closeChannel, disarm,
   }
 }

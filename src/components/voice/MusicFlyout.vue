@@ -13,21 +13,22 @@
  * sidebar, where it sat while this was being built and where it was a
  * second place to look during a call.
  */
-import { Music2, Plus, SkipForward, X, Library } from 'lucide-vue-next'
+import { Music2, Pause, Play, Plus, SkipForward, X, Library } from 'lucide-vue-next'
 import CallFlyout from './CallFlyout.vue'
 import { voice } from '@/composables/useVoice'
-import { music, skipMusic, closeMusicChannel } from '@/composables/useMusic'
+import { music, skipMusic, closeMusicChannel, isPaused, canPause } from '@/composables/useMusic'
 import { useCallMusic } from '@/composables/callMusic'
 
 defineProps<{ dir?: 'down' | 'up' }>()
 const emit = defineEmits<{ close: []; openLibrary: [] }>()
 
-// The listeners line, the create and queue forms and the tune-in tap are
-// callMusic's, shared with the phone sheet. Only the layout is here.
+// The listeners line, the create and queue forms, the tune-in tap and
+// Pause/Resume are callMusic's, shared with the phone sheet. Only the layout
+// is here.
 const {
   adding, name, url, queueFor, queueUrl,
   listeners, canAdd,
-  openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen,
+  openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen, togglePause,
 } = useCallMusic(() => voice.participants)
 </script>
 
@@ -55,7 +56,7 @@ const {
                  A library track carries its title; a pasted link has none,
                  so that case says so rather than showing a URL. -->
             <span class="mf-now">
-              {{ c.now?.title || (c.now ? 'A linked track' : 'Nothing playing') }}
+              {{ isPaused(c) ? 'Paused · ' : '' }}{{ c.now?.title || (c.now ? 'A linked track' : 'Nothing playing') }}
             </span>
             <span class="mf-who">
               {{ listeners(c.listeners) }}<template v-if="c.queued"> · {{ c.queued }} queued</template>
@@ -65,6 +66,15 @@ const {
         </button>
 
         <div class="mf-acts">
+          <!-- Pause while it plays, Resume while it is held: one control,
+               for everyone, beside Skip. Only where the music service can. -->
+          <button
+            v-if="canPause(c)" class="mf-icon"
+            :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+            @click="togglePause(c.id)"
+          >
+            <component :is="isPaused(c) ? Play : Pause" :size="14" :stroke-width="2.25" />
+          </button>
           <button class="mf-icon" :aria-label="`Skip the track in ${c.name}`" @click="skipMusic(c.id)">
             <SkipForward :size="14" :stroke-width="2.25" />
           </button>
@@ -130,9 +140,11 @@ const {
 <style scoped>
 /* Wider than the mic and camera menus, because this one carries three
    lines per row and a verb — at 236px the name, the track and the listeners
-   all truncated to nothing. Set on the CONTENT, not on .fly: that element
-   belongs to CallFlyout, so a scoped rule here never matches it. */
-.mf-list { list-style: none; display: flex; flex-direction: column; gap: 4px; min-width: 284px; }
+   all truncated to nothing. 284px held them beside three glyphs; Pause makes
+   it four, and the extra 28 keep the lines the room they had. Set on the
+   CONTENT, not on .fly: that element belongs to CallFlyout, so a scoped rule
+   here never matches it. */
+.mf-list { list-style: none; display: flex; flex-direction: column; gap: 4px; min-width: 312px; }
 
 .mf-row {
   display: flex; align-items: center; flex-wrap: wrap;
@@ -193,8 +205,8 @@ const {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* At rest the row reads name / track / listeners ... JOIN. The three
-   glyphs arriving on hover keeps the verb from being one symbol among four,
+/* At rest the row reads name / track / listeners ... JOIN. The glyphs
+   (three, four with Pause) arriving on hover keeps the verb from being one symbol among four,
    which is how it read when they all sat together. Space is reserved, so
    nothing jumps. Touch has no hover, so there they simply stay. */
 .mf-acts {

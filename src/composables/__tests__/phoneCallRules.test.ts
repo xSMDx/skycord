@@ -487,7 +487,7 @@ describe('musicCardLabel', () => {
 
   it('tuned in with now → song (title, artist, cover)', () => {
     expect(musicCardLabel({ available: true, listeningTo: 'c1', channels: [channel('c1', song())] }))
-      .toEqual({ kind: 'song', title: 'Midnight City', artist: 'M83', cover: '/covers/e1.jpg' })
+      .toEqual({ kind: 'song', title: 'Midnight City', artist: 'M83', cover: '/covers/e1.jpg', paused: false })
   })
 
   it('shows the song of the channel you are tuned into, not another that is playing', () => {
@@ -500,7 +500,7 @@ describe('musicCardLabel', () => {
     expect(musicCardLabel({
       available: true, listeningTo: 'c1',
       channels: [channel('c1', song({ artist: null, cover: null }))],
-    })).toEqual({ kind: 'song', title: 'Midnight City', artist: null, cover: null })
+    })).toEqual({ kind: 'song', title: 'Midnight City', artist: null, cover: null, paused: false })
   })
 
   it('tuned in, nothing queued → not-playing', () => {
@@ -529,7 +529,26 @@ describe('musicCardLabel', () => {
   it("a link with no title shows the url's host as title", () => {
     const linked = song({ kind: 'link', title: null, artist: null, cover: null, url: 'https://example.com/watch?v=1' })
     expect(musicCardLabel({ available: true, listeningTo: 'c1', channels: [channel('c1', linked)] }))
-      .toEqual({ kind: 'song', title: 'example.com', artist: null, cover: null })
+      .toEqual({ kind: 'song', title: 'example.com', artist: null, cover: null, paused: false })
+  })
+
+  it('says when the song you are tuned into is paused, so the card can show it held', () => {
+    const paused: MusicChannelView = { ...channel('c1', song()), pausable: true, paused: true }
+    expect(musicCardLabel({ available: true, listeningTo: 'c1', channels: [paused] }))
+      .toEqual({ kind: 'song', title: 'Midnight City', artist: 'M83', cover: '/covers/e1.jpg', paused: true })
+  })
+
+  it('reads an older server, which sends no paused, as playing', () => {
+    expect(musicCardLabel({ available: true, listeningTo: 'c1', channels: [channel('c1', song())] }))
+      .toMatchObject({ paused: false })
+  })
+
+  it('not tuned in: counts only the channels actually playing, not the paused ones', () => {
+    const paused: MusicChannelView = { ...channel('c2', song()), pausable: true, paused: true }
+    expect(musicCardLabel({ available: true, listeningTo: null, channels: [channel('c1', song()), paused] }))
+      .toEqual({ kind: 'count', n: 1 })
+    expect(musicCardLabel({ available: true, listeningTo: null, channels: [paused] }))
+      .toEqual({ kind: 'not-playing' })
   })
 
   it('a link with neither a title nor a usable url reads as the desktop rail does', () => {

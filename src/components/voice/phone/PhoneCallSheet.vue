@@ -370,8 +370,11 @@ onBeforeUnmount(() => {
               <img v-if="musicLabel.cover" class="pcsh-cover" :src="musicLabel.cover" alt="" draggable="false" />
               <span v-else class="pcsh-cover is-blank"><Music2 :size="16" :stroke-width="2.25" /></span>
               <!-- Slides only while the list is up, so it starts from the
-                   beginning when it comes into view rather than mid-way. -->
-              <MarqueeText class="pcsh-song" :text="musicLabel.title" :active="expanded" />
+                   beginning when it comes into view rather than mid-way, and
+                   not while the song is held: a title in motion says "on",
+                   and Paused beside it says why it is not. -->
+              <MarqueeText class="pcsh-song" :text="musicLabel.title" :active="expanded && !musicLabel.paused" />
+              <span v-if="musicLabel.paused" class="pcsh-paused">Paused</span>
             </template>
             <span v-else-if="musicLabel.kind === 'count'" class="pcsh-now-text">{{ musicLabel.n }} playing</span>
             <span v-else class="pcsh-now-text pcsh-quiet">Not playing</span>
@@ -556,6 +559,8 @@ onBeforeUnmount(() => {
 }
 .pcsh-cover.is-blank { display: flex; align-items: center; justify-content: center; background: var(--hover-strong); color: var(--text-3); }
 .pcsh-song { flex: 1; color: var(--text-1); }
+/* A state, not a second title: quieter than the song, and never the part cut off. */
+.pcsh-paused { flex: none; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-3); }
 /* Words alone sit under the word "Music": past its 18px icon and the gap. */
 .pcsh-now-text { padding-left: 30px; }
 .pcsh-quiet { color: var(--text-3); }

@@ -5,7 +5,7 @@ import { useVoice } from '@/composables/useVoice'
 import CallStage from './CallStage.vue'
 import MicFlyout from './MicFlyout.vue'
 import MusicFlyout from './MusicFlyout.vue'
-import { music, musicAvailable } from '@/composables/useMusic'
+import { music, musicAvailable, isPaused } from '@/composables/useMusic'
 
 /**
  * Music playing in this call that you are not hearing.
@@ -14,12 +14,16 @@ import { music, musicAvailable } from '@/composables/useMusic'
  * listening to was invisible from the call until you went looking. Now the
  * button carries a dot and its tip names the song.
  */
+// A playing channel before a held one: the dot is for music you could hear.
+// Held, it stays (there is music here) but stops breathing.
 const musicNearby = computed(() =>
-  music.listeningTo ? null : music.channels.find(c => c.now) ?? null)
+  music.listeningTo ? null
+    : music.channels.find(c => c.now && !isPaused(c)) ?? music.channels.find(c => c.now) ?? null)
 const musicTip = computed(() => {
   if (music.listeningTo) return 'Music — you are listening'
   const c = musicNearby.value
-  return c ? `Music — “${c.now?.title ?? 'a linked track'}” is playing in ${c.name}` : 'Music'
+  if (!c) return 'Music'
+  return `Music — “${c.now?.title ?? 'a linked track'}” is ${isPaused(c) ? 'paused' : 'playing'} in ${c.name}`
 })
 import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
@@ -695,7 +699,7 @@ onBeforeUnmount(() => {
               @click="toggleMenu('music')"
             >
               <Music2 :size="20" :stroke-width="2.25" />
-              <span v-if="musicNearby" class="cb-musicdot" aria-hidden="true" />
+              <span v-if="musicNearby" class="cb-musicdot" :class="{ still: isPaused(musicNearby) }" aria-hidden="true" />
             </button>
             <MusicFlyout
               v-if="openMenu === 'music'" dir="up"
@@ -973,6 +977,7 @@ onBeforeUnmount(() => {
   animation: cb-musicbreathe 2.4s var(--ease-out) infinite;
 }
 @keyframes cb-musicbreathe { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+.cb-musicdot.still { animation: none; opacity: .45; }
 @media (prefers-reduced-motion: reduce) { .cb-musicdot { animation: none; } }
 .cb-b.listening:hover:not(:disabled) { color: var(--accent-text); }
 

@@ -23,6 +23,7 @@ import { getSocket } from './useSocket'
  */
 import { soundMusicOpen, soundMusicTune, soundMusicLeave } from './useSounds'
 import { onYield, takeAudio, release } from './audioFocus'
+import { isPaused, canPause } from './musicPause'
 
 // Starting a local preview leaves whatever channel you were tuned into:
 // the two are the same ear. See audioFocus.ts.
@@ -84,7 +85,20 @@ export interface MusicChannelView {
   listeners: string[]
   /** Whether there is a song to go back to. */
   previous: boolean
+  /**
+   * Paused for everyone; `now.elapsedMs` is then the frozen point. An older
+   * server sends none, which is a song playing — read it through isPaused.
+   */
+  paused?: boolean
+  /**
+   * Present, and true, only when the server's music service can pause. Its
+   * absence is the whole compatibility story: no surface offers Pause
+   * without it. Read it through canPause.
+   */
+  pausable?: boolean
 }
+
+export { isPaused, canPause }
 
 export const music = reactive({
   /** Every channel in the current call. */
@@ -106,10 +120,16 @@ export const music = reactive({
  * long ago, by THIS machine's clock, that state arrived. Neither side ever
  * reads the other's clock, so a laptop that is a minute fast still draws the
  * bar in the right place.
+ *
+ * Paused, the server's figure is the frozen point and nothing is added: the
+ * bar stands still for as long as the song is held. Resume arrives as a new
+ * state carrying that same point, received now, so the count picks up from
+ * exactly where it stopped rather than jumping by the time it was held.
  */
 export const channelElapsed = (c: MusicChannelView | null, nowMs: number): number | null => {
   if (!c?.now || c.now.elapsedMs === null) return null
-  const sec = (c.now.elapsedMs + (nowMs - music.receivedAt)) / 1000
+  const since = isPaused(c) ? 0 : nowMs - music.receivedAt
+  const sec = (c.now.elapsedMs + since) / 1000
   const d = c.now.durationSec
   return d ? Math.min(d, Math.max(0, sec)) : Math.max(0, sec)
 }
@@ -125,6 +145,8 @@ export const channelElapsed = (c: MusicChannelView | null, nowMs: number): numbe
  * Not only while you are tuned in: the rail shows every channel's progress
  * so you can see what you would be joining, and a bar that only moves on
  * the one channel you already hear froze the others between updates.
+ *
+ * A held song counts nothing, so a call whose every song is paused stops it.
  */
 export const musicNow = ref(Date.now())
 let ticker: ReturnType<typeof setInterval> | null = null
@@ -132,7 +154,7 @@ const tick = (on: boolean): void => {
   if (on && !ticker) ticker = setInterval(() => { musicNow.value = Date.now() }, 1000)
   if (!on && ticker) { clearInterval(ticker); ticker = null }
 }
-const syncTick = (): void => tick(music.channels.some(c => c.now !== null))
+const syncTick = (): void => tick(music.channels.some(c => c.now !== null && !isPaused(c)))
 
 /**
  * Stop listening without telling the server — for when the server already
@@ -234,6 +256,28 @@ export const skipMusic = (channelId: string): void =>
 /** Move the channel's song for everyone. Whole seconds: the server floors anyway. */
 export const seekMusic = (channelId: string, sec: number): void =>
   send('music:seek', { channelId, sec: Math.floor(sec) })
+
+/**
+ * Pause, or resume, the channel's song for everyone — anyone who may skip may.
+ *
+ * Nothing is flipped here ahead of the server. It asks the music service
+ * first and tells the room only once the audio has actually stopped, so a
+ * control that said Paused while the song played on would be the one lie the
+ * server is built to avoid. The press answers the tap; the state follows the
+ * broadcast, as a skip's new title does, and a refusal leaves everything as
+ * it was, with its reason in `music.error` like any other.
+ */
+export const pauseMusic = (channelId: string): void =>
+  send('music:pause', { channelId })
+
+export const resumeMusic = (channelId: string): void =>
+  send('music:resume', { channelId })
+
+/** Pause a playing channel or resume a held one — whichever it is now. Nothing for one that cannot. */
+export const togglePauseMusic = (c: MusicChannelView): void => {
+  if (!canPause(c)) return
+  if (isPaused(c)) resumeMusic(c.id); else pauseMusic(c.id)
+}
 
 /** Back a song, or to the start of this one past three seconds, for everyone. */
 export const previousMusic = (channelId: string): void =>

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { listenersText, useCallMusic, CLOSE_ARM_MS } from '../callMusic'
-import { music, setMusicTarget, onMusicError } from '../useMusic'
+import { music, setMusicTarget, onMusicError, onMusicState, isPaused, type MusicChannelView } from '../useMusic'
 
 const emit = vi.fn()
 vi.mock('../useSocket', () => ({ getSocket: () => ({ emit }) }))
@@ -221,6 +221,61 @@ describe('tuning in and out', () => {
     m.toggleListen('x')
     expect(music.listeningTo).toBeNull()
     expect(sent('music:listen')).toEqual([{ conversationId: 'c1', kind: 'channel', channelId: null }])
+  })
+})
+
+/** A channel with a song on, as the server describes it. */
+const channelView = (id: string, over: Partial<MusicChannelView> = {}): MusicChannelView => ({
+  id, name: id.toUpperCase(), queue: [], queued: 0, listeners: [], previous: false,
+  now: { id: 'e1', kind: 'library', title: 'Song', artist: null, durationSec: 200, addedBy: 'a', url: null, cover: null, elapsedMs: 0 },
+  ...over,
+})
+
+describe('pausing and resuming a channel', () => {
+  it('pauses a playing channel and resumes a paused one, for that channel', () => {
+    onMusicState({ channels: [channelView('p', { pausable: true, paused: false }), channelView('q', { pausable: true, paused: true })] })
+    const m = useCallMusic(() => people)
+    m.togglePause('p')
+    m.togglePause('q')
+    expect(sent('music:pause')).toEqual([{ conversationId: 'c1', kind: 'channel', channelId: 'p' }])
+    expect(sent('music:resume')).toEqual([{ conversationId: 'c1', kind: 'channel', channelId: 'q' }])
+  })
+
+  it('sends nothing for a channel whose server cannot pause, or that has no song', () => {
+    onMusicState({ channels: [channelView('old'), channelView('quiet', { pausable: true, now: null })] })
+    const m = useCallMusic(() => people)
+    m.togglePause('old')
+    m.togglePause('quiet')
+    m.togglePause('gone')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('clears an old refusal first, and records the channel so a new refusal lands on its card', () => {
+    onMusicState({ channels: [channelView('p', { pausable: true })] })
+    music.error = 'Old.'
+    const m = useCallMusic(() => people)
+    m.togglePause('p')
+    expect(music.error).toBe('')
+    expect(m.origin.value).toBe('p')
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.' })
+    expect(m.refusedAt.value).toBe('p')
+  })
+
+  it('leaves the channel as it was when the pause is refused: nothing was flipped ahead of the server', () => {
+    onMusicState({ channels: [channelView('p', { pausable: true, paused: false })] })
+    const m = useCallMusic(() => people)
+    m.togglePause('p')
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.' })
+    expect(isPaused(music.channels[0])).toBe(false)
+  })
+
+  it('disarms a Close that was armed', () => {
+    vi.useFakeTimers()
+    onMusicState({ channels: [channelView('p', { pausable: true })] })
+    const m = useCallMusic(() => people)
+    m.closeChannel('x')
+    m.togglePause('p')
+    expect(m.closing.value).toBeNull()
   })
 })
 

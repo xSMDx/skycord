@@ -5,6 +5,7 @@
  */
 import { bySpeechRecency, type TileCandidate } from './callLimits'
 import type { MusicChannelView } from './useMusic'
+import { isPaused } from './musicPause'
 
 // ── Who fills the screen ────────────────────────────────────────────────────
 export interface FocusInput {
@@ -217,7 +218,7 @@ export const streamRow = (s: { sharing: boolean; joined: boolean; hidden: boolea
 export type MusicCardLabel =
   | null
   | { kind: 'not-playing' }
-  | { kind: 'song'; title: string; artist: string | null; cover: string | null }
+  | { kind: 'song'; title: string; artist: string | null; cover: string | null; paused: boolean }
   | { kind: 'count'; n: number }
 
 // A bare link has no title, only where it points. The desktop rail says
@@ -229,9 +230,11 @@ const hostOf = (url: string | null): string | null => {
 
 /**
  * What the Music card reads, or null when the card is not shown at all (the
- * server runs no music). The song is that of the channel you are tuned into; if
+ * server runs no music). The song is that of the channel you are tuned into,
+ * and whether it is held, so the card can say Paused and stop its marquee; if
  * you are not tuned into one, it can only say how many are playing, since there
- * is no single song to name.
+ * is no single song to name — and a held song is not playing, so it is not
+ * counted.
  */
 export const musicCardLabel = (
   m: { available: boolean; listeningTo: string | null; channels: MusicChannelView[] },
@@ -248,10 +251,11 @@ export const musicCardLabel = (
       title: now.title || hostOf(now.url) || 'A linked track',
       artist: now.artist,
       cover: now.cover,
+      paused: isPaused(tuned),
     }
   }
 
-  const n = m.channels.filter(c => c.now).length
+  const n = m.channels.filter(c => c.now && !isPaused(c)).length
   return n > 0 ? { kind: 'count', n } : { kind: 'not-playing' }
 }
 

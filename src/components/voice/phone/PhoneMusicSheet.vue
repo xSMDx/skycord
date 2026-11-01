@@ -3,8 +3,9 @@
  * The call's music channels, as a phone sheet.
  *
  * The same panel as the desktop MusicFlyout, with the same contents and the
- * same actions — the channels with who is listening, tune in and out, skip,
- * add a track, start a channel, close one — laid out for a thumb: each channel
+ * same actions — the channels with who is listening, tune in and out, pause
+ * and resume, skip, add a track, start a channel, close one — laid out for a
+ * thumb: each channel
  * a full-width card, every target at least 44px, and the verbs written out
  * rather than left as four-pixel glyphs, because a phone has no hover to
  * reveal them. The logic is callMusic's, shared with the flyout; only the
@@ -15,10 +16,10 @@
  * host decides what "Your library" shows and whether this stays up behind it.
  */
 import { computed, watch } from 'vue'
-import { Music2, Plus, SkipForward, X, Library, ChevronRight } from 'lucide-vue-next'
+import { Music2, Pause, Play, Plus, SkipForward, X, Library, ChevronRight } from 'lucide-vue-next'
 import BottomSheet from '@/components/ui/BottomSheet.vue'
 import { voice } from '@/composables/useVoice'
-import { music } from '@/composables/useMusic'
+import { music, isPaused, canPause } from '@/composables/useMusic'
 import { useCallMusic } from '@/composables/callMusic'
 
 const props = defineProps<{ open: boolean }>()
@@ -29,7 +30,7 @@ const {
   listeners, canAdd,
   refusedAt, closing,
   openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen,
-  skipTrack, closeChannel, disarm,
+  skipTrack, togglePause, closeChannel, disarm,
 } = useCallMusic(() => voice.participants)
 
 /**
@@ -93,7 +94,7 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
                    a pasted link has none, so that case says so rather than
                    showing a URL. -->
               <span class="pms-now">
-                {{ c.now?.title || (c.now ? 'A linked track' : 'Nothing playing') }}
+                {{ isPaused(c) ? 'Paused · ' : '' }}{{ c.now?.title || (c.now ? 'A linked track' : 'Nothing playing') }}
               </span>
               <span class="pms-who">
                 {{ listeners(c.listeners) }}<template v-if="c.queued"> · {{ c.queued }} queued</template>
@@ -102,6 +103,17 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
           </button>
 
           <div class="pms-acts">
+            <!-- Pause while it plays, Resume while it is held: one control,
+                 for everyone, beside Skip. Only where the music service can,
+                 so on an older server the row is the three it always was. -->
+            <button
+              v-if="canPause(c)" type="button" class="pms-act"
+              :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+              @click="togglePause(c.id)"
+            >
+              <component :is="isPaused(c) ? Play : Pause" :size="16" :stroke-width="2.25" />
+              <span>{{ isPaused(c) ? 'Resume' : 'Pause' }}</span>
+            </button>
             <button type="button" class="pms-act" :aria-label="`Skip the track in ${c.name}`" @click="skipTrack(c.id)">
               <SkipForward :size="16" :stroke-width="2.25" />
               <span>Skip</span>
@@ -252,8 +264,9 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
 }
 .pms-ch.on .pms-join { color: var(--accent-text); }
 
-/* Skip, add, close: one row of three, edge to edge and divided by hairlines,
-   not three filled chips inside a filled card. The whole third is the target. */
+/* Pause, skip, add, close: one row, edge to edge and divided by hairlines,
+   not filled chips inside a filled card. The whole share is the target.
+   (Three, without Pause, on a server that cannot pause.) */
 .pms-acts { display: flex; }
 .pms-act {
   flex: 1 1 0; min-width: 44px; min-height: 48px;
@@ -270,6 +283,10 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
    taller, because "Tap again to close" does not fit in a third of the row. It
    grows leftwards from the edge the thumb is on. Instant: it answers a tap. */
 .pms-act.armed { flex: 3 1 0; background: var(--danger); color: var(--text-on-danger); }
+/* While it is armed the others give it their words and keep their glyphs:
+   beside "Tap again to close", four labelled buttons cut to "Res…". For the
+   three seconds it lasts, the row's question is Close, not the rest. */
+.pms-acts:has(.armed) .pms-act:not(.armed) span { display: none; }
 
 .pms-inline { display: flex; gap: 8px; padding: 12px 16px; }
 

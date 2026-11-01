@@ -15,12 +15,13 @@
  * "our music", which is why it says what it will do rather than just "play".
  */
 import { computed, ref } from 'vue'
-import { Music2, Play, Plus, Radio, Send, SkipForward, Volume2, X } from 'lucide-vue-next'
+import { Music2, Pause, Play, Plus, Radio, Send, SkipForward, Volume2, X } from 'lucide-vue-next'
 import { voice } from '@/composables/useVoice'
 import { useAuth } from '@/composables/useAuth'
 import {
   music, createMusicChannel, shareToChannel, listenToMusic, closeMusicChannel, skipMusic, playNowMusic,
-  channelElapsed, musicNow, type MusicChannelView, type MusicEntryView,
+  channelElapsed, musicNow, togglePauseMusic, isPaused, canPause,
+  type MusicChannelView, type MusicEntryView,
 } from '@/composables/useMusic'
 import { clock, type LibTrack } from '@/composables/useMusicLibrary'
 import type { VoiceRoomChoice } from './rooms'
@@ -184,8 +185,9 @@ const startWith = (): void => {
               </span>
               <span class="cr-names">
                 <span class="cr-name">{{ c.name }}</span>
+                <!-- Held says so first: it is why the bar below has stopped. -->
                 <span v-if="c.now" class="cr-song">
-                  {{ titleOf(c.now) }}<template v-if="c.now.artist"> · {{ c.now.artist }}</template>
+                  <template v-if="isPaused(c)">Paused · </template>{{ titleOf(c.now) }}<template v-if="c.now.artist"> · {{ c.now.artist }}</template>
                 </span>
                 <span v-else class="cr-song quiet">Nothing playing</span>
               </span>
@@ -222,7 +224,17 @@ const startWith = (): void => {
               >
                 <Send :size="13" :stroke-width="2.25" />
               </button>
-              <!-- Shared, so skipping is for everyone, and the tip says so. -->
+              <!-- Shared, so pausing and skipping are for everyone, and the
+                   tips say so. Pause and Resume are one control, beside
+                   Skip, and only where the music service can pause. -->
+              <button
+                v-if="canPause(c)" class="cr-icon"
+                :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+                v-tip="isPaused(c) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
+                @click="togglePauseMusic(c)"
+              >
+                <component :is="isPaused(c) ? Play : Pause" :size="13" :stroke-width="2.25" />
+              </button>
               <button
                 v-if="c.now" class="cr-icon" :aria-label="`Skip for everyone in ${c.name}`"
                 v-tip="'Skip — for everyone listening'"
@@ -513,7 +525,7 @@ const startWith = (): void => {
 /* Touch: no hover to reveal the play buttons, and fingers need the room. */
 @media (max-width: 768px) {
   .cr-playnow { width: 40px; height: 40px; opacity: 1; }
-  .cr-icon { width: 40px; height: 40px; }
+  .cr-icon { width: 44px; height: 44px; }
 }
 
 /*

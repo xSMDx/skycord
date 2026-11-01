@@ -40,6 +40,7 @@ import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
   musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, queueMusic, seekMusic, previousMusic,
+  togglePauseMusic, isPaused, canPause,
 } from '@/composables/useMusic'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
@@ -662,7 +663,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
              true. Sticky, so scrolling the library never hides which mode a
              click is in. Also the live region that says "added". -->
         <div v-if="live" class="mm-band" role="status" aria-live="polite">
-          <span class="mm-banddot" aria-hidden="true" />
+          <span class="mm-banddot" :class="{ still: isPaused(live) }" aria-hidden="true" />
           <span class="mm-bandtext mm-ellip">
             {{ notice || `Listening with ${live.name} — click a song to add it to the channel` }}
           </span>
@@ -875,7 +876,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
             <span class="mm-nowtitle mm-ellip">
               {{ live.now ? (live.now.title ?? 'A linked track') : 'Nothing playing' }}
             </span>
-            <span class="mm-artist mm-ellip">{{ live.now?.artist || (live.now ? 'Unknown artist' : 'Queue something from your library') }}</span>
+            <span class="mm-artist mm-ellip">{{ isPaused(live) ? 'Paused · ' : '' }}{{ live.now?.artist || (live.now ? 'Unknown artist' : 'Queue something from your library') }}</span>
           </span>
         </template>
         <template v-else-if="playing">
@@ -901,10 +902,14 @@ const pct = (at: number, dur: number | null | undefined): number =>
 
       <div v-if="live" class="mm-deck">
         <!--
-          A shared song cannot be paused — that would be doing it to
-          everyone — so the deck offers what you can do, in words rather
-          than glyphs, because neither is a button any player has taught
-          you. The bar below moves the song for everyone.
+          Everything here reaches everyone listening. Pause is the round key
+          your own player has, between Back and Skip where every player puts
+          it, because it is the same act; Skip and Leave stay in words,
+          because neither is a button any player has taught you. Pause is
+          there only when the server's music service can pause, and like
+          Skip it stays in place, disabled, with nothing to act on. The bar
+          below moves the song for everyone, and stands still while it is
+          held.
         -->
         <div class="mm-keys">
           <!-- Back past three seconds in restarts the song, like your own
@@ -915,6 +920,14 @@ const pct = (at: number, dur: number | null | undefined): number =>
             v-tip="'Back — for everyone listening'" @click="previousMusic(live.id)"
           >
             <SkipBack :size="16" :stroke-width="2.25" />
+          </button>
+          <button
+            v-if="live.pausable" class="mm-pp" :disabled="!canPause(live)"
+            :aria-label="isPaused(live) ? `Resume for everyone in ${live.name}` : `Pause for everyone in ${live.name}`"
+            v-tip="isPaused(live) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
+            @click="togglePauseMusic(live)"
+          >
+            <component :is="isPaused(live) ? Play : Pause" :size="18" :stroke-width="2.5" />
           </button>
           <button
             class="mm-pill grow" :disabled="!live.now"
@@ -1001,7 +1014,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
                something without a toast for every click. -->
           <span v-if="queue.manual.length" class="mm-qbadge">{{ queue.manual.length }}</span>
         </button>
-        <span v-if="live" class="mm-only live"><span class="mm-livedot" aria-hidden="true" /> <span class="mm-ellip">Everyone in {{ live.name }}</span></span>
+        <span v-if="live" class="mm-only live"><span class="mm-livedot" :class="{ still: isPaused(live) }" aria-hidden="true" /> <span class="mm-ellip">Everyone in {{ live.name }}</span></span>
         <span v-else class="mm-only"><Radio :size="12" :stroke-width="2.25" /> Only you</span>
         <component :is="volIcon" class="mm-volico" :size="16" :stroke-width="2.25" />
         <input
@@ -1475,8 +1488,9 @@ const pct = (at: number, dur: number | null | undefined): number =>
 }
 @keyframes mm-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
-/* The live deck's two actions. Pills, not the round transport keys: they
-   are not play and pause, and dressing them up as such would lie. */
+/* The live deck's Skip and Leave. Pills, not the round transport keys: they
+   are not play and pause, and dressing them up as such would lie. Pause is
+   the round key (.mm-pp), because there it is the real thing. */
 .mm-pill {
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 13px;
   border: none; border-radius: var(--edge-pill); cursor: pointer;
@@ -1488,6 +1502,9 @@ const pct = (at: number, dur: number | null | undefined): number =>
 .mm-pill:active:not(:disabled) { transform: scale(.97); }
 .mm-pill:disabled { opacity: .4; cursor: default; }
 
+
+/* Held: still and dimmed, apart from a live dot reduced motion has stopped. */
+.mm-livedot.still, .mm-banddot.still { animation: none; opacity: .4; }
 
 @media (prefers-reduced-motion: reduce) {
   .mm-livedot, .mm-banddot { animation: none; }

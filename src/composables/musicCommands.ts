@@ -1,5 +1,5 @@
 /**
- * Music, typed into any chat box: /play, /skip, /prev, /stop and the rest.
+ * Music, typed into any chat box: /play, /skip, /pause, /stop and the rest.
  *
  * One rule decides what a command acts on: what you are hearing. Tuned into
  * a music channel, it is that channel, for everyone in it. Otherwise it is
@@ -14,6 +14,7 @@
  * posted to the channel.
  */
 import type { MusicChannelView } from './useMusic'
+import { isPaused, canPause } from './musicPause'
 import { clock, type LibTrack } from './useMusicLibrary'
 
 type Source = { trackId: string } | { url: string }
@@ -49,6 +50,8 @@ export interface CommandWorld {
     previous: (channelId: string) => void
     close: (channelId: string) => void
     seek: (channelId: string, sec: number) => void
+    pause: (channelId: string) => void
+    resume: (channelId: string) => void
     setChannelVolume: (v: number) => void
     playSolo: (tracks: LibTrack[], index: number) => Promise<void>
     soloNext: () => Promise<void>
@@ -70,8 +73,8 @@ export const MUSIC_COMMANDS: { name: string; aliases: string[]; usage: string; d
   { name: 'next',    aliases: [],                     usage: '/next',                description: 'Skip to the next song' },
   { name: 'prev',    aliases: ['previous', 'back'],   usage: '/prev',                description: 'Go back a song, or to the start of this one' },
   { name: 'stop',    aliases: [],                     usage: '/stop',                description: 'Stop the music (a shared channel stops for everyone)' },
-  { name: 'pause',   aliases: [],                     usage: '/pause',               description: 'Pause your music' },
-  { name: 'resume',  aliases: [],                     usage: '/resume',              description: 'Carry on with your music' },
+  { name: 'pause',   aliases: [],                     usage: '/pause',               description: 'Pause the music (a shared channel pauses for everyone)' },
+  { name: 'resume',  aliases: [],                     usage: '/resume',              description: 'Resume the music (a shared channel resumes for everyone)' },
   { name: 'np',      aliases: ['nowplaying'],         usage: '/np',                  description: 'What is playing, and where it is' },
   { name: 'queue',   aliases: ['q'],                  usage: '/queue',               description: 'What plays next' },
   { name: 'seek',    aliases: [],                     usage: '/seek <1:30>',         description: 'Move to a point in the song' },
@@ -211,8 +214,34 @@ const play = async (arg: string, w: CommandWorld): Promise<string> => {
   return `Playing ${quoted(track.title)} just for you.`
 }
 
+/** Said when the server, or its music service, is too old to pause. /leave is what still works. */
+const CANNOT_PAUSE = 'This music can’t be paused here. /leave stops it for you.'
+
+/**
+ * Tuned in, it is the channel, for everyone in it — anyone who may skip may
+ * pause. Answered in /skip's words, and like /skip the answer is written as
+ * the request leaves: a refusal from the server arrives on its own, in the
+ * same place a refused skip's does.
+ */
+const pauseOrResumeChannel = (want: 'pause' | 'resume', c: MusicChannelView, w: CommandWorld): string => {
+  if (!c.now) return `Nothing is playing in ${c.name}.`
+  const song = quoted(titleOf(c))
+  if (want === 'pause') {
+    if (isPaused(c)) return `${song} is already paused.`
+    // Refused here rather than sent: a server without pause drops the event,
+    // and the note would claim a pause that never happened.
+    if (!canPause(c)) return CANNOT_PAUSE
+    w.act.pause(c.id)
+    return `Paused ${song} for everyone in ${c.name}.`
+  }
+  // An older server never pauses, so its songs are always playing.
+  if (!isPaused(c)) return `${song} is already playing.`
+  w.act.resume(c.id)
+  return `Resumed ${song} for everyone in ${c.name}.`
+}
+
 const pauseOrResume = async (want: 'pause' | 'resume', w: CommandWorld): Promise<string> => {
-  if (w.tuned) return 'A shared song can’t be paused — it would pause for everyone. /leave stops it for you.'
+  if (w.tuned) return pauseOrResumeChannel(want, w.tuned, w)
   const t = w.solo.current
   if (!t) return nothingForYou(w)
   if (want === 'pause') {
@@ -288,7 +317,8 @@ const nowPlaying = (w: CommandWorld): string => {
     const at = w.elapsed(w.tuned) ?? 0
     const by = now.artist ? ` by ${now.artist}` : ''
     const len = now.durationSec ? ` / ${clock(now.durationSec)}` : ''
-    return `${w.tuned.name}: ${quoted(titleOf(w.tuned))}${by} — ${clock(at)}${len}, added by ${w.nameOf(now.addedBy)}.`
+    const held = isPaused(w.tuned) ? ', paused' : ''
+    return `${w.tuned.name}: ${quoted(titleOf(w.tuned))}${by} — ${clock(at)}${len}${held}, added by ${w.nameOf(now.addedBy)}.`
   }
   const t = w.solo.current
   if (!t) return nothingForYou(w)

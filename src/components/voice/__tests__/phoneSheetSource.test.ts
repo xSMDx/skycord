@@ -338,8 +338,9 @@ describe('the sliding title', () => {
 
   it('slides only while it is wanted, so it is never met mid-slide', () => {
     expect(marquee).toMatch(/withDefaults\(defineProps<\{ text: string; active\?: boolean \}>\(\), \{ active: true \}\)/)
-    // The sheet's title is out of view until the list is pulled up.
-    expect(componentTag(templateOf(sheet), 'MarqueeText')).toContain(':active="expanded"')
+    // The sheet's title is out of view until the list is pulled up, and a
+    // held song's title holds still.
+    expect(componentTag(templateOf(sheet), 'MarqueeText')).toContain(':active="expanded && !musicLabel.paused"')
   })
 
   it('fades its edges while sliding, outside the line, so the first letter rests where the still text does', () => {
