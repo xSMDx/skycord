@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pickFocus, focusedVideo, FOCUS_HOLD_MS, musicCardLabel, formatElapsed, callSubtitle,
+  pickFocus, focusedVideo, shareSlot, FOCUS_HOLD_MS, musicCardLabel, formatElapsed, callSubtitle,
   type FocusInput, type FocusState,
 } from '../phoneCallRules'
 import type { MusicChannelView } from '../useMusic'
@@ -257,6 +257,117 @@ describe('focusedVideo: is a picture what fills the screen', () => {
 
   it('is null for a share that has ended, with a camera still on', () => {
     expect(focusedVideo([track('a', 'camera')], focus('screen', 'a', 0))).toBeNull()
+  })
+})
+
+// A shared screen is not loaded until Join stream (spec 6), so a share can be
+// on the call with no picture here at all. It still fills the screen — as the
+// sharer's tile with Join stream (spec 8), or while it loads after the tap.
+describe('pickFocus: a share with no picture here', () => {
+  const share = (id: string, joined = false) => ({ id, joined })
+
+  it('a share nobody here has joined fills the screen, over cameras, as a screen', () => {
+    const f = pickFocus(input({
+      tiles: [tile('me'), tile('a', true), tile('b')],
+      videos: [cam('a')],
+      shares: [share('b')],
+    }), null, 100)
+    expect(f).toEqual(focus('screen', 'b', 100))
+  })
+
+  it('arriving, it takes the slot from a camera at once, as any screen does', () => {
+    const f = pickFocus(input({
+      tiles: [tile('me'), tile('a', true), tile('b')],
+      videos: [cam('a')],
+      shares: [share('b')],
+    }), focus('camera', 'a', 0), 10)
+    expect(f).toEqual(focus('screen', 'b', 10))
+  })
+
+  it('a share you are watching is not pushed aside by one you have not joined, however loud its sharer', () => {
+    const f = pickFocus(input({
+      tiles: [tile('me'), tile('a'), tile('b', true)],
+      videos: [screen('a')],
+      shares: [share('b')],
+      lastSpokeAt: { b: 99 },
+    }), null, 100)
+    expect(f).toEqual(focus('screen', 'a', 100))
+  })
+
+  it('one you joined that is still loading wins over one you have not joined', () => {
+    const f = pickFocus(input({
+      tiles: [tile('me'), tile('a', true), tile('b')],
+      shares: [share('a'), share('b', true)],
+      lastSpokeAt: { a: 99 },
+    }), null, 100)
+    expect(f).toEqual(focus('screen', 'b', 100))
+  })
+
+  it('among shares you have not joined, the most recent speaker’s comes first', () => {
+    const f = pickFocus(input({
+      tiles: [tile('me'), tile('a'), tile('b')],
+      shares: [share('a'), share('b')],
+      lastSpokeAt: { a: 1, b: 9 },
+    }), null, 100)
+    expect(f).toEqual(focus('screen', 'b', 100))
+  })
+
+  it('joining, and the picture arriving, keep the slot and its since: the tile turns into the picture in place', () => {
+    const tiles = [tile('me'), tile('a', true), tile('b')]
+    const waiting = focus('screen', 'b', 100)
+    const loading = pickFocus(input({ tiles, videos: [cam('a')], shares: [share('b', true)] }), waiting, 200)
+    expect(loading).toBe(waiting)
+    const shown = pickFocus(input({ tiles, videos: [cam('a'), screen('b')] }), loading, 300)
+    expect(shown).toBe(waiting)
+  })
+
+  it('leaving the stream hands the slot back to its tile, not to the next camera', () => {
+    const watching = focus('screen', 'b', 100)
+    const left = pickFocus(input({
+      tiles: [tile('me'), tile('a', true), tile('b')],
+      videos: [cam('a')],
+      shares: [share('b')],
+    }), watching, 200)
+    expect(left).toBe(watching)
+  })
+
+  it('a sharer known only by their share is still in the call: the holder is kept, not dropped at once', () => {
+    // Presence can lag the room; the share is proof enough that they are here.
+    const holder = focus('screen', 'b', 0)
+    const f = pickFocus(input({ tiles: [tile('me'), tile('a', true)], videos: [screen('a')], shares: [share('b')] }), holder, 100)
+    expect(f).toMatchObject({ kind: 'screen', id: 'b', pending: { kind: 'screen', id: 'a' } })
+  })
+
+  it('without shares, nothing changes: the input field is optional', () => {
+    const f = pickFocus(input({ tiles: [tile('me'), tile('a')] }), null, 100)
+    expect(f).toEqual(focus('avatar', 'a', 100))
+  })
+})
+
+// What the big slot draws for a screen share: the picture, the sharer's tile
+// with Join stream, or that tile while the stream loads. The stage draws by
+// it, and the long-press that opens the person sheet asks it too.
+describe('shareSlot: what the big slot shows for a share', () => {
+  const track = (participantId: string, source: 'camera' | 'screen') => ({ participantId, source })
+  const share = (id: string, joined = false) => ({ id, joined })
+
+  it('is the picture when the focused share has one', () => {
+    expect(shareSlot([track('b', 'screen')], focus('screen', 'b', 0), [])).toBe('picture')
+  })
+
+  it('is Join stream for a share not joined, and loading for one joined with no picture yet', () => {
+    expect(shareSlot([], focus('screen', 'b', 0), [share('b')])).toBe('join')
+    expect(shareSlot([], focus('screen', 'b', 0), [share('b', true)])).toBe('loading')
+  })
+
+  it('is nothing when the slot is not a share: no focus, a camera, a person', () => {
+    expect(shareSlot([track('b', 'screen')], null, [share('b')])).toBeNull()
+    expect(shareSlot([track('b', 'camera')], focus('camera', 'b', 0), [share('b')])).toBeNull()
+    expect(shareSlot([], focus('avatar', 'b', 0), [share('b')])).toBeNull()
+  })
+
+  it('is nothing for a share that has stopped: the holder is drawn as the person', () => {
+    expect(shareSlot([track('b', 'camera')], focus('screen', 'b', 0), [share('a')])).toBeNull()
   })
 })
 

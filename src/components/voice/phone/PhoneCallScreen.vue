@@ -15,11 +15,11 @@
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import PhoneStage from './PhoneStage.vue'
-import { pickFocus, focusedVideo, FOCUS_HOLD_MS, type FocusState, type FocusKind } from '@/composables/phoneCallRules'
+import { pickFocus, focusedVideo, shareSlot, FOCUS_HOLD_MS, type FocusState, type FocusKind } from '@/composables/phoneCallRules'
 import { useAutoHide, usePointersHeld } from '@/composables/phoneCall'
 import { voiceSettings } from '@/composables/useVoiceSettings'
-import { userPref } from '@/composables/useVoice'
-import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
+import { userPref, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
+import { media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 
 /** CallStage's tile. `ring` = someone being called who has not picked up. */
 type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ring?: 'ringing' | 'no-answer' }
@@ -60,6 +60,8 @@ const emit = defineEmits<{
   ringAgain: []
   /** Who fills the screen, as it changes: the host names them in the subtitle. */
   focus: [f: { kind: FocusKind; id: string } | null]
+  /** A long-press on a stream you joined: the host opens that person's sheet. */
+  person: [id: string]
 }>()
 
 defineSlots<{
@@ -71,6 +73,13 @@ defineSlots<{
 // person, nor your own camera when you asked not to see it.
 const shownVideos = computed(() => props.videos.filter(v =>
   v.local ? v.source !== 'camera' || voiceSettings.showOwnCamera : !userPref(v.participantId).videoOff))
+
+// Shares with no picture here: not joined yet (nothing is downloaded before
+// Join stream, spec 6), or joined and still loading. The desktop grid's
+// waiting shares, by the same rule — "Disable Video" on someone hides theirs.
+const shares = computed(() => [...media.streamsAvailable]
+  .filter(id => !userPref(id).videoOff && !shownVideos.value.some(v => v.participantId === id && v.source === 'screen'))
+  .map(id => ({ id, joined: joinedStreams.has(id) })))
 
 
 // ── Who fills the stage ─────────────────────────────────────────────────────
@@ -87,7 +96,7 @@ const refocus = () => {
   const now = Date.now()
   for (const t of props.tiles) if (t.speaking) lastSpokeAt[t.id] = now
   focus.value = pickFocus(
-    { tiles: props.tiles, videos: shownVideos.value, selfId: props.selfId, lastSpokeAt },
+    { tiles: props.tiles, videos: shownVideos.value, selfId: props.selfId, lastSpokeAt, shares: shares.value },
     focus.value, now,
   )
   // pickFocus moves only when asked. A newcomer waiting out the hold has to be
@@ -96,7 +105,10 @@ const refocus = () => {
   const pending = focus.value.pending
   if (pending) holdTimer = setTimeout(refocus, Math.max(0, pending.since + FOCUS_HOLD_MS - now))
 }
-watch([() => props.tiles, shownVideos, () => props.selfId], refocus, { immediate: true })
+watch([() => props.tiles, shownVideos, () => props.selfId, shares], refocus, { immediate: true })
+
+/** What the slot shows when a share holds it: its picture, Join stream, or loading. */
+const stageShare = computed(() => shareSlot(shownVideos.value, focus.value, shares.value))
 
 // Only a change of who or what: the newcomer being waited out is not news.
 watch(() => (focus.value ? `${focus.value.kind}:${focus.value.id}` : ''), () => {
@@ -195,7 +207,8 @@ onBeforeUnmount(clearHold)
       <PhoneStage
         :tiles="tiles" :videos="shownVideos" :self-id="selfId"
         :focus="focus" :hidden="hidden" :last-spoke-at="lastSpokeAt"
-        :raised-sheet="raisedSheet"
+        :raised-sheet="raisedSheet" :share="stageShare"
+        @join="joinStream" @leave="leaveStream" @person="emit('person', $event)"
       >
         <template #ringing>
           <button v-if="ringAgain" type="button" class="pcs-ring" @click="emit('ringAgain')">Ring again</button>

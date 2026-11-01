@@ -13,6 +13,13 @@ export interface FocusInput {
   selfId: string
   /** When each person last spoke, by the caller's clock. Missing = never. */
   lastSpokeAt: Record<string, number>
+  /**
+   * Screens others share that have no picture here. A share is not downloaded
+   * until Join stream (spec 6), so it can be on the call with nothing to draw:
+   * not joined yet, or joined (`joined`) and still loading. It still fills the
+   * screen, as the sharer's tile (spec 8). Missing = none.
+   */
+  shares?: readonly { id: string; joined: boolean }[]
 }
 
 export type FocusKind = 'screen' | 'camera' | 'avatar'
@@ -55,6 +62,15 @@ const wanted = (input: FocusInput): { kind: FocusKind; id: string } => {
   const screens = input.videos.filter(v => v.source === 'screen' && !v.local).map(v => v.participantId)
   if (screens.length) return { kind: 'screen', id: ranked(screens, input, true)[0] }
 
+  // A share with no picture here comes next: still a screen, drawn as its
+  // sharer's tile. After any share you can see, so one you are watching is
+  // never pushed aside for a tile asking you to join another; and one you
+  // joined (still loading) before one you have not, since you chose it.
+  const shares = input.shares ?? []
+  const joined = shares.filter(s => s.joined)
+  const pool = (joined.length ? joined : shares).map(s => s.id)
+  if (pool.length) return { kind: 'screen', id: ranked(pool, input, true)[0] }
+
   const cameras = input.videos.filter(v => v.source === 'camera' && !v.local).map(v => v.participantId)
   if (cameras.length) return { kind: 'camera', id: ranked(cameras, input, true)[0] }
 
@@ -72,7 +88,8 @@ const wanted = (input: FocusInput): { kind: FocusKind; id: string } => {
 const present = (input: FocusInput, id: string): boolean =>
   id === input.selfId ||
   input.tiles.some(t => t.id === id) ||
-  input.videos.some(v => v.participantId === id)
+  input.videos.some(v => v.participantId === id) ||
+  (input.shares ?? []).some(s => s.id === id)
 
 const sameFocus = (a: { kind: FocusKind; id: string }, b: { kind: FocusKind; id: string }): boolean =>
   a.kind === b.kind && a.id === b.id
@@ -128,6 +145,29 @@ export const focusedVideo = <V extends { participantId: string; source: 'camera'
 ): V | null => {
   if (!focus || focus.kind === 'avatar') return null
   return videos.find(v => v.participantId === focus.id && v.source === focus.kind) ?? null
+}
+
+/** What the big slot shows for a screen share: see shareSlot. */
+export type ShareSlot = 'picture' | 'join' | 'loading'
+
+/**
+ * What the big slot shows when a screen share holds it: the picture; the
+ * sharer's tile with Join stream, for a share not joined here (spec 8); or
+ * that tile while a joined share's picture is on its way. Null when the slot
+ * is not a share, or holds one that has stopped — that holder is drawn as the
+ * person, as a camera holder whose camera went off is. The stage draws the
+ * slot by this, and the long-press that opens the person sheet asks it too,
+ * so the two cannot disagree about whether a stream is joined.
+ */
+export const shareSlot = (
+  videos: readonly { participantId: string; source: 'camera' | 'screen' }[],
+  focus: Pick<FocusState, 'kind' | 'id'> | null,
+  shares: readonly { id: string; joined: boolean }[],
+): ShareSlot | null => {
+  if (focus?.kind !== 'screen') return null
+  if (focusedVideo(videos, focus)) return 'picture'
+  const share = shares.find(s => s.id === focus.id)
+  return share ? (share.joined ? 'loading' : 'join') : null
 }
 
 // ── The Music card ──────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import { userPref, setUserPref, setStreamVolume, userVolumeMax } from '@/composa
 import PhoneCallScreen from './phone/PhoneCallScreen.vue'
 import PhoneCallSheet from './phone/PhoneCallSheet.vue'
 import PhoneMusicSheet from './phone/PhoneMusicSheet.vue'
+import PhonePersonSheet from './phone/PhonePersonSheet.vue'
 import { phoneCall, minimizePhoneCall } from '@/composables/phoneCall'
 import { callSubtitle, type FocusKind } from '@/composables/phoneCallRules'
 import { joinProgress, failedCallId } from '@/composables/callStatus'
@@ -502,17 +503,47 @@ const sheetOpenHeight = ref<number | null>(null)
 /** The call's music, as a phone sheet over the screen. */
 const phoneMusicOpen = ref(false)
 
+/** One person's sheet over the screen: their volumes, the local Mute, Leave stream. */
+const personOpen = ref(false)
+/** Who it shows. Kept once it closes, so the sheet still has them while it slides away. */
+const person = ref<{ id: string; name: string; avatar: string } | null>(null)
+
+/**
+ * Open someone's sheet: from their row in the call sheet, or a long-press on
+ * the stream of theirs you joined. Never yours — nothing of yours is set
+ * there — and only for someone in the call.
+ */
+const openPerson = (id: string) => {
+  if (id === selfId.value) return
+  const p = phonePeople.value.find(p => p.id === id)
+  if (!p) return
+  person.value = { id: p.id, name: p.name, avatar: p.avatar }
+  personOpen.value = true
+}
+
+// The person whose sheet is open has left the call: its controls would act on
+// nobody, so it closes. Someone still here keeps their name and face current.
+watch(phonePeople, list => {
+  const cur = person.value
+  if (!cur) return
+  const p = list.find(x => x.id === cur.id)
+  if (!p) { personOpen.value = false; return }
+  if (p.name !== cur.name || p.avatar !== cur.avatar) person.value = { id: p.id, name: p.name, avatar: p.avatar }
+})
+
 // Closed is done with: the next screen starts with its sheets down.
 watch(phoneOpen, on => {
   if (on) return
   phoneMusicOpen.value = false
+  personOpen.value = false
   sheetExpanded.value = false
   phoneFocus.value = null
 })
 
 const onPhoneMinimize = () => {
-  // Escape from a keyboard lands on the screen even with the music sheet over
-  // it; it closes what is on top first, as Android Back does.
+  // Escape from a keyboard lands on the screen even with a sheet over it; it
+  // closes what is on top first, as Android Back does.
+  if (personOpen.value) { personOpen.value = false; return }
   if (phoneMusicOpen.value) { phoneMusicOpen.value = false; return }
   // A join that failed has no call to go back to: closing the screen
   // dismisses it, as hanging up does, rather than leaving a bar that says so.
@@ -565,10 +596,12 @@ onBeforeUnmount(() => {
     @minimize="onPhoneMinimize"
     @ring-again="ringAgain"
     @focus="phoneFocus = $event"
+    @person="openPerson"
   >
     <template #default="{ hidden }">
       <PhoneCallSheet
         :participants="phonePeople"
+        :self-id="selfId"
         :can-invite="kind !== 'dm'"
         :joined="joinedHere"
         :failed="failedHere"
@@ -577,6 +610,7 @@ onBeforeUnmount(() => {
         @invite="emit('invite')"
         @voice-settings="emit('openSettings', 'voice')"
         @music="phoneMusicOpen = true"
+        @person="openPerson"
         @leave="leave"
         @expanded="sheetExpanded = $event"
         @height="sheetHeight = $event"
@@ -588,6 +622,11 @@ onBeforeUnmount(() => {
         :open="phoneMusicOpen"
         @close="phoneMusicOpen = false"
         @open-library="openPhoneMusicLibrary"
+      />
+      <PhonePersonSheet
+        :open="personOpen"
+        :person="person"
+        @close="personOpen = false"
       />
     </template>
   </PhoneCallScreen>

@@ -36,7 +36,7 @@ import {
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
-import { streamVolumeRow, userVolumeRow } from './callMenu'
+import { volumeSliders } from './callMenu'
 
 export interface VoiceOccupantHandlers {
   openProfile:    (u: MenuUser) => void
@@ -105,8 +105,7 @@ export const voiceOccupantMenu = (
   if (s.inCallWithThem) {
     items.push(
       { sep: true },
-      userVolumeRow(u.id, s, h.setUserVolume),
-      ...streamVolumeRow(u.id, s, h.setStreamVolume),
+      ...volumeSliders(u.id, s, h),
       { label: 'Mute', icon: MicOff, check: s.muted, keepOpen: true,
         onSelect: () => h.toggleUserMute(u.id) },
       { label: 'Disable Video', icon: VideoOff, check: s.videoOff, keepOpen: true,

@@ -16,10 +16,21 @@ import { project, rubber, velocityOf } from '@/composables/sheetDrag'
 
 const props = withDefaults(defineProps<{
   open: boolean
+  /** The sheet's heading, and its name for a screen reader. A `head` slot may draw the heading instead. */
   title?: string
-  /** Fraction of the viewport the sheet occupies. */
-  height?: number
+  /**
+   * Fraction of the viewport the sheet occupies — or 'fit': as tall as what
+   * it holds, up to near the top of the screen, for a short sheet of controls
+   * that a fixed height would leave half empty.
+   */
+  height?: number | 'fit'
 }>(), { title: '', height: 0.72 })
+
+defineSlots<{
+  default?(): unknown
+  /** The heading row, in place of the title's text. */
+  head?(): unknown
+}>()
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -70,7 +81,7 @@ const onUp = () => {
 watch(() => props.open, o => { if (o) dragY.value = 0 })
 
 const style = computed(() => ({
-  height: `${Math.round(props.height * 100)}dvh`,
+  height: props.height === 'fit' ? undefined : `${Math.round(props.height * 100)}dvh`,
   transform: dragY.value ? `translate3d(0, ${dragY.value}px, 0)` : '',
   transition:dragging.value ? 'none' : undefined,
 }))
@@ -99,13 +110,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div class="bs-scrim" :style="scrimStyle" @click="emit('close')" />
 
         <div
-          ref="sheet" class="bs" :style="style"
+          ref="sheet" class="bs" :class="{ fit: height === 'fit' }" :style="style"
           role="dialog" aria-modal="true" :aria-label="title"
           @pointerdown="onDown" @pointermove="onMove"
           @pointerup="onUp" @pointercancel="onUp"
         >
           <div class="bs-grab"><span /></div>
-          <div v-if="title" class="bs-head">{{ title }}</div>
+          <div v-if="title || $slots.head" class="bs-head"><slot name="head">{{ title }}</slot></div>
           <div ref="body" class="bs-body"><slot /></div>
         </div>
       </div>
@@ -128,6 +139,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   transition: transform var(--dur-4) var(--ease-out);
   touch-action: none;   /* the sheet owns vertical drag; the body re-enables it */
 }
+
+/* Sized by its content. A percentage of the root, not dvh, which the Android
+   app's Chromium 86 WebView does not know. 48px keeps the scrim showing
+   above it, so it still reads as a sheet over the screen; past that its body
+   scrolls. The body's basis is its content, not flex: 1's 0%, which an older
+   WebView can take as zero in a box with no set height; min-height 0 still
+   lets it shrink. */
+.bs.fit { max-height: calc(100% - 48px); }
+.bs.fit .bs-body { flex: 0 1 auto; }
 
 .bs-grab { display: flex; justify-content: center; padding: 8px 0 4px; flex-shrink: 0 }
 .bs-grab span { width: 36px; height: 4px; border-radius: 2px; background: var(--grabber) }

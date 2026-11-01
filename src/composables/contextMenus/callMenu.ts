@@ -21,7 +21,7 @@ import {
   User, MicOff, Headphones, VideoOff, Copy, BellOff,
   Eye, UsersRound, Video, SlidersHorizontal, UserMinus, Phone,
 } from 'lucide-vue-next'
-import type { MenuItem } from '../useContextMenu'
+import type { MenuItem, MenuSlider } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
 import { USER_VOLUME_MAX } from '../remoteGain'
 
@@ -114,7 +114,7 @@ export const USER_VOLUME_CAPPED_HINT = 'Max 100% with this output device'
 export const userVolumeRow = (
   id: string, s: { volume: number; userVolumeMax?: number },
   setUserVolume: (id: string, v: number) => void,
-): MenuItem => {
+): MenuSlider => {
   const max = s.userVolumeMax ?? USER_VOLUME_MAX
   return {
     slider: true, label: 'User Volume', value: Math.min(s.volume, max), min: 0, max,
@@ -133,10 +133,22 @@ export const userVolumeRow = (
 export const streamVolumeRow = (
   id: string, s: { streamVolume?: number; sharesScreenAudio?: boolean },
   setStreamVolume: (id: string, v: number) => void,
-): MenuItem[] => s.sharesScreenAudio
+): MenuSlider[] => s.sharesScreenAudio
   ? [{ slider: true, label: 'Stream Volume', value: s.streamVolume ?? 100, min: 0, max: 100,
        format: v => `${v}%`, onInput: v => setStreamVolume(id, v) }]
   : []
+
+/**
+ * Every volume slider one person has, in order: User Volume, then Stream
+ * Volume while they share a screen with sound. Both desktop menus and the
+ * phone's person sheet draw exactly these, so none of the three can offer a
+ * slider, a range or a hint the others do not.
+ */
+export const volumeSliders = (
+  id: string,
+  s: { volume: number; userVolumeMax?: number; streamVolume?: number; sharesScreenAudio?: boolean },
+  h: Pick<CallMenuHandlers, 'setUserVolume' | 'setStreamVolume'>,
+): MenuSlider[] => [userVolumeRow(id, s, h.setUserVolume), ...streamVolumeRow(id, s, h.setStreamVolume)]
 
 /** Another participant's tile. */
 export const participantMenu = (
@@ -152,8 +164,7 @@ export const participantMenu = (
 ): MenuItem[] => [
   { label: 'Profile', icon: User, onSelect: () => h.openProfile(p) },
   { sep: true },
-  userVolumeRow(p.id, s, h.setUserVolume),
-  ...streamVolumeRow(p.id, s, h.setStreamVolume),
+  ...volumeSliders(p.id, s, h),
   { sep: true },
   { label: 'Mute',          icon: MicOff,  check: s.muted, keepOpen: true,
     onSelect: () => h.toggleUserMute(p.id) },

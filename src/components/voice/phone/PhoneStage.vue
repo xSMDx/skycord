@@ -7,16 +7,20 @@
  * newcomer hold) and when the controls hide, and passes both down. This only
  * draws them, with one rule of its own: a focus whose video has gone — someone
  * kept in the slot after their camera went off — is drawn as the person.
+ *
+ * A screen share in the slot that is not loaded here (spec 6) is drawn as its
+ * sharer too, with what they are doing and Join stream under them; the screen
+ * says which (`share`), and joining is the screen's to do (`join`).
  */
 import { computed, ref, watch, nextTick } from 'vue'
-import { MicOff } from 'lucide-vue-next'
+import { MicOff, Monitor, MonitorPlay, MonitorOff, LoaderCircle } from 'lucide-vue-next'
 import VideoTile from '../VideoTile.vue'
 import Avatar from '@/components/ui/Avatar.vue'
 import { defaultAvatar } from '@/composables/useAvatar'
 import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
 import { perf } from '@/composables/usePerformance'
 import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
-import { focusedVideo, type FocusState } from '@/composables/phoneCallRules'
+import { focusedVideo, type FocusState, type ShareSlot } from '@/composables/phoneCallRules'
 
 /** CallStage's tile. `ring` = someone being called who has not picked up. */
 type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ring?: 'ringing' | 'no-answer' }
@@ -37,6 +41,21 @@ const props = defineProps<{
    * to the middle of what is left — or, with no room left for it, fades.
    */
   raisedSheet?: number | null
+  /**
+   * What the slot shows when a screen share holds it (phoneCallRules'
+   * shareSlot): its picture, the sharer's tile with Join stream, or that tile
+   * while a joined stream loads. Null or missing when it is not a share.
+   */
+  share?: ShareSlot | null
+}>()
+
+const emit = defineEmits<{
+  /** Join stream, on the sharer's tile. */
+  join: [id: string]
+  /** Leave stream, on the same tile while the stream is still loading. */
+  leave: [id: string]
+  /** A long-press on a stream you joined: that person's sheet. */
+  person: [id: string]
 }>()
 
 defineSlots<{
@@ -135,8 +154,28 @@ const place = () => {
   noRoom.value = false
   lift.value = Math.min(0, Math.round((top + bottom) / 2 - (el.offsetTop + h / 2)))
 }
-watch(() => [props.raisedSheet, bigPerson.value?.id, !!bigVideo.value, ringing.value?.ring], () => { void nextTick(place) })
+// The share's tile is taller than an avatar alone, so it is measured again when it comes or goes.
+watch(() => [props.raisedSheet, bigPerson.value?.id, !!bigVideo.value, ringing.value?.ring, props.share], () => { void nextTick(place) })
 const soloStyle = computed(() => (lift.value ? { transform: `translateY(${lift.value}px)` } : undefined))
+
+// ── A share's tile ──────────────────────────────────────────────────────────
+// The sharer, as the slot already draws them, with what they are doing and
+// the one thing to do about it. Joining keeps the same button, which reads
+// Leave stream until the picture arrives (as the desktop's does), so a slow
+// join can be called off and focus never has to move.
+//
+// A long-press — useLongPress hands it over as a contextmenu event, the one
+// long-press the app has — on a stream you joined opens that person's sheet,
+// where its Leave stream and Stream Volume are (spec 16). From the slot only:
+// not from the row of small tiles, nor from a button.
+const onHold = (e: MouseEvent) => {
+  const f = props.focus
+  if (!f || (props.share !== 'picture' && props.share !== 'loading')) return
+  const t = e.target instanceof Element ? e.target : null
+  if (t?.closest('.ps-row, button')) return
+  e.preventDefault()
+  emit('person', f.id)
+}
 </script>
 
 <template>
@@ -150,7 +189,7 @@ const soloStyle = computed(() => (lift.value ? { transform: `translateY(${lift.v
       <div class="ps-scrim" :class="{ 'is-hidden': hidden }"></div>
     </template>
 
-    <div ref="main" class="ps-main" :class="{ 'over-video': bigVideo }">
+    <div ref="main" class="ps-main" :class="{ 'over-video': bigVideo }" @contextmenu="onHold">
       <div
         v-if="!bigVideo && bigPerson" ref="solo" :key="bigPerson.id"
         class="ps-solo" :class="{ raised, 'no-room': raised && noRoom }" :style="soloStyle"
@@ -159,6 +198,25 @@ const soloStyle = computed(() => (lift.value ? { transform: `translateY(${lift.v
           <span v-if="bigPerson.ring === 'ringing'" class="ps-wave"></span>
           <Avatar :src="avatarOf(bigPerson)" :alt="bigPerson.name" still />
           <span v-if="bigPerson.muted" class="ps-av-mute"><MicOff :size="14" :stroke-width="2.25" /></span>
+        </div>
+
+        <!-- A share not loaded here: who, what, and the way in. No video
+             element — nothing is downloaded until Join stream. -->
+        <div v-if="share === 'join' || share === 'loading'" class="ps-share">
+          <p class="ps-share-name">{{ bigPerson.name }}</p>
+          <p class="ps-share-line" aria-live="polite">
+            <LoaderCircle v-if="share === 'loading'" class="ps-spin spin" :size="16" :stroke-width="2.25" aria-hidden="true" />
+            <Monitor v-else :size="16" :stroke-width="2.25" aria-hidden="true" />
+            {{ share === 'loading' ? 'Loading their screen…' : 'Sharing their screen' }}
+          </p>
+          <button
+            type="button" class="ps-join" :class="{ joined: share === 'loading' }"
+            @click="share === 'loading' ? emit('leave', bigPerson.id) : emit('join', bigPerson.id)"
+          >
+            <MonitorOff v-if="share === 'loading'" :size="18" :stroke-width="2.25" aria-hidden="true" />
+            <MonitorPlay v-else :size="18" :stroke-width="2.25" aria-hidden="true" />
+            {{ share === 'loading' ? 'Leave stream' : 'Join stream' }}
+          </button>
         </div>
       </div>
 
@@ -224,7 +282,9 @@ const soloStyle = computed(() => (lift.value ? { transform: `translateY(${lift.v
   transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);
 }
 .ps-solo.raised { transition-duration: var(--dur-4); }
-.ps-solo.no-room { opacity: 0; }
+/* Faded, and with it the share's Join stream: a button nobody can see must
+   not take a tap. */
+.ps-solo.no-room { opacity: 0; pointer-events: none; }
 @keyframes ps-in { from { opacity: 0; transform: scale(.96); } }
 
 .ps-av {
@@ -252,6 +312,45 @@ const soloStyle = computed(() => (lift.value ? { transform: `translateY(${lift.v
   0%   { transform: scale(1);   opacity: .7; }
   100% { transform: scale(1.6); opacity: 0; }
 }
+
+/* ── A share's tile: the sharer, what they are doing, Join stream ── */
+/* Under the big avatar, centred on it. The name is the line that matters,
+   the activity a step quieter, then the one thing to do, set apart. */
+.ps-share {
+  display: flex; flex-direction: column; align-items: center;
+  max-width: 100%; margin-top: 16px; text-align: center;
+}
+.ps-share-name {
+  max-width: 100%; margin: 0;
+  font-size: 17px; line-height: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ps-share-line {
+  display: flex; align-items: center; gap: 6px; margin: 2px 0 0;
+  font-size: 15px; line-height: 20px; color: var(--text-2);
+}
+.ps-share-line svg { flex: none; }
+/* Turning means work is under way, so it keeps turning for anyone who asked
+   for less movement too (the `spin` carve-out in tokens.css). */
+.ps-spin { animation: ps-rot .8s linear infinite; }
+@keyframes ps-rot { to { transform: rotate(360deg); } }
+
+/* The way in, in the accent: on this screen the one thing asking to be done.
+   The measure of the screen's other pill, Ring again. While the stream
+   loads it steps back to the circles' neutral fill and reads Leave stream. */
+.ps-join {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; margin-top: 20px; padding: 0 22px;
+  border: none; border-radius: var(--edge-pill);
+  background: var(--accent); color: var(--text-on-accent);
+  font-family: inherit; font-size: 15px; font-weight: 600; white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+/* Lands on the press, with no easing in, as the sheet's circles do. */
+.ps-join:active { transform: scale(.96); }
+.ps-join:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.ps-join.joined { background: var(--hover-strong); color: var(--on-media); }
 
 .ps-ringing { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .ps-ring-label {
@@ -317,6 +416,9 @@ const soloStyle = computed(() => (lift.value ? { transform: `translateY(${lift.v
   /* Still plainly "calling", without the motion: one still ring, just clear
      of the face (at its resting size it would sit hidden behind it). */
   .ps-wave { animation: none; opacity: .5; transform: scale(1.16); }
+  /* Join turns into Leave at once. The spinner is left turning: it is
+     information, not decoration. */
+  .ps-join { transition: none; }
   .ps-scrim, .ps-ringing, .ps-row,
   .ps-scrim.is-hidden, .ps-ringing.is-hidden, .ps-row.is-hidden { transition: none; }
 }

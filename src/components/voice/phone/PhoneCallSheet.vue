@@ -39,6 +39,8 @@ type Person = { id: string; name: string; avatar: string; speaking: boolean; mut
 
 const props = defineProps<{
   participants: Person[]
+  /** You, among `participants`: your own row has nothing to open. */
+  selfId: string
   /** A voice channel or a group call. A DM call cannot take a third person here. */
   canInvite: boolean
   /** In the call, as opposed to still connecting to it. */
@@ -59,6 +61,8 @@ const emit = defineEmits<{
   invite: []
   voiceSettings: []
   music: []
+  /** Someone else's row, tapped or long-pressed: the host opens their person sheet. */
+  person: [id: string]
   /** Hang up — or, still connecting, cancel. */
   leave: []
   /** Pulled up (true) or let back down. */
@@ -333,11 +337,24 @@ onBeforeUnmount(() => {
         <section v-if="participants.length" class="pcsh-people">
           <h3 class="pcsh-h">In this call · {{ participants.length }}</h3>
           <ul class="pcsh-ppl">
-            <li v-for="p in participants" :key="p.id" class="pcsh-person">
-              <span class="pcsh-av" :class="{ speaking: p.speaking }"><Avatar :src="p.avatar || defaultAvatar(p.name)" alt="" still /></span>
-              <span class="pcsh-name">{{ p.name }}</span>
-              <span v-if="p.muted" class="pcsh-state muted" role="img" aria-label="Muted"><MicOff :size="16" :stroke-width="2.25" /></span>
-              <span v-else-if="p.speaking" class="pcsh-state talking" role="img" aria-label="Talking"><Mic :size="16" :stroke-width="2.25" /></span>
+            <!-- Everyone else's row opens their sheet: User Volume, Stream
+                 Volume, the local Mute. Yours is only a row; there is nothing
+                 of yours to set from here. -->
+            <li v-for="p in participants" :key="p.id">
+              <component
+                :is="p.id === selfId ? 'div' : 'button'"
+                :type="p.id === selfId ? undefined : 'button'"
+                class="pcsh-person" :class="{ opens: p.id !== selfId }"
+                :aria-haspopup="p.id === selfId ? undefined : 'dialog'"
+                @click="p.id !== selfId && emit('person', p.id)"
+                @contextmenu.prevent="p.id !== selfId && emit('person', p.id)"
+              >
+                <span class="pcsh-av" :class="{ speaking: p.speaking }"><Avatar :src="p.avatar || defaultAvatar(p.name)" alt="" still /></span>
+                <span class="pcsh-name">{{ p.name }}</span>
+                <span v-if="p.muted" class="pcsh-state muted" role="img" aria-label="Muted"><MicOff :size="16" :stroke-width="2.25" /></span>
+                <span v-else-if="p.speaking" class="pcsh-state talking" role="img" aria-label="Talking"><Mic :size="16" :stroke-width="2.25" /></span>
+                <ChevronRight v-if="p.id !== selfId" class="pcsh-chev" :size="16" :stroke-width="2.25" aria-hidden="true" />
+              </component>
             </li>
           </ul>
         </section>
@@ -492,6 +509,16 @@ onBeforeUnmount(() => {
 .pcsh-h { margin: 0 0 4px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-2); }
 .pcsh-ppl { margin: 0; padding: 0; list-style: none; }
 .pcsh-person { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+/* Someone else's row is a button the width of the list. It keeps the row's
+   look — no card, no fill at rest — and answers the press with the veil over
+   the whole row. Not past the list's edges: the list clips sideways. */
+.pcsh-person.opens {
+  width: 100%; padding: 0;
+  border: none; border-radius: var(--edge-lg); background: none; color: inherit;
+  font-family: inherit; text-align: left; cursor: pointer;
+}
+.pcsh-person.opens:active { background: var(--press-veil); }
+.pcsh-person.opens:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .pcsh-av {
   flex: none; display: flex; width: 32px; height: 32px; border-radius: 50%;
   box-shadow: 0 0 0 2px transparent;
