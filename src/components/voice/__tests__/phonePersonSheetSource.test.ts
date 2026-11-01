@@ -297,6 +297,14 @@ describe('the phone stage and Join stream', () => {
     expect(openingTag(elementWith(barTpl, '<PhoneCallScreen'))).toContain('@person="openPerson"')
   })
 
+  it('gives the stage to the stream you joined last, from the tile or the sheet (ruling T4-3)', () => {
+    // useVoice records the choice in joinStream, whichever surface called it;
+    // the screen hands it to pickFocus and re-picks when it changes.
+    expect(screen).toMatch(/import \{[^}]*\bchosenStream\b[^}]*\} from '@\/composables\/useVoice'/)
+    expect(between(screen, 'const refocus = ', '\n}')).toContain('chosen: chosenStream.value')
+    expect(screen).toMatch(/watch\(\[[^\]]*\(\) => chosenStream\.value[^\]]*\], refocus/)
+  })
+
   it('a screen fading over its own tile goes inert with it, so an unseen Join cannot be pressed', () => {
     expect(ruleOf(styleOf(stage), '.ps-solo.no-room')).toMatch(/pointer-events: none/)
   })

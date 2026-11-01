@@ -344,6 +344,80 @@ describe('pickFocus: a share with no picture here', () => {
   })
 })
 
+// Ruling T4-3: a stream you have just joined — from the stage's tile or from
+// the person sheet — is an explicit choice. It takes the slot at once, holds
+// it through anyone talking, and gives it up only to another choice, to its
+// share ending, or to you leaving it.
+describe('pickFocus: the stream you chose', () => {
+  const share = (id: string, joined = false) => ({ id, joined })
+  const tiles = [tile('me'), tile('a'), tile('b')]
+
+  it('joined from the sheet while another share shows, it takes the slot at once: the loading veil first, then its picture', () => {
+    const watchingA = focus('screen', 'a', 0)
+    const loading = input({ tiles, videos: [screen('a')], shares: [share('b', true)], chosen: 'b', lastSpokeAt: { a: 99 } })
+    const now = pickFocus(loading, watchingA, 100)
+    // No hold, and nobody left waiting behind it.
+    expect(now).toEqual(focus('screen', 'b', 100))
+    // The slot shows b loading, not a's picture.
+    expect(shareSlot([screen('a')], now, [share('b', true)])).toBe('loading')
+    // Its picture arrives into the same slot.
+    const shown = pickFocus(input({ tiles, videos: [screen('a'), screen('b')], chosen: 'b', lastSpokeAt: { a: 99 } }), now, 200)
+    expect(shown).toBe(now)
+    expect(shareSlot([screen('a'), screen('b')], shown, [])).toBe('picture')
+  })
+
+  it('a speaker change does not steal it, however long they talk', () => {
+    const chose = focus('screen', 'b', 0)
+    const aTalks = input({
+      tiles: [tile('me'), tile('a', true), tile('b')],
+      videos: [screen('a'), screen('b'), cam('a')],
+      chosen: 'b', lastSpokeAt: { a: 99_999, b: 1 },
+    })
+    const t1 = pickFocus(aTalks, chose, 10_000)
+    expect(t1).toBe(chose)
+    expect(pickFocus(aTalks, t1, 10_000 + FOCUS_HOLD_MS * 4)).toBe(chose)
+  })
+
+  it('beats a camera and a share you have not joined, as any screen would, and does not wait to', () => {
+    const f = pickFocus(input({
+      tiles: [tile('me'), tile('a', true), tile('b')],
+      videos: [cam('a')], shares: [share('a'), share('b', true)], chosen: 'b',
+    }), focus('screen', 'a', 0), 50)
+    expect(f).toEqual(focus('screen', 'b', 50))
+  })
+
+  it('another choice replaces it at once', () => {
+    const chose = focus('screen', 'b', 0)
+    const next = pickFocus(input({ tiles, videos: [screen('b')], shares: [share('a', true)], chosen: 'a' }), chose, 300)
+    expect(next).toEqual(focus('screen', 'a', 300))
+  })
+
+  it('when its share ends, normal picking resumes: the next share waits out the hold', () => {
+    const chose = focus('screen', 'b', 0)
+    // b stopped sharing; a's picture is what is left. The choice is gone with the share.
+    const ended = input({ tiles, videos: [screen('a')], chosen: null })
+    const waiting = pickFocus(ended, chose, 500)
+    expect(waiting).toMatchObject({ kind: 'screen', id: 'b', pending: { kind: 'screen', id: 'a' } })
+    expect(pickFocus(ended, waiting, 500 + FOCUS_HOLD_MS)).toEqual(focus('screen', 'a', 500 + FOCUS_HOLD_MS))
+  })
+
+  it('a choice that no longer stands — its share stopped, or it is hidden — is not forced onto the stage', () => {
+    // A stale id with nothing behind it changes nothing.
+    const plain = input({ tiles: [tile('me'), tile('a'), tile('b', true)], videos: [screen('a')], chosen: 'b' })
+    expect(pickFocus(plain, null, 100)).toEqual(focus('screen', 'a', 100))
+    // Not joined any more (left): its tile is a share like any other.
+    const left = input({ tiles, videos: [screen('a')], shares: [share('b')], chosen: 'b' })
+    expect(pickFocus(left, null, 100)).toEqual(focus('screen', 'a', 100))
+  })
+
+  it('when you leave it, normal picking resumes: with nothing else to show, its Join tile stays', () => {
+    const chose = focus('screen', 'b', 0)
+    const left = pickFocus(input({ tiles, shares: [share('b')], chosen: null }), chose, 400)
+    expect(left).toBe(chose)
+    expect(shareSlot([], left, [share('b')])).toBe('join')
+  })
+})
+
 // What the big slot draws for a screen share: the picture, the sharer's tile
 // with Join stream, or that tile while the stream loads. The stage draws by
 // it, and the long-press that opens the person sheet asks it too.

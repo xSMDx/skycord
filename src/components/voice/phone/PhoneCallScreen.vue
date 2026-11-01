@@ -18,7 +18,7 @@ import PhoneStage from './PhoneStage.vue'
 import { pickFocus, focusedVideo, shareSlot, FOCUS_HOLD_MS, type FocusState, type FocusKind } from '@/composables/phoneCallRules'
 import { useAutoHide, usePointersHeld } from '@/composables/phoneCall'
 import { voiceSettings } from '@/composables/useVoiceSettings'
-import { userPref, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
+import { userPref, joinedStreams, chosenStream, joinStream, leaveStream } from '@/composables/useVoice'
 import { media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 
 /** CallStage's tile. `ring` = someone being called who has not picked up. */
@@ -96,7 +96,9 @@ const refocus = () => {
   const now = Date.now()
   for (const t of props.tiles) if (t.speaking) lastSpokeAt[t.id] = now
   focus.value = pickFocus(
-    { tiles: props.tiles, videos: shownVideos.value, selfId: props.selfId, lastSpokeAt, shares: shares.value },
+    // `chosen`: the stream you joined last, from the tile or a person sheet.
+    // It takes the slot at once and keeps it through anyone talking (T4-3).
+    { tiles: props.tiles, videos: shownVideos.value, selfId: props.selfId, lastSpokeAt, shares: shares.value, chosen: chosenStream.value },
     focus.value, now,
   )
   // pickFocus moves only when asked. A newcomer waiting out the hold has to be
@@ -105,7 +107,7 @@ const refocus = () => {
   const pending = focus.value.pending
   if (pending) holdTimer = setTimeout(refocus, Math.max(0, pending.since + FOCUS_HOLD_MS - now))
 }
-watch([() => props.tiles, shownVideos, () => props.selfId, shares], refocus, { immediate: true })
+watch([() => props.tiles, shownVideos, () => props.selfId, shares, () => chosenStream.value], refocus, { immediate: true })
 
 /** What the slot shows when a share holds it: its picture, Join stream, or loading. */
 const stageShare = computed(() => shareSlot(shownVideos.value, focus.value, shares.value))

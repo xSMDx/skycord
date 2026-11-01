@@ -4,7 +4,7 @@
  * reactive participant/mute/deafen state, and keep the server presence in sync
  * (call:join / call:leave) so others see the call.
  */
-import { reactive, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import {
   Room, RoomEvent, Track, VideoQuality,
   type RemoteTrack, type RemoteTrackPublication, type RemoteParticipant, type Participant,
@@ -634,17 +634,30 @@ const screenSidOf = (p: RemoteParticipant | undefined): string | undefined => {
   return undefined
 }
 
+/**
+ * The stream this member joined last, for as long as it stays joined: an
+ * explicit choice of what to watch, from whichever surface it was made. The
+ * phone stage gives it the slot at once and keeps it there through anyone
+ * talking (ruling T4-3). Joining another replaces it; leaving it clears it,
+ * by hand or because its share ended (forgetEndedShares leaves it), and so
+ * does leaving the call. Nothing older takes its place: once it is gone, the
+ * stage picks as it always does.
+ */
+export const chosenStream = ref<string | null>(null)
+
 /** Join stream: download this person's shared screen and its sound. */
 export const joinStream = (identity: string): void => {
   const sid = screenSidOf(getRoom()?.remoteParticipants.get(identity))
   if (sid) joinedShare.set(identity, sid)
   joinedStreams.add(identity)
+  chosenStream.value = identity
 }
 
 /** Leave stream: stop downloading it. The call, and their voice, carry on. */
 export const leaveStream = (identity: string): void => {
   joinedShare.delete(identity)
   joinedStreams.delete(identity)
+  if (chosenStream.value === identity) chosenStream.value = null
 }
 
 /**
@@ -934,6 +947,7 @@ const cleanup = () => {
   // Joining a stream is a choice for this call. The next one asks again.
   joinedStreams.clear()
   joinedShare.clear()
+  chosenStream.value = null
   liveWhenAllowed = false
   voice.serverMuted = false
   voice.serverDeafened = false

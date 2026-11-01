@@ -20,6 +20,13 @@ export interface FocusInput {
    * screen, as the sharer's tile (spec 8). Missing = none.
    */
   shares?: readonly { id: string; joined: boolean }[]
+  /**
+   * The stream this member joined last (useVoice's chosenStream): an explicit
+   * choice of what to watch, which no amount of talking overrides (ruling
+   * T4-3). It counts only while it stands — joined, and on the stage's list,
+   * as a picture or still loading — so a stale or hidden one changes nothing.
+   */
+  chosen?: string | null
 }
 
 export type FocusKind = 'screen' | 'camera' | 'avatar'
@@ -54,12 +61,31 @@ const ranked = (ids: string[], input: FocusInput, hasVideo: boolean): string[] =
     .map(c => c.id)
 }
 
+/**
+ * The chosen stream, if it still stands: a picture on the list, or a joined
+ * share still loading. A stale or hidden choice is null and changes nothing.
+ */
+const chosenStanding = (input: FocusInput): string | null => {
+  const c = input.chosen
+  if (!c) return null
+  const shown = input.videos.some(v => v.participantId === c && v.source === 'screen' && !v.local)
+  const loading = (input.shares ?? []).some(s => s.id === c && s.joined)
+  return shown || loading ? c : null
+}
+
 // Who should be big right now, ignoring what was big a moment ago.
 const wanted = (input: FocusInput): { kind: FocusKind; id: string } => {
   // A screen is text that cannot be cropped: it beats every camera. Only one
   // somebody else is sharing counts — a phone cannot share, and a screen shared
   // from this device is not something to look at on it.
   const screens = input.videos.filter(v => v.source === 'screen' && !v.local).map(v => v.participantId)
+
+  // The stream you chose comes before anything talking decides — as its
+  // picture, or loading (the slot shows the loading veil, not the share it
+  // replaced). Only while it stands: joined, and on the list.
+  const chosen = chosenStanding(input)
+  if (chosen) return { kind: 'screen', id: chosen }
+
   if (screens.length) return { kind: 'screen', id: ranked(screens, input, true)[0] }
 
   // A share with no picture here comes next: still a screen, drawn as its
@@ -103,11 +129,14 @@ const sameFocus = (a: { kind: FocusKind; id: string }, b: { kind: FocusKind; id:
  * has had the slot, and two people talking over each other do not make the
  * picture jump. Each time the wanted pick changes, the wait starts again.
  *
- * Four things are not made to wait. A screen share arriving over anything but
- * another screen, which is what the viewer opened the call to see. A holder who
- * has left the call, because there is nobody left to keep the slot for. The
- * first pick, when there is no holder. And the holder's own camera going on or
- * off: it is the same person, so it changes what is drawn and keeps `since`.
+ * Five things are not made to wait. A screen share arriving over anything but
+ * another screen, which is what the viewer opened the call to see. The stream
+ * the viewer just joined (`chosen`): a tap, not a voice, so there is nothing to
+ * wait out — and since wanted() puts it first, nobody talking takes it back.
+ * A holder who has left the call, because there is nobody left to keep the
+ * slot for. The first pick, when there is no holder. And the holder's own
+ * camera going on or off: it is the same person, so it changes what is drawn
+ * and keeps `since`.
  *
  * Staying is not a decision to stay. A caller whose input has stopped changing
  * must call this again once the wait is up (at `pending.since + FOCUS_HOLD_MS`),
@@ -122,6 +151,7 @@ export const pickFocus = (input: FocusInput, prev: FocusState | null, now: numbe
   if (sameFocus(prev, next)) return prev.pending === null ? prev : { ...prev, pending: null }
 
   if (next.kind === 'screen' && prev.kind !== 'screen') return { ...next, since: now, pending: null }
+  if (next.kind === 'screen' && next.id === chosenStanding(input)) return { ...next, since: now, pending: null }
   if (!present(input, prev.id)) return { ...next, since: now, pending: null }
   if (next.id === prev.id) return { ...next, since: prev.since, pending: null }
 

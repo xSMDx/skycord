@@ -407,6 +407,38 @@ describe('joining a stream', () => {
     expect(m.isDesired).toBe(true)
   })
 
+  it('the stream joined last is your choice: another join replaces it; leaving it, its share ending, or leaving the call clears it', async () => {
+    const v = screen(), a = screenAudio()
+    h.seed = () => ({ u1: [mic(), v, a], u2: [mic(), screen()] })
+    const room = await join()
+    expect(V.chosenStream.value).toBeNull()
+    V.joinStream('u1')
+    expect(V.chosenStream.value).toBe('u1')
+
+    // Joining another is a new choice. Leaving one you did not choose keeps it.
+    V.joinStream('u2')
+    expect(V.chosenStream.value).toBe('u2')
+    V.leaveStream('u1')
+    expect(V.chosenStream.value).toBe('u2')
+
+    // Leaving the chosen one clears it; nothing older is promoted in its place.
+    V.joinStream('u1')
+    V.leaveStream('u1')
+    expect(V.chosenStream.value).toBeNull()
+
+    // Its share ending clears it too (forgetEndedShares leaves it).
+    V.joinStream('u1')
+    expect(V.chosenStream.value).toBe('u1')
+    room.unpublish('u1', v)
+    room.unpublish('u1', a)
+    expect(V.chosenStream.value).toBeNull()
+
+    // And the call ending.
+    V.joinStream('u2')
+    await V.useVoice().leave()
+    expect(V.chosenStream.value).toBeNull()
+  })
+
   it('a share that stops clears its joined state; a new share asks again', async () => {
     const { room, v, a } = await watchingU1()
     expect([v.isDesired, a.isDesired]).toEqual([true, true])
