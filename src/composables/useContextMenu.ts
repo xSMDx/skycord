@@ -40,6 +40,8 @@ export interface MenuSlider {
   /** Formats the readout; defaults to the raw number. */
   format?: (v: number) => string
   onInput: (v: number) => void
+  /** One short line under the control, for why it stops where it does. */
+  hint?:   string
 }
 
 /** Names the rows after it, up to the next separator or section (see

@@ -25,7 +25,7 @@ import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia, canScreenShare, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { voiceSettings, setVoiceSettings, noPushToTalkKey } from '@/composables/useVoiceSettings'
-import { userPref, setUserPref, setStreamVolume } from '@/composables/useVoice'
+import { userPref, setUserPref, setStreamVolume, userVolumeMax } from '@/composables/useVoice'
 import PhoneCallScreen from './phone/PhoneCallScreen.vue'
 import PhoneCallSheet from './phone/PhoneCallSheet.vue'
 import PhoneMusicSheet from './phone/PhoneMusicSheet.vue'
@@ -353,6 +353,7 @@ const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string;
     // Read inside the builder: the Stream Volume slider comes and goes as they
     // start or stop sharing sound, even while the menu is open.
     return participantMenu(u, { ...base(), volume: p.volume, muted: p.muted, videoOff: p.videoOff,
+      userVolumeMax: userVolumeMax(),
       streamVolume: p.streamVolume, sharesScreenAudio: media.streamsWithAudio.has(t.id) }, menuHandlers)
   })
 }

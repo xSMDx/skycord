@@ -18,6 +18,10 @@ import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import { MUSIC_IDENTITY, music, musicAvailable, setMusicTarget } from './useMusic'
 import { applySubscriptions } from './subscriptionPolicy'
+import {
+  volumePlan, sinkRoutable, gainSupport, userVolumeMaxFor,
+  amplify, release as releaseGain, stageGain, onGainStateChange, wakeGain, sleepGain,
+} from './remoteGain'
 import { qualityFor } from './callLimits'
 import { perf } from './usePerformance'
 import {
@@ -151,7 +155,7 @@ const FAIL_HOLD_MS   = 10000  // show "Couldn't connect" this long, then auto-le
 const teardownRoom = () => {
   const r = getRoom(); setRoom(null)
   if (r) r.disconnect().catch(() => {})
-  audioEls.forEach(el => el.remove()); audioEls.clear(); streamSids.clear()
+  audioEls.forEach(dropAudioEl); audioEls.clear(); streamSids.clear()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
   stopLocalLevel()
@@ -406,6 +410,9 @@ export const debugAudio = () => {
       prefForOwner: owner ? userPref(owner) : null,
       liveElementMuted:  el.muted,
       liveElementVolume: +el.volume.toFixed(3),
+      // Not null: turned up past 100 % and heard through the gain stage, so
+      // the element is muted on purpose and this is the level that counts.
+      stageGain: stageGain(el),
       elementInDom: document.body.contains(el),
       readyState: el.readyState,
       paused: el.paused,
@@ -429,12 +436,36 @@ const routeToOutput = (el: HTMLAudioElement) => {
   if (sink && typeof (el as any).setSinkId === 'function') (el as any).setSinkId(sink).catch(() => {})
 }
 
+/** Whether a voice turned past 100 % can still come out of the output the member chose. */
+const canRouteSink = () => sinkRoutable(voiceSettings.outputDeviceId, gainSupport())
+
+/**
+ * The top of the User Volume slider: 200, or 100 where going past 100 %
+ * would move the voice off the chosen output device (spec 12). The menus
+ * read it inside their builders, so it follows an output change live.
+ */
+export const userVolumeMax = (): number => userVolumeMaxFor(canRouteSink())
+
+/*
+ * A voice: User Volume times the output level, Mute and Deafen.
+ *
+ * Up to 100 % that is the element's own volume. Past it, the element
+ * cannot go (it throws), so the voice is played through the gain stage in
+ * remoteGain.ts and the element is muted under it; when the stage cannot
+ * play, it stays on the element at 100 %. The element's volume is set in
+ * both cases, so it is right the moment the stage lets go of it.
+ */
 const applyAudioEl = (el: HTMLAudioElement, identity?: string) => {
   const u = identity ? userPref(identity) : DEFAULT_PREF
-  // Per-user volume multiplies the global output level rather than replacing it.
-  el.volume = ((voiceSettings.outputVolume ?? 100) / 100) * (u.volume / 100)
+  const muted = voice.localDeafened || u.muted
+  const plan = volumePlan(voiceSettings.outputVolume ?? 100, u.volume, canRouteSink())
+  el.volume = plan.elVolume
+  // Even while amplified, as livekit-client's webAudioMix does: Chromium's
+  // echo cancellation with a chosen output needs the element pointed at it too.
   routeToOutput(el)
-  el.muted = voice.localDeafened || u.muted
+  if (plan.gain > 1 && amplify(el, plan.gain, muted, voiceSettings.outputDeviceId)) return
+  releaseGain(el)
+  el.muted = muted
 }
 
 /*
@@ -457,6 +488,12 @@ const applyStreamEl = (el: HTMLAudioElement, identity?: string) => {
 const applyAudio = (el: HTMLAudioElement, sid: string) =>
   streamSids.has(sid) ? applyStreamEl(el, audioOwner.get(sid)) : applyAudioEl(el, audioOwner.get(sid))
 const applyAllAudio = () => audioEls.forEach((el, sid) => applyAudio(el, sid))
+// The gain stage started or stopped running: amplified voices move onto it,
+// or back onto their elements, rather than going silent with it.
+onGainStateChange(applyAllAudio)
+
+/** An element this app stored, off the gain stage and out of the page. */
+const dropAudioEl = (el: HTMLMediaElement) => { releaseGain(el); el.remove() }
 
 /**
  * A remote audio track, played. `source` says whose rules it is under: a
@@ -485,9 +522,10 @@ const attachTrack = (track: RemoteTrack, identity?: string, source: Track.Source
  * SDK has not got to, and removing an element twice is harmless.
  */
 const detachTrack = (track: RemoteTrack) => {
-  track.detach().forEach(el => el.remove())
+  track.detach().forEach(dropAudioEl)
   if (track.sid) {
-    audioEls.get(track.sid)?.remove()
+    const el = audioEls.get(track.sid)
+    if (el) dropAudioEl(el)
     audioEls.delete(track.sid); audioOwner.delete(track.sid); streamSids.delete(track.sid)
   }
 }
@@ -502,7 +540,8 @@ const detachTrack = (track: RemoteTrack) => {
 const purgeParticipantAudio = (identity: string) => {
   audioOwner.forEach((owner, sid) => {
     if (owner !== identity) return
-    audioEls.get(sid)?.remove()
+    const el = audioEls.get(sid)
+    if (el) dropAudioEl(el)
     audioEls.delete(sid); audioOwner.delete(sid); streamSids.delete(sid)
   })
 }
@@ -879,9 +918,11 @@ const cleanup = () => {
   const r = getRoom()
   setRoom(null)
   if (r) r.disconnect().catch(() => {})
-  audioEls.forEach(el => el.remove())
+  audioEls.forEach(dropAudioEl)
   audioEls.clear()
   streamSids.clear()
+  // Nothing plays through the gain stage between calls; joining wakes it.
+  sleepGain()
   unbindPtt()
   if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
@@ -1078,9 +1119,13 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     // reconnect loop).
     if (voice.connecting && voice.connectingConvId === convId) return
     if (voice.connected  && voice.activeConvId     === convId && voice.activeKind === kind) return
+    // Joining is a click: the moment a browser lets a suspended AudioContext
+    // start. The gain stage for voices turned past 100 % needs it running.
+    wakeGain()
     // Switching calls (or recovering from a stale attempt): fully tear the old
     // room down before opening a new one, so we never hold two sessions at once.
-    if (getRoom() || voice.connected || voice.connecting) await leave()
+    // Leaving puts the gain stage to sleep, so it is woken again after.
+    if (getRoom() || voice.connected || voice.connecting) { await leave(); wakeGain() }
     // Set after leave(): cleanup() clears it, and clearing it after we set it
     // would drop the choice on every call that follows another.
     preferredVoiceServer = kind === 'channel' ? null : (voiceServerId ?? voiceSettings.defaultVoiceServer) || null
@@ -1293,7 +1338,10 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       muteBeforeDeafen = voice.localMuted
       voice.localMuted = true
       room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
-      audioEls.forEach(el => (el.muted = true))
+      // Through the element rules, not `el.muted = true` on each: a voice
+      // turned past 100 % is heard through the gain stage with its element
+      // already muted, and only applyAudioEl silences the stage.
+      applyAllAudio()
     } else {
       // Undeafening restores what you had before — unless the token forbids
       // publishing, in which case "what you had before" is not available and

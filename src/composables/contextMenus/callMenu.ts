@@ -23,6 +23,7 @@ import {
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
+import { USER_VOLUME_MAX } from '../remoteGain'
 
 export interface CallMenuHandlers {
   openProfile:    (u: MenuUser) => void
@@ -97,6 +98,31 @@ export const calleeMenu = (
     : []),
 ]
 
+/** Under User Volume when it stops at 100 %, so a slider halfway to its usual end does not read as broken. */
+export const USER_VOLUME_CAPPED_HINT = 'Max 100% with this output device'
+
+/**
+ * User Volume: how loud this person's voice is for you. 0–200 %, because
+ * past 100 is a real need when someone's mic is quiet, and the only fix
+ * available from this side.
+ *
+ * `userVolumeMax` is 100 where going past 100 % would move their voice off
+ * the output device you chose (useVoice's userVolumeMax, spec 12); then the
+ * slider says why, and a stored 150 % shows as the 100 % that is heard.
+ * Shared by both menus that offer it, so the two cannot drift.
+ */
+export const userVolumeRow = (
+  id: string, s: { volume: number; userVolumeMax?: number },
+  setUserVolume: (id: string, v: number) => void,
+): MenuItem => {
+  const max = s.userVolumeMax ?? USER_VOLUME_MAX
+  return {
+    slider: true, label: 'User Volume', value: Math.min(s.volume, max), min: 0, max,
+    format: v => `${v}%`, onInput: v => setUserVolume(id, v),
+    ...(max < USER_VOLUME_MAX ? { hint: USER_VOLUME_CAPPED_HINT } : {}),
+  }
+}
+
 /**
  * Stream Volume: the sound of the screen this person shares, apart from their
  * voice. Offered only while they share one WITH sound — a slider for a stream
@@ -117,6 +143,8 @@ export const participantMenu = (
   p: MenuUser,
   s: CallMenuState & {
     volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean
+    /** The User Volume slider's top: 200, or 100 where the output device cannot be kept past it. */
+    userVolumeMax?: number
     /** Their Stream Volume, and whether they are sharing a screen with sound right now. */
     streamVolume?: number; sharesScreenAudio?: boolean
   },
@@ -124,10 +152,7 @@ export const participantMenu = (
 ): MenuItem[] => [
   { label: 'Profile', icon: User, onSelect: () => h.openProfile(p) },
   { sep: true },
-  // 0–200%: above 100 is a real need when someone's mic is quiet, and it's the
-  // only fix available from this side.
-  { slider: true, label: 'User Volume', value: s.volume, min: 0, max: 200,
-    format: v => `${v}%`, onInput: v => h.setUserVolume(p.id, v) },
+  userVolumeRow(p.id, s, h.setUserVolume),
   ...streamVolumeRow(p.id, s, h.setStreamVolume),
   { sep: true },
   { label: 'Mute',          icon: MicOff,  check: s.muted, keepOpen: true,

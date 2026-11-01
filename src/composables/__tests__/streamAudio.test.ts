@@ -45,6 +45,8 @@ interface FakeEl {
   style: Record<string, string>
   inDom: boolean
   remove: ReturnType<typeof vi.fn>
+  /** As livekit's attachToElement leaves it: a stream holding the remote track. */
+  srcObject: { getAudioTracks: () => Array<{ id: string; kind: string }> }
 }
 interface FakeTrack {
   kind: 'audio' | 'video'
@@ -123,7 +125,9 @@ vi.mock('livekit-client', async (importOriginal) => {
       },
       muted: false, autoplay: false, style: {}, inDom: false,
       remove: vi.fn(() => { el.inDom = false }),
+      srcObject: { getAudioTracks: () => (pub.kind === 'audio' ? [mediaTrack] : []) },
     }
+    const mediaTrack = { id: pub.trackSid, kind: 'audio' }
     // As Track.attach/detach: detach() hands back what is attached and
     // forgets it, so a second detach() returns nothing — which is what the
     // app's own detach gets, because the SDK detaches first (see unsubscribe).
@@ -584,5 +588,241 @@ describe('an unsubscribed track takes its element with it', () => {
 
     expect(song.isDesired).toBe(false)
     expect(el.inDom).toBe(false)
+  })
+})
+
+/*
+ * User Volume above 100 % (spec 12).
+ *
+ * The element throws past a volume of 1, so before this a voice turned up
+ * to 150 % threw out of every volume change — and out of LiveKit's
+ * TrackSubscribed when it arrived already turned up, so it was never kept
+ * and nothing applied to it again. Past what the element can play, a voice
+ * now goes through a shared Web Audio gain stage (remoteGain.ts); a shared
+ * screen's sound never does — Stream Volume stops at 100.
+ *
+ * The stage's level is read through debugAudio's `stageGain`: null for an
+ * element playing on its own, the gain while it is routed.
+ */
+class FakeAudioContext {
+  static made: FakeAudioContext[] = []
+  state: AudioContextState = 'running'
+  currentTime = 0
+  destination = {}
+  onstatechange: (() => void) | null = null
+  nodes: Array<{ disconnect: ReturnType<typeof vi.fn> }> = []
+  constructor() { FakeAudioContext.made.push(this) }
+  private to(s: AudioContextState) { this.state = s; this.onstatechange?.() }
+  // As the real one: `state` changes once the request settles, in order.
+  resume = vi.fn(async () => { await null; this.to('running') })
+  suspend = vi.fn(async () => { await null; this.to('suspended') })
+  private node<T extends object>(extra: T) {
+    const n = { connect: vi.fn((x: unknown) => x), disconnect: vi.fn(), ...extra }
+    this.nodes.push(n)
+    return n
+  }
+  createMediaStreamSource = vi.fn(() => this.node({}))
+  createGain = vi.fn(() => {
+    const g = this.node({ gain: { value: 1, setTargetAtTime: (v: number) => { g.gain.value = v } } })
+    return g
+  })
+}
+/** A browser whose AudioContext can follow a chosen output device. */
+class SinkAudioContext extends FakeAudioContext {}
+;(SinkAudioContext.prototype as unknown as { setSinkId: unknown }).setSinkId = vi.fn(async () => {})
+
+/** The stage gain debugAudio reports for this element's track. */
+const stageOf = (el: FakeEl) => {
+  const sid = el.srcObject.getAudioTracks()[0]?.id
+  return V.debugAudio().audioElements.find(e => e.sid === sid)?.stageGain
+}
+
+describe('User Volume above 100 %', () => {
+  it('applyAudioEl at 150 % does not throw', async () => {
+    const m = mic()
+    h.seed = () => ({ u1: [m] })
+    const room = await join()
+    const voiceEl = room.subscribe('u1', m)
+
+    expect(() => V.setUserPref('u1', { volume: 150 })).not.toThrow()
+    expect(voiceEl.volume).toBe(1)
+
+    // A voice that arrives already turned up: attaching it must not throw out
+    // of LiveKit's TrackSubscribed either, and the element must still be kept.
+    const m2 = mic()
+    room.publish('u1', m2)
+    let lateEl!: FakeEl
+    expect(() => { lateEl = room.subscribe('u1', m2) }).not.toThrow()
+    expect(lateEl.inDom).toBe(true)
+    // So turning them down and muting them reaches it again.
+    V.setUserPref('u1', { volume: 50, muted: true })
+    expect(lateEl.volume).toBeCloseTo(0.5)
+    expect(lateEl.muted).toBe(true)
+  })
+
+  it('with no Web Audio there is nothing to amplify with: the slider stops at 100', () => {
+    expect(V.userVolumeMax()).toBe(100)
+  })
+
+  describe('with Web Audio', () => {
+    beforeEach(() => { vi.stubGlobal('AudioContext', SinkAudioContext) })
+
+    it('past 100 % the voice is amplified through the stage; the stream is not', async () => {
+      const { voiceEl, streamEl } = await watchingU1()
+      expect(V.userVolumeMax()).toBe(200)
+
+      V.setUserPref('u1', { volume: 150 })
+      expect(stageOf(voiceEl)).toBe(1.5)
+      // Playing, so Chromium keeps feeding the stage, but heard through it only.
+      expect(voiceEl.muted).toBe(true)
+      expect(streamEl.muted).toBe(false)
+      expect(streamEl.volume).toBe(1)
+      expect(stageOf(streamEl)).toBeNull()
+
+      // The output level multiplies it, on the stage as on the element.
+      const { voiceSettings } = await import('../useVoiceSettings')
+      voiceSettings.outputVolume = 80
+      V.useVoice().applyOutput()
+      expect(stageOf(voiceEl)).toBeCloseTo(1.2)
+      voiceSettings.outputVolume = 100
+
+      // Back under 100 %: off the stage, onto the element.
+      V.setUserPref('u1', { volume: 80 })
+      expect(stageOf(voiceEl)).toBeNull()
+      expect(voiceEl.muted).toBe(false)
+      expect(voiceEl.volume).toBeCloseTo(0.8)
+    })
+
+    it('Mute and Deafen silence an amplified voice; undeafening restores it', async () => {
+      const { voiceEl, streamEl } = await watchingU1()
+      V.setUserPref('u1', { volume: 150 })
+
+      // Deafen used to set `muted` on every element and nothing else — which
+      // an amplified voice already is, while the stage plays it.
+      V.useVoice().toggleDeafen()
+      expect(stageOf(voiceEl)).toBe(0)
+      expect(streamEl.muted).toBe(true)
+
+      V.useVoice().toggleDeafen()
+      expect(stageOf(voiceEl)).toBe(1.5)
+      expect(streamEl.muted).toBe(false)
+
+      V.setUserPref('u1', { muted: true })
+      expect(stageOf(voiceEl)).toBe(0)
+      V.setUserPref('u1', { muted: false })
+      expect(stageOf(voiceEl)).toBe(1.5)
+    })
+
+    it('a voice that arrives already turned up is amplified, and kept', async () => {
+      const m = mic()
+      h.seed = () => ({ u1: [m] })
+      const room = await join()
+      V.setUserPref('u1', { volume: 175 })
+
+      const el = room.subscribe('u1', m)
+      expect(el.inDom).toBe(true)
+      expect(stageOf(el)).toBe(1.75)
+    })
+
+    it('a voice leaving takes its stage with it, and leaving the call lets the context sleep', async () => {
+      const { room, voiceEl } = await watchingU1()
+      V.setUserPref('u1', { volume: 150 })
+      const ctx = FakeAudioContext.made.at(-1)!
+      const live = ctx.nodes.slice(-2)
+
+      room.leave('u1')
+      expect(voiceEl.inDom).toBe(false)
+      for (const n of live) expect(n.disconnect).toHaveBeenCalled()
+
+      await V.useVoice().leave()
+      expect(ctx.suspend).toHaveBeenCalled()
+    })
+
+    it('joining a call wakes the shared context', async () => {
+      const { voiceEl } = await watchingU1()
+      V.setUserPref('u1', { volume: 150 })
+      expect(stageOf(voiceEl)).toBe(1.5)
+      await V.useVoice().leave()
+      const ctx = FakeAudioContext.made.at(-1)!
+      await vi.waitFor(() => expect(ctx.state).toBe('suspended'))
+      ctx.resume.mockClear()
+
+      await join()
+      expect(ctx.resume).toHaveBeenCalled()
+    })
+
+    it('switching straight to another call leaves the stage awake for it', async () => {
+      const { voiceEl } = await watchingU1()
+      V.setUserPref('u1', { volume: 150 })
+      expect(stageOf(voiceEl)).toBe(1.5)
+      const ctx = FakeAudioContext.made.at(-1)!
+
+      // The old call's cleanup suspends the stage; the new call must not
+      // inherit that. A real context settles a suspend on a later task (its
+      // `state` reads "running" until then) and runs a resume after it.
+      let pending: Promise<void> = Promise.resolve()
+      ctx.suspend.mockImplementationOnce(() => (pending = new Promise<void>(r => setTimeout(() => {
+        ctx.state = 'suspended'; ctx.onstatechange?.(); r()
+      }, 5))))
+      ctx.resume.mockImplementation(async () => { await pending; ctx.state = 'running'; ctx.onstatechange?.() })
+      try {
+        h.getVoiceToken.mockResolvedValue({ token: 't', url: 'wss://sfu.test', voiceServer: null, voiceActivity: true })
+        await V.useVoice().connect('c2', 'channel', 'Other')
+        await vi.waitFor(() => expect(V.voice.activeConvId).toBe('c2'))
+        expect(ctx.suspend).toHaveBeenCalled()
+        await pending
+        await new Promise(r => setTimeout(r, 0))
+        expect(ctx.state).toBe('running')
+      } finally {
+        ctx.resume.mockReset()
+      }
+    })
+
+    it('a context that is not running leaves the voice on its element, never silent', async () => {
+      const { voiceEl } = await watchingU1()
+      V.setUserPref('u1', { volume: 150 })
+      const ctx = FakeAudioContext.made.at(-1)!
+
+      // Suspended under us mid-call (the OS took the audio device, say), and
+      // asking it to resume does not bring it back.
+      ctx.resume.mockImplementation(async () => {})
+      try {
+        ctx.state = 'suspended'; ctx.onstatechange?.()
+
+        expect(stageOf(voiceEl)).toBeNull()
+        expect(voiceEl.muted).toBe(false)
+        expect(voiceEl.volume).toBe(1)
+      } finally {
+        // One context for the app session, as in the app, so the tests share
+        // it: leave it able to run again.
+        ctx.resume.mockReset()
+      }
+    })
+
+    it('an output device the context cannot follow caps User Volume at 100 %', async () => {
+      // Elements can pick an output; this AudioContext cannot.
+      vi.stubGlobal('AudioContext', FakeAudioContext)
+      vi.stubGlobal('HTMLMediaElement', class { setSinkId() {} })
+      const { voiceSettings } = await import('../useVoiceSettings')
+      const { voiceEl } = await watchingU1()
+      V.setUserPref('u1', { volume: 150 })
+      expect(stageOf(voiceEl)).toBe(1.5)   // default output: amplified
+
+      voiceSettings.outputDeviceId = 'headset-1'
+      try {
+        V.useVoice().applyOutput()
+        expect(V.userVolumeMax()).toBe(100)
+        expect(stageOf(voiceEl)).toBeNull()
+        expect(voiceEl.muted).toBe(false)
+        expect(voiceEl.volume).toBe(1)
+        // The stored choice is kept: back on the default output, it applies again.
+        expect(V.userPref('u1').volume).toBe(150)
+      } finally {
+        voiceSettings.outputDeviceId = ''
+      }
+      V.useVoice().applyOutput()
+      expect(V.userVolumeMax()).toBe(200)
+      expect(stageOf(voiceEl)).toBe(1.5)
+    })
   })
 })

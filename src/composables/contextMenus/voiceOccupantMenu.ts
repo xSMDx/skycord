@@ -36,7 +36,7 @@ import {
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
-import { streamVolumeRow } from './callMenu'
+import { streamVolumeRow, userVolumeRow } from './callMenu'
 
 export interface VoiceOccupantHandlers {
   openProfile:    (u: MenuUser) => void
@@ -67,6 +67,8 @@ export interface VoiceOccupantState {
   volume:    number
   muted:     boolean
   videoOff:  boolean
+  /** The User Volume slider's top: 200, or 100 where the output device cannot be kept past it. */
+  userVolumeMax?: number
   /** Their Stream Volume, and whether they share a screen with sound right now. */
   streamVolume?:      number
   sharesScreenAudio?: boolean
@@ -103,10 +105,7 @@ export const voiceOccupantMenu = (
   if (s.inCallWithThem) {
     items.push(
       { sep: true },
-      // 0–200%: above 100 is a real need when someone's mic is quiet, and it
-      // is the only fix available from this side.
-      { slider: true, label: 'User Volume', value: s.volume, min: 0, max: 200,
-        format: v => `${v}%`, onInput: v => h.setUserVolume(u.id, v) },
+      userVolumeRow(u.id, s, h.setUserVolume),
       ...streamVolumeRow(u.id, s, h.setStreamVolume),
       { label: 'Mute', icon: MicOff, check: s.muted, keepOpen: true,
         onSelect: () => h.toggleUserMute(u.id) },

@@ -324,8 +324,11 @@ const onBeforeEnter = (el: Element) => {
             </div>
             <input type="range"
                    :min="item.min ?? 0" :max="item.max ?? 200" :value="item.value"
+                   :aria-label="item.label"
+                   :aria-describedby="item.hint ? `cm-hint-${i}` : undefined"
                    :style="{ background: sliderFill(item) }"
                    @input="item.onInput(+($event.target as HTMLInputElement).value)" />
+            <span v-if="item.hint" :id="`cm-hint-${i}`" class="cm-slider-hint">{{ item.hint }}</span>
           </div>
           <!-- A positive `isAction` guard rather than v-else: type narrowing does
                not carry across a v-if/v-else chain, so under v-else this branch
@@ -529,6 +532,8 @@ button { background: none; border: none; cursor: pointer; color: inherit; font: 
   font-size: 13px; color: var(--text-2);
 }
 .cm-slider-val { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* DESIGN.md's hint style, at the readout's size and colour beside it. */
+.cm-slider-hint { font-size: 12px; line-height: 1.5; color: var(--text-3); }
 .cm-slider input[type=range] {
   width: 100%; height: 4px; border-radius: 2px; appearance: none;
   background: var(--track); outline: none; cursor: pointer;
