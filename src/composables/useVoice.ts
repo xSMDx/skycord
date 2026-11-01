@@ -475,17 +475,29 @@ const attachTrack = (track: RemoteTrack, identity?: string, source: Track.Source
   document.body.appendChild(el)
   audioEls.set(sid, el)
 }
+/*
+ * The element is removed by the one this app stored, not by what
+ * `track.detach()` returns. On TrackUnsubscribed that is always nothing:
+ * livekit-client detaches the track's elements itself before it emits
+ * Unsubscribed (RemoteTrackPublication.setTrack), so removing the returned
+ * list removed nothing, and every voice gone and every stream left stayed in
+ * the body as a hidden, paused <audio>. The detach stays for any element the
+ * SDK has not got to, and removing an element twice is harmless.
+ */
 const detachTrack = (track: RemoteTrack) => {
   track.detach().forEach(el => el.remove())
-  if (track.sid) { audioEls.delete(track.sid); audioOwner.delete(track.sid); streamSids.delete(track.sid) }
+  if (track.sid) {
+    audioEls.get(track.sid)?.remove()
+    audioEls.delete(track.sid); audioOwner.delete(track.sid); streamSids.delete(track.sid)
+  }
 }
 
 /**
  * Everything someone was heard through, for a departure that skipped
  * TrackUnsubscribed — the abrupt drop purgeParticipantVideos exists for. A
  * stream element left behind would be a dead node per share; a voice one, the
- * same per voice. LiveKit's ordinary leave unsubscribes first, so this
- * usually finds nothing.
+ * same per voice. LiveKit's ordinary leave unsubscribes first, and
+ * detachTrack removes those, so this usually finds nothing.
  */
 const purgeParticipantAudio = (identity: string) => {
   audioOwner.forEach((owner, sid) => {
@@ -528,9 +540,11 @@ const attachMusicTrack = (track: RemoteTrack): void => {
   applyMusicVolume()
 }
 
+// The stored element, for the reason given at detachTrack: by Unsubscribed
+// the SDK has already detached it, and `track.detach()` returns nothing.
 const detachMusicTrack = (track: RemoteTrack): void => {
   track.detach().forEach(el => el.remove())
-  if (track.sid) musicEls.delete(track.sid)
+  if (track.sid) { musicEls.get(track.sid)?.remove(); musicEls.delete(track.sid) }
 }
 
 watch(() => [music.volume, voice.localDeafened], applyMusicVolume)

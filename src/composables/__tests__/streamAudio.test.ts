@@ -61,6 +61,9 @@ interface FakePub {
   trackName: string
   desired: boolean
   track?: FakeTrack
+  /** Set while subscribed: the media ending, as the SFU dropping it after
+   *  `setSubscribed(false)` ends it (RemoteTrackPublication.handleEnded). */
+  ended?: () => void
   readonly isDesired: boolean
   setSubscribed: ReturnType<typeof vi.fn>
   setVideoQuality: ReturnType<typeof vi.fn>
@@ -82,6 +85,7 @@ interface FakeRoomShape {
   unpublish: (identity: string, pub: FakePub) => void
   subscribe: (identity: string, pub: FakePub) => FakeEl
   unsubscribe: (identity: string, pub: FakePub) => void
+  leave: (identity: string) => void
   vanish: (identity: string) => void
 }
 
@@ -120,7 +124,15 @@ vi.mock('livekit-client', async (importOriginal) => {
       muted: false, autoplay: false, style: {}, inDom: false,
       remove: vi.fn(() => { el.inDom = false }),
     }
-    return { kind: pub.kind, sid: pub.trackSid, source: pub.source, el, attach: () => el, detach: () => [el] }
+    // As Track.attach/detach: detach() hands back what is attached and
+    // forgets it, so a second detach() returns nothing — which is what the
+    // app's own detach gets, because the SDK detaches first (see unsubscribe).
+    let attached: FakeEl[] = []
+    return {
+      kind: pub.kind, sid: pub.trackSid, source: pub.source, el,
+      attach: () => { if (!attached.includes(el)) attached.push(el); return el },
+      detach: () => { const out = attached; attached = []; return out },
+    }
   }
 
   class FakeRoom implements FakeRoomShape {
@@ -159,22 +171,47 @@ vi.mock('livekit-client', async (importOriginal) => {
     /** As RemoteParticipant.unpublishTrack: unsubscribed first, removed, then announced. */
     unpublish(identity: string, pub: FakePub) {
       const p = this.remoteParticipants.get(identity)!
-      if (pub.track) this.unsubscribe(identity, pub)
-      p.trackPublications.delete(pub.trackSid)
-      this.emit(RoomEvent.TrackUnpublished, pub, p)
+      this.drop(p, pub)
     }
     /** The media for a publication this member asked for has arrived. Returns its element. */
     subscribe(identity: string, pub: FakePub): FakeEl {
       const p = this.remoteParticipants.get(identity)!
       pub.track = fakeTrack(pub)
+      pub.ended = () => this.unsubscribeOf(p, pub)
       this.emit(RoomEvent.TrackSubscribed, pub.track, pub, p)
       return pub.track.el
     }
     unsubscribe(identity: string, pub: FakePub) {
-      const p = this.remoteParticipants.get(identity)!
+      this.unsubscribeOf(this.remoteParticipants.get(identity)!, pub)
+    }
+    /**
+     * As RemoteTrackPublication.setTrack(undefined) in livekit-client 2.20:
+     * the SDK detaches the track's elements FIRST, then emits Unsubscribed.
+     * So by the time TrackUnsubscribed arrives, track.detach() returns [].
+     */
+    private unsubscribeOf(p: FakePerson, pub: FakePub) {
       const track = pub.track
+      if (!track) return
+      track.detach()
       pub.track = undefined
+      pub.ended = undefined
       this.emit(RoomEvent.TrackUnsubscribed, track, pub, p)
+    }
+    private drop(p: FakePerson, pub: FakePub) {
+      this.unsubscribeOf(p, pub)
+      p.trackPublications.delete(pub.trackSid)
+      this.emit(RoomEvent.TrackUnpublished, pub, p)
+    }
+    /**
+     * Someone leaves, as Room.handleParticipantDisconnected does it: out of
+     * the room first, then each track unsubscribed and unpublished, then
+     * ParticipantDisconnected.
+     */
+    leave(identity: string) {
+      const p = this.remoteParticipants.get(identity)!
+      this.remoteParticipants.delete(identity)
+      for (const pub of [...p.trackPublications.values()]) this.drop(p, pub)
+      this.emit(RoomEvent.ParticipantDisconnected, p)
     }
     /** An abrupt drop: the participant is gone and nothing was unsubscribed first. */
     vanish(identity: string) {
@@ -191,6 +228,8 @@ let RoomEvent: typeof import('livekit-client').RoomEvent
 let nextTick: typeof import('vue').nextTick
 let V: typeof import('../useVoice')
 let media: typeof import('../useVoiceMedia').media
+let music: typeof import('../useMusic').music
+let MUSIC_IDENTITY: string
 
 beforeAll(async () => {
   globalThis.localStorage = { getItem: () => null, setItem: () => {} } as unknown as Storage
@@ -212,6 +251,7 @@ beforeAll(async () => {
   ;({ nextTick } = await import('vue'))
   V = await import('../useVoice')
   ;({ media } = await import('../useVoiceMedia'))
+  ;({ music, MUSIC_IDENTITY } = await import('../useMusic'))
 })
 
 let sid = 0
@@ -220,7 +260,8 @@ const pubOf = (source: string, kind: 'audio' | 'video', trackSid = `TR_${++sid}`
     trackSid, source, kind, trackName: '',
     desired: false,
     get isDesired() { return p.desired },
-    setSubscribed: vi.fn((on: boolean) => { p.desired = on }),
+    // Saying no to a subscribed track ends its media, which unsubscribes it.
+    setSubscribed: vi.fn((on: boolean) => { p.desired = on; if (!on) p.ended?.() }),
     setVideoQuality: vi.fn(),
     setEnabled: vi.fn(),
   }
@@ -259,6 +300,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   await V.useVoice().leave()
+  music.listeningTo = null
   await nextTick()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -479,5 +521,68 @@ describe('media.streamsAvailable', () => {
     await V.useVoice().leave()
     expect(media.streamsAvailable.size).toBe(0)
     expect(media.streamsWithAudio.size).toBe(0)
+  })
+})
+
+/*
+ * An unsubscribed track's <audio> leaves the page.
+ *
+ * livekit-client 2.20 detaches a track's elements itself before it emits
+ * Unsubscribed (RemoteTrackPublication.setTrack(undefined)), so the app's
+ * `track.detach()` gets back nothing and removing what it returns removed
+ * nothing: every Leave stream, every sharer leaving and every voice gone left
+ * a hidden element in the body. The fake above detaches in that order.
+ */
+describe('an unsubscribed track takes its element with it', () => {
+  it('Leave stream then TrackUnsubscribed takes the stream element out of the DOM', async () => {
+    const { voiceEl, streamEl } = await watchingU1()
+    expect(streamEl.inDom).toBe(true)
+
+    // Leave stream → the sweep says no → the SDK drops the track.
+    V.leaveStream('u1')
+    await nextTick()
+
+    expect(streamEl.inDom).toBe(false)
+    expect(voiceEl.inDom).toBe(true)
+    expect(V.debugAudio().audioElements.map(e => e.kind)).toEqual(['voice'])
+  })
+
+  it('a sharer leaving (Unsubscribed first, as the SDK does) removes the stream element', async () => {
+    const { room, voiceEl, streamEl } = await watchingU1()
+
+    room.leave('u1')
+
+    expect(streamEl.inDom).toBe(false)
+    expect(voiceEl.inDom).toBe(false)
+    expect(V.debugAudio().audioElements).toEqual([])
+    expect(media.streamsAvailable.has('u1')).toBe(false)
+  })
+
+  it('a voice unsubscribed after the SDK detached it takes its element out of the DOM', async () => {
+    // A mic switched or republished: the old publication goes, Unsubscribed first.
+    const { room, m, voiceEl, streamEl } = await watchingU1()
+
+    room.unpublish('u1', m)
+
+    expect(voiceEl.inDom).toBe(false)
+    expect(streamEl.inDom).toBe(true)
+    expect(V.debugAudio().audioElements.map(e => e.kind)).toEqual(['stream'])
+  })
+
+  it('music you tune out of takes its element out of the DOM', async () => {
+    const song = pubOf(Track.Source.Microphone, 'audio')
+    song.trackName = 'chanA'
+    h.seed = () => ({ [MUSIC_IDENTITY]: [song] })
+    const room = await join()
+    music.listeningTo = 'chanA'
+    await nextTick()
+    const el = room.subscribe(MUSIC_IDENTITY, song)
+    expect(el.inDom).toBe(true)
+
+    music.listeningTo = null
+    await nextTick()
+
+    expect(song.isDesired).toBe(false)
+    expect(el.inDom).toBe(false)
   })
 })
