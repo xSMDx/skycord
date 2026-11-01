@@ -80,16 +80,20 @@ export const musicClose = (room: string, channelId: string): Promise<boolean> =>
   post('/close', { room, channelId })
 
 /**
- * Hold the song on a channel where it is. True once the service has.
+ * Hold the song on a channel where it is. `paused` once the service has.
  *
  * Listeners stay subscribed to the track and hear silence; nothing is torn
- * down. A 404 is an older service with no such route, which also settles
- * the capability question: it cannot pause, whatever was cached.
+ * down. `not-yet` is a 409: nothing there to hold right now — usually the
+ * next song is still being fetched, which a retry a moment later gets past.
+ * A 404 is an older service with no such route, which also settles the
+ * capability question: it cannot pause, whatever was cached.
  */
-export const musicPause = async (room: string, channelId: string): Promise<boolean> => {
+export const musicPause = async (room: string, channelId: string): Promise<'paused' | 'not-yet' | 'failed'> => {
   const status = await send('/pause', { room, channelId })
+  if (status === 200) return 'paused'
+  if (status === 409) return 'not-yet'
   if (status === 404) settle(false)
-  return status === 200
+  return 'failed'
 }
 
 /**

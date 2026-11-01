@@ -536,11 +536,14 @@ describe('going back, from the socket', () => {
 describe('pausing a shared song', () => {
   // Pause needs the music service to hold the song, so these run against a
   // stand-in service on a real port: it records what it was asked and
-  // answers whatever status a test sets. The server is told about it the
-  // way a host tells it, through the music config.
+  // answers whatever status a test sets — one status, or a sequence whose
+  // last entry then repeats — optionally holding the answer until a test
+  // lets it go. The server is told about it the way a host tells it,
+  // through the music config.
   const stub = {
     calls: [] as { path: string; body: Record<string, unknown> }[],
-    status: {} as Record<string, number>,
+    status: {} as Record<string, number | number[]>,
+    hold: {} as Record<string, Promise<void>>,
   }
   let service: http.Server
   const saved = { url: config.music.url, secret: config.music.secret }
@@ -549,12 +552,14 @@ describe('pausing a shared song', () => {
     service = http.createServer((req, res) => {
       let raw = ''
       req.on('data', c => { raw += c })
-      req.on('end', () => {
+      req.on('end', async () => {
         const path = new URL(req.url ?? '/', 'http://music').pathname
         let body: Record<string, unknown> = {}
         try { body = raw ? JSON.parse(raw) : {} } catch { /* recorded as empty */ }
         stub.calls.push({ path, body })
-        const status = stub.status[path] ?? 200
+        if (stub.hold[path]) await stub.hold[path]
+        const set = stub.status[path]
+        const status = Array.isArray(set) ? (set.length > 1 ? set.shift()! : set[0]) : (set ?? 200)
         res.writeHead(status, { 'content-type': 'application/json' })
         res.end(JSON.stringify(path === '/capabilities' && status === 200 ? { ok: true, pause: true } : { ok: status === 200 }))
       })
@@ -573,6 +578,7 @@ describe('pausing a shared song', () => {
   beforeEach(() => {
     stub.calls.length = 0
     stub.status = {}
+    stub.hold = {}
     forgetMusicCapabilities()
   })
 
@@ -770,6 +776,70 @@ describe('pausing a shared song', () => {
     expect(stub.calls[1].body).toMatchObject({ room, startSec: 75 })
     // And Pause goes away with it: this service cannot pause.
     expect(chans(after)[0]).not.toHaveProperty('pausable')
+  })
+
+  describe('putting the service back in line after a refused commit', () => {
+    // A resume the service carried out, refused by the room because a seek
+    // moved the paused point while it was being asked: the room is still
+    // paused, so the service is told to pause again. If that lands while the
+    // next song is still starting, the service answers 409 — and the pause
+    // has to be tried again, or the song plays under a room that says Paused.
+    const count = (p: string) => paths().filter(x => x === p).length
+    const until = async (ok: () => boolean, ms = 3000) => {
+      for (let t = 0; t < ms && !ok(); t += 25) await sleep(25)
+    }
+    const refusedResume = async () => {
+      const ctx = await playing()
+      const { sa, sb, at } = ctx
+      sa.emit('music:pause', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+      let release = () => {}
+      stub.hold['/resume'] = new Promise<void>(r => { release = r })
+      stub.calls.length = 0
+      const err = nextEvent(sa, 'music:error')
+      sa.emit('music:resume', at)
+      await until(() => paths().includes('/resume'))   // out, and held by the service
+      sb.emit('music:seek', { ...at, sec: 30 })        // the paused point moves meanwhile
+      await musicStateWhere(sa, x => chans(x)[0]?.now?.elapsedMs === 30_000)
+      return { ...ctx, err, release }
+    }
+
+    it('retries a pause the service refuses while a song starts, until it holds', async () => {
+      const { err, release, room } = await refusedResume()
+      stub.status['/pause'] = [409, 409, 200]
+      release()
+      expect((await err).reason).toMatch(/changed while resuming/i)
+      await until(() => count('/pause') >= 3)
+      expect(count('/pause')).toBe(3)
+      await sleep(600)
+      expect(count('/pause')).toBe(3)                  // held: no more tries
+      expect(musicRooms.view(room).channels[0].paused).toBe(true)
+    })
+
+    it('keeps retrying through a seek while paused: still paused, same song', async () => {
+      const { sb, at, err, release } = await refusedResume()
+      stub.status['/pause'] = [409, 409, 409, 200]
+      release()
+      await err
+      await until(() => count('/pause') >= 2)
+      sb.emit('music:seek', { ...at, sec: 50 })
+      await until(() => count('/pause') >= 4)
+      expect(count('/pause')).toBe(4)
+    })
+
+    it('stops retrying once the room is no longer paused on that song', async () => {
+      const { sb, at, err, release } = await refusedResume()
+      stub.status['/pause'] = 409
+      release()
+      await err
+      await until(() => count('/pause') >= 2)
+      sb.emit('music:skip', at)                        // nothing queued: the song is over
+      await musicStateWhere(sb, x => chans(x)[0]?.now === null)
+      await sleep(300)
+      const settled = count('/pause')
+      await sleep(700)
+      expect(count('/pause')).toBe(settled)
+    })
   })
 
   it('seek while paused moves the point without playing, and resume starts there', async () => {

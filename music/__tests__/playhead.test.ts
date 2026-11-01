@@ -290,6 +290,87 @@ describe('a source that dies during a long pause', () => {
     expect(rec.seen).toEqual([...range(0, 51), ...range(49, SONG)])
   })
 
+  it('keeps the take-back across a refetch: a pause just after it still loses nothing', async () => {
+    // The source still holds frames sent BEFORE the refetch. A pause on the
+    // first fresh frame must take those back too, not only what came after.
+    let head!: Playhead
+    const first = new PassThrough()
+    const rec = recorder({
+      queuedMs: () => 3 * FRAME_MS,
+      onFrame: (_i, n) => {
+        if (n === 60) setImmediate(() => first.destroy())   // drops while playing
+        if (n === 61) head.pause()                           // the first fresh frame
+      },
+    })
+    head = new Playhead(0, rec.sink)
+    first.write(pcm(60))
+    const done = playThrough({
+      head, body: first, startSec: 0, decode: fakeDecode,
+      reopen: async () => Readable.from([pcm(SONG)]),
+    })
+    for (let i = 0; i < 50 && !head.paused; i++) await tick()
+    expect(head.paused).toBe(true)
+    expect(head.positionMs).toBe(58 * FRAME_MS)
+    head.resume()
+    expect(await done).toBe('ended')
+    expect(rec.seen).toEqual([...range(0, 61), ...range(58, SONG)])
+  })
+
+  it('stops fetching a source that keeps dropping while playing, after three refetches', async () => {
+    // Each refetch downloads the song again up to where the listener is. A
+    // source that drops every few seconds would do that for the whole song.
+    const flaky = (frames: number) => {
+      let i = 0
+      return new Readable({
+        highWaterMark: BYTES_PER_FRAME,
+        read() { if (i < frames) this.push(pcm(1, i++)); else this.destroy() },
+      })
+    }
+    const rec = recorder()
+    const head = new Playhead(0, rec.sink)
+    let reopened = 0
+    const done = playThrough({
+      head, body: flaky(50), startSec: 0, decode: fakeDecode,
+      // Every copy gets fifty frames further before it drops, so each one is
+      // progress — none trips the nothing-at-all guard.
+      reopen: async () => { reopened++; return reopened > 6 ? null : flaky(50 * (reopened + 1)) },
+    })
+    expect(await done).toBe('failed')
+    expect(reopened).toBe(3)
+    expect(rec.seen).toEqual(range(0, rec.seen.length))   // in order, nothing repeated
+    expect(rec.seen.length).toBeGreaterThan(150)
+  })
+
+  it('does not count refetches after a pause toward that limit', async () => {
+    // Four pauses long enough to lose the source: each is the pause's doing.
+    let head!: Playhead
+    const rec = recorder()
+    head = new Playhead(0, rec.sink)
+    let body = new PassThrough()
+    body.write(pcm(20))
+    let reopened = 0
+    const done = playThrough({
+      head, body, startSec: 0, decode: fakeDecode,
+      reopen: async () => {
+        reopened++
+        body = new PassThrough()
+        body.write(pcm(20 * (reopened + 1)))
+        if (reopened === 4) body.end()               // the last copy reaches the end
+        return body
+      },
+    })
+    for (let round = 0; round < 4; round++) {
+      for (let i = 0; i < 50 && rec.seen.length < 20 * (round + 1); i++) await tick()
+      head.pause()
+      body.destroy()
+      await tick()
+      head.resume()
+    }
+    expect(await done).toBe('ended')
+    expect(reopened).toBe(4)
+    expect(rec.seen).toEqual(range(0, 100))
+  })
+
   it('is not mistaken for one when the song is stopped instead', async () => {
     let head!: Playhead
     const rec = recorder({ onFrame: (_i, n) => { if (n === 5) head.pause() } })

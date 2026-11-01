@@ -193,6 +193,10 @@ export const musicTrackEnded = (room: string, channelId: string): void => {
   if (next.ok && next.now) startSource(room, channelId, next.now)
 }
 
+/** How often, and for how long, a resync pause is retried while a song starts. */
+const RESYNC_EVERY_MS = 250
+const RESYNC_FOR_MS = 10_000
+
 /**
  * Put the service back in line with the room after a commit was refused.
  *
@@ -203,8 +207,29 @@ export const musicTrackEnded = (room: string, channelId: string): void => {
 const resyncMusic = (room: string, channelId: string): void => {
   const channel = musicRooms.get(room, channelId)
   if (!channel?.now) return
-  if (channel.pausedAt !== null) void musicPause(room, channelId)
-  else void musicResume(room, channelId)
+  if (channel.pausedAt === null) { void musicResume(room, channelId); return }
+  void holdOnceStarted(room, channelId, channel.now.entryId, Date.now() + RESYNC_FOR_MS)
+}
+
+/**
+ * Pause the service, retrying while it says "not yet".
+ *
+ * A 409 here means the next song is still being fetched — pausing then
+ * would hold the song on its way out — so the pause is asked again every
+ * quarter second until it lands. It stops the moment the room is no longer
+ * paused on this same song: a resume, a skip, previous, play now or a close.
+ * Not on a seek: a seek while paused leaves the room paused on the same song,
+ * which the service still has to hold. And it stops after ten seconds
+ * whatever happens. Each wait is an unref'd timer, so nothing here outlives
+ * the channel or holds the process open.
+ */
+const holdOnceStarted = async (room: string, channelId: string, entryId: string, until: number): Promise<void> => {
+  for (;;) {
+    const channel = musicRooms.get(room, channelId)
+    if (!channel?.now || channel.pausedAt === null || channel.now.entryId !== entryId) return
+    if ((await musicPause(room, channelId)) !== 'not-yet' || Date.now() >= until) return
+    await new Promise<void>(r => { setTimeout(r, RESYNC_EVERY_MS).unref?.() })
+  }
 }
 
 /**
@@ -217,7 +242,7 @@ const resyncMusic = (room: string, channelId: string): void => {
 const pauseMusic = async (room: string, channelId: string): Promise<Check> => {
   const ask = musicRooms.pauseCheck(room, channelId)
   if (!ask.ok) return ask
-  if (!(await musicPause(room, channelId))) {
+  if ((await musicPause(room, channelId)) !== 'paused') {
     return { ok: false, reason: 'The music could not be paused. Try again in a moment.' }
   }
   const done = musicRooms.pause(room, channelId, ask.ticket)

@@ -101,11 +101,13 @@ export class Playhead {
 
   /**
    * A fresh decode starts at `atMs`, at or before the listener's point: drop
-   * frames up to that point, and forget frames from the old decode.
+   * frames up to that point. Frames not yet sent are dropped too — the fresh
+   * decode produces them again — but the recently sent ones are kept: the
+   * source may still hold up to a second of them, and a pause just after the
+   * refetch has to be able to take those back like any others.
    */
   restart(atMs: number): void {
     this.discard = Math.max(0, Math.round((this.positionMs - atMs) / FRAME_MS))
-    this.recent.length = 0
     this.next.length = 0
   }
 
@@ -144,6 +146,15 @@ export interface PlayOptions {
 }
 
 /**
+ * Refetches allowed per song for a source that closes while PLAYING. Each one
+ * downloads the song again up to where the listener is, so a source that
+ * drops every few seconds would otherwise do that for the whole song.
+ * Closes during a pause do not count: they are the pause's doing, and each
+ * already waits for somebody to press resume.
+ */
+export const MAX_PLAYING_REFETCHES = 3
+
+/**
  * Watch a source for closing before its end, while the song is still live.
  *
  * Held or playing alike. A pasted link's idle timer can fire a moment after
@@ -179,6 +190,7 @@ export const playThrough = async (o: PlayOptions): Promise<'ended' | 'replaced' 
   o.onDecoder?.(dec)
   let src = watch(o.body, head)
   let openedAt = head.positionMs
+  let playingRefetches = 0
   try {
     for (;;) {
       for await (const frame of frames(dec.pcm)) {
@@ -187,10 +199,15 @@ export const playThrough = async (o: PlayOptions): Promise<'ended' | 'replaced' 
         if (head.stopped) break
       }
       if (head.stopped || !src.lost || !o.reopen) break
-      // Closed before giving a single frame, while playing: fetching it again
-      // would be a loop, not a recovery. A close during a pause is the pause's
-      // doing, so it is always worth one more fetch.
-      if (head.positionMs === openedAt && !src.whilePaused) return 'failed'
+      if (!src.whilePaused) {
+        // Closed before giving a single frame, while playing: fetching it
+        // again would be a loop, not a recovery. And a source that keeps
+        // dropping gets MAX_PLAYING_REFETCHES chances, not the whole song.
+        // A close during a pause is the pause's doing: always one more fetch.
+        if (head.positionMs === openedAt) return 'failed'
+        if (playingRefetches >= MAX_PLAYING_REFETCHES) return 'failed'
+        playingRefetches++
+      }
       // Carry on only once any pause is over.
       await head.held()
       if (head.stopped) break

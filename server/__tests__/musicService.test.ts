@@ -37,11 +37,13 @@ afterEach(() => {
 })
 
 describe('pause and resume answers', () => {
-  it('a pause is done only on a 200; a 409 (nothing to hold, or still starting) refuses it', async () => {
+  it('a pause is done only on a 200; a 409 (nothing to hold yet, a song still starting) is "not yet"', async () => {
     answers['/pause'] = { status: 409 }
-    expect(await musicPause('voice:1', 'c')).toBe(false)
+    expect(await musicPause('voice:1', 'c')).toBe('not-yet')
+    answers['/pause'] = { status: 500 }
+    expect(await musicPause('voice:1', 'c')).toBe('failed')
     answers['/pause'] = { status: 200 }
-    expect(await musicPause('voice:1', 'c')).toBe(true)
+    expect(await musicPause('voice:1', 'c')).toBe('paused')
   })
 
   it('a 404 on resume (the service was rolled back mid-pause) means "start it again", and no more Pause', async () => {
