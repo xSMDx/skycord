@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pickFocus, focusedVideo, shareSlot, FOCUS_HOLD_MS, musicCardLabel, formatElapsed, callSubtitle,
+  pickFocus, focusedVideo, shareSlot, streamRow, FOCUS_HOLD_MS, musicCardLabel, formatElapsed, callSubtitle,
   type FocusInput, type FocusState,
 } from '../phoneCallRules'
 import type { MusicChannelView } from '../useMusic'
@@ -368,6 +368,32 @@ describe('shareSlot: what the big slot shows for a share', () => {
 
   it('is nothing for a share that has stopped: the holder is drawn as the person', () => {
     expect(shareSlot([track('b', 'camera')], focus('screen', 'b', 0), [share('a')])).toBeNull()
+  })
+})
+
+// The person sheet's stream row (ruling T4-2): every share must be joinable
+// (spec 6), and the stage shows only one, so the sheet offers the way in too —
+// and, once joined, the way out in the same place.
+describe('streamRow: Join stream or Leave stream in the person sheet', () => {
+  it('is nothing when they are not sharing a screen', () => {
+    expect(streamRow({ sharing: false, joined: false, hidden: false })).toBeNull()
+  })
+
+  it('is Join stream for a share you have not joined', () => {
+    expect(streamRow({ sharing: true, joined: false, hidden: false })).toBe('join')
+  })
+
+  it('is Leave stream once you have joined it', () => {
+    expect(streamRow({ sharing: true, joined: true, hidden: false })).toBe('leave')
+  })
+
+  it('offers no Join for a share hidden by Disable Video — it would load and never be drawn — but still lets you leave one', () => {
+    expect(streamRow({ sharing: true, joined: false, hidden: true })).toBeNull()
+    expect(streamRow({ sharing: true, joined: true, hidden: true })).toBe('leave')
+  })
+
+  it('is nothing for a stream still marked joined after its share has stopped', () => {
+    expect(streamRow({ sharing: false, joined: true, hidden: false })).toBeNull()
   })
 })
 

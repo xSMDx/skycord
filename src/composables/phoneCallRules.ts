@@ -170,6 +170,19 @@ export const shareSlot = (
   return share ? (share.joined ? 'loading' : 'join') : null
 }
 
+/**
+ * The person sheet's stream row: Join stream, Leave stream, or nothing.
+ *
+ * Every share must be joinable (spec 6), and the stage shows only the one in
+ * its slot, so a second share's way in is its sharer's sheet; once joined,
+ * the same place is the way out. A share hidden by Disable Video gets no
+ * Join — it would load and never be drawn — but one already joined can still
+ * be left. `sharing` is whether they share a screen now, so a stream still
+ * marked joined after its share stopped offers nothing.
+ */
+export const streamRow = (s: { sharing: boolean; joined: boolean; hidden: boolean }): 'join' | 'leave' | null =>
+  !s.sharing ? null : s.joined ? 'leave' : s.hidden ? null : 'join'
+
 // ── The Music card ──────────────────────────────────────────────────────────
 export type MusicCardLabel =
   | null

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * One person in the call, as a phone sheet: how loud they are for you, how
- * loud the screen they share is, the local Mute, and Leave stream while you
- * are watching their screen.
+ * loud the screen they share is, the local Mute, and Join stream or Leave
+ * stream while they share a screen (the stage shows only one share, so this
+ * is the way into any other).
  *
  * The desktop's tile menu, laid out for a thumb, on the same state: the
  * sliders are callMenu's volumeSliders — the rows both desktop menus draw, so
@@ -20,15 +21,16 @@
  * it holds rather than standing half empty.
  */
 import { computed } from 'vue'
-import { MicOff, MonitorOff } from 'lucide-vue-next'
+import { MicOff, MonitorOff, MonitorPlay } from 'lucide-vue-next'
 import BottomSheet from '@/components/ui/BottomSheet.vue'
 import Avatar from '@/components/ui/Avatar.vue'
 import { defaultAvatar } from '@/composables/useAvatar'
 import {
-  userPref, setUserPref, setStreamVolume, userVolumeMax, joinedStreams, leaveStream,
+  userPref, setUserPref, setStreamVolume, userVolumeMax, joinedStreams, joinStream, leaveStream,
 } from '@/composables/useVoice'
 import { media } from '@/composables/useVoiceMedia'
 import { volumeSliders } from '@/composables/contextMenus/callMenu'
+import { streamRow } from '@/composables/phoneCallRules'
 import type { MenuSlider } from '@/composables/useContextMenu'
 
 const props = defineProps<{ open: boolean; person: { id: string; name: string; avatar: string } | null }>()
@@ -59,15 +61,27 @@ const toggleMute = () => {
   if (p) setUserPref(p.id, { muted: !userPref(p.id).muted })
 }
 
-/** Watching their screen: joined, and the share still running. A stopped share takes the row with it. */
-const watching = computed(() => props.person !== null && joinedStreams.has(props.person.id) && media.streamsAvailable.has(props.person.id))
+/**
+ * Join stream, Leave stream, or neither (phoneCallRules' streamRow). Read
+ * live: a share that starts shows Join, one that stops takes the row with it.
+ */
+const streamAction = computed(() => {
+  const p = props.person
+  if (!p) return null
+  return streamRow({
+    sharing: media.streamsAvailable.has(p.id),
+    joined: joinedStreams.has(p.id),
+    hidden: userPref(p.id).videoOff,
+  })
+})
 
-// Leaving is the whole errand, and what it changed is on the stage behind:
-// the sheet goes with it.
-const onLeave = () => {
+// Joining or leaving is the whole errand, and what it changes is on the stage
+// behind — the stream you asked to see, or its tile again — so the sheet goes.
+const onStream = () => {
   const p = props.person
   if (!p) return
-  leaveStream(p.id)
+  if (streamAction.value === 'join') joinStream(p.id)
+  else leaveStream(p.id)
   emit('close')
 }
 </script>
@@ -112,12 +126,14 @@ const onLeave = () => {
         <p class="pps-note">Only for you. {{ person.name }} isn’t told.</p>
       </section>
 
-      <!-- Spec 6: stop loading their screen without leaving the call. Only
-           while you are watching it; the stage offers Join stream. -->
-      <div v-if="watching" class="pps-card">
-        <button type="button" class="pps-row" @click="onLeave">
-          <MonitorOff class="pps-ic" :size="18" :stroke-width="2.25" aria-hidden="true" />
-          <span class="pps-grow">Leave stream</span>
+      <!-- Spec 6: every share can be joined, and left again without leaving
+           the call. The stage shows one share; this is the way into any of
+           them, and the way out in the same place once joined. -->
+      <div v-if="streamAction" class="pps-card">
+        <button type="button" class="pps-row" @click="onStream">
+          <MonitorOff v-if="streamAction === 'leave'" class="pps-ic" :size="18" :stroke-width="2.25" aria-hidden="true" />
+          <MonitorPlay v-else class="pps-ic" :size="18" :stroke-width="2.25" aria-hidden="true" />
+          <span class="pps-grow">{{ streamAction === 'leave' ? 'Leave stream' : 'Join stream' }}</span>
         </button>
       </div>
     </div>

@@ -165,6 +165,12 @@ describe('the phone music sheet', () => {
     expect(sheet).toMatch(/\{[^}]*\brefusedAt\b[^}]*\} = useCallMusic\(/)
   })
 
+  it('draws the hairline between "New music channel" and "Your library", after the row reset that would take it off', () => {
+    // Scoped, `.pms-card > * + *` and `.pms-link` weigh the same, so the later
+    // one wins: declared first, the link's `border: none` removed the line.
+    expect(css.indexOf('.pms-card > * + *')).toBeGreaterThan(css.indexOf('.pms-link {'))
+  })
+
   it('still shows a refusal that has no card to sit in, rather than swallowing it', () => {
     expect(sheet).toMatch(/const orphaned = computed\(/)
     expect(tagWith(tpl, 'v-if="orphaned"')).toContain('role="alert"')

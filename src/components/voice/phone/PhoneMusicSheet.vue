@@ -300,7 +300,6 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
 /* The rows that are not a channel: start one, the library. One rounded group,
    each row a full-width target. */
 .pms-card { border-radius: var(--edge-xl); background: var(--hover); overflow: hidden; }
-.pms-card > * + * { border-top: 1px solid var(--divider); }
 
 .pms-link {
   display: flex; align-items: center; gap: 12px;
@@ -312,6 +311,10 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
 .pms-grow { flex: 1; min-width: 0; }
 .pms-ic { flex: none; color: var(--text-2); }
 .pms-chev { flex: none; color: var(--text-3); }
+/* The hairline between those rows. After .pms-link, whose `border: none`
+   weighs the same once scoped and, declared later, took the line off "Your
+   library". */
+.pms-card > * + * { border-top: 1px solid var(--divider); }
 
 .pms-new { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .pms-new-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }

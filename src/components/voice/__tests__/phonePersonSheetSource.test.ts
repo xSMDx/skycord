@@ -181,13 +181,36 @@ describe('the person sheet', () => {
     expect(px(ruleOf(sheetCss, '.pps-row'), 'min-height')).toBeGreaterThanOrEqual(44)
   })
 
-  it('offers Leave stream while their stream is joined, which leaves the stream and not the call', () => {
-    const leave = elementWith(sheetTpl, 'v-if="watching"')
-    expect(leave).toContain('Leave stream')
-    expect(between(personSheet, 'const watching = computed(', '\n')).toContain('joinedStreams.has(')
-    const act = between(personSheet, 'const onLeave = ', '\n}')
+  it('offers Join stream for a share not joined, and Leave stream in the same place once joined (ruling T4-2)', () => {
+    // Which, if either, is phoneCallRules' streamRow, fed the live state.
+    const which = between(personSheet, 'const streamAction = computed(', '\n})')
+    expect(which).toContain('streamRow(')
+    expect(which).toContain('sharing: media.streamsAvailable.has(p.id)')
+    expect(which).toContain('joined: joinedStreams.has(p.id)')
+    expect(which).toContain('hidden: userPref(p.id).videoOff')
+
+    // One row, the same row style and target as the rest of the sheet.
+    const card = elementWith(sheetTpl, 'v-if="streamAction"')
+    const row = openingTag(elementWith(card, 'class="pps-row"'))
+    expect(row).toMatch(/^<button\s/)
+    expect(row).toContain('@click="onStream"')
+    expect(card).toMatch(/streamAction === 'leave' \? 'Leave stream' : 'Join stream'/)
+    expect(card).toContain('<MonitorOff v-if="streamAction === \'leave\'"')
+    expect(card).toContain('<MonitorPlay v-else')
+    expect(px(ruleOf(sheetCss, '.pps-row'), 'min-height')).toBeGreaterThanOrEqual(44)
+
+    // Joining closes the sheet, so the stream can be seen; leaving does too,
+    // and leaves the stream, never the call.
+    const act = between(personSheet, 'const onStream = ', '\n}')
+    expect(act).toContain('joinStream(p.id)')
     expect(act).toContain('leaveStream(p.id)')
+    expect(act).toContain("emit('close')")
     expect(personSheet).not.toMatch(/\bleave\(\)/)
+  })
+
+  it('draws the hairline between rows after the row reset, which would otherwise take it off', () => {
+    // Scoped, `.pps-card > * + *` and `.pps-row` weigh the same, so the later one wins.
+    expect(sheetCss.indexOf('.pps-card > * + *')).toBeGreaterThan(sheetCss.indexOf('.pps-row {'))
   })
 
   it('says the controls are only for you', () => {
