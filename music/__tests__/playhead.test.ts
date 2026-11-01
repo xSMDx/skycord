@@ -27,7 +27,10 @@ const pcm = (n: number, from = 0): Buffer => {
 /**
  * Stands in for ffmpeg: the "file" is already PCM, so decoding is passing it
  * through, and starting `startSec` in is dropping that many seconds of it.
- * stop() ends the output the way a killed ffmpeg's stdout ends.
+ * stop() ends the output the way a killed ffmpeg's stdout ends, and a body
+ * that closes without ending ends it after what was already read, the way
+ * decode() ends ffmpeg's stdin and lets it finish (decode.test.ts proves
+ * that half against the real ffmpeg).
  */
 const decodes: number[] = []
 const fakeDecode = (body: Readable, startSec: number): Decoder => {
@@ -41,10 +44,13 @@ const fakeDecode = (body: Readable, startSec: number): Decoder => {
     },
   })
   body.pipe(out)
+  let ended = false
+  body.once('end', () => { ended = true })
+  body.once('close', () => { if (!ended && !out.writableEnded) out.end() })
   let stopped = false
   return {
     pcm: out,
-    stop: () => { if (stopped) return; stopped = true; body.unpipe(out); out.end() },
+    stop: () => { if (stopped) return; stopped = true; body.unpipe(out); if (!out.writableEnded) out.end() },
     done: Promise.resolve(0),
   }
 }
@@ -209,6 +215,79 @@ describe('a source that dies during a long pause', () => {
     await tick()
     head.resume()
     expect(await done).toBe('failed')
+  })
+
+  it('is fetched again when it dies just after resume, while playing', async () => {
+    // A pasted link's idle timer can fire a moment AFTER resume: the socket
+    // is not read again until ffmpeg drains what it buffered. A close while
+    // playing is as lost as one while held, or the song hangs silent.
+    decodes.length = 0
+    let head!: Playhead
+    const rec = recorder({ onFrame: (_i, n) => { if (n === 60) head.pause() } })
+    head = new Playhead(0, rec.sink)
+    const first = new PassThrough()
+    first.write(pcm(70))
+    let reopened = 0
+    const done = playThrough({
+      head, body: first, startSec: 0, decode: fakeDecode,
+      reopen: async () => { reopened++; return Readable.from([pcm(SONG)]) },
+    })
+    await tick()
+    head.resume()
+    first.destroy()                                  // right after resume
+    expect(await done).toBe('ended')
+    expect(reopened).toBe(1)
+    expect(rec.seen).toEqual(range(0, SONG))
+  })
+
+  it('gives up, rather than fetching forever, on a source that dies before sending anything', async () => {
+    let head!: Playhead
+    const rec = recorder()
+    head = new Playhead(0, rec.sink)
+    const first = new PassThrough()
+    first.write(pcm(10))
+    setTimeout(() => first.destroy(), 20)
+    let reopened = 0
+    const done = playThrough({
+      head, body: first, startSec: 0, decode: fakeDecode,
+      reopen: async () => {
+        reopened++
+        const dead = new PassThrough()
+        setTimeout(() => dead.destroy(), 5)
+        return dead
+      },
+    })
+    expect(await done).toBe('failed')
+    expect(reopened).toBe(1)
+    expect(rec.seen).toEqual(range(0, 10))
+  })
+
+  it('a pause during the refetch loses nothing, even across a second boundary', async () => {
+    // The pause takes back two unheard frames, moving the listener from just
+    // past second 1 to just before it. The fresh decode has to start from
+    // where the listener is AFTER that, or the taken-back frames are lost.
+    decodes.length = 0
+    const rec = recorder({ queuedMs: () => 2 * FRAME_MS })
+    const head = new Playhead(0, rec.sink)
+    const first = new PassThrough()
+    first.write(pcm(51))                             // 1.02 s
+    setTimeout(() => first.destroy(), 20)
+    let release: (b: Readable) => void = () => {}
+    let asked = false
+    const done = playThrough({
+      head, body: first, startSec: 0, decode: fakeDecode,
+      reopen: () => { asked = true; return new Promise<Readable>(r => { release = r }) },
+    })
+    for (let i = 0; i < 50 && !asked; i++) await tick()
+    expect(asked).toBe(true)
+    head.pause()
+    expect(head.positionMs).toBe(49 * FRAME_MS)
+    release(Readable.from([pcm(SONG)]))
+    await tick()
+    head.resume()
+    expect(await done).toBe('ended')
+    expect(decodes).toEqual([0, 0])
+    expect(rec.seen).toEqual([...range(0, 51), ...range(49, SONG)])
   })
 
   it('is not mistaken for one when the song is stopped instead', async () => {

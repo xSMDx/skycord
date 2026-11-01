@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { AddressInfo } from 'net'
-import type { Server } from 'http'
+import { createServer, type Server } from 'http'
 import { createMusicServer } from '../src/server.js'
 import type { MusicPublisher } from '../src/publisher.js'
 
@@ -173,6 +173,57 @@ describe('/pause and /resume', () => {
       expect((await post(path, { room: 'r' }, SECRET)).status).toBe(400)
       expect((await post(path, { channelId: 'c' }, SECRET)).status).toBe(400)
       expect((await post(path, { room: 'r', channelId: 'c' })).status).toBe(401)
+    }
+  })
+})
+
+describe('a pause while the next song is still being fetched', () => {
+  // /play and /play-track answer at once and fetch in the background; the
+  // song already playing keeps playing until the new one starts. A pause in
+  // that gap would hold the OUTGOING song, the new one would then start
+  // unpaused, and the room would show Paused over music. So it is refused,
+  // the same "try again in a moment" as a pause at the very start of a song.
+  it('is refused, and works again once the new song has started', async () => {
+    let release: (() => void) | null = null
+    const api = createServer((_req, res) => {
+      release = () => {
+        if (res.headersSent) return
+        res.writeHead(200, { 'content-type': 'audio/webm' }); res.end(Buffer.from('bytes'))
+      }
+    })
+    await new Promise<void>(r => api.listen(0, '127.0.0.1', () => r()))
+    const svc = createMusicServer(stubPublisher, {
+      port: 0, host: '127.0.0.1', secret: SECRET, maxBytes: 1024,
+      apiInternalUrl: `http://127.0.0.1:${(api.address() as AddressInfo).port}`,
+    })
+    await new Promise<void>(r => svc.listening ? r() : svc.once('listening', () => r()))
+    const at = `http://127.0.0.1:${(svc.address() as AddressInfo).port}`
+    const send = (path: string, body: unknown) => fetch(at + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-music-secret': SECRET },
+      body: JSON.stringify(body),
+    })
+    const waitFor = async (ok: () => boolean) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 20)) }
+    try {
+      calls.length = 0
+      playingHere.add('voice:9/c')                     // the outgoing song, still playing
+      expect((await send('/play-track', { room: 'voice:9', channelId: 'c', trackId: 'b'.repeat(24) })).status).toBe(200)
+      await waitFor(() => release !== null)            // the read is out, not answered
+
+      const early = await send('/pause', { room: 'voice:9', channelId: 'c' })
+      expect(early.status).toBe(409)
+      expect(calls).not.toContain('pause voice:9/c')
+
+      release!()
+      await waitFor(() => calls.includes('play voice:9/c'))
+      expect(calls).toContain('play voice:9/c')
+      expect((await send('/pause', { room: 'voice:9', channelId: 'c' })).status).toBe(200)
+    } finally {
+      playingHere.clear()
+      ;(release as (() => void) | null)?.()            // never leave the read hanging
+      await new Promise<void>(r => svc.close(() => r()))
+      api.closeAllConnections()
+      await new Promise<void>(r => api.close(() => r()))
     }
   })
 })

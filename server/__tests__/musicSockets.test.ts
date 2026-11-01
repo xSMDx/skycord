@@ -752,6 +752,26 @@ describe('pausing a shared song', () => {
     expect(stub.calls[1].body).toMatchObject({ room, startSec: 90 })
   })
 
+  it('resume after the service was rolled back mid-pause starts the song again too', async () => {
+    // An older service answers 404 to /resume. It cannot hold anything —
+    // its restart lost the song — so this is a restart, not a failure.
+    const { sa, at, room } = await playing()
+    sa.emit('music:seek', { ...at, sec: 75 })
+    await musicStateWhere(sa, x => (chans(x)[0]?.now?.elapsedMs ?? 0) >= 75_000)
+    sa.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+
+    stub.calls.length = 0
+    stub.status['/resume'] = 404
+    stub.status['/capabilities'] = 404
+    sa.emit('music:resume', at)
+    const after = await musicStateWhere(sa, x => chans(x)[0]?.paused === false)
+    expect(paths().slice(0, 2)).toEqual(['/resume', '/play-track'])
+    expect(stub.calls[1].body).toMatchObject({ room, startSec: 75 })
+    // And Pause goes away with it: this service cannot pause.
+    expect(chans(after)[0]).not.toHaveProperty('pausable')
+  })
+
   it('seek while paused moves the point without playing, and resume starts there', async () => {
     const { sa, sb, at } = await playing()
     sa.emit('music:pause', at)

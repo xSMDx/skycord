@@ -126,9 +126,9 @@ export class MusicPublisher {
    * advance its own queue. Errors are reported rather than thrown: a bad
    * file is an ordinary event here, not an exceptional one.
    *
-   * `reopen` fetches the same song again from the top. It is used only when
-   * the source dies while the song is paused (see playhead.ts); without it,
-   * such a song ends where its buffer ran out.
+   * `reopen` fetches the same song again from the top, for a source that
+   * closes before its end — usually because a pause left it idle (see
+   * playhead.ts). Without it, such a song ends where its buffer ran out.
    */
   async play(
     roomName: string, channelId: string, body: Readable, startSec = 0,

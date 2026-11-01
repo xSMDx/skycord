@@ -96,12 +96,16 @@ export const musicPause = async (room: string, channelId: string): Promise<boole
  * Release a held song. `not-held` is the service saying it holds nothing on
  * that channel — it restarted during the pause, or the song stopped — and
  * the caller then starts the song again from the room's frozen point.
+ *
+ * A 404 is `not-held` too: an older service, rolled back during the pause.
+ * Its restart lost the song, so starting it again is exactly right, and
+ * calling it a failure would leave a song nobody could ever resume.
  */
 export const musicResume = async (room: string, channelId: string): Promise<'resumed' | 'not-held' | 'failed'> => {
   const status = await send('/resume', { room, channelId })
   if (status === 200) return 'resumed'
   if (status === 409) return 'not-held'
-  if (status === 404) settle(false)
+  if (status === 404) { settle(false); return 'not-held' }
   return 'failed'
 }
 
@@ -114,13 +118,14 @@ export const musicResume = async (room: string, channelId: string): Promise<'res
  * runs beside it and a change is announced through onMusicCapabilitiesChange
  * so the rooms can be told again. Stale-while-revalidate, in short.
  *
- * Kept for different lengths by what it says. A yes holds for ten minutes:
- * a service that stops being able to pause is a downgrade, rare, and a
- * refused pause catches it at once anyway (a 404 above). A no is asked
- * again after a minute, because the normal way to get one is a host who
- * updated the server before the service — the next minute after they
- * update the service, Pause appears without restarting anything. A probe
- * that fails outright says nothing either way, and is retried shortly.
+ * Kept for different lengths by what it says. A yes holds for ten minutes
+ * and is re-checked when a state is next built: a service that stops being
+ * able to pause is a downgrade, rare, and a refused pause or resume catches
+ * it at once anyway (a 404 above). A no is asked again a minute later, on a
+ * timer, because the normal way to get one is a host who updated the server
+ * before the service: within a minute of updating the service, Pause
+ * appears in every room without anyone touching one. A probe that fails
+ * outright says nothing either way, and is retried on a timer after 15 s.
  */
 const KEEP_YES_MS = 10 * 60_000
 const KEEP_NO_MS = 60_000
@@ -131,6 +136,8 @@ let known: { pause: boolean; until: number } | null = null
 let retryAt = 0
 let probing: Promise<boolean> | null = null
 let changed: () => void = () => {}
+/** The next unprompted probe, after a No or after no answer at all. One at a time. */
+let recheck: ReturnType<typeof setTimeout> | null = null
 
 const canPauseNow = (): boolean => known?.pause ?? false
 
@@ -140,6 +147,14 @@ function settle(pause: boolean | null): void {
   const now = Date.now()
   if (pause === null) { known = null; retryAt = now + RETRY_MS }
   else known = { pause, until: now + (pause ? KEEP_YES_MS : KEEP_NO_MS) }
+  if (recheck) { clearTimeout(recheck); recheck = null }
+  if (pause !== true && musicConfigured()) {
+    // Asked again without waiting for a room to change; the change hook
+    // tells every room if the answer flips. Unref'd: a question about
+    // music never holds the process open.
+    recheck = setTimeout(() => { recheck = null; void refreshMusicCapabilities() }, pause === null ? RETRY_MS : KEEP_NO_MS)
+    recheck.unref?.()
+  }
   if (canPauseNow() !== before) changed()
 }
 
@@ -194,6 +209,7 @@ export const forgetMusicCapabilities = (): void => {
   known = null
   retryAt = 0
   probing = null
+  if (recheck) { clearTimeout(recheck); recheck = null }
 }
 
 // ── Ingest ──────────────────────────────────────────────────────────────────

@@ -166,6 +166,36 @@ describe('decode() against the real ffmpeg', () => {
     expect(n).toBeLessThanOrEqual(55)
   }, 30_000)
 
+  it('finishes when its source closes without ending, rather than waiting forever', async () => {
+    // A pasted link's socket that idles out is destroyed without an error,
+    // and pipe() does not end the destination for that. Without ending
+    // ffmpeg's stdin by hand, ffmpeg waits for more input that never comes
+    // and the channel hangs silent.
+    const { spawn } = await import('child_process')
+    const { PassThrough } = await import('stream')
+    const gen = spawn('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
+      '-f', 'mp3', 'pipe:1',
+    ], { windowsHide: true })
+    const chunks: Buffer[] = []
+    for await (const c of gen.stdout) chunks.push(c as Buffer)
+    const mp3 = Buffer.concat(chunks)
+
+    const body = new PassThrough()
+    const d = decode(body)
+    body.write(mp3.subarray(0, Math.floor(mp3.length / 2)))
+    setTimeout(() => body.destroy(), 100)            // closed, never ended
+
+    let n = 0
+    const drained = (async () => { for await (const _ of frames(d.pcm)) n++; await d.done; return 'finished' })()
+    const verdict = await Promise.race([drained, new Promise(r => setTimeout(() => r('hung'), 8_000))])
+    if (verdict === 'hung') d.stop()
+    expect(verdict).toBe('finished')
+    // What arrived was decoded: about a second of the two.
+    expect(n).toBeGreaterThan(20)
+  }, 30_000)
+
   it('stop() is safe to call twice and ends the decoder', async () => {
     const quiet = Readable.from([Buffer.alloc(0)])
     const d = decode(quiet)

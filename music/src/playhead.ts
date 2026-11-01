@@ -24,9 +24,10 @@
  *
  * 2. The fetch under a held song stalls while it is held, and the far end
  *    gives up on it — after ten seconds for a pasted link's socket, five
- *    minutes for the API's own. Playing on from what was buffered would end
- *    the song early and skip it. So a source that dies while held is fetched
- *    again on resume and decoded from the held point (playThrough).
+ *    minutes for the API's own — sometimes only a moment after resume.
+ *    Playing on from what was buffered would end the song early and skip
+ *    it. So a source that closes before its end is played out to where it
+ *    got, then fetched again and decoded from there (playThrough).
  */
 import type { Readable } from 'stream'
 import { frames, type Decoder } from './decode.js'
@@ -143,54 +144,68 @@ export interface PlayOptions {
 }
 
 /**
- * Watch a source for dying while the song is held. When it does, the decoder
- * is stopped there and then — what it still holds is redundant, because the
- * song will be decoded again from the held point.
+ * Watch a source for closing before its end, while the song is still live.
+ *
+ * Held or playing alike. A pasted link's idle timer can fire a moment after
+ * resume, before the socket is read again — ffmpeg first drains what it
+ * buffered — so "only while paused" missed exactly the case that hangs.
+ * Nothing is stopped here: decode() ends ffmpeg's stdin on such a close, the
+ * loop plays out what was already fetched, and then the song is fetched
+ * again from wherever the listener has got to.
  */
-const watch = (body: Readable, head: Playhead, dec: () => Decoder): (() => boolean) => {
+const watch = (body: Readable, head: Playhead) => {
+  const seen = { lost: false, whilePaused: false }
   let ended = false
-  let lost = false
   body.once('end', () => { ended = true })
   body.once('close', () => {
-    if (ended || !head.paused || head.stopped) return
-    lost = true
-    dec().stop()
+    if (ended || head.stopped) return
+    seen.lost = true
+    seen.whilePaused = head.paused
   })
-  return () => lost
+  return seen
 }
 
 /**
  * Play one song to the end, through any number of pauses.
  *
  * 'replaced' when stopped (a skip, a close), which reports no end; 'failed'
- * when a source that died during a pause cannot be fetched again; 'ended'
- * otherwise. A sink that throws is the caller's to catch.
+ * when a source that closed early cannot be fetched again, or keeps closing
+ * without giving any audio; 'ended' otherwise. A sink that throws is the
+ * caller's to catch.
  */
 export const playThrough = async (o: PlayOptions): Promise<'ended' | 'replaced' | 'failed'> => {
   const { head } = o
   let dec = o.decode(o.body, o.startSec)
   o.onDecoder?.(dec)
-  let lost = watch(o.body, head, () => dec)
+  let src = watch(o.body, head)
+  let openedAt = head.positionMs
   try {
     for (;;) {
       for await (const frame of frames(dec.pcm)) {
-        if (head.stopped || lost()) break
+        if (head.stopped) break
         await head.feed(frame)
-        if (head.stopped || lost()) break
+        if (head.stopped) break
       }
-      if (head.stopped || !lost() || !o.reopen) break
-      // Noticed during the pause; carry on only once it is over.
+      if (head.stopped || !src.lost || !o.reopen) break
+      // Closed before giving a single frame, while playing: fetching it again
+      // would be a loop, not a recovery. A close during a pause is the pause's
+      // doing, so it is always worth one more fetch.
+      if (head.positionMs === openedAt && !src.whilePaused) return 'failed'
+      // Carry on only once any pause is over.
       await head.held()
       if (head.stopped) break
       dec.stop()
-      const atSec = Math.floor(head.positionMs / 1000)
       const fresh = await o.reopen()
       if (head.stopped) { fresh?.destroy(); break }
       if (!fresh) return 'failed'
+      // Where the listener is NOW, not before the fetch: a pause during it
+      // took back what the source had queued, which may cross a second.
+      const atSec = Math.floor(head.positionMs / 1000)
       head.restart(atSec * 1000)
       dec = o.decode(fresh, atSec)
       o.onDecoder?.(dec)
-      lost = watch(fresh, head, () => dec)
+      src = watch(fresh, head)
+      openedAt = head.positionMs
     }
     const how = head.stopped ? 'replaced' : 'ended'
     // Over from here, before ffmpeg has finished exiting: a pause landing in
