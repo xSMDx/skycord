@@ -53,14 +53,21 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
        `+` and row actions made permanent (hover does not exist on a phone, so there was
        no discoverable way to create a channel). Spec:
        `docs/superpowers/specs/2026-08-25-phone-channels-nav-design.md`
-    2. ⬜ **Voice on a phone** — the stage, call controls, occupant list as phone screens.
+    2. ✅ **Voice on a phone** — shipped in **v0.20.99**: the phone call screen (full-screen stage,
+       a sheet with mute, camera and hang up, people, the call's music, Invite people), hold to
+       talk, join a stream from the person sheet. Plan: `docs/superpowers/plans/2026-10-25-phone-call-screen.md`
     3. ⬜ **Server management on a phone** — create channel/category, invites, members.
 
 ## Queue
 
 **Release numbers, set by the owner 2026-10-05:** music (listen together), tray and
 notifications, notification settings and the landing page's music demo ship as
-**v0.20.9**. The native phone app is **v0.21**.
+**v0.20.9**. The native phone app was to be **v0.21**.
+
+**Renumbered by the owner 2026-11-02:** the batch planned and written up as v0.21 ships as
+**v0.20.99** (tags 2026-11-07): the Android app, the phone call screen, the new logo, the music
+and screen-share batch, and the phone UI fixes. Changelog: `docs/changelog/v0.20.99.md`. Specs
+and plans under `docs/superpowers/` keep the name v0.21 they were written under.
 
 **Order changed 2026-09-11:** the one-command install and update comes first,
 then the UI/UX audit, then the Windows desktop app as v0.20.0 with
@@ -74,10 +81,10 @@ multi-instance split out to v0.21, then the phone app, then E2EE.
 | 4 | ~~**Multi-LiveKit (voice server picker)**~~ | ✅ **DONE — v0.14.0 (2026-08-30) and v0.14.1 (2026-08-31).** Shipped differently from the line this row used to carry, and deliberately: it assumed *"same API key/secret across servers, so a list of URLs — not a credential set each"*. Every server carries **its own** credentials instead, encrypted at rest via `secretBox`, because one shared key means one leak exposes every box. Two tiers: a guild owner registers servers for their own server, and an instance admin lists servers for the whole build in `voice-servers.json` (ids prefixed `instance:`, read-only in the app, secrets never reaching Mongo or a browser). Resolution is channel override → guild default → instance default → the `LIVEKIT_URL` trio. No lowest-ping auto — a per-channel pin and a per-user default for DMs, plus anyone in a DM/group call being able to move it live |
 | 5 | **Windows desktop app — v0.20** | **shipped as 0.20.x** (desktop 0.20.2, 2026-10-01; server v0.20.0–v0.20.4): shell and installer, first-run server picker and saved servers, auto-update with a launch splash, its own screen-share picker with per-app audio, the drawn title bar. **Still to build: 5.4 tray and notifications, 5.5 push-to-talk that works unfocused, 5.7 invite links that open the app** — see the slice table below |
 | 5a | ~~**Instance picker**~~ ✅ **shipped in v0.20** — the first-run picker and saved servers (Settings › Servers). | Requested 2026-09-12. A screen before login: use the hosted instance, or enter your own address. **This is a v0.20 blocker, not a nice-to-have** — without it the desktop app can only ever talk to app.skycord.xyz, which is useless to the audience PRODUCT.md names first. Choosing ONE instance is a different, much smaller problem than 5b switching between several. Client work is small: 7 fetch call sites use relative paths and `useSocket.ts:257` connects to `io('/')`. On the WEB it does not solve the stated problem and mostly cannot — a self-hoster already gets their own client from their own server, and an HTTPS page may not call `http://192.168.x.x` (mixed content), which is exactly the local-self-host case it was asked for. App-first. |
-| 5b | Multi-instance — not numbered (v0.21 is the phone app since 2026-10-05) | add another instance's address and switch between them, TeamSpeak-style. Split out of the desktop release because it changes how signing in works across instances. Blocks E2EE |
+| 5b | Multi-instance — not numbered (the phone app took v0.21 on 2026-10-05, and shipped as v0.20.99) | add another instance's address and switch between them, TeamSpeak-style. Split out of the desktop release because it changes how signing in works across instances. Blocks E2EE |
 | 5c | **Music — listen together** | **built 2026-10-03/04, not yet in production.** A personal library (upload or link, re-encoded, optionally virus-scanned), playlists, a player with a real queue, and music channels inside voice calls that everyone can tune into: shared queue, seek, previous, play-now, chat commands (`/play`, `/skip`, `/prev`…). Production runs it off until the container cutover (music is a second container). Branch `share-app-audio`, ahead of main. Plans: `docs/superpowers/plans/2026-10-04-music-*.md`; design and what is unverified: `docs/music-phase-2.md` |
-| 6 | Native phone app — **v0.21** | push notifications, and the same instance list as desktop. Blocks E2EE |
-| 6a | **Windows desktop app, to its full potential** | **next after v0.21** (owner, 2026-10-26). Customise the Electron shell much further than the web client in a window. The owner has ideas of their own for this, so it starts with a brainstorming session with the owner, before anything is designed. Open slices it can fold in: 5.5 (push-to-talk while unfocused) and 5.7 (invite links that open the app). |
+| 6 | ~~**Native phone app**~~ ✅ **shipped as v0.20.99** (2026-11-07) | Android 8 and newer, an APK from `xSMDx/skycord-android-releases` that updates itself; a native shell around each server's own web client; a saved-server list like the desktop's; notifications over the app's own connection to the last server opened (no Google push), with reply; calls that ring full screen, on the lock screen too; the phone call screen. Not built: iOS, a store listing. Specs: `docs/superpowers/specs/2026-10-05-android-shell-design.md`, `2026-10-23-android-notifications-design.md`, `2026-10-25-phone-call-screen-design.md` |
+| 6a | **Windows desktop app, to its full potential** | **next after v0.20.99** (owner, 2026-10-26). Customise the Electron shell much further than the web client in a window. The owner has ideas of their own for this, so it starts with a brainstorming session with the owner, before anything is designed. Open slices it can fold in: 5.5 (push-to-talk while unfocused) and 5.7 (invite links that open the app). |
 | 7 | E2EE (DMs only) | designed, not built — `docs/superpowers/specs/2026-08-30-e2ee-revision.md`. **After both apps**, not by preference: delete-on-delivery makes the device the only copy, and a browser tab that "clear site data" wipes is the wrong home for it. Write the protocol spec first — see that doc |
 
 ### 5. Windows desktop app — the slices
