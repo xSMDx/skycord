@@ -15,7 +15,7 @@ import { wellFormed } from '../utils/wellFormed'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
 import { MusicRooms } from './musicState'
-import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape, type Check } from '../utils/musicLimits'
+import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape } from '../utils/musicLimits'
 import {
   musicPlay, musicPlayTrack, musicClose, musicPause, musicResume,
   musicCanPause, onMusicCapabilitiesChange,
@@ -197,6 +197,19 @@ export const musicTrackEnded = (room: string, channelId: string): void => {
 const RESYNC_EVERY_MS = 250
 const RESYNC_FOR_MS = 10_000
 
+const musicKey = (room: string, channelId: string) => `${room}\u0000${channelId}`
+
+/**
+ * The resync loop each channel should be running, by number.
+ *
+ * Two refused commits close together used to start two loops, each pausing
+ * the service four times a second. Starting one now ends the one before:
+ * every loop checks it is still the channel's latest before each try, and
+ * whatever a newer resync decided — a resume, or a loop of its own — wins.
+ */
+const resyncLoops = new Map<string, number>()
+let resyncSeq = 0
+
 /**
  * Put the service back in line with the room after a commit was refused.
  *
@@ -205,10 +218,16 @@ const RESYNC_FOR_MS = 10_000
  * which way the race went, only what the room now says.
  */
 const resyncMusic = (room: string, channelId: string): void => {
+  const k = musicKey(room, channelId)
+  const mine = ++resyncSeq
+  resyncLoops.set(k, mine)                  // any loop already running stops at its next check
   const channel = musicRooms.get(room, channelId)
-  if (!channel?.now) return
-  if (channel.pausedAt === null) { void musicResume(room, channelId); return }
-  void holdOnceStarted(room, channelId, channel.now.entryId, Date.now() + RESYNC_FOR_MS)
+  if (!channel?.now || channel.pausedAt === null) {
+    resyncLoops.delete(k)
+    if (channel?.now) void musicResume(room, channelId)
+    return
+  }
+  void holdOnceStarted(room, channelId, channel.now.entryId, Date.now() + RESYNC_FOR_MS, mine)
 }
 
 /**
@@ -223,13 +242,60 @@ const resyncMusic = (room: string, channelId: string): void => {
  * whatever happens. Each wait is an unref'd timer, so nothing here outlives
  * the channel or holds the process open.
  */
-const holdOnceStarted = async (room: string, channelId: string, entryId: string, until: number): Promise<void> => {
-  for (;;) {
-    const channel = musicRooms.get(room, channelId)
-    if (!channel?.now || channel.pausedAt === null || channel.now.entryId !== entryId) return
-    if ((await musicPause(room, channelId)) !== 'not-yet' || Date.now() >= until) return
-    await new Promise<void>(r => { setTimeout(r, RESYNC_EVERY_MS).unref?.() })
+const holdOnceStarted = async (
+  room: string, channelId: string, entryId: string, until: number, loop: number,
+): Promise<void> => {
+  const k = musicKey(room, channelId)
+  try {
+    for (;;) {
+      if (resyncLoops.get(k) !== loop) return
+      const channel = musicRooms.get(room, channelId)
+      if (!channel?.now || channel.pausedAt === null || channel.now.entryId !== entryId) return
+      if ((await musicPause(room, channelId)) !== 'not-yet' || Date.now() >= until) return
+      await new Promise<void>(r => { setTimeout(r, RESYNC_EVERY_MS).unref?.() })
+    }
+  } finally {
+    if (resyncLoops.get(k) === loop) resyncLoops.delete(k)
   }
+}
+
+/**
+ * One pause or resume at a time per channel.
+ *
+ * Two people pressing Pause together both passed the check while the
+ * service was being asked for the first, and the second commit was then
+ * refused — "It is already paused." to somebody who got exactly what they
+ * asked for. And two resumes after a seek while paused both started the
+ * song. Each press now waits for the one before it on that channel, then
+ * looks again. The map holds the tail of the line and is emptied by
+ * whichever press is last; the rate limit bounds how long a line can get.
+ */
+const musicToggles = new Map<string, Promise<unknown>>()
+
+const oneAtATime = async <T>(room: string, channelId: string, run: () => Promise<T>): Promise<T> => {
+  const k = musicKey(room, channelId)
+  const before = musicToggles.get(k)
+  const mine = (async () => {
+    if (before) await before.catch(() => {})
+    return run()
+  })()
+  musicToggles.set(k, mine)
+  try {
+    return await mine
+  } finally {
+    if (musicToggles.get(k) === mine) musicToggles.delete(k)
+  }
+}
+
+/** Ok, and nothing to tell anyone: the room was already the way it was asked to be. */
+type Toggled = { ok: true; changed: boolean } | { ok: false; reason: string }
+const UNCHANGED: Toggled = { ok: true, changed: false }
+const CHANGED: Toggled = { ok: true, changed: true }
+
+/** Paused (or not) on a song: what a press of Pause (or Resume) asks for. */
+const isPausedNow = (room: string, channelId: string): boolean | null => {
+  const channel = musicRooms.get(room, channelId)
+  return channel?.now ? channel.pausedAt !== null : null
 }
 
 /**
@@ -239,18 +305,20 @@ const holdOnceStarted = async (room: string, channelId: string, entryId: string,
  * refusal or a failure changes nothing and broadcasts nothing — a channel
  * that said Paused while still playing would be worse than a refusal.
  */
-const pauseMusic = async (room: string, channelId: string): Promise<Check> => {
+const pauseMusic = (room: string, channelId: string): Promise<Toggled> => oneAtATime(room, channelId, async () => {
+  if (isPausedNow(room, channelId) === true) return UNCHANGED
   const ask = musicRooms.pauseCheck(room, channelId)
   if (!ask.ok) return ask
   if ((await musicPause(room, channelId)) !== 'paused') {
     return { ok: false, reason: 'The music could not be paused. Try again in a moment.' }
   }
   const done = musicRooms.pause(room, channelId, ask.ticket)
+  if (done.ok) return CHANGED
   // The song moved while the service was asked (a skip, a seek): the service
   // may now be holding the new one, which the room thinks is playing.
-  if (!done.ok) resyncMusic(room, channelId)
+  resyncMusic(room, channelId)
   return done
-}
+})
 
 /**
  * Resume a channel for everyone, from where it was frozen.
@@ -260,7 +328,8 @@ const pauseMusic = async (room: string, channelId: string): Promise<Check> => {
  * while paused, so what the service holds is the wrong place; or the
  * service says it holds nothing (409) — it restarted during the pause, say.
  */
-const resumeMusic = async (room: string, channelId: string): Promise<Check> => {
+const resumeMusic = (room: string, channelId: string): Promise<Toggled> => oneAtATime(room, channelId, async () => {
+  if (isPausedNow(room, channelId) === false) return UNCHANGED
   const ask = musicRooms.resumeCheck(room, channelId)
   if (!ask.ok) return ask
   let fromSec: number | undefined
@@ -269,15 +338,30 @@ const resumeMusic = async (room: string, channelId: string): Promise<Check> => {
   } else {
     const how = await musicResume(room, channelId)
     if (how === 'failed') return { ok: false, reason: 'The music could not be resumed. Try again in a moment.' }
-    if (how === 'not-held') fromSec = ask.sec
+    if (how === 'not-held') {
+      // A skip, previous or play now while the service was asked has already
+      // started the room's song. Starting the old one now could reach the
+      // service after that and replace it. The service holds nothing, so
+      // there is nothing to put back in line either.
+      if (musicRooms.resumeCheck(room, channelId).ticket !== ask.ticket) {
+        return isPausedNow(room, channelId) === false
+          ? UNCHANGED
+          : { ok: false, reason: 'The song changed while resuming it. Try again.' }
+      }
+      fromSec = ask.sec
+    }
   }
   if (fromSec !== undefined && !(await playFrom(room, channelId, ask.now!, fromSec))) {
     return { ok: false, reason: 'The music could not be resumed. Try again in a moment.' }
   }
   const done = musicRooms.resume(room, channelId, ask.ticket, fromSec)
-  if (!done.ok) resyncMusic(room, channelId)
-  return done
-}
+  if (done.ok) return CHANGED
+  resyncMusic(room, channelId)
+  // Overtaken by a skip, previous or play now: the room is playing, which is
+  // what was asked. Only a seek while paused leaves it paused — that one is
+  // a real refusal.
+  return isPausedNow(room, channelId) === false ? UNCHANGED : done
+})
 
 /**
  * Always the full list, never a delta — see broadcastCallState.
@@ -1768,7 +1852,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
         const r = await pauseMusic(gate.room, String(data?.channelId ?? ''))
         if (!r.ok) return musicRefuse(r.reason)
-        broadcastMusic(gate.room)
+        if (r.changed) broadcastMusic(gate.room)
       })()
     })
 
@@ -1778,7 +1862,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
         const r = await resumeMusic(gate.room, String(data?.channelId ?? ''))
         if (!r.ok) return musicRefuse(r.reason)
-        broadcastMusic(gate.room)
+        if (r.changed) broadcastMusic(gate.room)
       })()
     })
 

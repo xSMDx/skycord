@@ -842,6 +842,155 @@ describe('pausing a shared song', () => {
     })
   })
 
+  describe('two people pressing at once', () => {
+    // Both presses pass the check while the service is being asked for the
+    // first. One pause or resume is in flight per channel; the other waits
+    // for it, and finding the room already the way it asked is a success,
+    // not "It is already paused."
+    const count = (p: string) => paths().filter(x => x === p).length
+    const until = async (ok: () => boolean, ms = 3000) => {
+      for (let t = 0; t < ms && !ok(); t += 25) await sleep(25)
+    }
+    const errorsOn = (...ss: ClientSocket[]) => {
+      const seen: string[] = []
+      for (const s of ss) s.on('music:error', (e: { reason: string }) => seen.push(e.reason))
+      return seen
+    }
+    const holdPath = (p: string) => {
+      let release = () => {}
+      stub.hold[p] = new Promise<void>(r => { release = r })
+      return () => release()
+    }
+
+    it('Pause twice: the service is asked once, and nobody is told it is already paused', async () => {
+      const { sa, sb, at, room } = await playing()
+      const errors = errorsOn(sa, sb)
+      const release = holdPath('/pause')
+      stub.calls.length = 0
+      sa.emit('music:pause', at); sb.emit('music:pause', at)
+      await until(() => paths().includes('/pause'))
+      await sleep(150)                                 // both presses are in
+      release()
+      await musicStateWhere(sb, x => chans(x)[0]?.paused === true)
+      await sleep(300)
+      expect(errors).toEqual([])
+      expect(count('/pause')).toBe(1)
+      expect(musicRooms.view(room).channels[0].paused).toBe(true)
+    })
+
+    it('Resume twice: the service is asked once, and nobody is told it is not paused', async () => {
+      const { sa, sb, at, room } = await playing()
+      sa.emit('music:pause', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+      const errors = errorsOn(sa, sb)
+      const release = holdPath('/resume')
+      stub.calls.length = 0
+      sa.emit('music:resume', at); sb.emit('music:resume', at)
+      await until(() => paths().includes('/resume'))
+      await sleep(150)
+      release()
+      await musicStateWhere(sb, x => chans(x)[0]?.paused === false)
+      await sleep(300)
+      expect(errors).toEqual([])
+      expect(count('/resume')).toBe(1)
+      expect(musicRooms.view(room).channels[0].paused).toBe(false)
+    })
+
+    it('Resume twice after a seek while paused starts the song once', async () => {
+      const { sa, sb, at } = await playing()
+      sa.emit('music:pause', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+      sb.emit('music:seek', { ...at, sec: 120 })
+      await musicStateWhere(sa, x => chans(x)[0]?.now?.elapsedMs === 120_000)
+      const errors = errorsOn(sa, sb)
+      const release = holdPath('/play-track')
+      stub.calls.length = 0
+      sa.emit('music:resume', at); sb.emit('music:resume', at)
+      await until(() => paths().includes('/play-track'))
+      await sleep(150)
+      release()
+      await musicStateWhere(sb, x => chans(x)[0]?.paused === false)
+      await sleep(300)
+      expect(errors).toEqual([])
+      expect(count('/play-track')).toBe(1)
+    })
+
+    it('a resume overtaken by a skip is not an error: the room is playing, as asked', async () => {
+      const { a, sa, sb, at } = await playing()
+      const two = await giveTrack(a, 'Two')
+      sa.emit('music:queue', { ...at, trackId: two })
+      await musicStateWhere(sa, x => chans(x)[0]?.queue.length === 1)
+      sa.emit('music:pause', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+      const errors = errorsOn(sa)
+      const release = holdPath('/resume')
+      stub.calls.length = 0
+      sa.emit('music:resume', at)
+      await until(() => paths().includes('/resume'))
+      sb.emit('music:skip', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.now?.title === 'Two')
+      release()
+      await sleep(300)
+      expect(errors).toEqual([])
+    })
+
+    it('a resume that must restart the song does not, once a skip has moved on', async () => {
+      // The service lost the song (409), so resume would start it again — but
+      // a skip landed while the service was asked. Starting the old song now
+      // could reach the service after the skip's and replace the new one.
+      const { a, sa, sb, at } = await playing()
+      const two = await giveTrack(a, 'Two')
+      sa.emit('music:queue', { ...at, trackId: two })
+      await musicStateWhere(sa, x => chans(x)[0]?.queue.length === 1)
+      sa.emit('music:pause', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+      const errors = errorsOn(sa)
+      stub.status['/resume'] = 409
+      const release = holdPath('/resume')
+      stub.calls.length = 0
+      sa.emit('music:resume', at)
+      await until(() => paths().includes('/resume'))
+      sb.emit('music:skip', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.now?.title === 'Two')
+      await until(() => count('/play-track') >= 1)
+      release()
+      await sleep(300)
+      expect(count('/play-track')).toBe(1)            // the skip's, and only that
+      expect(errors).toEqual([])
+    })
+
+    it('a second refused commit does not start a second retry loop', async () => {
+      // Refused resume #1 leaves a retry loop pausing the service every
+      // quarter second while it answers 409. Refused resume #2 starts the
+      // loop again: one loop per channel, so the rate stays one loop's.
+      const ctx = await playing()
+      const { sa, sb, at } = ctx
+      sa.emit('music:pause', at)
+      await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+      stub.status['/pause'] = 409
+      const refuse = async (path: string, sec: number) => {
+        const release = holdPath(path)
+        const err = nextEvent(sa, 'music:error')
+        const before = count(path)
+        sa.emit('music:resume', at)
+        await until(() => count(path) > before)
+        sb.emit('music:seek', { ...at, sec })
+        await musicStateWhere(sa, x => chans(x)[0]?.now?.elapsedMs === sec * 1000)
+        release()
+        expect((await err).reason).toMatch(/changed while resuming/i)
+      }
+      await refuse('/resume', 30)
+      await until(() => count('/pause') >= 2)
+      // The paused point moved, so this resume starts the song: hold that.
+      await refuse('/play-track', 40)
+      await sleep(300)
+      const from = count('/pause')
+      await sleep(1000)
+      // One loop asks about four times a second; two would ask about eight.
+      expect(count('/pause') - from).toBeLessThanOrEqual(5)
+    })
+  })
+
   it('seek while paused moves the point without playing, and resume starts there', async () => {
     const { sa, sb, at } = await playing()
     sa.emit('music:pause', at)
