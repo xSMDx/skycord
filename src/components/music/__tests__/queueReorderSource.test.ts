@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import modal from '../MusicModal.vue?raw'
 import drag from '@/composables/queueDrag.ts?raw'
 import player from '@/composables/useMusicPlayer.ts?raw'
+import longPress from '@/composables/useLongPress.ts?raw'
 
 /**
  * Moving a song up or down your own queue, from the drawer.
@@ -112,6 +113,31 @@ describe('the handle on a song you queued', () => {
     expect(drag).toMatch(/o\.move\(index, to\)/)
   })
 
+  it('is not there when there is nothing to move: one song has nowhere to go', () => {
+    expect(grip).toMatch(/v-if="queueView\.manual\.length > 1"/)
+    // Its hint goes with it, rather than describing a control that is not there.
+    expect(openingTag(tpl.slice(tpl.lastIndexOf('<span', tpl.indexOf('id="mm-qgrip-how"'))))).toMatch(/v-if="queueView\.manual\.length > 1"/)
+  })
+
+  it('is left alone by the app-wide long press, and swallows any menu that still reaches it', () => {
+    // The handle opts out…
+    expect(grip).toMatch(/\sdata-no-longpress[\s>]/)
+    expect(grip).toMatch(/@contextmenu\.prevent\.stop/)
+    // …and the long press honours it: after the mouse early return and the
+    // reset, before the timer is armed — so a still finger never gets the buzz.
+    const down = /addEventListener\('pointerdown', e => \{([\s\S]*?)\n {2}\}, \{/.exec(longPress)?.[1] ?? ''
+    expect(down, 'the long-press pointerdown handler').not.toBe('')
+    const optOut = down.indexOf("closest?.('[data-no-longpress]')) return")
+    expect(optOut, 'the opt-out').toBeGreaterThan(-1)
+    expect(down.indexOf("if (e.pointerType === 'mouse') return")).toBeLessThan(optOut)
+    expect(down.indexOf('fired = false')).toBeLessThan(optOut)
+    expect(down.indexOf('timer = setTimeout(fire, HOLD_MS)')).toBeGreaterThan(optOut)
+  })
+
+  it('leaves modified arrows to whatever shortcut they belong to', () => {
+    expect(drag).toMatch(/if \(d \|\| e\.altKey \|\| e\.ctrlKey \|\| e\.metaKey \|\| e\.shiftKey\) return/)
+  })
+
   it('is at least 44px to a finger', () => {
     const rules = rulesOf(mediaBlocks(css, '(pointer: coarse)'), '.mm-qgrip')
     const w = Math.max(0, ...rules.map(r => Math.max(px(r, 'width'), px(r, 'min-width'))))
@@ -144,9 +170,23 @@ describe('the rows while a song is held', () => {
     expect(drag).toMatch(/e\.stopPropagation\(\)/)
   })
 
+  it('give the song back when the window loses focus mid-drag, and stop listening after', () => {
+    expect(drag).toMatch(/window\.addEventListener\('blur', onBlur\)/)
+    const stop = /const stopFollowing = \(\): void => \{[\s\S]*?\n {2}\}/.exec(drag)?.[0] ?? ''
+    expect(stop).toContain("window.removeEventListener('blur', onBlur)")
+    expect(drag).toMatch(/function onBlur\(\): void \{\s*if \(held\.value\?\.phase === 'drag'\) settle\(/)
+  })
+
+  it('hand the pointer back however the drag ends', () => {
+    const clear = /const clear = \(\): void => \{[\s\S]*?\n {2}\}/.exec(drag)?.[0] ?? ''
+    expect(clear).toMatch(/d\.grip\.releasePointerCapture\(d\.pointerId\)/)
+  })
+
   it('say where the song went, politely', () => {
     const queue = elementWith(tpl, 'section', 'class="mm-queue"')
     expect(queue).toMatch(/<p class="mm-sr" role="status" aria-live="polite">\{\{ qSaid \}\}<\/p>/)
+    // One screen-reader-only rule for the whole modal, not a second copy beside it.
+    expect(rulesOf(css, '.mm-sr')).toHaveLength(1)
   })
 })
 

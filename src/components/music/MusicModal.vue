@@ -640,15 +640,17 @@ const pct = (at: number, dur: number | null | undefined): number =>
             </div>
             <!-- Yours to rearrange: the handle that opens each row picks the
                  song up. Only here — the song playing has already left the
-                 queue, and what follows is the playlist's order. -->
-            <span id="mm-qgrip-how" class="mm-sr">Drag, or press the up and down arrow keys, to change when it plays.</span>
+                 queue, and what follows is the playlist's order — and only
+                 once there are two songs: one song has nowhere to go. -->
+            <span v-if="queueView.manual.length > 1" id="mm-qgrip-how" class="mm-sr">Drag, or press the up and down arrow keys, to change when it plays.</span>
             <ol ref="qList" class="mm-qlist" :class="{ sorting: !!qHeld, settling: qHeld?.phase === 'settle' }">
               <li
                 v-for="(t, i) in queueView.manual" :key="qKeys[i]" class="mm-qrow"
                 :class="{ held: qHeld?.index === i, lifted: qHeld?.index === i && qHeld?.phase === 'drag' }"
               >
                 <button
-                  type="button" class="mm-qgrip" data-qgrip
+                  v-if="queueView.manual.length > 1"
+                  type="button" class="mm-qgrip" data-qgrip data-no-longpress
                   :aria-label="`Move ${t.title}`" aria-describedby="mm-qgrip-how"
                   aria-keyshortcuts="ArrowUp ArrowDown"
                   @pointerdown="onGripDown($event, i)" @pointermove="onGripMove" @pointerup="onGripUp"
@@ -1134,7 +1136,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
 
 .mm-sr {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
 .mm-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .mm-dim { color: var(--text-3); font-size: 13px; }
@@ -1519,12 +1521,6 @@ const pct = (at: number, dur: number | null | undefined): number =>
 @media (prefers-reduced-motion: reduce) {
   .mm-qlist.sorting .mm-qrow, .mm-qlist.sorting .mm-qrow.held, .mm-qlist.settling .mm-qrow.held, .mm-qgrip { transition: none; }
   .mm-qrow.lifted { scale: none; }
-}
-
-/* For a screen reader only: the drawer's live region and the handle's hint. */
-.mm-sr {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
-  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 
 /* A control that is on. The transport is otherwise all one colour, so

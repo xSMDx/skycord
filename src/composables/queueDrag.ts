@@ -31,11 +31,12 @@
  *                     where the new order puts it, so the reorder itself moves
  *                     nothing on screen.
  *
- *   Give it back      Escape, a cancelled pointer, or a tap that never moved
- *                     puts the song back where it was. So does the queue
- *                     changing underneath — the song ending and the next one
- *                     leaving the queue to play: a drag never commits against
- *                     a list it did not start on.
+ *   Give it back      Escape, a cancelled pointer, the window losing focus
+ *                     (Alt-Tab with the button still down), or a tap that
+ *                     never moved puts the song back where it was. So does
+ *                     the queue changing underneath — the song ending and the
+ *                     next one leaving the queue to play: a drag never
+ *                     commits against a list it did not start on.
  *
  *   Keys              ArrowUp and ArrowDown on a focused handle move the song
  *                     one place, instantly — a key press is never animated —
@@ -190,6 +191,8 @@ interface Drag {
   from: number
   to: number
   offset: number
+  /** The handle holding the pointer, so capture can be handed back however the drag ends. */
+  grip: HTMLElement
   pointerId: number
   startY: number
   lastY: number
@@ -269,13 +272,19 @@ export const useQueueDrag = (o: QueueDragOptions): {
   const stopFollowing = (): void => {
     if (raf) { cancelAnimationFrame(raf); raf = 0 }
     window.removeEventListener('keydown', onEscape, true)
+    window.removeEventListener('blur', onBlur)
   }
 
   /** End everything at once: no glide, no move. The rows go back to where the list lays them. */
   const clear = (): void => {
     stopFollowing()
     if (landing) { clearTimeout(landing); landing = null }
-    d?.rows.forEach(r => place(r, 0))
+    if (d) {
+      // Explicitly: a drag cut short — the queue changed, the drawer closed —
+      // must not leave the handle holding a pointer that is still down.
+      try { d.grip.releasePointerCapture(d.pointerId) } catch { /* already released, or the pointer is gone */ }
+      d.rows.forEach(r => place(r, 0))
+    }
     d = null
     held.value = null
   }
@@ -332,6 +341,15 @@ export const useQueueDrag = (o: QueueDragOptions): {
     }
   }
 
+  /*
+   * The window lost focus with the button still down — Alt-Tab, a system
+   * dialog. The release will land somewhere else, if anywhere, so the song
+   * goes back rather than waiting on a pointerup that may never come.
+   */
+  function onBlur(): void {
+    if (held.value?.phase === 'drag') settle(d?.from ?? 0)
+  }
+
   const onGripDown = (e: PointerEvent, index: number): void => {
     // One song at a time: a second finger, a press while the last song is
     // still landing, and anything but the main button are ignored.
@@ -342,8 +360,9 @@ export const useQueueDrag = (o: QueueDragOptions): {
     if (!list || !sc) return
     const rows = Array.from(list.children) as HTMLElement[]
     if (!rows[index] || rows.length !== items.length) return
+    const grip = e.currentTarget as HTMLElement
     try {
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      grip.setPointerCapture(e.pointerId)
     } catch {
       return
     }
@@ -355,7 +374,7 @@ export const useQueueDrag = (o: QueueDragOptions): {
       centres: slots.map(s => s.top + s.height / 2),
       pitch: pitchOf(slots, index),
       from: index, to: index, offset: 0,
-      pointerId: e.pointerId,
+      grip, pointerId: e.pointerId,
       startY: e.clientY, lastY: e.clientY,
       startScroll: sc.scrollTop,
       grabbed: items[index], count: items.length,
@@ -363,6 +382,7 @@ export const useQueueDrag = (o: QueueDragOptions): {
     carry = 0
     lastFrame = performance.now()
     window.addEventListener('keydown', onEscape, true)
+    window.addEventListener('blur', onBlur)
     raf = requestAnimationFrame(tick)
     held.value = { index, phase: 'drag' }
   }
@@ -390,8 +410,9 @@ export const useQueueDrag = (o: QueueDragOptions): {
   }
 
   const onGripKey = (e: KeyboardEvent, index: number): void => {
-    // While a pointer holds a song, the pointer owns the queue.
-    if (d) return
+    // While a pointer holds a song, the pointer owns the queue. A modified
+    // arrow is someone else's shortcut, not a move.
+    if (d || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
     const n = o.items().length
     const to = keyTarget(e.key, index, n)
     if (to === null) return
