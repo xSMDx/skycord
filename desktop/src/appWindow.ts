@@ -16,6 +16,7 @@
 import { app, BrowserWindow, WebContentsView, ipcMain, type WebContents } from 'electron'
 import { join } from 'path'
 import { DEFAULT_COLORS, type TitleColors, type TitleState } from './titleState'
+import { APP_ICON } from './appIcon'
 
 export const TITLEBAR_HEIGHT = 32
 const TITLEBAR = join(app.getAppPath(), 'static', 'titlebar.html')
@@ -44,6 +45,7 @@ const createFramedWindow = (preload: string, onNavigate: (dir: 'back' | 'forward
     minHeight: 560,
     show: false,
     title: 'Skycord',
+    icon: APP_ICON,
     frame: true,
     webPreferences: secure,
   })
@@ -96,6 +98,7 @@ const createBarredWindow = (preload: string, onNavigate: (dir: 'back' | 'forward
     minHeight: 560,
     show: false,
     title: 'Skycord',
+    icon: APP_ICON,
     backgroundColor: colors.bar,
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: colors.bar, symbolColor: colors.text, height: TITLEBAR_HEIGHT },

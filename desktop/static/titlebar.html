@@ -42,7 +42,8 @@
     width: 16px; height: 16px; display: grid; place-items: center; border-radius: 5px;
     background: color-mix(in srgb, var(--text) 18%, transparent); font-size: 10px;
   }
-  .text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* line-height 1 (from body) would clip the tails of g, q and y under overflow: hidden. */
+  .text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 18px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>

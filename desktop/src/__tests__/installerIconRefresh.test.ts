@@ -18,4 +18,28 @@ describe('the Windows installer refreshes icons after an install or update', () 
     const nsh = read('build/installer.nsh')
     expect(nsh).toMatch(/!macro customInstall[\s\S]*shell32::SHChangeNotify\(i 0x08000000[\s\S]*!macroend/)
   })
+
+  it('customInstall also rebuilds the icon cache with ie4uinit -show', () => {
+    expect(read('build/installer.nsh')).toMatch(/!macro customInstall[\s\S]*nsExec::Exec '"\$SYSDIR\\ie4uinit\.exe" -show'[\s\S]*!macroend/)
+  })
+})
+
+// The running app's taskbar button and Alt+Tab use the window icon when one is
+// set, read fresh at launch, so they show the new icon even before the cache is.
+describe('every taskbar window sets the app icon at runtime', () => {
+  it('ships static/icon.ico identical to build/icon.ico', () => {
+    expect(readFileSync(resolve(root, 'static/icon.ico')).equals(readFileSync(resolve(root, 'build/icon.ico')))).toBe(true)
+  })
+
+  it('the main window (both kinds) and the splash pass APP_ICON', () => {
+    expect(read('src/appWindow.ts').match(/icon: APP_ICON/g)?.length).toBe(2)
+    expect(read('src/splash.ts')).toMatch(/icon: APP_ICON/)
+    expect(read('src/appIcon.ts')).toMatch(/'static', 'icon\.ico'/)
+  })
+})
+
+describe('the title bar text', () => {
+  it('has room for descenders (g, q, y) despite overflow: hidden', () => {
+    expect(read('static/titlebar.html')).toMatch(/\.text \{[^}]*overflow: hidden[^}]*line-height: 18px/)
+  })
 })
