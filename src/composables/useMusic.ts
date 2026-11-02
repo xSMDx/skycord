@@ -23,7 +23,7 @@ import { getSocket } from './useSocket'
  */
 import { soundMusicOpen, soundMusicTune, soundMusicLeave } from './useSounds'
 import { onYield, takeAudio, release } from './audioFocus'
-import { isPaused, canPause } from './musicPause'
+import { isPaused, canPause, canPauseOrResume } from './musicPause'
 
 // Starting a local preview leaves whatever channel you were tuned into:
 // the two are the same ear. See audioFocus.ts.
@@ -98,7 +98,7 @@ export interface MusicChannelView {
   pausable?: boolean
 }
 
-export { isPaused, canPause }
+export { isPaused, canPause, canPauseOrResume }
 
 export const music = reactive({
   /** Every channel in the current call. */
@@ -337,9 +337,13 @@ const settlePausesFrom = (channels: MusicChannelView[]): void => {
   }
 }
 
-/** Pause a playing channel or resume a held one — whichever it is now. Nothing for one that cannot, or that is waiting. */
+/**
+ * Pause a playing channel or resume a held one — whichever it is now.
+ * Nothing for one that is waiting, nor a pause where the server has not said
+ * it can; a held song can always be resumed (see canPauseOrResume).
+ */
 export const togglePauseMusic = (c: MusicChannelView): void => {
-  if (!canPause(c) || isPausePending(c)) return
+  if (!canPauseOrResume(c) || isPausePending(c)) return
   if (isPaused(c)) resumeMusic(c.id); else pauseMusic(c.id)
 }
 

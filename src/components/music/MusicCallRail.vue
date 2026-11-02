@@ -20,7 +20,7 @@ import { voice } from '@/composables/useVoice'
 import { useAuth } from '@/composables/useAuth'
 import {
   music, createMusicChannel, shareToChannel, listenToMusic, closeMusicChannel, skipMusic, playNowMusic,
-  channelElapsed, musicNow, togglePauseMusic, isPaused, canPause, isPausePending,
+  channelElapsed, musicNow, togglePauseMusic, isPaused, canPauseOrResume, isPausePending,
   type MusicChannelView, type MusicEntryView,
 } from '@/composables/useMusic'
 import { clock, type LibTrack } from '@/composables/useMusicLibrary'
@@ -226,9 +226,10 @@ const startWith = (): void => {
               </button>
               <!-- Shared, so pausing and skipping are for everyone, and the
                    tips say so. Pause and Resume are one control, beside
-                   Skip, and only where the music service can pause. -->
+                   Skip: Pause only where the music service can pause,
+                   Resume whenever the song is held. -->
               <button
-                v-if="canPause(c)" class="cr-icon" :class="{ pending: isPausePending(c) }"
+                v-if="canPauseOrResume(c)" class="cr-icon" :class="{ pending: isPausePending(c) }"
                 :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
                 :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
                 v-tip="isPaused(c) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"

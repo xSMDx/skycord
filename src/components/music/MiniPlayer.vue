@@ -27,7 +27,7 @@ import { LogOut, Music2, Pause, Play, Radio, SkipForward, X } from 'lucide-vue-n
 import { player, toggle, next, stop } from '@/composables/useMusicPlayer'
 import {
   music, musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, clearMusicError,
-  togglePauseMusic, isPaused, canPause, isPausePending, PAUSE_SETTLE_MS, type MusicChannelView,
+  togglePauseMusic, isPaused, canPauseOrResume, isPausePending, PAUSE_SETTLE_MS, type MusicChannelView,
 } from '@/composables/useMusic'
 
 const emit = defineEmits<{ open: [] }>()
@@ -158,7 +158,7 @@ const progress = computed(() =>
            server's music service cannot pause, and busy while one is on
            its way. -->
       <button
-        v-if="canPause(live)" class="mp-btn" :class="{ pending: isPausePending(live) }"
+        v-if="canPauseOrResume(live)" class="mp-btn" :class="{ pending: isPausePending(live) }"
         :aria-label="isPaused(live) ? `Resume for everyone in ${live.name}` : `Pause for everyone in ${live.name}`"
         :aria-busy="isPausePending(live)" :aria-disabled="isPausePending(live)"
         v-tip="isPaused(live) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"

@@ -251,6 +251,16 @@ describe('pausing and resuming a channel', () => {
     expect(emit).not.toHaveBeenCalled()
   })
 
+  it('still resumes a held channel whose server stopped saying it can pause', () => {
+    // The music service went away mid-pause: Pause is gone, but the song must not be stuck.
+    onMusicState({ channels: [channelView('q', { paused: true }), channelView('p', { paused: false })] })
+    const m = useCallMusic(() => people)
+    m.togglePause('q')
+    m.togglePause('p')
+    expect(sent('music:resume')).toEqual([{ conversationId: 'c1', kind: 'channel', channelId: 'q' }])
+    expect(sent('music:pause')).toEqual([])
+  })
+
   it('clears an old refusal first, and records the channel so a new refusal lands on its card', () => {
     onMusicState({ channels: [channelView('p', { pausable: true })] })
     music.error = 'Old.'

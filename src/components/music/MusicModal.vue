@@ -42,7 +42,7 @@ import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
   musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, queueMusic, seekMusic, previousMusic,
-  togglePauseMusic, isPaused, canPause, isPausePending,
+  togglePauseMusic, isPaused, canPauseOrResume, isPausePending,
 } from '@/composables/useMusic'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, enqueueUploads, importTrack,
@@ -1295,7 +1295,8 @@ const pct = (at: number, dur: number | null | undefined): number =>
           your own player has, between Back and Skip where every player puts
           it, because it is the same act; Skip and Leave stay in words,
           because neither is a button any player has taught you. Pause is
-          there only when the server's music service can pause, and like
+          there only when the server's music service can pause (Resume
+          whenever the song is held, even once it stops saying so), and like
           Skip it stays in place, disabled, with nothing to act on. The bar
           below moves the song for everyone, and stands still while it is
           held.
@@ -1311,7 +1312,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
             <SkipBack :size="16" :stroke-width="2.25" />
           </button>
           <button
-            v-if="live.pausable" class="mm-pp" :class="{ pending: isPausePending(live) }" :disabled="!canPause(live)"
+            v-if="live.pausable || isPaused(live)" class="mm-pp" :class="{ pending: isPausePending(live) }" :disabled="!canPauseOrResume(live)"
             :aria-label="isPaused(live) ? `Resume for everyone in ${live.name}` : `Pause for everyone in ${live.name}`"
             :aria-busy="isPausePending(live)" :aria-disabled="isPausePending(live)"
             v-tip="isPaused(live) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"

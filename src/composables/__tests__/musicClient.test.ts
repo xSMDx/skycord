@@ -3,7 +3,7 @@ import {
   MUSIC_IDENTITY, music, setMusicTarget, listenToMusic,
   onMusicState, onMusicError, clearMusicError, musicChannel,
   createMusicChannel, skipMusic, shareToChannel, channelElapsed, musicNow,
-  seekMusic, playNowMusic, pauseMusic, resumeMusic, togglePauseMusic, isPaused, canPause,
+  seekMusic, playNowMusic, pauseMusic, resumeMusic, togglePauseMusic, isPaused, canPause, canPauseOrResume,
   isPausePending, PAUSE_SETTLE_MS,
   type MusicChannelView,
 } from '../useMusic'
@@ -288,6 +288,22 @@ describe('pausing a shared song', () => {
     onMusicState(held(0, false, { now: null }))
     expect(canPause(music.channels[0])).toBe(false)          // nothing to pause
     expect(isPaused(music.channels[0])).toBe(false)
+  })
+
+  it('offers Resume for a held song even once the server stops saying it can pause, and Pause only while it does', () => {
+    onMusicState(held(0, true, { pausable: undefined }))
+    expect(canPause(music.channels[0])).toBe(false)
+    expect(canPauseOrResume(music.channels[0])).toBe(true)
+    togglePauseMusic(music.channels[0])
+    expect(emit.mock.calls.map(c => c[0])).toEqual(['music:resume'])
+    emit.mockClear()
+    onMusicState(held(0, false, { pausable: undefined }))
+    expect(canPauseOrResume(music.channels[0])).toBe(false)
+    togglePauseMusic(music.channels[0])
+    expect(emit).not.toHaveBeenCalled()
+    onMusicState(held(0, false))
+    expect(canPauseOrResume(music.channels[0])).toBe(true)
+    expect(canPauseOrResume(null)).toBe(false)
   })
 
   it('sends nothing for a channel that cannot pause', () => {

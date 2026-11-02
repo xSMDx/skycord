@@ -16,7 +16,7 @@
 import { Music2, Pause, Play, Plus, SkipForward, X, Library } from 'lucide-vue-next'
 import CallFlyout from './CallFlyout.vue'
 import { voice } from '@/composables/useVoice'
-import { music, skipMusic, closeMusicChannel, isPaused, canPause, isPausePending } from '@/composables/useMusic'
+import { music, skipMusic, closeMusicChannel, isPaused, canPauseOrResume, isPausePending } from '@/composables/useMusic'
 import { useCallMusic } from '@/composables/callMusic'
 
 defineProps<{ dir?: 'down' | 'up' }>()
@@ -69,7 +69,7 @@ const {
           <!-- Pause while it plays, Resume while it is held: one control,
                for everyone, beside Skip. Only where the music service can. -->
           <button
-            v-if="canPause(c)" class="mf-icon" :class="{ pending: isPausePending(c) }"
+            v-if="canPauseOrResume(c)" class="mf-icon" :class="{ pending: isPausePending(c) }"
             :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
             :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
             @click="togglePause(c.id)"

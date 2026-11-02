@@ -19,7 +19,7 @@ import { computed, watch } from 'vue'
 import { Music2, Pause, Play, Plus, SkipForward, X, Library, ChevronRight } from 'lucide-vue-next'
 import BottomSheet from '@/components/ui/BottomSheet.vue'
 import { voice } from '@/composables/useVoice'
-import { music, isPaused, canPause, isPausePending } from '@/composables/useMusic'
+import { music, isPaused, canPauseOrResume, isPausePending } from '@/composables/useMusic'
 import { useCallMusic } from '@/composables/callMusic'
 
 const props = defineProps<{ open: boolean }>()
@@ -107,7 +107,7 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
                  for everyone, beside Skip. Only where the music service can,
                  so on an older server the row is the three it always was. -->
             <button
-              v-if="canPause(c)" type="button" class="pms-act" :class="{ pending: isPausePending(c) }"
+              v-if="canPauseOrResume(c)" type="button" class="pms-act" :class="{ pending: isPausePending(c) }"
               :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
               :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
               @click="togglePause(c.id)"

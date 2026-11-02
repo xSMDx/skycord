@@ -90,12 +90,14 @@ const importsLucidePauseAndPlay = (src: string) => {
 /**
  * One control that is Pause while the song plays and Resume while it is held:
  * named to match, drawn with Pause or Play, and hidden unless the channel can
- * pause. `who` is how the channel is written there (`c`, `live`).
+ * pause — or is held, since `pausable` can drop mid-pause and a held song must
+ * still be resumable. `who` is how the channel is written there (`c`, `live`).
  */
 const isTheToggle = (button: string, who: string) => {
   const tag = openingTag(button)
-  // Hidden without `pausable`: canPause is false for a view that has none.
-  expect(tag, 'hidden without pausable').toMatch(new RegExp(`v-if="(canPause\\(${who}\\)|${who}\\.pausable)"`))
+  // Pause is hidden without `pausable`; Resume is there whenever the song is held.
+  expect(tag, 'hidden without pausable unless held').toMatch(
+    new RegExp(`v-if="(canPauseOrResume\\(${who}\\)|${who}\\.pausable \\|\\| isPaused\\(${who}\\))"`))
   // The accessible name says what a tap does now, and begins with the word.
   expect(tag).toMatch(new RegExp(`:aria-label="isPaused\\(${who}\\) \\? \`Resume [^\`]*\` : \`Pause [^\`]*\`"`))
   // Play in place of Pause while it is held.
@@ -211,7 +213,7 @@ describe('the music room, tuned into a channel', () => {
     // The round transport key, as your own player has: this one really is pause.
     expect(openingTag(toggle())).toContain('class="mm-pp"')
     // Like Skip, it stays in place with nothing to act on, rather than leaving a hole.
-    expect(openingTag(toggle())).toContain(':disabled="!canPause(live)"')
+    expect(openingTag(toggle())).toContain(':disabled="!canPauseOrResume(live)"')
   })
 
   it('says Paused under the title, and stops both live dots', () => {
