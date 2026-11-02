@@ -366,6 +366,18 @@ describe('stream audio has its own element rules', () => {
     expect(streamEl.muted).toBe(false)
   })
 
+  it('unmuting while deafened undeafens, and you hear the call again', async () => {
+    const { voiceEl, streamEl } = await watchingU1()
+    V.useVoice().toggleDeafen()
+    expect(voiceEl.muted).toBe(true)
+    expect(streamEl.muted).toBe(true)
+
+    V.useVoice().toggleMute()
+    expect(V.voice.localDeafened).toBe(false)
+    expect(voiceEl.muted).toBe(false)
+    expect(streamEl.muted).toBe(false)
+  })
+
   it('deafen silences the stream', async () => {
     const { room, voiceEl, streamEl } = await watchingU1()
     V.setUserPref('u1', { muted: true })
@@ -829,6 +841,53 @@ describe('User Volume above 100 %', () => {
         // it: leave it able to run again.
         ctx.resume.mockReset()
       }
+    })
+
+    it('a chosen output is amplified only once the context plays there', async () => {
+      const { voiceSettings } = await import('../useVoiceSettings')
+      const { voiceEl } = await watchingU1()
+      const ctx = FakeAudioContext.made.at(-1)!
+      let settle!: () => void
+      const setSink = vi.fn(() => new Promise<void>(r => { settle = r }))
+      ;(ctx as unknown as { setSinkId: unknown }).setSinkId = setSink
+      voiceSettings.outputDeviceId = 'headset-1'
+      try {
+        V.setUserPref('u1', { volume: 150 })
+        // On its element, at 100 %, where the element already plays — not on
+        // the stage, which would still be playing to the default device.
+        expect(setSink).toHaveBeenCalledWith('headset-1')
+        expect(stageOf(voiceEl)).toBeNull()
+        expect(voiceEl.muted).toBe(false)
+        expect(voiceEl.volume).toBe(1)
+        settle()
+        await vi.waitFor(() => expect(stageOf(voiceEl)).toBe(1.5))
+        expect(voiceEl.muted).toBe(true)
+      } finally {
+        voiceSettings.outputDeviceId = ''
+        delete (ctx as unknown as { setSinkId?: unknown }).setSinkId
+        V.useVoice().applyOutput()
+      }
+    })
+
+    it('an output the context refuses caps User Volume at 100 %, and applies it again', async () => {
+      const { voiceSettings } = await import('../useVoiceSettings')
+      const { voiceEl } = await watchingU1()
+      const ctx = FakeAudioContext.made.at(-1)!
+      ;(ctx as unknown as { setSinkId: unknown }).setSinkId = vi.fn(async () => { throw new Error('NotFoundError') })
+      voiceSettings.outputDeviceId = 'headset-2'
+      try {
+        V.setUserPref('u1', { volume: 150 })
+        await vi.waitFor(() => expect(V.userVolumeMax()).toBe(100))
+        expect(stageOf(voiceEl)).toBeNull()
+        expect(voiceEl.muted).toBe(false)
+        expect(voiceEl.volume).toBe(1)
+        expect(V.userPref('u1').volume).toBe(150)
+      } finally {
+        voiceSettings.outputDeviceId = ''
+        delete (ctx as unknown as { setSinkId?: unknown }).setSinkId
+        V.useVoice().applyOutput()
+      }
+      expect(V.userVolumeMax()).toBe(200)
     })
 
     it('an output device the context cannot follow caps User Volume at 100 %', async () => {

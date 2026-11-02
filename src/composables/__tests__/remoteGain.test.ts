@@ -260,6 +260,53 @@ describe('the gain stage', () => {
     expect(ctx.setSinkId.mock.calls).toEqual([['speakers-2'], ['']])
   })
 
+  it('the first amplification on a chosen output waits until the context is pointed there', async () => {
+    // Connected at once, the voice would play on the default device until
+    // setSinkId settled — the wrong speakers, at 150 %.
+    const changed = vi.fn()
+    G.onGainStateChange(changed)
+    let settle!: () => void
+    const a = element()
+    G.amplify(asEl(element(audioTrack('t0'))), 1.2, false, '')
+    const ctx = FakeAudioContext.made[0]
+    ctx.setSinkId.mockImplementationOnce(() => new Promise<void>(r => { settle = r }))
+
+    expect(G.amplify(asEl(a), 1.5, false, 'speakers-2')).toBe(false)
+    expect(G.amplify(asEl(a), 1.5, false, 'speakers-2')).toBe(false)
+    expect(ctx.setSinkId.mock.calls).toEqual([['speakers-2']])
+    expect(ctx.createMediaStreamSource).toHaveBeenCalledTimes(1)
+    // Left on its element meanwhile, never silent.
+    expect(a.muted).toBe(false)
+
+    settle()
+    await vi.waitFor(() => expect(changed).toHaveBeenCalled())
+    expect(G.amplify(asEl(a), 1.5, false, 'speakers-2')).toBe(true)
+    expect(ctx.gains.at(-1)!.connect).toHaveBeenCalledWith(ctx.destination)
+    expect(ctx.setSinkId).toHaveBeenCalledTimes(1)
+  })
+
+  it('a chosen output the context refuses is remembered, and the caller is told to apply again', async () => {
+    const changed = vi.fn()
+    G.onGainStateChange(changed)
+    G.amplify(asEl(element()), 1.5, false, '')
+    const ctx = FakeAudioContext.made[0]
+    ctx.setSinkId.mockImplementationOnce(async () => { throw new Error('NotFoundError') })
+
+    expect(G.sinkRefused('speakers-2')).toBe(false)
+    expect(G.amplify(asEl(element(audioTrack('t2'))), 1.5, false, 'speakers-2')).toBe(false)
+    await vi.waitFor(() => expect(changed).toHaveBeenCalled())
+    expect(G.sinkRefused('speakers-2')).toBe(true)
+    expect(G.sinkRefused('')).toBe(false)
+    expect(G.sinkRefused('default')).toBe(false)
+    // Not asked again while it is still the choice.
+    expect(G.amplify(asEl(element(audioTrack('t3'))), 1.5, false, 'speakers-2')).toBe(false)
+    expect(ctx.setSinkId).toHaveBeenCalledTimes(1)
+
+    // Choosing something else forgets it, so choosing it again tries again.
+    G.amplify(asEl(element(audioTrack('t4'))), 1.5, false, '')
+    expect(G.sinkRefused('speakers-2')).toBe(false)
+  })
+
   it('a context without setSinkId plays to the default device rather than failing', () => {
     const noSink = class extends FakeAudioContext { constructor() { super(); (this as any).setSinkId = undefined } }
     vi.stubGlobal('AudioContext', noSink)

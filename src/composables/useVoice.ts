@@ -19,7 +19,7 @@ import { getRoom, setRoom } from './voiceRoom'
 import { MUSIC_IDENTITY, music, musicAvailable, setMusicTarget } from './useMusic'
 import { applySubscriptions } from './subscriptionPolicy'
 import {
-  volumePlan, sinkRoutable, gainSupport, userVolumeMaxFor,
+  volumePlan, sinkRoutable, sinkRefused, gainSupport, userVolumeMaxFor,
   amplify, release as releaseGain, stageGain, onGainStateChange, wakeGain, sleepGain,
 } from './remoteGain'
 import { qualityFor } from './callLimits'
@@ -436,8 +436,14 @@ const routeToOutput = (el: HTMLAudioElement) => {
   if (sink && typeof (el as any).setSinkId === 'function') (el as any).setSinkId(sink).catch(() => {})
 }
 
-/** Whether a voice turned past 100 % can still come out of the output the member chose. */
-const canRouteSink = () => sinkRoutable(voiceSettings.outputDeviceId, gainSupport())
+/**
+ * Whether a voice turned past 100 % can still come out of the output the
+ * member chose: the browser can point the stage there, and when it tried,
+ * the device did not refuse. A refusal re-applies everything (through
+ * onGainStateChange), so the slider and the voices drop to 100 together.
+ */
+const canRouteSink = () =>
+  sinkRoutable(voiceSettings.outputDeviceId, gainSupport()) && !sinkRefused(voiceSettings.outputDeviceId)
 
 /**
  * The top of the User Volume slider: 200, or 100 where going past 100 %
@@ -1339,7 +1345,12 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
         voice.mic = micFailureReason(e)
         voice.localMuted = true
       })
-    if (!voice.localMuted && voice.localDeafened) voice.localDeafened = false
+    // Unmuting undeafens — and through the element rules, as toggleDeafen
+    // does, or every voice and stream would stay silent under a lifted deafen.
+    if (!voice.localMuted && voice.localDeafened) {
+      voice.localDeafened = false
+      applyAllAudio()
+    }
     syncParticipants()
   }
 

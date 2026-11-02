@@ -21,6 +21,11 @@
  * (`AudioContext.setSinkId`). Where the browser has no such thing and a
  * device other than the default is chosen, amplifying would move the voice
  * to the wrong speakers — so it does not, and User Volume stops at 100.
+ * Nothing goes onto the stage until the context is pointed where it should
+ * be: the voice stays on its element (at most 100 %) while setSinkId is on
+ * its way, and the caller is told when it settles. A device the context
+ * refuses is remembered (sinkRefused), so the caller caps User Volume at
+ * 100 for it, as for a browser that cannot follow it at all.
  *
  * **Never silent.** An element is muted for the stage only once the context
  * is running. A context that is not running is asked to resume, the voice
@@ -112,6 +117,10 @@ const stages = new WeakMap<HTMLMediaElement, Stage>()
 let ctx: SinkableContext | null = null
 /** The output the context was last pointed at; "" is the default, null unknown (a set that failed). */
 let ctxSink: string | null = ''
+/** The output a setSinkId is on its way to, or null. */
+let sinkPending: string | null = null
+/** The output the context last refused, or null. Forgotten when another is chosen. */
+let sinkFailed: string | null = null
 let onChange: () => void = () => {}
 
 /** Smooths a gain change over ~30 ms, so a dragged slider does not click. */
@@ -126,15 +135,37 @@ const sharedContext = (): SinkableContext | null => {
   if (typeof AC !== 'function') return null
   try { ctx = new AC() as SinkableContext } catch { return null }
   ctxSink = ''
+  sinkPending = null
+  sinkFailed = null
   ctx.onstatechange = () => onChange()
   return ctx
 }
 
-const pointAt = (c: SinkableContext, sinkId: string) => {
-  const want = isDefaultSink(sinkId) ? '' : sinkId
-  if (want === ctxSink || typeof c.setSinkId !== 'function') return
-  ctxSink = want
-  c.setSinkId(want).catch(() => { ctxSink = null })
+const sinkKey = (sinkId: string) => (isDefaultSink(sinkId) ? '' : sinkId)
+
+/** Whether the shared context refused to play to this output. */
+export const sinkRefused = (sinkId: string): boolean => {
+  const want = sinkKey(sinkId)
+  return want !== '' && want === sinkFailed
+}
+
+/**
+ * Point the context at `sinkId`. True once it plays there — or has no way to
+ * choose, and plays to the default — and false while a set is on its way or
+ * after it was refused. Either answer is followed by onChange, to apply again.
+ */
+const pointAt = (c: SinkableContext, sinkId: string): boolean => {
+  const want = sinkKey(sinkId)
+  if (typeof c.setSinkId !== 'function') return true
+  if (want === ctxSink && sinkPending === null) return true
+  if (want === sinkPending || want === sinkFailed) return false
+  sinkPending = want
+  sinkFailed = null
+  c.setSinkId(want).then(
+    () => { if (sinkPending === want) { ctxSink = want; sinkPending = null } },
+    () => { if (sinkPending === want) { ctxSink = null; sinkPending = null; sinkFailed = want } },
+  ).finally(() => onChange())
+  return false
 }
 
 /**
@@ -153,6 +184,10 @@ export const amplify = (el: HTMLMediaElement, gain: number, muted: boolean, sink
   const track = stream?.getAudioTracks?.()[0]
   if (!stream || !track) return false
 
+  // Not onto the stage, nor kept on it, until the context plays where the
+  // element does: connected first, it would play on the old device meanwhile.
+  if (!pointAt(c, sinkId)) return false
+
   const level = muted ? 0 : gain
   let st = stages.get(el)
   if (st && st.track !== track) { release(el); st = undefined }
@@ -170,7 +205,6 @@ export const amplify = (el: HTMLMediaElement, gain: number, muted: boolean, sink
       return false
     }
   }
-  pointAt(c, sinkId)
   el.muted = true
   return true
 }
