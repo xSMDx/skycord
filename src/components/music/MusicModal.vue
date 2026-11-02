@@ -53,6 +53,7 @@ import {
 import * as Sel from '@/composables/selectionModel'
 import { noPushToTalkKey } from '@/composables/useVoiceSettings'
 import { AUDIO_ACCEPT } from '@/composables/uploadScheduler'
+import { runBulk, type Refused } from '@/composables/bulkRun'
 import { useFileDrop, guardWindowDrops } from '@/composables/fileDrop'
 import UploadList from './UploadList.vue'
 import LibrarySelectionBar from './LibrarySelectionBar.vue'
@@ -496,7 +497,7 @@ watch(search, (q) => {
  * that is playing or queued lets go the same way whichever it was. A delete
  * that failed leaves the queue alone: the song is still yours.
  */
-const deleteOne = async (t: LibTrack, opts: Quiet = {}): Promise<string | null> => {
+const deleteOne = async (t: LibTrack, opts: Quiet = {}): Promise<Refused | null> => {
   const failed = await deleteTrack(t.id, opts)
   if (!failed) forget(t.id)
   return failed
@@ -550,8 +551,12 @@ type PickedRow = (typeof picked.value)[number]
  * A removal under way, read by the bar as its progress. While it runs the
  * selection is the one it was confirmed for: rows cannot be picked, and the
  * rows' own changes (each song leaving) do not trim it until it ends.
+ * `waiting`: the app-wide limit answered 429, and the run is waiting it out
+ * before the same song again.
  */
-const bulk = reactive({ verb: 'Deleting', done: 0, total: 0, stop: false })
+const bulk = reactive({ verb: 'Deleting', done: 0, total: 0, stop: false, waiting: false })
+/** Stops the run in hand — at once, if it is waiting out the limit. */
+let bulkStop: AbortController | null = null
 /** The room has closed. A run in hand stops after its current song and then does nothing. */
 let disposed = false
 const selBar = ref<InstanceType<typeof LibrarySelectionBar> | null>(null)
@@ -585,7 +590,7 @@ const leaveSelection = (): void => {
 }
 /** Cancel, Escape and the Select button again. In a run it stops after the song in hand. */
 const cancelSelection = (): void => {
-  if (bulk.total) { bulk.stop = true; return }
+  if (bulk.total) { bulk.stop = true; bulkStop?.abort(); return }
   leaveSelection()
 }
 const toggleSelecting = (): void => {
@@ -635,6 +640,9 @@ const onRowContext = (e: MouseEvent, t: LibTrack, i: number): void => {
  */
 const escapeSelection = (): boolean => {
   if (!selecting.value || confirming.value || menu.open) return false
+  // A run already told to stop: the next Escape (Android's back sends them
+  // until the room is gone) is for the room.
+  if (bulk.total && bulk.stop) return false
   cancelSelection()
   return true
 }
@@ -702,7 +710,9 @@ const removePicked = async (): Promise<void> => {
   const list = library.open
   failures.value = new Map()
   failNote.value = ''
-  Object.assign(bulk, { verb: list ? 'Removing' : 'Deleting', done: 0, total: rows.length, stop: false })
+  Object.assign(bulk, { verb: list ? 'Removing' : 'Deleting', done: 0, total: rows.length, stop: false, waiting: false })
+  const stop = new AbortController()
+  bulkStop = stop
   // The confirmation gives focus back to Delete, which this has just turned off.
   void nextTick(() => selBar.value?.focusCancel())
 
@@ -710,21 +720,27 @@ const removePicked = async (): Promise<void> => {
   const kept: PickedRow[] = []
   const why = new Map<PickedRow, string>()
   const removedAt: number[] = []
-  let at = 0
-  for (; at < order.length; at++) {
-    if (bulk.stop) break
-    const r = order[at]
-    const failed = list
-      ? await removeFromPlaylist(list.id, r.i, { quiet: true })
-      : await deleteOne(r.t, { quiet: true })
-    if (failed) { kept.push(r); why.set(r, failed) } else removedAt.push(r.i)
-    bulk.done++
-  }
+  // One song at a time. A 429 is the app-wide limit, not the song: the bar
+  // says so, the run waits as long as it was told, then the same song again.
+  const at = await runBulk(order, r => list
+    ? removeFromPlaylist(list.id, r.i, { quiet: true, reload: false })
+    : deleteOne(r.t, { quiet: true }), {
+    signal: stop.signal,
+    settled: (r, failed) => {
+      if (failed) { kept.push(r); why.set(r, failed) } else removedAt.push(r.i)
+      bulk.done++
+    },
+    waiting: (until) => { bulk.waiting = until !== null },
+  })
+  if (bulkStop === stop) bulkStop = null
+  // Highest place first kept every place right without reading the list
+  // back; now it is read back once, for the rows the run leaves picked.
+  if (list && removedAt.length && library.open?.id === list.id) await openPlaylist(list.id)
   // The room closed under it: it stopped at the song in hand, and has no rows to tell.
   if (disposed) return
   kept.push(...order.slice(at))
   const stopped = at < order.length
-  Object.assign(bulk, { done: 0, total: 0, stop: false })
+  Object.assign(bulk, { done: 0, total: 0, stop: false, waiting: false })
 
   // Somewhere else by now: nothing here is what was picked.
   if (library.open?.id !== list?.id) { leaveSelection(); return }
@@ -795,6 +811,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true
   bulk.stop = true
+  bulkStop?.abort()
   if (searchTimer) clearTimeout(searchTimer)
   listsWatch?.disconnect()
   unguardDrops?.()

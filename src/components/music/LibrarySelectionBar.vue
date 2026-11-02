@@ -11,7 +11,9 @@
  *
  * While a removal runs the bar is its progress: a count of where it has got
  * to, said aloud, and a rail along the top edge that fills. The acts are off
- * until it ends; Cancel stops it after the song in hand.
+ * until it ends; Cancel stops it after the song in hand. When the server's
+ * limit holds it up, the bar says it is waiting rather than sitting on a count
+ * that does not move; Cancel stops the wait at once.
  */
 import { computed, ref } from 'vue'
 import { ListEnd, Trash2, X } from 'lucide-vue-next'
@@ -21,15 +23,19 @@ const props = defineProps<{
   count: number
   /** Open on a playlist: removal takes songs out of it rather than deleting them. */
   inPlaylist: boolean
-  /** A removal under way, or null. `verb` is "Deleting" or "Removing". */
-  progress: { verb: string; done: number; total: number } | null
+  /** A removal under way, or null. `verb` is "Deleting" or "Removing";
+   *  `waiting`, the server's limit is being waited out. */
+  progress: { verb: string; done: number; total: number; waiting?: boolean } | null
   /** After a run: what did not go, which stays picked. */
   note?: string
 }>()
 const emit = defineEmits<{ queue: []; remove: []; cancel: [] }>()
 
+const WAITING_SAYS = 'Waiting for the limit…'
+
 const status = computed(() => {
   const p = props.progress
+  if (p?.waiting) return WAITING_SAYS
   if (p) return `${p.verb} ${Math.min(p.done + 1, p.total)} of ${p.total}…`
   return `${props.count} selected`
 })

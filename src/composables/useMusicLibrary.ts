@@ -16,6 +16,7 @@ import {
   createUploadQueue, looksLikeAudio, NOT_REACHED,
   type Attempt, type RateHeaders, type UploadItem, type UploadBatch,
 } from './uploadScheduler'
+import type { Refused } from './bulkRun'
 
 // The wire shapes are defined once, in useApi, beside every other one.
 export type LibTrack = WireTrack
@@ -43,6 +44,21 @@ const reasonOf = (err: unknown): string =>
   (err as { message?: string })?.message ?? 'Something went wrong.'
 
 const say = (err: unknown): void => { library.error = reasonOf(err) }
+
+/**
+ * How a call was refused, whole: the status and the rate headers as well as
+ * the sentence, so a bulk run can tell the app-wide limit (a 429, waited out)
+ * from a song that will not go. A request that never got an answer is status 0.
+ */
+const refusal = (err: unknown): Refused => {
+  const e = err as { status?: unknown; rateHeaders?: RateHeaders } | null
+  return {
+    ok: false,
+    status: typeof e?.status === 'number' ? e.status : 0,
+    headers: e?.rateHeaders ?? {},
+    message: reasonOf(err),
+  }
+}
 
 /**
  * A call made as one of many. The bulk acts in the library put each failure's
@@ -289,8 +305,8 @@ export const importTrack = async (url: string): Promise<LibTrack | null> => {
   } catch (e) { say(e); return null } finally { library.importing = false }
 }
 
-/** Null once it is gone; otherwise why it is not. */
-export const deleteTrack = async (id: string, opts: Quiet = {}): Promise<string | null> => {
+/** Null once it is gone; otherwise how it was refused. */
+export const deleteTrack = async (id: string, opts: Quiet = {}): Promise<Refused | null> => {
   try {
     await api().deleteMusicTrack(id)
     const at = library.tracks.findIndex(t => t.id === id)
@@ -308,7 +324,7 @@ export const deleteTrack = async (id: string, opts: Quiet = {}): Promise<string 
     return null
   } catch (e) {
     if (!opts.quiet) say(e)
-    return reasonOf(e)
+    return refusal(e)
   }
 }
 
@@ -337,15 +353,26 @@ export const addToPlaylist = async (playlistId: string, trackId: string): Promis
   } catch (e) { say(e) }
 }
 
-/** By place, not by song: a playlist can hold one song twice. Null once it is out. */
-export const removeFromPlaylist = async (playlistId: string, index: number, opts: Quiet = {}): Promise<string | null> => {
+/**
+ * By place, not by song: a playlist can hold one song twice. Null once it is
+ * out; otherwise how it was refused.
+ *
+ * `reload: false` is for a bulk run, which removes highest place first — each
+ * removal moves up only the rows after it, none of which is still to come, so
+ * the places it was confirmed with stay right without reading the list back
+ * after every song. It reloads once, at its end. A reload per song would also
+ * spend two calls of the app-wide limit on each.
+ */
+export const removeFromPlaylist = async (
+  playlistId: string, index: number, opts: Quiet & { reload?: boolean } = {},
+): Promise<Refused | null> => {
   try {
     await api().removeFromPlaylistApi(playlistId, index)
   } catch (e) {
     if (!opts.quiet) say(e)
-    return reasonOf(e)
+    return refusal(e)
   }
-  if (library.open?.id === playlistId) await openPlaylist(playlistId)
+  if (opts.reload !== false && library.open?.id === playlistId) await openPlaylist(playlistId)
   return null
 }
 

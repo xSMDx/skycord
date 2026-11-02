@@ -225,10 +225,15 @@ describe('Delete and Remove from playlist', () => {
   it('removes from a playlist by index, highest first, and deletes nothing from the library', () => {
     const body = fnBody(script, 'removePicked')
     expect(body).toContain('const order = list ? [...rows].sort((a, b) => b.i - a.i) : rows')
-    // One at a time, each awaited before the next; in a playlist only ever a removal.
-    expect(body).toMatch(/for \(; at < order\.length; at\+\+\) \{/)
-    expect(body).toMatch(/const failed = list\s*\? await removeFromPlaylist\(list\.id, r\.i, \{ quiet: true \}\)\s*: await deleteOne\(r\.t, \{ quiet: true \}\)/)
+    // One at a time, each awaited before the next (runBulk); in a playlist only ever a removal.
+    expect(body).toMatch(/const at = await runBulk\(order, r => list\s*\? removeFromPlaylist\(list\.id, r\.i, \{ quiet: true, reload: false \}\)\s*: deleteOne\(r\.t, \{ quiet: true \}\), \{/)
     expect(body).not.toContain('deleteTrack')
+    // Highest place first keeps the places right with no reload between songs;
+    // the list is read back once, after the run, before the kept rows are keyed.
+    const reload = body.indexOf('if (list && removedAt.length && library.open?.id === list.id) await openPlaylist(list.id)')
+    expect(reload).toBeGreaterThan(body.indexOf('await runBulk('))
+    expect(reload).toBeLessThan(body.indexOf('const keyNow'))
+    expect(reload).toBeLessThan(body.indexOf("Object.assign(bulk, { done: 0, total: 0"))
     // A kept row's key moves up one for every row taken out above it.
     expect(body).toContain('`${r.i - removedAt.filter(j => j < r.i).length}:${r.t.id}`')
   })
@@ -250,9 +255,18 @@ describe('Delete and Remove from playlist', () => {
     expect(tagWith(tpl, 'LibrarySelectionBar', '<LibrarySelectionBar')).toContain(':progress="bulk.total ? bulk : null"')
   })
 
-  it('the library calls say why they failed, and can be quiet about it', () => {
-    expect(library).toMatch(/export const deleteTrack = async \(id: string, opts: Quiet = \{\}\): Promise<string \| null>/)
-    expect(library).toMatch(/export const removeFromPlaylist = async \(playlistId: string, index: number, opts: Quiet = \{\}\): Promise<string \| null>/)
+  it('the library calls say how they were refused, and can be quiet about it', () => {
+    expect(library).toMatch(/export const deleteTrack = async \(id: string, opts: Quiet = \{\}\): Promise<Refused \| null>/)
+    expect(library).toMatch(/export const removeFromPlaylist = async \(\s*playlistId: string, index: number, opts: Quiet & \{ reload\?: boolean \} = \{\},\s*\): Promise<Refused \| null>/)
+  })
+
+  it('a 429 is waited out on the bar, and Cancel ends the wait', () => {
+    const body = fnBody(script, 'removePicked')
+    expect(body).toContain('signal: stop.signal')
+    expect(body).toContain('waiting: (until) => { bulk.waiting = until !== null }')
+    expect(fnBody(script, 'cancelSelection')).toMatch(/if \(bulk\.total\) \{ bulk\.stop = true; bulkStop\?\.abort\(\); return \}/)
+    expect(barScript).toContain("const WAITING_SAYS = 'Waiting for the limit…'")
+    expect(barScript).toMatch(/const p = props\.progress\s*if \(p\?\.waiting\) return WAITING_SAYS/)
   })
 })
 
@@ -282,9 +296,9 @@ describe('nothing moves under a run', () => {
   })
 
   it('closing the room stops the run, and an orphaned run touches nothing after', () => {
-    expect(script).toMatch(/onBeforeUnmount\(\(\) => \{\s*disposed = true\s*bulk\.stop = true/)
+    expect(script).toMatch(/onBeforeUnmount\(\(\) => \{\s*disposed = true\s*bulk\.stop = true\s*bulkStop\?\.abort\(\)/)
     const body = fnBody(script, 'removePicked')
-    const loop = body.indexOf('if (bulk.stop) break')
+    const loop = body.indexOf('await runBulk(')
     const after = body.indexOf('if (disposed) return')
     expect(loop).toBeGreaterThan(-1)
     expect(after).toBeGreaterThan(loop)
@@ -302,6 +316,10 @@ describe('leaving', () => {
     // An open confirmation or menu has its own Escape.
     expect(body).toMatch(/if \(!selecting\.value \|\| confirming\.value \|\| menu\.open\) return false/)
     expect(body).toMatch(/cancelSelection\(\)\s*return true/)
+    // Once a run has been told to stop, the next Escape is the room's — so
+    // Android's back, which sends Escape until the room is gone, still closes it.
+    expect(body).toContain('if (bulk.total && bulk.stop) return false')
+    expect(body.indexOf('if (bulk.total && bulk.stop) return false')).toBeLessThan(body.indexOf('cancelSelection()'))
   })
 
   it('ModalBase asks the guard before it closes, and stays open when it answers', () => {
@@ -326,7 +344,7 @@ describe('leaving', () => {
 
   it('Cancel during a run stops after the song in hand', () => {
     const body = fnBody(script, 'cancelSelection')
-    expect(body).toMatch(/if \(bulk\.total\) \{ bulk\.stop = true; return \}/)
-    expect(fnBody(script, 'removePicked')).toMatch(/if \(bulk\.stop\) break/)
+    expect(body).toMatch(/if \(bulk\.total\) \{ bulk\.stop = true; bulkStop\?\.abort\(\); return \}/)
+    expect(fnBody(script, 'removePicked')).toContain('signal: stop.signal')
   })
 })
