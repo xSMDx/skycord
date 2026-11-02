@@ -10,13 +10,23 @@
  */
 import { describe, it, expect, vi } from 'vitest'
 import { Track, type Room } from 'livekit-client'
+import policySource from '../subscriptionPolicy.ts?raw'
+// The policy is pure: it reads the music service's identity from a module of
+// its own rather than from useMusic, which opens a socket at import. The
+// socket stub below is only for checking useMusic's re-export agrees.
+import { kindOf, shouldSubscribe, applySubscriptions } from '../subscriptionPolicy'
+import { MUSIC_IDENTITY } from '../musicIdentity'
+import { MUSIC_IDENTITY as reExported } from '../useMusic'
 
-// subscriptionPolicy reads the music service's identity from useMusic, which
-// opens a socket through useSocket at import. Same stub as musicClient.test.ts.
 vi.mock('../useSocket', () => ({ getSocket: () => ({ emit: () => {} }) }))
 
-const { kindOf, shouldSubscribe, applySubscriptions } = await import('../subscriptionPolicy')
-const { MUSIC_IDENTITY } = await import('../useMusic')
+describe('the policy stays pure', () => {
+  it('imports nothing that opens a socket, and agrees with useMusic on the identity', () => {
+    expect(policySource).not.toMatch(/from '\.\/useMusic'/)
+    expect(policySource).toMatch(/import \{ MUSIC_IDENTITY \} from '\.\/musicIdentity'/)
+    expect(reExported).toBe(MUSIC_IDENTITY)
+  })
+})
 
 type Kind = ReturnType<typeof kindOf>
 const KINDS: Kind[] = ['mic', 'camera', 'screen', 'screen-audio', 'music']

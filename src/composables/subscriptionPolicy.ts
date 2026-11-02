@@ -18,7 +18,7 @@
  * (`music.listeningTo`, `joinedStreams`) and passes them in.
  */
 import { Track, type Room } from 'livekit-client'
-import { MUSIC_IDENTITY } from './useMusic'
+import { MUSIC_IDENTITY } from './musicIdentity'
 
 export type PubKind = 'mic' | 'camera' | 'screen' | 'screen-audio' | 'music'
 

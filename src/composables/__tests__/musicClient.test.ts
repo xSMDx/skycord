@@ -385,6 +385,30 @@ describe('a pause on its way', () => {
     expect(emit.mock.calls.map(c => c[0])).toEqual(['music:pause', 'music:pause'])
   })
 
+  it('a refusal naming its channel ends only that channel’s wait', () => {
+    onMusicState({ channels: [held(0, false).channels[0], { ...held(0, false).channels[0], id: 'q', name: 'Other' }] })
+    togglePauseMusic(music.channels[0])
+    togglePauseMusic(music.channels[1])
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.', channelId: 'q' })
+    expect(isPausePending(music.channels[0])).toBe(true)
+    expect(isPausePending(music.channels[1])).toBe(false)
+  })
+
+  it('a refusal that names no channel ends a wait only when there is just the one it can answer', () => {
+    // An older server says no channel. With one pause on its way that is the
+    // answer; with two, guessing would free a control whose answer is still coming.
+    onMusicState({ channels: [held(0, false).channels[0], { ...held(0, false).channels[0], id: 'q', name: 'Other' }] })
+    togglePauseMusic(music.channels[0])
+    togglePauseMusic(music.channels[1])
+    onMusicError({ reason: 'You are doing that too fast. Give it a moment.' })
+    expect(isPausePending(music.channels[0])).toBe(true)
+    expect(isPausePending(music.channels[1])).toBe(true)
+    onMusicState({ channels: [held(0, true).channels[0], { ...held(0, false).channels[0], id: 'q', name: 'Other' }] })
+    expect(isPausePending(music.channels[0])).toBe(false)
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.' })
+    expect(isPausePending(music.channels[1])).toBe(false)
+  })
+
   it('the timer clears pending, just past the service timeout, if no answer ever comes', () => {
     vi.useFakeTimers({ now: 1_000_000 })
     expect(PAUSE_SETTLE_MS).toBeGreaterThan(5_000)

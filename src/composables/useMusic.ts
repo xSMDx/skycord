@@ -29,7 +29,7 @@ import { isPaused, canPause, canPauseOrResume } from './musicPause'
 // the two are the same ear. See audioFocus.ts.
 onYield('channel', () => { if (music.listeningTo) listenToMusic(null) })
 
-export const MUSIC_IDENTITY = 'svc:music'
+export { MUSIC_IDENTITY } from './musicIdentity'
 
 /**
  * Off until something can actually play.
@@ -415,10 +415,22 @@ export const onMusicState = (payload: { room?: string; channels: MusicChannelVie
   }
 }
 
-export const onMusicError = (payload: { reason: string }): void => {
-  // A refusal ends any wait: the server answers a refused pause with this and
-  // nothing else, and it does not say which request it answers.
-  settleAllPauses()
+/**
+ * A refusal. A refused pause or resume is answered with this and nothing
+ * else, so it ends that channel's wait — and only that one: another
+ * channel's pause may still be on its way, and freeing its control early
+ * would let a second tap go out behind the first.
+ *
+ * A server that names the channel (`channelId`, additive) says which. One
+ * that does not leaves it to be inferred, and only one wait can be: with a
+ * single pause on its way, this is its answer (or near enough — the wait is
+ * a guard against double taps, not a promise); with several, each is left to
+ * its own state or its PAUSE_SETTLE_MS.
+ */
+export const onMusicError = (payload: { reason: string; channelId?: string }): void => {
+  const id = typeof payload?.channelId === 'string' ? payload.channelId : null
+  if (id !== null) settlePause(id)
+  else if (pauseWaits.size === 1) settleAllPauses()
   music.error = payload?.reason ?? 'That did not work.'
 }
 
