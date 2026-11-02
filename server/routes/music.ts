@@ -1,6 +1,6 @@
 import { Router, raw } from 'express'
 import { requireAuth } from '../middleware/auth'
-import { uploadLimit } from '../middleware/rateLimit'
+import { musicUploadLimit } from '../middleware/rateLimit'
 import {
   listTracks, uploadTrack, importTrack, deleteTrack, streamTrack,
   listPlaylists, getPlaylist, createPlaylist, renamePlaylist, deletePlaylist,
@@ -21,12 +21,12 @@ router.get('/tracks', listTracks)
  * matches nothing is the way to say "leave this alone": the route still
  * runs, and req is still the untouched stream.
  */
-router.post('/tracks/upload', uploadLimit, raw({ type: () => false }), uploadTrack)
+router.post('/tracks/upload', musicUploadLimit, raw({ type: () => false }), uploadTrack)
 
 // Importing is the same work with a different source of bytes, and the same
-// cost to the server, so it shares the upload limiter rather than the
+// cost to the server, so it shares the music upload limiter rather than the
 // general one.
-router.post('/tracks/import', uploadLimit, importTrack)
+router.post('/tracks/import', musicUploadLimit, importTrack)
 
 router.get('/tracks/:trackId/audio', streamTrack)
 router.delete('/tracks/:trackId', deleteTrack)

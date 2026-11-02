@@ -44,15 +44,18 @@ import {
   togglePauseMusic, isPaused, canPause, isPausePending,
 } from '@/composables/useMusic'
 import {
-  library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
+  library, loadLibrary, loadPlaylists, openPlaylist, enqueueUploads, importTrack,
   deleteTrack, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
   shownTracks, clearLibraryError, clock, totalTime, megabytes,
   type LibTrack,
 } from '@/composables/useMusicLibrary'
+import { AUDIO_ACCEPT } from '@/composables/uploadScheduler'
+import { useFileDrop } from '@/composables/fileDrop'
+import UploadList from './UploadList.vue'
 
 defineProps<{ rooms?: VoiceRoomChoice[] }>()
 const emit = defineEmits<{ close: []; join: [channelId: string] }>()
-const { accessToken, user } = useAuth()
+const { user } = useAuth()
 
 // The shell's own dismissal, so the leave transition plays. Emitting close
 // upward instead unmounts us on the same tick and the animation never runs.
@@ -440,12 +443,16 @@ const subtitle = computed(() => {
 // ── actions ─────────────────────────────────────────────────────────────────
 const pickFile = (): void => fileInput.value?.click()
 
-const onFile = async (e: Event): Promise<void> => {
+/** Every file chosen goes into the upload queue, which sends them one by one. */
+const onFile = (e: Event): void => {
   const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''              // so the same file can be chosen twice
-  if (file) await uploadTrack(file, accessToken.value ?? '')
+  const files = [...(input.files ?? [])]
+  input.value = ''              // so the same files can be chosen twice
+  enqueueUploads(files)
 }
+
+/** Files dragged anywhere onto the player join the same queue. */
+const { dropping, onDragEnter, onDragOver, onDragLeave, onDrop } = useFileDrop(enqueueUploads)
 
 const submitLink = async (): Promise<void> => {
   const u = linkUrl.value.trim()
@@ -533,7 +540,10 @@ const pct = (at: number, dur: number | null | undefined): number =>
     <button class="mm-x" aria-label="Close" @click="dismiss">
       <X :size="16" :stroke-width="2.25" />
     </button>
-    <div class="mm">
+    <div
+      class="mm"
+      @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop"
+    >
       <!-- ── left: what you own ──────────────────────────────────────── -->
       <aside class="mm-rail">
         <div class="mm-search">
@@ -597,7 +607,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
       </aside>
 
       <!-- ── centre: the record you are looking at ───────────────────── -->
-      <section ref="mainEl" class="mm-main" :class="{ 'queue-open': showQueue }">
+      <section ref="mainEl" class="mm-main" :class="{ 'queue-open': showQueue, dropping }">
         <!-- The queue, over the centre pane rather than beside it: three
              columns is already the most this modal can hold, and what plays
              next is a question you ask occasionally, not a thing to watch. -->
@@ -775,14 +785,17 @@ const pct = (at: number, dur: number | null | undefined): number =>
             v-model="linkUrl" class="mm-in" placeholder="https://…/track.mp3"
             aria-label="Link to an audio file" autofocus
           />
-          <button type="submit" class="mm-go" :disabled="!linkUrl.trim() || library.uploading !== null">Add</button>
+          <!-- Waits for its own import only: files going up never hold a link back. -->
+          <button
+            type="submit" class="mm-go" :disabled="!linkUrl.trim() || library.importing"
+            :aria-busy="library.importing"
+          >
+            <Loader2 v-if="library.importing" class="mm-spin" :size="13" :stroke-width="2.5" aria-hidden="true" />
+            <span :class="{ 'mm-gohide': library.importing }">Add</span>
+          </button>
         </form>
 
-        <div v-if="library.uploading !== null" class="mm-progress" role="status">
-          <Loader2 class="mm-spin" :size="14" :stroke-width="2.5" />
-          <span>{{ library.uploading < 95 ? 'Uploading…' : 'Checking and converting…' }}</span>
-          <div class="mm-bar"><span :style="{ transform: `scaleX(${library.uploading / 100})` }" /></div>
-        </div>
+        <UploadList />
 
         <p v-if="library.error" class="mm-err" role="alert">
           {{ library.error }}
@@ -1075,8 +1088,8 @@ const pct = (at: number, dur: number | null | undefined): number =>
     </div>
 
     <input
-      ref="fileInput" class="mm-sr" type="file"
-      accept="audio/*,.mp3,.flac,.ogg,.opus,.wav,.m4a,.aac" @change="onFile"
+      ref="fileInput" class="mm-sr" type="file" multiple
+      :accept="AUDIO_ACCEPT" @change="onFile"
     />
 
   </ModalBase>
@@ -1221,6 +1234,10 @@ const pct = (at: number, dur: number | null | undefined): number =>
    carried on into the library and took the rest of the queue off screen. While
    the drawer is open the pane stays where showQueue's watch put it. */
 .mm-main.queue-open { overflow: hidden; }
+/* Files dragged over the player: the library says it will take them. An
+   outline drawn inward rather than a border, so nothing in the pane moves by a
+   pixel, and it is painted over the header's cover colours, not under them. */
+.mm-main.dropping { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /*
  * The one place colour comes from content rather than tokens. The wash is
@@ -1304,13 +1321,12 @@ const pct = (at: number, dur: number | null | undefined): number =>
   .mm-flat:hover { background: var(--hover); color: var(--text-1); }
 }
 
-.mm-progress {
-  display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center;
-  margin: 0 28px 14px; padding: 12px 14px;
-  background: var(--bg-input); border-radius: var(--edge-md);
-  font-size: 12.5px; color: var(--text-2);
-}
-.mm-progress .mm-bar { grid-column: 1 / -1; }
+/* Add, while its link is fetched: the spinner sits where the word was, so the
+   button keeps its width, and it stays at full strength — busy is not off. */
+.mm-go[aria-busy="true"] { position: relative; }
+.mm-go[aria-busy="true"]:disabled { opacity: 1; cursor: progress; }
+.mm-go .mm-spin { position: absolute; inset: 0; margin: auto; color: currentColor; }
+.mm-gohide { visibility: hidden; }
 .mm-spin { animation: mm-spin 1s linear infinite; color: var(--accent); }
 @keyframes mm-spin { to { transform: rotate(360deg); } }
 
@@ -1802,7 +1818,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
     border: none; background: none; cursor: pointer; border-radius: 50%;
     color: var(--text-2);
   }
-  .mm-link, .mm-progress, .mm-err { margin-inline: 16px; padding-inline: 16px; }
+  .mm-link, .mm-err { margin-inline: 16px; padding-inline: 16px; }
   .mm-in { min-height: 44px; }
   .mm-go, .mm-flat { min-height: 44px; padding-inline: 16px; }
   .mm-bandleave { height: 44px; }

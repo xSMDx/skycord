@@ -19,7 +19,7 @@ const rule = (selector: string): string => {
 
 describe('the queue drawer keeps the library still', () => {
   it('marks the library pane while the queue is open', () => {
-    expect(source).toMatch(/<section ref="mainEl" class="mm-main" :class="\{ 'queue-open': showQueue \}"/)
+    expect(source).toMatch(/<section ref="mainEl" class="mm-main" :class="\{ 'queue-open': showQueue[ ,]/)
   })
 
   it('stops the pane scrolling while it is marked', () => {

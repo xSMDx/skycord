@@ -8,9 +8,14 @@
  * meet in one place — playing a track from here into a channel there — and
  * keeping them apart keeps that seam honest.
  */
-import { reactive, computed } from 'vue'
+import { reactive, computed, watch } from 'vue'
 import { useApi, type WireTrack, type WirePlaylist, type MusicLibraryCaps } from './useApi'
+import { useAuth, silentRefresh } from './useAuth'
 import { uploadFailure, tooBigToUpload } from './uploadFailure'
+import {
+  createUploadQueue, looksLikeAudio, NOT_REACHED,
+  type Attempt, type RateHeaders, type UploadItem,
+} from './uploadScheduler'
 
 // The wire shapes are defined once, in useApi, beside every other one.
 export type LibTrack = WireTrack
@@ -27,8 +32,8 @@ export const library = reactive({
   loading: false,
   /** Shown in the modal, cleared by the next successful action. */
   error: '',
-  /** 0–100 while a file is going up, null when nothing is. */
-  uploading: null as number | null,
+  /** A link import is on its way. Files have their own rows: see `uploads`. */
+  importing: false,
 })
 
 const api = () => useApi()
@@ -68,20 +73,47 @@ export const openPlaylist = async (id: string | null): Promise<void> => {
   } catch (e) { say(e) }
 }
 
+/** A new track at the top of the library — once, even if a reload of the
+ *  list raced the answer and already brought it. */
+const addToLibrary = (t: LibTrack): void => {
+  if (library.tracks.some(x => x.id === t.id)) return
+  library.tracks.unshift(t)
+  library.usage.tracks++
+  library.usage.bytes += t.bytes
+}
+
+export type UploadAttempt = Attempt<LibTrack>
+
+/** The two headers a 429 says how long to wait in. Same origin for every
+ *  client (the web app, the desktop shell and the Android app all load the
+ *  page from the instance itself and call it by relative path), so CORS has
+ *  nothing to hide here. */
+const rateHeaders = (xhr: XMLHttpRequest): RateHeaders => ({
+  'retry-after': xhr.getResponseHeader('Retry-After') ?? undefined,
+  'ratelimit-reset': xhr.getResponseHeader('RateLimit-Reset') ?? undefined,
+})
+
 /**
- * Upload with XHR rather than fetch, for one reason: progress.
+ * Upload one file. XHR rather than fetch, for one reason: progress.
  *
  * fetch cannot report how much of a request body has gone out, and a
  * 40MB upload with no progress bar is indistinguishable from a hang. The
  * body is the file itself — no multipart wrapper, because there is one
  * file and no fields, and the server pipes it straight through.
+ *
+ * It never throws and never touches the library: it says what happened —
+ * the track, or the status, the rate headers and a sentence — and the upload
+ * queue decides. A 429 is waited out, anything else fails that file alone,
+ * and status 0 is a request that never got an answer.
  */
-export const uploadTrack = (file: File, token: string): Promise<LibTrack | null> =>
+export const uploadTrack = (
+  file: File,
+  token: string,
+  opts: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+): Promise<UploadAttempt> =>
   new Promise((resolve) => {
-    const tooBig = tooBigToUpload(file.size, library.caps?.maxUploadBytes)
-    if (tooBig) { library.error = tooBig; resolve(null); return }
-    library.uploading = 0
-    library.error = ''
+    const stopped: UploadAttempt = { ok: false, status: 0, headers: {}, message: 'The upload was stopped.' }
+    if (opts.signal?.aborted) { resolve(stopped); return }
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/music/tracks/upload')
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
@@ -89,46 +121,113 @@ export const uploadTrack = (file: File, token: string): Promise<LibTrack | null>
     xhr.withCredentials = true
 
     xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return
-      // Capped below 100: the bytes being sent is not the work being done.
-      // Transcoding and scanning happen after the last byte arrives, and a
-      // bar that sits at 100% for a minute reads as broken.
-      library.uploading = Math.min(95, Math.round((e.loaded / e.total) * 95))
+      if (e.lengthComputable && e.total) opts.onProgress?.(e.loaded / e.total)
     }
+    // Every byte is there. What follows is the server scanning and converting.
+    xhr.upload.onload = () => opts.onProgress?.(1)
 
     xhr.onload = () => {
-      library.uploading = null
-      let body: { track?: LibTrack; message?: string } = {}
-      try { body = JSON.parse(xhr.responseText) } catch { /* handled below */ }
+      let body: { track?: LibTrack } = {}
+      try { body = JSON.parse(xhr.responseText) } catch { /* read from the status below */ }
       if (xhr.status >= 200 && xhr.status < 300 && body.track) {
-        library.tracks.unshift(body.track)
-        library.usage.tracks++
-        library.usage.bytes += body.track.bytes
-        resolve(body.track)
+        resolve({ ok: true, value: body.track })
         return
       }
-      library.error = uploadFailure(xhr.status, xhr.responseText)
-      resolve(null)
+      resolve({
+        ok: false, status: xhr.status, headers: rateHeaders(xhr),
+        message: uploadFailure(xhr.status, xhr.responseText),
+      })
     }
-    xhr.onerror = () => {
-      library.uploading = null
-      library.error = 'That upload did not reach the server.'
-      resolve(null)
-    }
+    xhr.onerror = () => resolve({ ok: false, status: 0, headers: {}, message: NOT_REACHED })
+    xhr.onabort = () => resolve(stopped)
+    opts.signal?.addEventListener('abort', () => xhr.abort(), { once: true })
 
     xhr.send(file)
   })
 
+// ── the upload queue ────────────────────────────────────────────────────────
+/*
+ * Here rather than in the modal, so closing the modal does not stop a batch
+ * and reopening it shows where the batch has got to.
+ */
+
+/** One row per file: waiting, going up, checking and converting, done, failed,
+ *  or waiting out the server's limit. */
+export const uploads = reactive<UploadItem[]>([])
+/** Files done of files in this batch, for "3 of 8 uploaded". */
+export const uploadBatch = reactive({ total: 0, done: 0 })
+
+const { user, accessToken } = useAuth()
+
+/**
+ * One try with the session as it is now. A batch can outlast an access token
+ * — 25 songs and a wait for the limit take minutes — so each file reads the
+ * token as it starts, and a 401 gets one refresh and one more try. A refresh
+ * that fails signs the session out, which clears the queue below.
+ */
+const sendWithSession = async (
+  file: File, progress: (fraction: number) => void, signal: AbortSignal,
+): Promise<UploadAttempt> => {
+  const token = accessToken.value
+  if (!token) return { ok: false, status: 401, headers: {}, message: 'Sign in again to upload.' }
+  const first = await uploadTrack(file, token, { onProgress: progress, signal })
+  if (first.ok || first.status !== 401 || signal.aborted) return first
+  if (!(await silentRefresh()) || !accessToken.value || signal.aborted) return first
+  return uploadTrack(file, accessToken.value, { onProgress: progress, signal })
+}
+
+const queue = createUploadQueue<LibTrack>({
+  items: uploads,
+  batch: uploadBatch,
+  send: sendWithSession,
+  // A finished file shows up in the library at once, as a single upload did.
+  uploaded: addToLibrary,
+  refuse: f => tooBigToUpload(f.size, library.caps?.maxUploadBytes),
+})
+
+/** Who the queue is uploading for: nobody without a token. */
+const session = (): string | null => (accessToken.value ? user.value?.id ?? null : null)
+
+/*
+ * Signing out, or in as someone else, ends the batch: the next file would go
+ * up with a token that is gone or is not theirs, into a library that is not
+ * theirs. Sync, so no file can start between the change and the clear.
+ */
+watch(session, (now, before) => { if (now !== before) queue.clear() }, { flush: 'sync' })
+
+/**
+ * Add files to the queue, in the order given. What is not audio is left out
+ * with a word about it: a dragged folder of covers should not spend the
+ * upload limit on being refused one by one.
+ */
+export const enqueueUploads = (files: File[]): void => {
+  const out = files.filter(f => !looksLikeAudio(f))
+  library.error = !out.length ? ''
+    : out.length === 1 ? `${out[0].name} isn’t an audio file, so it was left out.`
+    : `${out.length} files aren’t audio, so they were left out.`
+  queue.enqueue(files.filter(looksLikeAudio))
+}
+
+/** Skip a waiting file, stop one going up, or dismiss a failed one. A file the
+ *  server is already checking and converting stays: it cannot be called back. */
+export const dropUpload = (id: string): void => { queue.drop(id) }
+
+/**
+ * Import from a link. Not part of the upload queue, on purpose: it is one
+ * request the person is watching, with the link still in the box to correct,
+ * and it must never sit behind twenty files. It shares the server's limit, so
+ * at the limit it says the limiter's words and keeps the link for another go.
+ */
 export const importTrack = async (url: string): Promise<LibTrack | null> => {
-  library.uploading = 0
+  const who = session()
+  library.importing = true
   library.error = ''
   try {
     const r = await api().importMusicTrack(url)
-    library.tracks.unshift(r.track)
-    library.usage.tracks++
-    library.usage.bytes += r.track.bytes
+    // Signed out meanwhile: the song is theirs, not the next person's.
+    if (session() === who) addToLibrary(r.track)
     return r.track
-  } catch (e) { say(e); return null } finally { library.uploading = null }
+  } catch (e) { say(e); return null } finally { library.importing = false }
 }
 
 export const deleteTrack = async (id: string): Promise<void> => {
