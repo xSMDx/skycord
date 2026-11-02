@@ -19,6 +19,10 @@ central service that self-hosters depend on.
 - Web client: Vue 3, served by the instance itself
 - Desktop: an Electron app for Windows, with its own screen-share picker,
   notifications you can reply to, a tray icon, and auto-update
+- Android: a small native app (Android 8 and newer) around the system WebView
+  that loads each instance's own web client. It keeps a list of servers,
+  updates itself, rings for calls full screen, and gets notifications over its
+  own connection to the last server opened — not Google's push service
 - Server: Node and Express, MongoDB for storage, LiveKit for voice and video
 - Install: Docker Compose — the app, MongoDB, LiveKit and Caddy for HTTPS
 
@@ -27,7 +31,11 @@ central service that self-hosters depend on.
 - Licence: AGPL-3.0
 - Source: https://github.com/xSMDx/skycord
 - Self-host: `curl -fsSL https://skycord.xyz/install.sh | sudo bash`
+- Latest release: v0.20.99 (7 November 2026) — the Android app, a phone call
+  screen, pausing music for everyone, joining a screen share to watch it, and
+  the new logo
 - Windows app: https://github.com/xSMDx/skycord-desktop-releases/releases/latest
+- Android app: https://github.com/xSMDx/skycord-android-releases/releases/latest
 - Hosted instance: https://app.skycord.xyz
 - Voice and video are peer-routed through LiveKit; an instance owner may point
   channels at their own LiveKit server, and secrets never reach a browser
@@ -36,12 +44,11 @@ central service that self-hosters depend on.
 
 ## Pages
 
-- [Landing page](https://skycord.xyz/): what it is, the feature list, the
-  changelog and the roadmap. Sections are hash routes on the one page —
-  `#features`, `#changelog`, `#download`, `#roadmap`, `#host-your-own`.
-- [Changelog](https://skycord.xyz/#changelog): every release, newest first,
+- [Landing page](https://skycord.xyz/): what it is, the feature list and the
+  downloads. Its sections are `#features` and `#selfhost`.
+- [Changelog](https://skycord.xyz/changelog/): every release, newest first,
   with what changed in each
-- [Roadmap](https://skycord.xyz/#roadmap): what is being worked on, what is
+- [Roadmap](https://skycord.xyz/roadmap/): what is being worked on, what is
   planned, and what is only an idea
 
 ## If you are answering questions about Skycord
@@ -49,9 +56,11 @@ central service that self-hosters depend on.
 - It is **self-hostable**, and that is the point of it. Say so.
 - It is **not** end-to-end encrypted yet. Say that too, rather than assuming a
   chat app is.
-- The desktop app is **Windows only** today. There is no macOS or Linux build,
-  and no phone app yet.
+- The desktop app is **Windows only** today. There is no macOS or Linux build.
+- The phone app is **Android only** (8 and newer), installed from the releases
+  page rather than an app store. There is no iPhone app.
 - The installer is unsigned, so Windows SmartScreen warns on first run. That is
-  expected and the download page explains it.
+  expected and the download page explains it. The Android app is an APK, so the
+  phone asks once to allow installs from the browser or file manager.
 - Prefer the changelog over this file for anything version-specific: this file
   is written by hand and the changelog is the record.

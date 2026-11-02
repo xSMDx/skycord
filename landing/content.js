@@ -25,8 +25,23 @@
     items: [
       'Servers and channels on a phone — the server rail sits beside the channel list — live now',
       'Everything you tap is thumb-sized, and the buttons that used to need a hover are just there — live now',
-      'Voice on a phone: the call screen, its controls, and who is in the room',
+      'Voice on a phone: a full-screen call with big buttons, who is in the room, and the music playing in it — live now',
+      'Every screen fits a phone: sign-up, Settings, Server Settings and the music player — live now',
       'Making channels and sending invites from your phone'
+    ]
+  },
+  {
+    // Shipped in v0.20.99 as an Android app (an APK from the releases page,
+    // not a store). Its notifications follow the server you last opened, so
+    // the card says so rather than promising every server.
+    stage: 'shipped', label: 'Live now', title: 'Phone app — Android',
+    items: [
+      'A real app rather than a website saved to your home screen — for Android 8 and newer, live now',
+      'Notifications that arrive when the app is closed, over the app’s own connection rather than Google’s — live now, for the server you last opened',
+      'Calls that ring full screen, even on the lock screen, with Answer and Decline — live now',
+      'Your own list of servers to switch between, like the desktop app — live now',
+      'It updates itself, the way the Windows app does — live now',
+      'iPhone, and the app stores. For now it is a download from the releases page'
     ]
   },
   {
@@ -38,22 +53,18 @@
     ]
   },
   {
-    stage: 'now', label: 'Building now', title: 'Desktop app',
+    // Next after v0.20.99 (owner, 2026-10-26): the Windows app taken much
+    // further than the web client in a window, then end-to-end encryption.
+    stage: 'next', label: 'Next up', title: 'Desktop app, further',
     items: [
-      'A real desktop app instead of a browser tab — for Windows, in testing now',
+      'A real desktop app instead of a browser tab — for Windows, live now',
+      'Much more of what a real Windows app can do, beyond the web app in a window — the next thing being built',
       'Add other people’s servers and switch between them, like TeamSpeak — your friend hosts his, you host yours, one app for both — live now',
       'Your own screen-share picker, with the stream quality you choose — live now',
       'Notifications you can reply to, a tray icon, and an unread count on the taskbar — live now',
       'Push-to-talk that works while the app is in the background',
+      'Invite links that open the app',
       'Per-app audio capture, so sharing a game does not echo the call back'
-    ]
-  },
-  {
-    stage: 'next', label: 'Next up', title: 'Phone app — v0.21',
-    items: [
-      'A real app rather than a website saved to your home screen',
-      'Notifications that arrive when the app is closed',
-      'The same list of servers as the desktop app'
     ]
   },
   {
@@ -108,6 +119,38 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.20.99', date: 'Nov 7, 2026', time: '20:00 UTC+1', title: 'Your phone rings when the crew calls',
+    items: [
+      ['add', 'An Android app. Install Skycord on an Android phone, Android 8 or newer, from the releases page. It opens your own server, or skycord.xyz, keeps a list of the servers you use, and updates itself. Links to other sites open in your browser, the back button closes whatever is on top before it leaves a chat, and files you attach come from the phone’s own picker. **If you host your own instance, deploy this version of the web client before handing out the app: the app shows your server’s own web client, and its phone screens come with this version.**'],
+      ['add', 'Notifications on Android, without Google. The app keeps its own quiet connection to your last server, so messages, mentions and calls reach you even with Skycord closed. You get one notification per conversation, with every line, and you can reply from it; tapping it opens that chat. If the phone was off for a while, it catches up on what you missed when it comes back. Your friends don’t see you online just because the app is listening, and there is nothing to set up on the server.'],
+      ['add', 'Calls ring like a phone call. A DM or group call shows a full-screen incoming call with Answer and Decline, even on the lock screen. Answer opens the call, and a call you didn’t pick up leaves a missed-call notification.'],
+      ['add', 'A call screen made for phones. It is full screen, with big round buttons on a sheet at the bottom — mute, camera and hang up — and swiping the sheet up shows who is in the call, the music playing in it, Invite people and Voice settings. When someone turns their camera on, their video fills the screen with everyone else in small tiles, and the buttons step aside after a few seconds until you tap. The person talking gets the big spot, and it doesn’t jump around when two people talk over each other. Tap the arrow or press Back to keep chatting, and a bar at the top takes you back to the call. The screen stays on while you’re in one.'],
+      ['add', 'Hold to talk on phones. In a channel that uses push to talk, a big Hold to talk bar replaces the keyboard key you don’t have. It asks for the microphone when you join, so the first press isn’t interrupted, and it tells you if your voice isn’t getting through.'],
+      ['add', 'Music in the phone call screen. The Music card shows what’s playing, with the cover and a title that slides when it’s too long. Tap it for the call’s music channels: tune in, add songs, skip, start or close a channel. On a phone, closing a channel takes two taps, because it stops the music for everyone.'],
+      ['add', 'Pause the music in a call. A call’s music channel can be paused and resumed for everyone listening, and it picks up where it stopped. **If you host your own instance, update the music service before the server to get Pause. With an older music service nothing breaks; the button simply doesn’t appear.**'],
+      ['add', 'Pick several songs at once. Select songs in your library, then add them all to your queue or delete them, with one confirmation. In a playlist the same selection removes them from that playlist instead. A long run that reaches the server’s limit waits and carries on by itself, and Cancel stops it.'],
+      ['add', 'Upload several songs at once. Choose or drag in as many files as you like. They upload one after another, each with its own progress. If you hit the upload limit, Skycord waits and carries on by itself, and a file that fails doesn’t stop the rest. If your connection drops, the rest wait for you, with a Retry button.'],
+      ['add', 'Reorder your queue. Drag a song up or down by the handle on its left, with a mouse or a finger, or use the arrow keys on the handle.'],
+      ['add', 'Join a screen share to watch it. Someone sharing their screen no longer starts downloading to everyone in the call. You see who is sharing and a Join stream button, and the stream only loads once you join. Leave it whenever you like without leaving the call. On a phone, tap the person in the call sheet to join or leave their stream, and the stream you join takes the screen.'],
+      ['add', 'Stream volume. Right-click someone to turn their shared screen’s sound down without touching their voice. On a phone, tap them in the call sheet, or long-press the stream you’re watching.'],
+      ['add', 'A new logo. The Skycord creature now wears headphones, because Skycord is first a place to talk. It’s on the app icons, the browser tab, the loading screens, the Windows tray and taskbar, the Android launcher and notifications, and the default avatars, which still blink. The new icon arrives with the update: Android swaps it along with the app, Windows refreshes its icon cache as the update installs, and an installed web app picks it up the next time the browser checks.'],
+      ['imp', 'The whole app works on a phone. Sign-up scrolls and every field fits, nothing slides sideways, and Settings, Server Settings, Notifications and the music player fit the screen. Every control is big enough for a finger, the member list is reachable in servers, interface zoom no longer shrinks the layout, and the grey tap flash is gone.'],
+      ['imp', 'The music player on a phone has its controls back: the queue, seeking within a song, and a playlist strip you can actually see.'],
+      ['imp', 'A Push to Talk setting saved on a computer no longer silences your microphone on a phone, which has no key to press.'],
+      ['imp', 'The push-to-talk key on a computer now says why a press did nothing — the microphone blocked, missing or in use by another app — instead of failing silently. And a key you let go of before the microphone had come on no longer leaves it on.'],
+      ['imp', 'Calls show the caller’s display name instead of their username, on the phone and in the call log.'],
+      ['imp', 'Your own profile offers Edit profile instead of Message and Add friend.'],
+      ['imp', 'Uploading too many songs at once now says “Too many uploads — wait a moment” instead of a message about profile updates. Profile, server and sticker uploads keep their own limit and wording.'],
+      ['fix', 'Joining a voice call played whatever song was on in it. Now you hear a call’s music channel only after you tap Listen; the person who starts or shares a song still hears it.'],
+      ['fix', 'The music queue lost its bottom half. On a computer, scrolling down a full queue carried on into the library behind it and pushed the rest of the queue off the screen.'],
+      ['fix', 'Turning someone up past 100% could stop their volume applying at all. Now it makes them louder, up to 200%. In a browser that can’t send the louder sound to an output device you picked (anything but Default), the slider stops at 100% and says “Max 100% with this output device”.'],
+      ['fix', 'Your status could jump back to an old one when another tab or device reported you idle.'],
+      ['fix', 'Leaving a group didn’t stop that group’s live updates reaching you.'],
+      ['fix', 'The member list on a phone couldn’t be closed with Back without leaving the channel.'],
+      ['fix', 'Server Settings flashed “isn’t available yet” while it loaded.'],
+      ['fix', 'A lifted server mute didn’t put the person back on the air.'],
+    ]
+  }, {
     v: 'v0.20.9', date: 'Oct 5, 2026', time: '00:20 UTC+2', title: 'Everyone hears the same song',
     items: [
       ['add', 'Music you listen to together. Upload your own tracks or paste a link to build a library, then open a music channel in any voice call: everyone in the call can tune in, add to one shared queue, skip, go back, or jump to any point in the song. The server plays it, so nobody has to share their screen or play songs into their mic. The chat box does the same from the keyboard \u2014 /play a song, /skip, /prev, /seek 1:30, /queue. **If you host your own instance, music is off unless you choose it: the installer asks, or pass --music.**'],

@@ -75,6 +75,12 @@
   /* ── Changelog ───────────────────────────────────────────────────── */
   var KIND = { add: 'Added', imp: 'Improved', fix: 'Fixed' };
 
+  // **…** marks the line a host has to act on. It was printed as literal
+  // asterisks until v0.20.99; content.js is ours, so this is markup, not input.
+  function strong(text) {
+    return text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  }
+
   function renderChangelog(host) {
     var data = window.SKYCORD_RELEASES || [];
 
@@ -92,7 +98,7 @@
             '<ul class="changes" id="' + id + '">' +
               r.items.map(function (c) {
                 return '<li class="ch"><span class="kind ' + c[0] + '">' + KIND[c[0]] +
-                       '</span><p>' + c[1] + '</p></li>';
+                       '</span><p>' + strong(c[1]) + '</p></li>';
               }).join('') +
             '</ul>' +
           '</div></div>' +
