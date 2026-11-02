@@ -610,19 +610,20 @@
   }
 
   /* ── Demo: phone ───────────────────────────────────────────────────── */
-  /* The Android app: Max calls, it rings full screen, you answer and hold to
-     talk, then hang up — and with the app closed, Kai's message still lands.
-     Whoever is talking has the big spot. */
+  /* Skycord in a phone's browser: Max calls, you answer and hold to talk,
+     then hang up. Whoever is talking has the big spot. The end screen names
+     what the Android app adds in v0.21 rather than acting it out. */
   var PEOPLE = {
     max: { letter: 'M', name: 'Max', c: '#23a55a' },
     you: { letter: 'Y', name: 'You', you: true }
   };
   function phoneSetUp(el) {
-    var views = $$('.ph-view', el), time = $('.ph-time', el), notes = $('.ph-notes', el);
+    var views = $$('.ph-view', el), time = $('.ph-time', el);
+    var endTime = $('.ph-end .ph-clock', el), endNote = $('.ph-end .ph-date', el);
     var big = $('.ph-big', el), small = $('.ph-small', el);
     var ptt = $('[data-ph="ptt"]', el), mute = $('[data-ph="mute"]', el), cam = $('[data-ph="cam"]', el);
     var s = { view: 'ring', muted: false, cam: false, talking: false, t0: 0 };
-    var timer = 0, gen = 0;
+    var timer = 0;
 
     function tile(node, who) {
       var p = PEOPLE[who], av = $('.ph-av', node);
@@ -650,46 +651,20 @@
       clearInterval(timer);
       if (s.view === 'call') { tickTime(); timer = setInterval(tickTime, 1000); }
     }
-    /* Built from text nodes, the way the app's own notification is built. */
-    function note(title, body, reply) {
-      var n = document.createElement('div'), ic = document.createElement('span');
-      var main = document.createElement('div'), app = document.createElement('span');
-      var b = document.createElement('b'), p = document.createElement('p');
-      n.className = 'ph-note fresh';
-      ic.className = 'ph-note-ic';
-      ic.innerHTML = '<svg aria-hidden="true"><use href="#i-mark-s"/></svg>';
-      app.className = 'ph-note-app';
-      app.textContent = 'Skycord · now';
-      b.textContent = title; p.textContent = body;
-      main.appendChild(app); main.appendChild(b); main.appendChild(p);
-      if (reply) {
-        var r = document.createElement('span');
-        r.className = 'ph-reply'; r.textContent = 'Reply';
-        main.appendChild(r);
-      }
-      n.appendChild(ic); n.appendChild(main);
-      notes.insertBefore(n, notes.firstChild);
-    }
     function talk(on) {
       on = on && !s.muted && s.view === 'call';
       if (on === s.talking) return;
       s.talking = on; draw();
     }
     function answer() { s.view = 'call'; s.t0 = performance.now(); s.talking = false; draw(); }
-    function close(missed) {
-      var mine = ++gen;
-      s.view = 'lock'; s.talking = false; s.cam = false; s.muted = false;
-      notes.textContent = '';
-      if (missed) note('Missed call', 'Max called you');
+    function close(declined) {
+      endTime.textContent = declined ? clock(0) : clock((performance.now() - s.t0) / 1000);
+      endNote.textContent = declined ? 'You declined Max’s call' : 'Call ended';
+      s.view = 'end'; s.talking = false; s.cam = false; s.muted = false;
       draw();
-      setTimeout(function () {
-        if (mine === gen && s.view === 'lock') note('Kai', 'lounge in 10? bring snacks', true);
-      }, 800);
     }
     function reset() {
-      gen++;
       s.view = 'ring'; s.muted = false; s.cam = false; s.talking = false;
-      notes.textContent = '';
       draw();
     }
 
