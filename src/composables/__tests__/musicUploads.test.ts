@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useAuth, type PublicUser } from '../useAuth'
 import {
-  library, uploads, uploadBatch, uploadTrack, enqueueUploads, dropUpload, importTrack, retryUploads,
-  UPLOAD_STALL_MS,
+  library, uploads, uploadBatch, uploadTrack, enqueueUploads, dropUpload, importTrack, retryUploads, loadLibrary,
+  UPLOAD_STALL_MS, UPLOAD_CONFIRM_MS, UNCONFIRMED,
   type LibTrack,
 } from '../useMusicLibrary'
 import { NOT_REACHED } from '../uploadScheduler'
@@ -174,6 +174,25 @@ describe('uploadTrack', () => {
     expect(got).toEqual({ ok: true, value: track('t1') })
   })
 
+  it('gives up on the server’s answer a little after the server itself would', async () => {
+    // The server allows the music service ten minutes to scan and convert.
+    expect(UPLOAD_CONFIRM_MS).toBeGreaterThan(10 * 60_000)
+    expect(UPLOAD_CONFIRM_MS).toBeLessThanOrEqual(12 * 60_000)
+    let got: unknown = null
+    void uploadTrack(song('a.mp3'), 'tok').then(a => { got = a })
+    const x = FakeXHR.made[0]
+    x.progress(100, 100)
+    await vi.advanceTimersByTimeAsync(UPLOAD_CONFIRM_MS - 1)
+    expect(got).toBeNull()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(x.aborted).toBe(true)
+    // Not status 0: that would hold the batch and send the same song again,
+    // and the first one may well still land.
+    expect(got).toMatchObject({ ok: false, message: UNCONFIRMED })
+    expect((got as { status: number }).status).not.toBe(0)
+    expect((got as { status: number }).status).not.toBe(429)
+  })
+
   it('leaves no watchdog behind, however it ends', async () => {
     const ends: ((x: FakeXHR, stop: AbortController) => void)[] = [
       x => x.respond(201, { track: track('t1') }),
@@ -181,14 +200,16 @@ describe('uploadTrack', () => {
       x => x.fail(),
       (_x, stop) => stop.abort(),
     ]
-    for (const end of ends) {
-      FakeXHR.made = []
-      const stop = new AbortController()
-      const got = uploadTrack(song('a.mp3'), 'tok', { signal: stop.signal })
-      FakeXHR.made[0].progress(5, 100)
-      end(FakeXHR.made[0], stop)
-      await got
-      expect(vi.getTimerCount()).toBe(0)
+    for (const sent of [5, 100]) {
+      for (const end of ends) {
+        FakeXHR.made = []
+        const stop = new AbortController()
+        const got = uploadTrack(song('a.mp3'), 'tok', { signal: stop.signal })
+        FakeXHR.made[0].progress(sent, 100)
+        end(FakeXHR.made[0], stop)
+        await got
+        expect(vi.getTimerCount()).toBe(0)
+      }
     }
   })
 
@@ -243,6 +264,26 @@ describe('the upload queue', () => {
     await vi.advanceTimersByTimeAsync(20_000)
     expect(FakeXHR.made).toHaveLength(2)
     expect((FakeXHR.made[1].body as File).name).toBe('a.mp3')
+  })
+
+  it('an upload the server never confirms fails that file, reloads the library, and is not sent again', async () => {
+    const fetchMock = vi.fn(async (_path: string) => new Response(JSON.stringify({
+      tracks: [track('a')], usage: { tracks: 1, bytes: 1000 }, caps: null,
+    }), { status: 200 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    // The library is showing a search: the reload keeps it.
+    await loadLibrary('bee')
+    fetchMock.mockClear()
+    enqueueUploads([song('a.mp3'), song('b.mp3')])
+    await settle()
+    FakeXHR.made[0].progress(100, 100)
+    await vi.advanceTimersByTimeAsync(UPLOAD_CONFIRM_MS)
+    expect(uploads[0]).toMatchObject({ state: 'failed', error: UNCONFIRMED })
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual(['/music/tracks?q=bee'])
+    // The next file goes; the unconfirmed one does not go again.
+    expect(FakeXHR.made).toHaveLength(2)
+    expect((FakeXHR.made[1].body as File).name).toBe('b.mp3')
+    expect(uploadBatch.held).toBe(false)
   })
 
   it('signing out stops the batch, clears it, and sends nothing more', async () => {

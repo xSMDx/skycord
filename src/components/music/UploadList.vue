@@ -17,10 +17,10 @@
  * The queue is useMusicLibrary's, not this component's, so it carries on with
  * the modal closed and this only draws it.
  */
-import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { Clock, Hourglass, LoaderCircle, Check, CircleAlert, WifiOff, X } from 'lucide-vue-next'
 import { uploads, uploadBatch, dropUpload, retryUploads, clock } from '@/composables/useMusicLibrary'
-import { announcement, snapshot, HELD_SAYS, type UploadItem } from '@/composables/uploadScheduler'
+import { announcement, snapshot, followOn, HELD_SAYS, type UploadItem } from '@/composables/uploadScheduler'
 
 /** A second hand, running only while a row waits out the limit. */
 const now = ref(Date.now())
@@ -72,27 +72,31 @@ const summary = computed(() => `${uploadBatch.done} of ${uploadBatch.total} uplo
 
 /*
  * The live region's words. Rows already there when the list mounted are not
- * news. Emptied for a tick before each new line, so the same words twice —
- * the connection lost again after a Retry — are said twice.
+ * news. Each line is its own keyed node, so a new one is an addition the
+ * reader says — the same words twice, the connection lost again after a
+ * Retry, are two nodes and said twice. A line hard on the last (within a
+ * second: a file in, and the next refused at once) joins it rather than
+ * replacing it before it was read; after a pause the region starts afresh.
  */
-const said = ref('')
+const said = ref<{ id: number; text: string }[]>([])
+let saidAt = -Infinity
+let lineSeq = 0
 let seen = snapshot(uploads, uploadBatch)
-let mounted = true
 watch(
   () => [uploads.map(u => `${u.id}:${u.state}`).join('|'), uploadBatch.held, uploadBatch.done, uploadBatch.total],
   () => {
     const line = announcement(seen, uploads, uploadBatch)
     seen = snapshot(uploads, uploadBatch)
     if (!line) return
-    said.value = ''
-    void nextTick(() => { if (mounted) said.value = line })
+    const at = Date.now()
+    said.value = followOn(said.value, { id: ++lineSeq, text: line }, at, saidAt)
+    saidAt = at
   },
 )
-onBeforeUnmount(() => { mounted = false })
 </script>
 
 <template>
-  <p class="ul-sr" aria-live="polite">{{ said }}</p>
+  <p class="ul-sr" aria-live="polite"><span v-for="l in said" :key="l.id">{{ l.text + ' ' }}</span></p>
   <section v-if="uploads.length" class="ul" aria-label="Uploads">
     <div v-if="uploadBatch.held" class="ul-held">
       <WifiOff class="ul-ico" :size="14" :stroke-width="2.25" aria-hidden="true" />

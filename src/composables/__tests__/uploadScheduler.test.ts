@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
-  createUploadQueue, nextAction, retryAfterMs, looksLikeAudio, judge, announcement, snapshot,
-  RETRY_FALLBACK_MS, NOT_REACHED, HELD_SAYS,
+  createUploadQueue, nextAction, retryAfterMs, looksLikeAudio, judge, announcement, snapshot, followOn,
+  RETRY_FALLBACK_MS, NOT_REACHED, HELD_SAYS, FOLLOW_ON_MS,
   type Attempt, type UploadItem,
 } from '../uploadScheduler'
 
@@ -640,6 +640,27 @@ describe('announcement', () => {
   it('a file refused before it was sent is new, and said as failed', () => {
     expect(said([], [row('a', 'failed', { error: 'That file is too big — 25MB at most.' })]))
       .toBe('a.mp3 failed: That file is too big — 25MB at most.')
+  })
+})
+
+describe('followOn', () => {
+  // The live region's lines. A second line hard on the first — a file in,
+  // and the next one refused at once — would replace it before it was read.
+  it('a line within a second of the last joins it rather than replacing it', () => {
+    expect(FOLLOW_ON_MS).toBe(1000)
+    expect(followOn(['a'], 'b', 10_500, 10_000)).toEqual(['a', 'b'])
+    expect(followOn(['a', 'b'], 'c', 10_999, 10_500)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('a line after a pause replaces what was said', () => {
+    expect(followOn(['a', 'b'], 'c', 11_000, 10_000)).toEqual(['c'])
+    expect(followOn([], 'a', 0, -Infinity)).toEqual(['a'])
+  })
+
+  it('leaves what it was given alone', () => {
+    const before = ['a']
+    followOn(before, 'b', 1, 0)
+    expect(before).toEqual(['a'])
   })
 })
 

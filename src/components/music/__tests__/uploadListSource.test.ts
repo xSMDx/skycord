@@ -202,8 +202,12 @@ describe('the list', () => {
     expect(region).toMatch(/class="ul-sr"/)
     // Outside the section that comes and goes with the rows.
     expect(lTpl.indexOf('aria-live="polite"')).toBeLessThan(lTpl.indexOf('<section'))
-    expect(lTpl).toMatch(/\{\{ said \}\}/)
+    // One keyed node a line, so each new line is an addition a reader says.
+    expect(region).toBe('<p class="ul-sr" aria-live="polite">')
+    expect(lTpl).toMatch(/<span v-for="l in said" :key="l\.id">\{\{ l\.text \+ ' ' \}\}<\/span>/)
     expect(lScript).toMatch(/announcement\(/)
+    // A line hard on the last joins it rather than replacing it unread.
+    expect(lScript).toMatch(/said\.value = followOn\(said\.value, \{ id: \+\+lineSeq, text: line \}, at, saidAt\)/)
     const sr = rulesOf(lCss, '.ul-sr').join(';')
     expect(sr).toMatch(/position:\s*absolute/)
     expect(sr).toMatch(/clip-path:\s*inset\(50%\)/)

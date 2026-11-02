@@ -69,7 +69,11 @@ export interface Quiet { quiet?: boolean }
 
 export const clearLibraryError = (): void => { library.error = '' }
 
+/** What the library list was last asked for, so a reload keeps a search. */
+let lastQuery = ''
+
 export const loadLibrary = async (q = ''): Promise<void> => {
+  lastQuery = q
   library.loading = true
   try {
     const r = await api().listMusicTracks(q)
@@ -126,6 +130,25 @@ const rateHeaders = (xhr: XMLHttpRequest): RateHeaders => ({
 export const UPLOAD_STALL_MS = 60_000
 
 /**
+ * How long, once every byte is there, the server's answer is waited for. The
+ * server gives the music service ten minutes to scan and convert
+ * (INGEST_TIMEOUT_MS in server/utils/musicService.ts) and answers either way
+ * when they are up; this is a minute past that, a backstop for an answer lost
+ * on the way — a proxy that dropped it, a connection that died quietly.
+ */
+export const UPLOAD_CONFIRM_MS = 11 * 60_000
+/** What a file whose answer never came says. The song may well have landed. */
+export const UNCONFIRMED = 'Couldn’t confirm this upload — check your library'
+/**
+ * The status that answer is given. Not 0, which holds the batch and sends the
+ * same file again — the server has it, and a second copy would land beside
+ * the first — but a gateway timeout, which the queue fails that file alone on.
+ */
+const UNCONFIRMED_STATUS = 504
+const unconfirmed = (a: UploadAttempt): boolean =>
+  !a.ok && a.status === UNCONFIRMED_STATUS && a.message === UNCONFIRMED
+
+/**
  * Upload one file. XHR rather than fetch, for one reason: progress.
  *
  * fetch cannot report how much of a request body has gone out, and a
@@ -142,6 +165,8 @@ export const UPLOAD_STALL_MS = 60_000
  * The stall is timed only while bytes are going out. Once all of them are
  * there the server is scanning and converting, which it bounds itself, and
  * giving up then would send the same song twice: the first one still lands.
+ * So that wait has only a backstop, UPLOAD_CONFIRM_MS, past the server's own
+ * bound, and what it answers fails the file rather than trying it again.
  */
 export const uploadTrack = (
   file: File,
@@ -154,9 +179,14 @@ export const uploadTrack = (
     const xhr = new XMLHttpRequest()
 
     let stall: ReturnType<typeof setTimeout> | null = null
+    let backstop: ReturnType<typeof setTimeout> | null = null
     const calm = (): void => { if (stall) { clearTimeout(stall); stall = null } }
     // Every way this ends goes through here, so no watchdog outlives it.
-    const resolve = (a: UploadAttempt): void => { calm(); answer(a) }
+    const resolve = (a: UploadAttempt): void => {
+      calm()
+      if (backstop) { clearTimeout(backstop); backstop = null }
+      answer(a)
+    }
     const watch = (): void => {
       calm()
       stall = setTimeout(() => {
@@ -177,7 +207,17 @@ export const uploadTrack = (
       if (e.lengthComputable && e.total) opts.onProgress?.(e.loaded / e.total)
     }
     // Every byte is there. What follows is the server scanning and converting.
-    xhr.upload.onload = () => { calm(); opts.onProgress?.(1) }
+    xhr.upload.onload = () => {
+      calm()
+      opts.onProgress?.(1)
+      if (backstop) return
+      backstop = setTimeout(() => {
+        backstop = null
+        // Answered first, as the stall is: the abort would answer "stopped".
+        resolve({ ok: false, status: UNCONFIRMED_STATUS, headers: {}, message: UNCONFIRMED })
+        xhr.abort()
+      }, UPLOAD_CONFIRM_MS)
+    }
 
     xhr.onload = () => {
       let body: { track?: LibTrack } = {}
@@ -225,10 +265,18 @@ const sendWithSession = async (
 ): Promise<UploadAttempt> => {
   const token = accessToken.value
   if (!token) return { ok: false, status: 401, headers: {}, message: 'Sign in again to upload.' }
-  const first = await uploadTrack(file, token, { onProgress: progress, signal })
+  const who = session()
+  const once = async (t: string): Promise<UploadAttempt> => {
+    const a = await uploadTrack(file, t, { onProgress: progress, signal })
+    // No answer came for a file the server had every byte of: it may be in
+    // the library by now, so the library is read again (this session's only).
+    if (unconfirmed(a) && session() === who) void loadLibrary(lastQuery)
+    return a
+  }
+  const first = await once(token)
   if (first.ok || first.status !== 401 || signal.aborted) return first
   if (!(await silentRefresh()) || !accessToken.value || signal.aborted) return first
-  return uploadTrack(file, accessToken.value, { onProgress: progress, signal })
+  return once(accessToken.value)
 }
 
 const queue = createUploadQueue<LibTrack>({

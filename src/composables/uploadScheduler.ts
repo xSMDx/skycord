@@ -362,3 +362,15 @@ export const announcement = (before: Snapshot, items: readonly UploadItem[], bat
   if (landed && batch.total > 1) lines.push(`${batch.done} of ${batch.total} uploaded`)
   return [...new Set(lines)].map(sentence).join(' ')
 }
+
+/** How soon after one line another joins it rather than replacing it. */
+export const FOLLOW_ON_MS = 1000
+
+/**
+ * The live region's lines after a new one, said `now`, the last at `lastAt`.
+ * Replacing the words a moment after they were set loses them: a reader is
+ * still on the first when the second lands. So a line within FOLLOW_ON_MS of
+ * the last is added after it, and only a line after a pause starts afresh.
+ */
+export const followOn = <L>(lines: readonly L[], line: L, now: number, lastAt: number): L[] =>
+  now - lastAt < FOLLOW_ON_MS ? [...lines, line] : [line]
