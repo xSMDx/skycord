@@ -17,14 +17,15 @@
  * the room is a separate, deliberate action, because "everyone can hear
  * this" should never be the side effect of pressing play.
  */
-import { ref, computed, watch, onMounted, onBeforeUnmount, inject, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, inject, nextTick } from 'vue'
 import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
   Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert, ShieldCheck,
   Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
-  ListPlus, ListStart, ListEnd, LogOut, Ellipsis, GripVertical,
+  ListPlus, ListStart, ListEnd, LogOut, Ellipsis, GripVertical, ListChecks, Check,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
+import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import MusicCallRail from './MusicCallRail.vue'
 import type { VoiceRoomChoice } from './rooms'
 import { useAuth } from '@/composables/useAuth'
@@ -47,11 +48,14 @@ import {
   library, loadLibrary, loadPlaylists, openPlaylist, enqueueUploads, importTrack,
   deleteTrack, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
   shownTracks, clearLibraryError, clock, totalTime, megabytes,
-  type LibTrack,
+  type LibTrack, type Quiet,
 } from '@/composables/useMusicLibrary'
+import * as Sel from '@/composables/selectionModel'
+import { noPushToTalkKey } from '@/composables/useVoiceSettings'
 import { AUDIO_ACCEPT } from '@/composables/uploadScheduler'
 import { useFileDrop, guardWindowDrops } from '@/composables/fileDrop'
 import UploadList from './UploadList.vue'
+import LibrarySelectionBar from './LibrarySelectionBar.vue'
 
 defineProps<{ rooms?: VoiceRoomChoice[] }>()
 const emit = defineEmits<{ close: []; join: [channelId: string] }>()
@@ -133,9 +137,15 @@ const loadingId = computed(() => player.loadingId)
  * clickable and was not — and the call rail asks you to "pick a track",
  * which is the same gesture. Clicks that started on a control inside the
  * row belong to that control.
+ *
+ * While you are picking songs a click picks instead, and a Shift or Ctrl/Cmd
+ * click picks without Select being pressed first, the way a file list
+ * behaves. A plain click outside selection still plays: picking must never
+ * cost the row its first job.
  */
 const onRowClick = (e: MouseEvent, i: number): void => {
   if ((e.target as HTMLElement).closest('button, select')) return
+  if (selecting.value || e.shiftKey || e.metaKey || e.ctrlKey) { pickRow(e, i); return }
   void playRow(i)
 }
 
@@ -479,12 +489,250 @@ watch(search, (q) => {
   searchTimer = setTimeout(() => void loadLibrary(q), 220)
 })
 
+/**
+ * Deleting one song: from the library, then — once it is really gone — from
+ * your queue, and out of the player if it was the one playing. Every delete
+ * comes through here, the row's own and each one of a bulk delete, so a song
+ * that is playing or queued lets go the same way whichever it was. A delete
+ * that failed leaves the queue alone: the song is still yours.
+ */
+const deleteOne = async (t: LibTrack, opts: Quiet = {}): Promise<string | null> => {
+  const failed = await deleteTrack(t.id, opts)
+  if (!failed) forget(t.id)
+  return failed
+}
+
 const removeHere = async (t: LibTrack, index: number): Promise<void> => {
   // Inside a playlist the X means "take it out of this list". In the library
   // it means "delete it". Same glyph, genuinely different acts, so they are
   // labelled differently and the destructive one is styled as such.
   if (library.open) await removeFromPlaylist(library.open.id, index)
-  else { await deleteTrack(t.id); forget(t.id) }
+  else await deleteOne(t)
+}
+
+// ── picking several ─────────────────────────────────────────────────────────
+/*
+ * Select, then queue them or remove them.
+ *
+ * Select in the header turns it on; so does a Shift or Ctrl/Cmd click on a
+ * row, and on a phone a long press, which puts that row in. Rows then carry a
+ * checkbox and a click picks; Escape or Cancel turns it off. The bar at the
+ * bottom of the pane holds the count and the acts.
+ *
+ * The selection is only ever what is on screen. A new search, or a row that
+ * went away, drops the rows you can no longer see — so a bulk delete can never
+ * take something you had stopped looking at.
+ */
+const selecting = ref(false)
+const sel = ref<Sel.Selection>(Sel.createSelection())
+
+/**
+ * A row's identity in the selection. In the library a song is one row, so its
+ * id will do. A playlist can hold a song twice, and removal there is by place,
+ * so a playlist row is its place AND its song: a row that moves stops matching,
+ * and is dropped rather than mistaken for whatever moved into its place.
+ */
+const rowKey = (t: LibTrack, i: number): string => library.open ? `${i}:${t.id}` : t.id
+const rowKeys = computed(() => shownTracks.value.map(rowKey))
+const isPicked = (t: LibTrack, i: number): boolean => sel.value.ids.has(rowKey(t, i))
+
+/** The picked rows, in the order the list shows them: the order they are queued in. */
+const picked = computed(() =>
+  shownTracks.value
+    .map((t, i) => ({ t, i, key: rowKey(t, i) }))
+    .filter(r => sel.value.ids.has(r.key)))
+type PickedRow = (typeof picked.value)[number]
+
+/**
+ * A removal under way, read by the bar as its progress. While it runs the
+ * selection is the one it was confirmed for: rows cannot be picked, and the
+ * rows' own changes (each song leaving) do not trim it until it ends.
+ */
+const bulk = reactive({ verb: 'Deleting', done: 0, total: 0, stop: false })
+/** Why a row did not go, by row key. It stays picked and says this under its name. */
+const failures = ref(new Map<string, string>())
+/** After a run that left something behind: what, said on the bar. */
+const failNote = ref('')
+const confirming = ref(false)
+/** Said aloud once the bar has gone, which it does when everything went. */
+const libSaid = ref('')
+const sayInLibrary = (message: string): void => {
+  libSaid.value = ''
+  void nextTick(() => { libSaid.value = message })
+}
+
+/**
+ * Leaving takes the bar and the checkboxes away. If the keyboard was on one of
+ * them it would fall to the page, so it goes back to Select, where picking
+ * started.
+ */
+const selectBtn = ref<HTMLButtonElement | null>(null)
+const leaveSelection = (): void => {
+  const focused = document.activeElement as HTMLElement | null
+  if (focused?.closest('.lsb, .mm-check')) void nextTick(() => selectBtn.value?.focus())
+  selecting.value = false
+  sel.value = Sel.clear(sel.value)
+  failures.value = new Map()
+  failNote.value = ''
+  confirming.value = false
+}
+/** Cancel, Escape and the Select button again. In a run it stops after the song in hand. */
+const cancelSelection = (): void => {
+  if (bulk.total) { bulk.stop = true; return }
+  leaveSelection()
+}
+const toggleSelecting = (): void => {
+  if (selecting.value) cancelSelection()
+  else selecting.value = true
+}
+
+/** A click, or Space on a row's checkbox. Shift spans from the last row clicked. */
+const pickRow = (e: MouseEvent, i: number): void => {
+  const t = shownTracks.value[i]
+  if (!t || bulk.total) return
+  const key = rowKey(t, i)
+  selecting.value = true
+  sel.value = e.shiftKey ? Sel.range(sel.value, rowKeys.value, key) : Sel.toggle(sel.value, key)
+  if (!sel.value.ids.has(key)) failures.value.delete(key)
+  failNote.value = ''
+}
+
+/** A long press on a phone: "this one", into the selection, which it turns on. */
+const holdToSelect = (i: number): void => {
+  const t = shownTracks.value[i]
+  if (!t || bulk.total) return
+  selecting.value = true
+  sel.value = Sel.select(sel.value, rowKey(t, i))
+  failNote.value = ''
+}
+
+/**
+ * Right-click, or a long press — useLongPress turns a held finger into this
+ * same event. On a phone the hold picks the row instead of opening its menu:
+ * the ⋯ button on every phone row already opens that menu with one tap, and a
+ * hold is the gesture people know for "select this" in a list. Everywhere
+ * else it is the menu, as it always was.
+ */
+const onRowContext = (e: MouseEvent, t: LibTrack, i: number): void => {
+  if (noPushToTalkKey.value) { holdToSelect(i); return }
+  rowMenu(e, t, i)
+}
+
+const onEscape = (e: KeyboardEvent): void => {
+  if (!selecting.value || confirming.value) return
+  // Ours, not the room's: Escape steps out of picking before it closes anything.
+  e.stopPropagation()
+  cancelSelection()
+}
+
+watch(rowKeys, (keys) => { if (!bulk.total) sel.value = Sel.retainVisible(sel.value, keys) })
+// Another list is another selection. Mid-run the bar stays, to finish saying how it went.
+watch(() => library.open?.id, () => { if (!bulk.total) leaveSelection() })
+
+const songs = (n: number): string => `${n} ${n === 1 ? 'song' : 'songs'}`
+
+/**
+ * Add to your queue: your own, in list order, even while you are tuned into a
+ * channel. A channel's queue takes songs one at a time, through a row's click
+ * or its menu — it allows ten a minute and holds fifty, and a bulk add would
+ * spend that for everyone in one go.
+ */
+const queuePicked = (): void => {
+  const rows = picked.value
+  if (!rows.length || bulk.total) return
+  for (const { t } of rows) addToQueue(t)
+  const message = `Added ${songs(rows.length)} to your queue`
+  leaveSelection()
+  if (live.value) say(message)
+  else sayInLibrary(message)
+}
+
+/** The question, asked once, naming how many. It follows the view, as the bar does. */
+const confirmCopy = computed(() => {
+  const n = picked.value.length
+  if (library.open) {
+    return {
+      title: `Remove ${n} ${n === 1 ? 'song' : 'songs'} from ${library.open.name}?`,
+      message: 'They stay in your library.',
+      confirmLabel: 'Remove',
+    }
+  }
+  return {
+    title: `Delete ${n} ${n === 1 ? 'song' : 'songs'}?`,
+    message: "This can't be undone.",
+    confirmLabel: 'Delete',
+  }
+})
+const askToRemovePicked = (): void => {
+  if (!picked.value.length || bulk.total) return
+  confirming.value = true
+}
+
+/**
+ * Delete, or Remove from playlist, once confirmed: one song at a time through
+ * the same call a row's own ✕ makes, with the bar counting.
+ *
+ * In a playlist that is removal by place, highest place first — taking a row
+ * out moves up every row after it, and none of those is still to come — and
+ * the library keeps the songs. Anywhere else it is a delete, through deleteOne,
+ * so a song that is playing or queued leaves the queue as a single delete
+ * makes it.
+ *
+ * Whatever did not go stays picked: a failure with its reason under its name,
+ * and after Cancel the songs not reached yet.
+ */
+const removePicked = async (): Promise<void> => {
+  confirming.value = false
+  const rows = picked.value
+  if (!rows.length || bulk.total) return
+  const list = library.open
+  failures.value = new Map()
+  failNote.value = ''
+  Object.assign(bulk, { verb: list ? 'Removing' : 'Deleting', done: 0, total: rows.length, stop: false })
+
+  const order = list ? [...rows].sort((a, b) => b.i - a.i) : rows
+  const kept: PickedRow[] = []
+  const why = new Map<PickedRow, string>()
+  const removedAt: number[] = []
+  let at = 0
+  for (; at < order.length; at++) {
+    if (bulk.stop) break
+    const r = order[at]
+    const failed = list
+      ? await removeFromPlaylist(list.id, r.i, { quiet: true })
+      : await deleteOne(r.t, { quiet: true })
+    if (failed) { kept.push(r); why.set(r, failed) } else removedAt.push(r.i)
+    bulk.done++
+  }
+  kept.push(...order.slice(at))
+  const stopped = at < order.length
+  Object.assign(bulk, { done: 0, total: 0, stop: false })
+
+  // Somewhere else by now: nothing here is what was picked.
+  if (library.open?.id !== list?.id) { leaveSelection(); return }
+
+  const verbed = list ? 'Removed' : 'Deleted'
+  if (!kept.length) {
+    leaveSelection()
+    sayInLibrary(list ? `${verbed} ${songs(rows.length)} from ${list.name}` : `${verbed} ${songs(rows.length)}`)
+    return
+  }
+  /** Where a kept row is now. In a playlist, one place up for every row taken out above it. */
+  const keyNow = (r: PickedRow): string => list
+    ? `${r.i - removedAt.filter(j => j < r.i).length}:${r.t.id}`
+    : r.key
+  sel.value = Sel.retainVisible({ ids: new Set(kept.map(keyNow)), anchor: null }, rowKeys.value)
+  for (const [r, reason] of why) {
+    if (sel.value.ids.has(keyNow(r))) failures.value.set(keyNow(r), reason)
+  }
+  // A search changed under the run and none of what is left is on screen.
+  if (!sel.value.ids.size) {
+    leaveSelection()
+    sayInLibrary(`${verbed} ${removedAt.length} of ${rows.length}`)
+    return
+  }
+  const left = `${sel.value.ids.size} not ${list ? 'removed' : 'deleted'} — still selected.`
+  failNote.value = `${stopped ? 'Stopped. ' : ''}${verbed} ${removedAt.length} of ${rows.length}. ${left}`
 }
 
 /**
@@ -540,7 +788,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
 
 <template>
   <ModalBase width="1240px" title="Music" @close="emit('close')">
-    <div class="mm-shell" :style="headerStyle">
+    <div class="mm-shell" :style="headerStyle" @keydown.esc="onEscape">
     <!-- Over the header rather than in a bar of its own: the art is the
          header, and a title strip above it would push the thing this modal
          is actually about down the screen. -->
@@ -776,6 +1024,16 @@ const pct = (at: number, dur: number | null | undefined): number =>
               >
                 <Link2 :size="15" :stroke-width="2.25" />
               </button>
+              <!-- Picking several songs, to queue them or remove them. Pressed
+                   while it is on, and pressing it again leaves it, as Cancel
+                   on the bar does. -->
+              <button
+                v-if="shownTracks.length" ref="selectBtn" type="button" class="mm-select" :class="{ on: selecting }"
+                :aria-pressed="selecting" @click="toggleSelecting"
+              >
+                <ListChecks :size="15" :stroke-width="2.25" aria-hidden="true" />
+                <span>Select</span>
+              </button>
               <button
                 v-if="library.open" class="mm-ghost danger"
                 v-tip="'Delete this playlist'" :aria-label="`Delete the playlist ${library.open.name}`"
@@ -811,7 +1069,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
 
         <!-- The table. Columns earn their place: album is the only one that
              is ever the reason you recognise a track you cannot name. -->
-        <div v-if="shownTracks.length" class="mm-table" role="table">
+        <div v-if="shownTracks.length" class="mm-table" :class="{ selecting }" role="table">
           <div class="mm-tr mm-th" role="row">
             <span role="columnheader">#</span>
             <span role="columnheader">Title</span>
@@ -821,10 +1079,23 @@ const pct = (at: number, dur: number | null | undefined): number =>
           </div>
           <div
             v-for="(t, i) in shownTracks" :key="`${t.id}-${i}`"
-            class="mm-tr mm-row" :class="{ on: !live && isPlayingRow(t, i) }" role="row"
-            @click="onRowClick($event, i)" @contextmenu.prevent="rowMenu($event, t, i)"
+            class="mm-tr mm-row" :class="{ on: !live && isPlayingRow(t, i), picked: isPicked(t, i) }" role="row"
+            @click="onRowClick($event, i)" @mousedown.shift.prevent
+            @contextmenu.prevent="onRowContext($event, t, i)"
           >
+            <!-- Picking: the number's place becomes the row's checkbox, so
+                 the column holds still and Space on it picks. -->
             <button
+              v-if="selecting" type="button" class="mm-check" role="checkbox"
+              :aria-checked="isPicked(t, i)" :aria-label="`Select ${t.title}`"
+              @click="pickRow($event, i)"
+            >
+              <span class="mm-box" aria-hidden="true">
+                <Check v-if="isPicked(t, i)" :size="12" :stroke-width="3" />
+              </span>
+            </button>
+            <button
+              v-else
               class="mm-num" :aria-label="live ? `Add ${t.title} to ${live.name}` : `Play ${t.title}`"
               @click="playRow(i)"
             >
@@ -845,7 +1116,9 @@ const pct = (at: number, dur: number | null | undefined): number =>
               </span>
               <span class="mm-names">
                 <span class="mm-name mm-ellip">{{ t.title }}</span>
-                <span class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
+                <!-- A song a bulk act could not remove says why, where its artist was. -->
+                <span v-if="failures.get(rowKey(t, i))" class="mm-rowerr mm-ellip">{{ failures.get(rowKey(t, i)) }}</span>
+                <span v-else class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
               </span>
               <!-- What the scan said, in one fixed column. Checked files get a
                    quiet green shield, so "scanned" is something you can see
@@ -915,6 +1188,17 @@ const pct = (at: number, dur: number | null | undefined): number =>
             <Upload :size="16" :stroke-width="2.5" /><span>Upload a track</span>
           </button>
         </div>
+
+        <Transition name="mm-selbar">
+          <LibrarySelectionBar
+            v-if="selecting"
+            :count="picked.length" :in-playlist="!!library.open"
+            :progress="bulk.total ? bulk : null" :note="failNote"
+            @queue="queuePicked" @remove="askToRemovePicked" @cancel="cancelSelection"
+          />
+        </Transition>
+        <!-- How a bulk act ended, once the bar that counted it has gone. -->
+        <p class="mm-sr" role="status" aria-live="polite">{{ libSaid }}</p>
       </section>
 
       <!-- ── right: the room ─────────────────────────────────────────── -->
@@ -1097,6 +1381,15 @@ const pct = (at: number, dur: number | null | undefined): number =>
     <input
       ref="fileInput" class="mm-sr" type="file" multiple
       :accept="AUDIO_ACCEPT" @change="onFile"
+    />
+
+    <!-- Asked once, naming how many, before anything goes. Over the room:
+         both teleport to body, and this one opens after. -->
+    <ConfirmModal
+      v-if="confirming"
+      :title="confirmCopy.title" :message="confirmCopy.message"
+      :confirm-label="confirmCopy.confirmLabel" :danger="!library.open"
+      @confirm="removePicked" @close="confirming = false"
     />
 
   </ModalBase>
@@ -1422,6 +1715,55 @@ const pct = (at: number, dur: number | null | undefined): number =>
 }
 @media (hover: hover) and (pointer: fine) { .mm-add:hover { background: var(--hover); color: var(--text-1); } }
 .mm-add option { background: var(--bg-panel); color: var(--text-1); }
+
+/* ── picking several ─────────────────────────────────────────────────── */
+/* Select: a word, not another round icon, because it changes what a click on
+   every row does. Pressed, it wears the ring the rest of the modal uses for
+   "on" — never the accent, which is Play's. */
+.mm-select {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 38px; padding: 0 14px;
+  border: none; border-radius: var(--edge-pill); background: none; cursor: pointer;
+  color: var(--text-2); font: inherit; font-size: 13px; font-weight: 600;
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .mm-select:hover { background: var(--hover); color: var(--text-1); } }
+.mm-select.on { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); color: var(--text-1); }
+
+/* A picked row: the selection ring, as the playing row has, and a ticked box.
+   Colour is not the only signal — the tick is a shape. */
+.mm-row.picked { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); }
+/* Shift-clicks span rows, not words. */
+.mm-table.selecting .mm-row { -webkit-user-select: none; user-select: none; }
+.mm-check {
+  display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
+  border: none; background: none; cursor: pointer; border-radius: var(--edge-sm);
+}
+.mm-box {
+  display: grid; place-items: center; width: 18px; height: 18px;
+  border: 2px solid var(--text-3); border-radius: var(--edge-sm);
+  transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.mm-row.picked .mm-box { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+@media (hover: hover) and (pointer: fine) { .mm-row:hover .mm-box { border-color: var(--text-1); } }
+.mm-row.picked:hover .mm-box { border-color: var(--accent); }
+.mm-rowerr { font-size: 12px; color: var(--danger-text); }
+
+/* A finger's checkbox. Wider than the number column on a tablet, so it
+   reaches into the gap either side rather than shifting the row. */
+@media (pointer: coarse) {
+  .mm-check { width: 44px; height: 44px; justify-self: center; margin-inline: -4px; }
+  .mm-select { min-height: 44px; }
+}
+
+/* The bar rises into place and drops away, shorter on the way out. */
+.mm-selbar-enter-from, .mm-selbar-leave-to { opacity: 0; transform: translateY(8px); }
+.mm-selbar-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+.mm-selbar-leave-active { transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in); }
+@media (prefers-reduced-motion: reduce) {
+  .mm-selbar-enter-from, .mm-selbar-leave-to { transform: none; }
+  .mm-select, .mm-box { transition: none; }
+}
 
 .mm-empty {
   display: flex; flex-direction: column; align-items: center; gap: 10px;

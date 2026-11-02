@@ -38,11 +38,18 @@ export const library = reactive({
 
 const api = () => useApi()
 
-const say = (err: unknown): void => {
-  // The API answers with { message }, as it does everywhere else.
-  const msg = (err as { message?: string })?.message ?? 'Something went wrong.'
-  library.error = msg
-}
+/** The API answers with { message }, as it does everywhere else. */
+const reasonOf = (err: unknown): string =>
+  (err as { message?: string })?.message ?? 'Something went wrong.'
+
+const say = (err: unknown): void => { library.error = reasonOf(err) }
+
+/**
+ * A call made as one of many. The bulk acts in the library put each failure's
+ * reason on its own row, so the banner over the list would only say the last
+ * one again, out of context.
+ */
+export interface Quiet { quiet?: boolean }
 
 export const clearLibraryError = (): void => { library.error = '' }
 
@@ -282,7 +289,8 @@ export const importTrack = async (url: string): Promise<LibTrack | null> => {
   } catch (e) { say(e); return null } finally { library.importing = false }
 }
 
-export const deleteTrack = async (id: string): Promise<void> => {
+/** Null once it is gone; otherwise why it is not. */
+export const deleteTrack = async (id: string, opts: Quiet = {}): Promise<string | null> => {
   try {
     await api().deleteMusicTrack(id)
     const at = library.tracks.findIndex(t => t.id === id)
@@ -297,7 +305,11 @@ export const deleteTrack = async (id: string): Promise<void> => {
       library.open.tracks = library.open.tracks.filter(t => t.id !== id)
       library.open.count = library.open.tracks.length
     }
-  } catch (e) { say(e) }
+    return null
+  } catch (e) {
+    if (!opts.quiet) say(e)
+    return reasonOf(e)
+  }
 }
 
 export const createPlaylist = async (name: string): Promise<LibPlaylist | null> => {
@@ -325,11 +337,16 @@ export const addToPlaylist = async (playlistId: string, trackId: string): Promis
   } catch (e) { say(e) }
 }
 
-export const removeFromPlaylist = async (playlistId: string, index: number): Promise<void> => {
+/** By place, not by song: a playlist can hold one song twice. Null once it is out. */
+export const removeFromPlaylist = async (playlistId: string, index: number, opts: Quiet = {}): Promise<string | null> => {
   try {
     await api().removeFromPlaylistApi(playlistId, index)
-    if (library.open?.id === playlistId) await openPlaylist(playlistId)
-  } catch (e) { say(e) }
+  } catch (e) {
+    if (!opts.quiet) say(e)
+    return reasonOf(e)
+  }
+  if (library.open?.id === playlistId) await openPlaylist(playlistId)
+  return null
 }
 
 /** What the centre pane is showing: a playlist's tracks, or the whole library. */
