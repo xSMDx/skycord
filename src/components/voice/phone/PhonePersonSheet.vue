@@ -81,7 +81,7 @@ const onStream = () => {
   const p = props.person
   if (!p) return
   if (streamAction.value === 'join') joinStream(p.id)
-  else leaveStream(p.id)
+  else if (streamAction.value === 'leave') leaveStream(p.id)
   emit('close')
 }
 </script>

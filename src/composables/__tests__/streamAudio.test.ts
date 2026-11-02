@@ -96,6 +96,8 @@ const h = vi.hoisted(() => ({
   rooms: [] as FakeRoomShape[],
   seed: (() => ({})) as () => Record<string, FakePub[]>,
   person: null as unknown as (identity: string, pubs: FakePub[]) => FakePerson,
+  /** Held open, the connect waits here before the room is there and Connected fires. */
+  gate: null as Promise<void> | null,
 }))
 
 vi.mock('../useApi', () => ({
@@ -157,6 +159,7 @@ vi.mock('livekit-client', async (importOriginal) => {
     private created(pub: FakePub) { pub.desired = this.autoSubscribe }
 
     connect = vi.fn(async (_url: string, _token: string, opts?: { autoSubscribe?: boolean }) => {
+      if (h.gate) await h.gate
       this.autoSubscribe = opts?.autoSubscribe ?? true
       for (const [identity, pubs] of Object.entries(h.seed())) {
         pubs.forEach(p => this.created(p))
@@ -296,6 +299,7 @@ const watchingU1 = async () => {
 
 beforeEach(() => {
   h.rooms.length = 0
+  h.gate = null
   h.seed = () => ({})
   h.getVoiceToken.mockReset()
   for (const id of Object.keys(V.userPrefs)) delete V.userPrefs[id]
@@ -551,6 +555,22 @@ describe('joining a stream', () => {
 })
 
 describe('media.streamsAvailable', () => {
+  it('a connect cancelled before it lands leaves nobody sharing', async () => {
+    h.seed = () => ({ u1: [mic(), screen()] })
+    let open!: () => void
+    h.gate = new Promise<void>(r => { open = r })
+    h.getVoiceToken.mockResolvedValue({ token: 't', url: 'wss://sfu.test', voiceServer: null, voiceActivity: true })
+    const going = V.useVoice().connect('c1', 'channel', 'Lounge')
+    await vi.waitFor(() => expect(h.rooms).toHaveLength(1))
+    // Cancel while LiveKit is still connecting; then it lands, and fires Connected.
+    await V.useVoice().leave()
+    open()
+    await going
+    await vi.waitFor(() => expect((h.rooms[0] as unknown as { disconnect: ReturnType<typeof vi.fn> }).disconnect).toHaveBeenCalled())
+    expect(V.voice.connected).toBe(false)
+    expect(media.streamsAvailable.size).toBe(0)
+  })
+
   it('lists who is sharing a screen, joined or not, and who shares one with sound', async () => {
     const v1 = screen()
     h.seed = () => ({ u1: [mic(), v1], u2: [mic()] })

@@ -5,7 +5,7 @@ import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import { keyFor, media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
-import { getRoom } from '@/composables/voiceRoom'
+import { getRoom, participantName } from '@/composables/voiceRoom'
 import { userPref, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
 import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
 import { perf } from '@/composables/usePerformance'
@@ -40,11 +40,14 @@ const emit = defineEmits<{
  * sharing and the button instead. A share you just joined stays one of these
  * for the moment its picture takes to arrive, offering Leave stream, and
  * becomes a video cell under the same key, so the swap does not remount it.
- * "Disable Video" on that person covers their stream tile too.
+ *
+ * "Disable Video" on that person hides the picture, not the way in or out:
+ * their share stays one of these tiles, with Join stream (its sound still
+ * plays) and, once joined, Leave stream — without it a joined stream would
+ * go on downloading with no control on screen to stop it.
  */
 const waitingStreams = computed(() => new Set([...media.streamsAvailable].filter(id =>
-  !userPref(id).videoOff &&
-  !props.videos.some(v => v.participantId === id && v.source === 'screen'))))
+  !props.videos.some(v => v.participantId === id && v.source === 'screen' && !userPref(id).videoOff))))
 
 // A share waiting to be joined counts: the grid, not the row of round
 // avatars, is the layout with room for a tile and its button.
@@ -122,6 +125,15 @@ const cells = computed<Cell[]>(() => {
     } else if (voiceSettings.showNonVideo) {
       out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar, ring: t.ring })
     }
+  }
+  // A share whose sharer hasn't landed in `tiles` yet (presence lag) gets its
+  // tile anyway — it already counts as video, so the grid has made room —
+  // named as LiveKit has them, as a video of theirs would be.
+  const tiled = new Set(props.tiles.map(t => t.id))
+  for (const id of waitingStreams.value) {
+    if (tiled.has(id)) continue
+    out.push({ kind: 'stream', key: keyFor(id, 'screen'), owner: id, name: participantName(id),
+               speaking: false, avatar: '', joined: joinedStreams.has(id) })
   }
   // Videos whose participant hasn't landed in `tiles` yet (presence lag):
   // render them anyway rather than dropping them invisibly. A participant who

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import stage from '../CallStage.vue?raw'
 import bar from '../CallBar.vue?raw'
 import chatApp from '../../../views/ChatApp.vue?raw'
+import phoneStage from '../phone/PhoneStage.vue?raw'
 
 /**
  * Join stream on the desktop call stage, and the two menus that offer
@@ -99,6 +100,24 @@ describe('the call stage, a share you have not joined', () => {
 
   it('a share being shared counts as video, so the stage is a grid with room for its button', () => {
     expect(script).toMatch(/const hasVideo = computed\(\(\) => props\.videos\.length > 0 \|\| waitingStreams\.value\.size > 0\)/)
+  })
+
+  it('a share whose sharer has no tile yet still gets its cell, named as LiveKit has them', () => {
+    // It counts as video, so the grid makes room — and the room must hold it.
+    const cells = /const cells = computed<Cell\[\]>\(\(\) => \{[\s\S]*?\n\}\)/.exec(script)?.[0] ?? ''
+    expect(cells).toMatch(/const tiled = new Set\(props\.tiles\.map\(t => t\.id\)\)/)
+    expect(cells).toMatch(/for \(const id of waitingStreams\.value\) \{\s*if \(tiled\.has\(id\)\) continue/)
+    expect(cells).toMatch(/kind: 'stream', key: keyFor\(id, 'screen'\), owner: id, name: participantName\(id\)/)
+    expect(script).toMatch(/import \{[^}]*\bparticipantName\b[^}]*\} from '@\/composables\/voiceRoom'/)
+    // The phone's big slot names a sharer with no tile and no video the same way.
+    expect(phoneStage).toMatch(/props\.videos\.find\(v => v\.participantId === f\.id\)\?\.name \|\| participantName\(f\.id\)/)
+  })
+
+  it('Disable Video hides the picture but keeps Join stream and Leave stream on the stage', () => {
+    // Waiting = no picture drawn here, which a share hidden by Disable Video never has.
+    expect(script).toMatch(/const waitingStreams = computed\(\(\) => new Set\(\[\.\.\.media\.streamsAvailable\]\.filter\(id =>\s*!props\.videos\.some\(v => v\.participantId === id && v\.source === 'screen' && !userPref\(id\)\.videoOff\)\)\)\)/)
+    const waiting = /const waitingStreams = [\s\S]*?\)\)\)\)/.exec(script)?.[0] ?? ''
+    expect(waiting).not.toMatch(/^\s*!userPref\(id\)\.videoOff &&/m)
   })
 })
 

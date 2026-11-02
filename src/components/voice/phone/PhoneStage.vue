@@ -20,6 +20,7 @@ import { defaultAvatar } from '@/composables/useAvatar'
 import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
 import { perf } from '@/composables/usePerformance'
 import type { VideoTrackInfo } from '@/composables/useVoiceMedia'
+import { participantName } from '@/composables/voiceRoom'
 import { focusedVideo, type FocusState, type ShareSlot } from '@/composables/phoneCallRules'
 
 /** CallStage's tile. `ring` = someone being called who has not picked up. */
@@ -71,13 +72,14 @@ const avatarOf = (t: Tile): string => t.avatar || defaultAvatar(t.name)
 // ── The big slot ────────────────────────────────────────────────────────────
 const bigVideo = computed<VideoTrackInfo | null>(() => focusedVideo(props.videos, props.focus))
 
-// Someone in the slot with no tile yet (their video arrived before presence)
-// still has a name to show.
+// Someone in the slot with no tile yet (their video, or their share, arrived
+// before presence) still has a name to show: their video's, or — for a share
+// not joined, which has no video here — the one LiveKit has for them.
 const bigPerson = computed<Tile | null>(() => {
   const f = props.focus
   if (!f) return null
   return props.tiles.find(t => t.id === f.id) ?? {
-    id: f.id, name: props.videos.find(v => v.participantId === f.id)?.name ?? '',
+    id: f.id, name: props.videos.find(v => v.participantId === f.id)?.name || participantName(f.id),
     avatar: '', speaking: false, muted: false,
   }
 })

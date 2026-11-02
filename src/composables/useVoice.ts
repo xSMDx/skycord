@@ -641,13 +641,17 @@ const screenSidOf = (p: RemoteParticipant | undefined): string | undefined => {
 }
 
 /**
- * The stream this member joined last, for as long as it stays joined: an
- * explicit choice of what to watch, from whichever surface it was made. The
- * phone stage gives it the slot at once and keeps it there through anyone
- * talking (ruling T4-3). Joining another replaces it; leaving it clears it,
- * by hand or because its share ended (forgetEndedShares leaves it), and so
- * does leaving the call. Nothing older takes its place: once it is gone, the
- * stage picks as it always does.
+ * The stream this member joined last: an explicit choice of what to watch,
+ * from whichever surface it was made. The phone stage gives it the slot at
+ * once and keeps it there through anyone talking (ruling T4-3).
+ *
+ * Joining another replaces it. It is cleared by Leave stream; by
+ * forgetEndedShares, once the sharer is in the room with no screen or a
+ * different one; and by leaving the call. Not when the sharer leaves the
+ * room: LiveKit's full reconnect looks the same, so it stays set — naming
+ * someone the stage no longer has, which it then passes over — until they
+ * come back with another share or the call ends. Nothing older takes its
+ * place: once it is gone, the stage picks as it always does.
  */
 export const chosenStream = ref<string | null>(null)
 
@@ -831,7 +835,7 @@ const onLocalPermissionsChanged = (r: Room) => {
   if (step !== 'none') syncParticipants()
 }
 
-const wireRoom = (r: Room) => {
+const wireRoom = (r: Room, seq: number) => {
   r.on(RoomEvent.ParticipantPermissionsChanged, (_prev, p) => {
     if (p === r.localParticipant) onLocalPermissionsChanged(r)
   })
@@ -857,8 +861,13 @@ const wireRoom = (r: Room) => {
    * `r`, never getRoom(): Connected fires inside r.connect(), before
    * setRoom. Reading getRoom() there is exactly how the old music sweep
    * found no room, did nothing, and let autoSubscribe play everyone the song.
+   *
+   * Only while this is still the attempt in hand (`seq`): Connected also
+   * fires for a connect that was cancelled or superseded while LiveKit was
+   * connecting, before attemptConnect can check, and its sweep would refill
+   * who-is-sharing from a room about to be dropped, after the leave cleared it.
    */
-  const sweep = () => sweepRoom(r)
+  const sweep = () => { if (seq === connectSeq) sweepRoom(r) }
   r.on(RoomEvent.Connected, sweep)
   r.on(RoomEvent.Reconnected, sweep)
   r.on(RoomEvent.ParticipantConnected, sweep)
@@ -1190,7 +1199,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       if (seq !== connectSeq) return                                  // superseded while fetching token
       voice.connectStage = 'connecting'
       const r = new Room({ adaptiveStream: true, dynacast: true })
-      wireRoom(r)
+      wireRoom(r, seq)
       // Signal channel up (token accepted by the server) → past auth, now negotiating media.
       r.on(RoomEvent.SignalConnected, () => { if (seq === connectSeq) voice.connectStage = 'rtc-connecting' })
       voice.connectStage = 'authenticating'

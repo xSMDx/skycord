@@ -204,6 +204,8 @@ describe('the person sheet', () => {
     const act = between(personSheet, 'const onStream = ', '\n}')
     expect(act).toContain('joinStream(p.id)')
     expect(act).toContain('leaveStream(p.id)')
+    // Each act on its own word: a row gone between draw and tap does neither.
+    expect(act).toMatch(/if \(streamAction\.value === 'join'\) joinStream\(p\.id\)\s*else if \(streamAction\.value === 'leave'\) leaveStream\(p\.id\)/)
     expect(act).toContain("emit('close')")
     expect(personSheet).not.toMatch(/\bleave\(\)/)
   })
