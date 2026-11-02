@@ -650,6 +650,33 @@ describe('pausing a shared song', () => {
     expect(musicRooms.view(room).channels[0].paused).toBe(true)
   })
 
+  it('a refused pause or resume names its channel, so the client settles only that one', async () => {
+    // Additive: `reason` is unchanged. The client keeps one pending pause per
+    // channel and settles the one whose channelId the refusal carries.
+    const { sa, sb, ch, at } = await playing()
+    stub.status['/pause'] = 500
+    let err = nextEvent(sa, 'music:error')
+    sa.emit('music:pause', at)
+    expect(await err).toMatchObject({ reason: expect.stringMatching(/could not be paused/i), channelId: ch })
+
+    stub.status['/pause'] = 200
+    sa.emit('music:pause', at)
+    await musicStateWhere(sa, x => chans(x)[0]?.paused === true)
+    stub.status['/resume'] = 500
+    err = nextEvent(sa, 'music:error')
+    sa.emit('music:resume', at)
+    expect(await err).toMatchObject({ reason: expect.stringMatching(/could not be resumed/i), channelId: ch })
+
+    // Refused by the rate limit, before anything else: still named.
+    for (let i = 0; i < 10; i++) sb.emit('music:seek', { ...at, sec: 10 + i })
+    await musicStateWhere(sb, x => (chans(x)[0]?.now?.elapsedMs ?? 0) >= 19_000)
+    for (const ev of ['music:pause', 'music:resume']) {
+      err = nextEvent(sb, 'music:error')
+      sb.emit(ev, at)
+      expect(await err).toMatchObject({ reason: expect.stringMatching(/too fast/i), channelId: ch })
+    }
+  })
+
   it('an older service (no capability) → no pausable, and a pause is refused', async () => {
     // An older service has no /capabilities route and no /pause either.
     stub.status['/capabilities'] = 404

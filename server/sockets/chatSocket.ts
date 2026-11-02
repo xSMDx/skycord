@@ -1775,7 +1775,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     }
 
     /** Refusals go to the asker alone; nobody else needs to see them fail. */
-    const musicRefuse = (reason: string) => socket.emit('music:error', { reason })
+    // `channelId` is additive and only where the client needs it: pause and
+    // resume, whose pending state it keeps per channel and settles by it.
+    const musicRefuse = (reason: string, channelId?: string) =>
+      socket.emit('music:error', channelId === undefined ? { reason } : { reason, channelId })
 
     socket.on('music:create', (data: { conversationId: string; kind: string; name: string; url?: string; trackId?: string }) => {
       void (async () => {
@@ -1849,9 +1852,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     socket.on('music:pause', (data: { conversationId: string; kind: string; channelId: string }) => {
       void (async () => {
         const gate = musicGate(data); if (!gate) return
-        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
-        const r = await pauseMusic(gate.room, String(data?.channelId ?? ''))
-        if (!r.ok) return musicRefuse(r.reason)
+        const channelId = String(data?.channelId ?? '')
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.', channelId)
+        const r = await pauseMusic(gate.room, channelId)
+        if (!r.ok) return musicRefuse(r.reason, channelId)
         if (r.changed) broadcastMusic(gate.room)
       })()
     })
@@ -1859,9 +1863,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     socket.on('music:resume', (data: { conversationId: string; kind: string; channelId: string }) => {
       void (async () => {
         const gate = musicGate(data); if (!gate) return
-        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.')
-        const r = await resumeMusic(gate.room, String(data?.channelId ?? ''))
-        if (!r.ok) return musicRefuse(r.reason)
+        const channelId = String(data?.channelId ?? '')
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.', channelId)
+        const r = await resumeMusic(gate.room, channelId)
+        if (!r.ok) return musicRefuse(r.reason, channelId)
         if (r.changed) broadcastMusic(gate.room)
       })()
     })
