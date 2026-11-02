@@ -228,6 +228,101 @@ describe('a pause while the next song is still being fetched', () => {
   })
 })
 
+describe('a play whose fetch lands after a newer one', () => {
+  // Two quick skips are two plays in flight. If the first one's fetch is the
+  // slow one, it must not land on top of the second song once that is
+  // playing — nor report an end for it, which would move the API's queue
+  // past the song everyone is hearing. It bails, and lets go of its fetch.
+  const OLD = 'a'.repeat(24), NEW = 'b'.repeat(24)
+  const setup = async () => {
+    const held: { answer: (status: number) => void; closed: Promise<void> }[] = []
+    const api = createServer((req, res) => {
+      if (req.url?.includes(NEW)) {
+        res.writeHead(200, { 'content-type': 'audio/webm' }); res.end(Buffer.from('new')); return
+      }
+      const closed = new Promise<void>(r => res.once('close', () => r()))
+      held.push({
+        closed,
+        answer: (status) => {
+          if (status !== 200) { res.writeHead(status); res.end(); return }
+          // Headers and a little of the body, then nothing: a live fetch.
+          res.writeHead(200, { 'content-type': 'audio/webm' }); res.write(Buffer.from('old'))
+        },
+      })
+    })
+    await new Promise<void>(r => api.listen(0, '127.0.0.1', () => r()))
+    const endedHere: string[] = []
+    const svc = createMusicServer(stubPublisher, {
+      port: 0, host: '127.0.0.1', secret: SECRET, maxBytes: 1024,
+      apiInternalUrl: `http://127.0.0.1:${(api.address() as AddressInfo).port}`,
+      onEnded: (room, id) => endedHere.push(`${room}/${id}`),
+    })
+    await new Promise<void>(r => svc.listening ? r() : svc.once('listening', () => r()))
+    const at = `http://127.0.0.1:${(svc.address() as AddressInfo).port}`
+    const send = (path: string, body: unknown) => fetch(at + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-music-secret': SECRET },
+      body: JSON.stringify(body),
+    })
+    const close = async () => {
+      await new Promise<void>(r => svc.close(() => r()))
+      api.closeAllConnections()
+      await new Promise<void>(r => api.close(() => r()))
+    }
+    return { held, endedHere, send, close }
+  }
+  const waitFor = async (ok: () => boolean) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 20)) }
+  const plays = () => calls.filter(c => c === 'play voice:7/c').length
+
+  it('does not replace the newer song, reports no end, and closes its fetch', async () => {
+    const { held, endedHere, send, close } = await setup()
+    try {
+      calls.length = 0
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: OLD })
+      await waitFor(() => held.length === 1)          // the old read is out, unanswered
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: NEW })
+      await waitFor(() => plays() === 1)              // the new song is playing
+      const endsBefore = endedHere.length
+
+      held[0].answer(200)
+      await held[0].closed                             // let go, not left to idle out
+      await new Promise(r => setTimeout(r, 100))
+      expect(plays()).toBe(1)
+      expect(endedHere.length).toBe(endsBefore)
+    } finally { await close() }
+  })
+
+  it('a late failure reports no end either', async () => {
+    const { held, endedHere, send, close } = await setup()
+    try {
+      calls.length = 0
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: OLD })
+      await waitFor(() => held.length === 1)
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: NEW })
+      await waitFor(() => plays() === 1)
+      const endsBefore = endedHere.length
+      held[0].answer(500)
+      await new Promise(r => setTimeout(r, 200))
+      expect(endedHere.length).toBe(endsBefore)
+    } finally { await close() }
+  })
+
+  it('a close in the meantime makes it stale too', async () => {
+    const { held, endedHere, send, close } = await setup()
+    try {
+      calls.length = 0
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: OLD })
+      await waitFor(() => held.length === 1)
+      await send('/close', { room: 'voice:7', channelId: 'c' })
+      held[0].answer(200)
+      await held[0].closed
+      await new Promise(r => setTimeout(r, 100))
+      expect(plays()).toBe(0)
+      expect(endedHere).toEqual([])
+    } finally { await close() }
+  })
+})
+
 describe('everything else', () => {
   it('404s an unknown path', async () => {
     expect((await post('/whatever', {}, SECRET)).status).toBe(404)
