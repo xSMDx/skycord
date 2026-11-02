@@ -312,6 +312,17 @@ describe('/pause and /resume', () => {
     expect(w.act.soloPause).not.toHaveBeenCalled()
   })
 
+  it('points /join at a channel that is playing, not one that is held', async () => {
+    const held = channel({ id: 'h', name: 'Held', pausable: true, paused: true })
+    const live = channel({ id: 'l', name: 'Live' })
+    const w = world({ inCall: true, channels: [held, live] })
+    expect(await run('pause', '', w)).toBe('Nothing is playing for you. /join to listen to Live.')
+    expect(await run('skip', '', w)).toBe('Nothing is playing for you. /join to listen to Live.')
+    // Held music is still music: with nothing else, it is the one to join.
+    expect(await run('skip', '', world({ inCall: true, channels: [held] })))
+      .toBe('Nothing is playing for you. /join to listen to Held.')
+  })
+
   it('has nothing to pause in a tuned channel with no song', async () => {
     const c = channel({ pausable: true, now: null })
     const w = world({ inCall: true, channels: [c], tuned: c })

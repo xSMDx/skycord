@@ -6,6 +6,7 @@ import flyout from '../../voice/MusicFlyout.vue?raw'
 import sheet from '../../voice/phone/PhoneMusicSheet.vue?raw'
 import callSheet from '../../voice/phone/PhoneCallSheet.vue?raw'
 import callBar from '../../voice/CallBar.vue?raw'
+import composer from '../../chat/MessageInput.vue?raw'
 
 /**
  * Pause and Resume, wherever a call's song can be skipped.
@@ -99,6 +100,18 @@ const isTheToggle = (button: string, who: string) => {
   expect(tag).toMatch(new RegExp(`:aria-label="isPaused\\(${who}\\) \\? \`Resume [^\`]*\` : \`Pause [^\`]*\`"`))
   // Play in place of Pause while it is held.
   expect(button).toMatch(new RegExp(`isPaused\\(${who}\\) \\? Play : Pause`))
+  // While one is on its way it says so and takes no second tap. Not
+  // `disabled`, which would throw keyboard focus off the control.
+  expect(tag).toContain(`:aria-busy="isPausePending(${who})"`)
+  expect(tag).toContain(`:aria-disabled="isPausePending(${who})"`)
+  expect(tag).toMatch(new RegExp(`:class="\\{ pending: isPausePending\\(${who}\\) \\}"`))
+}
+
+/** The pending look: dimmed like a disabled control, and deaf to the pointer. */
+const looksPending = (src: string, selector: string) => {
+  const rule = rulesOf(styleOf(src), selector).join(';')
+  expect(rule, selector).toMatch(/opacity:\s*\.\d+/)
+  expect(rule, selector).toMatch(/pointer-events:\s*none/)
 }
 
 /** The skip control comes straight after it: the two are one group. */
@@ -111,7 +124,7 @@ const sitsBeforeSkip = (tpl: string, button: string) => {
 describe('the mini player', () => {
   const tpl = templateOf(mini)
   const css = styleOf(mini)
-  const toggle = (): string => buttonWith(tpl, '@click="togglePauseMusic(live)"')
+  const toggle = (): string => buttonWith(tpl, '@click="pauseHere(live)"')
 
   it('offers Pause and Resume on the channel you hear, next to Skip, and only when it can pause', () => {
     importsLucidePauseAndPlay(mini)
@@ -134,6 +147,23 @@ describe('the mini player', () => {
     expect(mini).toMatch(/const nearby = computed\([\s\S]{0,400}isPaused\(/)
   })
 
+  it('dims the control while a pause is on its way', () => {
+    looksPending(mini, '.mp-btn.pending')
+  })
+
+  it('shows a refusal of its own tap, in the strip, for as long as the composer note lasts', () => {
+    const line = /<p v-if="refusal" class="mp-err" role="alert">\{\{ refusal \}\}<\/p>/
+    expect(tpl).toMatch(line)
+    expect(rulesOf(css, '.mp-err').join(';')).toMatch(/color:\s*var\(--danger-text\)/)
+    // Its own: a refusal that lands within the window of a tap here.
+    expect(mini).toMatch(/Date\.now\(\) - sentAt < PAUSE_SETTLE_MS/)
+    expect(mini).toContain('REFUSAL_MS = 8000')
+    // Pause and Skip both go through the strip's own handlers, which clear
+    // the old refusal and note when they sent.
+    expect(tpl).toContain('@click="skipHere(live)"')
+    expect(mini).toMatch(/const pauseHere = [\s\S]{0,200}clearMusicError\(\)[\s\S]{0,80}sentAt = Date\.now\(\)/)
+  })
+
   it('is at least 44px to a thumb', () => {
     const s = sizeUnder(mini, '(max-width: 768px)', '.mp-btn')
     expect(s.w).toBeGreaterThanOrEqual(44)
@@ -154,6 +184,10 @@ describe('the call rail in the music room', () => {
 
   it('says Paused before the song on a held card', () => {
     expect(tpl).toMatch(/<template v-if="isPaused\(c\)">Paused · <\/template>/)
+  })
+
+  it('dims the control while a pause is on its way', () => {
+    looksPending(rail, '.cr-icon.pending')
   })
 
   it('is at least 44px to a thumb', () => {
@@ -189,6 +223,10 @@ describe('the music room, tuned into a channel', () => {
     }
   })
 
+  it('dims the key while a pause is on its way', () => {
+    looksPending(modal, '.mm-pp.pending')
+  })
+
   it('no longer says a shared song cannot be paused', () => {
     expect(modal).not.toMatch(/shared song cannot be paused/i)
   })
@@ -214,6 +252,19 @@ describe('the desktop call flyout', () => {
   it('says Paused before the song on a held row', () => {
     expect(tpl).toMatch(/isPaused\(c\) \? 'Paused · ' : ''/)
   })
+
+  it('dims the control while a pause is on its way', () => {
+    looksPending(flyout, '.mf-icon.pending')
+  })
+
+  it('is at least 44px to a finger: touch laptops and tablets get this flyout too', () => {
+    const s = sizeUnder(flyout, '(pointer: coarse)', '.mf-icon')
+    expect(s.w).toBeGreaterThanOrEqual(44)
+    expect(s.h).toBeGreaterThanOrEqual(44)
+    // Four 44px glyphs and three lines of text do not share a 312px row:
+    // the actions wrap to a row of their own.
+    expect(rulesOf(mediaBlocks(styleOf(flyout), '(pointer: coarse)'), '.mf-tune').join(';')).toMatch(/flex-basis:\s*100%/)
+  })
 })
 
 describe('the phone music sheet', () => {
@@ -238,8 +289,19 @@ describe('the phone music sheet', () => {
     }
   })
 
-  it('keeps the row legible with four actions while Close is armed: the others keep their glyphs', () => {
-    expect(rulesOf(css, '.pms-acts:has(.armed) .pms-act:not(.armed) span').join(';')).toMatch(/display:\s*none/)
+  it('dims the control while a pause is on its way', () => {
+    looksPending(sheet, '.pms-act.pending')
+  })
+
+  it('keeps the row legible with four actions while Close is armed: the others shrink to their glyphs', () => {
+    // A class, not :has(), which the oldest WebView the phone app supports lacks.
+    expect(tpl).toContain('class="pms-acts" :class="{ arming: closing === c.id }"')
+    expect(css).not.toContain(':has(')
+    expect(rulesOf(css, '.pms-acts.arming .pms-act:not(.armed) span').join(';')).toMatch(/display:\s*none/)
+    const others = rulesOf(css, '.pms-acts.arming .pms-act:not(.armed)').join(';')
+    const basis = /flex:\s*0 0 (\d+)px/.exec(others)
+    expect(basis, 'icon-wide while armed').toBeTruthy()
+    expect(Number(basis![1])).toBeGreaterThanOrEqual(44)
   })
 })
 
@@ -251,6 +313,11 @@ describe('the Music card on the phone call screen', () => {
     expect(tpl).toMatch(/<span v-if="musicLabel\.paused" class="pcsh-paused">Paused<\/span>/)
     expect(rulesOf(styleOf(callSheet), '.pcsh-paused').join(';')).toMatch(/color:\s*var\(--text-3\)/)
   })
+
+  it('says held music is paused, and where, when you are not tuned in', () => {
+    expect(tpl).toContain("musicLabel.kind === 'paused'")
+    expect(tpl).toContain('musicLabel.n === 1 ? `Paused in ${musicLabel.where}` : `${musicLabel.n} paused`')
+  })
 })
 
 describe('the call bar music button', () => {
@@ -260,6 +327,14 @@ describe('the call bar music button', () => {
     expect(callBar).toMatch(/is \$\{isPaused\(c\) \? 'paused' : 'playing'\} in \$\{c\.name\}/)
     // A playing channel before a held one.
     expect(callBar).toMatch(/find\(c => c\.now && !isPaused\(c\)\) \?\? music\.channels\.find\(c => c\.now\)/)
+  })
+})
+
+describe('the composer note for /pause and /resume', () => {
+  it('lets a slow refusal replace the note, waiting as long as a pause can take', () => {
+    expect(composer).toMatch(/import \{[^}]*\bPAUSE_SETTLE_MS\b[^}]*\} from '@\/composables\/useMusic'/)
+    expect(composer).toMatch(/refuseWithin = cmd\.name === 'pause' \|\| cmd\.name === 'resume' \? PAUSE_SETTLE_MS : 2500/)
+    expect(composer).toMatch(/Date\.now\(\) - sentAt < refuseWithin/)
   })
 })
 

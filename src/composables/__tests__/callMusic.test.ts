@@ -25,6 +25,7 @@ afterEach(() => { vi.useRealTimers() })
 beforeEach(() => {
   emit.mockClear()
   music.channels = []; music.listeningTo = null; music.error = ''
+  setMusicTarget(null)       // drops a pause still on its way from the last test
   setMusicTarget({ conversationId: 'c1', kind: 'channel' })
 })
 
@@ -267,6 +268,16 @@ describe('pausing and resuming a channel', () => {
     m.togglePause('p')
     onMusicError({ reason: 'The music could not be paused. Try again in a moment.' })
     expect(isPaused(music.channels[0])).toBe(false)
+  })
+
+  it('does nothing on a second tap while the first is on its way: one emit, and the card it answers stays put', () => {
+    onMusicState({ channels: [channelView('p', { pausable: true })] })
+    const m = useCallMusic(() => people)
+    m.togglePause('p')
+    m.toggleListen('l')
+    m.togglePause('p')
+    expect(sent('music:pause')).toHaveLength(1)
+    expect(m.origin.value).toBe('l')
   })
 
   it('disarms a Close that was armed', () => {

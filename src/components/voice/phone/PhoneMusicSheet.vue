@@ -19,7 +19,7 @@ import { computed, watch } from 'vue'
 import { Music2, Pause, Play, Plus, SkipForward, X, Library, ChevronRight } from 'lucide-vue-next'
 import BottomSheet from '@/components/ui/BottomSheet.vue'
 import { voice } from '@/composables/useVoice'
-import { music, isPaused, canPause } from '@/composables/useMusic'
+import { music, isPaused, canPause, isPausePending } from '@/composables/useMusic'
 import { useCallMusic } from '@/composables/callMusic'
 
 const props = defineProps<{ open: boolean }>()
@@ -102,13 +102,14 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
             </span>
           </button>
 
-          <div class="pms-acts">
+          <div class="pms-acts" :class="{ arming: closing === c.id }">
             <!-- Pause while it plays, Resume while it is held: one control,
                  for everyone, beside Skip. Only where the music service can,
                  so on an older server the row is the three it always was. -->
             <button
-              v-if="canPause(c)" type="button" class="pms-act"
+              v-if="canPause(c)" type="button" class="pms-act" :class="{ pending: isPausePending(c) }"
               :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+              :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
               @click="togglePause(c.id)"
             >
               <component :is="isPaused(c) ? Play : Pause" :size="16" :stroke-width="2.25" />
@@ -274,7 +275,11 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
   padding: 0 8px; border: none; background: none; color: var(--text-2);
   font-family: inherit; font-size: 14px; line-height: 20px; font-weight: 600;
   cursor: pointer;
+  transition: opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.pms-act.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 .pms-act + .pms-act { border-left: 1px solid var(--divider); }
 .pms-act svg { flex: none; }
 .pms-act span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -283,10 +288,13 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
    taller, because "Tap again to close" does not fit in a third of the row. It
    grows leftwards from the edge the thumb is on. Instant: it answers a tap. */
 .pms-act.armed { flex: 3 1 0; background: var(--danger); color: var(--text-on-danger); }
-/* While it is armed the others give it their words and keep their glyphs:
-   beside "Tap again to close", four labelled buttons cut to "Res…". For the
-   three seconds it lasts, the row's question is Close, not the rest. */
-.pms-acts:has(.armed) .pms-act:not(.armed) span { display: none; }
+/* While it is armed the others give it their words and shrink to their
+   glyphs, still 48px: beside "Tap again to close", four labelled buttons cut
+   to "Res…" on a 360px card. For the three seconds it lasts, the row's
+   question is Close, not the rest. A class on the row rather than :has(),
+   which the oldest WebView the phone app runs on does not have. */
+.pms-acts.arming .pms-act:not(.armed) { flex: 0 0 48px; padding: 0; }
+.pms-acts.arming .pms-act:not(.armed) span { display: none; }
 
 .pms-inline { display: flex; gap: 8px; padding: 12px 16px; }
 
@@ -349,6 +357,6 @@ watch(() => props.open, o => { if (!o) { disarm(); cancelNew(); queueFor.value =
 .pms-vol-input { width: 100%; min-width: 0; min-height: 44px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pms-ch, .pms-join, .pms-input { transition: none; }
+  .pms-ch, .pms-join, .pms-input, .pms-act { transition: none; }
 }
 </style>

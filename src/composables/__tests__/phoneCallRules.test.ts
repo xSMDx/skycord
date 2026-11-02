@@ -547,8 +547,14 @@ describe('musicCardLabel', () => {
     const paused: MusicChannelView = { ...channel('c2', song()), pausable: true, paused: true }
     expect(musicCardLabel({ available: true, listeningTo: null, channels: [channel('c1', song()), paused] }))
       .toEqual({ kind: 'count', n: 1 })
-    expect(musicCardLabel({ available: true, listeningTo: null, channels: [paused] }))
-      .toEqual({ kind: 'not-playing' })
+  })
+
+  it('not tuned in, only held music: says it is paused, and where, rather than "Not playing"', () => {
+    const held = (id: string): MusicChannelView => ({ ...channel(id, song()), pausable: true, paused: true })
+    expect(musicCardLabel({ available: true, listeningTo: null, channels: [held('Chill'), channel('c3', null)] }))
+      .toEqual({ kind: 'paused', n: 1, where: 'Chill' })
+    expect(musicCardLabel({ available: true, listeningTo: null, channels: [held('Chill'), held('Metal')] }))
+      .toEqual({ kind: 'paused', n: 2, where: 'Chill' })
   })
 
   it('a link with neither a title nor a usable url reads as the desktop rail does', () => {

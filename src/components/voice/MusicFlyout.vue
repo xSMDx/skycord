@@ -16,7 +16,7 @@
 import { Music2, Pause, Play, Plus, SkipForward, X, Library } from 'lucide-vue-next'
 import CallFlyout from './CallFlyout.vue'
 import { voice } from '@/composables/useVoice'
-import { music, skipMusic, closeMusicChannel, isPaused, canPause } from '@/composables/useMusic'
+import { music, skipMusic, closeMusicChannel, isPaused, canPause, isPausePending } from '@/composables/useMusic'
 import { useCallMusic } from '@/composables/callMusic'
 
 defineProps<{ dir?: 'down' | 'up' }>()
@@ -69,8 +69,9 @@ const {
           <!-- Pause while it plays, Resume while it is held: one control,
                for everyone, beside Skip. Only where the music service can. -->
           <button
-            v-if="canPause(c)" class="mf-icon"
+            v-if="canPause(c)" class="mf-icon" :class="{ pending: isPausePending(c) }"
             :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+            :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
             @click="togglePause(c.id)"
           >
             <component :is="isPaused(c) ? Play : Pause" :size="14" :stroke-width="2.25" />
@@ -219,8 +220,12 @@ const {
   display: grid; place-items: center; width: 26px; height: 26px;
   border: none; background: none; cursor: pointer; color: var(--text-3);
   border-radius: var(--edge-sm);
-  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out),
+              opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.mf-icon.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 @media (hover: hover) and (pointer: fine) {
   .mf-icon:hover { background: var(--hover); color: var(--text-1); }
   /* Closing a channel stops it for everyone listening, not just you. It sits
@@ -231,6 +236,15 @@ const {
   }
 }
 .mf-icon:active { transform: scale(0.94); }
+/* A finger, not a cursor: a touch laptop or a tablet gets this flyout too
+   (the phone call screen is for phones). 44px glyphs, and four of them do not
+   fit beside three lines of text, so they take a row of their own under the
+   row they act on, at its right edge. */
+@media (pointer: coarse) {
+  .mf-icon { width: 44px; height: 44px; }
+  .mf-tune { flex-basis: 100%; }
+  .mf-acts { margin-left: auto; padding: 0 4px 4px; }
+}
 
 .mf-inline { flex: 1 0 100%; display: flex; gap: 6px; padding: 0 8px 8px; }
 .mf-new { display: flex; flex-direction: column; gap: 5px; padding: 4px 8px 8px; }

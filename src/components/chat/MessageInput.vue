@@ -8,7 +8,7 @@ import AutocompletePopup from './AutocompletePopup.vue'
 import TimeTokenPicker from './TimeTokenPicker.vue'
 import { matchCommands, resolveSlash, type SlashCommand } from '@/composables/useChatCommands'
 import { suggestTracks } from '@/composables/musicCommands'
-import { music, clearMusicError } from '@/composables/useMusic'
+import { music, clearMusicError, PAUSE_SETTLE_MS } from '@/composables/useMusic'
 import { useApi } from '@/composables/useApi'
 import type { LibTrack } from '@/composables/useMusicLibrary'
 import { appearance } from '@/composables/useAppearance'
@@ -362,6 +362,12 @@ const note = ref('')
 let noteT: ReturnType<typeof setTimeout> | null = null
 /** When the last music command was sent, so a refusal can replace its note. */
 let sentAt = 0
+/**
+ * How long after it a refusal still answers it. Most refusals come back at
+ * once; a pause or resume waits on the music service first, up to the
+ * server's five seconds, so its refusal can land long after a quick one.
+ */
+let refuseWithin = 2500
 const showNote = (text: string, ms = 8000): void => {
   note.value = text
   if (noteT) clearTimeout(noteT)
@@ -371,12 +377,13 @@ const runAct = (cmd: SlashCommand, arg: string): void => {
   emit('update:modelValue', '')
   clearMusicError()
   sentAt = Date.now()
+  refuseWithin = cmd.name === 'pause' || cmd.name === 'resume' ? PAUSE_SETTLE_MS : 2500
   cmd.act!(arg).then(t => showNote(t), () => showNote('That did not work.'))
 }
 // The server refuses some things only once it has heard them — too fast,
 // a channel that just closed. Its reason replaces the note it contradicts.
 watch(() => music.error, e => {
-  if (e && Date.now() - sentAt < 2500) showNote(e)
+  if (e && Date.now() - sentAt < refuseWithin) showNote(e)
 })
 onBeforeUnmount(() => { if (noteT) clearTimeout(noteT) })
 

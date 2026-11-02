@@ -149,9 +149,13 @@ const titleOf = (c: MusicChannelView): string => c.now?.title ?? 'the linked tra
 const quoted = (s: string) => `“${s}”`
 const isLink = (s: string) => /^https?:\/\//i.test(s)
 
-/** When a command needs something playing and nothing is, say where music is. */
+/**
+ * When a command needs something playing and nothing is, say where music is —
+ * a channel that is playing before one that is held, as the mini player and
+ * the call bar choose, because /join should land you in sound.
+ */
 const nothingForYou = (w: CommandWorld): string => {
-  const playing = w.channels.find(c => c.now)
+  const playing = w.channels.find(c => c.now && !isPaused(c)) ?? w.channels.find(c => c.now)
   return playing
     ? `Nothing is playing for you. /join to listen to ${playing.name}.`
     : 'Nothing is playing. /play <song> to start.'

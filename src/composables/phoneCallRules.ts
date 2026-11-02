@@ -220,6 +220,8 @@ export type MusicCardLabel =
   | { kind: 'not-playing' }
   | { kind: 'song'; title: string; artist: string | null; cover: string | null; paused: boolean }
   | { kind: 'count'; n: number }
+  /** Not tuned in, and the only music is held: how many, and where the first is. */
+  | { kind: 'paused'; n: number; where: string }
 
 // A bare link has no title, only where it points. The desktop rail says
 // 'A linked track' when it has not even that.
@@ -233,8 +235,9 @@ const hostOf = (url: string | null): string | null => {
  * server runs no music). The song is that of the channel you are tuned into,
  * and whether it is held, so the card can say Paused and stop its marquee; if
  * you are not tuned into one, it can only say how many are playing, since there
- * is no single song to name — and a held song is not playing, so it is not
- * counted.
+ * is no single song to name. A held song is not playing, so it is not counted;
+ * when held music is all there is, the card says so ("Paused in Chill"), as
+ * the mini player does, rather than "Not playing".
  */
 export const musicCardLabel = (
   m: { available: boolean; listeningTo: string | null; channels: MusicChannelView[] },
@@ -256,7 +259,9 @@ export const musicCardLabel = (
   }
 
   const n = m.channels.filter(c => c.now && !isPaused(c)).length
-  return n > 0 ? { kind: 'count', n } : { kind: 'not-playing' }
+  if (n > 0) return { kind: 'count', n }
+  const held = m.channels.filter(c => isPaused(c))
+  return held.length ? { kind: 'paused', n: held.length, where: held[0].name } : { kind: 'not-playing' }
 }
 
 // ── The call timer and subtitle ─────────────────────────────────────────────

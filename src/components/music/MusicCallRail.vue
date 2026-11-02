@@ -20,7 +20,7 @@ import { voice } from '@/composables/useVoice'
 import { useAuth } from '@/composables/useAuth'
 import {
   music, createMusicChannel, shareToChannel, listenToMusic, closeMusicChannel, skipMusic, playNowMusic,
-  channelElapsed, musicNow, togglePauseMusic, isPaused, canPause,
+  channelElapsed, musicNow, togglePauseMusic, isPaused, canPause, isPausePending,
   type MusicChannelView, type MusicEntryView,
 } from '@/composables/useMusic'
 import { clock, type LibTrack } from '@/composables/useMusicLibrary'
@@ -228,8 +228,9 @@ const startWith = (): void => {
                    tips say so. Pause and Resume are one control, beside
                    Skip, and only where the music service can pause. -->
               <button
-                v-if="canPause(c)" class="cr-icon"
+                v-if="canPause(c)" class="cr-icon" :class="{ pending: isPausePending(c) }"
                 :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+                :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
                 v-tip="isPaused(c) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
                 @click="togglePauseMusic(c)"
               >
@@ -460,8 +461,12 @@ const startWith = (): void => {
   display: grid; place-items: center; width: 24px; height: 24px;
   border: none; background: none; cursor: pointer; color: var(--text-3);
   border-radius: var(--edge-sm);
-  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out),
+              opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.cr-icon.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 @media (hover: hover) and (pointer: fine) {
   .cr-icon:hover:not(:disabled) { background: var(--hover); color: var(--text-1); }
   .cr-icon.danger:hover { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger-text); }

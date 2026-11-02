@@ -377,6 +377,8 @@ onBeforeUnmount(() => {
               <span v-if="musicLabel.paused" class="pcsh-paused">Paused</span>
             </template>
             <span v-else-if="musicLabel.kind === 'count'" class="pcsh-now-text">{{ musicLabel.n }} playing</span>
+            <!-- Held music is still music: where it is, not "Not playing". -->
+            <span v-else-if="musicLabel.kind === 'paused'" class="pcsh-now-text">{{ musicLabel.n === 1 ? `Paused in ${musicLabel.where}` : `${musicLabel.n} paused` }}</span>
             <span v-else class="pcsh-now-text pcsh-quiet">Not playing</span>
           </span>
         </button>

@@ -40,7 +40,7 @@ import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
   musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, queueMusic, seekMusic, previousMusic,
-  togglePauseMusic, isPaused, canPause,
+  togglePauseMusic, isPaused, canPause, isPausePending,
 } from '@/composables/useMusic'
 import {
   library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
@@ -922,8 +922,9 @@ const pct = (at: number, dur: number | null | undefined): number =>
             <SkipBack :size="16" :stroke-width="2.25" />
           </button>
           <button
-            v-if="live.pausable" class="mm-pp" :disabled="!canPause(live)"
+            v-if="live.pausable" class="mm-pp" :class="{ pending: isPausePending(live) }" :disabled="!canPause(live)"
             :aria-label="isPaused(live) ? `Resume for everyone in ${live.name}` : `Pause for everyone in ${live.name}`"
+            :aria-busy="isPausePending(live)" :aria-disabled="isPausePending(live)"
             v-tip="isPaused(live) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
             @click="togglePauseMusic(live)"
           >
@@ -1463,8 +1464,11 @@ const pct = (at: number, dur: number | null | undefined): number =>
   display: grid; place-items: center; width: 38px; height: 38px;
   border: none; border-radius: 50%; cursor: pointer;
   background: var(--text-strong); color: var(--bg-floor);
-  transition: transform var(--dur-1) var(--ease-out);
+  transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.mm-pp.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 @media (hover: hover) and (pointer: fine) { .mm-pp:hover:not(:disabled) { transform: scale(1.06); } }
 .mm-pp:active:not(:disabled) { transform: scale(.94); }
 .mm-pp:disabled { opacity: .35; cursor: not-allowed; }

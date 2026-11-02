@@ -194,6 +194,8 @@ export const setMusicTarget = (t: typeof target, room: string | null = null): vo
   if (t?.conversationId === target?.conversationId && t?.kind === target?.kind && room === targetRoom) return
   target = t
   targetRoom = t ? room : null
+  // A pause asked in one call is no business of the next.
+  settleAllPauses()
   // Leaving a call leaves its music. The server forgets us too; this is the
   // half the client owns, so a stale panel never outlives the call.
   if (!t) { music.channels = []; untune(); syncTick(); music.error = ''; return }
@@ -266,16 +268,78 @@ export const seekMusic = (channelId: string, sec: number): void =>
  * server is built to avoid. The press answers the tap; the state follows the
  * broadcast, as a skip's new title does, and a refusal leaves everything as
  * it was, with its reason in `music.error` like any other.
+ *
+ * That gap can be long — the server waits up to five seconds on the service
+ * — and the control still reads Pause throughout. So one request per channel
+ * is in flight at a time: a second tap would only be refused "It is already
+ * paused." straight after a pause that worked, and spend a rate-limit token
+ * doing it. See pausePending.
  */
-export const pauseMusic = (channelId: string): void =>
-  send('music:pause', { channelId })
+export const pauseMusic = (channelId: string): void => askPause(channelId, true)
 
-export const resumeMusic = (channelId: string): void =>
-  send('music:resume', { channelId })
+export const resumeMusic = (channelId: string): void => askPause(channelId, false)
 
-/** Pause a playing channel or resume a held one — whichever it is now. Nothing for one that cannot. */
+/**
+ * How long a pause or resume waits for an answer before the control takes
+ * taps again: just past the server's five-second wait on the music service,
+ * so it never gives up on an answer that is still allowed to come. Also how
+ * long the composer lets a refusal replace a /pause note.
+ */
+export const PAUSE_SETTLE_MS = 6000
+
+/**
+ * The channels with a pause or resume on its way, by id — what each asked
+ * for and which song it was asked about, so the answer can be recognised.
+ * The set is what the controls read; the rest is bookkeeping.
+ */
+const pausing = reactive(new Set<string>())
+const pauseWaits = new Map<string, { paused: boolean; entry: string | null; timer: ReturnType<typeof setTimeout> }>()
+
+const settlePause = (channelId: string): void => {
+  const w = pauseWaits.get(channelId)
+  if (w) clearTimeout(w.timer)
+  pauseWaits.delete(channelId)
+  pausing.delete(channelId)
+}
+const settleAllPauses = (): void => { for (const id of [...pauseWaits.keys()]) settlePause(id) }
+
+const askPause = (channelId: string, paused: boolean): void => {
+  // No call, nothing sent — and so nothing to wait for.
+  if (!target || pausing.has(channelId)) return
+  send(paused ? 'music:pause' : 'music:resume', { channelId })
+  pausing.add(channelId)
+  pauseWaits.set(channelId, {
+    paused,
+    entry: music.channels.find(c => c.id === channelId)?.now?.id ?? null,
+    timer: setTimeout(() => settlePause(channelId), PAUSE_SETTLE_MS),
+  })
+}
+
+/**
+ * A pause or resume is on its way for this channel. Not an optimistic flip:
+ * the channel still shows what the server last said, and the control only
+ * says it is busy and takes no second tap.
+ *
+ * It ends with the answer: a state that shows the channel paused (or
+ * playing) as asked, or one where the song it was asked about has gone, or
+ * the channel has; any refusal; leaving the call; or PAUSE_SETTLE_MS. Not on
+ * any state at all, because the server broadcasts the whole list for every
+ * change, and somebody queueing a song in the gap is not the answer.
+ */
+export const isPausePending = (c: MusicChannelView | null | undefined): boolean =>
+  !!c && pausing.has(c.id)
+
+/** The pause bookkeeping a new state answers. See isPausePending. */
+const settlePausesFrom = (channels: MusicChannelView[]): void => {
+  for (const [id, w] of pauseWaits) {
+    const c = channels.find(x => x.id === id)
+    if (!c || (c.now?.id ?? null) !== w.entry || isPaused(c) === w.paused) settlePause(id)
+  }
+}
+
+/** Pause a playing channel or resume a held one — whichever it is now. Nothing for one that cannot, or that is waiting. */
 export const togglePauseMusic = (c: MusicChannelView): void => {
-  if (!canPause(c)) return
+  if (!canPause(c) || isPausePending(c)) return
   if (isPaused(c)) resumeMusic(c.id); else pauseMusic(c.id)
 }
 
@@ -321,6 +385,7 @@ export const onMusicState = (payload: { room?: string; channels: MusicChannelVie
   const before = new Set(music.channels.map(c => c.id))
   music.channels = payload?.channels ?? []
   syncTick()
+  settlePausesFrom(music.channels)
 
   /*
    * A channel that is new to us gets the cue. Compared by id against what we
@@ -347,6 +412,9 @@ export const onMusicState = (payload: { room?: string; channels: MusicChannelVie
 }
 
 export const onMusicError = (payload: { reason: string }): void => {
+  // A refusal ends any wait: the server answers a refused pause with this and
+  // nothing else, and it does not say which request it answers.
+  settleAllPauses()
   music.error = payload?.reason ?? 'That did not work.'
 }
 
