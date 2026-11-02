@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   emptyQueue, start, next, previous, jump, setShuffle, cycleRepeat,
-  enqueue, unqueue, drop, upNext, peek, contextTrack,
+  enqueue, unqueue, moveManual, drop, upNext, peek, contextTrack,
   type QueueState, type Rng,
 } from '../musicQueue'
 
@@ -259,6 +259,76 @@ describe('the manual queue', () => {
     let s = enqueue(enqueue(enqueue(begin(), C, 'last'), D, 'last'), C, 'last')
     s = unqueue(s, 0)
     expect(ids(s.manual)).toEqual(['d', 'c'])
+  })
+})
+
+/**
+ * The drag handle and the arrow keys in the drawer both end here. `to` is
+ * where the song ends up, so a drag that runs past either end of the list
+ * lands it first or last rather than nowhere.
+ */
+describe('moving a song you queued', () => {
+  const lined = (): QueueState<T> => [C, D, E].reduce((q, x) => enqueue(q, x, 'last'), begin(0))
+
+  it('moveManual moves up and down', () => {
+    const s = lined()
+    expect(ids(moveManual(s, 2, 0).manual)).toEqual(['e', 'c', 'd'])
+    expect(ids(moveManual(s, 0, 2).manual)).toEqual(['d', 'e', 'c'])
+    expect(ids(moveManual(s, 1, 2).manual)).toEqual(['c', 'e', 'd'])
+    expect(ids(moveManual(s, 1, 0).manual)).toEqual(['d', 'c', 'e'])
+    // What plays next follows the new order.
+    expect(next(moveManual(s, 2, 0), 'skip', rng).track).toBe(E)
+    // A new state; the one it was given is untouched.
+    expect(ids(s.manual)).toEqual(['c', 'd', 'e'])
+  })
+
+  it('moveManual clamps out-of-range targets', () => {
+    const s = lined()
+    expect(ids(moveManual(s, 1, -5).manual)).toEqual(['d', 'c', 'e'])
+    expect(ids(moveManual(s, 1, 99).manual)).toEqual(['c', 'e', 'd'])
+    expect(ids(moveManual(s, 0, Infinity).manual)).toEqual(['d', 'e', 'c'])
+    expect(ids(moveManual(s, 2, -Infinity).manual)).toEqual(['e', 'c', 'd'])
+    // A song that is not there moves nothing, and neither does a target that is not a number.
+    expect(moveManual(s, 3, 0)).toBe(s)
+    expect(moveManual(s, -1, 0)).toBe(s)
+    expect(moveManual(s, 0, NaN)).toBe(s)
+    expect(moveManual(emptyQueue<T>(), 0, 1).manual).toEqual([])
+  })
+
+  it('moveManual is a no-op for from === to, including a move that clamps back onto itself', () => {
+    const s = lined()
+    expect(moveManual(s, 1, 1)).toBe(s)
+    expect(moveManual(s, 0, -3)).toBe(s)
+    expect(moveManual(s, 2, 10)).toBe(s)
+  })
+
+  it('moveManual moves by position, so a song queued twice moves the copy you picked up', () => {
+    const first = t('c'), second = t('c')
+    const s = [first, D, second].reduce((q, x) => enqueue(q, x, 'last'), begin(0))
+    const moved = moveManual(s, 2, 0)
+    expect(moved.manual[0]).toBe(second)
+    expect(moved.manual[1]).toBe(first)
+  })
+
+  it('moveManual leaves the playlist part alone', () => {
+    // Shuffled and part-way through, with a queued song playing: everything
+    // but your own lineup has to come out exactly as it went in.
+    let s = setShuffle(begin(1), true, seeded(7))
+    s = [C, D, E, A].reduce((q, x) => enqueue(q, x, 'last'), s)
+    s = next(s, 'skip', rng).state
+    expect(s.fromManual).toBe(true)
+
+    const moved = moveManual(s, 0, 2)
+    expect(ids(moved.manual)).toEqual(['e', 'a', 'd'])
+    expect(moved.context).toBe(s.context)
+    expect(moved.tracks).toBe(s.tracks)
+    expect(moved.order).toBe(s.order)
+    expect(moved.pos).toBe(s.pos)
+    expect(moved.current).toBe(s.current)
+    expect(moved.fromManual).toBe(true)
+    expect(moved.shuffle).toBe(true)
+    expect(moved.repeat).toBe(s.repeat)
+    expect(upNext(moved).context).toEqual(upNext(s).context)
   })
 })
 

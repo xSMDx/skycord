@@ -22,7 +22,7 @@ import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
   Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert, ShieldCheck,
   Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
-  ListPlus, ListStart, ListEnd, LogOut, Ellipsis,
+  ListPlus, ListStart, ListEnd, LogOut, Ellipsis, GripVertical,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
 import MusicCallRail from './MusicCallRail.vue'
@@ -33,8 +33,9 @@ import { appearance } from '@/composables/useAppearance'
 import {
   player, queue, queueView, playFrom, toggle, next, previous, jumpTo, seek, setVolume,
   forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue,
-  removeFromQueue, clearQueue, okToPlaySolo, type QueueContext,
+  removeFromQueue, clearQueue, moveInQueue, okToPlaySolo, type QueueContext,
 } from '@/composables/useMusicPlayer'
+import { useQueueDrag, stableKeys } from '@/composables/queueDrag'
 import { openMenu, type MenuItem, type MenuAnchor } from '@/composables/useContextMenu'
 import { voice } from '@/composables/useVoice'
 import {
@@ -76,6 +77,30 @@ watch(showQueue, (open) => {
   if (!pane) return
   if (open) { libraryScroll = pane.scrollTop; pane.scrollTop = 0 }
   else pane.scrollTop = libraryScroll
+})
+
+/*
+ * Rearranging your own queue: a handle on each of your songs in the drawer,
+ * dragged or arrowed. The mechanics are queueDrag's; the move is the
+ * player's. Only "Next in queue" — the playlist part follows the playlist.
+ */
+const qList = ref<HTMLElement | null>(null)
+/** Row keys that travel with their song, so a move moves a row instead of refilling every row it passed. */
+const qKeys = computed(() => stableKeys(queueView.value.manual.map(t => t.id)))
+/** The drawer's live region. Cleared before each message: a polite region only speaks when its text changes. */
+const qSaid = ref('')
+const sayInQueue = (message: string): void => {
+  qSaid.value = ''
+  void nextTick(() => { qSaid.value = message })
+}
+const {
+  held: qHeld, onGripDown, onGripMove, onGripUp, onGripCancel, onGripKey,
+} = useQueueDrag({
+  list: qList,
+  scroller: () => qList.value?.closest<HTMLElement>('.mm-queue') ?? null,
+  items: () => queue.manual,
+  move: moveInQueue,
+  say: sayInQueue,
 })
 
 const search = ref('')
@@ -583,6 +608,10 @@ const pct = (at: number, dur: number | null | undefined): number =>
               <X :size="14" :stroke-width="2.25" />
             </button>
           </header>
+          <!-- Where a moved song went, for a screen reader. Here for as long
+               as the drawer is open: a region that arrives with its message
+               is often not read at all. -->
+          <p class="mm-sr" role="status" aria-live="polite">{{ qSaid }}</p>
 
           <template v-if="queue.current">
             <span class="mm-qlabel">Now playing</span>
@@ -609,8 +638,25 @@ const pct = (at: number, dur: number | null | undefined): number =>
               <span>Next in queue</span>
               <button class="mm-qclear" @click="clearQueue">Clear</button>
             </div>
-            <ol class="mm-qlist">
-              <li v-for="(t, i) in queueView.manual" :key="'m' + i + t.id" class="mm-qrow">
+            <!-- Yours to rearrange: the handle that opens each row picks the
+                 song up. Only here — the song playing has already left the
+                 queue, and what follows is the playlist's order. -->
+            <span id="mm-qgrip-how" class="mm-sr">Drag, or press the up and down arrow keys, to change when it plays.</span>
+            <ol ref="qList" class="mm-qlist" :class="{ sorting: !!qHeld, settling: qHeld?.phase === 'settle' }">
+              <li
+                v-for="(t, i) in queueView.manual" :key="qKeys[i]" class="mm-qrow"
+                :class="{ held: qHeld?.index === i, lifted: qHeld?.index === i && qHeld?.phase === 'drag' }"
+              >
+                <button
+                  type="button" class="mm-qgrip" data-qgrip
+                  :aria-label="`Move ${t.title}`" aria-describedby="mm-qgrip-how"
+                  aria-keyshortcuts="ArrowUp ArrowDown"
+                  @pointerdown="onGripDown($event, i)" @pointermove="onGripMove" @pointerup="onGripUp"
+                  @pointercancel="onGripCancel" @lostpointercapture="onGripCancel"
+                  @keydown="onGripKey($event, i)" @contextmenu.prevent.stop
+                >
+                  <GripVertical :size="14" :stroke-width="2.25" aria-hidden="true" />
+                </button>
                 <button class="mm-qjump" :aria-label="'Play ' + t.title" @click="jumpTo({ kind: 'manual', index: i })">
                   <span class="mm-thumb" :class="{ empty: !t.cover }">
                     <img v-if="t.cover" :src="t.cover" alt="" />
@@ -1420,6 +1466,66 @@ const pct = (at: number, dur: number | null | undefined): number =>
   border-radius: var(--edge-md);
 }
 .mm-qjump .mm-dim { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/*
+ * Rearranging your queue.
+ *
+ * The handle opens the row and is the only place a press picks a song up, so
+ * a finger anywhere else still scrolls the drawer. touch-action: none here,
+ * and only here, is what keeps a drag from ever fighting the list's scroll.
+ * It is the full height of the row, so it is easy to find with a thumb even
+ * where it is narrow.
+ */
+.mm-qgrip {
+  flex-shrink: 0; align-self: stretch;
+  display: grid; place-items: center; width: 24px; padding: 0;
+  border: none; background: none; border-radius: var(--edge-sm);
+  color: var(--text-3); opacity: .7; cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .mm-qrow:hover .mm-qgrip { opacity: 1; color: var(--text-1); } }
+.mm-qgrip:focus-visible, .mm-qrow.held .mm-qgrip { opacity: 1; color: var(--text-1); }
+.mm-qgrip + .mm-qjump { padding-left: 4px; }
+/* While a song is held the hand stays closed wherever it goes, and nothing selects. */
+.mm-qlist.sorting { cursor: grabbing; -webkit-user-select: none; user-select: none; }
+.mm-qlist.sorting .mm-qgrip { cursor: grabbing; }
+/* The others slide aside to show where it will land… */
+.mm-qlist.sorting .mm-qrow {
+  transition: translate var(--dur-2) var(--ease-out), scale var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+/* …while the held row has no transition on where it is: the finger is its
+   motion, and anything else would trail behind it. It lifts — a little
+   larger, a menu's shadow — and is opaque, so the rows passing under it do
+   not show through. */
+.mm-qlist.sorting .mm-qrow.held {
+  position: relative; z-index: 1;
+  background: linear-gradient(var(--hover), var(--hover)), var(--bg-panel);
+  transition: scale var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.mm-qrow.lifted { scale: 1.02; box-shadow: var(--shadow-md); }
+/* Let go, and it settles: down from the lift and the last few pixels into
+   its slot, together. */
+.mm-qlist.settling .mm-qrow.held {
+  transition: translate var(--dur-2) var(--ease-out), scale var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+/* A finger's width, and in full: on touch there is no hover to bring it up. */
+@media (pointer: coarse) {
+  .mm-qgrip { width: 44px; min-height: 44px; opacity: 1; }
+}
+@media (hover: none) { .mm-qgrip { opacity: 1; } }
+/* Rows move without the slide, and the lift is the shadow alone. */
+@media (prefers-reduced-motion: reduce) {
+  .mm-qlist.sorting .mm-qrow, .mm-qlist.sorting .mm-qrow.held, .mm-qlist.settling .mm-qrow.held, .mm-qgrip { transition: none; }
+  .mm-qrow.lifted { scale: none; }
+}
+
+/* For a screen reader only: the drawer's live region and the handle's hint. */
+.mm-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
 
 /* A control that is on. The transport is otherwise all one colour, so
    shuffle and repeat need to say which of them is doing something. */

@@ -337,6 +337,19 @@ export const addToQueue = (t: LibTrack): void => { apply(Q.enqueue(queue, t, 'la
 export const removeFromQueue = (index: number): void => { apply(Q.unqueue(queue, index)); changed() }
 export const clearQueue = (): void => { apply(Q.clearManual(queue)); changed() }
 
+/**
+ * Move a song you queued up or down your queue: the drawer's drag handle and
+ * its arrow keys. Through changed(), like every other edit to what comes
+ * next, so the new head is the one fetched early and the order survives a
+ * reload. A move that goes nowhere changes nothing and saves nothing.
+ */
+export const moveInQueue = (from: number, to: number): void => {
+  const s = Q.moveManual(queue, from, to)
+  if (s.manual === queue.manual) return
+  apply(s)
+  changed()
+}
+
 /** Silence and unload, without touching the queue. */
 const unload = (): void => {
   if (el) { el.pause(); el.removeAttribute('src'); el.load() }
