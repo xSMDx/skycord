@@ -172,6 +172,8 @@ const _h: Record<string, CB<any>> = {
   onMemberRoles:        ((_p: any) => {}) as CB<any>,
   /** Who may see or do what in a server changed for this user: refetch it. */
   onServerAccessChanged: ((_p: any) => {}) as CB<any>,
+  /** Somebody declined a call: told to the caller (a DM), and to the decliner's own sockets. */
+  onCallDeclined:       ((_p: any) => {}) as CB<any>,
 }
 
 // ── Sounds ────────────────────────────────────────────────────────────────
@@ -197,6 +199,11 @@ export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'ch
  * call:rejoin for why that distinction is load-bearing.
  */
 export const emitCallRejoin = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:rejoin', { conversationId, kind })
+/**
+ * Turn down a ring: the caller is told, and so are my other devices, which stop
+ * ringing. `room` is the room name `call:state` uses (dm: or group:).
+ */
+export const emitCallDecline = (room: string): void => { _socket?.emit('call:decline', { room }) }
 
 /**
  * Bind the OS online/offline events exactly once.
@@ -213,12 +220,18 @@ export const emitCallRejoin = (conversationId: string, kind: 'dm' | 'group' | 'c
 /** Guards the one-shot token refresh in connect_error. Cleared on connect. */
 let _authRetried = false
 let _netWatchInstalled = false
+/**
+ * Set by rest(): the connection was let go on purpose (the Android app is in
+ * the background) and a fresh one is coming when it returns. The OS network
+ * events must not treat the missing socket as trouble in the meantime.
+ */
+let _resting = false
 const installNetworkWatch = () => {
   if (_netWatchInstalled || typeof window === 'undefined') return
   _netWatchInstalled = true
-  window.addEventListener('offline', () => { if (!connected.value) connState.value = 'offline' })
+  window.addEventListener('offline', () => { if (!_resting && !connected.value) connState.value = 'offline' })
   window.addEventListener('online',  () => {
-    if (connected.value) return
+    if (_resting || connected.value) return
     connState.value = 'connecting'
     _socket?.connect()   // nudge, rather than waiting out the backoff
   })
@@ -232,6 +245,7 @@ export const useSocket = () => {
     // a failed login followed by a good one went straight to 'offline' without
     // trying, because the guard was still set from the previous attempt.
     _authRetried = false
+    _resting = false
     // The old guard was `if (_socket?.connected) return`, which let a socket
     // that existed but was mid-reconnect fall straight through and be
     // REPLACED — abandoning the previous one with every listener still
@@ -390,8 +404,14 @@ export const useSocket = () => {
     _socket.on('music:state', (p: { channels: MusicChannelView[] }) => onMusicState(p))
     _socket.on('music:error', (p: { reason: string }) => onMusicError(p))
 
+    // Somebody declined. The caller hears it for a DM; the decliner's own
+    // sockets hear it for DMs and groups, so a Decline on the phone quiets the PC.
+    _socket.on('call:declined', (p: { room: string; userId: string; name: string }) => _h.onCallDeclined(p))
+
     _socket.on('call:state', (p: {
       room: string; userIds: string[]; serverId?: string
+      /** When the call began, ms since epoch. Nothing in the web client reads it. */
+      startedAt?: number
       states?: Record<string, VoiceMemberState>
     }) => {
       const next = { ...activeCalls.value }
@@ -437,6 +457,30 @@ export const useSocket = () => {
     // Reset, not 'connecting'. We are not trying to reach anything — logging
     // out and then back in used to inherit whatever the last state was.
     connState.value = 'connecting'
+    _resting = false
+  }
+
+  /**
+   * Let the connection go on purpose, without the strip hearing about it.
+   *
+   * For the Android app in the background (backgroundSocket.ts): the person
+   * should not look online from a pocket, and nothing is gained by a second
+   * websocket beside the service's. Unlike disconnect(), `connState` is left
+   * where it was. Nobody is looking while the app is away, and when it returns
+   * connect() brings a fresh socket up in a moment — "Reconnecting…" followed
+   * by "Back online" would announce a fault that was never there. The
+   * listeners come off first for the same reason disconnect() does.
+   *
+   * `connected` does go false: it is what gates sending, and it is true again
+   * when the new socket connects.
+   */
+  const rest = () => {
+    _resting = true
+    _socket?.removeAllListeners()
+    _socket?.io.removeAllListeners()
+    _socket?.disconnect()
+    _socket = null
+    connected.value = false
   }
 
   // ── Emitters ────────────────────────────────────────────────────────────
@@ -486,7 +530,7 @@ export const useSocket = () => {
     connected, connState, typingUsers, activeCalls, voiceRoomServers,
     /** Manual retry, for the "Try again" affordance once we've given up. */
     retry: () => { connState.value = 'connecting'; _socket?.connect() },
-    connect, disconnect,
+    connect, disconnect, rest,
     sendDMSocket, sendReplySocket,
     sendEditSocket, sendDeleteSocket,
     sendPinSocket, sendReactSocket,
@@ -494,7 +538,7 @@ export const useSocket = () => {
     getMessageSocket,
     sendTypingStart, sendTypingStop,
     subscribeGroup,
-    emitCallJoin, emitCallLeave,
+    emitCallJoin, emitCallLeave, emitCallDecline,
     on,
   }
 }

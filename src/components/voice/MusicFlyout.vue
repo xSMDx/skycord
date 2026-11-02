@@ -13,63 +13,23 @@
  * sidebar, where it sat while this was being built and where it was a
  * second place to look during a call.
  */
-import { ref, computed } from 'vue'
-import { Music2, Plus, SkipForward, X, Library } from 'lucide-vue-next'
+import { Music2, Pause, Play, Plus, SkipForward, X, Library } from 'lucide-vue-next'
 import CallFlyout from './CallFlyout.vue'
 import { voice } from '@/composables/useVoice'
-import {
-  music, createMusicChannel, queueMusic, skipMusic,
-  closeMusicChannel, listenToMusic, clearMusicError,
-} from '@/composables/useMusic'
+import { music, skipMusic, closeMusicChannel, isPaused, canPauseOrResume, isPausePending } from '@/composables/useMusic'
+import { useCallMusic } from '@/composables/callMusic'
 
 defineProps<{ dir?: 'down' | 'up' }>()
 const emit = defineEmits<{ close: []; openLibrary: [] }>()
 
-const adding = ref(false)
-const name = ref('')
-const url = ref('')
-const queueFor = ref<string | null>(null)
-const queueUrl = ref('')
-
-/**
- * Who is listening, by name.
- *
- * A count is the easy answer and the less useful one: this is a crew of
- * people who know each other, so "Ana, Ben" says something "2 listening"
- * does not. Every listener is by definition in the call, so the names are
- * already here in `voice.participants` and nothing extra is fetched.
- */
-const nameOf = (id: string): string =>
-  voice.participants.find(p => p.id === id)?.name ?? 'Someone'
-
-const listeners = (ids: string[]): string => {
-  if (!ids.length) return 'Nobody yet'
-  const names = ids.map(nameOf)
-  if (names.length <= 2) return names.join(' and ')
-  return `${names[0]}, ${names[1]} and ${names.length - 2} more`
-}
-
-const canAdd = computed(() => name.value.trim() !== '' && url.value.trim() !== '')
-
-const submitNew = () => {
-  if (!canAdd.value) return
-  clearMusicError()
-  createMusicChannel(name.value.trim(), { url: url.value.trim() })
-  // Cleared on submit, not on success: the server answers a create with a
-  // music:state rather than an ack, so a form waiting for one would sit
-  // there looking stuck. A refusal appears below instead.
-  name.value = ''; url.value = ''; adding.value = false
-}
-
-const submitQueue = (id: string) => {
-  const u = queueUrl.value.trim()
-  if (!u) return
-  clearMusicError()
-  queueMusic(id, { url: u })
-  queueUrl.value = ''; queueFor.value = null
-}
-
-const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : id)
+// The listeners line, the create and queue forms, the tune-in tap and
+// Pause/Resume are callMusic's, shared with the phone sheet. Only the layout
+// is here.
+const {
+  adding, name, url, queueFor, queueUrl,
+  listeners, canAdd,
+  openNew, cancelNew, submitNew, toggleQueue, submitQueue, toggleListen, togglePause,
+} = useCallMusic(() => voice.participants)
 </script>
 
 <template>
@@ -82,7 +42,7 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
           class="mf-tune"
           :aria-pressed="music.listeningTo === c.id"
           :aria-label="music.listeningTo === c.id ? `Stop listening to ${c.name}` : `Listen to ${c.name}`"
-          @click="toggle(c.id)"
+          @click="toggleListen(c.id)"
         >
           <!-- The song's cover where it has one; the glyph only for a link,
                which arrives with no art to show. -->
@@ -96,7 +56,7 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
                  A library track carries its title; a pasted link has none,
                  so that case says so rather than showing a URL. -->
             <span class="mf-now">
-              {{ c.now?.title || (c.now ? 'A linked track' : 'Nothing playing') }}
+              {{ isPaused(c) ? 'Paused · ' : '' }}{{ c.now?.title || (c.now ? 'A linked track' : 'Nothing playing') }}
             </span>
             <span class="mf-who">
               {{ listeners(c.listeners) }}<template v-if="c.queued"> · {{ c.queued }} queued</template>
@@ -106,11 +66,20 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
         </button>
 
         <div class="mf-acts">
+          <!-- Pause while it plays, Resume while it is held: one control,
+               for everyone, beside Skip. Only where the music service can. -->
+          <button
+            v-if="canPauseOrResume(c)" class="mf-icon" :class="{ pending: isPausePending(c) }"
+            :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+            :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
+            @click="togglePause(c.id)"
+          >
+            <component :is="isPaused(c) ? Play : Pause" :size="14" :stroke-width="2.25" />
+          </button>
           <button class="mf-icon" :aria-label="`Skip the track in ${c.name}`" @click="skipMusic(c.id)">
             <SkipForward :size="14" :stroke-width="2.25" />
           </button>
-          <button class="mf-icon" :aria-label="`Add a track to ${c.name}`"
-                  @click="queueFor = queueFor === c.id ? null : c.id">
+          <button class="mf-icon" :aria-label="`Add a track to ${c.name}`" @click="toggleQueue(c.id)">
             <Plus :size="14" :stroke-width="2.25" />
           </button>
           <button class="mf-icon danger" :aria-label="`Close ${c.name} for everyone`" @click="closeMusicChannel(c.id)">
@@ -136,11 +105,11 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
       <label class="mf-label" for="mf-url">Link to an audio file</label>
       <input id="mf-url" v-model="url" class="mf-input" placeholder="https://…/track.mp3" />
       <div class="mf-new-acts">
-        <button type="button" class="mf-cancel" @click="adding = false; clearMusicError()">Cancel</button>
+        <button type="button" class="mf-cancel" @click="cancelNew">Cancel</button>
         <button type="submit" class="mf-go" :disabled="!canAdd">Start</button>
       </div>
     </form>
-    <button v-else class="fr mf-add" @click="adding = true">
+    <button v-else class="fr mf-add" @click="openNew">
       <span>New music channel</span>
       <Plus :size="14" :stroke-width="2.25" />
     </button>
@@ -172,9 +141,11 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
 <style scoped>
 /* Wider than the mic and camera menus, because this one carries three
    lines per row and a verb — at 236px the name, the track and the listeners
-   all truncated to nothing. Set on the CONTENT, not on .fly: that element
-   belongs to CallFlyout, so a scoped rule here never matches it. */
-.mf-list { list-style: none; display: flex; flex-direction: column; gap: 4px; min-width: 284px; }
+   all truncated to nothing. 284px held them beside three glyphs; Pause makes
+   it four, and the extra 28 keep the lines the room they had. Set on the
+   CONTENT, not on .fly: that element belongs to CallFlyout, so a scoped rule
+   here never matches it. */
+.mf-list { list-style: none; display: flex; flex-direction: column; gap: 4px; min-width: 312px; }
 
 .mf-row {
   display: flex; align-items: center; flex-wrap: wrap;
@@ -235,8 +206,8 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* At rest the row reads name / track / listeners ... JOIN. The three
-   glyphs arriving on hover keeps the verb from being one symbol among four,
+/* At rest the row reads name / track / listeners ... JOIN. The glyphs
+   (three, four with Pause) arriving on hover keeps the verb from being one symbol among four,
    which is how it read when they all sat together. Space is reserved, so
    nothing jumps. Touch has no hover, so there they simply stay. */
 .mf-acts {
@@ -249,8 +220,12 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
   display: grid; place-items: center; width: 26px; height: 26px;
   border: none; background: none; cursor: pointer; color: var(--text-3);
   border-radius: var(--edge-sm);
-  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out),
+              opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.mf-icon.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 @media (hover: hover) and (pointer: fine) {
   .mf-icon:hover { background: var(--hover); color: var(--text-1); }
   /* Closing a channel stops it for everyone listening, not just you. It sits
@@ -261,6 +236,15 @@ const toggle = (id: string) => listenToMusic(music.listeningTo === id ? null : i
   }
 }
 .mf-icon:active { transform: scale(0.94); }
+/* A finger, not a cursor: a touch laptop or a tablet gets this flyout too
+   (the phone call screen is for phones). 44px glyphs, and four of them do not
+   fit beside three lines of text, so they take a row of their own under the
+   row they act on, at its right edge. */
+@media (pointer: coarse) {
+  .mf-icon { width: 44px; height: 44px; }
+  .mf-tune { flex-basis: 100%; }
+  .mf-acts { margin-left: auto; padding: 0 4px 4px; }
+}
 
 .mf-inline { flex: 1 0 100%; display: flex; gap: 6px; padding: 0 8px 8px; }
 .mf-new { display: flex; flex-direction: column; gap: 5px; padding: 4px 8px 8px; }

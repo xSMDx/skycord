@@ -3,7 +3,8 @@ import {
   MUSIC_IDENTITY, music, setMusicTarget, listenToMusic,
   onMusicState, onMusicError, clearMusicError, musicChannel,
   createMusicChannel, skipMusic, shareToChannel, channelElapsed, musicNow,
-  seekMusic, playNowMusic,
+  seekMusic, playNowMusic, pauseMusic, resumeMusic, togglePauseMusic, isPaused, canPause, canPauseOrResume,
+  isPausePending, PAUSE_SETTLE_MS,
   type MusicChannelView,
 } from '../useMusic'
 
@@ -20,6 +21,8 @@ const view = (channels: Partial<{ id: string; name: string; now: null; queued: n
 beforeEach(() => {
   emit.mockClear()
   music.channels = []; music.listeningTo = null; music.error = ''; music.volume = 0.6
+  // Leaving first drops anything still on its way from the last test.
+  setMusicTarget(null)
   setMusicTarget({ conversationId: 'c1', kind: 'channel' })
 })
 
@@ -244,6 +247,244 @@ describe('moving a shared song', () => {
   it('play now names the entry, not a position', () => {
     playNowMusic('a', 'e1')
     expect(emit).toHaveBeenCalledWith('music:play-now', expect.objectContaining({ channelId: 'a', entryId: 'e1' }))
+  })
+})
+
+/** The same channel, paused or not, on a server whose music service can pause. */
+const held = (elapsedMs: number, paused: boolean, over: Partial<MusicChannelView> = {}): { channels: MusicChannelView[] } => ({
+  channels: [{ ...playing(elapsedMs).channels[0], paused, pausable: true, ...over }],
+})
+
+describe('pausing a shared song', () => {
+  it('pause emits music:pause, and resume emits music:resume, for that channel', () => {
+    pauseMusic('a')
+    resumeMusic('b')
+    expect(emit.mock.calls).toEqual([
+      ['music:pause', { conversationId: 'c1', kind: 'channel', channelId: 'a' }],
+      ['music:resume', { conversationId: 'c1', kind: 'channel', channelId: 'b' }],
+    ])
+  })
+
+  it('the toggle asks for whichever the channel is not', () => {
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    onMusicState(held(0, true))
+    togglePauseMusic(music.channels[0])
+    expect(emit.mock.calls.map(c => c[0])).toEqual(['music:pause', 'music:resume'])
+    expect(emit.mock.calls[0][1]).toMatchObject({ channelId: 'p' })
+  })
+
+  it('reads a missing paused field as playing: an older server never sends one', () => {
+    onMusicState(playing(0))
+    expect(isPaused(music.channels[0])).toBe(false)
+    expect(isPaused(null)).toBe(false)
+  })
+
+  it('offers the control only when the server says the service can pause, and there is a song', () => {
+    onMusicState(playing(0))
+    expect(canPause(music.channels[0])).toBe(false)          // older server: no pausable
+    onMusicState(held(0, false))
+    expect(canPause(music.channels[0])).toBe(true)
+    onMusicState(held(0, false, { now: null }))
+    expect(canPause(music.channels[0])).toBe(false)          // nothing to pause
+    expect(isPaused(music.channels[0])).toBe(false)
+  })
+
+  it('offers Resume for a held song even once the server stops saying it can pause, and Pause only while it does', () => {
+    onMusicState(held(0, true, { pausable: undefined }))
+    expect(canPause(music.channels[0])).toBe(false)
+    expect(canPauseOrResume(music.channels[0])).toBe(true)
+    togglePauseMusic(music.channels[0])
+    expect(emit.mock.calls.map(c => c[0])).toEqual(['music:resume'])
+    emit.mockClear()
+    onMusicState(held(0, false, { pausable: undefined }))
+    expect(canPauseOrResume(music.channels[0])).toBe(false)
+    togglePauseMusic(music.channels[0])
+    expect(emit).not.toHaveBeenCalled()
+    onMusicState(held(0, false))
+    expect(canPauseOrResume(music.channels[0])).toBe(true)
+    expect(canPauseOrResume(null)).toBe(false)
+  })
+
+  it('sends nothing for a channel that cannot pause', () => {
+    onMusicState(playing(0))
+    togglePauseMusic(music.channels[0])
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('does not flip on its own: the channel stays as the server last said until it says otherwise', () => {
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    expect(isPaused(music.channels[0])).toBe(false)
+    // Refused: the server sends a reason and no state, and nothing has changed.
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.' })
+    expect(isPaused(music.channels[0])).toBe(false)
+  })
+})
+
+describe('a pause on its way', () => {
+  // The server asks the music service before it tells anyone, which can take
+  // up to its five-second timeout. Until then the control still reads Pause,
+  // and a second tap would be refused "It is already paused." right after a
+  // pause that worked — and spend a rate-limit token on the way.
+  afterEach(() => { vi.useRealTimers() })
+
+  it('two toggles before the state send one emit', () => {
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    togglePauseMusic(music.channels[0])
+    pauseMusic('p')                                         // the command path too
+    expect(emit.mock.calls.map(c => c[0])).toEqual(['music:pause'])
+    expect(isPausePending(music.channels[0])).toBe(true)
+  })
+
+  it('is per channel: another channel can still be paused', () => {
+    onMusicState({ channels: [held(0, false).channels[0], { ...held(0, false).channels[0], id: 'q' }] })
+    togglePauseMusic(music.channels[0])
+    togglePauseMusic(music.channels[1])
+    expect(emit.mock.calls.map(c => c[1].channelId)).toEqual(['p', 'q'])
+  })
+
+  it('the state clears pending once it shows the pause, and the next tap resumes', () => {
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    onMusicState(held(0, true))
+    expect(isPausePending(music.channels[0])).toBe(false)
+    togglePauseMusic(music.channels[0])
+    expect(emit.mock.calls.map(c => c[0])).toEqual(['music:pause', 'music:resume'])
+  })
+
+  it('stays pending through a state about something else, which still shows it playing', () => {
+    // Someone queueing a song in the gap broadcasts too; that is not the answer.
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    onMusicState(held(1_000, false, { queued: 1 }))
+    expect(isPausePending(music.channels[0])).toBe(true)
+  })
+
+  it('the state clears pending when the song it was for has gone, or the channel has', () => {
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    const next = held(0, false).channels[0]
+    onMusicState({ channels: [{ ...next, now: { ...next.now!, id: 'e9' } }] })
+    expect(isPausePending(music.channels[0])).toBe(false)
+
+    togglePauseMusic(music.channels[0])
+    onMusicState({ channels: [] })
+    onMusicState(held(0, false))
+    expect(isPausePending(music.channels[0])).toBe(false)
+  })
+
+  it('a refusal clears pending, and leaves the channel as it was', () => {
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.' })
+    expect(isPausePending(music.channels[0])).toBe(false)
+    expect(isPaused(music.channels[0])).toBe(false)
+    togglePauseMusic(music.channels[0])
+    expect(emit.mock.calls.map(c => c[0])).toEqual(['music:pause', 'music:pause'])
+  })
+
+  it('a refusal naming its channel ends only that channel’s wait', () => {
+    onMusicState({ channels: [held(0, false).channels[0], { ...held(0, false).channels[0], id: 'q', name: 'Other' }] })
+    togglePauseMusic(music.channels[0])
+    togglePauseMusic(music.channels[1])
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.', channelId: 'q' })
+    expect(isPausePending(music.channels[0])).toBe(true)
+    expect(isPausePending(music.channels[1])).toBe(false)
+  })
+
+  it('a refusal that names no channel ends a wait only when there is just the one it can answer', () => {
+    // An older server says no channel. With one pause on its way that is the
+    // answer; with two, guessing would free a control whose answer is still coming.
+    onMusicState({ channels: [held(0, false).channels[0], { ...held(0, false).channels[0], id: 'q', name: 'Other' }] })
+    togglePauseMusic(music.channels[0])
+    togglePauseMusic(music.channels[1])
+    onMusicError({ reason: 'You are doing that too fast. Give it a moment.' })
+    expect(isPausePending(music.channels[0])).toBe(true)
+    expect(isPausePending(music.channels[1])).toBe(true)
+    onMusicState({ channels: [held(0, true).channels[0], { ...held(0, false).channels[0], id: 'q', name: 'Other' }] })
+    expect(isPausePending(music.channels[0])).toBe(false)
+    onMusicError({ reason: 'The music could not be paused. Try again in a moment.' })
+    expect(isPausePending(music.channels[1])).toBe(false)
+  })
+
+  it('the timer clears pending, just past the service timeout, if no answer ever comes', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    expect(PAUSE_SETTLE_MS).toBeGreaterThan(5_000)
+    expect(PAUSE_SETTLE_MS).toBeLessThanOrEqual(7_000)
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    vi.advanceTimersByTime(PAUSE_SETTLE_MS - 1)
+    expect(isPausePending(music.channels[0])).toBe(true)
+    vi.advanceTimersByTime(1)
+    expect(isPausePending(music.channels[0])).toBe(false)
+  })
+
+  it('leaving the call clears it', () => {
+    onMusicState(held(0, false))
+    togglePauseMusic(music.channels[0])
+    setMusicTarget(null)
+    expect(isPausePending(held(0, false).channels[0])).toBe(false)
+  })
+
+  it('marks nothing when nothing was sent', () => {
+    setMusicTarget(null)
+    pauseMusic('p')
+    expect(emit).not.toHaveBeenCalled()
+    expect(isPausePending(held(0, false).channels[0])).toBe(false)
+  })
+})
+
+describe('where a paused song is', () => {
+  afterEach(() => { vi.useRealTimers() })
+
+  it('elapsed stops while paused, at the point the server froze it', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(held(30_000, true))
+    const c = music.channels[0]
+    expect(channelElapsed(c, Date.now())).toBe(30)
+    expect(channelElapsed(c, Date.now() + 60_000)).toBe(30)
+  })
+
+  it('carries on from the frozen point on resume, without a jump', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(held(30_000, true))
+    vi.advanceTimersByTime(45_000)                            // left paused for a while
+    expect(channelElapsed(music.channels[0], musicNow.value)).toBe(30)
+    // The resume broadcast carries the held point; the bar picks up from it.
+    onMusicState(held(30_000, false))
+    expect(channelElapsed(music.channels[0], musicNow.value)).toBe(30)
+    vi.advanceTimersByTime(2_000)
+    expect(channelElapsed(music.channels[0], musicNow.value)).toBe(32)
+  })
+
+  it('a seek while paused stays paused, at the new point', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(held(30_000, true))
+    onMusicState(held(90_000, true))
+    expect(isPaused(music.channels[0])).toBe(true)
+    expect(channelElapsed(music.channels[0], Date.now() + 10_000)).toBe(90)
+  })
+
+  it('a skip while paused plays: the next song counts up again', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(held(30_000, true))
+    onMusicState(held(0, false))
+    expect(isPaused(music.channels[0])).toBe(false)
+    expect(channelElapsed(music.channels[0], Date.now() + 4_000)).toBe(4)
+  })
+
+  it('stops ticking while everything is paused, and starts again on resume', () => {
+    vi.useFakeTimers({ now: 1_000_000 })
+    onMusicState(held(0, true))
+    const still = musicNow.value
+    vi.advanceTimersByTime(5_000)
+    expect(musicNow.value).toBe(still)
+    onMusicState(held(0, false))
+    const start = musicNow.value
+    vi.advanceTimersByTime(3_000)
+    expect(musicNow.value - start).toBe(3_000)
   })
 })
 

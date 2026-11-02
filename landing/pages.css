@@ -120,6 +120,7 @@
   max-width: 62ch;
   text-wrap: pretty;
 }
+.ch p strong { font-weight: 600; color: var(--text-1); }
 .kind {
   font: 600 10px/1.6 var(--font-ui);
   letter-spacing: .09em; text-transform: uppercase;

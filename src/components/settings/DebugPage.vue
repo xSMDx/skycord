@@ -10,7 +10,7 @@
  * pasted into a conversation without being read first.
  */
 import { computed, onMounted, ref } from 'vue'
-import { desktopBridge, type AboutFacts } from '@/composables/desktopBridge'
+import { appBridge, type AboutFacts } from '@/composables/desktopBridge'
 import { useUpdates, updateLabel } from '@/composables/useUpdates'
 import { diagnosticsText } from '@/composables/diagnosticsText'
 import { setDebugUnlocked } from '@/composables/debugUnlock'
@@ -28,7 +28,7 @@ const bundle = computed(() =>
     .find(u => /assets\/index-/.test(u))?.split('/').pop() ?? 'unknown')
 
 onMounted(async () => {
-  facts.value = (await desktopBridge()?.about?.()) ?? null
+  facts.value = (await appBridge()?.about?.()) ?? null
   // A HEAD is enough: the failure that mattered was a 404, not bad contents.
   try { workletLoaded.value = (await fetch('/share-audio-worklet.js', { method: 'HEAD' })).ok }
   catch { workletLoaded.value = false }

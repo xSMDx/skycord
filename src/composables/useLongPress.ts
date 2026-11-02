@@ -53,6 +53,10 @@ export const installLongPress = () => {
     // click-and-think open menus by accident.
     if (e.pointerType === 'mouse') return
     fired = false
+    // A control whose press-and-hold is its own gesture — a drag handle —
+    // opts out. Without this, a finger held still on the queue's handle got
+    // the menu buzz half a second in, for a menu that never opens.
+    if ((e.target as Element | null)?.closest?.('[data-no-longpress]')) return
     startX = e.clientX
     startY = e.clientY
     target = e.target

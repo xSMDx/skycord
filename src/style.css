@@ -2,6 +2,12 @@
 
 html, body { width: 100%; height: 100%; overflow: hidden; }
 
+/* No grey flash on tap. Android paints a translucent box over whatever was
+   touched, on top of the app's own press state (the inset veil below), so every
+   tap showed two responses and the first was the browser's. Desktop never draws
+   it, so this changes nothing there. */
+* { -webkit-tap-highlight-color: transparent; }
+
 body {
   font-family: var(--font-ui);
   background: var(--bg-floor);
@@ -157,3 +163,13 @@ button:disabled:active,
   margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-3);
   max-width: 44ch;   /* these are sentences, and a centred pane is wide */
 }
+
+/* ── Full-screen overlays clear the connection strip ──────────────────────
+ * The strip ("Reconnecting…", "Back online") is pinned at z-index 10000 and
+ * ConnectionBanner publishes its measured height as --conn-h while it is up (0
+ * otherwise). .app shrinks by it, but a full-screen overlay is position:fixed
+ * against the viewport and ignores .app, so each overlay with a title bar at the
+ * top edge sets `top: var(--conn-h, 0px)` in its own phone rule (SettingsModal,
+ * ServerSettingsModal, SearchScreen) and drops its status-bar inset while the
+ * strip is up, since --conn-h already includes it. A bottom sheet leaves the top
+ * uncovered and needs nothing. */

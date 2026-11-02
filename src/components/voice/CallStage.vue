@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { MicOff, Monitor, Minimize2, Maximize2 } from 'lucide-vue-next'
+import { MicOff, Monitor, MonitorPlay, MonitorOff, Minimize2, Maximize2 } from 'lucide-vue-next'
 import VideoTile from './VideoTile.vue'
 import { colorForUsername } from '@/composables/useAvatar'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import { keyFor, media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
-import { getRoom } from '@/composables/voiceRoom'
-import { userPref } from '@/composables/useVoice'
+import { getRoom, participantName } from '@/composables/voiceRoom'
+import { userPref, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
 import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
 import { perf } from '@/composables/usePerformance'
 
@@ -31,7 +31,27 @@ const emit = defineEmits<{
   tileCtx: [e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean }]
 }>()
 
-const hasVideo = computed(() => props.videos.length > 0)
+/**
+ * Shares drawn as the sharer's tile rather than as a picture.
+ *
+ * A shared screen is not downloaded until Join stream (spec 8), so a share
+ * you have not joined has no picture to draw — and an empty video element
+ * would be a black box that reads as a broken stream. Its tile shows who is
+ * sharing and the button instead. A share you just joined stays one of these
+ * for the moment its picture takes to arrive, offering Leave stream, and
+ * becomes a video cell under the same key, so the swap does not remount it.
+ *
+ * "Disable Video" on that person hides the picture, not the way in or out:
+ * their share stays one of these tiles, with Join stream (its sound still
+ * plays) and, once joined, Leave stream — without it a joined stream would
+ * go on downloading with no control on screen to stop it.
+ */
+const waitingStreams = computed(() => new Set([...media.streamsAvailable].filter(id =>
+  !props.videos.some(v => v.participantId === id && v.source === 'screen' && !userPref(id).videoOff))))
+
+// A share waiting to be joined counts: the grid, not the row of round
+// avatars, is the layout with room for a tile and its button.
+const hasVideo = computed(() => props.videos.length > 0 || waitingStreams.value.size > 0)
 const initial  = (n: string) => (n || '?').charAt(0).toUpperCase()
 
 // Whose tile is this? A video cell knows its participant directly; an avatar
@@ -52,7 +72,7 @@ const candidates = computed<TileCandidate[]>(() => props.tiles.map(t => ({
   id: t.id,
   isSelf: t.id === localId.value,
   speaking: t.speaking,
-  hasVideo: props.videos.some(v => v.participantId === t.id),
+  hasVideo: props.videos.some(v => v.participantId === t.id) || waitingStreams.value.has(t.id),
   lastSpokeAt: lastSpokeAt[t.id] ?? 0,
 })))
 const visibleIds = computed(() => new Set(visibleTiles(candidates.value, perf.maxCallTiles)))
@@ -62,14 +82,16 @@ const visibleIds = computed(() => new Set(visibleTiles(candidates.value, perf.ma
 const hiddenTiles = computed(() => props.tiles.filter(t => !visibleIds.value.has(t.id)))
 const hiddenIds   = computed(() => new Set(hiddenTiles.value.map(t => t.id)))
 
-const cellOwner  = (c: Cell) => c.kind === 'video' ? c.video.participantId : c.key
-const cellAvatar = (c: Cell) => c.kind === 'avatar' ? c.avatar
+const cellOwner  = (c: Cell) => c.kind === 'video' ? c.video.participantId : c.kind === 'stream' ? c.owner : c.key
+const cellAvatar = (c: Cell) => c.kind !== 'video' ? c.avatar
   : (props.tiles.find(t => t.id === c.video.participantId)?.avatar ?? '')
 
 // One grid cell per participant: their video publication(s) if any, else an
 // avatar cell. A participant sharing screen + camera yields two video cells.
+// A share not loaded yet is a 'stream' cell: the sharer's tile and Join stream.
 type Cell =
   | { kind: 'video'; key: string; name: string; speaking: boolean; source: 'camera' | 'screen'; video: VideoTrackInfo }
+  | { kind: 'stream'; key: string; owner: string; name: string; speaking: boolean; avatar: string; joined: boolean }
   | { kind: 'avatar'; key: string; name: string; speaking: boolean; muted: boolean; avatar: string; ring?: RingState }
 
 /** Your own video you've asked not to see: the camera by setting, the screen
@@ -89,14 +111,29 @@ const cells = computed<Cell[]>(() => {
       // flowing, you just stop rendering it.
       !(!v.local && userPref(v.participantId).videoOff) &&
       !hiddenOwn(v))
-    if (mine.length) {
+    const waiting = waitingStreams.value.has(t.id)
+    if (mine.length || waiting) {
       for (const v of mine) {
         used.add(v)
         out.push({ kind: 'video', key: keyFor(t.id, v.source), name: t.name, speaking: t.speaking, source: v.source, video: v })
       }
+      // The screen's key, so joining turns this cell into the video cell in place.
+      if (waiting) {
+        out.push({ kind: 'stream', key: keyFor(t.id, 'screen'), owner: t.id, name: t.name,
+                   speaking: t.speaking, avatar: t.avatar, joined: joinedStreams.has(t.id) })
+      }
     } else if (voiceSettings.showNonVideo) {
       out.push({ kind: 'avatar', key: t.id, name: t.name, speaking: t.speaking, muted: t.muted, avatar: t.avatar, ring: t.ring })
     }
+  }
+  // A share whose sharer hasn't landed in `tiles` yet (presence lag) gets its
+  // tile anyway — it already counts as video, so the grid has made room —
+  // named as LiveKit has them, as a video of theirs would be.
+  const tiled = new Set(props.tiles.map(t => t.id))
+  for (const id of waitingStreams.value) {
+    if (tiled.has(id)) continue
+    out.push({ kind: 'stream', key: keyFor(id, 'screen'), owner: id, name: participantName(id),
+               speaking: false, avatar: '', joined: joinedStreams.has(id) })
   }
   // Videos whose participant hasn't landed in `tiles` yet (presence lag):
   // render them anyway rather than dropping them invisibly. A participant who
@@ -130,6 +167,18 @@ const renderCells = computed(() =>
 
 const focus  = (key: string) => { focusedKey.value = key }
 const unfocus = () => { focusedKey.value = null }
+
+// Joining a stream is asking to watch it, so it comes to the front: the
+// cell keeps its key from tile to picture, and the spotlight holds through.
+const onJoin = (key: string, owner: string) => {
+  joinStream(owner)
+  focus(key)
+}
+// Leaving puts the grid back rather than spotlighting the tile you just left.
+const onLeave = (key: string, owner: string) => {
+  leaveStream(owner)
+  if (focusedKey.value === key) unfocus()
+}
 
 // If the focused participant leaves or stops their video, the key no longer
 // resolves — drop back to grid rather than freezing on an empty spotlight.
@@ -235,6 +284,31 @@ onBeforeUnmount(() => {
                 @click="toggleCellFs(c.key, $event)">
           <component :is="fsKey === c.key ? Minimize2 : Maximize2" :size="16" :stroke-width="2.25" />
         </button>
+        <!-- Someone else's share you joined. Stops downloading it; the call
+             and their voice carry on. Never on your own share — that is the
+             Share button's to stop. -->
+        <button v-if="c.source === 'screen' && !c.video.local" class="g-leave"
+                @click.stop="onLeave(c.key, c.video.participantId)">
+          <MonitorOff :size="14" :stroke-width="2.25" aria-hidden="true" />
+          Leave stream
+        </button>
+      </template>
+      <!-- A share not loaded yet: the sharer's tile and the way in. No video
+           element — there is nothing to draw until Join stream. -->
+      <template v-else-if="c.kind === 'stream'">
+        <div class="g-stream" :style="{ background: colorForUsername(c.name) }">
+          <div class="g-av g-stream-av">
+            <Avatar v-if="c.avatar" :src="c.avatar" :alt="c.name" />
+            <template v-else>{{ initial(c.name) }}</template>
+          </div>
+          <!-- One button through the join, so keyboard focus stays on it
+               when it turns from Join to Leave. -->
+          <button class="g-join" @click.stop="c.joined ? onLeave(c.key, c.owner) : onJoin(c.key, c.owner)">
+            <component :is="c.joined ? MonitorOff : MonitorPlay" :size="16" :stroke-width="2.25" aria-hidden="true" />
+            {{ c.joined ? 'Leave stream' : 'Join stream' }}
+          </button>
+        </div>
+        <span class="g-live">LIVE</span>
       </template>
       <template v-else>
         <div class="g-avwrap" :class="{ ringing: !!c.ring }" :style="{ background: colorForUsername(c.name) }">
@@ -252,7 +326,7 @@ onBeforeUnmount(() => {
         <span v-if="c.muted" class="g-mute"><MicOff :size="14" :stroke-width="2.25" /></span>
       </template>
       <span class="g-name">
-        <Monitor v-if="c.kind === 'video' && c.source === 'screen'" :size="14" :stroke-width="2.25" />
+        <Monitor v-if="(c.kind === 'video' && c.source === 'screen') || c.kind === 'stream'" :size="14" :stroke-width="2.25" />
         {{ c.name }}<template v-if="c.kind === 'avatar' && c.ring"> · {{ c.ring === 'ringing' ? 'ringing…' : 'no answer' }}</template>
       </span>
     </div>
@@ -459,4 +533,51 @@ button { border: none; }
   position: absolute; right: 8px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%;
   background: var(--media-veil-strong); color: var(--on-media); display: flex; align-items: center; justify-content: center;
 }
+
+/* ── Join stream / Leave stream ───────────────────────────────────────────
+   A share you have not joined is the sharer's tile — their avatar on their
+   colour, as an avatar cell draws it — with the button under the avatar.
+   Both controls rest on media (a member's colour, or the shared screen
+   itself), so they take the media veil and its ink, like the LIVE badge and
+   the fullscreen button beside them: legible on any colour, in any theme. */
+.g-stream {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+}
+.g-join, .g-leave {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--edge-md);
+  background: var(--media-veil-strong); color: var(--on-media);
+  font-family: inherit; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.g-join:hover, .g-leave:hover { background: var(--scrim); }
+/* The house button's measure: 14px/600 in 9px padding makes a 38px control. */
+.g-join {
+  gap: 8px; padding: 9px 18px; font-size: 14px;
+  transition: background var(--dur-1) var(--ease-out);
+}
+/* Top-left on the picture: the corner LIVE and fullscreen leave free, and
+   the name pill at the bottom never reaches. Revealed the way fullscreen is —
+   on hover, on keyboard focus, and always in a fullscreened cell — by
+   opacity alone, so nothing moves under the pointer. */
+.g-leave {
+  position: absolute; left: 8px; top: 8px;
+  gap: 6px; height: 28px; padding: 0 10px; font-size: 12px;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
+}
+.g-cell:hover .g-leave, .g-cell:focus-within .g-leave, .g-cell.is-cell-fs .g-leave { opacity: 1; }
+/* Touch has no hover to reveal it with, so there it simply shows. */
+@media (hover: none) {
+  .g-leave { opacity: 1; }
+}
+/* A finger needs the whole 44px. */
+@media (pointer: coarse) {
+  .g-join, .g-leave { min-height: 44px; }
+  .g-leave { height: auto; }
+}
+/* A thumbnail is 88px at most: room for the button, not the avatar as well.
+   Leave stream waits for the front, where a thumb's click brings it. */
+.is-thumb .g-stream-av { display: none; }
+.is-thumb .g-leave { display: none; }
 </style>

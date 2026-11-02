@@ -1,0 +1,51 @@
+<resources>
+    <string name="app_name">Skycord</string>
+    <string name="unreachable_title">Can’t reach %1$s</string>
+    <string name="unreachable_body">Check your connection, or that the server is running.</string>
+    <string name="retry">Retry</string>
+    <string name="choose_another">Choose another server</string>
+    <string name="shortcut_choose_server">Choose a server</string>
+    <string name="old_webview_title">Android System WebView needs an update</string>
+    <string name="old_webview_body">Skycord runs inside Android System WebView, and the version on this phone is too old. Update it, then open Skycord again.</string>
+    <string name="old_webview_action">Update Android System WebView</string>
+
+    <!-- Notification channels: the names Android's own settings list. -->
+    <string name="channel_messages">Messages</string>
+    <string name="channel_messages_description">Messages and mentions from your conversations.</string>
+    <string name="channel_calls">Calls</string>
+    <string name="channel_calls_description">Incoming calls, which ring like a phone call.</string>
+    <string name="channel_connection">Connection</string>
+    <string name="channel_connection_description">The quiet notice that Skycord is connected in the background.</string>
+
+    <!-- A message notification. -->
+    <string name="notice_you">You</string>
+    <string name="notice_no_text">New message</string>
+    <string name="notice_mentioned">Mentioned you</string>
+    <string name="notice_reply">Reply</string>
+    <string name="notice_reply_hint">Write a reply</string>
+    <string name="notice_send_failed">Couldn’t send — open Skycord to try again</string>
+    <string name="notice_signed_out">Signed out — open Skycord to sign in</string>
+
+    <!-- A call that rings (the Calls channel), the screen it opens, and the one left behind when nobody answered. -->
+    <string name="call_incoming">Incoming call</string>
+    <string name="call_answer">Answer</string>
+    <string name="call_decline">Decline</string>
+    <string name="call_someone">Someone</string>
+    <string name="notice_missed_call">Missed call from %1$s</string>
+
+    <!-- The background connection's own, always-on notification (the Connection channel). -->
+    <string name="service_connected">Connected to %1$s</string>
+    <string name="service_connecting">Connecting to %1$s…</string>
+
+    <!-- The two questions asked once, the first time a server's page loads (MainActivity). The
+         notification permission is Android's own dialog and has no copy of ours. -->
+    <string name="ask_battery_body">Skycord needs to run in the background to tell you about messages and calls. Android may stop it to save battery unless you allow it.</string>
+    <string name="ask_full_screen_body">Calls ring as a normal notification until you let Skycord show them full screen.</string>
+    <string name="ask_allow">Allow</string>
+    <string name="ask_not_now">Not now</string>
+
+    <!-- What a notification calls a group, channel or server whose name the app could not look up. -->
+    <string name="notice_unknown_group">Group</string>
+    <string name="notice_unknown_channel">channel</string>
+    <string name="notice_unknown_server">Server</string>
+</resources>

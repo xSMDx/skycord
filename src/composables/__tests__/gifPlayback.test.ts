@@ -1,4 +1,7 @@
+/// <reference types="node" />
 import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 
 // useGifPlayback pulls in usePerformance for `tapOnly`, which pulls in
 // useAppearance → materialScheme → @material/material-color-utilities, whose
@@ -35,5 +38,26 @@ describe('playbackPolicy', () => {
   it('keeps today\'s behaviour when the level is not asking: hover, or the shared burst', () => {
     expect(playbackPolicy(base)).toBe('hover')
     expect(playbackPolicy({ ...base, hasHover: false })).toBe('burst')
+  })
+})
+
+/**
+ * Avatar's `still`: an avatar that must never be a control. Avatar cannot be
+ * mounted here (vitest runs in node), so its wiring is read from the source, as
+ * the phone call tests do.
+ */
+describe('a still Avatar', () => {
+  // Read lazily, so a missing file fails these tests, not the policy ones above.
+  const avatar = () => readFileSync(resolve(__dirname, '../../components/ui/Avatar.vue'), 'utf8')
+
+  it('is opt-in, so every other avatar keeps its tap', () => {
+    expect(avatar()).toMatch(/still\?: boolean/)
+    expect(avatar()).toMatch(/still: false \}\)/)
+  })
+
+  it('holds its first frame where the level would have waited for a tap, and draws no play button', () => {
+    expect(avatar()).toContain("return props.still && r === 'tap' ? 'never' : r")
+    // The play button is drawn for 'tap' alone, which a still avatar never reaches.
+    expect(avatar()).toMatch(/<button v-if="reason === 'tap'"/)
   })
 })

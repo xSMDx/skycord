@@ -225,24 +225,51 @@
       state.textContent = kind === 'screen' ? 'sharing Screen 1' : 'sharing ' + (kind === 'game' ? 'Skyrunner' : 'Browser');
       open(false);
     }
+    /* Max is sharing too. Nothing of it loads until you join, and its sound
+       has a slider of its own that leaves his voice alone. */
+    var other = $('.sh-other', el), join = $('[data-sh="join"]', el);
+    var range = $('.sh-range', el), level = $('.sh-vol-v', el);
+    function watch(on) {
+      other.dataset.watch = String(on);
+      el.dataset.watch = String(on);
+      join.textContent = on ? 'Leave' : 'Join';
+      join.setAttribute('aria-pressed', String(on));
+      join.setAttribute('aria-label', on ? 'Leave Max\'s stream' : 'Join Max\'s stream');
+      range.disabled = !on;
+    }
+    function volume(v) {
+      range.value = String(v);
+      level.textContent = v + '%';
+      range.setAttribute('aria-valuetext', v + '%');
+    }
+    range.setAttribute('aria-label', 'Volume of Max\'s stream');
+    range.addEventListener('input', function () { volume(Number(range.value)); });
     function reset() {
       open(false); tile.dataset.live = 'false'; btn.classList.remove('live');
       state.textContent = 'not sharing';
       $$('.sh-opt', el).forEach(function (o) { o.classList.remove('picked'); });
+      watch(false); volume(100);
     }
-    el._open = open; el._pick = pick; el._reset = reset;
+    el._open = open; el._pick = pick; el._reset = reset; el._watch = watch; el._volume = volume;
     el.addEventListener('click', function (e) {
       if (e.target.closest('[data-sh="open"]')) return open(picker.dataset.open !== 'true');
+      if (e.target.closest('[data-sh="join"]')) return watch(other.dataset.watch !== 'true');
       var o = e.target.closest('.sh-opt');
       if (o) pick(o.dataset.pick);
     });
+    watch(false);
   }
   function shareScript(a) {
     var el = a.el;
     return chain(a, [
       function () { return a.run(function () { el._reset(); }, 400); },
       tap(a, '[data-sh="open"]', function () { el._open(true); }, 700),
-      tap(a, '.sh-opt[data-pick="game"]', function () { el._pick('game'); }, 2400)
+      tap(a, '.sh-opt[data-pick="game"]', function () { el._pick('game'); }, 1600),
+      tap(a, '[data-sh="join"]', function () { el._watch(true); }, 1100),
+      function () { return a.to('.sh-range', -10, 0); },
+      function () { return a.dwell(160); },
+      function () { return a.click('.sh-range', -10, 0); },
+      function () { return a.run(function () { el._volume(45); }, 2200); }
     ]);
   }
 
@@ -325,10 +352,17 @@
     var tune = $('[data-mu="tune"]', el), prevB = $('[data-mu="prev"]', el), skipB = $('[data-mu="skip"]', el);
     var who = $('.mu-who-t', el), list = $('.mu-queue', el);
     var note = $('.mu-note', el), form = $('.mu-chat', el), input = $('.mu-input', el);
-    var s = { now: null, by: '', t0: 0, queue: [], history: [], tuned: false };
+    var pauseB = $('[data-mu="pause"]', el), pauseUse = $('use', pauseB);
+    var s = { now: null, by: '', t0: 0, queue: [], history: [], tuned: false, paused: false, held: 0 };
 
-    function position() { return s.now ? Math.min(s.now.len, (performance.now() - s.t0) / 1000) : 0; }
-    function startAt(sec) { s.t0 = performance.now() - sec * 1000; }
+    /* A held song keeps its place; the clock only runs while it plays. */
+    function position() {
+      if (!s.now) return 0;
+      return Math.min(s.now.len, s.paused ? s.held : (performance.now() - s.t0) / 1000);
+    }
+    function startAt(sec) { if (s.paused) s.held = sec; else s.t0 = performance.now() - sec * 1000; }
+    /* A new song plays: skipping or going back while paused carries on. */
+    function fresh() { s.paused = false; startAt(0); }
 
     function drawTime() {
       var p = position(), len = s.now ? s.now.len : 1;
@@ -370,9 +404,14 @@
       seek.setAttribute('aria-valuemax', String(n ? n.len : 0));
       tune.setAttribute('aria-pressed', String(s.tuned));
       tune.textContent = s.tuned ? 'Listening' : 'Tune in';
-      who.textContent = (s.tuned ? 'You, Max and Kai are' : 'Max and Kai are') + ' listening';
+      who.textContent = n && s.paused ? 'Paused for everyone in the call'
+        : (s.tuned ? 'You, Max and Kai are' : 'Max and Kai are') + ' listening';
       prevB.disabled = !n && !s.history.length;
       skipB.disabled = !n;
+      pauseB.disabled = !n;
+      el.dataset.paused = String(!!n && s.paused);
+      pauseB.setAttribute('aria-label', s.paused ? 'Resume for everyone' : 'Pause for everyone');
+      pauseUse.setAttribute('href', s.paused ? '#i-play' : '#i-pause');
       list.textContent = '';
       if (!s.queue.length) {
         var empty = document.createElement('li');
@@ -401,7 +440,7 @@
 
     function play(name, by) {
       var t = songFor(name);
-      if (!s.now) { s.now = t; s.by = by; startAt(0); say(['Playing ', t.title, ' for everyone in the call']); }
+      if (!s.now) { s.now = t; s.by = by; fresh(); say(['Playing ', t.title, ' for everyone in the call']); }
       else { s.queue.push({ t: t, by: by, fresh: true }); say(['Added ', t.title, ' to the queue']); }
       draw();
     }
@@ -409,7 +448,7 @@
       if (!s.now) return say(['Nothing is playing']);
       s.history.push({ t: s.now, by: s.by });
       var next = s.queue.shift();
-      if (next) { s.now = next.t; s.by = next.by; startAt(0); if (!ended) say(['Skipped to ', next.t.title, ' for everyone']); }
+      if (next) { s.now = next.t; s.by = next.by; fresh(); if (!ended) say(['Skipped to ', next.t.title, ' for everyone']); }
       else { s.now = null; if (!ended) say(['That was the last song in the queue']); }
       draw();
     }
@@ -420,8 +459,17 @@
       var back = s.history.pop();
       if (!back) return seekTo(0);
       if (s.now) s.queue.unshift({ t: s.now, by: s.by });
-      s.now = back.t; s.by = back.by; startAt(0);
+      s.now = back.t; s.by = back.by; fresh();
       draw();
+    }
+    function setPaused(v, quiet) {
+      if (!s.now) return say(['Nothing is playing']);
+      if (v === s.paused) return quiet ? null : say([v ? 'Already paused' : 'Already playing']);
+      var at = position();
+      s.paused = v;
+      startAt(at);
+      draw();
+      if (!quiet) say([v ? 'Paused ' : 'Resumed ', s.now.title, ' for everyone']);
     }
     function seekTo(frac) {
       if (!s.now) return;
@@ -441,6 +489,8 @@
       if (cmd === 'play' || cmd === 'p') return arg ? play(arg, 'you') : say(['Name a song: ', '/play low tide']);
       if (cmd === 'skip' || cmd === 's' || cmd === 'next') return skip();
       if (cmd === 'prev' || cmd === 'previous' || cmd === 'back') return prev();
+      if (cmd === 'pause') return setPaused(true);
+      if (cmd === 'resume' || cmd === 'unpause') return setPaused(false);
       if (cmd === 'stop') {
         if (!s.now) return say(['Nothing is playing']);
         s.now = null; s.queue = []; draw();
@@ -465,11 +515,11 @@
       }
       if (cmd === 'join') { setTuned(true); return say(['Listening to ', 'In this call']); }
       if (cmd === 'leave') { setTuned(false); return say(['Stopped listening']); }
-      say(['Try ', '/play', ', ', '/skip', ', ', '/seek 1:30', ' or ', '/queue']);
+      say(['Try ', '/play', ', ', '/pause', ', ', '/skip', ', ', '/seek 1:30', ' or ', '/queue']);
     }
 
     function reset() {
-      s.tuned = false; s.history = [];
+      s.tuned = false; s.history = []; s.paused = false;
       s.now = SONGS['night drive']; s.by = 'Max';
       s.queue = [{ t: SONGS['paper planes'], by: 'Kai' }, { t: SONGS['low tide'], by: 'Max' }];
       startAt(42);
@@ -501,6 +551,7 @@
       if (b.dataset.mu === 'tune') setTuned(!s.tuned);
       else if (b.dataset.mu === 'prev') prev();
       else if (b.dataset.mu === 'skip') skip();
+      else if (b.dataset.mu === 'pause') setPaused(!s.paused);
     });
     seek.addEventListener('pointerdown', function (e) {
       var r = seek.getBoundingClientRect();
@@ -524,6 +575,7 @@
     el._play = play;
     el._skip = function () { skip(); };
     el._seekTo = seekTo;
+    el._pause = function (v) { setPaused(v); };
     el._type = function (v) { input.value = v; };
     el._typing = function (v) { form.classList.toggle('typing', v); };
     el._send = function () { command(input.value); input.value = ''; };
@@ -551,8 +603,150 @@
       function () { return a.dwell(200); },
       function () { return a.click('.mu-seek', along(), 0); },
       function () { return a.run(function () { el._seekTo(0.72); }, 1500); },
+      tap(a, '[data-mu="pause"]', function () { el._pause(true); }, 1500),
+      tap(a, '[data-mu="pause"]', function () { el._pause(false); }, 1100),
       tap(a, '[data-mu="skip"]', function () { el._skip(); }, 2400)
     ]));
+  }
+
+  /* ── Demo: phone ───────────────────────────────────────────────────── */
+  /* The Android app: Max calls, it rings full screen, you answer and hold to
+     talk, then hang up — and with the app closed, Kai's message still lands.
+     Whoever is talking has the big spot. */
+  var PEOPLE = {
+    max: { letter: 'M', name: 'Max', c: '#23a55a' },
+    you: { letter: 'Y', name: 'You', you: true }
+  };
+  function phoneSetUp(el) {
+    var views = $$('.ph-view', el), time = $('.ph-time', el), notes = $('.ph-notes', el);
+    var big = $('.ph-big', el), small = $('.ph-small', el);
+    var ptt = $('[data-ph="ptt"]', el), mute = $('[data-ph="mute"]', el), cam = $('[data-ph="cam"]', el);
+    var s = { view: 'ring', muted: false, cam: false, talking: false, t0: 0 };
+    var timer = 0, gen = 0;
+
+    function tile(node, who) {
+      var p = PEOPLE[who], av = $('.ph-av', node);
+      av.textContent = p.letter;
+      av.classList.toggle('you', !!p.you);
+      if (p.c) av.style.setProperty('--c', p.c); else av.style.removeProperty('--c');
+      $('.ph-tag', node).textContent = p.name;
+      node.dataset.cam = String(!!p.you && s.cam);
+    }
+    function tickTime() { time.textContent = clock((performance.now() - s.t0) / 1000); }
+    function draw() {
+      el.dataset.ph = s.view;
+      views.forEach(function (v) { v.hidden = v.dataset.view !== s.view; });
+      var speaker = s.talking ? 'you' : 'max';
+      tile(big, speaker);
+      tile(small, speaker === 'you' ? 'max' : 'you');
+      ptt.setAttribute('aria-pressed', String(s.talking));
+      ptt.setAttribute('aria-disabled', String(s.muted));
+      ptt.textContent = s.muted ? 'Muted' : s.talking ? 'Talking…' : 'Hold to talk';
+      mute.setAttribute('aria-pressed', String(s.muted));
+      mute.setAttribute('aria-label', s.muted ? 'Unmute' : 'Mute');
+      $('use', mute).setAttribute('href', s.muted ? '#i-mic-off' : '#i-mic');
+      cam.setAttribute('aria-pressed', String(s.cam));
+      cam.setAttribute('aria-label', s.cam ? 'Turn camera off' : 'Turn camera on');
+      clearInterval(timer);
+      if (s.view === 'call') { tickTime(); timer = setInterval(tickTime, 1000); }
+    }
+    /* Built from text nodes, the way the app's own notification is built. */
+    function note(title, body, reply) {
+      var n = document.createElement('div'), ic = document.createElement('span');
+      var main = document.createElement('div'), app = document.createElement('span');
+      var b = document.createElement('b'), p = document.createElement('p');
+      n.className = 'ph-note fresh';
+      ic.className = 'ph-note-ic';
+      ic.innerHTML = '<svg aria-hidden="true"><use href="#i-mark-s"/></svg>';
+      app.className = 'ph-note-app';
+      app.textContent = 'Skycord · now';
+      b.textContent = title; p.textContent = body;
+      main.appendChild(app); main.appendChild(b); main.appendChild(p);
+      if (reply) {
+        var r = document.createElement('span');
+        r.className = 'ph-reply'; r.textContent = 'Reply';
+        main.appendChild(r);
+      }
+      n.appendChild(ic); n.appendChild(main);
+      notes.insertBefore(n, notes.firstChild);
+    }
+    function talk(on) {
+      on = on && !s.muted && s.view === 'call';
+      if (on === s.talking) return;
+      s.talking = on; draw();
+    }
+    function answer() { s.view = 'call'; s.t0 = performance.now(); s.talking = false; draw(); }
+    function close(missed) {
+      var mine = ++gen;
+      s.view = 'lock'; s.talking = false; s.cam = false; s.muted = false;
+      notes.textContent = '';
+      if (missed) note('Missed call', 'Max called you');
+      draw();
+      setTimeout(function () {
+        if (mine === gen && s.view === 'lock') note('Kai', 'lounge in 10? bring snacks', true);
+      }, 800);
+    }
+    function reset() {
+      gen++;
+      s.view = 'ring'; s.muted = false; s.cam = false; s.talking = false;
+      notes.textContent = '';
+      draw();
+    }
+
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-ph]');
+      if (!b) return;
+      var k = b.dataset.ph;
+      if (k === 'answer') answer();
+      else if (k === 'decline') close(true);
+      else if (k === 'hangup') close(false);
+      else if (k === 'again') reset();
+      else if (k === 'mute') { s.muted = !s.muted; s.talking = false; draw(); }
+      else if (k === 'cam') { s.cam = !s.cam; draw(); }
+    });
+    /* Hold to talk is a hold: down starts it, up or a lost pointer ends it.
+       Space and Enter do the same from a keyboard. */
+    ptt.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      try { ptt.setPointerCapture(e.pointerId); } catch (_) { /* fine without */ }
+      talk(true);
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (t) {
+      ptt.addEventListener(t, function () { talk(false); });
+    });
+    ptt.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    ptt.addEventListener('keydown', function (e) {
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      e.preventDefault();
+      if (!e.repeat) talk(true);
+    });
+    ptt.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') talk(false); });
+    ptt.addEventListener('blur', function () { talk(false); });
+    // The ghost may have been holding it when a real pointer arrived.
+    el.addEventListener('pointerenter', function () { talk(false); });
+
+    new IntersectionObserver(function (entries) {
+      el.dataset.visible = String(entries[0].isIntersecting);
+    }).observe(el);
+
+    el._reset = reset; el._answer = answer; el._talk = talk;
+    el._cam = function () { s.cam = !s.cam; draw(); };
+    el._hangup = function () { close(false); };
+    reset();
+  }
+  function phoneScript(a) {
+    var el = a.el;
+    return chain(a, [
+      function () { return a.run(function () { el._reset(); }, 1600); },
+      tap(a, '[data-ph="answer"]', function () { el._answer(); }, 1200),
+      function () { return a.to('[data-ph="ptt"]'); },
+      function () { return a.dwell(200); },
+      function () { return a.click('[data-ph="ptt"]'); },
+      function () { return a.run(function () { el._talk(true); }, 1800); },
+      function () { return a.run(function () { el._talk(false); }, 900); },
+      tap(a, '[data-ph="cam"]', function () { el._cam(); }, 1500),
+      tap(a, '[data-ph="hangup"]', function () { el._hangup(); }, 3000)
+    ]);
   }
 
   /* ── Demo: themes ──────────────────────────────────────────────────── */
@@ -740,6 +934,7 @@
 
   /* ── Registry ──────────────────────────────────────────────────────── */
   var KINDS = {
+    phone:     { setUp: phoneSetUp,     script: phoneScript },
     share:     { setUp: shareSetUp,     script: shareScript },
     voice:     { setUp: voiceSetUp,     script: voiceScript },
     music:     { setUp: musicSetUp,     script: musicScript },
@@ -769,7 +964,9 @@
       var rx = $('.demo[data-demo="reactions"]');
       if (rx) { rx._add('😄', true); rx._add('😄', false); rx._add('🔥', false); }
       var sh = $('.demo[data-demo="share"]');
-      if (sh) sh._pick('game');
+      if (sh) { sh._pick('game'); sh._watch(true); }
+      var ph = $('.demo[data-demo="phone"]');
+      if (ph) ph._answer();
       var mu = $('.demo[data-demo="music"]');
       if (mu) { mu._tune(true); mu._play('golden hour', 'you'); }
       demos.forEach(function (d) { if (d.el._frame) d.el._frame(); });

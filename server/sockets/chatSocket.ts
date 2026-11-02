@@ -10,13 +10,16 @@ import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf } from '../utils/access'
 import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
-import { dmConvId, canDM } from '../controllers/messagesController'
+import { dmConvId, canDM, dmReceivePayload, buildReplyPreviews } from '../controllers/messagesController'
 import { wellFormed } from '../utils/wellFormed'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
 import { MusicRooms } from './musicState'
 import { ActionRate, capsFromEnv, checkChannelName, checkUrlShape } from '../utils/musicLimits'
-import { musicPlay, musicPlayTrack, musicClose } from '../utils/musicService'
+import {
+  musicPlay, musicPlayTrack, musicClose, musicPause, musicResume,
+  musicCanPause, onMusicCapabilitiesChange,
+} from '../utils/musicService'
 import { Track as LibraryTrack } from '../models/Track'
 import type { Source as MusicSource } from './musicState'
 
@@ -33,6 +36,29 @@ export const getOnlineUserIds = presence.onlineUserIds
 // members who AREN'T in the room yet see "a call is happening / who's in it"
 // (header Join state + "In a call" badges) without joining the LiveKit room.
 const activeCalls   = new Map<string, Set<string>>()
+
+/**
+ * When each live call began (epoch ms): the moment its room went from empty to
+ * occupied. Sent on every `call:state` for an occupied room so a client can
+ * tell a call that is starting NOW from one that was already under way when it
+ * connected — the phone rings for the first and never for the second.
+ *
+ * Cleared in releaseCallRoom, not when the room's occupancy goes. Occupancy
+ * drops the instant a socket does, but a dropped socket is not a hang-up (see
+ * CALL_END_GRACE_MS): the person is back within seconds, and it is the same
+ * call. Clearing the time with the occupancy would hand that call a new start
+ * on rejoin, and every blip would ring the phone again.
+ *
+ * PER-PROCESS, like activeCalls. After an API restart the clients rejoin and
+ * the clock restarts from the first of them.
+ */
+const callStartedAt = new Map<string, number>()
+
+/** Start the clock for a room that has just become occupied, unless one is
+ *  already running — a call resumed inside its grace period keeps its start. */
+const noteCallStarted = (room: string): void => {
+  if (!callStartedAt.has(room)) callStartedAt.set(room, Date.now())
+}
 
 /**
  * Music channels, per voice room.
@@ -57,7 +83,16 @@ export const musicRooms = new MusicRooms(
     broadcastMusic(room)
     void musicClose(room, channelId)
   },
+  Date.now,
+  musicCanPause,
 )
+
+// The service turned out able to pause, or stopped being able to: every room
+// with music is told again, so Pause appears or goes without waiting for the
+// next change in that room.
+onMusicCapabilitiesChange(() => {
+  for (const room of musicRooms.roomsWithMusic()) broadcastMusic(room)
+})
 
 /**
  * A track finished on its own: advance that channel's queue.
@@ -124,26 +159,209 @@ const resolveSource = async (
  * replaced play reports no end — so a seek restarts the song at the new
  * point without advancing the queue.
  */
-const startSource = (room: string, channelId: string, now: MusicSource, startSec = 0): void => {
+const playFrom = (room: string, channelId: string, now: MusicSource, startSec = 0): Promise<boolean> => {
   switch (now.kind) {
-    case 'library': void musicPlayTrack(room, channelId, now.trackId, startSec); break
-    case 'link':    void musicPlay(room, channelId, now.url, startSec); break
+    case 'library': return musicPlayTrack(room, channelId, now.trackId, startSec)
+    case 'link':    return musicPlay(room, channelId, now.url, startSec)
     default: {
       // Exhaustiveness, and it has to be written down to be true: a switch
       // with no default compiles happily when a new kind appears and then
       // plays silence. Assigning to never is what makes the compiler object.
       const unhandled: never = now
       void unhandled
+      return Promise.resolve(false)
     }
   }
 }
 
+/** playFrom without waiting: most callers have nothing to do with the answer. */
+const startSource = (room: string, channelId: string, now: MusicSource, startSec = 0): void => {
+  void playFrom(room, channelId, now, startSec)
+}
+
 export const musicTrackEnded = (room: string, channelId: string): void => {
-  if (!musicRooms.get(room, channelId)) return
+  const channel = musicRooms.get(room, channelId)
+  if (!channel) return
+  // The service holds a paused song and reports no end for it, so an end
+  // that arrives while paused raced the pause and is stale. Acting on it
+  // would skip the song everyone is about to resume. Should the service
+  // really have lost the song, resume finds out (a 409) and starts it again
+  // from the frozen point — see resumeMusic.
+  if (channel.pausedAt !== null) return
   const next = musicRooms.skip(room, channelId)
   broadcastMusic(room)
   if (next.ok && next.now) startSource(room, channelId, next.now)
 }
+
+/** How often, and for how long, a resync pause is retried while a song starts. */
+const RESYNC_EVERY_MS = 250
+const RESYNC_FOR_MS = 10_000
+
+const musicKey = (room: string, channelId: string) => `${room}\u0000${channelId}`
+
+/**
+ * The resync loop each channel should be running, by number.
+ *
+ * Two refused commits close together used to start two loops, each pausing
+ * the service four times a second. Starting one now ends the one before:
+ * every loop checks it is still the channel's latest before each try, and
+ * whatever a newer resync decided — a resume, or a loop of its own — wins.
+ */
+const resyncLoops = new Map<string, number>()
+let resyncSeq = 0
+
+/**
+ * Put the service back in line with the room after a commit was refused.
+ *
+ * Both calls are harmless when already true — pausing a held song and
+ * resuming a playing one change nothing — so this does not need to know
+ * which way the race went, only what the room now says.
+ */
+const resyncMusic = (room: string, channelId: string): void => {
+  const k = musicKey(room, channelId)
+  const mine = ++resyncSeq
+  resyncLoops.set(k, mine)                  // any loop already running stops at its next check
+  const channel = musicRooms.get(room, channelId)
+  if (!channel?.now || channel.pausedAt === null) {
+    resyncLoops.delete(k)
+    if (channel?.now) void musicResume(room, channelId)
+    return
+  }
+  void holdOnceStarted(room, channelId, channel.now.entryId, Date.now() + RESYNC_FOR_MS, mine)
+}
+
+/**
+ * Pause the service, retrying while it says "not yet".
+ *
+ * A 409 here means the next song is still being fetched — pausing then
+ * would hold the song on its way out — so the pause is asked again every
+ * quarter second until it lands. It stops the moment the room is no longer
+ * paused on this same song: a resume, a skip, previous, play now or a close.
+ * Not on a seek: a seek while paused leaves the room paused on the same song,
+ * which the service still has to hold. And it stops after ten seconds
+ * whatever happens. Each wait is an unref'd timer, so nothing here outlives
+ * the channel or holds the process open.
+ */
+const holdOnceStarted = async (
+  room: string, channelId: string, entryId: string, until: number, loop: number,
+): Promise<void> => {
+  const k = musicKey(room, channelId)
+  try {
+    for (;;) {
+      if (resyncLoops.get(k) !== loop) return
+      const channel = musicRooms.get(room, channelId)
+      if (!channel?.now || channel.pausedAt === null || channel.now.entryId !== entryId) return
+      if ((await musicPause(room, channelId)) !== 'not-yet' || Date.now() >= until) return
+      await new Promise<void>(r => { setTimeout(r, RESYNC_EVERY_MS).unref?.() })
+    }
+  } finally {
+    if (resyncLoops.get(k) === loop) resyncLoops.delete(k)
+  }
+}
+
+/**
+ * One pause or resume at a time per channel.
+ *
+ * Two people pressing Pause together both passed the check while the
+ * service was being asked for the first, and the second commit was then
+ * refused — "It is already paused." to somebody who got exactly what they
+ * asked for. And two resumes after a seek while paused both started the
+ * song. Each press now waits for the one before it on that channel, then
+ * looks again. The map holds the tail of the line and is emptied by
+ * whichever press is last; the rate limit bounds how long a line can get.
+ */
+const musicToggles = new Map<string, Promise<unknown>>()
+
+const oneAtATime = async <T>(room: string, channelId: string, run: () => Promise<T>): Promise<T> => {
+  const k = musicKey(room, channelId)
+  const before = musicToggles.get(k)
+  const mine = (async () => {
+    if (before) await before.catch(() => {})
+    return run()
+  })()
+  musicToggles.set(k, mine)
+  try {
+    return await mine
+  } finally {
+    if (musicToggles.get(k) === mine) musicToggles.delete(k)
+  }
+}
+
+/** Ok, and nothing to tell anyone: the room was already the way it was asked to be. */
+type Toggled = { ok: true; changed: boolean } | { ok: false; reason: string }
+const UNCHANGED: Toggled = { ok: true, changed: false }
+const CHANGED: Toggled = { ok: true, changed: true }
+
+/** Paused (or not) on a song: what a press of Pause (or Resume) asks for. */
+const isPausedNow = (room: string, channelId: string): boolean | null => {
+  const channel = musicRooms.get(room, channelId)
+  return channel?.now ? channel.pausedAt !== null : null
+}
+
+/**
+ * Pause a channel for everyone: ask the service, then commit.
+ *
+ * The room is told only once the service has actually stopped sending, so a
+ * refusal or a failure changes nothing and broadcasts nothing — a channel
+ * that said Paused while still playing would be worse than a refusal.
+ */
+const pauseMusic = (room: string, channelId: string): Promise<Toggled> => oneAtATime(room, channelId, async () => {
+  if (isPausedNow(room, channelId) === true) return UNCHANGED
+  const ask = musicRooms.pauseCheck(room, channelId)
+  if (!ask.ok) return ask
+  if ((await musicPause(room, channelId)) !== 'paused') {
+    return { ok: false, reason: 'The music could not be paused. Try again in a moment.' }
+  }
+  const done = musicRooms.pause(room, channelId, ask.ticket)
+  if (done.ok) return CHANGED
+  // The song moved while the service was asked (a skip, a seek): the service
+  // may now be holding the new one, which the room thinks is playing.
+  resyncMusic(room, channelId)
+  return done
+})
+
+/**
+ * Resume a channel for everyone, from where it was frozen.
+ *
+ * Usually the service releases the song it is holding. Two cases start it
+ * again instead, through the same path a seek uses: a seek moved the point
+ * while paused, so what the service holds is the wrong place; or the
+ * service says it holds nothing (409) — it restarted during the pause, say.
+ */
+const resumeMusic = (room: string, channelId: string): Promise<Toggled> => oneAtATime(room, channelId, async () => {
+  if (isPausedNow(room, channelId) === false) return UNCHANGED
+  const ask = musicRooms.resumeCheck(room, channelId)
+  if (!ask.ok) return ask
+  let fromSec: number | undefined
+  if (ask.restart) {
+    fromSec = ask.sec
+  } else {
+    const how = await musicResume(room, channelId)
+    if (how === 'failed') return { ok: false, reason: 'The music could not be resumed. Try again in a moment.' }
+    if (how === 'not-held') {
+      // A skip, previous or play now while the service was asked has already
+      // started the room's song. Starting the old one now could reach the
+      // service after that and replace it. The service holds nothing, so
+      // there is nothing to put back in line either.
+      if (musicRooms.resumeCheck(room, channelId).ticket !== ask.ticket) {
+        return isPausedNow(room, channelId) === false
+          ? UNCHANGED
+          : { ok: false, reason: 'The song changed while resuming it. Try again.' }
+      }
+      fromSec = ask.sec
+    }
+  }
+  if (fromSec !== undefined && !(await playFrom(room, channelId, ask.now!, fromSec))) {
+    return { ok: false, reason: 'The music could not be resumed. Try again in a moment.' }
+  }
+  const done = musicRooms.resume(room, channelId, ask.ticket, fromSec)
+  if (done.ok) return CHANGED
+  resyncMusic(room, channelId)
+  // Overtaken by a skip, previous or play now: the room is playing, which is
+  // what was asked. Only a seek while paused leaves it paused — that one is
+  // a real refusal.
+  return isPausedNow(room, channelId) === false ? UNCHANGED : done
+})
 
 /**
  * Always the full list, never a delta — see broadcastCallState.
@@ -331,6 +549,7 @@ const forgetEmptyRoom = (room: string): void => {
 const releaseCallRoom = (room: string): void => {
   cancelCallEnd(room)
   callVoiceServer.delete(room)
+  callStartedAt.delete(room)
 }
 
 /** How many people are in a call room right now, and whether a given user is
@@ -446,7 +665,15 @@ const callStatePayload = (room: string) => {
   // a server whose channel list it has not fetched.
   const serverId = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
   const states = statesFor(room)
-  return { room, userIds, ...(serverId ? { serverId } : {}), ...(states ? { states } : {}) }
+  // Only for an occupied room. A room inside its grace period still has a
+  // start time on file (so the call keeps it if somebody comes back), but it
+  // has nobody in it, and "when did this call start" has no answer to give.
+  const startedAt = userIds.length > 0 ? callStartedAt.get(room) : undefined
+  return {
+    room, userIds,
+    ...(startedAt !== undefined ? { startedAt } : {}),
+    ...(serverId ? { serverId } : {}), ...(states ? { states } : {}),
+  }
 }
 
 export const broadcastCallState = (room: string): void => {
@@ -471,6 +698,29 @@ export const broadcastCallState = (room: string): void => {
 }
 
 /**
+ * The name a call's system lines ("X started a call", "Call ended") go under:
+ * the person's display name, else their username — the rule an ordinary message
+ * follows for its author. The username on its own is what these lines used to
+ * carry, so the web client printed "t11b_mvkppvuf started a call" and a phone
+ * that remembers the last name it saw for somebody learned the username from the
+ * line and rang with it.
+ *
+ * Looked up when the line is written, not taken from the socket: a connection
+ * lives for hours and the person may have renamed themselves since, and the
+ * socket's own copy is only filled in once its async setup has finished, so a
+ * call joined straight after connecting would still carry the username.
+ * [fallback] is the name the caller already holds, for a lookup that fails.
+ */
+const callLineName = async (userId: string, fallback: string): Promise<string> => {
+  try {
+    const u = await User.findById(userId).select('displayName username').lean()
+    return u?.displayName || u?.username || fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
  * Write "Call ended" into the conversation the room belongs to.
  *
  * Module level rather than a closure over the socket that triggered it,
@@ -489,13 +739,14 @@ const postCallEnded = async (room: string, author: CallAuthor) => {
   try {
     const isGroup = room.startsWith('group:')
     const conversationId = isGroup ? room.slice(6) : room.slice(3)
+    const authorName = await callLineName(author.id, author.name)
     const msg = await Message.create({
       conversationId, kind: 'system', systemType: 'call',
-      authorId: author.id, authorName: author.name, authorAvatar: null, content: 'Call ended',
+      authorId: author.id, authorName, authorAvatar: null, content: 'Call ended',
     })
     const payload = {
       _id: msg._id.toString(), conversationId, kind: 'system', systemType: 'call',
-      authorId: author.id, authorName: author.name, authorAvatar: null, content: 'Call ended',
+      authorId: author.id, authorName, authorAvatar: null, content: 'Call ended',
       reactions: [], pinned: false, edited: false, replyTo: null,
       createdAt: msg.createdAt.toISOString(),
     }
@@ -753,23 +1004,6 @@ const presenceAudience = async (
   return [...new Set([...friendIds, ...coMemberIds])].filter(id => id !== userId)
 }
 
-// Resolve a list of parent message ids into reply previews, preserving order
-// and dropping any that no longer exist. `conversationId` is required, not
-// optional — every call site knows exactly which conversation it's building
-// a message for, and an optional scope here is one forgotten call site away
-// from reopening the same leak: a crafted replyToIds naming a message in
-// someone else's DM would otherwise resolve and echo that message's author +
-// a content snippet into whatever conversation the caller chose.
-const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string) => {
-  if (!Array.isArray(ids) || ids.length === 0) return []
-  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content').lean()
-  const byId = new Map(targets.map(t => [t._id.toString(), t]))
-  return ids
-    .map(id => byId.get(id))
-    .filter((t): t is NonNullable<typeof t> => !!t)
-    .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
-}
-
 export const initSocket = (httpServer: HttpServer): IOServer => {
   const io = new IOServer(httpServer, {
     cors: { origin: config.cors.clientOrigin, credentials: true },
@@ -799,6 +1033,13 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const p = verifyAccessToken(token)
       ;(socket as any).userId   = p.sub
       ;(socket as any).username = p.username
+      // The Android app holds a socket open all day so a DM or a call can ring
+      // while the app is closed. It says so here, and from then on the server
+      // does not count it as the person being there: it receives everything
+      // the user's other sockets do, but it never makes them look online, and
+      // it cannot set their presence or take a seat in a call. Other events are
+      // not restricted by this flag.
+      ;(socket as any).background = socket.handshake.auth?.background === true
       next()
     } catch { next(new Error('Invalid token')) }
   })
@@ -808,7 +1049,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     const username = (socket as any).username as string
     console.log(`[WS] + ${username}`)
 
-    const wasOffline = presence.addSocket(userId, socket.id)
+    // A background socket joins the user's rooms like any other (that is the
+    // point of it) but is never entered in the presence registry: no
+    // addSocket, so isOnline() ignores it, and no removeSocket on the way out.
+    const background = (socket as any).background === true
+    const wasOffline = !background && presence.addSocket(userId, socket.id)
     socket.join(`user:${userId}`)
 
     /*
@@ -872,19 +1117,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           content:        wellFormed(data.content.trim()),
           replyToIds:     replyTo.map(r => r.id),
         })
-        const payload = {
-          _id:            msg._id.toString(),
-          conversationId: msg.conversationId,
-          authorId:       userId,
-          authorName:     msg.authorName,
-          authorAvatar:   msg.authorAvatar,
-          content:        msg.content,
-          reactions:      [],
-          pinned:         false,
-          edited:         false,
-          replyTo,
-          createdAt:      msg.createdAt.toISOString(),
-        }
+        const payload = dmReceivePayload(msg, replyTo)
         io.to(`user:${data.partnerId}`).emit('dm:receive', payload)
         if (/@everyone\b/.test(msg.content)) io.to(`user:${data.partnerId}`).emit('mention:everyone', { conversationId: msg.conversationId, authorName: msg.authorName })
         ack?.({ ok: true, message: payload })
@@ -1122,19 +1355,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           replyToIds:     replyTo.map(r => r.id),
         })
 
-        const payload = {
-          _id:            msg._id.toString(),
-          conversationId: msg.conversationId,
-          authorId:       userId,
-          authorName:     msg.authorName,
-          authorAvatar:   msg.authorAvatar,
-          content:        msg.content,
-          reactions:      [],
-          pinned:         false,
-          edited:         false,
-          replyTo,
-          createdAt: msg.createdAt.toISOString(),
-        }
+        const payload = dmReceivePayload(msg, replyTo)
 
         io.to(`user:${data.partnerId}`).emit('dm:receive', payload)
         if (/@everyone\b/.test(msg.content)) io.to(`user:${data.partnerId}`).emit('mention:everyone', { conversationId: msg.conversationId, authorName: msg.authorName })
@@ -1244,15 +1465,20 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // Never called for a channel — the parameter type is the guard, and the one
     // call site narrows `kind` before reaching here. A voice channel has no
     // readable text history for a system message to land in.
-    const postCallSystem = async (kind: 'dm' | 'group', convId: string, content: string) => {
+    //
+    // `say` builds the text from the caller's name, so the author and the
+    // sentence cannot disagree about who it is (see callLineName).
+    const postCallSystem = async (kind: 'dm' | 'group', convId: string, say: (name: string) => string) => {
       const conversationId = kind === 'group' ? convId : dmConvId(userId, convId)
+      const authorName = await callLineName(userId, myName)
+      const content = say(authorName)
       const msg = await Message.create({
         conversationId, kind: 'system', systemType: 'call',
-        authorId: userId, authorName: username, authorAvatar: null, content,
+        authorId: userId, authorName, authorAvatar: null, content,
       })
       const payload = {
         _id: msg._id.toString(), conversationId, kind: 'system', systemType: 'call',
-        authorId: userId, authorName: username, authorAvatar: null, content,
+        authorId: userId, authorName, authorAvatar: null, content,
         reactions: [], pinned: false, edited: false, replyTo: null,
         createdAt: msg.createdAt.toISOString(),
       }
@@ -1341,6 +1567,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       broadcastCall(room)
     })
     socket.on('call:join', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+      // A background connection must not put the person in a call: it would
+      // list them as present while every other surface shows them offline.
+      // No ack is taken on this event, so there is nothing to answer.
+      if (background) return
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       // Refuse silently, same shape every other handler in this file uses for
       // "not allowed" — no ack is expected on this event, so there is nothing
@@ -1365,6 +1595,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const resuming = callEndPending(room)
       cancelCallEnd(room)
       if (!set) { set = new Set(); activeCalls.set(room, set) }
+      noteCallStarted(room)
       set.add(userId)
       joinedCallRooms.add(room)
       // No "X started a call" for a voice channel: there is no text history
@@ -1372,7 +1603,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // a conversation nobody can open. Narrowing here is also what keeps
       // postCallSystem's signature honest.
       if (wasEmpty && !resuming && data.kind !== 'channel') {
-        await postCallSystem(data.kind, data.conversationId, `${username} started a call`)
+        await postCallSystem(data.kind, data.conversationId, name => `${name} started a call`)
       }
       broadcastCall(room)
       // What is playing, to the newcomer alone. Music state only goes out on
@@ -1403,6 +1634,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * instance a second time, in everybody's history.
      */
     socket.on('call:rejoin', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+      // Same as call:join: a background connection never holds a seat in a call.
+      if (background) return
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       // The same gate as call:join: coming back from a blip is not a way in.
       if (!await canJoinCall(data.kind, data.conversationId, userId)) return
@@ -1415,6 +1648,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       cancelCallEnd(room)
       let set = activeCalls.get(room)
       if (!set) { set = new Set(); activeCalls.set(room, set) }
+      noteCallStarted(room)
       const wasPresent = set.has(userId)
       set.add(userId)
       joinedCallRooms.add(room)
@@ -1434,6 +1668,89 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     socket.on('call:leave', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       leaveCall(callRoom(data.kind, data.conversationId), 'hang-up')
+    })
+
+    /**
+     * Turn down a call that is ringing.
+     *
+     * Two audiences, one event. The caller is told so their screen can say
+     * "<name> declined", and the decliner's OTHER devices are told so they stop
+     * ringing — a call answered or refused on the phone must not keep ringing the
+     * laptop. `user:<id>` reaches every socket a person has, so addressing the
+     * decliner's own personal room covers both the device that pressed the button
+     * and all the rest.
+     *
+     * A DM goes to both people. A group call goes to the decliner alone: it has
+     * no single caller to answer to, and telling every member that somebody
+     * passed on it is noise for the people still deciding.
+     *
+     * This only ever NOTIFIES. It never touches `activeCalls`, so it cannot end
+     * a call, evict anybody or write a message; the call carries on exactly as
+     * it was, and whoever declined can still join it later.
+     *
+     * Deliberately NOT guarded by `background`, unlike call:join and
+     * call:rejoin above. Those refuse a background socket because it would seat
+     * the person in a call while they look offline. Decline is the opposite
+     * case: the phone's Decline button on the ringing notification speaks over
+     * exactly that socket, and it seats nobody.
+     *
+     * The room has to be one this person could actually be ringing for AND one
+     * that is live: occupied, and without them. Anything else is dropped without
+     * a word, the same shape every other handler here uses for "not allowed" —
+     * otherwise this would be a way to put a "declined" on a stranger's screen
+     * for a call that does not exist, or one you are standing in. No ack is
+     * taken on this event, so there is nothing to answer.
+     */
+    socket.on('call:decline', async (data: { room?: unknown }) => {
+      try {
+        const room = data?.room
+        if (typeof room !== 'string') return
+
+        // Live and not yet joined by this person. Read from `activeCalls` each
+        // time rather than remembered: it is asked again after the awaits below,
+        // because the call can end, or this person can join it from another
+        // device, while the lookups are in flight.
+        const ringingFor = () => {
+          const members = activeCalls.get(room)
+          return !!members && members.size > 0 && !members.has(userId)
+        }
+        // First, because it is free and turns away every made-up room before
+        // anything touches the database.
+        if (!ringingFor()) return
+
+        let partner: string | null = null
+        if (room.startsWith('dm:')) {
+          // A DM room is `dm:<a>_<b>` (see dmConvId). Containing the decliner's
+          // id is the whole of the membership test: there is no other list.
+          const ids = room.slice(3).split('_')
+          if (ids.length !== 2 || !ids.includes(userId)) return
+          partner = ids[0] === userId ? ids[1] : ids[0]
+        } else if (room.startsWith('group:')) {
+          // The same membership rule call:join applies, not a second copy of it.
+          if (!await canJoinCall('group', room.slice(6), userId)) return
+        } else {
+          // A voice channel is not a ringing call, and anything unrecognised
+          // is not a room at all.
+          return
+        }
+
+        // Looked up now rather than taken from this connection's `myName`: a
+        // phone's socket lives all day, so that could be a name the person
+        // changed hours ago — and it is only filled in once setup has finished,
+        // so a Decline sent straight after connecting would carry the username.
+        const me = await User.findById(userId).select('displayName username').lean()
+        const name = me?.displayName || me?.username || username
+        if (!ringingFor()) return
+
+        const payload = { room, userId, name }
+        if (partner) io.to(`user:${partner}`).to(`user:${userId}`).emit('call:declined', payload)
+        else io.to(`user:${userId}`).emit('call:declined', payload)
+      } catch (err) {
+        // An async handler with no catch is an unhandled rejection, and a
+        // malformed id or a dropped connection must not be able to take the
+        // process down from here.
+        console.error('[WS] call:decline', err)
+      }
     })
 
     // ── Music channels ─────────────────────────────────────────────────────
@@ -1458,7 +1775,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     }
 
     /** Refusals go to the asker alone; nobody else needs to see them fail. */
-    const musicRefuse = (reason: string) => socket.emit('music:error', { reason })
+    // `channelId` is additive and only where the client needs it: pause and
+    // resume, whose pending state it keeps per channel and settles by it.
+    const musicRefuse = (reason: string, channelId?: string) =>
+      socket.emit('music:error', channelId === undefined ? { reason } : { reason, channelId })
 
     socket.on('music:create', (data: { conversationId: string; kind: string; name: string; url?: string; trackId?: string }) => {
       void (async () => {
@@ -1520,7 +1840,35 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       const r = musicRooms.seek(gate.room, channelId, data?.sec)
       if (!r.ok) return musicRefuse(r.reason)
       broadcastMusic(gate.room)
-      startSource(gate.room, channelId, r.now!, r.sec)
+      // Paused, it stays paused at the new point: resume starts it there.
+      if (!r.paused) startSource(gate.room, channelId, r.now!, r.sec)
+    })
+
+    /**
+     * Pause and resume, for everyone, as anyone may skip. The service is
+     * asked first and the room told only once it has done it — see
+     * pauseMusic. Rate limited in the same bucket as seek.
+     */
+    socket.on('music:pause', (data: { conversationId: string; kind: string; channelId: string }) => {
+      void (async () => {
+        const gate = musicGate(data); if (!gate) return
+        const channelId = String(data?.channelId ?? '')
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.', channelId)
+        const r = await pauseMusic(gate.room, channelId)
+        if (!r.ok) return musicRefuse(r.reason, channelId)
+        if (r.changed) broadcastMusic(gate.room)
+      })()
+    })
+
+    socket.on('music:resume', (data: { conversationId: string; kind: string; channelId: string }) => {
+      void (async () => {
+        const gate = musicGate(data); if (!gate) return
+        const channelId = String(data?.channelId ?? '')
+        if (!musicRate.take(userId).ok) return musicRefuse('You are doing that too fast. Give it a moment.', channelId)
+        const r = await resumeMusic(gate.room, channelId)
+        if (!r.ok) return musicRefuse(r.reason, channelId)
+        if (r.changed) broadcastMusic(gate.room)
+      })()
     })
 
     socket.on('music:previous', (data: { conversationId: string; kind: string; channelId: string }) => {
@@ -1573,16 +1921,47 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * at one of the call sites.
      */
     const broadcastPresence = async () => {
-      const status = presence.effectiveStatus(myStatus, userId, myStatusUntil)
       const audience = await presenceAudience(userId)
+      // The status is read from the user, NOT taken from this socket's copy.
+      // myStatus was loaded when THIS socket connected and only this socket's
+      // own presence:set refreshes it, so a broadcast triggered by another tab
+      // (presence:away) or another route (PATCH /users/me) carried an old
+      // choice, and every tab -- the phone too -- adopted it. Read last, right
+      // before the emits, so a choice saved while the audience was being worked
+      // out is the one that goes.
+      await refreshChosenStatus()
+      const status = presence.effectiveStatus(myStatus, userId, myStatusUntil)
       for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status })
       // Your own other tabs get the RAW choice — you must see your own
       // "Invisible", even while your friends are being told you're offline.
-      io.to(`user:${userId}`).emit('presence:self', { status: myStatus, effective: status, until: myStatusUntil })
+      // `until` is only sent while it still applies: an ended deadline is null,
+      // which the client reads as "disarm the timer", exactly as toSelfJSON does.
+      const live = myStatusUntil !== null && myStatusUntil.getTime() > Date.now()
+      io.to(`user:${userId}`).emit('presence:self', {
+        status: presence.chosenNow(myStatus, myStatusUntil), effective: status, until: live ? myStatusUntil : null,
+      })
+    }
+
+    /**
+     * Bring this socket's copy of the chosen status up to what is stored. One
+     * indexed read per presence event; a failed read keeps the copy we have,
+     * which is the old behaviour rather than silence.
+     */
+    const refreshChosenStatus = async () => {
+      try {
+        const row = await User.findById(userId).select('status statusUntil').lean()
+        if (!row) return
+        myStatus      = presence.isChosenStatus(row.status) ? row.status : 'online'
+        myStatusUntil = (row.statusUntil as Date | null | undefined) ?? null
+      } catch { /* keep the copy we have */ }
     }
 
     /** The user picked a status. Persist the choice, then tell people. */
     socket.on('presence:set', async (raw: unknown, ack?: (r: any) => void) => {
+      // A listener-only connection has no say in how the person appears. Acked
+      // rather than dropped so a client waiting on the callback is not left
+      // hanging.
+      if (background) { ack?.({ ok: false, error: 'Not available on a background connection' }); return }
       const next = typeof raw === 'string' ? raw : (raw as any)?.status
       if (!presence.isChosenStatus(next)) { ack?.({ ok: false, error: 'Unknown status' }); return }
 
@@ -1604,7 +1983,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         await User.findByIdAndUpdate(userId, { status: next, statusUntil: until })
       } catch { ack?.({ ok: false, error: 'Could not save that' }); return }
       await broadcastPresence()
-      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, myStatusUntil), until: myStatusUntil })
+      ack?.({ ok: true, status: next, effective: presence.effectiveStatus(next, userId, until), until })
     })
 
     /**
@@ -1613,6 +1992,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * starts you as away. effectiveStatus() only lets it apply to 'online'.
      */
     socket.on('presence:away', async (raw: unknown) => {
+      if (background) return   // a phone idling in a pocket says nothing about the person
       const away = raw === true || (raw as any)?.away === true
       if (presence.isAway(userId) === away) return   // no-op, don't spam friends
       presence.setAway(userId, away)
@@ -1630,7 +2010,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         for (const room of [...joinedCallRooms]) leaveCall(room, 'socket-lost')
         // Only go offline once the user's LAST socket closes — otherwise closing
         // one of two tabs (or a refresh) would falsely mark them offline.
-        if (presence.removeSocket(userId, socket.id)) {
+        // A background socket was never registered, so closing it is not an
+        // arrival or a departure and must not reach the offline broadcast.
+        if (!background && presence.removeSocket(userId, socket.id)) {
           // lastSeenAt only. Writing status: 'offline' here is exactly what used
           // to erase the user's Do Not Disturb every time they closed the app.
           await User.findByIdAndUpdate(userId, { lastSeenAt: new Date() })
@@ -1649,9 +2031,13 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     try {
       // Reads the chosen status rather than stamping 'online' over it. That
       // write was the reason Do Not Disturb never survived a sign-in.
-      const me = await User.findByIdAndUpdate(
-        userId, { lastSeenAt: new Date() }, { new: true }
-      ).select('avatar avatarCrop displayName username status statusUntil').lean()
+      //
+      // A background connect only reads. lastSeenAt is when the person was last
+      // actually here, and a phone reconnecting in a pocket is not that.
+      const meFields = 'avatar avatarCrop displayName username status statusUntil'
+      const me = await (background
+        ? User.findById(userId).select(meFields).lean()
+        : User.findByIdAndUpdate(userId, { lastSeenAt: new Date() }, { new: true }).select(meFields).lean())
       // Skipped entirely when presence:set beat this load: the row was read
     // before that write, so "catching up" from it would roll the fresher
     // choice back to the stale one.
@@ -1721,7 +2107,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // of the point of a member list, and the audience only widens to rooms
       // the user chose to join. Invisible is still a full opt-out, because
       // effectiveStatus maps it to offline.
-      if (wasOffline) {
+      // A background socket never announces: it is not the person arriving.
+      if (!background && wasOffline) {
         const eff = presence.effectiveStatus(myStatus, userId, myStatusUntil)
         const audience = await presenceAudience(userId, myServers)
         for (const fid of audience) io.to(`user:${fid}`).emit('presence', { userId, status: eff })
@@ -1741,11 +2128,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
             ? myGroups.some(g => `group:${g._id.toString()}` === room)
             : room.slice(3).split('_').includes(userId)
         if (!belongs) continue
-        const sid = room.startsWith('voice:') ? channelServer.get(room.slice(6)) : undefined
-        // Without this a late arrival sees the room's occupants but none of
-        // their state until somebody happens to change theirs.
-        const catchUpStates = statesFor(room)
-        socket.emit('call:state', { room, userIds: [...participants], ...(sid ? { serverId: sid } : {}), ...(catchUpStates ? { states: catchUpStates } : {}) })
+        // The live payload builder, so a late arrival gets exactly what a
+        // broadcast would have carried: the occupants, their state (without it
+        // they see who is there but not who is muted until somebody changes),
+        // and when the call started.
+        socket.emit('call:state', callStatePayload(room))
       }
     } catch (err) {
       // A failed setup must not take the connection down — the handlers are

@@ -68,6 +68,18 @@ export interface MusicChannel {
   /** What played before `now`, oldest first, for "previous". Capped at HISTORY. */
   history: Track[]
   listeners: Set<string>
+  /**
+   * When `now` was paused, by this process's clock, or null while it plays.
+   * Elapsed time is read against this instead of the clock while it is set,
+   * which is the whole of how a pause freezes the position.
+   */
+  pausedAt: number | null
+  /**
+   * A seek landed while paused. The music service still holds the song at
+   * the old point, so resuming must start it again where the room now is
+   * rather than release the hold.
+   */
+  movedWhilePaused: boolean
 }
 
 /** What a client is told. Sets become counts and arrays; nothing else leaks. */
@@ -105,7 +117,24 @@ export interface MusicChannelView {
   listeners: string[]
   /** Whether there is a song to go back to. */
   previous: boolean
+  /** Paused for everyone. `now.elapsedMs` is then the frozen position. */
+  paused?: boolean
+  /**
+   * Present, and true, only when the music service can pause. An older
+   * service makes this absent, and a client shows no Pause without it.
+   */
+  pausable?: boolean
 }
+
+/**
+ * What a pause or resume was checked against.
+ *
+ * The music service is asked between the check and the commit, and a skip,
+ * seek or restart can land in that gap. The commit names the ticket it was
+ * checked with and is refused if the song has moved since, so a pause asked
+ * for one song never freezes the next.
+ */
+export type PauseTicket = string
 
 /** No real song is six hours long; past this a position is a typo or an attack. */
 export const MAX_SEEK_SEC = 6 * 60 * 60
@@ -147,6 +176,8 @@ export class MusicRooms {
     /** Called when a channel is actually torn down, so the service can stop decoding. */
     private readonly onClosed: (room: string, channelId: string) => void = () => {},
     private readonly now: () => number = Date.now,
+    /** Whether the music service can pause. Asked on every view, so it must be cheap. */
+    private readonly canPause: () => boolean = () => false,
   ) {}
 
   // ── reading ────────────────────────────────────────────────────────────
@@ -163,6 +194,25 @@ export class MusicRooms {
     return this.rooms.get(room)?.get(channelId)
   }
 
+  /** Every room with a music channel, for telling them all when the service changes. */
+  roomsWithMusic(): string[] { return [...this.rooms.keys()] }
+
+  /** How far into `now`, frozen while paused. Null with nothing playing. */
+  private elapsed(c: MusicChannel): number | null {
+    if (c.startedAt === null) return null
+    return Math.max(0, (c.pausedAt ?? this.now()) - c.startedAt)
+  }
+
+  private ticket(c: MusicChannel): PauseTicket {
+    return `${c.now?.entryId ?? ''}|${c.startedAt ?? ''}|${c.pausedAt ?? ''}`
+  }
+
+  /** A new song, or the same one from the top: either way it plays. */
+  private unpause(c: MusicChannel): void {
+    c.pausedAt = null
+    c.movedWhilePaused = false
+  }
+
   /**
    * The payload broadcast as `music:state`. Always the FULL list, and it
    * names its room: a voice channel's audience is the whole server, so every
@@ -171,6 +221,8 @@ export class MusicRooms {
   view(room: string): { room: string; channels: MusicChannelView[] } {
     const here = this.rooms.get(room)
     if (!here) return { room, channels: [] }
+    // Asked once per view, not per channel: it is the same service for all.
+    const pausable = this.canPause()
     return {
       room,
       channels: [...here.values()].map(c => ({
@@ -181,13 +233,17 @@ export class MusicRooms {
               ...entry(c.now),
               url: c.now.kind === 'link' ? c.now.url : null,
               cover: c.now.kind === 'library' ? c.now.cover : null,
-              elapsedMs: c.startedAt === null ? null : Math.max(0, this.now() - c.startedAt),
+              elapsedMs: this.elapsed(c),
             }
           : null,
         queue: c.queue.map(entry),
         queued: c.queue.length,
         listeners: [...c.listeners],
         previous: c.history.length > 0,
+        paused: c.pausedAt !== null,
+        // Absent rather than false for an older service, so the field means
+        // one thing: this server can pause here.
+        ...(pausable ? { pausable: true } : {}),
       })),
     }
   }
@@ -206,7 +262,10 @@ export class MusicRooms {
 
     const id = randomUUID()
     const track: Track = { ...source, entryId: randomUUID(), addedBy: by, addedAt: this.now() }
-    here.set(id, { id, name, createdBy: by, now: track, startedAt: this.now(), queue: [], history: [], listeners: new Set() })
+    here.set(id, {
+      id, name, createdBy: by, now: track, startedAt: this.now(), queue: [], history: [], listeners: new Set(),
+      pausedAt: null, movedWhilePaused: false,
+    })
 
     /*
      * The creator is NOT made a listener.
@@ -236,6 +295,8 @@ export class MusicRooms {
     this.retire(channel)
     channel.now = channel.queue.shift() ?? null
     channel.startedAt = channel.now ? this.now() : null
+    // Skipping while paused means "play the next one", not "queue it paused".
+    this.unpause(channel)
     /*
      * An empty channel is not closed here.
      *
@@ -256,7 +317,7 @@ export class MusicRooms {
    * last second would decode nothing, report an end and skip the song,
    * which is not what dragging to the end of a bar means.
    */
-  seek(room: string, channelId: string, sec: unknown): Check & { now?: Track; sec?: number } {
+  seek(room: string, channelId: string, sec: unknown): Check & { now?: Track; sec?: number; paused?: boolean } {
     const channel = this.get(room, channelId)
     if (!channel) return no('That music channel is gone.')
     if (!channel.now) return no('Nothing is playing there.')
@@ -265,8 +326,84 @@ export class MusicRooms {
     }
     const d = channel.now.kind === 'library' ? channel.now.durationSec : null
     const at = Math.floor(d ? Math.min(sec, Math.max(0, d - 1)) : sec)
+    if (channel.pausedAt !== null) {
+      /*
+       * Paused stays paused, at the new point.
+       *
+       * Measured back from the pause rather than from the clock, so the
+       * frozen position IS the point asked for. Nothing is sent to the
+       * service: it keeps holding the old point, and resume starts the song
+       * here instead of releasing that hold.
+       */
+      channel.startedAt = channel.pausedAt - at * 1000
+      channel.movedWhilePaused = true
+      return { ok: true, now: channel.now, sec: at, paused: true }
+    }
     channel.startedAt = this.now() - at * 1000
-    return { ok: true, now: channel.now, sec: at }
+    return { ok: true, now: channel.now, sec: at, paused: false }
+  }
+
+  // ── pausing ────────────────────────────────────────────────────────────
+  //
+  // Each half is a check and a commit, because the music service has to be
+  // asked in between: it is the thing actually holding the audio, and the
+  // room is told only once it has. The check hands out a ticket and the
+  // commit refuses if the song moved while the service was being asked.
+
+  /** Whether `now` can be paused, without pausing it. */
+  pauseCheck(room: string, channelId: string): Check & { ticket?: PauseTicket } {
+    const channel = this.get(room, channelId)
+    if (!channel) return no('That music channel is gone.')
+    if (!channel.now) return no('Nothing is playing there.')
+    if (channel.pausedAt !== null) return no('It is already paused.')
+    return { ok: true, ticket: this.ticket(channel) }
+  }
+
+  /** Freeze `now` where it is. With a ticket, only if nothing moved since the check. */
+  pause(room: string, channelId: string, ticket?: PauseTicket): Check {
+    const ask = this.pauseCheck(room, channelId)
+    if (!ask.ok) return ask
+    if (ticket !== undefined && ticket !== ask.ticket) return no('The song changed while pausing it. Try again.')
+    this.get(room, channelId)!.pausedAt = this.now()
+    return { ok: true }
+  }
+
+  /**
+   * Whether `now` can be resumed, and how.
+   *
+   * `restart` says the service no longer holds the room's point — a seek
+   * moved it while paused — so the song has to be started at `sec` rather
+   * than released. `sec` is the frozen point in whole seconds, which is also
+   * where a service that lost the song (restarted, say) starts it again.
+   */
+  resumeCheck(room: string, channelId: string): Check & { ticket?: PauseTicket; now?: Track; sec?: number; restart?: boolean } {
+    const channel = this.get(room, channelId)
+    if (!channel) return no('That music channel is gone.')
+    if (!channel.now) return no('Nothing is playing there.')
+    if (channel.pausedAt === null) return no('It is not paused.')
+    return {
+      ok: true,
+      ticket: this.ticket(channel),
+      now: channel.now,
+      sec: Math.floor((this.elapsed(channel) ?? 0) / 1000),
+      restart: channel.movedWhilePaused,
+    }
+  }
+
+  /**
+   * Carry on from the frozen point. `fromSec`, when given, is where the song
+   * was actually started again — whole seconds — so the clock matches what
+   * is heard rather than the sub-second point it was frozen at.
+   */
+  resume(room: string, channelId: string, ticket?: PauseTicket, fromSec?: number): Check {
+    const ask = this.resumeCheck(room, channelId)
+    if (!ask.ok) return ask
+    if (ticket !== undefined && ticket !== ask.ticket) return no('The song changed while resuming it. Try again.')
+    const channel = this.get(room, channelId)!
+    const at = fromSec === undefined ? this.elapsed(channel) ?? 0 : fromSec * 1000
+    channel.startedAt = this.now() - at
+    this.unpause(channel)
+    return { ok: true }
   }
 
   /**
@@ -279,9 +416,12 @@ export class MusicRooms {
   previous(room: string, channelId: string): Check & { now?: Track; restart?: boolean } {
     const channel = this.get(room, channelId)
     if (!channel) return no('That music channel is gone.')
-    const into = channel.startedAt === null ? 0 : this.now() - channel.startedAt
+    // The frozen position while paused: a song paused a second in and left
+    // for a minute is still at its start.
+    const into = this.elapsed(channel) ?? 0
     if (channel.now && into > RESTART_AFTER_MS) {
       channel.startedAt = this.now()
+      this.unpause(channel)
       return { ok: true, now: channel.now, restart: true }
     }
     const back = channel.history.pop()
@@ -289,6 +429,7 @@ export class MusicRooms {
     if (channel.now) channel.queue.unshift(channel.now)
     channel.now = back
     channel.startedAt = this.now()
+    this.unpause(channel)
     return { ok: true, now: back }
   }
 
@@ -313,6 +454,7 @@ export class MusicRooms {
     this.retire(channel)
     channel.now = t
     channel.startedAt = this.now()
+    this.unpause(channel)
     return { ok: true, now: t }
   }
 

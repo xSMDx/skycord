@@ -7,14 +7,14 @@
  * of surface — a grouped nav down the left, one page at a time on the right —
  * so they should feel the same. The reference screenshots do this too.
  *
- * UI ONLY at this stage. Everything without a backend carries a TBD marker
- * rather than being hidden: a row that says "not yet" reads as a plan, a
- * missing row reads as something the app cannot do. Nothing here pretends to
- * work, which was the whole problem with the "1 device" row and the video
- * button.
+ * Only sections with a screen behind them are listed (see `visibleNav`). The
+ * rest stay in NAV with `ready: false` so they can come back, but are not shown:
+ * a row that opens a page saying "not built yet" reads as a developer's note,
+ * which is what the phone audit found. Nothing here pretends to work, which was
+ * the whole problem with the "1 device" row and the video button.
  */
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { X, Trash2 } from 'lucide-vue-next'
+import { X, Trash2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useApi, type WireServer } from '@/composables/useApi'
 import { useAuth } from '@/composables/useAuth'
 import { useViewport } from '@/composables/useViewport'
@@ -33,7 +33,7 @@ const server = ref<WireServer | null>(null)
 const isOwner = computed(() => !!server.value && !!user.value && server.value.owner === user.value.id)
 
 /**
- * `ready: false` means the screen has no backend yet and shows a placeholder.
+ * `ready: false` means the screen has no backend yet, so the nav does not list it.
  *
  * The list is deliberately NOT a copy of the reference. Server Tag, Boost
  * Perks, Engagement, App Directory, Enable Community, Server Template, AutoMod
@@ -62,6 +62,23 @@ const NAV: { label?: string; items: { id: string; label: string; ready: boolean 
     { id: 'bans',  label: 'Bans',      ready: false },
   ] },
 ]
+
+/**
+ * What the nav lists. A section with no screen behind it is not offered: a row
+ * that opens a page saying "not built yet" is a note to the developers, not
+ * something for the person who opened settings to read. The entries stay in NAV
+ * with `ready: false`, so turning one on later is a one-word change, and a group
+ * whose entries are all unbuilt disappears with them rather than leaving its
+ * heading over nothing.
+ */
+const visibleNav = computed(() =>
+  NAV.map(g => ({ ...g, items: g.items.filter(i => i.ready) })).filter(g => g.items.length))
+
+/**
+ * Deleting a server has no page here yet — it lives in the server's own menu,
+ * behind a confirm. Flip this when the page exists and the row comes back.
+ */
+const DELETE_PAGE_READY = false
 
 const page = ref('profile')
 const currentLabel = computed(() =>
@@ -95,15 +112,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <Teleport to="body">
-    <div class="sv-overlay">
+    <div class="sv-overlay" data-overlay>
       <div class="sv" :class="{ mobile: isMobile, 'm-detail': mobileDetail }">
 
         <!-- ── Nav ── -->
-        <nav class="sv-nav">
+        <nav class="sv-nav" :inert="isMobile && mobileDetail ? true : undefined">
+          <!-- On a phone the list is a screen of its own, so it carries its own
+               title and a way out, the same as the user-settings list does. -->
+          <div v-if="isMobile" class="sv-mhead">
+            <h2 class="sv-mhead-title">Server settings</h2>
+            <button class="sv-mhead-btn" aria-label="Close server settings" @click="emit('close')">
+              <X :size="22" :stroke-width="1.5" />
+            </button>
+          </div>
           <div class="sv-nav-inner">
             <div class="sv-servername">{{ server?.name ?? '—' }}</div>
 
-            <template v-for="(group, gi) in NAV" :key="gi">
+            <template v-for="(group, gi) in visibleNav" :key="gi">
               <div v-if="group.label" class="sv-navgroup">{{ group.label }}</div>
               <button
                 v-for="item in group.items" :key="item.id"
@@ -112,29 +137,38 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 @click="selectPage(item.id)"
               >
                 <span class="sv-navitem-label">{{ item.label }}</span>
-                <span v-if="!item.ready" class="st-tbd">TBD</span>
+                <!-- A chevron says "this opens a screen". -->
+                <ChevronRight v-if="isMobile" class="sv-navitem-chev" :size="14" :stroke-width="2.25" />
               </button>
             </template>
 
-            <div class="sv-navsep" />
-            <button
-              v-if="isOwner"
-              class="sv-navitem danger"
-              :class="{ active: page === 'delete' }"
-              @click="selectPage('delete')"
-            >
-              <span class="sv-navitem-label">Delete Server</span>
-              <Trash2 :size="14" :stroke-width="2" />
-            </button>
+            <template v-if="isOwner && DELETE_PAGE_READY">
+              <div class="sv-navsep" />
+              <button
+                class="sv-navitem danger"
+                :class="{ active: page === 'delete' }"
+                @click="selectPage('delete')"
+              >
+                <span class="sv-navitem-label">Delete Server</span>
+                <Trash2 :size="14" :stroke-width="2" />
+              </button>
+            </template>
           </div>
         </nav>
 
         <!-- ── Content ── -->
-        <main class="sv-main">
-          <!-- On a phone the detail is its own screen and needs its own way back. -->
-          <button v-if="isMobile" class="sv-back" @click="mobileDetail = false">
-            ← {{ currentLabel }}
-          </button>
+        <main class="sv-main" :inert="isMobile && !mobileDetail ? true : undefined">
+          <!-- On a phone the detail is its own screen: the section's name, a back
+               arrow to the list and a close, as in user settings. -->
+          <div v-if="isMobile" class="sv-mhead sv-mhead-detail">
+            <button class="sv-mhead-btn" aria-label="Back to server settings" @click="mobileDetail = false">
+              <ChevronLeft :size="22" :stroke-width="2.25" />
+            </button>
+            <h2 class="sv-mhead-title">{{ currentLabel }}</h2>
+            <button class="sv-mhead-btn" aria-label="Close server settings" @click="emit('close')">
+              <X :size="22" :stroke-width="1.5" />
+            </button>
+          </div>
 
           <div class="sv-scroll">
             <!-- Only the page being viewed is mounted; a settings surface with
@@ -154,13 +188,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 :is-owner="isOwner"
                 @toast="m => emit('toast', m)"
               />
-              <div v-else :key="page" class="st-placeholder">
-                <span class="st-placeholder-title">{{ currentLabel }} — not built yet</span>
-                <span class="st-placeholder-sub">
-                  The screen is designed; the server side it needs does not
-                  exist. Listed rather than hidden, so the plan is visible.
-                </span>
-              </div>
+              <!-- The profile page describes a server that getServerDetail has not
+                   returned yet. Until it does there is nothing true to show; a
+                   failed load toasts and closes, so this never sticks. -->
+              <div v-else key="loading" aria-busy="true" />
             </Transition>
           </div>
         </main>
@@ -267,29 +298,64 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .sv-close:hover .sv-close-x { background: var(--hover); }
 .sv-close:active .sv-close-x { transform: scale(.94); }
 
-.sv-back {
-  display: none;
-  align-items: center; gap: 6px;
-  padding: 14px 16px; font-size: 15px; font-weight: 600;
-  color: var(--text-1); background: none; border: none; cursor: pointer;
-  font-family: inherit; text-align: left;
-}
-
 /* ── Phone: two screens, the nav pushed aside by the detail ── */
 @media (max-width: 768px) {
+  /* Below the connection strip, which is pinned over the top edge and publishes
+     its height as --conn-h while it is up (see SettingsModal). That height
+     already includes the status-bar inset, so the header drops its own while
+     the strip is showing. */
+  .sv-overlay {
+    top: var(--conn-h, 0px);
+    --sv-top-inset: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px));
+  }
   .sv { overflow: hidden; }
   .sv-nav, .sv-main {
     position: absolute; inset: 0; width: 100%;
     transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);
   }
-  .sv-nav { z-index: 1; justify-content: flex-start; }
-  .sv-nav-inner { width: 100%; padding: 20px 12px 40px; }
+  /* A column, so the header sits above the list and sticks while it scrolls. */
+  .sv-nav { z-index: 1; flex-direction: column; justify-content: flex-start; align-items: stretch; }
+  .sv-nav-inner { width: 100%; padding: 8px 12px 40px; }
   .sv-main { z-index: 2; transform: translate3d(100%, 0, 0); background: var(--bg-raised); }
   .sv.m-detail .sv-nav { transform: translate3d(-28%, 0, 0); opacity: .6; }
   .sv.m-detail .sv-main { transform: translate3d(0, 0, 0); box-shadow: var(--shadow-drawer); }
-  .sv-navitem { min-height: 44px; }
-  .sv-back { display: flex; }
-  .sv-scroll { padding: 4px 16px 60px; max-width: none; }
+  .sv-navitem { min-height: 48px; font-size: 15px; }
+  .sv-navitem-chev { color: var(--icon); flex-shrink: 0; }
+  /* Highlighting the "current" row is desktop grammar — both panes are on screen
+     there. In a stack you are on the list or on the page, so a permanently lit
+     row reads as a stuck selection (user settings drops it the same way). */
+  .sv-navitem.active { background: none; box-shadow: none; color: var(--text-2); }
+  .sv-scroll { padding: 16px 16px 60px; max-width: none; overflow-x: clip; }
   .sv-scroll > * { max-width: none; }
+
+  /* The same header as the user-settings stack: title, close, and on a section a
+     back arrow. 56px under the status bar, sticky so it survives a long page. */
+  .sv-mhead {
+    position: sticky; top: 0; z-index: 5; flex: none;
+    display: flex; align-items: center; gap: 4px;
+    padding: var(--sv-top-inset, env(safe-area-inset-top)) 8px 0;
+    min-height: calc(56px + var(--sv-top-inset, env(safe-area-inset-top)));
+    background: var(--bg-floor);
+    border-bottom: 1px solid var(--border);
+  }
+  .sv-mhead-detail { background: var(--bg-raised); }
+  .sv-mhead-title {
+    flex: 1; margin: 0; text-align: center;
+    font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-strong);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* The list screen has no back arrow, so a centred title would sit off-centre
+     against a lone close button — left-aligned is the honest version. */
+  .sv-nav .sv-mhead-title { text-align: left; padding-left: 8px; }
+  .sv-mhead-btn {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; flex-shrink: 0;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-2); border-radius: var(--edge-lg);
+  }
+  .sv-mhead-btn:active { background: var(--hover); color: var(--text-strong); }
+}
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+  .sv-nav, .sv-main { transition: opacity var(--dur-3) var(--ease-out); }
 }
 </style>

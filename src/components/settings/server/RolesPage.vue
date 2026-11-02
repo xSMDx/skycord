@@ -358,8 +358,7 @@ const removeFromRole = (m: ServerMember) => {
         </ul>
 
         <p class="rl-listnote">
-          Highest role first. @everyone stays at the bottom — position 0 is what
-          “everyone” means. <span class="st-tbd">TBD</span> reordering.
+          Highest role first. @everyone stays at the bottom, under every other role.
         </p>
       </aside>
 
@@ -803,5 +802,15 @@ const removeFromRole = (m: ServerMember) => {
 @media (max-width: 1180px) {
   .rl-stage { flex-direction: column; gap: 24px; }
   .rl-list { width: 100%; position: static; }
+}
+/* Phone: everything pressable is 44px tall. (The swatches and the member remove
+   buttons are the next smallest; the rows and tabs are what a thumb meets first.) */
+@media (max-width: 768px) {
+  .rl-stage { align-items: stretch; }
+  .rl-role-btn { min-height: 44px; }
+  .rl-tab { min-height: 44px; }
+  .rl-swatch { width: 44px; height: 44px; }
+  .rl-member-x { width: 44px; height: 44px; }
+  .rl-cand { min-height: 44px; }
 }
 </style>

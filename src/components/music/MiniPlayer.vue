@@ -14,16 +14,20 @@
  * have not tuned into. It used to show nothing at all, so a song everyone
  * else was listening to was invisible unless you opened the music room.
  *
- * Deliberately small: art, a name, two buttons, a hairline of progress.
+ * Deliberately small: art, a name, a few buttons, a hairline of progress.
+ * On a channel whose server can pause, the buttons are Pause (or Resume),
+ * Skip and Leave — the same three a preview of your own gets, in the same
+ * order, because they are the same three acts; only these ones reach
+ * everyone listening.
  * Everything else is a click away in the room, and this sits directly above
  * the voice panel, the busiest corner of the app.
  */
-import { computed } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { LogOut, Music2, Pause, Play, Radio, SkipForward, X } from 'lucide-vue-next'
 import { player, toggle, next, stop } from '@/composables/useMusicPlayer'
 import {
-  music, musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic,
-  type MusicChannelView,
+  music, musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, clearMusicError,
+  togglePauseMusic, isPaused, canPauseOrResume, isPausePending, PAUSE_SETTLE_MS, type MusicChannelView,
 } from '@/composables/useMusic'
 
 const emit = defineEmits<{ open: [] }>()
@@ -38,11 +42,15 @@ const soloPlaying = computed(() => !!player.current && !player.paused)
  * Music in your call that you are not hearing — shown when nothing you
  * hear is. The busiest channel if there are several: that is the one most
  * people are in. A paused song of your own does not hide it; one playing does.
+ * A channel that is playing comes before one that is held, whatever the
+ * crowd: the strip is for music you could be hearing, and held music is
+ * silent for everyone.
  */
 const playingHere = computed(() => music.channels.filter(c => c.now))
 const nearby = computed(() => {
   if (live.value || soloPlaying.value || !playingHere.value.length) return null
-  return [...playingHere.value].sort((a, b) => b.listeners.length - a.listeners.length)[0]
+  return [...playingHere.value].sort((a, b) =>
+    Number(isPaused(a)) - Number(isPaused(b)) || b.listeners.length - a.listeners.length)[0]
 })
 const local = computed(() => (live.value || nearby.value ? null : player.current))
 
@@ -63,6 +71,43 @@ const channelProgress = (c: MusicChannelView | null): number => {
   return Math.min(100, (at / d) * 100)
 }
 const liveProgress = computed(() => channelProgress(live.value))
+
+/**
+ * A refusal of something tapped here, in the strip, for as long as the
+ * composer's note for a music command lasts.
+ *
+ * The server answers a refused pause or skip with one `music:error` that
+ * names no action, and the strip is always on screen — so it shows only the
+ * refusal that lands within a pause's longest wait of its own tap (anything
+ * later answers something done elsewhere, which shows it there), and lets it
+ * go after a while rather than keeping a red line in the sidebar all day.
+ */
+const REFUSAL_MS = 8000
+const refusal = ref('')
+let sentAt = 0
+let refusalT: ReturnType<typeof setTimeout> | null = null
+watch(() => music.error, e => {
+  if (!e) { refusal.value = ''; return }
+  if (Date.now() - sentAt < PAUSE_SETTLE_MS) {
+    refusal.value = e
+    if (refusalT) clearTimeout(refusalT)
+    refusalT = setTimeout(() => { refusal.value = '' }, REFUSAL_MS)
+  }
+})
+onBeforeUnmount(() => { if (refusalT) clearTimeout(refusalT) })
+
+/** Pause or resume from the strip. A tap while one is on its way changes nothing. */
+const pauseHere = (c: MusicChannelView): void => {
+  if (isPausePending(c)) return
+  clearMusicError()
+  sentAt = Date.now()
+  togglePauseMusic(c)
+}
+const skipHere = (c: MusicChannelView): void => {
+  clearMusicError()
+  sentAt = Date.now()
+  skipMusic(c.id)
+}
 
 const nearbyTitle = computed(() => nearby.value?.now?.title ?? 'A linked track')
 const nearbyWho = computed(() => {
@@ -98,16 +143,32 @@ const progress = computed(() =>
         <span class="mp-text">
           <span class="mp-title">{{ liveTitle }}</span>
           <!-- Live, and where: the one thing that tells you this is shared
-               rather than yours. -->
-          <span class="mp-artist"><span class="mp-pulse" aria-hidden="true" /><span class="mp-where">{{ live.name }}</span></span>
+               rather than yours. Held, the dot stops and the line says so,
+               because the silence is the room's, not a fault in your ear. -->
+          <span class="mp-artist">
+            <span class="mp-pulse" :class="{ still: isPaused(live) }" aria-hidden="true" />
+            <span class="mp-where">{{ isPaused(live) ? `Paused · ${live.name}` : live.name }}</span>
+          </span>
         </span>
       </button>
 
-      <!-- Skipping a shared channel skips it for everyone, so the label
-           says so rather than looking like the private next button. -->
+      <!-- Pause and Skip reach everyone listening, so their labels say so
+           rather than looking like the private keys. One control, Pause
+           while it plays and Resume while it is held; absent when the
+           server's music service cannot pause, and busy while one is on
+           its way. -->
+      <button
+        v-if="canPauseOrResume(live)" class="mp-btn" :class="{ pending: isPausePending(live) }"
+        :aria-label="isPaused(live) ? `Resume for everyone in ${live.name}` : `Pause for everyone in ${live.name}`"
+        :aria-busy="isPausePending(live)" :aria-disabled="isPausePending(live)"
+        v-tip="isPaused(live) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
+        @click="pauseHere(live)"
+      >
+        <component :is="isPaused(live) ? Play : Pause" :size="14" :stroke-width="2.5" />
+      </button>
       <button
         v-if="live.now" class="mp-btn" :aria-label="`Skip for everyone in ${live.name}`"
-        v-tip="'Skip — for everyone listening'" @click="skipMusic(live.id)"
+        v-tip="'Skip — for everyone listening'" @click="skipHere(live)"
       >
         <SkipForward :size="13" :stroke-width="2.5" />
       </button>
@@ -129,7 +190,7 @@ const progress = computed(() =>
         <span class="mp-text">
           <span class="mp-title">{{ nearbyTitle }}</span>
           <!-- No live dot: you are not hearing this. Where, and how many are. -->
-          <span class="mp-artist"><span class="mp-where">Playing in {{ nearby.name }}{{ nearbyWho }}</span></span>
+          <span class="mp-artist"><span class="mp-where">{{ isPaused(nearby) ? 'Paused' : 'Playing' }} in {{ nearby.name }}{{ nearbyWho }}</span></span>
         </span>
       </button>
       <button class="mp-join" :aria-label="`Join ${nearby.name}`" @click="listenToMusic(nearby.id)">Join</button>
@@ -162,6 +223,9 @@ const progress = computed(() =>
       </button>
     </template>
 
+    <!-- Its own line under the row, so the row never reflows around it. -->
+    <p v-if="refusal" class="mp-err" role="alert">{{ refusal }}</p>
+
     <!-- A hairline, not a scrubber. Seeking belongs where you can see the
          numbers, and a shared song cannot be sought at all. -->
     <span class="mp-rail" role="presentation">
@@ -173,7 +237,7 @@ const progress = computed(() =>
 <style scoped>
 .mp {
   position: relative;
-  display: flex; align-items: center; gap: 2px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
   margin: 0 8px 6px; padding: 6px 4px 6px 6px;
   background: var(--bg-input); border-radius: var(--edge-md);
 }
@@ -217,6 +281,9 @@ const progress = computed(() =>
   animation: mp-breathe 2.4s var(--ease-out) infinite;
 }
 @keyframes mp-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+/* Held: still, and dimmed as well, so it reads apart from a live dot that
+   reduced motion has stopped — that one stays at full strength. */
+.mp-pulse.still { animation: none; opacity: .4; }
 
 /* Join: the one thing to do about music you can see and not hear. */
 .mp-join {
@@ -236,13 +303,23 @@ const progress = computed(() =>
   display: grid; place-items: center; width: 24px; height: 24px;
   border: none; background: none; cursor: pointer; color: var(--text-2);
   border-radius: var(--edge-sm);
-  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out),
+              opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.mp-btn.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 @media (hover: hover) and (pointer: fine) {
   .mp-btn:hover { background: var(--hover); color: var(--text-1); }
   .mp-stop:hover { color: var(--danger-text); }
 }
 .mp-btn:active { transform: scale(.94); }
+
+/* A refusal of a tap here, as the call rail words one. */
+.mp-err {
+  flex: 1 0 100%; min-width: 0; margin: 4px 2px 0;
+  font-size: 11.5px; line-height: 1.45; color: var(--danger-text);
+}
 
 .mp-rail {
   position: absolute; left: 6px; right: 6px; bottom: 2px;
@@ -258,9 +335,9 @@ const progress = computed(() =>
   transition: transform 1s linear;
 }
 
-/* Touch targets, per DESIGN.md. */
+/* Touch targets: 44px, the floor for a thumb. */
 @media (max-width: 768px) {
-  .mp-btn { width: 40px; height: 40px; }
+  .mp-btn { width: 44px; height: 44px; }
   .mp-join { height: 40px; padding: 0 16px; }
   .mp-art { width: 34px; height: 34px; }
 }

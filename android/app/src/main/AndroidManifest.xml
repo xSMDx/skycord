@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The tick under a finger on Hold to talk (navigator.vibrate): without this, Chromium does nothing.
+         A normal permission, granted at install, with no prompt. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The background connection (notify/NotifyService): a foreground service of type remoteMessaging. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <!-- A call rings full-screen, even over the lock screen (notify/CallRinger). From Android 14 the person
+         can switch it off, and the ring is then a heads-up notification. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Back after a restart (notify/BootReceiver), and one explained ask to be left running in the
+         background (MainActivity, once). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- usesCleartextTraffic: a server on a home network often has no certificate. -->
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.Skycord"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:allowBackup="false">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection|keyboard|navigation|colorMode"
+            android:windowSoftInputMode="adjustNothing">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity>
+        <!-- The private door for the app's own notifications, rings, missed calls and Answer button
+             (notify/Notifier, CallRinger): they open MainActivity through this alias, and MainActivity
+             honours the open/join extras only when an intent came through it (core/NoticeEntry). Not
+             exported, so no other app can address it: MainActivity itself is exported, being the launcher. -->
+        <activity-alias
+            android:name=".NoticeEntry"
+            android:exported="false"
+            android:targetActivity=".MainActivity" />
+        <!-- The incoming-call screen: over the lock screen, waking the phone. Its own task, so it never
+             disturbs the app's, and never in Recents. Not exported: only a ring's PendingIntent opens it.
+             showWhenLocked/turnScreenOn start at API 27; the activity sets the window flags for API 26. -->
+        <activity
+            tools:ignore="UnusedAttribute"
+            android:name=".notify.IncomingCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:turnScreenOn="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection" />
+        <!-- remoteMessaging: passing the person's messages on to them, no daily limit, and still
+             allowed to start from boot on Android 15 (see NotifyService). Not exported. -->
+        <service
+            android:name=".notify.NotifyService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+        <receiver
+            android:name=".notify.NoticeActions"
+            android:exported="false" />
+        <!-- The background connection comes back after a restart and after an update. Both broadcasts are
+             the system's own, which a non-exported receiver still gets; no one else can send them. Not
+             direct-boot aware: it runs after the first unlock, when the sign-in can be read. -->
+        <receiver
+            android:name=".notify.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
+        </provider>
+    </application>
+</manifest>

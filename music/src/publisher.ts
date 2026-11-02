@@ -17,7 +17,8 @@ import {
 } from '@livekit/rtc-node'
 import { AccessToken, TrackSource as GrantSource } from 'livekit-server-sdk'
 import type { Readable } from 'stream'
-import { SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME, decode, frames } from './decode.js'
+import { SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME, decode, type Decoder } from './decode.js'
+import { Playhead, playThrough } from './playhead.js'
 
 /** Must match the client's MUSIC_IDENTITY. The colon is what makes it unforgeable. */
 export const MUSIC_IDENTITY = 'svc:music'
@@ -35,6 +36,8 @@ interface Channel {
   track: LocalAudioTrack
   /** Stops whatever is currently playing, if anything. */
   stop: () => void
+  /** The song playing now, which is what pause and resume act on. Null between songs. */
+  head: Playhead | null
 }
 
 interface RoomEntry {
@@ -112,7 +115,7 @@ export class MusicPublisher {
       track,
       new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE }),
     )
-    entry.channels.set(channelId, { source, track, stop: () => {} })
+    entry.channels.set(channelId, { source, track, stop: () => {}, head: null })
     this.log(`opened ${roomName}/${channelId}`)
   }
 
@@ -122,9 +125,14 @@ export class MusicPublisher {
    * Returns when the track finishes or is replaced, so the caller can
    * advance its own queue. Errors are reported rather than thrown: a bad
    * file is an ordinary event here, not an exceptional one.
+   *
+   * `reopen` fetches the same song again from the top, for a source that
+   * closes before its end — usually because a pause left it idle (see
+   * playhead.ts). Without it, such a song ends where its buffer ran out.
    */
   async play(
     roomName: string, channelId: string, body: Readable, startSec = 0,
+    reopen?: () => Promise<Readable | null>,
   ): Promise<'ended' | 'replaced' | 'failed'> {
     const entry = this.rooms.get(roomName)
     const channel = entry?.channels.get(channelId)
@@ -132,39 +140,71 @@ export class MusicPublisher {
 
     channel.stop()                      // whatever was playing is over
 
-    const dec = decode(body, {
-      ffmpegPath: this.cfg.ffmpegPath,
-      onStderr: l => this.log(`ffmpeg ${roomName}/${channelId}: ${l}`),
-      startSec,
+    const source = channel.source
+    const head = new Playhead(startSec * 1000, {
+      /*
+       * captureFrame is awaited, and that await is the clock.
+       *
+       * AudioSource paces itself to real time, so awaiting each frame is
+       * what makes a four-minute track take four minutes instead of being
+       * flung into the room as fast as the file can be read. There is no
+       * separate timer, and adding one would fight this. It is also why a
+       * pause needs no timer: not sending is the pause.
+       */
+      capture: f => source.captureFrame(new AudioFrame(f, SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME)),
+      queuedMs: () => source.queuedDuration,
+      clear: () => source.clearQueue(),
+    }, {
+      // Held past MAX_HOLD_MS: most likely the API restarted during the pause
+      // and forgot the room. Let the song go like a skip — no end reported —
+      // so ffmpeg and the fetch are not held forever. A resume after this
+      // gets a 409, and the API starts the song again where it froze.
+      onHoldExpired: () => {
+        this.log(`${roomName}/${channelId}: held too long, letting the song go`)
+        if (channel.head === head) channel.stop()
+      },
     })
-
-    let replaced = false
-    channel.stop = () => { replaced = true; dec.stop() }
+    let current: Decoder | null = null
+    channel.head = head
+    channel.stop = () => { head.stop(); current?.stop() }
 
     try {
-      for await (const frame of frames(dec.pcm)) {
-        if (replaced) break
-        /*
-         * captureFrame is awaited, and that await is the clock.
-         *
-         * AudioSource paces itself to real time, so awaiting each frame is
-         * what makes a four-minute track take four minutes instead of
-         * being flung into the room as fast as the file can be read. There
-         * is no separate timer, and adding one would fight this.
-         */
-        await channel.source.captureFrame(
-          new AudioFrame(frame, SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME),
-        )
-      }
+      return await playThrough({
+        head, body, startSec, reopen,
+        decode: (b, at) => decode(b, {
+          ffmpegPath: this.cfg.ffmpegPath,
+          onStderr: l => this.log(`ffmpeg ${roomName}/${channelId}: ${l}`),
+          startSec: at,
+        }),
+        onDecoder: d => { current = d },
+      })
     } catch (e) {
       this.log(`play ${roomName}/${channelId} failed: ${String(e).slice(0, 200)}`)
-      dec.stop()
       return 'failed'
+    } finally {
+      // Only this song's: a replacement has already put its own head here.
+      if (channel.head === head) channel.head = null
     }
+  }
 
-    dec.stop()
-    await dec.done
-    return replaced ? 'replaced' : 'ended'
+  /**
+   * Hold the song on a channel: frames stop, the track stays, listeners hear
+   * silence. False when nothing is playing there to hold.
+   */
+  pause(roomName: string, channelId: string): boolean {
+    const head = this.rooms.get(roomName)?.channels.get(channelId)?.head
+    if (!head || head.stopped) return false
+    head.pause()
+    this.log(`paused ${roomName}/${channelId} at ${Math.floor(head.positionMs / 1000)}s`)
+    return true
+  }
+
+  /** Release a held song where it stopped. False when nothing is there to release. */
+  resume(roomName: string, channelId: string): boolean {
+    const head = this.rooms.get(roomName)?.channels.get(channelId)?.head
+    if (!head || head.stopped) return false
+    head.resume()
+    return true
   }
 
   /** Stop a channel and unpublish its track. */

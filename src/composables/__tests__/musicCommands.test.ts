@@ -32,7 +32,7 @@ const world = (over: Partial<Omit<CommandWorld, 'act' | 'solo'>> & {
 } = {}): CommandWorld & { act: Record<keyof CommandWorld['act'], ReturnType<typeof vi.fn>> } => {
   const act = {
     queue: vi.fn(), create: vi.fn(), listen: vi.fn(), skip: vi.fn(), previous: vi.fn(),
-    close: vi.fn(), seek: vi.fn(), setChannelVolume: vi.fn(),
+    close: vi.fn(), seek: vi.fn(), pause: vi.fn(), resume: vi.fn(), setChannelVolume: vi.fn(),
     playSolo: vi.fn(async () => {}), soloNext: vi.fn(async () => {}), soloPrevious: vi.fn(async () => {}),
     soloToggle: vi.fn(async () => {}), soloPause: vi.fn(), soloStop: vi.fn(), soloSeek: vi.fn(),
     soloVolume: vi.fn(), soloShuffle: vi.fn(), soloRepeat: vi.fn(),
@@ -264,13 +264,78 @@ describe('/stop', () => {
 })
 
 describe('/pause and /resume', () => {
-  it('cannot pause a shared song', async () => {
-    const c = channel()
-    for (const cmd of ['pause', 'resume']) {
-      const w = world({ inCall: true, channels: [c], tuned: c })
-      expect(await run(cmd, '', w)).toMatch(/can’t be paused.*\/leave/)
-      expect(w.act.soloPause).not.toHaveBeenCalled()
+  it('/pause pauses the tuned channel and refuses when not tuned', async () => {
+    const c = channel({ pausable: true })
+    const tuned = world({ inCall: true, channels: [c], tuned: c })
+    expect(await run('pause', '', tuned)).toBe('Paused “Khaar” for everyone in Chill.')
+    expect(tuned.act.pause).toHaveBeenCalledWith('c1')
+    expect(tuned.act.soloPause).not.toHaveBeenCalled()
+
+    // Not tuned in, with nothing of your own playing: refused the way /skip
+    // refuses, pointing at the music you could join. Nothing is paused.
+    const notTuned = world({ inCall: true, channels: [c], tuned: null })
+    expect(await run('pause', '', notTuned)).toBe(await run('skip', '', world({ inCall: true, channels: [c] })))
+    expect(await run('pause', '', notTuned)).toBe('Nothing is playing for you. /join to listen to Chill.')
+    expect(notTuned.act.pause).not.toHaveBeenCalled()
+  })
+
+  it('/resume resumes the tuned channel for everyone', async () => {
+    const c = channel({ pausable: true, paused: true })
+    const w = world({ inCall: true, channels: [c], tuned: c })
+    expect(await run('resume', '', w)).toBe('Resumed “Khaar” for everyone in Chill.')
+    expect(w.act.resume).toHaveBeenCalledWith('c1')
+    expect(w.act.soloToggle).not.toHaveBeenCalled()
+  })
+
+  it('says when the tuned channel is already where you asked', async () => {
+    const paused = channel({ pausable: true, paused: true })
+    const w1 = world({ inCall: true, channels: [paused], tuned: paused })
+    expect(await run('pause', '', w1)).toBe('“Khaar” is already paused.')
+    const playing = channel({ pausable: true, paused: false })
+    const w2 = world({ inCall: true, channels: [playing], tuned: playing })
+    expect(await run('resume', '', w2)).toBe('“Khaar” is already playing.')
+    for (const w of [w1, w2]) {
+      expect(w.act.pause).not.toHaveBeenCalled()
+      expect(w.act.resume).not.toHaveBeenCalled()
     }
+  })
+
+  it('says so plainly when the server cannot pause this music, and offers /leave', async () => {
+    // An older server or music service sends no `pausable`.
+    const c = channel()
+    const w = world({ inCall: true, channels: [c], tuned: c })
+    expect(await run('pause', '', w)).toBe('This music can’t be paused here. /leave stops it for you.')
+    // Never paused, so there is nothing to resume: it is playing.
+    expect(await run('resume', '', w)).toBe('“Khaar” is already playing.')
+    expect(w.act.pause).not.toHaveBeenCalled()
+    expect(w.act.resume).not.toHaveBeenCalled()
+    expect(w.act.soloPause).not.toHaveBeenCalled()
+  })
+
+  it('points /join at a channel that is playing, not one that is held', async () => {
+    const held = channel({ id: 'h', name: 'Held', pausable: true, paused: true })
+    const live = channel({ id: 'l', name: 'Live' })
+    const w = world({ inCall: true, channels: [held, live] })
+    expect(await run('pause', '', w)).toBe('Nothing is playing for you. /join to listen to Live.')
+    expect(await run('skip', '', w)).toBe('Nothing is playing for you. /join to listen to Live.')
+    // Held music is still music: with nothing else, it is the one to join.
+    expect(await run('skip', '', world({ inCall: true, channels: [held] })))
+      .toBe('Nothing is playing for you. /join to listen to Held.')
+  })
+
+  it('has nothing to pause in a tuned channel with no song', async () => {
+    const c = channel({ pausable: true, now: null })
+    const w = world({ inCall: true, channels: [c], tuned: c })
+    expect(await run('pause', '', w)).toBe('Nothing is playing in Chill.')
+    expect(await run('resume', '', w)).toBe('Nothing is playing in Chill.')
+    expect(w.act.pause).not.toHaveBeenCalled()
+  })
+
+  it('lists them as pausing the music, for everyone in a shared channel', () => {
+    const pause = MUSIC_COMMANDS.find(m => m.name === 'pause')!
+    const resume = MUSIC_COMMANDS.find(m => m.name === 'resume')!
+    expect(pause.description).toBe('Pause the music (a shared channel pauses for everyone)')
+    expect(resume.description).toBe('Resume the music (a shared channel resumes for everyone)')
   })
   it('pauses and resumes your own', async () => {
     const playing = world({ solo: { current: LIB[0], paused: false } })
@@ -312,6 +377,11 @@ describe('/np and /queue', () => {
     const c = channel()
     expect(await run('np', '', world({ inCall: true, channels: [c], tuned: c, elapsedSec: 18 })))
       .toBe('Chill: “Khaar” by Kourosh — 0:18 / 6:49, added by Ana.')
+  })
+  it('tuned in, paused: says so beside the held time', async () => {
+    const c = channel({ pausable: true, paused: true })
+    expect(await run('np', '', world({ inCall: true, channels: [c], tuned: c, elapsedSec: 18 })))
+      .toBe('Chill: “Khaar” by Kourosh — 0:18 / 6:49, paused, added by Ana.')
   })
   it('your own music, paused', async () => {
     expect(await run('nowplaying', '', world({ solo: { current: LIB[0], at: 5, duration: 200, paused: true } })))

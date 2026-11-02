@@ -101,6 +101,13 @@ export const decode = (body: Readable, opts: DecodeOptions = {}): Decoder => {
   // accumulate processes until its memory limit stopped the service.
   body.pipe(child.stdin)
   body.on('error', () => child.stdin.destroy())
+  // Closed without ending — a socket that idled out is destroyed with no
+  // error — and pipe() leaves the destination open for that. ffmpeg would
+  // then wait for input that never comes, and the channel would hang
+  // silent. Ending stdin lets it decode what it has and finish.
+  let bodyEnded = false
+  body.once('end', () => { bodyEnded = true })
+  body.once('close', () => { if (!bodyEnded && !child.stdin.destroyed) child.stdin.end() })
   // EPIPE here is normal: it means ffmpeg exited first, which is what the
   // byte cap and stop() both cause.
   child.stdin.on('error', () => {})

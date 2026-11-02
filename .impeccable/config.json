@@ -22,6 +22,15 @@
         ],
         "createdAt": "2026-09-19T06:18:19.161Z",
         "reason": "Message-structure conventions, not card accents: the curved reply connector (.reply-preview::before) and the Markdown blockquote rule (.msg-bq), both in neutral --border"
+      },
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "desktop/static/splash.html"
+        ],
+        "createdAt": "2026-10-25T04:42:45.550Z",
+        "reason": "Claude: the only motion matched is .bar's sweep, the startup splash's indeterminate loading bar (pre-existing, commented 'Indeterminate on purpose'), not scrolling content; reduced motion already stops it"
       }
     ]
   }

@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <title>Skycord</title>
 <style>
-  :root { color-scheme: dark; --bg: #111214; --text: #dcddde; --muted: #abb1b8; --brand: #5865f2; --accent: #38b6f1; --track: rgba(255,255,255,.08); --ease: cubic-bezier(.32,.72,0,1); }
+  :root { color-scheme: dark; --bg: #111214; --text: #dcddde; --muted: #abb1b8; --brand: #38b6f1; --accent: #38b6f1; --track: rgba(255,255,255,.08); --ease: cubic-bezier(.32,.72,0,1); }
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; overflow: hidden; }
   /* The whole window drags. */
@@ -31,10 +31,12 @@
 </head>
 <body>
   <main class="stage">
-    <svg class="mark" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"/>
-      <circle class="eye" cx="92" cy="140" r="12" fill="currentColor" stroke="none"/>
-      <circle class="eye" cx="164" cy="140" r="12" fill="currentColor" stroke="none"/>
+    <!-- The mark (src/brand/mark.ts): head and headphones solid, the eyes painted
+         in the background colour so they read as its cut-out eyes and can blink. -->
+    <svg class="mark" viewBox="0 0 256 256" aria-hidden="true">
+      <path fill="currentColor" d="M56,150A72,72 0 0 1 200,150V170A48,48 0 0 1 152,218H104A48,48 0 0 1 56,170ZM12,170V130A17,17 0 0 1 26.47,113.19A108,108 0 0 1 229.53,113.19A17,17 0 0 1 244,130V170A17,17 0 0 1 210,170V130A17,17 0 0 1 212.99,120.38A90,90 0 0 0 43.01,120.38A17,17 0 0 1 46,130V170A17,17 0 0 1 12,170Z"/>
+      <circle class="eye" cx="104" cy="156" r="14" fill="var(--bg)"/>
+      <circle class="eye" cx="152" cy="156" r="14" fill="var(--bg)"/>
     </svg>
     <p class="status" role="status">Starting…</p>
     <div class="bar"><i></i></div>

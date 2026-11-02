@@ -32,7 +32,7 @@ const settle = () => (document.activeElement as HTMLElement | null)?.blur()
 </script>
 
 <template>
-  <div class="ss" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="ss" data-search-screen role="dialog" aria-modal="true" aria-label="Search">
     <header class="ss-head">
       <button type="button" class="ss-back" aria-label="Close search" @click="emit('close')">
         <ChevronLeft :size="22" :stroke-width="2.25" aria-hidden="true" />
@@ -67,4 +67,13 @@ const settle = () => (document.activeElement as HTMLElement | null)?.blur()
 }
 .ss-back:active { background: var(--press-veil); }
 .ss-field { flex: 1; min-width: 0; }
+/* Below the connection strip, which is pinned over the top edge and publishes
+   its height as --conn-h while it is up (see SettingsModal). That height already
+   includes the status-bar inset, so this drops its own while the strip shows. */
+@media (max-width: 768px) {
+  .ss {
+    top: var(--conn-h, 0px);
+    padding-top: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px));
+  }
+}
 </style>

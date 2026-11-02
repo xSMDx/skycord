@@ -11,6 +11,7 @@ import Sparkline from '@/components/ui/Sparkline.vue'
 import { rtc, retainRtcStats, releaseRtcStats, avgPing, outLossPct } from '@/composables/useRtcStats'
 import { useApi, type WireMyVoiceServer } from '@/composables/useApi'
 import { micNotice } from '@/composables/micState'
+import { joinProgress } from '@/composables/callStatus'
 
 // Persistent "Voice Connected" strip above the user panel — stays put while you
 // browse other chats, so the call survives navigation. Mute/deafen live in the
@@ -28,15 +29,6 @@ const emit = defineEmits<{
 // look at it.
 onMounted(retainRtcStats)
 onBeforeUnmount(releaseRtcStats)
-
-// Connecting steps, surfaced from the real join lifecycle (useVoice.connectStage).
-const STAGE_LABEL: Record<string, string> = {
-  'finding-server': 'Finding server…',
-  'connecting':     'Connecting…',
-  'authenticating': 'Authenticating…',
-  'rtc-connecting': 'RTC connecting…',
-  'connected':      'Voice Connected',
-}
 
 // Quality → Lucide signal icon + colour:
 //   signal-high   green  (≤150ms)
@@ -57,13 +49,14 @@ const GREEN = 'var(--green-text)', YELLOW = 'var(--warning-text)', RED = 'var(--
 // conclusion was right and the reason given for it was not.)
 const ORANGE = YELLOW
 const q = computed(() => {
-  if (voice.connectStage === 'failed') return { icon: SignalZero, color: RED, label: 'Couldn’t connect' }
-  if (voice.connecting) {
-    // Auto-retry cycle: red "No route" flash, then blue "Trying again…", repeat.
-    if (voice.connectStage === 'no-route') return { icon: SignalZero, color: RED,  label: 'No route' }
-    if (voice.connectAttempt > 1)          return { icon: SignalLow,  color: BLUE, label: 'Trying again…' }
-    return { icon: SignalLow, color: BLUE, label: STAGE_LABEL[voice.connectStage ?? 'connecting'] ?? 'Connecting…' }
-  }
+  // While joining, or once the join has failed, the words come from
+  // joinProgress (the phone call screen shows the same ones); the icon and
+  // colour stay this strip's own choice: red for the failing states, blue for
+  // progress.
+  const join = joinProgress(voice)
+  if (join) return join.failing
+    ? { icon: SignalZero, color: RED,  label: join.label }
+    : { icon: SignalLow,  color: BLUE, label: join.label }
   if (voice.quality === 'lost') return { icon: SignalZero, color: RED, label: 'No route' }
   const p = voice.ping
   if (p === null) return { icon: SignalMedium, color: YELLOW, label: 'Voice Connected' }

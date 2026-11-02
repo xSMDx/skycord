@@ -258,9 +258,17 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg-system-time{font-size:11px;color:var(--text-faint);margin-left: 2px}
 
 .msg{display:flex;align-items:flex-start;padding: var(--msg-pad-y, 1px) 48px var(--msg-pad-y, 1px) 16px;position:relative;transition: background var(--dur-1) var(--ease-out)}
-.msg:hover{background:var(--hover)}
+/* Row tint on hover is for a pointer. On a phone a tap leaves :hover stuck on
+   the row until the next tap elsewhere, which painted a grey band, a desktop
+   toolbar and a timestamp over a message the reader had only touched. Touch has
+   its own response: the press state, and long-press for the sheet. */
+@media (hover: hover) and (pointer: fine){
+  .msg:hover{background:var(--hover)}
+}
 .msg.mentioned{background:var(--mention-row-bg);box-shadow:inset 2px 0 0 var(--mention-row-bar)}
-.msg.mentioned:hover{background:var(--mention-row-bg-hover)}
+@media (hover: hover) and (pointer: fine){
+  .msg.mentioned:hover{background:var(--mention-row-bg-hover)}
+}
 .msg:not(.consecutive){margin-top: var(--msg-group-gap, 16px)}
 .msg.consecutive{padding-top: 0}
 .msg.failed .msg-text{color:var(--danger-text)}
@@ -271,9 +279,13 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    was also one of four things firing at once on every message hover (row tint,
    avatar, timestamp, action bar). Scoped to the avatar itself: same affordance,
    but only when it is the thing you are actually pointing at. */
-.msg-av:hover{transform:scale(1.06)}
+@media (hover: hover) and (pointer: fine){
+  .msg-av:hover{transform:scale(1.06)}
+}
 .msg-ts{font-size:10px;color:transparent;line-height:22px;padding-left: 2px;transition: color var(--dur-1) var(--ease-out);white-space:nowrap}
-.msg:hover .msg-ts{color:var(--text-faint)}
+@media (hover: hover) and (pointer: fine){
+  .msg:hover .msg-ts{color:var(--text-faint)}
+}
 .msg-body{flex:1;min-width:0;padding-top: 4px}
 .reply-previews{display:flex;flex-direction:column;gap: 1px;margin-bottom: 4px}
 .reply-preview{display:flex;align-items:center;gap: 6px;margin-left: 6px;font-size:13px;color:var(--text-3);overflow:hidden;position:relative;padding-left: 14px;cursor:pointer;border-radius: var(--edge-sm);transition: background var(--dur-1) var(--ease-out);width:fit-content;max-width:100%}
@@ -314,7 +326,9 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .msg.compact:not(.consecutive){margin-top: 6px}
 .msg.compact .msg-left{width:auto;min-width:46px;justify-content:flex-end;padding: 0 8px 0 0}
 .msg.compact .msg-ts{color:var(--text-faint);line-height:1.5}
-.msg.compact:hover .msg-ts{color:var(--text-2)}
+@media (hover: hover) and (pointer: fine){
+  .msg.compact:hover .msg-ts{color:var(--text-2)}
+}
 .msg.compact .msg-body{padding-top: 0}
 .msg-author-inline{display:inline;margin-right: 8px;font-size:var(--msg-font-size, 15px);line-height:1.5;vertical-align:baseline}
 .msg.compact .msg-text{display:inline}
@@ -363,12 +377,31 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   opacity:0;pointer-events:none;transform:translateY(2px);
   transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.msg-actions.shown,
-.msg:focus-within .msg-actions{opacity:1;pointer-events:auto;transform:none}
+/* A mouse reveals the bar by hover (`shown`) or by focus. A tap must not: touch
+   browsers fire an emulated mouseenter, so `shown` stuck on the tapped message
+   and laid a row of 28px buttons over its text. Touch gets the long-press sheet
+   instead. A keyboard still gets the bar on any device, via :focus-visible,
+   which a tap on a button inside the row does not match. */
+@media (hover: hover) and (pointer: fine){
+  .msg-actions.shown,
+  .msg:focus-within .msg-actions{opacity:1;pointer-events:auto;transform:none}
+}
+.msg:has(:focus-visible) .msg-actions{opacity:1;pointer-events:auto;transform:none}
 .ap{width:28px;height:28px;border-radius: var(--edge-md);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out)}
 /* 1.15 was the largest hover scale in the app, on a 28px button, in a bar that
    has just faded in — three pieces of motion stacked on one gesture. The tint
    and colour change carry the hover; :active below carries the press. */
 .ap:hover{background:var(--hover-strong);color:var(--text-1)}
 .ap:active{transform:scale(.9)}
+/* Phone gutters. Desktop reserves 48px on the right for the hover toolbar and
+   56px for the avatar column; on a 360px screen that is a third of the width
+   gone before a word is set. Nothing is floated on the right on touch (the
+   toolbar is off), so the text takes it back: 12px right, a 44px avatar column
+   (the 32px avatar keeps 6px either side). Compact layout sets its own column
+   width and is untouched. */
+@media (max-width: 768px){
+  .msg{padding-right: 12px}
+  .msg-system{padding-right: 12px}
+  .msg-left{width:44px}
+}
 </style>

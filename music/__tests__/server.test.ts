@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { AddressInfo } from 'net'
-import type { Server } from 'http'
+import { createServer, type Server } from 'http'
 import { createMusicServer } from '../src/server.js'
 import type { MusicPublisher } from '../src/publisher.js'
 
@@ -16,6 +16,8 @@ const SECRET = 'a-shared-secret-of-some-length'
 
 const calls: string[] = []
 const ended: string[] = []
+/** The channels the stub says have a song it can hold. */
+const playingHere = new Set<string>()
 
 /** Enough of a publisher to record what the server asked it to do. */
 const stubPublisher = {
@@ -25,6 +27,8 @@ const stubPublisher = {
     return 'ended' as const
   },
   close: async (room: string, id: string) => { calls.push(`close ${room}/${id}`) },
+  pause: (room: string, id: string) => { calls.push(`pause ${room}/${id}`); return playingHere.has(`${room}/${id}`) },
+  resume: (room: string, id: string) => { calls.push(`resume ${room}/${id}`); return playingHere.has(`${room}/${id}`) },
 } as unknown as MusicPublisher
 
 let server: Server
@@ -133,6 +137,189 @@ describe('/close', () => {
 
   it('requires room and channelId', async () => {
     expect((await post('/close', { room: 'r' }, SECRET)).status).toBe(400)
+  })
+})
+
+describe('what this service can do', () => {
+  it('says it can pause, to the API and nobody else', async () => {
+    // The API sends `pausable` only when this answers. An older service has
+    // no such route and 404s, which is how the API knows not to.
+    expect((await fetch(base + '/capabilities')).status).toBe(401)
+    const r = await fetch(base + '/capabilities', { headers: { 'x-music-secret': SECRET } })
+    expect(r.status).toBe(200)
+    expect(await r.json()).toMatchObject({ pause: true })
+  })
+})
+
+describe('/pause and /resume', () => {
+  it('hold and release the song on that channel, answering 200 when done', async () => {
+    calls.length = 0
+    playingHere.add('voice:1/chill')
+    expect((await post('/pause', { room: 'voice:1', channelId: 'chill' }, SECRET)).status).toBe(200)
+    expect((await post('/resume', { room: 'voice:1', channelId: 'chill' }, SECRET)).status).toBe(200)
+    expect(calls).toEqual(['pause voice:1/chill', 'resume voice:1/chill'])
+    playingHere.clear()
+  })
+
+  it('answer 409 when nothing is playing there to hold', async () => {
+    // What a restarted service says: it holds nothing. The API then starts
+    // the song again from where the room paused it.
+    expect((await post('/pause', { room: 'voice:1', channelId: 'gone' }, SECRET)).status).toBe(409)
+    expect((await post('/resume', { room: 'voice:1', channelId: 'gone' }, SECRET)).status).toBe(409)
+  })
+
+  it('require room and channelId, and the secret', async () => {
+    for (const path of ['/pause', '/resume']) {
+      expect((await post(path, { room: 'r' }, SECRET)).status).toBe(400)
+      expect((await post(path, { channelId: 'c' }, SECRET)).status).toBe(400)
+      expect((await post(path, { room: 'r', channelId: 'c' })).status).toBe(401)
+    }
+  })
+})
+
+describe('a pause while the next song is still being fetched', () => {
+  // /play and /play-track answer at once and fetch in the background; the
+  // song already playing keeps playing until the new one starts. A pause in
+  // that gap would hold the OUTGOING song, the new one would then start
+  // unpaused, and the room would show Paused over music. So it is refused,
+  // the same "try again in a moment" as a pause at the very start of a song.
+  it('is refused, and works again once the new song has started', async () => {
+    let release: (() => void) | null = null
+    const api = createServer((_req, res) => {
+      release = () => {
+        if (res.headersSent) return
+        res.writeHead(200, { 'content-type': 'audio/webm' }); res.end(Buffer.from('bytes'))
+      }
+    })
+    await new Promise<void>(r => api.listen(0, '127.0.0.1', () => r()))
+    const svc = createMusicServer(stubPublisher, {
+      port: 0, host: '127.0.0.1', secret: SECRET, maxBytes: 1024,
+      apiInternalUrl: `http://127.0.0.1:${(api.address() as AddressInfo).port}`,
+    })
+    await new Promise<void>(r => svc.listening ? r() : svc.once('listening', () => r()))
+    const at = `http://127.0.0.1:${(svc.address() as AddressInfo).port}`
+    const send = (path: string, body: unknown) => fetch(at + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-music-secret': SECRET },
+      body: JSON.stringify(body),
+    })
+    const waitFor = async (ok: () => boolean) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 20)) }
+    try {
+      calls.length = 0
+      playingHere.add('voice:9/c')                     // the outgoing song, still playing
+      expect((await send('/play-track', { room: 'voice:9', channelId: 'c', trackId: 'b'.repeat(24) })).status).toBe(200)
+      await waitFor(() => release !== null)            // the read is out, not answered
+
+      const early = await send('/pause', { room: 'voice:9', channelId: 'c' })
+      expect(early.status).toBe(409)
+      expect(calls).not.toContain('pause voice:9/c')
+
+      release!()
+      await waitFor(() => calls.includes('play voice:9/c'))
+      expect(calls).toContain('play voice:9/c')
+      expect((await send('/pause', { room: 'voice:9', channelId: 'c' })).status).toBe(200)
+    } finally {
+      playingHere.clear()
+      ;(release as (() => void) | null)?.()            // never leave the read hanging
+      await new Promise<void>(r => svc.close(() => r()))
+      api.closeAllConnections()
+      await new Promise<void>(r => api.close(() => r()))
+    }
+  })
+})
+
+describe('a play whose fetch lands after a newer one', () => {
+  // Two quick skips are two plays in flight. If the first one's fetch is the
+  // slow one, it must not land on top of the second song once that is
+  // playing — nor report an end for it, which would move the API's queue
+  // past the song everyone is hearing. It bails, and lets go of its fetch.
+  const OLD = 'a'.repeat(24), NEW = 'b'.repeat(24)
+  const setup = async () => {
+    const held: { answer: (status: number) => void; closed: Promise<void> }[] = []
+    const api = createServer((req, res) => {
+      if (req.url?.includes(NEW)) {
+        res.writeHead(200, { 'content-type': 'audio/webm' }); res.end(Buffer.from('new')); return
+      }
+      const closed = new Promise<void>(r => res.once('close', () => r()))
+      held.push({
+        closed,
+        answer: (status) => {
+          if (status !== 200) { res.writeHead(status); res.end(); return }
+          // Headers and a little of the body, then nothing: a live fetch.
+          res.writeHead(200, { 'content-type': 'audio/webm' }); res.write(Buffer.from('old'))
+        },
+      })
+    })
+    await new Promise<void>(r => api.listen(0, '127.0.0.1', () => r()))
+    const endedHere: string[] = []
+    const svc = createMusicServer(stubPublisher, {
+      port: 0, host: '127.0.0.1', secret: SECRET, maxBytes: 1024,
+      apiInternalUrl: `http://127.0.0.1:${(api.address() as AddressInfo).port}`,
+      onEnded: (room, id) => endedHere.push(`${room}/${id}`),
+    })
+    await new Promise<void>(r => svc.listening ? r() : svc.once('listening', () => r()))
+    const at = `http://127.0.0.1:${(svc.address() as AddressInfo).port}`
+    const send = (path: string, body: unknown) => fetch(at + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-music-secret': SECRET },
+      body: JSON.stringify(body),
+    })
+    const close = async () => {
+      await new Promise<void>(r => svc.close(() => r()))
+      api.closeAllConnections()
+      await new Promise<void>(r => api.close(() => r()))
+    }
+    return { held, endedHere, send, close }
+  }
+  const waitFor = async (ok: () => boolean) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 20)) }
+  const plays = () => calls.filter(c => c === 'play voice:7/c').length
+
+  it('does not replace the newer song, reports no end, and closes its fetch', async () => {
+    const { held, endedHere, send, close } = await setup()
+    try {
+      calls.length = 0
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: OLD })
+      await waitFor(() => held.length === 1)          // the old read is out, unanswered
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: NEW })
+      await waitFor(() => plays() === 1)              // the new song is playing
+      const endsBefore = endedHere.length
+
+      held[0].answer(200)
+      await held[0].closed                             // let go, not left to idle out
+      await new Promise(r => setTimeout(r, 100))
+      expect(plays()).toBe(1)
+      expect(endedHere.length).toBe(endsBefore)
+    } finally { await close() }
+  })
+
+  it('a late failure reports no end either', async () => {
+    const { held, endedHere, send, close } = await setup()
+    try {
+      calls.length = 0
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: OLD })
+      await waitFor(() => held.length === 1)
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: NEW })
+      await waitFor(() => plays() === 1)
+      const endsBefore = endedHere.length
+      held[0].answer(500)
+      await new Promise(r => setTimeout(r, 200))
+      expect(endedHere.length).toBe(endsBefore)
+    } finally { await close() }
+  })
+
+  it('a close in the meantime makes it stale too', async () => {
+    const { held, endedHere, send, close } = await setup()
+    try {
+      calls.length = 0
+      await send('/play-track', { room: 'voice:7', channelId: 'c', trackId: OLD })
+      await waitFor(() => held.length === 1)
+      await send('/close', { room: 'voice:7', channelId: 'c' })
+      held[0].answer(200)
+      await held[0].closed
+      await new Promise(r => setTimeout(r, 100))
+      expect(plays()).toBe(0)
+      expect(endedHere).toEqual([])
+    } finally { await close() }
   })
 })
 

@@ -7,7 +7,7 @@
  * checks every one of them.
  */
 import { watch, onScopeDispose, type ComputedRef } from 'vue'
-import { desktopBridge } from './desktopBridge'
+import { appBridge } from './desktopBridge'
 
 export type View = 'friends' | 'dm' | 'server' | 'group' | 'discover'
 export interface Place { view: View; serverId: string | null; channelId: string | null; dmId: string | null; groupId: string | null }
@@ -83,7 +83,7 @@ export const useDesktopTitleBar = (opts: {
   /** Go to a place; false if it no longer exists (a server left, a DM gone). */
   go(place: Place): Promise<boolean>
 }): void => {
-  const bridge = desktopBridge()
+  const bridge = appBridge()
   const bar = bridge?.titleBar
   if (!bridge || !bar) return
 

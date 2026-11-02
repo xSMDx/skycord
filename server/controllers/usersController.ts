@@ -302,7 +302,11 @@ const broadcastStatusToFriends = async (
     const fid = f.requester.toString() === userId ? f.receiver.toString() : f.requester.toString()
     io.to(`user:${fid}`).emit('presence', { userId, status })
   }
-  io.to(`user:${userId}`).emit('presence:self', { status: chosen, effective: status })
+  // `until` is always present, null included, exactly as the socket path
+  // sends it: the web client disarms its expiry timer only when the key
+  // exists, so omitting it left a tab holding the deadline a previous timed
+  // status had set.
+  io.to(`user:${userId}`).emit('presence:self', { status: chosen, effective: status, until })
 }
 
 // ── Change username (requires current password) ──────────────────────────────
@@ -525,6 +529,13 @@ export const setConvPref = async (req: Request, res: Response, next: NextFunctio
     user.convPrefs = prefs as any
     user.markModified('convPrefs')
     await user.save({ validateModifiedOnly: true })
+
+    // Tell the person's OTHER devices to re-read. The Android background
+    // service decides mute and level from the copy it fetched at connect, so
+    // without this a mute made on the web rang the phone until it reconnected.
+    // No payload on purpose: the listener refetches, so there is nothing to
+    // apply out of order. Additive -- an older client has no handler for it.
+    getIO()?.to(`user:${req.user!.sub}`).emit('prefs:changed')
 
     res.json({ convId, pref: liveConvPref(prefs.get(convId)), prefs: prefsToObject(prefs) })
   } catch (err) { next(err) }

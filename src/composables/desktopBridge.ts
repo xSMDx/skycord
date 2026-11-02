@@ -1,8 +1,9 @@
 /**
- * The Windows app's bridge, when this client is running inside it.
+ * The native app's bridge, when this client is running inside one.
  *
- * The desktop shell loads this same web client and adds `window.skycordDesktop`
- * through its preload. Everything desktop-only feature-detects through here, so
+ * Two apps load this same web client: the Windows app adds `window.skycordDesktop`
+ * through its preload, and the Android app's WebView shell injects
+ * `window.skycordAndroid`. Everything app-only feature-detects through here, so
  * in a browser it is simply null and nothing changes.
  */
 /** The stream settings chosen in the app's share picker. */
@@ -111,11 +112,91 @@ export interface DesktopBridge {
     keepInTray(): Promise<boolean>
     setKeepInTray(on: boolean): void
   }
+  /**
+   * Android only: the back button, offered to the page first. A handler
+   * returns true when it used the press. Returns a function that stops
+   * listening.
+   */
+  onBack?(cb: () => boolean): () => void
+  /** Android only: the theme's colours for the status and navigation bars. */
+  colors?(c: { bar: string; text: string }): void
+  /**
+   * Android only: the app went to the background (true) or came back (false).
+   * While it is away the app's own service posts the notifications, so the page
+   * keeps quiet. Returns a function that stops listening.
+   */
+  onBackground?(cb: (backgrounded: boolean) => void): () => void
+  /**
+   * Android only: a notification was tapped. Open that conversation — for a
+   * channel, in its server. Returns a function that stops listening.
+   */
+  onOpenConversation?(cb: (c: { kind: 'dm' | 'group' | 'channel'; id: string; serverId?: string }) => void): () => void
+  /**
+   * Android only: Answer on a call notification. Join that call. Returns a
+   * function that stops listening.
+   */
+  onJoinCall?(cb: (c: { kind: 'dm' | 'group'; convId: string }) => void): () => void
+  /** Android only: the conversation now on screen, so the app can clear its notification. */
+  seen?(c: { kind: 'dm' | 'group' | 'channel'; id: string }): void
+  /** Android only: a conversation's mute or level was written, so the app can re-read them. */
+  prefsChanged?(): void
+  /** Android only: the app's own notification switches, shown in Settings › Notifications. */
+  androidNotifications?: {
+    state(): Promise<AndroidNotifyState>
+    setEnabled(on: boolean): void
+    openSystemSettings(): void
+    requestBatteryExemption(): void
+  }
+  /**
+   * Android only: where the call's sound comes out, for a speaker button. `setCall(true)` starts a
+   * call on the speaker and `setCall(false)` hands the route back; a headset overrides the choice.
+   * Absent while the app cannot move WebView's call audio, which is every build so far, so the page
+   * leaves the button out.
+   */
+  audio?: {
+    state(): Promise<AudioRouteState>
+    setCall(active: boolean): void
+    setSpeaker(on: boolean): void
+  }
+  /** Android only: the audio route changed (a headset was plugged in or out). Returns a function that stops listening. */
+  onAudioRoute?(cb: (s: AudioRouteState) => void): () => void
+  /** Android only: keep the screen from dimming and locking (true) while the phone call screen is up, or let it (false). */
+  keepScreenOn?(on: boolean): void
 }
 
-export const desktopBridge = (): DesktopBridge | null => {
-  const b = (globalThis as { skycordDesktop?: unknown }).skycordDesktop
-  return b && typeof b === 'object' && typeof (b as DesktopBridge).changeInstance === 'function'
-    ? b as DesktopBridge
-    : null
+/** Where a call's sound comes out, as the app reports it. */
+export interface AudioRouteState {
+  /** The loudspeaker is on. */
+  speaker: boolean
+  /** A wired or Bluetooth headset is connected, and has taken the sound. */
+  headset: boolean
+}
+
+/** What Android lets the app do about notifications, and whether it is on. */
+export interface AndroidNotifyState {
+  enabled: boolean
+  /** Android's notification permission is granted. */
+  permission: boolean
+  /** The app is exempt from battery optimisation, so it can stay connected. */
+  batteryExempt: boolean
+  fullScreenCalls: boolean
+  /**
+   * The server is an older version that ignores "background" sockets, so the
+   * phone counts as online while the app listens. Absent in older app builds.
+   */
+  legacyServer?: boolean
+}
+
+/**
+ * The app's bridge — the Windows app's (`skycordDesktop`) or the Android
+ * app's (`skycordAndroid`) — or null in a browser. Every member past
+ * `changeInstance` is optional and checked where it is used, so one shape
+ * serves both.
+ */
+export const appBridge = (): DesktopBridge | null => {
+  const g = globalThis as { skycordDesktop?: unknown; skycordAndroid?: unknown }
+  for (const b of [g.skycordDesktop, g.skycordAndroid]) {
+    if (b && typeof b === 'object' && typeof (b as DesktopBridge).changeInstance === 'function') return b as DesktopBridge
+  }
+  return null
 }

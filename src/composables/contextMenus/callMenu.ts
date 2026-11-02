@@ -1,7 +1,8 @@
 /**
  * Call-bar tile menus: one for your own tile, one for everybody else's.
  *
- * Everything here that says "Mute", "Disable Video" or "User Volume" is LOCAL —
+ * Everything here that says "Mute", "Disable Video", "User Volume" or "Stream
+ * Volume" is LOCAL —
  * it changes what you hear and see, is never sent to the server, and the other
  * person is never told. That's deliberate, and it's why none of these need a
  * backend.
@@ -20,8 +21,9 @@ import {
   User, MicOff, Headphones, VideoOff, Copy, BellOff,
   Eye, UsersRound, Video, SlidersHorizontal, UserMinus, Phone,
 } from 'lucide-vue-next'
-import type { MenuItem } from '../useContextMenu'
+import type { MenuItem, MenuSlider } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
+import { USER_VOLUME_MAX } from '../remoteGain'
 
 export interface CallMenuHandlers {
   openProfile:    (u: MenuUser) => void
@@ -32,6 +34,8 @@ export interface CallMenuHandlers {
   copy:           (text: string, what: string) => void
   /** Per-participant local controls. */
   setUserVolume:  (id: string, v: number) => void
+  /** Their shared screen's sound, not their voice. */
+  setStreamVolume:(id: string, v: number) => void
   toggleUserMute: (id: string) => void
   toggleUserVideo:(id: string) => void
   removeFriend?:  (id: string) => void
@@ -94,18 +98,73 @@ export const calleeMenu = (
     : []),
 ]
 
+/** Under User Volume when it stops at 100 %, so a slider halfway to its usual end does not read as broken. */
+export const USER_VOLUME_CAPPED_HINT = 'Max 100% with this output device'
+
+/**
+ * User Volume: how loud this person's voice is for you. 0–200 %, because
+ * past 100 is a real need when someone's mic is quiet, and the only fix
+ * available from this side.
+ *
+ * `userVolumeMax` is 100 where going past 100 % would move their voice off
+ * the output device you chose (useVoice's userVolumeMax, spec 12); then the
+ * slider says why, and a stored 150 % shows as the 100 % that is heard.
+ * Shared by both menus that offer it, so the two cannot drift.
+ */
+export const userVolumeRow = (
+  id: string, s: { volume: number; userVolumeMax?: number },
+  setUserVolume: (id: string, v: number) => void,
+): MenuSlider => {
+  const max = s.userVolumeMax ?? USER_VOLUME_MAX
+  return {
+    slider: true, label: 'User Volume', value: Math.min(s.volume, max), min: 0, max,
+    format: v => `${v}%`, onInput: v => setUserVolume(id, v),
+    ...(max < USER_VOLUME_MAX ? { hint: USER_VOLUME_CAPPED_HINT } : {}),
+  }
+}
+
+/**
+ * Stream Volume: the sound of the screen this person shares, apart from their
+ * voice. Offered only while they share one WITH sound — a slider for a stream
+ * that has none is a control with nothing behind it. 0–100, because it only
+ * ever needs to go down (spec 12). Shared by both menus that offer User
+ * Volume, so the two cannot drift.
+ */
+export const streamVolumeRow = (
+  id: string, s: { streamVolume?: number; sharesScreenAudio?: boolean },
+  setStreamVolume: (id: string, v: number) => void,
+): MenuSlider[] => s.sharesScreenAudio
+  ? [{ slider: true, label: 'Stream Volume', value: s.streamVolume ?? 100, min: 0, max: 100,
+       format: v => `${v}%`, onInput: v => setStreamVolume(id, v) }]
+  : []
+
+/**
+ * Every volume slider one person has, in order: User Volume, then Stream
+ * Volume while they share a screen with sound. Both desktop menus and the
+ * phone's person sheet draw exactly these, so none of the three can offer a
+ * slider, a range or a hint the others do not.
+ */
+export const volumeSliders = (
+  id: string,
+  s: { volume: number; userVolumeMax?: number; streamVolume?: number; sharesScreenAudio?: boolean },
+  h: Pick<CallMenuHandlers, 'setUserVolume' | 'setStreamVolume'>,
+): MenuSlider[] => [userVolumeRow(id, s, h.setUserVolume), ...streamVolumeRow(id, s, h.setStreamVolume)]
+
 /** Another participant's tile. */
 export const participantMenu = (
   p: MenuUser,
-  s: CallMenuState & { volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean },
+  s: CallMenuState & {
+    volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean
+    /** The User Volume slider's top: 200, or 100 where the output device cannot be kept past it. */
+    userVolumeMax?: number
+    /** Their Stream Volume, and whether they are sharing a screen with sound right now. */
+    streamVolume?: number; sharesScreenAudio?: boolean
+  },
   h: CallMenuHandlers,
 ): MenuItem[] => [
   { label: 'Profile', icon: User, onSelect: () => h.openProfile(p) },
   { sep: true },
-  // 0–200%: above 100 is a real need when someone's mic is quiet, and it's the
-  // only fix available from this side.
-  { slider: true, label: 'User Volume', value: s.volume, min: 0, max: 200,
-    format: v => `${v}%`, onInput: v => h.setUserVolume(p.id, v) },
+  ...volumeSliders(p.id, s, h),
   { sep: true },
   { label: 'Mute',          icon: MicOff,  check: s.muted, keepOpen: true,
     onSelect: () => h.toggleUserMute(p.id) },

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="choose_server"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_servers"
+        android:shortcutShortLabel="@string/shortcut_choose_server">
+        <intent
+            android:action="xyz.skycord.android.action.CHOOSE_SERVER"
+            android:targetPackage="xyz.skycord.android"
+            android:targetClass="xyz.skycord.android.MainActivity" />
+    </shortcut>
+</shortcuts>

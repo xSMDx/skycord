@@ -1,0 +1,323 @@
+<script setup lang="ts">
+/**
+ * The phone call screen: a full-screen layer with the stage behind, the call's
+ * name at the top, and the sheet at the bottom (the default slot).
+ *
+ * It owns who fills the stage — pickFocus, fed by its own record of who spoke
+ * when, as CallStage keeps one — and when the controls hide. The host owns
+ * everything about the call itself: the name and subtitle it shows, who is in
+ * it, and what minimising and ringing again do.
+ *
+ * Teleported to the body: the phone shell slides its panes with a transform,
+ * and a fixed layer inside a transformed pane is fixed to the pane, not the
+ * screen.
+ */
+import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
+import PhoneStage from './PhoneStage.vue'
+import { pickFocus, focusedVideo, shareSlot, FOCUS_HOLD_MS, type FocusState, type FocusKind } from '@/composables/phoneCallRules'
+import { useAutoHide, usePointersHeld } from '@/composables/phoneCall'
+import { voiceSettings } from '@/composables/useVoiceSettings'
+import { userPref, joinedStreams, chosenStream, joinStream, leaveStream } from '@/composables/useVoice'
+import { media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
+
+/** CallStage's tile. `ring` = someone being called who has not picked up. */
+type Tile = { id: string; name: string; avatar: string; speaking: boolean; muted: boolean; ring?: 'ringing' | 'no-answer' }
+
+const props = defineProps<{
+  name: string
+  subtitle: string
+  /**
+   * The subtitle is bad news — no route, couldn't connect (joinProgress's
+   * `failing`) — and is drawn in the danger role, as the desktop strip draws
+   * the same words. The words still say it on their own.
+   */
+  subtitleFailing?: boolean
+  /** The microphone's trouble (micNotice), or null when there is none. */
+  notice: string | null
+  tiles: Tile[]
+  videos: VideoTrackInfo[]
+  selfId: string
+  /** The person being called did not answer and can be rung again. */
+  ringAgain: boolean
+  /** The sheet is pulled up. The controls never hide while it is. */
+  sheetExpanded: boolean
+  /**
+   * The shut sheet's measured height in px (its `height` event), where the
+   * stage keeps its small tiles above it. Null until it has been measured,
+   * when an estimate stands in.
+   */
+  sheetHeight?: number | null
+  /**
+   * The sheet's height pulled all the way up (its `openHeight` event). While
+   * it is up, the stage keeps its big avatar clear of it.
+   */
+  sheetOpenHeight?: number | null
+}>()
+
+const emit = defineEmits<{
+  minimize: []
+  ringAgain: []
+  /** Who fills the screen, as it changes: the host names them in the subtitle. */
+  focus: [f: { kind: FocusKind; id: string } | null]
+  /** A long-press on a stream you joined: the host opens that person's sheet. */
+  person: [id: string]
+}>()
+
+defineSlots<{
+  /** The sheet. `hidden` = the controls have faded over a video. */
+  default?(scope: { hidden: boolean }): unknown
+}>()
+
+// The videos the desktop grid would draw: never one you switched off for that
+// person, nor your own camera when you asked not to see it.
+const shownVideos = computed(() => props.videos.filter(v =>
+  v.local ? v.source !== 'camera' || voiceSettings.showOwnCamera : !userPref(v.participantId).videoOff))
+
+// Shares with no picture here: not joined yet (nothing is downloaded before
+// Join stream, spec 6), or joined and still loading. The desktop grid's
+// waiting shares, by the same rule — "Disable Video" on someone hides theirs.
+const shares = computed(() => [...media.streamsAvailable]
+  .filter(id => !userPref(id).videoOff && !shownVideos.value.some(v => v.participantId === id && v.source === 'screen'))
+  .map(id => ({ id, joined: joinedStreams.has(id) })))
+
+
+// ── Who fills the stage ─────────────────────────────────────────────────────
+const lastSpokeAt = reactive<Record<string, number>>({})
+const focus = ref<FocusState | null>(null)
+
+let holdTimer: ReturnType<typeof setTimeout> | null = null
+const clearHold = () => {
+  if (holdTimer !== null) clearTimeout(holdTimer)
+  holdTimer = null
+}
+
+const refocus = () => {
+  const now = Date.now()
+  for (const t of props.tiles) if (t.speaking) lastSpokeAt[t.id] = now
+  focus.value = pickFocus(
+    // `chosen`: the stream you joined last, from the tile or a person sheet.
+    // It takes the slot at once and keeps it through anyone talking (T4-3).
+    { tiles: props.tiles, videos: shownVideos.value, selfId: props.selfId, lastSpokeAt, shares: shares.value, chosen: chosenStream.value },
+    focus.value, now,
+  )
+  // pickFocus moves only when asked. A newcomer waiting out the hold has to be
+  // asked about again once the wait is up, even if nothing else has changed.
+  clearHold()
+  const pending = focus.value.pending
+  if (pending) holdTimer = setTimeout(refocus, Math.max(0, pending.since + FOCUS_HOLD_MS - now))
+}
+watch([() => props.tiles, shownVideos, () => props.selfId, shares, () => chosenStream.value], refocus, { immediate: true })
+
+/** What the slot shows when a share holds it: its picture, Join stream, or loading. */
+const stageShare = computed(() => shareSlot(shownVideos.value, focus.value, shares.value))
+
+// Only a change of who or what: the newcomer being waited out is not news.
+watch(() => (focus.value ? `${focus.value.kind}:${focus.value.id}` : ''), () => {
+  const f = focus.value
+  emit('focus', f ? { kind: f.kind, id: f.id } : null)
+}, { immediate: true })
+
+// Your camera has the top-right corner, so the top text stops short of it —
+// but only while it is in the corner. When nobody else has video it fills the
+// screen instead (pickFocus), the corner is empty, and the name gets the width.
+const selfViewShown = computed(() => {
+  const own = shownVideos.value.some(v => v.local && v.source === 'camera')
+  const f = focus.value
+  return own && !(f?.kind === 'camera' && f.id === props.selfId)
+})
+
+// The pulled-up sheet, for the stage to keep clear of; nothing while it is down.
+const raisedSheet = computed(() => (props.sheetExpanded && props.sheetOpenHeight ? props.sheetOpenHeight : null))
+
+// The measured sheet replaces the stylesheet's estimate.
+const rootStyle = computed(() =>
+  props.sheetHeight ? { '--pcs-sheet-h': `${props.sheetHeight}px` } : undefined)
+
+// ── Controls that fade over a video ─────────────────────────────────────────
+const pointers = usePointersHeld()
+// Only while a picture is what fills the screen. `focus.kind` is not that: a
+// camera holder whose video has stopped keeps kind 'camera' while a newcomer
+// waits out the hold, and the stage draws them as an avatar. The same lookup
+// the stage draws by (focusedVideo), so the two cannot disagree.
+const videoFillsScreen = computed(() => focusedVideo(shownVideos.value, focus.value) !== null)
+const { hidden, poke } = useAutoHide({
+  enabled: () => videoFillsScreen.value && !props.sheetExpanded
+    // Never under a finger that is still down: a press can outlast the delay
+    // (Hold to talk is held for as long as you talk), and the count starts
+    // again from its release.
+    && !pointers.held.value,
+})
+
+// Hidden controls are inert: they take no taps, and the tap that brings them
+// back does only that. The click it ends in is swallowed, so it cannot also
+// press whatever reappears under the finger. The Hold to talk bar is not one
+// of them: the sheet keeps it outside what `hidden` fades, so it never goes
+// inert.
+let swallowClick = false
+const onPointerDown = (e: PointerEvent) => {
+  // Read before the press is counted: counting it shows the controls.
+  swallowClick = hidden.value
+  pointers.down(e.pointerId, e.isPrimary)
+  poke()
+}
+// Lifted, cancelled, or its capture lost. Heard in the capture phase, so a
+// child that has taken the pointer (Hold to talk does) cannot hide it.
+const onPointerUp = (e: PointerEvent) => {
+  if (pointers.up(e.pointerId)) poke()
+}
+const onClickCapture = (e: MouseEvent) => {
+  if (!swallowClick) return
+  swallowClick = false
+  e.stopPropagation()
+  e.preventDefault()
+}
+
+// Android Back reaches a dialog as Escape, sent to the dialog itself; a
+// hardware keyboard's lands here because the screen takes focus when it opens.
+const onKey = (e: KeyboardEvent) => {
+  poke()
+  if (e.key === 'Escape') {
+    e.stopPropagation()
+    emit('minimize')
+  }
+}
+
+const root = ref<HTMLElement | null>(null)
+onMounted(() => root.value?.focus({ preventScroll: true }))
+onBeforeUnmount(clearHold)
+</script>
+
+<template>
+  <Teleport to="body">
+    <div
+      ref="root"
+      class="pcs"
+      :style="rootStyle"
+      data-surface="media"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="name"
+      tabindex="-1"
+      @keydown="onKey"
+      @pointerdown.capture="onPointerDown"
+      @pointerup.capture="onPointerUp"
+      @pointercancel.capture="onPointerUp"
+      @lostpointercapture.capture="onPointerUp"
+      @click.capture="onClickCapture"
+    >
+      <PhoneStage
+        :tiles="tiles" :videos="shownVideos" :self-id="selfId"
+        :focus="focus" :hidden="hidden" :last-spoke-at="lastSpokeAt"
+        :raised-sheet="raisedSheet" :share="stageShare"
+        @join="joinStream" @leave="leaveStream" @person="emit('person', $event)"
+      >
+        <template #ringing>
+          <button v-if="ringAgain" type="button" class="pcs-ring" @click="emit('ringAgain')">Ring again</button>
+        </template>
+      </PhoneStage>
+
+      <header class="pcs-top" :class="{ 'is-hidden': hidden, 'beside-self': selfViewShown }">
+        <button type="button" class="pcs-min" aria-label="Minimise call" @click="emit('minimize')">
+          <ChevronDown :size="28" :stroke-width="2.25" />
+        </button>
+        <div class="pcs-titles">
+          <h2 class="pcs-name">{{ name }}</h2>
+          <p v-if="subtitle" class="pcs-sub" :class="{ failing: subtitleFailing }">{{ subtitle }}</p>
+          <p v-if="notice" class="pcs-notice">{{ notice }}</p>
+        </div>
+      </header>
+
+      <slot :hidden="hidden" />
+    </div>
+  </Teleport>
+</template>
+
+<style scoped>
+.pcs {
+  /* The connection strip is pinned over the top edge and publishes its height
+     as --conn-h while it is up (see SettingsModal's phone rule). This layer
+     starts below it, and since that height already includes the status bar,
+     the top text drops its own inset while the strip shows. */
+  --pcs-top-inset: max(0px, env(safe-area-inset-top) - var(--conn-h, 0px));
+  /* Where the stage's middle begins: the chevron row and two lines of text. */
+  --pcs-top-h: calc(var(--pcs-top-inset) + 72px);
+  /* The collapsed sheet: its handle, the row of circles and the hint. An
+     estimate until the host passes the sheet's measured height (sheetHeight),
+     which the root's inline style then writes over this. */
+  --pcs-sheet-h: calc(152px + env(safe-area-inset-bottom));
+
+  position: fixed; left: 0; right: 0; bottom: 0; top: var(--conn-h, 0px);
+  /* Over the phone shell and its drawers (up to 960 would be the members
+     sheet, never open under a call), under the bottom sheets (950) and modals
+     (1000) the screen itself opens: invite, settings, music. */
+  z-index: 940;
+  overflow: hidden;
+  background: var(--bg-floor); color: var(--text-1);
+  touch-action: manipulation;
+  outline: none;
+  animation: pcs-in var(--dur-4) var(--ease-out);
+}
+@keyframes pcs-in { from { opacity: 0; transform: translateY(24px); } }
+
+/* ── The top: minimise, then the call's name and what is going on ── */
+.pcs-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: flex-start; gap: 4px;
+  padding: calc(var(--pcs-top-inset) + 8px) 16px 0 8px;
+  transition: opacity var(--dur-3) var(--ease-inout), visibility 0s;
+}
+/* The self-view's 84px, its 12px from the edge, and a gap. */
+.pcs-top.beside-self { padding-right: 112px; }
+.pcs-top.is-hidden {
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--dur-3) var(--ease-inout), visibility 0s linear var(--dur-3);
+}
+
+.pcs-min {
+  flex: none; width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%; background: none; color: var(--text-1);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.pcs-min:active { background: var(--press-veil); }
+.pcs-min:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Centred on the 44px button whether it is one line (the name alone, while a
+   DM rings) or two (22 + 18); a notice line below them grows it downwards. */
+.pcs-titles {
+  flex: 1; min-width: 0; min-height: 44px;
+  display: flex; flex-direction: column; justify-content: center;
+  text-shadow: 0 1px 2px var(--media-veil);
+}
+.pcs-name {
+  margin: 0; font-size: 17px; line-height: 22px; font-weight: 500; letter-spacing: -0.01em;
+  color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pcs-sub {
+  margin: 0; font-size: 13px; line-height: 18px; color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pcs-sub.failing { color: var(--danger-text); }
+.pcs-notice { margin: 4px 0 0; font-size: 13px; line-height: 18px; color: var(--warning-text); }
+
+/* ── Ring again, under the person being rung ── */
+.pcs-ring {
+  min-height: 44px; padding: 0 22px;
+  border: none; border-radius: var(--edge-pill);
+  background: var(--green); color: var(--text-on-green);
+  font-family: inherit; font-size: 15px; font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.pcs-ring:active { background: var(--green-hover); }
+.pcs-ring:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* The controls come and go without fading, and the screen arrives in place. */
+@media (prefers-reduced-motion: reduce) {
+  .pcs { animation: none; }
+  .pcs-top, .pcs-top.is-hidden { transition: none; }
+}
+</style>

@@ -7,7 +7,7 @@
  * looking exactly like an app that had nothing to do.
  */
 import { onUnmounted, ref } from 'vue'
-import { desktopBridge, type UpdateState } from './desktopBridge'
+import { appBridge, type UpdateState } from './desktopBridge'
 
 const IDLE: UpdateState = { phase: 'idle', version: '', percent: 0, bytesPerSecond: 0, lastCheckedAt: 0, error: '' }
 
@@ -23,7 +23,7 @@ export const updateLabel = (s: UpdateState): string => {
 }
 
 export const useUpdates = () => {
-  const bridge = desktopBridge()
+  const bridge = appBridge()
   const supported = !!bridge?.updates
   const state = ref<UpdateState>(IDLE)
 

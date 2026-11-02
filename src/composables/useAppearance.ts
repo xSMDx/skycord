@@ -152,6 +152,18 @@ if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
   })
 }
 
+// The phone layout's breakpoint — useViewport's MOBILE_MAX. Not imported from
+// there: that module reads matchMedia at import time, and this one is loaded
+// in places (tests, the theme-code parser) that have no window to ask.
+const PHONE_QUERY = '(max-width: 768px)'
+const onPhone = (): boolean =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  // Crossing the breakpoint (rotating a phone, dragging a window) swaps zoom on
+  // or off without a reload.
+  window.matchMedia(PHONE_QUERY).addEventListener?.('change', () => applyAppearance())
+}
+
 /**
  * `appearance.accent` may be the sentinel 'auto', which almost every consumer
  * never notices because it reads the `--accent` CSS custom property instead
@@ -270,11 +282,16 @@ export const applyAppearance = () => {
   root.style.setProperty('--font-mono', MONO_FONTS[a.fontMono] || MONO_FONTS[DEFAULTS.fontMono])
 
   // Readability + density extras
-  if (a.zoom === 100) {
+  // Interface zoom is a desktop setting. On a phone it is ignored, though the
+  // saved value is kept (and still travels in a shared theme): 150% turns a
+  // 360px screen into a 240px layout, and a theme someone shared from their
+  // desktop must not do that to a phone.
+  const zoom = onPhone() ? 100 : a.zoom
+  if (zoom === 100) {
     root.style.removeProperty('zoom')
     root.style.removeProperty('--zoom-factor')
   } else {
-    const zf = a.zoom / 100
+    const zf = zoom / 100
     root.style.setProperty('zoom', String(zf))
     // Exposed so full-viewport containers (.app) can counter-scale and not clip.
     root.style.setProperty('--zoom-factor', String(zf))

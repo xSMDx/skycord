@@ -102,6 +102,7 @@ onBeforeUnmount(() => {
         v-if="shown"
         ref="panel"
         class="fly"
+        data-overlay
         :class="`fly-${dir}`"
         :style="pos ? { left: pos.left + 'px', top: pos.top + 'px' } : { opacity: 0 }"
         @click.stop

@@ -10,7 +10,7 @@
 import type { CommandWorld } from './musicCommands'
 import {
   music, musicAvailable, musicChannel, channelElapsed, queueMusic, createMusicChannel,
-  listenToMusic, skipMusic, previousMusic, closeMusicChannel, seekMusic,
+  listenToMusic, skipMusic, previousMusic, closeMusicChannel, seekMusic, pauseMusic, resumeMusic,
 } from './useMusic'
 import {
   player, queueView, playFrom, next, previous, toggle, pause, stop, seek, setVolume,
@@ -58,6 +58,8 @@ export const musicWorld = (): CommandWorld => {
       previous: previousMusic,
       close: closeMusicChannel,
       seek: seekMusic,
+      pause: pauseMusic,
+      resume: resumeMusic,
       setChannelVolume: v => { music.volume = v },
       // The same context the room uses for the library, so the queue drawer
       // reads the same either way and a click in the room toggles this song.

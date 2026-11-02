@@ -125,6 +125,31 @@
 .sh-tile[data-live="true"] .sh-live { opacity: 1; transform: none; }
 .sh-small { background: var(--raised); }
 
+/* Someone else's share: nothing loads until you join it to watch. */
+.sh-join {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  height: 28px; padding: 0 11px; border-radius: 6px;
+  background: var(--accent); color: var(--on-accent);
+  font: 600 11px/1 var(--font-ui); white-space: nowrap;
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, color var(--dur-ui) ease;
+}
+.sh-join:active { transform: translate(-50%, -50%) scale(0.97); }
+.sh-other[data-watch="true"] { border-color: var(--accent); background: linear-gradient(135deg, #1d2c3d, #35688f); }
+.sh-other[data-watch="true"] .sh-live { opacity: 1; transform: none; }
+.sh-other[data-watch="true"] .sh-tile-name { color: #fff; }
+.sh-other[data-watch="true"] .sh-join { background: var(--seam); color: #fff; }
+
+/* The stream's own volume, apart from the voice. Space is kept for it, so
+   joining does not push the card about. */
+.sh-vol {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px;
+  font-size: 12px; color: var(--text-3);
+  transition: opacity var(--dur-ui) var(--ease-out);
+}
+.demo[data-watch="false"] .sh-vol { opacity: 0; visibility: hidden; }
+.sh-range { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+.sh-vol-v { width: 36px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+
 /* ── Demo: voice ───────────────────────────────────────────────────── */
 .wave { border-radius: 9px; background: var(--sunk); border: 1px solid var(--divider); padding: 8px; margin-bottom: 14px; }
 .wave canvas { display: block; width: 100%; height: 132px; }
@@ -355,8 +380,157 @@
 .mu-input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; font: 400 13.5px/1 var(--font-ui); color: var(--text-1); }
 .mu-input::placeholder { color: var(--text-3); }
 
+/* Pause for everyone: the bars hold still while the song is held. */
+.demo[data-paused="true"] .mu-cover i { animation-play-state: paused; }
+
+/* ── Demo: phone ───────────────────────────────────────────────────── */
+/* The Android app: a call that rings full screen, the call screen with its
+   sheet (music card, hold to talk, three round buttons), and the lock screen
+   a message reaches with the app closed. */
+.ph {
+  align-self: center; width: 236px; max-width: 100%;
+  padding: 7px; border-radius: 30px;
+  background: var(--sunk); border: 1px solid var(--border);
+  box-shadow: 0 22px 50px -24px rgba(0,0,0,.85);
+}
+.ph-screen {
+  position: relative; height: 430px; border-radius: 24px; overflow: hidden;
+  background: var(--ink); display: flex; flex-direction: column;
+}
+.ph-view { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: phIn var(--dur-panel) var(--ease-out); }
+.ph-view[hidden] { display: none; }
+@keyframes phIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.ph-av {
+  position: relative; flex: none; display: grid; place-items: center; border-radius: 50%;
+  width: 56px; height: 56px; background: var(--c, var(--accent));
+  font: 600 20px/1 var(--font-ui); color: #fff;
+}
+.ph-av.you { background: var(--accent); color: var(--on-accent); transition: background-color var(--dur-panel) var(--ease-out); }
+
+.ph-round {
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--panel); color: var(--text-1);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, color var(--dur-ui) ease;
+}
+.ph-round svg { width: 22px; height: 22px; }
+.ph-round:active { transform: scale(0.94); }
+.ph-round[aria-pressed="true"] { background: var(--text-strong); color: var(--ink); }
+.ph-red { background: #e24d4d; color: #fff; }
+.ph-green { background: var(--green); color: #fff; }
+
+/* Ringing */
+.ph-ring {
+  align-items: center; padding: 22px 16px 26px; text-align: center;
+  background: radial-gradient(120% 70% at 50% 0%, rgba(var(--green-rgb), .2), transparent 70%), var(--ink);
+}
+.ph-app { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--font-ui); color: var(--text-3); }
+.ph-app svg { width: 15px; height: 15px; color: var(--accent); transition: color var(--dur-panel) var(--ease-out); }
+.ph-ring .ph-av { margin-top: 48px; width: 88px; height: 88px; font-size: 34px; }
+.ph-ring .ph-av::after {
+  content: ''; position: absolute; inset: -6px; border-radius: 50%;
+  border: 2px solid rgba(var(--green-rgb), .55); opacity: 0;
+}
+.demo[data-visible="true"] .ph-ring .ph-av::after { animation: phRing 1.6s var(--ease-out) infinite; }
+@keyframes phRing { from { opacity: 1; transform: scale(.94); } to { opacity: 0; transform: scale(1.3); } }
+.ph-caller { margin-top: 16px; font: 700 24px/1.1 var(--font-display); color: var(--text-strong); }
+.ph-sub { margin-top: 6px; font-size: 12.5px; color: var(--text-3); }
+.ph-answer { margin-top: auto; width: 100%; display: flex; justify-content: space-around; }
+.ph-act { display: grid; justify-items: center; gap: 8px; font-size: 11.5px; color: var(--text-2); }
+
+/* In the call */
+.ph-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 9px; font-size: 12px; color: var(--text-3); }
+.ph-min { width: 16px; height: 16px; }
+.ph-top b { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+.ph-time { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ph-stage { position: relative; flex: 1; min-height: 0; margin: 0 9px; }
+.ph-big, .ph-small {
+  display: grid; place-items: center; overflow: hidden;
+  border: 1px solid var(--divider);
+  transition: background var(--dur-panel) var(--ease-out), border-color var(--dur-ui) ease;
+}
+.ph-big { position: absolute; inset: 0; border-radius: 14px; background: var(--surface); }
+.ph-big .ph-av { width: 66px; height: 66px; font-size: 26px; }
+/* Whoever is talking has the big spot, and the ring that says so. */
+.ph-big .ph-av::after {
+  content: ''; position: absolute; inset: -5px; border-radius: 50%;
+  border: 3px solid var(--green);
+}
+.ph-small {
+  position: absolute; right: 8px; top: 8px; width: 50px; height: 66px;
+  border-radius: 10px; background: var(--panel); border-color: var(--border);
+  box-shadow: 0 8px 18px -8px rgba(0,0,0,.6);
+}
+.ph-small .ph-av { width: 28px; height: 28px; font-size: 12px; }
+.ph-big[data-cam="true"], .ph-small[data-cam="true"] { background: linear-gradient(135deg, #1d2c3d, #35688f); }
+.ph-big[data-cam="true"] .ph-av, .ph-small[data-cam="true"] .ph-av { opacity: 0; }
+.ph-tag { position: absolute; left: 8px; bottom: 7px; font: 500 10.5px/1 var(--font-ui); color: var(--text-2); }
+.ph-big[data-cam="true"] .ph-tag, .ph-small[data-cam="true"] .ph-tag { color: #fff; }
+.ph-small .ph-tag { left: 6px; bottom: 5px; font-size: 9.5px; }
+
+.ph-sheet {
+  margin-top: 10px; padding: 7px 11px 13px; display: grid; gap: 9px;
+  border-radius: 18px 18px 0 0; background: var(--raised); border-top: 1px solid var(--border);
+}
+.ph-grab { justify-self: center; width: 34px; height: 4px; border-radius: 2px; background: var(--hover-strong); }
+.ph-music {
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  padding: 7px 9px; border-radius: 10px; background: var(--panel);
+  font-size: 11.5px; color: var(--text-3);
+}
+.ph-music .mu-dot { width: 26px; height: 26px; }
+.ph-music-t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-music-t b { color: var(--text-1); font-weight: 600; }
+.ph-music svg { width: 15px; height: 15px; flex: none; color: var(--accent-text); }
+.ph-ptt {
+  height: 46px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border);
+  font: 600 13.5px/1 var(--font-ui); color: var(--text-1);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, color var(--dur-ui) ease, border-color var(--dur-ui) ease;
+}
+.ph-ptt[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--on-accent); transform: scale(0.98); }
+.ph-ptt[aria-disabled="true"] { color: var(--text-3); }
+.ph-ctrls { display: flex; justify-content: space-around; }
+
+/* The app closed, and a message arriving anyway */
+.ph-lock {
+  align-items: center; padding: 34px 12px 16px;
+  background: radial-gradient(120% 60% at 50% 0%, rgba(var(--accent-rgb), .16), transparent 70%), var(--ink);
+}
+.ph-clock { font: 700 46px/1 var(--font-display); letter-spacing: -.02em; color: var(--text-strong); }
+.ph-date { margin-top: 7px; font-size: 12px; color: var(--text-2); }
+.ph-notes { margin-top: 24px; width: 100%; display: grid; gap: 8px; }
+.ph-note {
+  display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 9px; align-items: start;
+  padding: 10px; border-radius: 14px; background: var(--raised); border: 1px solid var(--border);
+}
+.ph-note.fresh { animation: muIn 420ms var(--ease-out); }
+.ph-note-ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--sunk); color: var(--accent); transition: color var(--dur-panel) var(--ease-out); }
+.ph-note-ic svg { width: 17px; height: 17px; }
+.ph-note-app { display: block; font-size: 10.5px; color: var(--text-3); }
+.ph-note b { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 600; color: var(--text-strong); }
+.ph-note p { font-size: 12px; line-height: 1.4; color: var(--text-2); }
+.ph-reply { display: inline-block; margin-top: 6px; font: 600 11px/1 var(--font-ui); color: var(--accent-text); }
+.ph-again {
+  margin-top: auto; height: 38px; padding: 0 16px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border);
+  font: 500 12.5px/1 var(--font-ui); color: var(--text-1);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease;
+}
+.ph-again:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  /* A tint laid over the fill rather than a new fill, so it lightens every
+     colour of button the same way. */
+  .ph-round:hover, .ph-again:hover, .ph-ptt:not([aria-pressed="true"]):hover { box-shadow: inset 0 0 0 60px var(--hover); }
+  .sh-join:hover { background: var(--accent-hover); }
+  .sh-other[data-watch="true"] .sh-join:hover { background: var(--panel); }
+}
+
 /* ── Reduced motion ────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
+  .ph-view, .ph-note.fresh, .demo[data-visible="true"] .ph-ring .ph-av::after { animation: none !important; }
+  .ph-ptt[aria-pressed="true"] { transform: none; }
   .gcursor, .ripple { display: none !important; }
   .rx-chip.pop, .rx-chip .n.bump { animation: none; }
   .gauge-bar i { transition: none; }
@@ -377,9 +551,17 @@
   .rx-act { width: 40px; height: 40px; font-size: 17px; }
   .rx-actions { gap: 4px; top: -22px; }
   .mu-tune, .mu-b { height: 44px; }
+  /* Four controls and the time do not fit one 300px row; the buttons drop
+     under the time, whole, rather than squeezing it onto two lines. */
+  .mu-row { flex-wrap: wrap; }
+  .mu-time, .mu-skip { white-space: nowrap; }
+  .mu-btns { margin-left: auto; }
   .mu-b { min-width: 44px; }
   .mu-seek { height: 28px; }
   .mu-seek::before, .mu-fill { top: 12px; }
   .mu-chat { height: 46px; }
+  .sh-join { height: 40px; }
+  .sh-vol { min-height: 44px; }
+  .ph-again { height: 44px; }
   .mu-input { font-size: 16px; }   /* below 16px, iOS zooms the page on focus */
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/floor" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <!-- Themed icons (Android 13+) tint this one shape; older versions skip it. -->
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

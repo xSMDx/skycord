@@ -15,12 +15,13 @@
  * "our music", which is why it says what it will do rather than just "play".
  */
 import { computed, ref } from 'vue'
-import { Music2, Play, Plus, Radio, Send, SkipForward, Volume2, X } from 'lucide-vue-next'
+import { Music2, Pause, Play, Plus, Radio, Send, SkipForward, Volume2, X } from 'lucide-vue-next'
 import { voice } from '@/composables/useVoice'
 import { useAuth } from '@/composables/useAuth'
 import {
   music, createMusicChannel, shareToChannel, listenToMusic, closeMusicChannel, skipMusic, playNowMusic,
-  channelElapsed, musicNow, type MusicChannelView, type MusicEntryView,
+  channelElapsed, musicNow, togglePauseMusic, isPaused, canPauseOrResume, isPausePending,
+  type MusicChannelView, type MusicEntryView,
 } from '@/composables/useMusic'
 import { clock, type LibTrack } from '@/composables/useMusicLibrary'
 import type { VoiceRoomChoice } from './rooms'
@@ -115,7 +116,7 @@ const startWith = (): void => {
 </script>
 
 <template>
-  <aside class="cr">
+  <aside class="cr" :class="{ idle: !inCall && !rooms.length }">
     <span class="cr-head">
       <Radio :size="13" :stroke-width="2.25" />
       <span>{{ inCall ? 'In this call' : 'Where everyone is' }}</span>
@@ -153,9 +154,13 @@ const startWith = (): void => {
         </li>
       </ul>
 
+      <!-- Two lengths of the same answer. The long one says what to do about
+           it; a phone has one line to spare for this, and the short one is the
+           fact, which is what that line is for. -->
       <p v-else class="cr-empty">
-        Nobody is in a voice channel right now. Join one and whatever you play
-        here, everyone in it can tune into.
+        <span class="cr-long">Nobody is in a voice channel right now. Join one and whatever you play
+        here, everyone in it can tune into.</span>
+        <span class="cr-short">Nobody is in a voice channel right now.</span>
       </p>
     </template>
 
@@ -180,8 +185,9 @@ const startWith = (): void => {
               </span>
               <span class="cr-names">
                 <span class="cr-name">{{ c.name }}</span>
+                <!-- Held says so first: it is why the bar below has stopped. -->
                 <span v-if="c.now" class="cr-song">
-                  {{ titleOf(c.now) }}<template v-if="c.now.artist"> · {{ c.now.artist }}</template>
+                  <template v-if="isPaused(c)">Paused · </template>{{ titleOf(c.now) }}<template v-if="c.now.artist"> · {{ c.now.artist }}</template>
                 </span>
                 <span v-else class="cr-song quiet">Nothing playing</span>
               </span>
@@ -218,7 +224,19 @@ const startWith = (): void => {
               >
                 <Send :size="13" :stroke-width="2.25" />
               </button>
-              <!-- Shared, so skipping is for everyone, and the tip says so. -->
+              <!-- Shared, so pausing and skipping are for everyone, and the
+                   tips say so. Pause and Resume are one control, beside
+                   Skip: Pause only where the music service can pause,
+                   Resume whenever the song is held. -->
+              <button
+                v-if="canPauseOrResume(c)" class="cr-icon" :class="{ pending: isPausePending(c) }"
+                :aria-label="isPaused(c) ? `Resume for everyone in ${c.name}` : `Pause for everyone in ${c.name}`"
+                :aria-busy="isPausePending(c)" :aria-disabled="isPausePending(c)"
+                v-tip="isPaused(c) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
+                @click="togglePauseMusic(c)"
+              >
+                <component :is="isPaused(c) ? Play : Pause" :size="13" :stroke-width="2.25" />
+              </button>
               <button
                 v-if="c.now" class="cr-icon" :aria-label="`Skip for everyone in ${c.name}`"
                 v-tip="'Skip — for everyone listening'"
@@ -306,6 +324,7 @@ const startWith = (): void => {
 }
 .cr-empty { padding: 2px; font-size: 11.5px; line-height: 1.55; color: var(--text-3); }
 
+.cr-short { display: none; }
 .cr-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 
 /* ── outside a call: the rooms ──────────────────────────────────────── */
@@ -443,8 +462,12 @@ const startWith = (): void => {
   display: grid; place-items: center; width: 24px; height: 24px;
   border: none; background: none; cursor: pointer; color: var(--text-3);
   border-radius: var(--edge-sm);
-  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out),
+              opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.cr-icon.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 @media (hover: hover) and (pointer: fine) {
   .cr-icon:hover:not(:disabled) { background: var(--hover); color: var(--text-1); }
   .cr-icon.danger:hover { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger-text); }
@@ -508,7 +531,32 @@ const startWith = (): void => {
 /* Touch: no hover to reveal the play buttons, and fingers need the room. */
 @media (max-width: 768px) {
   .cr-playnow { width: 40px; height: 40px; opacity: 1; }
-  .cr-icon { width: 40px; height: 40px; }
+  .cr-icon { width: 44px; height: 44px; }
+}
+
+/*
+ * Phone. With nobody in a call this card was three lines of advice taking a
+ * quarter of the screen above the player, to say "nobody is here" — so it
+ * becomes the one line that says it. With rooms or channels in it, it keeps
+ * its content but is capped, so a busy call cannot push the library out of
+ * the modal; it scrolls inside itself instead.
+ */
+@media (max-width: 680px) {
+  .cr { max-height: min(184px, 28vh); }
+  .cr.idle {
+    flex-wrap: nowrap; align-items: center; gap: 8px;
+    padding: 0 14px; min-height: 44px;
+  }
+  .cr.idle .cr-head { padding: 0; }
+  .cr.idle .cr-head > span { display: none; }
+  .cr.idle .cr-empty {
+    flex: 1; min-width: 0; padding: 0; font-size: 13px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cr-long { display: none; }
+  .cr-short { display: inline; }
+  .cr-playnow, .cr-icon { width: 44px; height: 44px; }
+  .cr-add, .cr-go, .cr-flat, .cr-in { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

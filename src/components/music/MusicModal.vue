@@ -17,14 +17,15 @@
  * the room is a separate, deliberate action, because "everyone can hear
  * this" should never be the side effect of pressing play.
  */
-import { ref, computed, watch, onMounted, onBeforeUnmount, inject } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, inject, nextTick } from 'vue'
 import {
   Music2, Search, Plus, Play, Pause, SkipBack, SkipForward, Shuffle,
   Upload, Link2, Trash2, X, ListMusic, Radio, Loader2, ShieldAlert, ShieldCheck,
   Volume1, Volume2, VolumeX, Shuffle as ShuffleIcon, Repeat, Repeat1, ListVideo,
-  ListPlus, ListStart, ListEnd, LogOut,
+  ListPlus, ListStart, ListEnd, LogOut, Ellipsis, GripVertical, ListChecks, Check,
 } from 'lucide-vue-next'
 import ModalBase from '@/components/modals/ModalBase.vue'
+import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import MusicCallRail from './MusicCallRail.vue'
 import type { VoiceRoomChoice } from './rooms'
 import { useAuth } from '@/composables/useAuth'
@@ -32,25 +33,34 @@ import { coverTheme, type CoverTheme } from '@/composables/coverTheme'
 import { appearance } from '@/composables/useAppearance'
 import {
   player, queue, queueView, playFrom, toggle, next, previous, jumpTo, seek, setVolume,
-  forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue,
-  removeFromQueue, clearQueue, okToPlaySolo, type QueueContext,
+  forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue, addAllToQueue,
+  removeFromQueue, clearQueue, moveInQueue, okToPlaySolo, type QueueContext,
 } from '@/composables/useMusicPlayer'
-import { openMenu, type MenuItem } from '@/composables/useContextMenu'
+import { useQueueDrag, stableKeys } from '@/composables/queueDrag'
+import { menu, openMenu, type MenuItem, type MenuAnchor } from '@/composables/useContextMenu'
 import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
   musicChannel, channelElapsed, musicNow, skipMusic, listenToMusic, queueMusic, seekMusic, previousMusic,
+  togglePauseMusic, isPaused, canPauseOrResume, isPausePending,
 } from '@/composables/useMusic'
 import {
-  library, loadLibrary, loadPlaylists, openPlaylist, uploadTrack, importTrack,
+  library, loadLibrary, loadPlaylists, openPlaylist, enqueueUploads, importTrack,
   deleteTrack, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
   shownTracks, clearLibraryError, clock, totalTime, megabytes,
-  type LibTrack,
+  type LibTrack, type Quiet,
 } from '@/composables/useMusicLibrary'
+import * as Sel from '@/composables/selectionModel'
+import { noPushToTalkKey } from '@/composables/useVoiceSettings'
+import { AUDIO_ACCEPT } from '@/composables/uploadScheduler'
+import { runBulk, type Refused } from '@/composables/bulkRun'
+import { useFileDrop, guardWindowDrops } from '@/composables/fileDrop'
+import UploadList from './UploadList.vue'
+import LibrarySelectionBar from './LibrarySelectionBar.vue'
 
 defineProps<{ rooms?: VoiceRoomChoice[] }>()
 const emit = defineEmits<{ close: []; join: [channelId: string] }>()
-const { accessToken, user } = useAuth()
+const { user } = useAuth()
 
 // The shell's own dismissal, so the leave transition plays. Emitting close
 // upward instead unmounts us on the same tick and the animation never runs.
@@ -59,6 +69,47 @@ const dismiss = inject<() => void>('modalClose', () => emit('close'))
 /** The queue drawer, over the centre pane. Closed by default: it answers
  *  a question you only sometimes have. */
 const showQueue = ref(false)
+/**
+ * The pane the queue covers. The drawer is absolutely positioned inside it, and
+ * an absolute box inside a scrolling pane scrolls WITH the pane: open the queue
+ * from halfway down a long library and it arrives shifted up by however far
+ * you had scrolled, with the library showing through underneath. So the pane
+ * goes to the top while the drawer is open — and comes back to where it was
+ * when the drawer closes, so looking at the queue does not lose your place in
+ * the library.
+ */
+const mainEl = ref<HTMLElement | null>(null)
+let libraryScroll = 0
+watch(showQueue, (open) => {
+  const pane = mainEl.value
+  if (!pane) return
+  if (open) { libraryScroll = pane.scrollTop; pane.scrollTop = 0 }
+  else pane.scrollTop = libraryScroll
+})
+
+/*
+ * Rearranging your own queue: a handle on each of your songs in the drawer,
+ * dragged or arrowed. The mechanics are queueDrag's; the move is the
+ * player's. Only "Next in queue" — the playlist part follows the playlist.
+ */
+const qList = ref<HTMLElement | null>(null)
+/** Row keys that travel with their song, so a move moves a row instead of refilling every row it passed. */
+const qKeys = computed(() => stableKeys(queueView.value.manual.map(t => t.id)))
+/** The drawer's live region. Cleared before each message: a polite region only speaks when its text changes. */
+const qSaid = ref('')
+const sayInQueue = (message: string): void => {
+  qSaid.value = ''
+  void nextTick(() => { qSaid.value = message })
+}
+const {
+  held: qHeld, onGripDown, onGripMove, onGripUp, onGripCancel, onGripKey,
+} = useQueueDrag({
+  list: qList,
+  scroller: () => qList.value?.closest<HTMLElement>('.mm-queue') ?? null,
+  items: () => queue.manual,
+  move: moveInQueue,
+  say: sayInQueue,
+})
 
 const search = ref('')
 const adding = ref<'' | 'link'>('')
@@ -87,9 +138,15 @@ const loadingId = computed(() => player.loadingId)
  * clickable and was not — and the call rail asks you to "pick a track",
  * which is the same gesture. Clicks that started on a control inside the
  * row belong to that control.
+ *
+ * While you are picking songs a click picks instead, and a Shift or Ctrl/Cmd
+ * click picks without Select being pressed first, the way a file list
+ * behaves. A plain click outside selection still plays: picking must never
+ * cost the row its first job.
  */
 const onRowClick = (e: MouseEvent, i: number): void => {
   if ((e.target as HTMLElement).closest('button, select')) return
+  if (selecting.value || e.shiftKey || e.metaKey || e.ctrlKey) { pickRow(e, i); return }
   void playRow(i)
 }
 
@@ -160,12 +217,31 @@ const menuTail = (t: LibTrack, i: number): MenuItem[] => {
     })
   }
   items.push({ sep: true }, library.open
-    ? { label: 'Remove from this playlist', icon: X, onSelect: () => removeHere(t, i) }
-    : { label: 'Delete from your library', icon: Trash2, danger: true, onSelect: () => removeHere(t, i) })
+    ? { label: 'Remove from this playlist', icon: X, onSelect: () => removeHere(t, i), disabled: !!bulk.total }
+    : { label: 'Delete from your library', icon: Trash2, danger: true, onSelect: () => removeHere(t, i), disabled: !!bulk.total })
   return items
 }
 
+/**
+ * Where a row menu opens. A click that came from the keyboard (Enter or Space
+ * on the ⋯ button) has no pointer: it reports 0,0, which put the menu in the
+ * top-left corner of the window. With no pointer position the menu hangs off
+ * the control that was activated instead.
+ */
+const menuAnchor = (e: MouseEvent): MenuAnchor => {
+  const fromKeyboard = (e.type === 'click' && e.detail === 0) || (!e.clientX && !e.clientY)
+  const from = e.currentTarget instanceof HTMLElement ? e.currentTarget.getBoundingClientRect() : null
+  if (!fromKeyboard || !from) return e
+  return {
+    clientX: from.left,
+    clientY: from.bottom,
+    preventDefault: () => e.preventDefault(),
+    stopPropagation: () => e.stopPropagation(),
+  }
+}
+
 const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
+  const anchor = menuAnchor(e)
   // In a channel the menu leads with the channel, and "just for me" says
   // what it costs: it goes through playFrom, which asks before leaving.
   if (live.value) {
@@ -186,7 +262,7 @@ const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
       { label: 'Add to your own queue', icon: ListEnd, onSelect: () => addToQueue(t) },
       ...menuTail(t, i),
     )
-    openMenu(e, items)
+    openMenu(anchor, items)
     return
   }
   const items: MenuItem[] = [
@@ -214,7 +290,7 @@ const rowMenu = (e: MouseEvent, t: LibTrack, i: number): void => {
         })
   }
   items.push(...menuTail(t, i))
-  openMenu(e, items)
+  openMenu(anchor, items)
 }
 
 /*
@@ -378,12 +454,19 @@ const subtitle = computed(() => {
 // ── actions ─────────────────────────────────────────────────────────────────
 const pickFile = (): void => fileInput.value?.click()
 
-const onFile = async (e: Event): Promise<void> => {
+/** Every file chosen goes into the upload queue, which sends them one by one. */
+const onFile = (e: Event): void => {
   const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''              // so the same file can be chosen twice
-  if (file) await uploadTrack(file, accessToken.value ?? '')
+  const files = [...(input.files ?? [])]
+  input.value = ''              // so the same files can be chosen twice
+  enqueueUploads(files)
 }
+
+/** Files dragged anywhere onto the player join the same queue. One let go
+ *  of beside it, on the backdrop, is refused at the window while this is open
+ *  — the browser would otherwise open the file in place of the app. */
+const { dropping, onDragEnter, onDragOver, onDragLeave, onDrop } = useFileDrop(enqueueUploads)
+let unguardDrops: (() => void) | null = null
 
 const submitLink = async (): Promise<void> => {
   const u = linkUrl.value.trim()
@@ -407,24 +490,341 @@ watch(search, (q) => {
   searchTimer = setTimeout(() => void loadLibrary(q), 220)
 })
 
+/**
+ * Deleting one song: from the library, then — once it is really gone — from
+ * your queue, and out of the player if it was the one playing. Every delete
+ * comes through here, the row's own and each one of a bulk delete, so a song
+ * that is playing or queued lets go the same way whichever it was. A delete
+ * that failed leaves the queue alone: the song is still yours.
+ */
+const deleteOne = async (t: LibTrack, opts: Quiet = {}): Promise<Refused | null> => {
+  const failed = await deleteTrack(t.id, opts)
+  if (!failed) forget(t.id)
+  return failed
+}
+
 const removeHere = async (t: LibTrack, index: number): Promise<void> => {
+  // Not while a bulk removal runs: it removes by the places it was confirmed
+  // with, and taking any row out now would move the ones it has still to take.
+  if (bulk.total) return
   // Inside a playlist the X means "take it out of this list". In the library
   // it means "delete it". Same glyph, genuinely different acts, so they are
   // labelled differently and the destructive one is styled as such.
   if (library.open) await removeFromPlaylist(library.open.id, index)
-  else { await deleteTrack(t.id); forget(t.id) }
+  else await deleteOne(t)
 }
 
+// ── picking several ─────────────────────────────────────────────────────────
+/*
+ * Select, then queue them or remove them.
+ *
+ * Select in the header turns it on; so does a Shift or Ctrl/Cmd click on a
+ * row, and on a phone a long press, which puts that row in. Rows then carry a
+ * checkbox and a click picks; Escape or Cancel turns it off. The bar at the
+ * bottom of the pane holds the count and the acts.
+ *
+ * The selection is only ever what is on screen. A new search, or a row that
+ * went away, drops the rows you can no longer see — so a bulk delete can never
+ * take something you had stopped looking at.
+ */
+const selecting = ref(false)
+const sel = ref<Sel.Selection>(Sel.createSelection())
+
+/**
+ * A row's identity in the selection. In the library a song is one row, so its
+ * id will do. A playlist can hold a song twice, and removal there is by place,
+ * so a playlist row is its place AND its song: a row that moves stops matching,
+ * and is dropped rather than mistaken for whatever moved into its place.
+ */
+const rowKey = (t: LibTrack, i: number): string => library.open ? `${i}:${t.id}` : t.id
+const rowKeys = computed(() => shownTracks.value.map(rowKey))
+const isPicked = (t: LibTrack, i: number): boolean => sel.value.ids.has(rowKey(t, i))
+
+/** The picked rows, in the order the list shows them: the order they are queued in. */
+const picked = computed(() =>
+  shownTracks.value
+    .map((t, i) => ({ t, i, key: rowKey(t, i) }))
+    .filter(r => sel.value.ids.has(r.key)))
+type PickedRow = (typeof picked.value)[number]
+
+/**
+ * A removal under way, read by the bar as its progress. While it runs the
+ * selection is the one it was confirmed for: rows cannot be picked, and the
+ * rows' own changes (each song leaving) do not trim it until it ends.
+ * `waiting`: the app-wide limit answered 429, and the run is waiting it out
+ * before the same song again.
+ */
+const bulk = reactive({ verb: 'Deleting', done: 0, total: 0, stop: false, waiting: false })
+/** Stops the run in hand — at once, if it is waiting out the limit. */
+let bulkStop: AbortController | null = null
+/** The room has closed. A run in hand stops after its current song and then does nothing. */
+let disposed = false
+const selBar = ref<InstanceType<typeof LibrarySelectionBar> | null>(null)
+/** Why a row did not go, by row key. It stays picked and says this under its name. */
+const failures = ref(new Map<string, string>())
+/** After a run that left something behind: what, said on the bar. */
+const failNote = ref('')
+const confirming = ref(false)
+/** Said aloud once the bar has gone, which it does when everything went. */
+const libSaid = ref('')
+const sayInLibrary = (message: string): void => {
+  libSaid.value = ''
+  void nextTick(() => { libSaid.value = message })
+}
+
+/**
+ * Leaving takes the bar and the checkboxes away. If the keyboard was on one of
+ * them it would fall to the page, so it goes back to Select, where picking
+ * started.
+ */
+const selectBtn = ref<HTMLButtonElement | null>(null)
+const leaveSelection = (): void => {
+  const focused = document.activeElement as HTMLElement | null
+  const lost = !focused || focused === document.body || !!focused.closest('.lsb, .mm-check')
+  if (lost) void nextTick(() => (selectBtn.value ?? mainEl.value?.closest<HTMLElement>('[role="dialog"]'))?.focus())
+  selecting.value = false
+  sel.value = Sel.clear(sel.value)
+  failures.value = new Map()
+  failNote.value = ''
+  confirming.value = false
+}
+/** Cancel, Escape and the Select button again. In a run it stops after the song in hand. */
+const cancelSelection = (): void => {
+  if (bulk.total) { bulk.stop = true; bulkStop?.abort(); return }
+  leaveSelection()
+}
+const toggleSelecting = (): void => {
+  if (selecting.value) cancelSelection()
+  else selecting.value = true
+}
+
+/** A click, or Space on a row's checkbox. Shift spans from the last row clicked. */
+const pickRow = (e: MouseEvent, i: number): void => {
+  const t = shownTracks.value[i]
+  if (!t || bulk.total) return
+  const key = rowKey(t, i)
+  selecting.value = true
+  sel.value = e.shiftKey ? Sel.range(sel.value, rowKeys.value, key) : Sel.toggle(sel.value, key)
+  if (!sel.value.ids.has(key)) failures.value.delete(key)
+  failNote.value = ''
+}
+
+/** A long press on a phone: "this one", into the selection, which it turns on. */
+const holdToSelect = (i: number): void => {
+  const t = shownTracks.value[i]
+  if (!t || bulk.total) return
+  selecting.value = true
+  sel.value = Sel.select(sel.value, rowKey(t, i))
+  failNote.value = ''
+}
+
+/**
+ * Right-click, or a long press — useLongPress turns a held finger into this
+ * same event. On a phone the hold picks the row instead of opening its menu:
+ * the ⋯ button on every phone row already opens that menu with one tap, and a
+ * hold is the gesture people know for "select this" in a list. Everywhere
+ * else it is the menu, as it always was.
+ */
+const onRowContext = (e: MouseEvent, t: LibTrack, i: number): void => {
+  if (noPushToTalkKey.value) { holdToSelect(i); return }
+  rowMenu(e, t, i)
+}
+
+/**
+ * Escape while picking steps out of picking and leaves the room open.
+ *
+ * ModalBase answers Escape for the whole dialog, and a click on a row leaves
+ * focus on its sheet rather than on anything of ours, so a listener down here
+ * never heard it and the room closed. ModalBase asks this first instead. An
+ * open confirmation or row menu keeps its own Escape.
+ */
+const escapeSelection = (): boolean => {
+  if (!selecting.value || confirming.value || menu.open) return false
+  // A run already told to stop: the next Escape (Android's back sends them
+  // until the room is gone) is for the room.
+  if (bulk.total && bulk.stop) return false
+  cancelSelection()
+  return true
+}
+
+watch(rowKeys, (keys) => { if (!bulk.total) sel.value = Sel.retainVisible(sel.value, keys) })
+// Another list is another selection. Mid-run the bar stays, to finish saying how it went.
+watch(() => library.open?.id, () => { if (!bulk.total) leaveSelection() })
+
+const songs = (n: number): string => `${n} ${n === 1 ? 'song' : 'songs'}`
+
+/**
+ * Add to your queue: your own, in list order, even while you are tuned into a
+ * channel. A channel's queue takes songs one at a time, through a row's click
+ * or its menu — it allows ten a minute and holds fifty, and a bulk add would
+ * spend that for everyone in one go.
+ */
+const queuePicked = (): void => {
+  const rows = picked.value
+  if (!rows.length || bulk.total) return
+  addAllToQueue(rows.map(r => r.t))
+  const message = `Added ${songs(rows.length)} to your queue`
+  leaveSelection()
+  if (live.value) say(message)
+  else sayInLibrary(message)
+}
+
+/** The question, asked once, naming how many. It follows the view, as the bar does. */
+const confirmCopy = computed(() => {
+  const n = picked.value.length
+  if (library.open) {
+    return {
+      title: `Remove ${n} ${n === 1 ? 'song' : 'songs'} from ${library.open.name}?`,
+      message: 'They stay in your library.',
+      confirmLabel: 'Remove',
+    }
+  }
+  return {
+    title: `Delete ${n} ${n === 1 ? 'song' : 'songs'}?`,
+    message: "This can't be undone.",
+    confirmLabel: 'Delete',
+  }
+})
+const askToRemovePicked = (): void => {
+  if (!picked.value.length || bulk.total) return
+  confirming.value = true
+}
+
+/**
+ * Delete, or Remove from playlist, once confirmed: one song at a time through
+ * the same call a row's own ✕ makes, with the bar counting.
+ *
+ * In a playlist that is removal by place, highest place first — taking a row
+ * out moves up every row after it, and none of those is still to come — and
+ * the library keeps the songs. Anywhere else it is a delete, through deleteOne,
+ * so a song that is playing or queued leaves the queue as a single delete
+ * makes it.
+ *
+ * Whatever did not go stays picked: a failure with its reason under its name,
+ * and after Cancel the songs not reached yet.
+ */
+const removePicked = async (): Promise<void> => {
+  confirming.value = false
+  const rows = picked.value
+  if (!rows.length || bulk.total) return
+  const list = library.open
+  failures.value = new Map()
+  failNote.value = ''
+  Object.assign(bulk, { verb: list ? 'Removing' : 'Deleting', done: 0, total: rows.length, stop: false, waiting: false })
+  const stop = new AbortController()
+  bulkStop = stop
+  // The confirmation gives focus back to Delete, which this has just turned off.
+  void nextTick(() => selBar.value?.focusCancel())
+
+  const order = list ? [...rows].sort((a, b) => b.i - a.i) : rows
+  const kept: PickedRow[] = []
+  const why = new Map<PickedRow, string>()
+  const removedAt: number[] = []
+  // One song at a time. A 429 is the app-wide limit, not the song: the bar
+  // says so, the run waits as long as it was told, then the same song again.
+  const at = await runBulk(order, r => list
+    ? removeFromPlaylist(list.id, r.i, { quiet: true, reload: false })
+    : deleteOne(r.t, { quiet: true }), {
+    signal: stop.signal,
+    settled: (r, failed) => {
+      if (failed) { kept.push(r); why.set(r, failed) } else removedAt.push(r.i)
+      bulk.done++
+    },
+    waiting: (until) => { bulk.waiting = until !== null },
+  })
+  if (bulkStop === stop) bulkStop = null
+  // Highest place first kept every place right without reading the list
+  // back; now it is read back once, for the rows the run leaves picked.
+  if (list && removedAt.length && library.open?.id === list.id) await openPlaylist(list.id)
+  // The room closed under it: it stopped at the song in hand, and has no rows to tell.
+  if (disposed) return
+  kept.push(...order.slice(at))
+  const stopped = at < order.length
+  Object.assign(bulk, { done: 0, total: 0, stop: false, waiting: false })
+
+  // Somewhere else by now: nothing here is what was picked.
+  if (library.open?.id !== list?.id) { leaveSelection(); return }
+
+  const verbed = list ? 'Removed' : 'Deleted'
+  if (!kept.length) {
+    leaveSelection()
+    sayInLibrary(list ? `${verbed} ${songs(rows.length)} from ${list.name}` : `${verbed} ${songs(rows.length)}`)
+    return
+  }
+  /** Where a kept row is now. In a playlist, one place up for every row taken out above it. */
+  const keyNow = (r: PickedRow): string => list
+    ? `${r.i - removedAt.filter(j => j < r.i).length}:${r.t.id}`
+    : r.key
+  sel.value = Sel.retainVisible({ ids: new Set(kept.map(keyNow)), anchor: null }, rowKeys.value)
+  for (const [r, reason] of why) {
+    if (sel.value.ids.has(keyNow(r))) failures.value.set(keyNow(r), reason)
+  }
+  // A search changed under the run and none of what is left is on screen.
+  if (!sel.value.ids.size) {
+    leaveSelection()
+    sayInLibrary(`${verbed} ${removedAt.length} of ${rows.length}`)
+    return
+  }
+  const left = `${sel.value.ids.size} not ${list ? 'removed' : 'deleted'} — still selected.`
+  failNote.value = `${stopped ? 'Stopped. ' : ''}${verbed} ${removedAt.length} of ${rows.length}. ${left}`
+}
+
+/**
+ * Is there more of the playlist strip than fits?
+ *
+ * On a phone the playlists scroll sideways, and a scrolling row with no
+ * scrollbar is a row nobody knows scrolls. The strip fades out on whichever
+ * side still has chips past the edge, so the cut-off chip reads as "more this
+ * way" rather than as a mistake. Measured, not guessed: with two playlists
+ * that fit there is nothing to hint at and no fade is drawn.
+ */
+const listsEl = ref<HTMLElement | null>(null)
+const edge = ref({ l: false, r: false })
+const measureEdges = (): void => {
+  const el = listsEl.value
+  if (!el) return
+  const l = el.scrollLeft > 4
+  const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
+  if (l !== edge.value.l || r !== edge.value.r) edge.value = { l, r }
+}
+let listsWatch: ResizeObserver | null = null
+watch(() => library.playlists.length, () => { void nextTick(measureEdges) })
+// Opening a playlist from anywhere else should leave its chip in view.
+watch(() => library.open?.id, () => {
+  void nextTick(() => {
+    listsEl.value?.querySelector<HTMLElement>('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  })
+})
+
 onMounted(async () => {
+  unguardDrops = guardWindowDrops()
+  if (listsEl.value && typeof ResizeObserver !== 'undefined') {
+    listsWatch = new ResizeObserver(measureEdges)
+    listsWatch.observe(listsEl.value)
+  }
+  void nextTick(measureEdges)
   await Promise.all([loadLibrary(), loadPlaylists()])
 })
 // The player keeps going when this closes — that is the point of it living
-// elsewhere — so only this component's own timer is cleaned up here.
-onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
+// elsewhere — so only this component's own timer, observer and window
+// listeners are cleaned up here.
+onBeforeUnmount(() => {
+  disposed = true
+  bulk.stop = true
+  bulkStop?.abort()
+  if (searchTimer) clearTimeout(searchTimer)
+  listsWatch?.disconnect()
+  unguardDrops?.()
+  unguardDrops = null
+})
+
+/** How far through, 0–100, for the phone's seek bar to paint its own fill. */
+const pct = (at: number, dur: number | null | undefined): number =>
+  dur ? Math.max(0, Math.min(100, (at / dur) * 100)) : 0
 </script>
 
 <template>
-  <ModalBase width="1240px" title="Music" @close="emit('close')">
+  <ModalBase width="1240px" title="Music" :escape-guard="escapeSelection" @close="emit('close')">
     <div class="mm-shell" :style="headerStyle">
     <!-- Over the header rather than in a bar of its own: the art is the
          header, and a title strip above it would push the thing this modal
@@ -432,7 +832,10 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
     <button class="mm-x" aria-label="Close" @click="dismiss">
       <X :size="16" :stroke-width="2.25" />
     </button>
-    <div class="mm">
+    <div
+      class="mm"
+      @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop"
+    >
       <!-- ── left: what you own ──────────────────────────────────────── -->
       <aside class="mm-rail">
         <div class="mm-search">
@@ -468,7 +871,10 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           </div>
         </form>
 
-        <ul class="mm-lists">
+        <ul
+          ref="listsEl" class="mm-lists" :class="{ 'fade-l': edge.l, 'fade-r': edge.r }"
+          @scroll.passive="measureEdges"
+        >
           <li v-for="p in library.playlists" :key="p.id">
             <button class="mm-nav" :class="{ on: library.open?.id === p.id }" @click="openPlaylist(p.id)">
               <Music2 :size="15" :stroke-width="2.25" />
@@ -493,7 +899,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
       </aside>
 
       <!-- ── centre: the record you are looking at ───────────────────── -->
-      <section class="mm-main">
+      <section ref="mainEl" class="mm-main" :class="{ 'queue-open': showQueue, dropping }">
         <!-- The queue, over the centre pane rather than beside it: three
              columns is already the most this modal can hold, and what plays
              next is a question you ask occasionally, not a thing to watch. -->
@@ -504,6 +910,10 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
               <X :size="14" :stroke-width="2.25" />
             </button>
           </header>
+          <!-- Where a moved song went, for a screen reader. Here for as long
+               as the drawer is open: a region that arrives with its message
+               is often not read at all. -->
+          <p class="mm-sr" role="status" aria-live="polite">{{ qSaid }}</p>
 
           <template v-if="queue.current">
             <span class="mm-qlabel">Now playing</span>
@@ -530,8 +940,27 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
               <span>Next in queue</span>
               <button class="mm-qclear" @click="clearQueue">Clear</button>
             </div>
-            <ol class="mm-qlist">
-              <li v-for="(t, i) in queueView.manual" :key="'m' + i + t.id" class="mm-qrow">
+            <!-- Yours to rearrange: the handle that opens each row picks the
+                 song up. Only here — the song playing has already left the
+                 queue, and what follows is the playlist's order — and only
+                 once there are two songs: one song has nowhere to go. -->
+            <span v-if="queueView.manual.length > 1" id="mm-qgrip-how" class="mm-sr">Drag, or press the up and down arrow keys, to change when it plays.</span>
+            <ol ref="qList" class="mm-qlist" :class="{ sorting: !!qHeld, settling: qHeld?.phase === 'settle' }">
+              <li
+                v-for="(t, i) in queueView.manual" :key="qKeys[i]" class="mm-qrow"
+                :class="{ held: qHeld?.index === i, lifted: qHeld?.index === i && qHeld?.phase === 'drag' }"
+              >
+                <button
+                  v-if="queueView.manual.length > 1"
+                  type="button" class="mm-qgrip" data-qgrip data-no-longpress
+                  :aria-label="`Move ${t.title}`" aria-describedby="mm-qgrip-how"
+                  aria-keyshortcuts="ArrowUp ArrowDown"
+                  @pointerdown="onGripDown($event, i)" @pointermove="onGripMove" @pointerup="onGripUp"
+                  @pointercancel="onGripCancel" @lostpointercapture="onGripCancel"
+                  @keydown="onGripKey($event, i)" @contextmenu.prevent.stop
+                >
+                  <GripVertical :size="14" :stroke-width="2.25" aria-hidden="true" />
+                </button>
                 <button class="mm-qjump" :aria-label="'Play ' + t.title" @click="jumpTo({ kind: 'manual', index: i })">
                   <span class="mm-thumb" :class="{ empty: !t.cover }">
                     <img v-if="t.cover" :src="t.cover" alt="" />
@@ -584,7 +1013,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
              true. Sticky, so scrolling the library never hides which mode a
              click is in. Also the live region that says "added". -->
         <div v-if="live" class="mm-band" role="status" aria-live="polite">
-          <span class="mm-banddot" aria-hidden="true" />
+          <span class="mm-banddot" :class="{ still: isPaused(live) }" aria-hidden="true" />
           <span class="mm-bandtext mm-ellip">
             {{ notice || `Listening with ${live.name} — click a song to add it to the channel` }}
           </span>
@@ -632,8 +1061,18 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
               >
                 <Link2 :size="15" :stroke-width="2.25" />
               </button>
+              <!-- Picking several songs, to queue them or remove them. Pressed
+                   while it is on, and pressing it again leaves it, as Cancel
+                   on the bar does. -->
               <button
-                v-if="library.open" class="mm-ghost danger"
+                v-if="shownTracks.length" ref="selectBtn" type="button" class="mm-select" :class="{ on: selecting }"
+                :aria-pressed="selecting" @click="toggleSelecting"
+              >
+                <ListChecks :size="15" :stroke-width="2.25" aria-hidden="true" />
+                <span>Select</span>
+              </button>
+              <button
+                v-if="library.open" class="mm-ghost danger" :disabled="!!bulk.total"
                 v-tip="'Delete this playlist'" :aria-label="`Delete the playlist ${library.open.name}`"
                 @click="deletePlaylist(library.open.id)"
               >
@@ -648,14 +1087,17 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             v-model="linkUrl" class="mm-in" placeholder="https://…/track.mp3"
             aria-label="Link to an audio file" autofocus
           />
-          <button type="submit" class="mm-go" :disabled="!linkUrl.trim() || library.uploading !== null">Add</button>
+          <!-- Waits for its own import only: files going up never hold a link back. -->
+          <button
+            type="submit" class="mm-go" :disabled="!linkUrl.trim() || library.importing"
+            :aria-busy="library.importing"
+          >
+            <Loader2 v-if="library.importing" class="mm-spin" :size="13" :stroke-width="2.5" aria-hidden="true" />
+            <span :class="{ 'mm-gohide': library.importing }">Add</span>
+          </button>
         </form>
 
-        <div v-if="library.uploading !== null" class="mm-progress" role="status">
-          <Loader2 class="mm-spin" :size="14" :stroke-width="2.5" />
-          <span>{{ library.uploading < 95 ? 'Uploading…' : 'Checking and converting…' }}</span>
-          <div class="mm-bar"><span :style="{ transform: `scaleX(${library.uploading / 100})` }" /></div>
-        </div>
+        <UploadList />
 
         <p v-if="library.error" class="mm-err" role="alert">
           {{ library.error }}
@@ -664,7 +1106,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
         <!-- The table. Columns earn their place: album is the only one that
              is ever the reason you recognise a track you cannot name. -->
-        <div v-if="shownTracks.length" class="mm-table" role="table">
+        <div v-if="shownTracks.length" class="mm-table" :class="{ selecting }" role="table">
           <div class="mm-tr mm-th" role="row">
             <span role="columnheader">#</span>
             <span role="columnheader">Title</span>
@@ -674,10 +1116,23 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           </div>
           <div
             v-for="(t, i) in shownTracks" :key="`${t.id}-${i}`"
-            class="mm-tr mm-row" :class="{ on: !live && isPlayingRow(t, i) }" role="row"
-            @click="onRowClick($event, i)" @contextmenu.prevent="rowMenu($event, t, i)"
+            class="mm-tr mm-row" :class="{ on: !live && isPlayingRow(t, i), picked: isPicked(t, i) }" role="row"
+            @click="onRowClick($event, i)" @mousedown.shift.prevent
+            @contextmenu.prevent="onRowContext($event, t, i)"
           >
+            <!-- Picking: the number's place becomes the row's checkbox, so
+                 the column holds still and Space on it picks. -->
             <button
+              v-if="selecting" type="button" class="mm-check" role="checkbox"
+              :aria-checked="isPicked(t, i)" :aria-label="`Select ${t.title}`"
+              @click="pickRow($event, i)"
+            >
+              <span class="mm-box" aria-hidden="true">
+                <Check v-if="isPicked(t, i)" :size="12" :stroke-width="3" />
+              </span>
+            </button>
+            <button
+              v-else
               class="mm-num" :aria-label="live ? `Add ${t.title} to ${live.name}` : `Play ${t.title}`"
               @click="playRow(i)"
             >
@@ -698,7 +1153,9 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
               </span>
               <span class="mm-names">
                 <span class="mm-name mm-ellip">{{ t.title }}</span>
-                <span class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
+                <!-- A song a bulk act could not remove says why, where its artist was. -->
+                <span v-if="failures.get(rowKey(t, i))" class="mm-rowerr mm-ellip">{{ failures.get(rowKey(t, i)) }}</span>
+                <span v-else class="mm-artist mm-ellip">{{ t.artist || 'Unknown artist' }}</span>
               </span>
               <!-- What the scan said, in one fixed column. Checked files get a
                    quiet green shield, so "scanned" is something you can see
@@ -737,9 +1194,18 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
                 class="mm-icon" :class="{ danger: !library.open }"
                 :aria-label="library.open ? `Remove ${t.title} from this playlist` : `Delete ${t.title}`"
                 v-tip="library.open ? 'Remove from this playlist' : 'Delete from your library'"
-                @click="removeHere(t, i)"
+                :disabled="!!bulk.total" @click="removeHere(t, i)"
               >
                 <component :is="library.open ? X : Trash2" :size="14" :stroke-width="2.25" />
+              </button>
+              <!-- Phone only. Three small buttons a row do not fit a phone, so
+                   they become this one, which opens the same menu a long press
+                   does — every action in one 44px target. -->
+              <button
+                class="mm-more" :aria-label="`More for ${t.title}`" aria-haspopup="menu"
+                @click="rowMenu($event, t, i)"
+              >
+                <Ellipsis :size="18" :stroke-width="2.25" />
               </button>
             </span>
           </div>
@@ -759,6 +1225,17 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             <Upload :size="16" :stroke-width="2.5" /><span>Upload a track</span>
           </button>
         </div>
+
+        <Transition name="mm-selbar">
+          <LibrarySelectionBar
+            v-if="selecting" ref="selBar"
+            :count="picked.length" :in-playlist="!!library.open"
+            :progress="bulk.total ? bulk : null" :note="failNote"
+            @queue="queuePicked" @remove="askToRemovePicked" @cancel="cancelSelection"
+          />
+        </Transition>
+        <!-- How a bulk act ended, once the bar that counted it has gone. -->
+        <p class="mm-sr" role="status" aria-live="polite">{{ libSaid }}</p>
       </section>
 
       <!-- ── right: the room ─────────────────────────────────────────── -->
@@ -788,7 +1265,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             <span class="mm-nowtitle mm-ellip">
               {{ live.now ? (live.now.title ?? 'A linked track') : 'Nothing playing' }}
             </span>
-            <span class="mm-artist mm-ellip">{{ live.now?.artist || (live.now ? 'Unknown artist' : 'Queue something from your library') }}</span>
+            <span class="mm-artist mm-ellip">{{ isPaused(live) ? 'Paused · ' : '' }}{{ live.now?.artist || (live.now ? 'Unknown artist' : 'Queue something from your library') }}</span>
           </span>
         </template>
         <template v-else-if="playing">
@@ -801,14 +1278,28 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             <span class="mm-artist mm-ellip">{{ playing.artist || 'Unknown artist' }}</span>
           </span>
         </template>
+        <!-- Phone only: the bar keeps its height with nothing playing, and
+             empty space under a row of controls reads as something missing. -->
+        <span v-else class="mm-idle">
+          <span class="mm-nowart empty"><Music2 :size="20" :stroke-width="1.75" /></span>
+          <span class="mm-nownames">
+            <span class="mm-nowtitle mm-ellip">Nothing playing</span>
+            <span class="mm-artist mm-ellip">Pick a song to start</span>
+          </span>
+        </span>
       </div>
 
       <div v-if="live" class="mm-deck">
         <!--
-          A shared song cannot be paused — that would be doing it to
-          everyone — so the deck offers what you can do, in words rather
-          than glyphs, because neither is a button any player has taught
-          you. The bar below moves the song for everyone.
+          Everything here reaches everyone listening. Pause is the round key
+          your own player has, between Back and Skip where every player puts
+          it, because it is the same act; Skip and Leave stay in words,
+          because neither is a button any player has taught you. Pause is
+          there only when the server's music service can pause (Resume
+          whenever the song is held, even once it stops saying so), and like
+          Skip it stays in place, disabled, with nothing to act on. The bar
+          below moves the song for everyone, and stands still while it is
+          held.
         -->
         <div class="mm-keys">
           <!-- Back past three seconds in restarts the song, like your own
@@ -821,12 +1312,21 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
             <SkipBack :size="16" :stroke-width="2.25" />
           </button>
           <button
-            class="mm-pill" :disabled="!live.now"
+            v-if="live.pausable || isPaused(live)" class="mm-pp" :class="{ pending: isPausePending(live) }" :disabled="!canPauseOrResume(live)"
+            :aria-label="isPaused(live) ? `Resume for everyone in ${live.name}` : `Pause for everyone in ${live.name}`"
+            :aria-busy="isPausePending(live)" :aria-disabled="isPausePending(live)"
+            v-tip="isPaused(live) ? 'Resume — for everyone listening' : 'Pause — for everyone listening'"
+            @click="togglePauseMusic(live)"
+          >
+            <component :is="isPaused(live) ? Play : Pause" :size="18" :stroke-width="2.5" />
+          </button>
+          <button
+            class="mm-pill grow" :disabled="!live.now"
             :aria-label="`Skip for everyone in ${live.name}`" @click="skipMusic(live.id)"
           >
             <SkipForward :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Skip for everyone</span>
           </button>
-          <button class="mm-pill" :aria-label="`Leave ${live.name}`" @click="listenToMusic(null)">
+          <button class="mm-pill leave" :aria-label="`Leave ${live.name}`" @click="listenToMusic(null)">
             <LogOut :size="14" :stroke-width="2.5" /><span class="mm-pilltext">Leave channel</span>
           </button>
         </div>
@@ -837,6 +1337,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           <input
             class="mm-seek" type="range" min="0" step="1"
             :max="live.now?.durationSec || 1" :value="liveDrag ?? liveAt"
+            :style="{ '--p': pct(liveDrag ?? liveAt, live.now?.durationSec) + '%' }"
             :disabled="!live.now?.durationSec"
             :aria-label="`Move the song — for everyone in ${live.name}`"
             v-tip="'Moves the song for everyone listening'"
@@ -884,6 +1385,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
           <span class="mm-time">{{ clock(at) }}</span>
           <input
             class="mm-seek" type="range" min="0" :max="playing?.durationSec || 1" :value="at"
+            :style="{ '--p': pct(at, playing?.durationSec) + '%' }"
             step="1" aria-label="Seek" :disabled="!playing" @input="onSeek"
           />
           <span class="mm-time">{{ clock(playing?.durationSec ?? 0) }}</span>
@@ -903,7 +1405,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
                something without a toast for every click. -->
           <span v-if="queue.manual.length" class="mm-qbadge">{{ queue.manual.length }}</span>
         </button>
-        <span v-if="live" class="mm-only live"><span class="mm-livedot" aria-hidden="true" /> <span class="mm-ellip">Everyone in {{ live.name }}</span></span>
+        <span v-if="live" class="mm-only live"><span class="mm-livedot" :class="{ still: isPaused(live) }" aria-hidden="true" /> <span class="mm-ellip">Everyone in {{ live.name }}</span></span>
         <span v-else class="mm-only"><Radio :size="12" :stroke-width="2.25" /> Only you</span>
         <component :is="volIcon" class="mm-volico" :size="16" :stroke-width="2.25" />
         <input
@@ -915,8 +1417,17 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
     </div>
 
     <input
-      ref="fileInput" class="mm-sr" type="file"
-      accept="audio/*,.mp3,.flac,.ogg,.opus,.wav,.m4a,.aac" @change="onFile"
+      ref="fileInput" class="mm-sr" type="file" multiple
+      :accept="AUDIO_ACCEPT" @change="onFile"
+    />
+
+    <!-- Asked once, naming how many, before anything goes. Over the room:
+         both teleport to body, and this one opens after. -->
+    <ConfirmModal
+      v-if="confirming"
+      :title="confirmCopy.title" :message="confirmCopy.message"
+      :confirm-label="confirmCopy.confirmLabel" :danger="!library.open"
+      @confirm="removePicked" @close="confirming = false"
     />
 
   </ModalBase>
@@ -976,7 +1487,7 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
 .mm-sr {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
 .mm-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .mm-dim { color: var(--text-3); font-size: 13px; }
@@ -1056,6 +1567,15 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   display: flex; flex-direction: column; min-width: 0; overflow-y: auto;
   background: var(--bg-panel); border-radius: var(--edge-lg);
 }
+/* The queue drawer is positioned inside this pane, so anything that scrolls the
+   pane moves the drawer with it: a wheel that ran past the end of the queue
+   carried on into the library and took the rest of the queue off screen. While
+   the drawer is open the pane stays where showQueue's watch put it. */
+.mm-main.queue-open { overflow: hidden; }
+/* Files dragged over the player: the library says it will take them. An
+   outline drawn inward rather than a border, so nothing in the pane moves by a
+   pixel, and it is painted over the header's cover colours, not under them. */
+.mm-main.dropping { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /*
  * The one place colour comes from content rather than tokens. The wash is
@@ -1139,13 +1659,12 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   .mm-flat:hover { background: var(--hover); color: var(--text-1); }
 }
 
-.mm-progress {
-  display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center;
-  margin: 0 28px 14px; padding: 12px 14px;
-  background: var(--bg-input); border-radius: var(--edge-md);
-  font-size: 12.5px; color: var(--text-2);
-}
-.mm-progress .mm-bar { grid-column: 1 / -1; }
+/* Add, while its link is fetched: the spinner sits where the word was, so the
+   button keeps its width, and it stays at full strength — busy is not off. */
+.mm-go[aria-busy="true"] { position: relative; }
+.mm-go[aria-busy="true"]:disabled { opacity: 1; cursor: progress; }
+.mm-go .mm-spin { position: absolute; inset: 0; margin: auto; color: currentColor; }
+.mm-gohide { visibility: hidden; }
 .mm-spin { animation: mm-spin 1s linear infinite; color: var(--accent); }
 @keyframes mm-spin { to { transform: rotate(360deg); } }
 
@@ -1223,9 +1742,11 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .mm-icon:hover { background: var(--hover); color: var(--text-1); }
-  .mm-icon.danger:hover { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger-text); }
+  .mm-icon:hover:not(:disabled) { background: var(--hover); color: var(--text-1); }
+  .mm-icon.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger-text); }
 }
+/* Off, as a row's ✕ is while a bulk removal runs: dimmed, and deaf to hover. */
+.mm-acts .mm-icon:disabled { opacity: .4; cursor: default; }
 .mm-add {
   width: 26px; height: 26px; border: none; border-radius: var(--edge-sm);
   background: none; color: var(--text-3); cursor: pointer;
@@ -1234,6 +1755,55 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 }
 @media (hover: hover) and (pointer: fine) { .mm-add:hover { background: var(--hover); color: var(--text-1); } }
 .mm-add option { background: var(--bg-panel); color: var(--text-1); }
+
+/* ── picking several ─────────────────────────────────────────────────── */
+/* Select: a word, not another round icon, because it changes what a click on
+   every row does. Pressed, it wears the ring the rest of the modal uses for
+   "on" — never the accent, which is Play's. */
+.mm-select {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 38px; padding: 0 14px;
+  border: none; border-radius: var(--edge-pill); background: none; cursor: pointer;
+  color: var(--text-2); font: inherit; font-size: 13px; font-weight: 600;
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .mm-select:hover { background: var(--hover); color: var(--text-1); } }
+.mm-select.on { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); color: var(--text-1); }
+
+/* A picked row: the selection ring, as the playing row has, and a ticked box.
+   Colour is not the only signal — the tick is a shape. */
+.mm-row.picked { background: var(--active-bg); box-shadow: inset 0 0 0 1px var(--active-ring); }
+/* Shift-clicks span rows, not words. */
+.mm-table.selecting .mm-row { -webkit-user-select: none; user-select: none; }
+.mm-check {
+  display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
+  border: none; background: none; cursor: pointer; border-radius: var(--edge-sm);
+}
+.mm-box {
+  display: grid; place-items: center; width: 18px; height: 18px;
+  border: 2px solid var(--text-3); border-radius: var(--edge-sm);
+  transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.mm-row.picked .mm-box { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+@media (hover: hover) and (pointer: fine) { .mm-row:hover .mm-box { border-color: var(--text-1); } }
+.mm-row.picked:hover .mm-box { border-color: var(--accent); }
+.mm-rowerr { font-size: 12px; color: var(--danger-text); }
+
+/* A finger's checkbox. Wider than the number column on a tablet, so it
+   reaches into the gap either side rather than shifting the row. */
+@media (pointer: coarse) {
+  .mm-check { width: 44px; height: 44px; justify-self: center; margin-inline: -4px; }
+  .mm-select { min-height: 44px; }
+}
+
+/* The bar rises into place and drops away, shorter on the way out. */
+.mm-selbar-enter-from, .mm-selbar-leave-to { opacity: 0; transform: translateY(8px); }
+.mm-selbar-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+.mm-selbar-leave-active { transition: opacity var(--dur-exit) var(--ease-in), transform var(--dur-exit) var(--ease-in); }
+@media (prefers-reduced-motion: reduce) {
+  .mm-selbar-enter-from, .mm-selbar-leave-to { transform: none; }
+  .mm-select, .mm-box { transition: none; }
+}
 
 .mm-empty {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
@@ -1255,6 +1825,8 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 .mm-queue {
   position: absolute; inset: 0; z-index: 2;
   overflow-y: auto;
+  /* A scroll that reaches the end of the queue stops there, at every width. */
+  overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 2px;
   padding: 14px 14px 18px;
   background: var(--bg-panel); border-radius: var(--edge-lg);
@@ -1302,6 +1874,60 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 }
 .mm-qjump .mm-dim { margin-left: auto; font-variant-numeric: tabular-nums; }
 
+/*
+ * Rearranging your queue.
+ *
+ * The handle opens the row and is the only place a press picks a song up, so
+ * a finger anywhere else still scrolls the drawer. touch-action: none here,
+ * and only here, is what keeps a drag from ever fighting the list's scroll.
+ * It is the full height of the row, so it is easy to find with a thumb even
+ * where it is narrow.
+ */
+.mm-qgrip {
+  flex-shrink: 0; align-self: stretch;
+  display: grid; place-items: center; width: 24px; padding: 0;
+  border: none; background: none; border-radius: var(--edge-sm);
+  color: var(--text-3); opacity: .7; cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  transition: opacity var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .mm-qrow:hover .mm-qgrip { opacity: 1; color: var(--text-1); } }
+.mm-qgrip:focus-visible, .mm-qrow.held .mm-qgrip { opacity: 1; color: var(--text-1); }
+.mm-qgrip + .mm-qjump { padding-left: 4px; }
+/* While a song is held the hand stays closed wherever it goes, and nothing selects. */
+.mm-qlist.sorting { cursor: grabbing; -webkit-user-select: none; user-select: none; }
+.mm-qlist.sorting .mm-qgrip { cursor: grabbing; }
+/* The others slide aside to show where it will land… */
+.mm-qlist.sorting .mm-qrow {
+  transition: translate var(--dur-2) var(--ease-out), scale var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+/* …while the held row has no transition on where it is: the finger is its
+   motion, and anything else would trail behind it. It lifts — a little
+   larger, a menu's shadow — and is opaque, so the rows passing under it do
+   not show through. */
+.mm-qlist.sorting .mm-qrow.held {
+  position: relative; z-index: 1;
+  background: linear-gradient(var(--hover), var(--hover)), var(--bg-panel);
+  transition: scale var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.mm-qrow.lifted { scale: 1.02; box-shadow: var(--shadow-md); }
+/* Let go, and it settles: down from the lift and the last few pixels into
+   its slot, together. */
+.mm-qlist.settling .mm-qrow.held {
+  transition: translate var(--dur-2) var(--ease-out), scale var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+/* A finger's width, and in full: on touch there is no hover to bring it up. */
+@media (pointer: coarse) {
+  .mm-qgrip { width: 44px; min-height: 44px; opacity: 1; }
+}
+@media (hover: none) { .mm-qgrip { opacity: 1; } }
+/* Rows move without the slide, and the lift is the shadow alone. */
+@media (prefers-reduced-motion: reduce) {
+  .mm-qlist.sorting .mm-qrow, .mm-qlist.sorting .mm-qrow.held, .mm-qlist.settling .mm-qrow.held, .mm-qgrip { transition: none; }
+  .mm-qrow.lifted { scale: none; }
+}
+
 /* A control that is on. The transport is otherwise all one colour, so
    shuffle and repeat need to say which of them is doing something. */
 .mm-icon.lit { color: var(--art-accent, var(--accent-text)); }
@@ -1345,8 +1971,11 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   display: grid; place-items: center; width: 38px; height: 38px;
   border: none; border-radius: 50%; cursor: pointer;
   background: var(--text-strong); color: var(--bg-floor);
-  transition: transform var(--dur-1) var(--ease-out);
+  transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-2) var(--ease-out);
 }
+/* A pause on its way: dimmed like a disabled control and deaf to the pointer,
+   after a beat, so an answer that comes at once never flickers it. */
+.mm-pp.pending { opacity: .5; pointer-events: none; transition-delay: var(--dur-1); }
 @media (hover: hover) and (pointer: fine) { .mm-pp:hover:not(:disabled) { transform: scale(1.06); } }
 .mm-pp:active:not(:disabled) { transform: scale(.94); }
 .mm-pp:disabled { opacity: .35; cursor: not-allowed; }
@@ -1370,8 +1999,9 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 }
 @keyframes mm-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
-/* The live deck's two actions. Pills, not the round transport keys: they
-   are not play and pause, and dressing them up as such would lie. */
+/* The live deck's Skip and Leave. Pills, not the round transport keys: they
+   are not play and pause, and dressing them up as such would lie. Pause is
+   the round key (.mm-pp), because there it is the real thing. */
 .mm-pill {
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 13px;
   border: none; border-radius: var(--edge-pill); cursor: pointer;
@@ -1383,6 +2013,9 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 .mm-pill:active:not(:disabled) { transform: scale(.97); }
 .mm-pill:disabled { opacity: .4; cursor: default; }
 
+
+/* Held: still and dimmed, apart from a live dot reduced motion has stopped. */
+.mm-livedot.still, .mm-banddot.still { animation: none; opacity: .4; }
 
 @media (prefers-reduced-motion: reduce) {
   .mm-livedot, .mm-banddot { animation: none; }
@@ -1429,79 +2062,6 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 }
 
 /*
- * Phone.
- *
- * The left rail used to be display:none here, which took search, every
- * playlist and the storage meter with it — a third of the feature, gone,
- * on the device most people have. It becomes a horizontal strip instead:
- * the same controls, laid along the one axis a phone has to spare.
- */
-@media (max-width: 680px) {
-  .mm { grid-template-columns: minmax(0, 1fr); padding: 8px 8px 0; }
-
-  .mm-rail {
-    flex-direction: row; align-items: center; gap: 6px;
-    padding: 8px; overflow-x: auto; overflow-y: hidden;
-    /* Momentum, and no vertical rubber-banding fighting the sheet's own
-       drag-to-dismiss. */
-    -webkit-overflow-scrolling: touch;
-  }
-  .mm-rail::-webkit-scrollbar { display: none; }
-  .mm-search { margin-bottom: 0; flex: 0 0 150px; }
-  .mm-nav {
-    width: auto; flex: 0 0 auto; border-radius: var(--edge-pill);
-    background: var(--bg-input); padding: 8px 12px;
-  }
-  .mm-lists { flex-direction: row; gap: 6px; }
-  /* The meter and the empty note are what a phone can do without. The
-     heading stays, reduced to the button inside it — that button is the only
-     way to make a playlist, and it keeps its place in the markup rather than
-     being a second copy that exists only here. */
-  .mm-railempty, .mm-space { display: none; }
-  .mm-railhead { order: -1; flex: 0 0 auto; padding: 0; }
-  .mm-railhead > span { display: none; }
-  .mm-railhead .mm-mini { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-input); }
-
-  .mm-head { padding: 16px 16px 14px; gap: 14px; }
-  .mm-art { width: 92px; height: 92px; }
-  .mm-title { font-size: 26px; }
-  .mm-headacts { margin-top: 10px; gap: 6px; }
-  .mm-table { padding: 0 10px 16px; }
-  /*
-   * A head band for the close button.
-   *
-   * On a desktop it floats over the top-right of the call rail, which has
-   * room for it. On a phone that corner is the playlist strip, and every
-   * attempt to share the space failed in a different way: padding is not
-   * honoured at the scroll end of an overflowing flex row, and a margin
-   * just pushed the button out of the clip so it could only be reached by
-   * scrolling. So it gets its own row — which is what every other modal in
-   * the app has, and this one only lacked because the artwork is its header.
-   */
-  .mm-shell { padding-top: 34px; }
-  .mm-x { top: 2px; right: 8px; }
-
-  /* Names were truncating to four characters: a 40px thumbnail and a 86px
-     action column were spending a third of a phone screen on furniture.
-     The thumbnail shrinks and the columns give back what they do not need. */
-  .mm-tr { grid-template-columns: 36px minmax(0, 1fr) 44px 44px; gap: 8px; }
-  .mm-thumb { width: 32px; height: 32px; }
-  .mm-cell { gap: 8px; }
-  .mm-link, .mm-progress, .mm-err { margin-inline: 16px; padding-inline: 16px; }
-
-  /* Two zones, not three: what is playing, and the one control that matters.
-     A scrubber at this width is a 40px target for a three-minute track. */
-  .mm-foot { grid-template-columns: minmax(0, 1fr) auto; height: 68px; padding: 0 12px; gap: 10px; }
-  .mm-nowart { width: 44px; height: 44px; }
-  .mm-deck { flex-direction: row; gap: 0; width: auto; }
-  .mm-scrub, .mm-aside { display: none; }
-  /* Two worded pills would take the title's whole column on a phone. The
-     words go; the aria-labels already say exactly what each one does. */
-  .mm-pilltext { display: none; }
-  .mm-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
-}
-
-/*
  * Touch.
  *
  * Two separate problems, and only one of them is size.
@@ -1536,6 +2096,185 @@ onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
   /* Two 40px controls need the room, and the time column can give it. */
   .mm-tr { grid-template-columns: 40px minmax(0, 1fr) 48px 86px; }
   .mm-bandleave { height: 40px; }
+}
+
+/* Phone-only furniture: absent from the desktop layout. */
+.mm-idle, .mm-more { display: none; }
+
+/*
+ * Phone.
+ *
+ * Last in the file on purpose: the touch rules above set the sizes every
+ * control has on any narrow screen, and this block then lays the phone out
+ * around them, so it has to win ties.
+ *
+ * The left rail used to be display:none here, then a sideways strip with its
+ * scrollbar hidden, a scrubber and a Queue button that were display:none, and
+ * a 34px empty band for the close button. A phone has less room, not fewer
+ * functions, so each of those is now laid out for the screen instead of
+ * removed from it:
+ *
+ *   top      search and close share one row; "All tracks" and the new-playlist
+ *            button stay put and only the playlists scroll, with a fade on the
+ *            edge that has more.
+ *   centre   the library, its actions on a row of their own so every one is a
+ *            full 44px target.
+ *   bottom   what is playing with Queue beside it, a seek bar, then the
+ *            transport, with the room the home indicator needs.
+ */
+@media (max-width: 680px) {
+  .mm-shell {
+    --mm-inset: env(safe-area-inset-bottom, 0px);
+    /* The sheet pads its own bottom edge for the home indicator, which leaves
+       a lighter band under the footer. Take that band into the footer, whose
+       padding then does the clearing. */
+    margin-bottom: calc(-1 * var(--mm-inset));
+  }
+  .mm { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; padding: 8px 8px 0; }
+
+  /* ── top: search + close, then the chips ───────────────────────────── */
+  .mm-rail {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center; gap: 8px 6px; padding: 8px; overflow: hidden;
+  }
+  /* The close button sits at the end of this row (it is positioned against
+     the shell: 8px of grid padding + 8px of rail padding from each edge), so
+     the search leaves room for it instead of the close taking a row of its
+     own. */
+  .mm-search { grid-column: 1 / -1; grid-row: 1; margin: 0 52px 0 0; }
+  .mm-x { top: 16px; right: 16px; width: 44px; height: 44px; }
+
+  .mm-rail > .mm-nav { grid-column: 1; grid-row: 2; }
+  .mm-nav {
+    width: auto; flex: 0 0 auto; border-radius: var(--edge-pill);
+    background: var(--bg-input); padding: 8px 12px; min-height: 44px;
+  }
+  .mm-lists {
+    grid-column: 2; grid-row: 2; min-width: 0;
+    flex-direction: row; gap: 6px; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    --fade-l: 0px; --fade-r: 0px;
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--fade-l), black calc(100% - var(--fade-r)), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, black var(--fade-l), black calc(100% - var(--fade-r)), transparent 100%);
+  }
+  .mm-lists.fade-l { --fade-l: 28px; }
+  .mm-lists.fade-r { --fade-r: 28px; }
+  .mm-lists::-webkit-scrollbar { display: none; }
+  .mm-lists > li { flex: 0 0 auto; max-width: 220px; display: flex; }
+  .mm-lists .mm-nav { width: 100%; }
+  .mm-railhead { grid-column: 3; grid-row: 2; padding: 0; }
+  .mm-railhead > span { display: none; }
+  .mm-railhead .mm-mini { width: 44px; height: 44px; border-radius: 50%; background: var(--bg-input); }
+  .mm-newlist { grid-column: 1 / -1; grid-row: 3; flex-direction: row; align-items: center; gap: 6px; padding: 0; }
+  .mm-newlist .mm-in { min-height: 44px; }
+  .mm-newlist-acts { flex-shrink: 0; }
+  /* The meter and the empty note are what a phone can do without. */
+  .mm-railempty, .mm-space { display: none; }
+
+  /* ── centre: the library ───────────────────────────────────────────── */
+  /* The text beside the cover is a grid so the actions can drop to a row of
+     their own below it: beside the cover there is 190px, and Play with three
+     or four round buttons needs more than that. */
+  .mm-head {
+    display: grid; grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto; gap: 0 14px;
+    padding: 16px 16px 14px;
+  }
+  .mm-headtext { display: contents; }
+  .mm-art { grid-column: 1; grid-row: 1 / 4; width: 92px; height: 92px; }
+  .mm-kind { grid-column: 2; grid-row: 1; align-self: end; }
+  .mm-title { grid-column: 2; grid-row: 2; font-size: 26px; margin-top: 2px; }
+  .mm-sub { grid-column: 2; grid-row: 3; margin-top: 4px; }
+  .mm-headacts { grid-column: 1 / -1; grid-row: 4; margin-top: 14px; gap: 4px; flex-wrap: wrap; }
+  .mm-play { flex: 0 0 auto; white-space: nowrap; padding: 12px 18px; min-height: 44px; justify-content: center; }
+  .mm-ghost { flex: 0 0 auto; }
+  /* 44px, a step above the 40px every narrow screen gets: these are thumbs. */
+  .mm-icon, .mm-num { width: 44px; height: 44px; }
+  .mm-search, .mm-search-in { min-height: 44px; }
+
+  .mm-table { padding: 0 8px 16px; }
+  /* Names were truncating to four characters. The row is play, the name, the
+     time and ONE menu button: every action a row has in a single 44px target
+     (it opens what a long press opens), instead of three squeezed to 21px. */
+  .mm-tr { grid-template-columns: 44px minmax(0, 1fr) 40px 44px; gap: 6px; padding: 0 4px; }
+  .mm-row { height: 64px; }
+  .mm-thumb { width: 32px; height: 32px; }
+  .mm-cell { gap: 8px; }
+  .mm-acts > .mm-icon, .mm-acts > .mm-add { display: none; }
+  .mm-more {
+    display: grid; place-items: center; width: 44px; height: 44px;
+    border: none; background: none; cursor: pointer; border-radius: 50%;
+    color: var(--text-2);
+  }
+  .mm-link, .mm-err { margin-inline: 16px; padding-inline: 16px; }
+  .mm-in { min-height: 44px; }
+  .mm-go, .mm-flat { min-height: 44px; padding-inline: 16px; }
+  .mm-bandleave { height: 44px; }
+
+  /* ── bottom: now playing, seek, transport ──────────────────────────── */
+  /*
+   * Three rows rather than three columns. A phone is 336px of footer: five
+   * transport buttons take 244 of them, which left the title 28px. Stacked,
+   * the title gets the row, Queue sits beside it where its count reads as
+   * "what is next", the seek bar is as wide as it can be, and the transport
+   * is spread across the bottom where the thumb rests.
+   */
+  .mm-foot {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "now aside" "scrub scrub" "keys keys";
+    gap: 2px 8px; height: auto;
+    padding: 12px 16px calc(14px + var(--mm-inset));
+  }
+  .mm-now { grid-area: now; gap: 10px; }
+  .mm-idle { display: contents; }
+  .mm-nowart { width: 48px; height: 48px; }
+  .mm-nowtitle { font-size: 15px; }
+  .mm-aside { grid-area: aside; }
+  /* Volume is the hardware buttons here, and "only you" is said by the call
+     rail above. Queue is the one control the aside still has to carry. */
+  .mm-only, .mm-volico, .mm-vol { display: none; }
+  .mm-aside .mm-qbadge { top: 6px; right: 4px; }
+  .mm-deck { display: contents; }
+  .mm-scrub { grid-area: scrub; gap: 10px; }
+  .mm-keys {
+    grid-area: keys; justify-self: center; width: 100%; max-width: 340px;
+    justify-content: space-between; gap: 8px;
+  }
+  .mm-pp { width: 56px; height: 56px; }
+  .mm-pill { height: 44px; padding: 0 14px; }
+  .mm-pill.grow { flex: 1; justify-content: center; }
+  .mm-pill.leave { width: 44px; padding: 0; justify-content: center; }
+  .mm-pill.leave .mm-pilltext { display: none; }
+
+  /* A seek bar to drag: the 44px box is the hit area, the 4px rail is what
+     you see. It paints its own fill from --p, so progress reads at a glance
+     the way a thin bar does, and the thumb is only as big as a thumb needs. */
+  .mm-seek {
+    -webkit-appearance: none; appearance: none; background: transparent;
+    height: 44px; margin: 0; padding: 0;
+  }
+  .mm-seek::-webkit-slider-runnable-track {
+    height: 4px; border-radius: var(--edge-pill);
+    background: linear-gradient(to right, var(--art-accent, var(--accent)) var(--p, 0%), var(--track) var(--p, 0%));
+  }
+  .mm-seek::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; margin-top: -6px; border: none; border-radius: 50%;
+    background: var(--text-strong); box-shadow: var(--shadow-xs);
+  }
+  .mm-seek:active::-webkit-slider-thumb { transform: scale(1.25); }
+  .mm-seek::-moz-range-track { height: 4px; border-radius: var(--edge-pill); background: var(--track); }
+  .mm-seek::-moz-range-progress { height: 4px; border-radius: var(--edge-pill); background: var(--art-accent, var(--accent)); }
+  .mm-seek::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: var(--text-strong); }
+}
+
+/* A short phone cannot spend this much on chrome and still show a track. */
+@media (max-width: 680px) and (max-height: 700px) {
+  .mm-head { padding: 10px 16px 10px; }
+  .mm-headacts { margin-top: 10px; }
+  .mm-foot { padding-top: 8px; }
+  .mm-nowart { width: 40px; height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

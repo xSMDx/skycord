@@ -2,6 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import type { AnimationItem } from 'lottie-web'
 import { appearance } from '@/composables/useAppearance'
+import { MARK, MARK_SMALL, VIEWBOX } from '@/brand/mark'
 
 const props = withDefaults(defineProps<{
   size?:  number | string
@@ -155,18 +156,11 @@ watch(
   <svg
     v-if="mode === 'static'"
     :width="size" :height="size"
-    viewBox="0 0 256 256"
+    :viewBox="VIEWBOX"
     xmlns="http://www.w3.org/2000/svg"
     class="skycord-icon"
   >
-    <rect width="256" height="256" fill="none" />
-    <path
-      fill="none" :stroke="color"
-      stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
-      d="M24,64a24,24,0,0,1,48,0H184a24,24,0,0,1,48,0v80a64,64,0,0,1-64,64H88a64,64,0,0,1-64-64Z"
-    />
-    <circle cx="92"  cy="140" r="12" :fill="color" />
-    <circle cx="164" cy="140" r="12" :fill="color" />
+    <path :d="Number(size) <= 24 ? MARK_SMALL : MARK" :fill="color" fill-rule="evenodd" />
   </svg>
 
   <!-- Loading / hover mode: lottie-rendered, with the same flat footprint -->

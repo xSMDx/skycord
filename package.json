@@ -7,6 +7,7 @@
     "dev:client": "vite --host 0.0.0.0",
     "dev:server": "nodemon --exec \"ts-node --project tsconfig.server.json --transpile-only\" server/index.ts --watch server",
     "build": "vite build && tsc -p tsconfig.server.json",
+    "build:launcher": "vite build --config android/launcher/vite.config.ts",
     "start": "node dist/server/index.js",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json && tsc --noEmit -p tsconfig.music.json",

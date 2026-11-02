@@ -8,17 +8,28 @@
  */
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
-import { desktopBridge, type DesktopBridge } from '@/composables/desktopBridge'
+import { appBridge, type DesktopBridge } from '@/composables/desktopBridge'
 import {
   perf, perfState, setPerfLevel, setPerfOverride, clearPerfOverrides,
   dismissSuggestion, suggestsLight, restartNeeded, type PerfLevel,
 } from '@/composables/usePerformance'
 
-const desktop: DesktopBridge | null = desktopBridge()
+const desktop: DesktopBridge | null = appBridge()
+
+/**
+ * What Light does depends on where it runs. The plain title bar and the graphics
+ * card are the Windows app's to switch; a browser or a phone has neither, so
+ * naming them there would describe two things that do not happen. The Windows
+ * line says what it costs there, and the figure is the one measured on that app.
+ */
+const windowsApp = desktop?.platform === 'win32'
+const LIGHT_LINE = windowsApp
+  ? 'Two cameras, no motion, the plain Windows title bar, and the graphics card off — that last one does most of the work. Measured at 41% less memory than Max on this machine. Best on an old one, and video may look worse.'
+  : 'Two cameras at a time, no motion and lighter drawing — it uses a lot less memory than Max. Best on an older device, and video may look worse.'
 
 const LEVELS: { id: PerfLevel; name: string; line: string }[] = [
   { id: 'max', name: 'Max', line: 'Everything on. The default.' },
-  { id: 'light', name: 'Light', line: 'Two cameras, no motion, the plain Windows title bar, and the graphics card off — that last one does most of the work. Measured at 41% less memory than Max on this machine. Best on an old one, and video may look worse.' },
+  { id: 'light', name: 'Light', line: LIGHT_LINE },
 ]
 
 const memory = ref<{ privateMb: number; workingSetMb: number } | null>(null)
@@ -168,7 +179,7 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
       </select>
     </div>
 
-    <template v-if="desktop">
+    <template v-if="desktop?.performance">
       <div class="st-field">
         <div class="st-field-left">
           <span class="st-field-label">Skycord's title bar</span>
@@ -223,7 +234,10 @@ const overridden = computed(() => Object.keys(perfState.overrides).length > 0)
   background: var(--bg-input); color: var(--text-1); font: inherit;
   transition: background var(--dur-1) var(--ease-out);
 }
-.level:hover { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  .level:hover { background: var(--hover); }
+}
+@media (max-width: 768px) { .level { min-height: 44px; } }
 .level[aria-pressed="true"] { border-color: var(--accent); background: rgba(var(--accent-rgb), .12); }
 .level-name { font-weight: 700; font-size: 15px; }
 .level-line { font-size: 13px; color: var(--text-2); line-height: 1.4; }

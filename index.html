@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/skycord-icon.svg" />
+    <!-- ?v= changes whenever the icon art does: browsers and installed web apps
+         only fetch an icon again when its address changes. Bump it with the
+         manifest's icon addresses. -->
+    <link rel="icon" type="image/svg+xml" href="/skycord-icon.svg?v=2" />
     <!-- viewport-fit=cover lets the app paint into the notch/home-indicator
          area; env(safe-area-inset-*) then keeps content out of it. Without
          cover, those insets all report 0 and the phone letterboxes us.
@@ -15,7 +18,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Skycord" />
-    <link rel="apple-touch-icon" href="/skycord-icon.svg" />
+    <!-- iOS ignores an SVG here; it takes a 180 px PNG and rounds the corners itself. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Skycord</title>
   </head>

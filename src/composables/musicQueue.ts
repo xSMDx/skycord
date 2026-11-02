@@ -311,6 +311,38 @@ export const clearManual = <T extends { id: string }>(s: QueueState<T>): QueueSt
 })
 
 /**
+ * Move a song you queued to another place in your queue — the drawer's drag
+ * handle and its arrow keys.
+ *
+ * `to` is where the song ends up, clamped to the queue, so a drag that runs
+ * past either end lands it first or last rather than nowhere. Positions, not
+ * ids, for the same reason as unqueue: the queue can hold one song twice, and
+ * the copy you picked up is the one that moves.
+ *
+ * Only your own lineup changes. The context, its order, the position and what
+ * is playing come out exactly as they went in: "Next from …" follows the
+ * playlist or the shuffle, and is not yours to rearrange.
+ *
+ * Anything that would not move — the same place, a source that is not there,
+ * a target that is not a number — returns the state it was given, so a caller
+ * can tell a move from a no-op by identity.
+ */
+export const moveManual = <T extends { id: string }>(
+  s: QueueState<T>,
+  from: number,
+  to: number,
+): QueueState<T> => {
+  const n = s.manual.length
+  if (!Number.isInteger(from) || from < 0 || from >= n || Number.isNaN(to)) return s
+  const dest = Math.min(n - 1, Math.max(0, Math.trunc(to)))
+  if (dest === from) return s
+  const manual = [...s.manual]
+  const [track] = manual.splice(from, 1)
+  manual.splice(dest, 0, track)
+  return { ...s, manual }
+}
+
+/**
  * A track was deleted. Take every copy of it out of everything.
  *
  * The position is pulled back past any removed entry at or before it, so

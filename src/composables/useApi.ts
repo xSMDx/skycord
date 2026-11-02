@@ -25,7 +25,13 @@ const failure = async (res: Response): Promise<never> => {
   try { body = await res.json() } catch {
     body = { message: `Unexpected ${res.status} response from the server` }
   }
-  throw Object.assign(body, { status: res.status })
+  // The two headers a 429 says how long to wait in, for a caller that waits
+  // it out (a bulk delete); everyone else reads status and message alone.
+  const header = (name: string): string | undefined => res.headers?.get?.(name) ?? undefined
+  throw Object.assign(body, {
+    status: res.status,
+    rateHeaders: { 'retry-after': header('Retry-After'), 'ratelimit-reset': header('RateLimit-Reset') },
+  })
 }
 export const useApi = () => {
   const { accessToken } = useAuth()

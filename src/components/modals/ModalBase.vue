@@ -26,6 +26,10 @@ const props = defineProps<{
    *  switcher) that belong high on screen near the typing focus. Ignored on a
    *  phone, where everything is a sheet at the bottom edge. */
   align?: 'center' | 'top'
+  /** Asked first when Escape reaches the dialog. True means the content used it
+   *  — to step out of a mode of its own, like the music room's selection — and
+   *  the dialog stays open. Without one, or when it answers false, Escape closes. */
+  escapeGuard?: () => boolean
 }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -98,7 +102,7 @@ const focusables = () => Array.from(
 ).filter(el => el.offsetParent !== null || getComputedStyle(el).position === 'fixed')
 
 const onKey = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') { e.stopPropagation(); requestClose(); return }
+  if (e.key === 'Escape') { e.stopPropagation(); if (props.escapeGuard?.()) return; requestClose(); return }
   if (e.key !== 'Tab') return
   // A cascade panel is teleported to body, so it is visually inside this
   // dialog but a DOM sibling of it. Let its own rows take the focus.

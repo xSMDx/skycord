@@ -1,0 +1,128 @@
+# The Android app's release. A tag like android-v0.20.99 builds the APK,
+# signs it, and publishes it with latest.json — which installed apps check —
+# to the public releases-only repo.
+#
+# The signing key stays away from the build: npm, Gradle and the unit tests
+# run with no secrets in their environment and produce an unsigned APK; one
+# separate step, which runs nothing but the SDK's own zipalign and apksigner,
+# is the only place the keystore exists. That step then checks the result is
+# signed by the certificate installed phones already trust.
+name: Android release
+
+on:
+  push:
+    tags: ['android-v*']
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # The two checks that need nothing from the repo come first, so a wrong
+      # tag or a missing secret fails in seconds, before any code is installed.
+      - name: Version from the tag
+        id: version
+        run: |
+          v="${GITHUB_REF_NAME#android-v}"
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]{1,2}\.[0-9]{1,2}$' || { echo "::error::Tag version must be X.Y.Z (Y and Z below 100), got '$v'"; exit 1; }
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+      # Refuse rather than sign with a key nobody can sign with again: an APK
+      # signed by a new key cannot update any phone that has the old one.
+      - name: Everything the release needs is set
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          RELEASES_TOKEN: ${{ secrets.ANDROID_RELEASES_TOKEN }}
+          CERT: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          missing=""
+          [ -n "$KS_B64" ] || missing="$missing secret:ANDROID_KEYSTORE_BASE64"
+          [ -n "$KS_PASSWORD" ] || missing="$missing secret:ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$KEY_ALIAS" ] || missing="$missing secret:ANDROID_KEY_ALIAS"
+          [ -n "$KEY_PASSWORD" ] || missing="$missing secret:ANDROID_KEY_PASSWORD"
+          [ -n "$RELEASES_TOKEN" ] || missing="$missing secret:ANDROID_RELEASES_TOKEN"
+          [ -n "$CERT" ] || missing="$missing variable:ANDROID_CERT_SHA256"
+          if [ -n "$missing" ]; then
+            echo "::error::Not releasing: these are not set in the repository settings (Actions secrets and variables):$missing"
+            exit 1
+          fi
+          cert=$(printf '%s' "$CERT" | tr -d ': \r\n' | tr 'A-Z' 'a-z')
+          printf '%s' "$cert" | grep -Eq '^[0-9a-f]{64}$' || { echo "::error::variable ANDROID_CERT_SHA256 must be the signing certificate's SHA-256 (64 hex digits, colons optional)"; exit 1; }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      # No signing secrets in the environment from here to the signing step.
+      - name: Unit tests
+        working-directory: android
+        run: ./gradlew test
+      - name: Build (unsigned)
+        working-directory: android
+        env:
+          V: ${{ steps.version.outputs.v }}
+        run: ./gradlew assembleRelease -PappVersion="$V"
+      - name: Sign
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SKYCORD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SKYCORD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SKYCORD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPECTED_CERT: ${{ vars.ANDROID_CERT_SHA256 }}
+          V: ${{ steps.version.outputs.v }}
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          UNSIGNED=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          ALIGNED="$RUNNER_TEMP/aligned.apk"
+          OUT="$RUNNER_TEMP/skycord-$V.apk"
+          KS_FILE="$RUNNER_TEMP/release.jks"
+          umask 077
+          trap 'rm -f "$KS_FILE"' EXIT
+          printf '%s' "$KS_B64" | base64 -d > "$KS_FILE"
+          "$BT/zipalign" -p -f 4 "$UNSIGNED" "$ALIGNED"
+          "$BT/apksigner" sign --ks "$KS_FILE" --ks-key-alias "$SKYCORD_KEY_ALIAS" \
+            --ks-pass env:SKYCORD_KEYSTORE_PASSWORD --key-pass env:SKYCORD_KEY_PASSWORD \
+            --out "$OUT" "$ALIGNED"
+          certs=$("$BT/apksigner" verify --print-certs "$OUT")
+          echo "$certs"
+          got=$(printf '%s\n' "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: *//p' | tr -d ': \r' | tr 'A-Z' 'a-z')
+          want=$(printf '%s' "$EXPECTED_CERT" | tr -d ': \r\n' | tr 'A-Z' 'a-z')
+          if [ -z "$got" ] || [ "$got" != "$want" ]; then
+            echo "::error::The APK is signed by a different key than the one installed phones trust (certificate SHA-256 ${got:-unreadable}, expected $want). Not publishing: phones with the app could not update to it."
+            exit 1
+          fi
+      - name: latest.json
+        env:
+          V: ${{ steps.version.outputs.v }}
+        run: |
+          SHA=$(sha256sum "$RUNNER_TEMP/skycord-$V.apk" | cut -d' ' -f1)
+          # The url must be exactly what UpdateFeed.downloadUrl builds (android-v<V>/skycord-<V>.apk) — installed apps accept nothing else.
+          cat > "$RUNNER_TEMP/latest.json" <<EOF
+          {"version":"$V","url":"https://github.com/xSMDx/skycord-android-releases/releases/download/android-v$V/skycord-$V.apk","sha256":"$SHA","notes":"https://skycord.xyz/changelog/"}
+          EOF
+          cat "$RUNNER_TEMP/latest.json"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_RELEASES_TOKEN }}
+          V: ${{ steps.version.outputs.v }}
+          REPO: xSMDx/skycord-android-releases
+        run: |
+          gh release create "android-v$V" -R "$REPO" --title "Skycord for Android $V" \
+            --notes "Download **skycord-$V.apk** below and open it on your phone. Installed copies offer each update themselves." \
+            "$RUNNER_TEMP/skycord-$V.apk" "$RUNNER_TEMP/latest.json"

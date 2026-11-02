@@ -111,8 +111,74 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
     ok(res, { ok: true, id, track: card })
   }
 
+  /*
+   * Channels with a play call whose song is still being fetched.
+   *
+   * /play and /play-track answer at once and fetch in the background, and
+   * the song already playing carries on until the new one starts. A pause
+   * in that gap would hold the OUTGOING song; the new one would then start
+   * unpaused under a room that says Paused. So /pause is refused (409, the
+   * API says "try again in a moment") from the moment a play call arrives
+   * until its song is the one playing — the same answer as a pause at the
+   * very start of a channel, before any song exists to hold.
+   *
+   * Counted rather than flagged: two quick skips are two calls in flight.
+   */
+  const starting = new Map<string, number>()
+  const key = (room: string, channelId: string) => `${room}\u0000${channelId}`
+  /** Mark a play call in flight. The answer says it is over; saying so twice is harmless. */
+  const cue = (room: string, channelId: string): (() => void) => {
+    const k = key(room, channelId)
+    starting.set(k, (starting.get(k) ?? 0) + 1)
+    let over = false
+    return () => {
+      if (over) return
+      over = true
+      const left = (starting.get(k) ?? 1) - 1
+      if (left > 0) starting.set(k, left)
+      else starting.delete(k)
+    }
+  }
+
+  /*
+   * The latest play call per channel.
+   *
+   * Two quick skips are two fetches in flight, and the first can be the one
+   * that answers last. Handed to the publisher then, it would replace the
+   * song that is already playing — the newer one — and its end, or its
+   * failure, would be reported as that song's, moving the API's queue past
+   * what everyone is hearing. So each play call takes a number, and a fetch
+   * that lands after a newer call (or a /close) lets go of its body and
+   * says nothing. Numbers are never reused, so a close can simply forget.
+   */
+  const latest = new Map<string, number>()
+  let plays = 0
+  const claim = (room: string, channelId: string): (() => boolean) => {
+    const k = key(room, channelId)
+    const mine = ++plays
+    latest.set(k, mine)
+    return () => latest.get(k) === mine
+  }
+
+  /**
+   * Hand a fetched body to the publisher and close the starting window in
+   * the same tick: play() installs the new song before its first await, so
+   * there is no moment at which a pause could reach the old one.
+   */
+  const playNow = (
+    room: string, channelId: string, body: Readable, startSec: number,
+    reopen: () => Promise<Readable | null>, started: () => void,
+  ) => {
+    const playing = pub.play(room, channelId, body, startSec, reopen)
+    started()
+    return playing
+  }
+
   /** Fetch and play, reporting the end so the API can move its queue on. */
-  const start = async (room: string, channelId: string, url: string, startSec = 0): Promise<void> => {
+  const start = async (
+    room: string, channelId: string, url: string, startSec: number,
+    started: () => void, current: () => boolean,
+  ): Promise<void> => {
     const guard = async (u: string) => {
       const r = await check(u, { anyExtension: u !== url })
       return r.ok
@@ -120,19 +186,43 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
         : { ok: false as const, reason: r.reason }
     }
 
-    const got = await fetchFollowing(url, guard, { maxBytes: cfg.maxBytes })
-    if (got.kind !== 'stream') {
-      log(`${room}/${channelId}: ${got.kind === 'error' ? got.reason : 'unexpected redirect'}`)
-      cfg.onEnded?.(room, channelId)        // nothing to play: treat as finished
-      return
-    }
+    try {
+      const got = await fetchFollowing(url, guard, { maxBytes: cfg.maxBytes })
+      if (!current()) {
+        if (got.kind === 'stream') got.body.destroy()
+        log(`${room}/${channelId}: a newer play arrived while this link was fetched; dropped`)
+        return
+      }
+      if (got.kind !== 'stream') {
+        log(`${room}/${channelId}: ${got.kind === 'error' ? got.reason : 'unexpected redirect'}`)
+        started()
+        cfg.onEnded?.(room, channelId)        // nothing to play: treat as finished
+        return
+      }
 
-    if (startSec) log(`${room}/${channelId}: starting at ${startSec}s`)
-    const how = await pub.play(room, channelId, got.body, startSec)
-    if (got.tooBig()) log(`${room}/${channelId}: stopped at the size limit`)
-    // 'replaced' means something else is already playing on this channel —
-    // reporting an end then would advance a queue that has already moved.
-    if (how !== 'replaced') cfg.onEnded?.(room, channelId)
+      // A paused link's socket times out after seconds of silence, so a long
+      // pause usually ends with this: the same link, through the same guard.
+      let tooBig = got.tooBig
+      const reopen = async () => {
+        log(`${room}/${channelId}: the link closed early; fetching it again`)
+        const again = await fetchFollowing(url, guard, { maxBytes: cfg.maxBytes })
+        if (again.kind !== 'stream') {
+          log(`${room}/${channelId}: ${again.kind === 'error' ? again.reason : 'unexpected redirect'}`)
+          return null
+        }
+        tooBig = again.tooBig
+        return again.body
+      }
+
+      if (startSec) log(`${room}/${channelId}: starting at ${startSec}s`)
+      const how = await playNow(room, channelId, got.body, startSec, reopen, started)
+      if (tooBig()) log(`${room}/${channelId}: stopped at the size limit`)
+      // 'replaced' means something else is already playing on this channel —
+      // reporting an end then would advance a queue that has already moved.
+      if (how !== 'replaced') cfg.onEnded?.(room, channelId)
+    } finally {
+      started()
+    }
   }
 
   /**
@@ -148,29 +238,55 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
    * design — so the honest answer is that this path has no untrusted input
    * rather than that it has been checked.
    */
-  const startTrack = async (room: string, channelId: string, trackId: string, startSec = 0): Promise<void> => {
+  const startTrack = async (
+    room: string, channelId: string, trackId: string, startSec: number,
+    started: () => void, current: () => boolean,
+  ): Promise<void> => {
     const base = cfg.apiInternalUrl
+    const stale = () => {
+      log(`${room}/${channelId}: a newer play arrived while track ${trackId} was read; dropped`)
+    }
     if (!base) {
       log(`${room}/${channelId}: no API_INTERNAL_URL, cannot read library tracks`)
+      started()
       cfg.onEnded?.(room, channelId)
       return
     }
-    try {
+    const read = async (): Promise<Readable | null> => {
       const res = await fetch(`${base.replace(/\/$/, '')}/internal/music/track/${trackId}/audio`, {
         headers: { 'x-music-secret': cfg.secret },
       })
       if (!res.ok || !res.body) {
         log(`${room}/${channelId}: the API answered ${res.status} for track ${trackId}`)
+        return null
+      }
+      return Readable.fromWeb(res.body as never)
+    }
+    // fetch() gives up on a body nobody reads for five minutes, which is
+    // what a long pause does to it. Read again, from the top; the publisher
+    // decodes from where the listener is.
+    const reopen = async () => {
+      log(`${room}/${channelId}: track ${trackId} closed early; reading it again`)
+      return read().catch(() => null)
+    }
+    try {
+      const body = await read()
+      if (!current()) { body?.destroy(); stale(); return }
+      if (!body) {
+        started()
         cfg.onEnded?.(room, channelId)
         return
       }
-      const body = Readable.fromWeb(res.body as never)
       if (startSec) log(`${room}/${channelId}: starting at ${startSec}s`)
-      const how = await pub.play(room, channelId, body, startSec)
+      const how = await playNow(room, channelId, body, startSec, reopen, started)
       if (how !== 'replaced') cfg.onEnded?.(room, channelId)
     } catch (e) {
+      if (!current()) { stale(); return }
       log(`${room}/${channelId}: could not read track ${trackId}: ${String(e).slice(0, 160)}`)
+      started()
       cfg.onEnded?.(room, channelId)
+    } finally {
+      started()
     }
   }
 
@@ -189,10 +305,13 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
           const startSec = readStart(b.startSec)
           if (startSec === null) return fail(res, 400, 'startSec must be a whole number of seconds')
           await pub.open(b.room, b.channelId)
+          // Marked before answering, so no /pause can slip in between.
+          const started = cue(b.room, b.channelId)
+          const current = claim(b.room, b.channelId)
           // Answered immediately: a track is minutes long and the API is not
           // going to hold a request open for it. The end arrives by callback.
           ok(res)
-          void start(b.room, b.channelId, b.url, startSec)
+          void start(b.room, b.channelId, b.url, startSec, started, current)
           return
         }
 
@@ -205,16 +324,47 @@ export const createMusicServer = (pub: MusicPublisher, cfg: ServerConfig): Serve
           // composed it: one hex id is cheaper to verify than to trust.
           if (!/^[0-9a-f]{24}$/i.test(b.trackId)) return fail(res, 400, 'that is not a track id')
           await pub.open(b.room, b.channelId)
+          const started = cue(b.room, b.channelId)
+          const current = claim(b.room, b.channelId)
           ok(res)
-          void startTrack(b.room, b.channelId, b.trackId, startSec)
+          void startTrack(b.room, b.channelId, b.trackId, startSec, started, current)
           return
         }
 
         if (req.method === 'POST' && url.pathname === '/close') {
           const b = await readJson(req) as { room?: string; channelId?: string }
           if (!b.room || !b.channelId) return fail(res, 400, 'room and channelId are required')
+          // A fetch still in flight for this channel is over too.
+          latest.delete(key(b.room, b.channelId))
           await pub.close(b.room, b.channelId)
           return ok(res)
+        }
+
+        /*
+         * What this service can do, so the API knows whether to offer Pause.
+         *
+         * A route rather than a version number: the API asks about the one
+         * thing it needs. A service from before this existed answers 404,
+         * and the API reads that as "cannot pause" and sends no `pausable`.
+         * Behind the secret like everything but /health.
+         */
+        if (req.method === 'GET' && url.pathname === '/capabilities') return ok(res, { ok: true, pause: true })
+
+        // Hold or release the song on a channel. 200 once done; 409 when
+        // there is no song there to act on — a service restarted during a
+        // pause says this, and the API then starts the song again itself.
+        if (req.method === 'POST' && (url.pathname === '/pause' || url.pathname === '/resume')) {
+          const b = await readJson(req) as { room?: string; channelId?: string }
+          if (!b.room || !b.channelId) return fail(res, 400, 'room and channelId are required')
+          // A song on its way in: pausing now would hold the one on its way
+          // out. See `starting`.
+          if (url.pathname === '/pause' && starting.has(key(b.room, b.channelId))) {
+            return fail(res, 409, 'the next song is still starting')
+          }
+          const done = url.pathname === '/pause'
+            ? pub.pause(b.room, b.channelId)
+            : pub.resume(b.room, b.channelId)
+          return done ? ok(res) : fail(res, 409, 'nothing is playing there')
         }
 
         // ── ingest ──────────────────────────────────────────────────────

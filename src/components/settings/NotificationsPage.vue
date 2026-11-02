@@ -8,17 +8,57 @@
  * server, category or channel — said once at the top so nobody hunts for it
  * here.
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { notificationPrefs, setNotificationPref, type NotificationPrefKey } from '@/composables/notificationPrefs'
-import { desktopBridge } from '@/composables/desktopBridge'
+import { appBridge, type AndroidNotifyState } from '@/composables/desktopBridge'
 import { soundMessage, soundRingOnce } from '@/composables/useSounds'
+import { useViewport } from '@/composables/useViewport'
 
-const notifications = desktopBridge()?.notifications ?? null
+// A touch screen has no right-click, and its notifications are not "desktop"
+// ones. Coarse pointer rather than a narrow window: a small desktop window still
+// has a mouse.
+const { isCoarse } = useViewport()
+const gesture = computed(() => (isCoarse.value ? 'long-pressing' : 'right-clicking'))
+const popupLabel = computed(() => (isCoarse.value ? 'Enable notifications' : 'Enable desktop notifications'))
+
+const notifications = appBridge()?.notifications ?? null
+// The Android app notifies on its own while it is in the background, so the
+// desktop switches (pop-ups, browser permission, message text) are replaced by
+// the app's own three rows. Absent in older app builds, which keep what they had.
+const droid = appBridge()?.androidNotifications ?? null
 const permission = ref<NotificationPermission | 'unsupported'>(
   typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
 const keepInTray = ref<boolean | null>(null)
+const droidState = ref<AndroidNotifyState | null>(null)
 
-onMounted(async () => { keepInTray.value = notifications ? await notifications.keepInTray() : null })
+const readDroid = async () => {
+  if (!droid) return
+  try { droidState.value = await droid.state() } catch { /* keep the last answer */ }
+}
+// The battery question and Android's own settings are other screens: look
+// again when this one is back in front.
+const onBack = () => { if (document.visibilityState === 'visible') void readDroid() }
+
+onMounted(async () => {
+  // Listening first, and only in the Android app: nothing here may wait on the
+  // tray question below, or the page could unmount with the listeners still to be added.
+  if (droid) {
+    document.addEventListener('visibilitychange', onBack)
+    window.addEventListener('focus', onBack)
+    void readDroid()
+  }
+  keepInTray.value = notifications ? await notifications.keepInTray() : null
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onBack)
+  window.removeEventListener('focus', onBack)
+})
+
+const toggleBackground = () => {
+  if (!droid || !droidState.value) return
+  droidState.value = { ...droidState.value, enabled: !droidState.value.enabled }
+  droid.setEnabled(droidState.value.enabled)
+}
 
 const allow = async () => {
   if (typeof Notification === 'undefined') return
@@ -35,19 +75,55 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
 
 <template>
   <p class="st-hint nt-lead">
-    Choose which servers, categories and channels notify you by right-clicking them: Mute, or Notification Settings.
+    Choose which servers, categories and channels notify you by {{ gesture }} them: Mute, or Notification Settings.
   </p>
 
   <h2 class="st-section">Notifications</h2>
-  <div class="st-card">
+  <div v-if="droid" class="st-card">
     <div class="st-field">
       <div class="st-field-left">
-        <span class="st-field-label">Enable desktop notifications</span>
+        <span class="st-field-label">Background notifications</span>
+        <span class="st-field-value prose">Messages, mentions and calls reach you while Skycord is in the background. Turning this off also removes the always-on notification.</span>
+        <!-- An older server ignores that the phone is only listening, so it counts as online.
+             The app reports it; older app builds do not have the field, so absent reads as no. -->
+        <span v-if="droidState?.legacyServer" class="st-field-value prose">This server is an older version — while Skycord listens in the background you'll appear online. Updating the server fixes this.</span>
+      </div>
+      <button
+        type="button" class="st-toggle" :class="{ on: droidState?.enabled }" role="switch"
+        :aria-checked="!!droidState?.enabled" aria-label="Background notifications"
+        :disabled="!droidState"
+        @click="toggleBackground"
+      ><span /></button>
+    </div>
+
+    <div v-if="droidState" class="st-field">
+      <div class="st-field-left">
+        <span class="st-field-label">Battery</span>
+        <span v-if="droidState.batteryExempt" class="st-field-value prose">Allowed to run in the background</span>
+        <span v-else class="st-field-value prose">Android may stop Skycord in the background, and notifications stop with it.</span>
+      </div>
+      <button v-if="!droidState.batteryExempt" type="button" class="st-btn" @click="droid.requestBatteryExemption()">Allow</button>
+    </div>
+
+    <div class="st-field">
+      <div class="st-field-left">
+        <span class="st-field-label">Android notification settings</span>
+        <span v-if="droidState && !droidState.permission" class="st-field-value prose">Android isn't letting Skycord show notifications. Allow them here.</span>
+        <span v-else class="st-field-value prose">Silence messages, calls or the connection notice separately.</span>
+      </div>
+      <button type="button" class="st-btn" @click="droid.openSystemSettings()">Open</button>
+    </div>
+  </div>
+
+  <div v-else class="st-card">
+    <div class="st-field">
+      <div class="st-field-left">
+        <span class="st-field-label">{{ popupLabel }}</span>
         <span class="st-field-value prose">The pop-ups for DMs, group messages, mentions, calls and friend requests, while Skycord isn't the window in front. Off, you still hear them.</span>
       </div>
       <button
         type="button" class="st-toggle" :class="{ on: notificationPrefs.enabled }" role="switch"
-        :aria-checked="notificationPrefs.enabled" aria-label="Enable desktop notifications"
+        :aria-checked="notificationPrefs.enabled" :aria-label="popupLabel"
         @click="flip('enabled')"
       ><span /></button>
     </div>
@@ -102,7 +178,7 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
 
   <h2 class="st-section">Sounds</h2>
   <div class="st-card">
-    <div class="st-field" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
+    <div class="st-field nt-pair" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
       <div class="st-field-left">
         <span class="st-field-label">New message</span>
         <span class="st-field-value prose">Messages, mentions and friend requests — the same ones that would notify you.</span>
@@ -129,7 +205,7 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
       ><span /></button>
     </div>
 
-    <div class="st-field" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
+    <div class="st-field nt-pair" :class="{ 'nt-off': notificationPrefs.allSoundsOff }">
       <div class="st-field-left">
         <span class="st-field-label">Incoming call</span>
         <span class="st-field-value prose">The ring when someone calls you. Do Not Disturb never rings.</span>
@@ -178,4 +254,17 @@ const flip = (key: NotificationPrefKey) => setNotificationPref(key, !notificatio
 .nt-lead { margin: 0 0 6px; }
 /* A switch that does nothing while another is set: readable, plainly inert. */
 .nt-off .st-field-left { opacity: .55; }
+
+/* Phone: a row that carries Preview as well as the switch gives the sentence the
+   whole width and puts the two controls on a line of their own beneath it, Preview
+   on the left and the switch on the right. Squeezed beside both, the sentence was
+   a column about 120px wide and ran to six lines. */
+@media (max-width: 768px) {
+  .nt-pair { flex-wrap: wrap; row-gap: 12px; }
+  .nt-pair .st-field-left { flex: 1 1 100%; }
+  .nt-pair .st-toggle { margin-left: auto; }
+  /* On its own line a bare text button reads as a stray label; the outline
+     variant (the one .st-btn--outline gives) says it can be pressed. */
+  .nt-pair .st-btn { border: 1px solid var(--border); padding-left: 18px; padding-right: 18px; }
+}
 </style>

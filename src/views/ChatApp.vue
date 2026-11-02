@@ -14,6 +14,10 @@ import { useApi, type ApiUser, type PendingRequest, type ApiMessage, type WireCh
 import { avatarFor } from '@/composables/useAvatar'
 import { useUpdates } from '@/composables/useUpdates'
 import { shouldPrompt } from '@/composables/updatePrompt'
+import { appBridge } from '@/composables/desktopBridge'
+import { backAction, overlayOpen, pressEscape, closeOverlays } from '@/composables/androidBack'
+import { useAndroidChrome } from '@/composables/androidChrome'
+import { alertsBelongToPage, declinedText, firstDecline } from '@/composables/androidNotify'
 import { useSearch, type SearchHit } from '@/composables/useSearch'
 import type { SuggestMember, SuggestChannel } from '@/composables/searchSuggest'
 import SearchField        from '@/components/search/SearchField.vue'
@@ -21,8 +25,10 @@ import SearchFiltersModal from '@/components/search/SearchFiltersModal.vue'
 import SearchResultsPanel from '@/components/search/SearchResultsPanel.vue'
 import SearchScreen       from '@/components/search/SearchScreen.vue'
 import { toClientMessage } from '@/composables/useMessageAdapter'
+import { ownEcho } from '@/composables/ownEcho'
 import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
-import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates } from '@/composables/useSocket'
+import { createBackgroundSocket, mergeCaughtUp } from '@/composables/backgroundSocket'
+import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates, emitCallDecline } from '@/composables/useSocket'
 import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
 import { filterMembers } from '@/composables/memberFilter'
 import { canActOnMemberUI } from '@/composables/permissionMeta'
@@ -69,13 +75,17 @@ import ConversationDetails    from '@/components/chat/ConversationDetails.vue'
 import ProfilePopout       from '@/components/profile/ProfilePopout.vue'
 import MicFlyout            from '@/components/voice/MicFlyout.vue'
 import VoiceConnectedPanel   from '@/components/voice/VoiceConnectedPanel.vue'
+import ReturnToCallBar       from '@/components/voice/phone/ReturnToCallBar.vue'
+import { phoneCall, openPhoneCall, minimizePhoneCall, useCallKeepAwake, initSpeaker, callAudioActive } from '@/composables/phoneCall'
+import { joinProgress, failedCallId, callConversation } from '@/composables/callStatus'
+import { noPushToTalkKey }   from '@/composables/useVoiceSettings'
 import IncomingCallModal     from '@/components/voice/IncomingCallModal.vue'
 import { appearance, accentHex, chooseVariant, chooseStudio } from '@/composables/useAppearance'
 import { familyOf, type DarkVariant, type LightVariant } from '@/composables/themeMode'
 import { resolveAccentHex } from '@/composables/onAccent'
 import { THEME_OPTS, STUDIO_OPTS, ALL_PRESETS, type ThemeOpt } from '@/composables/themePresets'
 import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/useSavedThemes'
-import { useVoice, isConnectedVoiceRoom, userPref, setUserPref } from '@/composables/useVoice'
+import { useVoice, isConnectedVoiceRoom, userPref, setUserPref, setStreamVolume, userVolumeMax } from '@/composables/useVoice'
 import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
@@ -154,6 +164,15 @@ watch(shellRef, (el, prev) => {
   if (el) edgeSwipe.bind(el)
 })
 
+// The shell is clipped, so it cannot scroll sideways on a current WebView. An
+// older one still treats `overflow:hidden` as scrollable and slides the whole
+// app left when focus lands off-screen (measured scrollLeft 158), so every
+// screen change puts it back.
+watch(() => mobileNav.screen.value, () => {
+  const el = shellRef.value
+  if (el && isMobile.value) { el.scrollLeft = 0; el.scrollTop = 0 }
+})
+
 // ── API ────────────────────────────────────────────────────────────────────
 const api = useApi()
 const {
@@ -213,6 +232,7 @@ const {
   typingUsers,
   connect:          socketConnect,
   disconnect:       socketDisconnect,
+  rest:             socketRest,
   sendDMSocket,
   sendReplySocket,
   sendEditSocket,
@@ -244,6 +264,14 @@ const engagedCallRooms = ref<Set<string>>(new Set())
 // CallBar (that's dismissedCallRooms). Pruned when the call actually ends, so a
 // fresh call from the same room rings again.
 const modalAckedRooms = ref<Set<string>>(new Set())
+// The room the Android app has just asked this page to join (its Answer button).
+// Set the moment the request arrives, before anything loads or awaits: the
+// server's replay of the call's presence can land first and would ring a modal
+// for the call being answered. It cannot be an engaged room, because that set
+// is pruned against `activeCalls`, which may not hold the room yet. Cleared by
+// endJoiningFromApp, whose safety timer starts when the call is made rather than
+// here (see "Android: what the app asks of the page").
+const joiningFromApp = ref<string | null>(null)
 // Whether the window is in front — declared before anything that asks.
 // The desktop app says (windowInFront): inside it the document reports focus
 // and visibility as true even while hidden in the tray. In a browser the
@@ -253,7 +281,15 @@ const modalAckedRooms = ref<Set<string>>(new Set())
 const domInFront = () => document.hasFocus() && document.visibilityState === 'visible'
 const domFocused = ref(domInFront())
 const syncFocus = () => { domFocused.value = domInFront() }
-const appFocused = computed(() => windowInFront.value ?? domFocused.value)
+// Android only: the app says when it is in the background. Then its own service
+// posts the notifications, so the page keeps quiet (no chimes, no ring, no
+// incoming-call box) and is not looking at anything: what arrives meanwhile is
+// unread. Nothing else ever sets this — Windows and a browser stay false.
+const backgrounded = ref(false)
+const stopBackground = appBridge()?.onBackground?.(b => { backgrounded.value = !!b })
+onBeforeUnmount(() => stopBackground?.())
+const pageAlerts = computed(() => alertsBelongToPage(appBridge()?.platform, backgrounded.value))
+const appFocused = computed(() => !backgrounded.value && (windowInFront.value ?? domFocused.value))
 onMounted(() => {
   window.addEventListener('focus', syncFocus)
   window.addEventListener('blur', syncFocus)
@@ -276,6 +312,7 @@ const incomingCall = computed<{ room: string; kind: 'dm' | 'group'; convId: stri
   for (const [room, ids] of Object.entries(activeCalls.value)) {
     if (modalAckedRooms.value.has(room)) continue    // declined / seen in-chat / left
     if (engagedCallRooms.value.has(room)) continue   // already accepted/joined this call
+    if (room === joiningFromApp.value) continue      // answered in the Android app, joining now
     // Viewing it → the CallBar shows it. Only while the window is in front:
     // an open chat in a hidden window is a call nobody would see.
     if (room === openRoom && appFocused.value) continue
@@ -315,8 +352,37 @@ const acceptIncomingCall  = () => {
   vConnect(c.convId, c.kind, c.name).catch(() => {})
 }
 // Decline only silences the ring modal (acked) — it must NOT hide the in-chat
-// CallBar, so opening the conversation still shows "in a call / Join".
-const declineIncomingCall = () => { const c = incomingCall.value; if (c) modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room]) }
+// CallBar, so opening the conversation still shows "in a call / Join". It also
+// tells the server, which tells the caller (a DM) and quiets this account's
+// other devices — the phone stops ringing when the computer declines.
+const declineIncomingCall = () => {
+  const c = incomingCall.value; if (!c) return
+  modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room])
+  emitCallDecline(c.room)
+}
+// Who has declined the call I am in, so "Sam declined" shows once however many
+// times the server says it. Emptied when I leave the call.
+const declinedShown = new Set<string>()
+watch(() => voice.connected || voice.connecting, inCall => { if (!inCall) declinedShown.clear() })
+/** Is `room` the call I am in, or joining? Only DM and group calls can be declined. */
+const inCallRoom = (room: string): boolean => {
+  const myId = authUser.value?.id, id = voice.activeConvId ?? voice.connectingConvId
+  return !!myId && !!id && (room === voiceRoomName('dm', id, myId) || room === voiceRoomName('group', id, myId))
+}
+// Somebody declined. My own decline coming back — from this window or another
+// device — only has to stop the ring here. Someone else's, in the call I am in
+// or placing, is a toast.
+const onCallDeclined = (p: { room: string; userId: string; name: string }) => {
+  if (p.userId === authUser.value?.id) {
+    // Only a call still going: an ack for a room that has emptied is pruned by
+    // nobody, and would swallow that person's next call.
+    if (activeCalls.value[p.room] && !modalAckedRooms.value.has(p.room)) {
+      modalAckedRooms.value = new Set([...modalAckedRooms.value, p.room])
+    }
+    return
+  }
+  if (inCallRoom(p.room) && firstDecline(declinedShown, p.room, p.userId)) showToast(declinedText(p.name))
+}
 // Mark any room you connect to as engaged (covers joining via the CallBar's Join
 // button too, not just accepting the ring) so a later media drop won't re-ring.
 watch(() => [voice.connected, voice.activeConvId, voice.activeKind] as const, ([conn, cid, kind]) => {
@@ -326,7 +392,7 @@ watch(() => [voice.connected, voice.activeConvId, voice.activeKind] as const, ([
 })
 // Drop dismissals/engagements once the call actually ends, so a later call from
 // the same person (same stable room id) rings again instead of being swallowed.
-watch(activeCalls, (cur) => {
+const pruneCallMarks = (cur: Record<string, string[]>) => {
   const active = new Set(Object.keys(cur))
   if (dismissedCallRooms.value.size) {
     const next = new Set([...dismissedCallRooms.value].filter(r => active.has(r)))
@@ -340,7 +406,13 @@ watch(activeCalls, (cur) => {
     const next = new Set([...modalAckedRooms.value].filter(r => active.has(r)))
     if (next.size !== modalAckedRooms.value.size) modalAckedRooms.value = next
   }
-}, { deep: true })
+}
+// Not while the calls are being learned again after the Android socket's rest
+// (forgetCallsForWake): every room is gone from `activeCalls` for a moment, and
+// pruning then would forget that a call still going was declined or left.
+let callsRelearning: ReturnType<typeof setTimeout> | null = null
+watch(activeCalls, cur => { if (callsRelearning === null) pruneCallMarks(cur) }, { deep: true })
+onBeforeUnmount(() => { if (callsRelearning !== null) clearTimeout(callsRelearning) })
 
 // ── View state ─────────────────────────────────────────────────────────────
 const view          = ref<'friends' | 'dm' | 'server' | 'group' | 'discover'>('friends')
@@ -362,6 +434,29 @@ const groupsData    = ref<Group[]>([])
 const { open: searchResultsOpen, setScope: setSearchScope, close: closeSearch } = useSearch()
 const showSearchFilters = ref(false)
 const showSearchScreen  = ref(false)
+
+// Android: the back button, offered to the page first (see androidBack.ts),
+// and the system bars in the theme's colour.
+const stopAndroidBack = appBridge()?.onBack?.(() => {
+  // The search screen and the list/conversation split are phone layouts; on a
+  // landscape phone or a tablet the panes sit side by side and those flags can be stale.
+  const a = backAction({
+    searchOpen: showSearchScreen.value && isMobile.value,
+    overlayOpen: overlayOpen(),
+    onConversation: mobileNav.onConversation.value && isMobile.value,
+    // connected covers channels, DMs and groups; connecting is a join or a reconnect, which is still a call
+    // (Android silences the microphone of an app in the background once it is up).
+    inCall: voice.connected || voice.connecting,
+  })
+  if (a === 'close-search') showSearchScreen.value = false
+  else if (a === 'escape') pressEscape()
+  else if (a === 'to-list') mobileNav.backToList()
+  else if (a === 'stay-in-call') showToast('Leave the call first — Android stops your microphone when Skycord is in the background')
+  return a !== 'none'
+})
+onBeforeUnmount(() => stopAndroidBack?.())
+useAndroidChrome()
+
 /** The result opened last, marked in the panel so you can see where you were. */
 const openedResultId    = ref<string | null>(null)
 
@@ -463,6 +558,8 @@ const showToast = (msg: string) => {
  * learn to dismiss without reading.
  */
 const { state: updateState, install: installUpdate } = useUpdates()
+// On Android the button hands the update to Android's installer; there is no restart.
+const onAndroid = appBridge()?.platform === 'android'
 const updateReady = ref('')
 let promptedVersion = ''
 // Watches the call too: an update that lands mid-call must still be offered
@@ -493,6 +590,24 @@ const unhideConv = (id: string) => {
 const deleteDM = (id: string) => { initDM(id, []); hideConv(id) }
 const sidebarOpen   = ref(true)
 const membersOpen   = ref(false)
+// On a phone the member list is a sheet over the conversation. Going back to
+// the list must not leave its scrim up over the channel list.
+watch(() => mobileNav.onConversation.value, on => { if (!on && isMobile.value) membersOpen.value = false })
+/**
+ * The phone's members sheet is up. It is the same <aside> as the desktop column,
+ * laid over the chat by the .shell.mobile rules.
+ *
+ * Android Back closes what is on top by sending it Escape, and finds it by role
+ * (see androidBack.ts). A sheet that was not a dialog was invisible to it, so
+ * Back left the channel with the sheet still showing. The marks are bound only
+ * while it is open: on a phone a closed sheet is merely translated off the
+ * bottom, still has boxes, and would count as an open overlay for ever.
+ */
+const membersSheetOpen = computed(() => isMobile.value && membersOpen.value && (view.value === 'server' || view.value === 'group'))
+const membersSheetAttrs = computed(() =>
+  membersSheetOpen.value ? { role: 'dialog', 'aria-modal': true, 'aria-label': 'Members' } : {},
+)
+const closeMembersSheet = () => { if (membersSheetOpen.value) membersOpen.value = false }
 /*
  * Mute and deafen now live in useSelfAudio, shared. They used to be two refs
  * right here, which made them unreachable from any other component — the
@@ -547,6 +662,29 @@ const liveVoiceChannel = computed<Channel | null>(() => {
   return null
 })
 
+/** The conversation whose join has failed, while useVoice holds the failure on screen. */
+const callFailedId = computed(() => failedCallId(voice))
+/** The voice channel whose join has failed, for that hold. */
+const failedVoiceChannel = computed<Channel | null>(() => {
+  const id = callFailedId.value
+  if (!id) return null
+  for (const list of Object.values(channelsByServer.value)) {
+    const ch = list.find(c => c.id === id && c.type === 'voice')
+    if (ch) return ch
+  }
+  return null
+})
+/**
+ * The voice channel the call surface belongs to: the live call's, and on a
+ * touch phone a failed join's too, for its hold. There the phone call screen
+ * is the only thing that says the join failed, and it lives in the channel's
+ * CallBar, which needs the stage kept for it. Everything that shows where you
+ * ARE — the sidebar row, the occupants, the rail badge — keeps reading
+ * liveVoiceChannel, so those still retract the moment the join fails. On a
+ * desktop the two are the same.
+ */
+const callVoiceChannel = computed(() => liveVoiceChannel.value ?? (noPushToTalkKey.value ? failedVoiceChannel.value : null))
+
 /**
  * What the Voice Connected panel calls this channel.
  *
@@ -564,19 +702,23 @@ const voiceChannelLabel = (ch: Channel) => {
  *
  * Two conditions, and both matter. `viewedVoiceId` is the intent — the channel
  * you asked to look at (see its declaration in useServers for why that is not
- * `activeChannelId`). `liveVoiceChannel` is the reality — the call that is
- * actually up. A stage with no call behind it is an empty pane, so the moment
- * the call stops being live (you left, or the join spent its retries) this
- * goes null and the column falls back to the text channel underneath. The
- * server/`activeServerId` check keeps a call in one server from taking over
- * another server's column, exactly as `currentCall` does below.
+ * `activeChannelId`). `callVoiceChannel` is the reality — the call that is
+ * actually up, or joining. A stage with no call behind it is an empty pane, so
+ * the moment the call stops being there this goes null and the column falls
+ * back to the text channel underneath. What ends it depends on the device: on
+ * a desktop, you leaving or the join spending its retries; on a touch phone,
+ * you leaving or the red "Couldn't connect" hold running out, because the
+ * phone call screen is what says the join failed, and it lives on the stage
+ * (see `callVoiceChannel`). The server/`activeServerId` check keeps a call in
+ * one server from taking over another server's column, exactly as
+ * `currentCall` does below.
  *
  * Returning the channel rather than a boolean is deliberate: the header needs
  * its bare `name`, not `voiceChannelLabel`'s "Channel / Server" form — the
  * server is already named by the rail and the sidebar right next to it.
  */
 const viewedVoiceChannel = computed<Channel | null>(() => {
-  const vc = liveVoiceChannel.value
+  const vc = callVoiceChannel.value
   if (!vc || vc.id !== viewedVoiceId.value) return null
   if (view.value !== 'server' || vc.serverId !== activeServerId.value) return null
   return vc
@@ -593,7 +735,7 @@ const currentCall = computed<{ id: string; kind: 'dm' | 'group' | 'channel'; nam
   // unrelated conversation, and to a call you have actually joined: an ongoing
   // channel call you haven't joined belongs to the sidebar's occupant list,
   // which names it, rather than to a banner that couldn't say which channel.
-  const vc = liveVoiceChannel.value
+  const vc = callVoiceChannel.value
   if (view.value === 'server' && vc && vc.serverId === activeServerId.value)
     return { id: vc.id, kind: 'channel', name: voiceChannelLabel(vc) }
   return null
@@ -616,7 +758,7 @@ const returnToCall = () => {
   // channel happens to be selected underneath it (openServer's `selectLanding`
   // always picks a text channel and clears `viewedVoiceId`, so without this
   // "return to call" would land you next to the call instead of on it).
-  const vc = liveVoiceChannel.value
+  const vc = callVoiceChannel.value
   if (vc) {
     const showStage = () => viewVoiceChannel(vc.id)
     // Already in the right server: no navigation needed, but the stage may
@@ -626,13 +768,110 @@ const returnToCall = () => {
     if (srv) void openServer(srv).then(showStage)
     return
   }
-  if (voice.activeKind === 'group') {
-    const g = groupsData.value.find(x => x.id === id)
-    if (g) { openGroup(g); return }
-  }
-  const dm = dmsData.value.find(d => d.id === id)
-  if (dm) openDM(dm)
+  // A group or a DM. The kind is not asked for first: `activeKind` is set only
+  // once a join has succeeded, so it is still null through "Connecting…",
+  // "Trying again…" and the failed hold, which is exactly when the return bar
+  // is the only way back (callConversation has the rule).
+  const target = callConversation(id, voice.activeKind, groupsData.value, dmsData.value)
+  if (target?.kind === 'group') openGroup(target.group)
+  else if (target?.kind === 'dm') openDM(target.dm)
 }
+// ── The phone call screen ───────────────────────────────────────────────────
+// On a touch phone (noPushToTalkKey: a small screen AND a finger — never the
+// width alone, so a narrow desktop window keeps the desktop call) a call you
+// are in or joining is a full-screen layer, or, minimised, a slim bar across
+// the top of every screen. CallBar draws the screen; this decides when it is
+// up (phoneCall.open), and draws the return bar.
+//
+// The screen only ever draws on the call's own conversation: CallBar is
+// mounted only there. So it opens there, and minimises the moment the view
+// moves anywhere else — never left "open" where nothing can draw it, with no
+// return bar to get back by.
+
+/** The call you are in or joining, whatever is on screen. */
+const callConvId = computed(() => voice.activeConvId || voice.connectingConvId)
+/**
+ * The conversation on screen, as the call screen counts it: a DM, a group, or
+ * a voice channel while its stage is open. A server's text channel is never a
+ * call's conversation, but it is a move away from one.
+ */
+const viewedConvId = computed<string | null>(() => {
+  if (view.value === 'dm') return activeDM.value?.id ?? null
+  if (view.value === 'group') return activeGroup.value?.id ?? null
+  if (view.value === 'server') return viewedVoiceChannel.value?.id ?? activeChannelId.value ?? null
+  return null
+})
+/** The call's own conversation is on screen: where CallBar, and so the screen, can draw. */
+const callInView = computed(() => callConvId.value !== null && viewedConvId.value === callConvId.value)
+
+/**
+ * The screen was asked for while its conversation was still on the way: a
+ * server loading for a voice channel, or a conversation the Android app is
+ * opening for a call answered there. It comes up when the conversation does.
+ */
+let phoneCallWanted = false
+
+/** Bring the screen up, going to the call's conversation first if need be. */
+const showPhoneCall = () => {
+  if (!callInView.value) returnToCall()
+  if (!callInView.value) { phoneCallWanted = true; return }
+  phoneCallWanted = false
+  // The members sheet and its scrim sit above the call screen; nothing may be
+  // left on top of it, unseen behind its own layer.
+  closeMembersSheet()
+  openPhoneCall()
+}
+
+/**
+ * The call surface has something to show: a call up or joining, or a join
+ * that has failed and whose failure useVoice is still holding. giveUp clears
+ * connected and connecting at once, and the phone has no VoiceConnectedPanel
+ * to say why the call went, so the screen (or the return bar) stays through
+ * the hold, saying "Couldn't connect", until it is dismissed or the hold ends.
+ */
+const callSurfaceUp = computed(() => voice.connected || voice.connecting || callFailedId.value !== null)
+
+// Joining or connecting opens it; the call ending (left, or a failed join's
+// hold over) puts it away.
+watch(callSurfaceUp, (up, was) => {
+  if (up && !was && noPushToTalkKey.value) showPhoneCall()
+  if (!up) { phoneCallWanted = false; minimizePhoneCall() }
+})
+// Opening the voice channel you are in: its stage is the screen on a phone.
+watch(voiceStageOpen, open => { if (open && noPushToTalkKey.value) showPhoneCall() })
+// Leaving the call's conversation minimises it (a notification tap, a link, the
+// Friends button); arriving at one still being waited for brings it up.
+watch(callInView, inView => {
+  if (!inView) minimizePhoneCall()
+  else if (phoneCallWanted) showPhoneCall()
+})
+
+/** The return bar: in a call (or its failed join) on a touch phone, whenever the screen is not up. */
+const returnBarShown = computed(() => noPushToTalkKey.value && callSurfaceUp.value && !phoneCall.open)
+/** Anyone in the call talking, for the return bar's dot. */
+const callTalking = computed(() => voice.participants.some(p => p.speaking && !p.muted))
+/** Why the call is not up, in the words the screen uses ("Couldn't connect"), during a failed join's hold. */
+const callFailure = computed(() => (callFailedId.value !== null ? joinProgress(voice)?.label ?? null : null))
+
+// What a touch phone needs while a call is up. Read live, not decided once:
+// noPushToTalkKey is a width (768px) as well as a finger, and most phones are
+// wider than that turned on their side.
+// The display must not sleep mid-call: Android would background the app and silence the mic.
+useCallKeepAwake(() => noPushToTalkKey.value && (voice.connected || voice.connecting))
+// The app routes a call's audio while one is up (a no-op in builds without the
+// route bridge), and gets the route back if this view goes first.
+let callAudioOn = false
+const setCallAudio = (on: boolean) => { if (on !== callAudioOn) { callAudioOn = on; callAudioActive(on) } }
+watch(() => noPushToTalkKey.value && voice.connected, setCallAudio, { immediate: true })
+onBeforeUnmount(() => setCallAudio(false))
+// The speaker circle follows the app's audio route from the start.
+let stopSpeaker: (() => void) | null = null
+onMounted(() => { if (noPushToTalkKey.value) stopSpeaker = initSpeaker() })
+onBeforeUnmount(() => stopSpeaker?.())
+// The open flag is module state; it must not outlive this view (a sign-out
+// mid-call) and greet the next one with a screen nobody asked for.
+onBeforeUnmount(minimizePhoneCall)
+
 const toggleCall = async () => {
   const c = currentCall.value; if (!c) return
   if (callActiveHere.value) { await vLeave(); return }
@@ -982,8 +1221,12 @@ const joinVoiceChannel = (ch: Channel) => {
  * straight from one voice channel to another: `viewVoiceChannel` has already
  * pointed at the new one by the time the old call tears down, so there is
  * nothing to rescue.
+ *
+ * The call SURFACE's channel (callVoiceChannel), so on a touch phone a failed
+ * join keeps its stage, and the phone call screen on it saying so, until the
+ * failure is dismissed or its hold ends. On a desktop it is the live call.
  */
-watch(() => liveVoiceChannel.value?.id ?? null, (id, prev) => {
+watch(() => callVoiceChannel.value?.id ?? null, (id, prev) => {
   if (!prev || id === prev) return
   if (viewedVoiceId.value !== prev) return
   if (view.value !== 'server' || !activeServerId.value) return
@@ -1002,9 +1245,13 @@ watch(() => liveVoiceChannel.value?.id ?? null, (id, prev) => {
  * VoiceConnectedPanel's red "Couldn't connect" label is easy to miss once
  * you've looked away from it. Fires once per failed attempt, not on every
  * render while the fail-hold is showing.
+ *
+ * Not on a touch phone: there the call screen's subtitle, or the return bar
+ * when it is minimised, already says "Couldn't connect" for the whole hold, and
+ * the toast landed on the call screen's own controls.
  */
 watch(() => voice.connectStage, (stage, prev) => {
-  if (stage === 'failed' && prev !== 'failed') showToast('Couldn’t connect to voice')
+  if (stage === 'failed' && prev !== 'failed' && !noPushToTalkKey.value) showToast('Couldn’t connect to voice')
 })
 
 // Presence userIds for the open conversation's call, resolved to display info
@@ -1153,6 +1400,18 @@ const toggleInviteVoice = (e: MouseEvent, ch: Channel) => {
   inviteVoiceAnchor.value  = open ? null : (e.currentTarget as HTMLElement)
 }
 const inviteVoiceModal   = ref<Channel | null>(null)
+
+/**
+ * Invite people, from the phone call screen: a voice channel's invite (the
+ * modal behind "See more…"), or a group's add-friends sheet. A DM has no such
+ * row — a third person would make it a group, which is not the call screen's
+ * to do — so it never asks. Both open over the screen, which stays up beneath.
+ */
+const inviteFromCall = () => {
+  const vc = callVoiceChannel.value
+  if (currentCall.value?.kind === 'channel' && vc) { inviteVoiceModal.value = vc; return }
+  if (currentCall.value?.kind === 'group') showInviteGroup.value = true
+}
 
 /** Friends first for the inline peek — that is who you actually pull into a
  *  call. The modal widens to every member of the server. */
@@ -2176,6 +2435,34 @@ const loadNewerMessages = async () => {
   finally { loadingNewer.value = false }
 }
 
+/**
+ * After the page's connection was let go in the background and is back: pull in
+ * what a conversation missed, merged into what is already on screen
+ * (mergeCaughtUp keeps the order). Gentler than jumpToPresent — no skeleton, no
+ * jump to the bottom for someone reading up the page.
+ *
+ * `anchor` is the newest message the page had BEFORE the new socket came up:
+ * read after, it could be one that arrived live in the meantime, and everything
+ * between would be skipped. Pages are capped so a very long absence cannot loop;
+ * a window left short of the end stays non-live and offers "Jump to present".
+ */
+const CATCH_UP_PAGES = 20
+const catchUpConversation = async (c: { kind: ConvKind; id: string }, anchor: string | undefined) => {
+  try {
+    if (!anchor) { if (sameConv(c)) await jumpToPresent(); return }   // nothing to anchor on: load it as if opened
+    for (let i = 0; i < CATCH_UP_PAGES && anchor; i++) {
+      const page = await fetchHistory(c, { after: anchor })
+      if (!sameConv(c)) return
+      const got = toClient(page)
+      // The list is read again here: a message may have come over the new socket meanwhile.
+      setWindow(c.kind, c.id, mergeCaughtUp(getMsgList(), got),
+        { hasOlder: windowOf(c.kind, c.id).hasOlder, hasNewer: page.hasNewer })
+      if (!page.hasNewer) return
+      anchor = got[got.length - 1]?.dbId
+    }
+  } catch (e) { console.error('[catchUpConversation]', e) }
+}
+
 /** Back to the newest messages: reload the conversation as if just opened. */
 const jumpToPresent = async () => {
   const c = activeConv.value
@@ -2384,7 +2671,23 @@ const setupSocket = () => {
     const parts = (payload.conversationId as string).split('_')
     const partnerId = parts.find(p => p !== authUser.value?.id) || payload.authorId
 
+    // A DM sent over REST is announced to the sender's own sockets too (a phone
+    // answering a notification, a voice invite). Mine and already drawn: nothing
+    // to do. Mine from somewhere else: show it, but it is not news — never an
+    // unread, never a new sidebar row built from my own name and avatar.
+    const echo = ownEcho(payload, authUser.value?.id, getDMMessages(partnerId))
+    if (echo === 'seen') return
+
     const msg: Message = toClientMessage(payload, authUser.value?.id)
+
+    if (echo === 'fresh') {
+      // Back in history, hold it off the screen as any live message is — but
+      // without feeding the "jump to present" count, which is for what others said.
+      if (windowOf('dm', partnerId).live) pushDMMessage(partnerId, msg)
+      const mine = dmsData.value.find(d => d.id === partnerId)
+      if (mine) { mine.lastMsg = payload.content; mine.lastActiveAt = Date.now() }
+      return
+    }
 
     // Back in history, a live message is counted for the bar, not appended
     // below messages it does not follow.
@@ -2487,12 +2790,17 @@ const setupSocket = () => {
     // (e.g. our own optimistic message that got stamped via the send ack), skip.
     if (payload._id && getGroupMsgs(groupId).some(m => (m as any).dbId === payload._id)) return
     const msg: Message = toClientMessage(payload, authUser.value?.id)
-    if (!holdIfAway('group', groupId)) pushGroupMessage(groupId, msg)
+    // A REST group send is announced to every member, the sender included (a
+    // phone answering a notification). Having got this far it is mine from
+    // somewhere else: show it, but it is not unread and not away-count news.
+    const mine = ownEcho(payload, authUser.value?.id, getGroupMsgs(groupId)) !== null
+    if (mine) { if (windowOf('group', groupId).live) pushGroupMessage(groupId, msg) }
+    else if (!holdIfAway('group', groupId)) pushGroupMessage(groupId, msg)
     const g = groupsData.value.find(x => x.id === groupId)
     if (g) {
       g.lastMsg = payload.content
       g.lastMessageAt = payload.createdAt || new Date().toISOString()
-      if (!(view.value === 'group' && activeGroup.value?.id === groupId && appFocused.value)) g.unread = (g.unread || 0) + 1
+      if (!mine && !(view.value === 'group' && activeGroup.value?.id === groupId && appFocused.value)) g.unread = (g.unread || 0) + 1
     }
     consider({
       type: 'group', messageId: String(payload._id ?? ''), groupId,
@@ -2652,6 +2960,8 @@ const setupSocket = () => {
     }
   })
 
+  socketOn('onCallDeclined', onCallDeclined)
+
   socketOn('onVoiceDisconnected', (p: any) => {
     // Only the person removed has a call to tear down. Everyone else's view is
     // corrected by the occupancy broadcast the server already sent.
@@ -2792,6 +3102,7 @@ const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string
     },
     copy:        copyText,
     setUserVolume:   (id: string, v: number) => setUserPref(id, { volume: v }),
+    setStreamVolume: (id: string, v: number) => setStreamVolume(id, v),
     toggleUserMute:  (id: string) => setUserPref(id, { muted: !userPref(id).muted }),
     toggleUserVideo: (id: string) => setUserPref(id, { videoOff: !userPref(id).videoOff }),
     toggleMute:   onToggleMute,
@@ -2819,6 +3130,10 @@ const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string
     return voiceOccupantMenu(u, {
       channelId,
       volume: pref.volume, muted: pref.muted, videoOff: pref.videoOff,
+      userVolumeMax: userVolumeMax(),
+      // The slider shows only while they share a screen with sound, and only
+      // in the call with them, which inCallWithThem below decides.
+      streamVolume: pref.streamVolume, sharesScreenAudio: media.streamsWithAudio.has(o.id),
       isFriend: apiFriends.value.some(f => f.id === o.id),
       // Volume and local mute act on an audio element that only exists
       // while you share a room; from a channel you are merely looking at
@@ -2915,12 +3230,16 @@ const copyText = (text: string, what: string) => {
 // write failed.
 // Mute, Notification Settings and Hide Muted Channels for servers, categories
 // and channels. Optimistic, like pin and mute below, and put back on failure.
+// The Android app keeps its own copy of mutes and levels for notifying in the
+// background; it re-reads them when told one was written. Guarded, so a
+// throwing bridge cannot turn a saved write into a rolled-back one.
+const prefWritten = () => { try { appBridge()?.prefsChanged?.() } catch { /* the app's to report */ } }
 const writeNotifyPref = async (
   id: string, local: Partial<ConvPref>, body: Parameters<typeof api.setConvPref>[1], what: string,
 ) => {
   const prev = convPref(id)
   setConvPrefLocal(id, { ...prev, ...local })
-  try { const r = await api.setConvPref(id, body); setConvPrefLocal(id, r.pref) }
+  try { const r = await api.setConvPref(id, body); setConvPrefLocal(id, r.pref); prefWritten() }
   catch { setConvPrefLocal(id, prev); showToast(`Couldn’t update ${what}`) }
 }
 const notifyActions = {
@@ -2941,7 +3260,7 @@ const convActions = {
   setPinned: async (convId: string, pinned: boolean) => {
     const prev = convPref(convId)
     setConvPrefLocal(convId, { ...prev, pinned })
-    try { const r = await api.setConvPref(convId, { pinned }); setConvPrefLocal(convId, r.pref) }
+    try { const r = await api.setConvPref(convId, { pinned }); setConvPrefLocal(convId, r.pref); prefWritten() }
     catch { setConvPrefLocal(convId, prev); showToast('Couldn’t update pin') }
   },
   setMute: async (convId: string, mute: string | null) => {
@@ -2949,7 +3268,7 @@ const convActions = {
     setConvPrefLocal(convId, {
       ...prev, muted: mute !== null, mutedUntil: mute === 'forever' || mute === null ? null : mute,
     })
-    try { const r = await api.setConvPref(convId, { mute }); setConvPrefLocal(convId, r.pref) }
+    try { const r = await api.setConvPref(convId, { mute }); setConvPrefLocal(convId, r.pref); prefWritten() }
     catch { setConvPrefLocal(convId, prev); showToast('Couldn’t update mute') }
   },
   copy: copyText,
@@ -3559,7 +3878,12 @@ const doSend = async () => {
           if (m) { (m as any).dbId = ack.message._id; if (ack.message.replyTo) m.replyTo = ack.message.replyTo }
         }
       } else {
-        await sendDMRest(activeDM.value.id, text, name, myAvatar.value, replyIds)
+        // Stamp from the 201 as the socket branch does from its ack, so the
+        // echo the server now sends back to our own sockets finds it and stops.
+        const res = await sendDMRest(activeDM.value.id, text, name, myAvatar.value, replyIds)
+        const msgs = getDMMessages(activeDM.value.id)
+        const m = msgs.find(m => m.id === optimistic.id)
+        if (m && res.message?._id) { (m as any).dbId = res.message._id; if (res.message.replyTo) m.replyTo = res.message.replyTo as any }
       }
     } catch (e) {
       console.error('[doSend]', e)
@@ -3752,7 +4076,7 @@ const handleDeleteById = (msgId: number) => {
   const msg  = list.find(m => m.id === msgId)
   if (!msg) return
 
-  const body = stripMarkers(msg.content || "").replace(/s+/g, " ").trim()
+  const body = stripMarkers(msg.content || "").replace(/\s+/g, " ").trim()
   const preview = body.length > DELETE_PREVIEW_MAX
     ? body.slice(0, DELETE_PREVIEW_MAX) + "…"
     : body
@@ -4035,6 +4359,11 @@ useShortcuts({
 })
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
+/** The friends, DMs and groups have loaded: what a tap from the Android app needs to find its conversation. */
+const booted = ref(false)
+const whenBooted = (): Promise<void> => booted.value ? Promise.resolve() : new Promise(resolve => {
+  const stop = watch(booted, v => { if (v) { stop(); resolve() } })
+})
 onMounted(async () => {
   socketConnect()
   setupSocket()
@@ -4052,6 +4381,7 @@ onMounted(async () => {
 
   await loadFriends()
   await loadMyGroups()
+  booted.value = true
 
   document.addEventListener('keydown', onKey)
   document.addEventListener('click',   onClick)
@@ -4142,7 +4472,7 @@ function onScreen(): ConvRef | null {
 const ruleState = (): RuleState => ({
   me: noticeMe(),
   status: chosenStatus.value,
-  focused: windowInFront.value ?? domInFront(),
+  focused: !backgrounded.value && (windowInFront.value ?? domInFront()),
   previews: notificationPrefs.previews,
   isMuted: isConvMuted,
   levelOf,
@@ -4151,6 +4481,8 @@ const ruleState = (): RuleState => ({
 })
 /** Everything that might notify comes through here: its sound, then its notice. */
 function consider(e: Incoming, iconSrc: string | null): void {
+  // In the Android app's background its service has the sound and the notice.
+  if (!pageAlerts.value) return
   const s = ruleState()
   const sound = chime(e, s)
   if (sound === 'message') soundMessage()
@@ -4227,10 +4559,190 @@ const stopCallActions = onCallAction(a => {
     vConnect(c.convId, c.kind, c.name).catch(() => {})
   } else {
     modalAckedRooms.value = new Set([...modalAckedRooms.value, c.room])
+    emitCallDecline(c.room)   // as the box's Decline does: tell the caller, quiet the other devices
   }
 })
 const stopTray = onTrayCommand(cmd => { if (cmd === 'mute') onToggleMute(); else onToggleDeafen() })
 onBeforeUnmount(() => { stopNotices(); stopCallActions(); stopTray() })
+
+// ── Android: what the app asks of the page ──────────────────────────────────
+// Tapping a notification opens its conversation; Answer on a call joins it; and
+// the page tells the app which conversation is on screen. All through optional
+// bridge members, so Windows and a browser never get here.
+
+/** What a tap on a notification says when what it points at is not in the lists. */
+const CONVERSATION_GONE = 'That conversation is no longer here'
+
+/**
+ * Open a conversation the app names, once what it points at has loaded, and say
+ * whether it was there. A missing one is toasted, unless the caller `quiet`s it
+ * because it has its own answer to give.
+ */
+const openFromApp = async (c: ConvRef, opts: { quiet?: boolean } = {}): Promise<boolean> => {
+  await whenBooted()
+  showSearchScreen.value = false   // a phone's search screen covers the conversation
+  // On a phone Settings, the quick switcher, pins and profiles fill the screen:
+  // a conversation opened beneath one changes nothing the person can see. Close
+  // what is open, topmost first — the back button's own Escape — waiting for each
+  // box to be gone before the next, and a bounded number of times at most, so a
+  // box that will not close cannot hold this up.
+  await closeOverlays()
+  // A channel in a server not opened this session: fetch the server first, as a notice does.
+  if (c.kind === 'channel' && !channelHome(c.id) && c.serverId) {
+    try { await loadServerDetail(c.serverId) } catch { /* not found, said below */ }
+  }
+  const opened = await openConversationRef(c)
+  if (!opened && !opts.quiet) showToast(CONVERSATION_GONE)
+  return opened
+}
+const stopOpenFromApp = appBridge()?.onOpenConversation?.(c => { void openFromApp(c) })
+
+/** Who a call is with, as the ring names them. */
+const callNameFor = (kind: 'dm' | 'group', convId: string): string => {
+  if (kind === 'group') {
+    const g = groupsData.value.find(x => x.id === convId)
+    return g ? groupDisplayName(g) : 'Group call'
+  }
+  const f = apiFriends.value.find(x => x.id === convId)
+  return f ? (f.displayName || f.username) : dmsData.value.find(d => d.id === convId)?.name ?? 'Someone'
+}
+
+// Answering in the Android app. `joiningFromApp` keeps the ring modal away from
+// the very call being answered until the voice state itself takes over: the
+// guard comes down when the call is up (the engaged set takes over from there),
+// when the attempt ends without one, if the join throws, or after a safety
+// timeout. The name is cosmetic and never holds the guard up.
+//
+// The timeout runs from the moment the call is made, not from the request: the
+// page may still be booting when the request arrives, and a slow boot would use
+// the guard up before anything had begun to connect.
+const JOINING_FROM_APP_MS = 15_000
+let joiningTimer: ReturnType<typeof setTimeout> | null = null
+let joiningSawConnecting = false
+const endJoiningFromApp = () => {
+  if (joiningTimer) { clearTimeout(joiningTimer); joiningTimer = null }
+  joiningFromApp.value = null
+  joiningSawConnecting = false
+}
+const armJoiningTimer = () => {
+  if (joiningTimer) clearTimeout(joiningTimer)
+  joiningTimer = setTimeout(endJoiningFromApp, JOINING_FROM_APP_MS)
+}
+watch(() => [voice.connecting, voice.connected] as const, ([connecting, connected]) => {
+  if (joiningFromApp.value === null) return
+  if (connected) endJoiningFromApp()
+  else if (connecting) joiningSawConnecting = true
+  else if (joiningSawConnecting) endJoiningFromApp()   // gave up: let the call ring again
+})
+const joinFromApp = async (c: { kind: 'dm' | 'group'; convId: string }) => {
+  await whenBooted()
+  armJoiningTimer()
+  let failed = false
+  vConnect(c.convId, c.kind, callNameFor(c.kind, c.convId)).catch(() => { failed = true; endJoiningFromApp() })
+  // The call with the app on screen: the conversation it belongs to, opened. A DM
+  // that is not in the list can still be joined, so while the join stands a
+  // conversation that is not here is no cause for a toast; a join that has
+  // already failed, with nothing to show for it, still says so.
+  const opened = await openFromApp({ kind: c.kind, id: c.convId }, { quiet: true })
+  if (!opened && failed) showToast(CONVERSATION_GONE)
+}
+const stopJoinFromApp = appBridge()?.onJoinCall?.(c => {
+  const myId = authUser.value?.id
+  // Synchronously, ahead of the awaits in joinFromApp (see joiningFromApp). The
+  // safety timer is not started here: joinFromApp starts it with the call.
+  if (myId) {
+    joiningFromApp.value = voiceRoomName(c.kind, c.convId, myId)
+    joiningSawConnecting = false
+    if (joiningTimer) { clearTimeout(joiningTimer); joiningTimer = null }
+  }
+  void joinFromApp(c)
+})
+onBeforeUnmount(() => { stopOpenFromApp?.(); stopJoinFromApp?.(); if (joiningTimer) clearTimeout(joiningTimer) })
+
+// Android only: with the app in the background the page lets its own socket go
+// after a short grace (backgroundSocket.ts). The service keeps the phone's
+// connection for notifications and tells the server it is a background one, so
+// the person does not look online from a pocket and there is no second socket
+// and live renderer drawing battery. Not while in or joining a call: that rides
+// the socket (and a join answered from the notification arrives, then the
+// guard holds it until the voice state takes over). Windows and a browser never
+// rest, whatever they report.
+//
+// A deliberate rest does not touch the connection strip (useSocket.rest), so
+// coming back shows no "Reconnecting…". Nothing replays what the socket missed,
+// so the open conversation is topped up once the new socket is up.
+let pendingCatchUp: { c: { kind: ConvKind; id: string }; anchor: string | undefined } | null = null
+
+// What the page believes about calls is only as fresh as the socket that told
+// it. `call:state` says what changed, and the server's catch-up on connect skips
+// an empty room, so a call that ended while the socket rested was never heard to
+// end: it stayed in `activeCalls`, rang on return (Accept joined an empty room)
+// and kept its occupants in the voice channel list. So the calls are forgotten
+// before the new socket exists, and the catch-up, which names every room still
+// occupied, fills them in again. `resetCalls` clears the voice states and room
+// attribution along with the occupancy.
+//
+// The declined / left / joined marks outlive that for CALL_RELEARN_MS, so a call
+// that is still going and was turned down does not ring again from the catch-up;
+// then they are pruned against what came back, as the watch above does on every
+// change, and a call that really ended no longer swallows the next one.
+const CALL_RELEARN_MS = 20_000
+const forgetCallsForWake = () => {
+  // Armed before the reset, so the watch on activeCalls already finds it held.
+  if (callsRelearning !== null) clearTimeout(callsRelearning)
+  callsRelearning = setTimeout(() => {
+    callsRelearning = null
+    pruneCallMarks(activeCalls.value)
+  }, CALL_RELEARN_MS)
+  resetCalls()
+}
+const backgroundSocket = createBackgroundSocket({
+  platform: appBridge()?.platform,
+  rest: socketRest,
+  wake: () => {
+    // Remember where the open conversation stood before anything new can arrive.
+    // A window back in history pages for itself and has its own "Jump to present".
+    const c = activeConv.value
+    if (c && windowOf(c.kind, c.id).live) {
+      pendingCatchUp = { c, anchor: [...getMsgList()].reverse().find(m => m.dbId)?.dbId }
+    }
+    // Never in a call of mine: the socket does not rest in one (shouldRestSocket),
+    // so this only guards a call begun in the meantime, whose state is live and
+    // not the page's to forget.
+    if (!voice.connected && !voice.connecting) forgetCallsForWake()
+    socketConnect()
+  },
+})
+const socketNeededForCall = computed(() => voice.connected || voice.connecting || joiningFromApp.value !== null)
+// Synchronously: an answer from the notification must have its socket back
+// before the join's first emit, not a tick later.
+watch([backgrounded, socketNeededForCall], ([bg, inCall]) => backgroundSocket.sync(bg, inCall), { flush: 'sync' })
+watch(socketConnected, up => {
+  if (!up || !pendingCatchUp) return
+  const { c, anchor } = pendingCatchUp
+  pendingCatchUp = null
+  void catchUpConversation(c, anchor)
+})
+onBeforeUnmount(() => backgroundSocket.stop())
+
+// The conversation on screen, for the app to clear its notification and start
+// a fresh burst. Fires when the open conversation changes in front, and when the
+// app comes back to the front with one open — and, on a phone, when it is pushed
+// over the list again, even if it is the same one. Keyed by a string so a
+// re-assigned but unchanged conversation says nothing.
+watch(
+  () => {
+    if (!appFocused.value || (isMobile.value && !mobileNav.onConversation.value)) return null
+    const c = onScreen()
+    return c ? `${c.kind}:${c.id}` : null
+  },
+  key => {
+    if (!key) return
+    const i = key.indexOf(':')
+    const kind = key.slice(0, i) as ConvRef['kind']
+    try { appBridge()?.seen?.({ kind, id: key.slice(i + 1) }) } catch { /* the app's to report */ }
+  },
+)
 
 // The badge and the tray dot: conversations holding something that would notify.
 watchEffect(() => setUnread(unreadCount(dmsData.value, groupsData.value, alertedChannels, isConvMuted, channelMutedById)))
@@ -4259,8 +4771,9 @@ watch(
 
 // Calls: the desktop app's call window, or a notification in a browser. Only
 // while the window is not in front — in front, the in-app ring already shows.
-watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus], ([c]) => {
-  if (!c) { void ringFor(null); return }
+watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, pageAlerts], ([c]) => {
+  // Not while the Android app is in the background: its service rings.
+  if (!c || !pageAlerts.value) { void ringFor(null); return }
   const n = decide({ type: 'call', room: c.room, kind: c.kind, convId: c.convId, muteKey: c.convId, name: c.name }, ruleState())
   // The call window is a box too: notifications off, the in-app ring only.
   if (!n || !notificationPrefs.enabled) { void ringFor(null); return }
@@ -4271,7 +4784,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
 </script>
 
 <template>
-  <div class="app" @click="onClick">
+  <div class="app" :class="{ 'has-call-bar': returnBarShown }" @click="onClick">
 
     <!--
       Skip to the composer. It sits 42 tab stops into the page — the rail,
@@ -4286,9 +4799,11 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
     -->
     <button class="skip-link" @click="focusComposer">Skip to message box</button>
 
-    <!-- Incoming DM call — ringing modal (accept joins, decline dismisses) -->
+    <!-- Incoming DM call — ringing modal (accept joins, decline dismisses).
+         It rings from mounting, so keeping it away keeps the Android app's
+         background ring from doubling up. -->
     <IncomingCallModal
-      v-if="incomingCall"
+      v-if="incomingCall && pageAlerts"
       :name="incomingCall.name"
       :avatar="incomingCall.avatar"
       @accept="acceptIncomingCall"
@@ -4502,7 +5017,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
       <Transition name="toast-pop">
         <div v-if="updateReady" class="app-update" role="status">
           <span class="app-update-text">Skycord {{ updateReady }} is ready to install.</span>
-          <button type="button" class="app-update-btn primary" @click="installUpdate()">Restart now</button>
+          <button type="button" class="app-update-btn primary" @click="installUpdate()">{{ onAndroid ? 'Install' : 'Restart now' }}</button>
           <button type="button" class="app-update-btn" @click="updateReady = ''">Later</button>
         </div>
       </Transition>
@@ -4554,6 +5069,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
       @close="showUserProfile = null"
       @toast="showToast"
       @message="openDMFromUser"
+      @edit-profile="showUserProfile = null; openSettings('profile')"
     />
     <!-- Reaction picker modal (full center modal) -->
     <ReactionPickerModal
@@ -4618,6 +5134,17 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
     <!-- Connection status. Mounted at app level rather than inside a pane so it
          survives navigation and can't be covered by a modal. -->
     <ConnectionBanner />
+    <!-- The way back into a minimised call on a touch phone. Beside the strip,
+         at app level, for the same reasons: it is on every screen, and .app
+         steps down by its height (has-call-bar) so it covers nothing. -->
+    <ReturnToCallBar
+      v-if="returnBarShown"
+      :name="voice.activeName"
+      :talking="callTalking"
+      :started-at="voice.connectedAt"
+      :failure="callFailure"
+      @open="showPhoneCall"
+    />
     <!-- ══ SHELL ════════════════════════════════════════════════════════════ -->
     <!-- `--m` is the 0..1 pane position. The CSS below reads it, so a drag can
          sit anywhere between the two screens instead of only at the ends.
@@ -4788,7 +5315,10 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
              modal, so something on screen has to say so. -->
         <MiniPlayer @open="musicModal = true" />
         <!-- Voice connected strip + user panel -->
+        <!-- Not on a touch phone: the return bar stands in for it there, and
+             its screen share cannot work on a phone. -->
         <VoiceConnectedPanel
+          v-if="!noPushToTalkKey"
           @return-to-call="returnToCall"
           @preview-camera="openCameraPreview('camera')"
           @open-debug="showRtcDebug = true"
@@ -5065,7 +5595,10 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
           <div v-if="dragCategoryId && categoryDropBefore === null" class="ch-drop-line cat" aria-hidden="true" />
         </div>
         <MiniPlayer @open="musicModal = true" />
+        <!-- Not on a touch phone: the return bar stands in for it there, and
+             its screen share cannot work on a phone. -->
         <VoiceConnectedPanel
+          v-if="!noPushToTalkKey"
           @return-to-call="returnToCall"
           @preview-camera="openCameraPreview('camera')"
           @open-debug="showRtcDebug = true"
@@ -5477,7 +6010,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
                    .members-panel` already hides the panel, so the toggle would
                    be a button with no visible outcome — the same reason the
                    CallBar's hide-chat control is suppressed for a channel. -->
-              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersShown }" v-tip="membersShown ? 'Hide Member List' : 'Show Member List'" @click.stop="toggleMembers">
+              <button v-if="(view==='server' || view==='group') && !voiceStageOpen" class="icon-btn icon-btn-members" :class="{ active: membersShown, 'members-in-group': view==='group' }" :aria-label="membersShown ? 'Hide Member List' : 'Show Member List'" v-tip="isMobile ? '' : (membersShown ? 'Hide Member List' : 'Show Member List')" @click.stop="toggleMembers">
                 <Users :size="18" :stroke-width="1.5"/>
               </button>
 
@@ -5526,6 +6059,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
             @profile="showUserProfile = $event.id"
             @preview-camera="openCameraPreview('camera')"
             @open-music-library="musicModal = true"
+            @invite="inviteFromCall"
           />
 
           <!-- Pinned messages panel -->
@@ -5601,7 +6135,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
           :channels="searchChannels" :active-id="openedResultId"
           @open="openSearchResult" @close="closeSearch()"
         />
-        <aside v-if="view==='server' && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }">
+        <aside v-if="view==='server' && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }" v-bind="membersSheetAttrs" @keydown.esc="closeMembersSheet">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeMembers.online.length + activeMembers.offline.length }}</span></h3></div>
           <div class="mp-search">
             <Search :size="14" :stroke-width="1.5"/>
@@ -5645,7 +6179,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus],
         </aside>
 
         <!-- Members sidebar (group DM) -->
-        <aside v-if="view==='group' && activeGroup && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }">
+        <aside v-if="view==='group' && activeGroup && !searchPanelShown" class="members-panel" :class="{ closed: !membersOpen }" v-bind="membersSheetAttrs" @keydown.esc="closeMembersSheet">
           <div class="mp-header"><h3>Members <span class="mp-count">{{ activeGroup.memberCount }}</span></h3></div>
           <div class="mp-list">
             <div v-for="m in activeGroup.members" :key="m.id" class="mp-member" @click.stop="openProfilePopout($event, m.id, m, 'left')"
@@ -5701,14 +6235,25 @@ img{display:block;width:100%;height:100%;object-fit:cover}
   /* --conn-h is the connection strip's measured height (0 when it's hidden).
      Shifting down by it, and shrinking to match, keeps the strip from covering
      the chat header — it was hiding the back button. */
-  height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px)) / var(--zoom-factor, 1));
-  margin-top: var(--conn-h, 0px);
-  overflow:hidden;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
+  /* --call-bar-h is the return-to-call bar's, on a touch phone in a call with
+     the call screen minimised (below), and stacks under the strip the same way. */
+  height:calc((100dvh - var(--keyboard-h, 0px) - var(--conn-h, 0px) - var(--call-bar-h, 0px)) / var(--zoom-factor, 1));
+  margin-top: calc(var(--conn-h, 0px) + var(--call-bar-h, 0px));
+  overflow:hidden;overflow:clip;background:var(--bg-floor);color:var(--text-1);font-family: var(--font-ui);
   /* No transition. Height and margin follow --conn-h and --keyboard-h, and
      animating them reflowed the whole app on every frame; the connection
      strip animates its own entrance, by transform. */
 }
-.shell{display:flex;height:100%;overflow:hidden}
+/* The return-to-call bar's height: its 44px row, plus the status-bar inset it
+   carries as the top edge — none while the connection strip is above it,
+   which carries the inset then (ReturnToCallBar draws the same sum). Written
+   in CSS rather than measured, so it follows the strip coming and going. */
+.app.has-call-bar{ --call-bar-h: calc(44px + max(0px, env(safe-area-inset-top) - var(--conn-h, 0px))); }
+/* `overflow:hidden` still leaves this a scroll container, and focus landing on
+   something off-screen scrolls it: measured scrollLeft 158 on a phone, the whole
+   app slid left. `clip` cuts without being scrollable. `hidden` stays on the line
+   before it for WebViews that predate `clip` — they drop the second declaration. */
+.shell{display:flex;height:100%;overflow:hidden;overflow:clip}
 
 /* ── Rail ──────────────────────────────────────────────────────────────── */
 .rail{width:68px;flex-shrink:0;background:var(--bg-floor);display:flex;flex-direction:column;align-items:center;padding: 10px 0;gap: 2px;overflow: hidden auto}
@@ -6387,11 +6932,25 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 }
 
 /* Pin, invite and members are desktop affordances — on a phone they belong on
-   the details screen, and crowding them in here costs the title its room. */
+   the details screen, and crowding them in here costs the title its room.
+   A server channel has no details screen, so its members button stays: it opens
+   the members sheet. A group DM does have one, so its copy still goes.
+
+   `icon-btn-sidebar` is the desktop "collapse the channel list" toggle. On a
+   phone the list is its own screen, so there is nothing to collapse — and
+   tapping it left the list on screen but untappable (pointer-events:none)
+   until a reload. */
 .shell.mobile .icon-btn-pin,
-.shell.mobile .icon-btn-members,
+.shell.mobile .icon-btn-members.members-in-group,
 .shell.mobile .icon-btn-invite,
+.shell.mobile .icon-btn-sidebar,
 .shell.mobile .ch-edit-btn{display:none}
+/* If the desktop toggle was left collapsed (a window dragged narrow, or a saved
+   state), the phone list must still behave like the normal phone list. Its width,
+   opacity and transition already come from .shell.mobile .sidebar above, which
+   is later than .sidebar.collapsed at the same weight; only pointer-events is
+   set by .collapsed alone, so only that is undone here. */
+.shell.mobile .sidebar.collapsed{pointer-events:auto}
 
 @media (prefers-reduced-motion: reduce){
   .shell.mobile .ch-ident{transition:none}
@@ -6409,11 +6968,12 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 .shell.mobile .btn-mic,
 .shell.mobile .btn-headphones,
 .shell.mobile .btn-settings{min-width:44px;min-height:44px}
-.shell.mobile .up-chev{min-width:28px;min-height:44px}
+/* The device chevrons beside mic and deafen are gone on a phone. At 360px the
+   panel holds an avatar, three 44px buttons and two 28px chevrons, which left the
+   name about 40px — "Be…". Long-pressing mic or deafen opens the same device
+   flyout (their contextmenu handler), and a 28px sliver was a poor target anyway. */
+.shell.mobile .up-chev{display:none}
 .shell.mobile .ftab{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center}
-/* up-chev stays 28x44: the user panel has 16px of slack at 390px and widening
-   both chevrons needs 32px. They are secondary to a full 44x44 sibling, and
-   long-pressing that sibling opens the same device flyout. */
 .shell.mobile .sb-search-btn{min-height:44px}
 .shell.mobile .add-friend-btn,
 .shell.mobile .an-add-btn{min-height:44px}

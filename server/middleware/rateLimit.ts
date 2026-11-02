@@ -38,8 +38,15 @@ export const searchLimit = make(60_000, 30, 'Too many searches — wait a moment
 /** Third-party quota: every call costs us a KLIPY request. */
 export const gifLimit = make(60_000, 60, 'Too many GIF requests — wait a moment')
 
-/** Multi-MB bodies and image processing. */
+/** Multi-MB bodies and image processing: profile and server updates, stickers. */
 export const uploadLimit = make(60_000, 20, 'Too many profile updates — wait a moment')
+
+/** Songs going into a member's library, from a file or from a link. The same
+ *  budget as uploadLimit, but its own: a batch of songs must not use up the
+ *  profile budget, and a song refused must not be told about profile updates.
+ *  The client waits out a 429 here by reading Retry-After, so keep the
+ *  standard headers on. */
+export const musicUploadLimit = make(60_000, 20, 'Too many uploads — wait a moment')
 
 /** Writes that create records or notify other users. */
 export const writeLimit = make(60_000, 120, 'Too many requests — wait a moment')

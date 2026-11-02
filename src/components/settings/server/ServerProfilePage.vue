@@ -9,8 +9,8 @@
  * tab to check, is the workflow the preview removes.
  *
  * UI ONLY. Name, icon, banner colour and description are backed by the existing
- * PATCH; Traits is marked TBD because there is no field for it and inventing
- * one in the client would just lose whatever gets typed.
+ * PATCH; Traits is hidden (TRAITS_SAVE) because there is no field for it and
+ * inventing one in the client would just lose whatever gets typed.
  */
 import { reactive, computed, watch } from 'vue'
 import { Image as ImageIcon, Smile } from 'lucide-vue-next'
@@ -21,6 +21,14 @@ import '@/styles/settingsShared.css'
 
 const props = defineProps<{ server: WireServer; isOwner: boolean }>()
 defineEmits<{ toast: [msg: string] }>()
+
+/**
+ * Traits is not offered until something stores it. Showing the field with a
+ * "TBD" chip and a note that anything typed "is lost on close" is a developer's
+ * message, and a field that accepts nothing is a dead end for whoever opens it.
+ * The markup stays below, behind this switch, for the day a field exists.
+ */
+const TRAITS_SAVE = false
 
 /**
  * Ten banner colours, from the app's own palette rather than the reference's.
@@ -53,7 +61,7 @@ const iconSrc = computed(() => props.server.icon || avatarFor(props.server.name,
 const established = computed(() =>
   new Date(props.server.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }))
 
-/** Five slots, mirroring the reference. No backend field — see TBD below. */
+/** Five slots, mirroring the reference. No backend field — see TRAITS_SAVE above. */
 const traits = reactive<string[]>(['', '', '', '', ''])
 </script>
 
@@ -98,22 +106,18 @@ const traits = reactive<string[]>(['', '', '', '', ''])
         />
       </div>
 
-      <hr class="st-hr" />
+      <template v-if="TRAITS_SAVE">
+        <hr class="st-hr" />
 
-      <span id="sp-traits-h" class="st-label">
-        Traits <span class="st-tbd">TBD</span>
-      </span>
-      <p class="st-hint">
-        Up to five words for what this server is about. Nothing stores these
-        yet, so anything typed here is lost on close — the field is here to show
-        the shape, not to be used.
-      </p>
-      <div class="sp-traits" role="group" aria-labelledby="sp-traits-h">
-        <div v-for="(_, i) in traits" :key="i" class="sp-trait">
-          <Smile :size="15" :stroke-width="2" class="sp-trait-ic" />
-          <input v-model="traits[i]" class="sp-trait-in" maxlength="24" disabled placeholder="—" />
+        <span id="sp-traits-h" class="st-label">Traits</span>
+        <p class="st-hint">Up to five words for what this server is about.</p>
+        <div class="sp-traits" role="group" aria-labelledby="sp-traits-h">
+          <div v-for="(_, i) in traits" :key="i" class="sp-trait">
+            <Smile :size="15" :stroke-width="2" class="sp-trait-ic" />
+            <input v-model="traits[i]" class="sp-trait-in" maxlength="24" aria-label="Trait" placeholder="—" />
+          </div>
         </div>
-      </div>
+      </template>
 
       <hr class="st-hr" />
 
@@ -246,7 +250,10 @@ const traits = reactive<string[]>(['', '', '', '', ''])
   .sp-card { max-width: 340px; }
 }
 @media (max-width: 768px) {
+  /* stretch, not flex-start: in a column that sizes each child to its content. */
+  .sp { align-items: stretch; }
   .sp-trait { width: 100%; }
   .sp-swatch { width: calc(20% - 8px); height: 44px; }
+  .sp-card { max-width: none; }
 }
 </style>
