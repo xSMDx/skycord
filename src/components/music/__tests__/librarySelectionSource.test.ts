@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import modal from '../MusicModal.vue?raw'
 import bar from '../LibrarySelectionBar.vue?raw'
 import library from '@/composables/useMusicLibrary.ts?raw'
+import modalBase from '@/components/modals/ModalBase.vue?raw'
 
 /**
  * Picking several songs in the library, then queueing or removing them.
@@ -193,7 +194,9 @@ describe('the bar', () => {
 describe('Add to your queue', () => {
   it('goes to your own queue in list order, even in a channel', () => {
     const body = fnBody(script, 'queuePicked')
-    expect(body).toMatch(/for \(const \{ t \} of rows\) addToQueue\(t\)/)
+    // All at once, so the queue is saved and the next song fetched once, not once a song.
+    expect(body).toContain('addAllToQueue(rows.map(r => r.t))')
+    expect(body).not.toMatch(/addToQueue\(/)
     expect(body).toContain('const rows = picked.value')
     expect(body).not.toContain('queueMusic')
     expect(body).not.toContain('addToChannel')
@@ -253,13 +256,72 @@ describe('Delete and Remove from playlist', () => {
   })
 })
 
+describe('nothing moves under a run', () => {
+  // A run removes from a playlist by the places it was confirmed with. Taking
+  // any row out meanwhile moves the rows after it, and the run would then take
+  // the wrong one — so while it runs, nothing else removes.
+  it('a row’s own ✕ is off, and does nothing if it is reached anyway', () => {
+    const x = tagWith(tpl, 'button', '@click="removeHere(t, i)"')
+    expect(x).toContain(':disabled="!!bulk.total"')
+    expect(fnBody(script, 'removeHere')).toMatch(/^\s*(\/\/[^\n]*\n\s*)*if \(bulk\.total\) return/)
+  })
+
+  it('the row menu’s removal is off too', () => {
+    const tail = fnBody(script, 'menuTail')
+    expect(tail).toMatch(/label: 'Remove from this playlist'[^}]*disabled: !!bulk\.total/)
+    expect(tail).toMatch(/label: 'Delete from your library'[^}]*disabled: !!bulk\.total/)
+  })
+
+  it('so is deleting the playlist being removed from', () => {
+    expect(tagWith(tpl, 'button', '@click="deletePlaylist(library.open.id)"')).toContain(':disabled="!!bulk.total"')
+  })
+
+  it('a disabled row control has no hover', () => {
+    expect(modalCss).toMatch(/\.mm-acts \.mm-icon:disabled\s*\{[^}]*cursor:\s*default/)
+    expect(modalCss).toMatch(/\.mm-icon:hover:not\(:disabled\)/)
+  })
+
+  it('closing the room stops the run, and an orphaned run touches nothing after', () => {
+    expect(script).toMatch(/onBeforeUnmount\(\(\) => \{\s*disposed = true\s*bulk\.stop = true/)
+    const body = fnBody(script, 'removePicked')
+    const loop = body.indexOf('if (bulk.stop) break')
+    const after = body.indexOf('if (disposed) return')
+    expect(loop).toBeGreaterThan(-1)
+    expect(after).toBeGreaterThan(loop)
+    expect(after).toBeLessThan(body.indexOf('leaveSelection()'))
+  })
+})
+
 describe('leaving', () => {
-  it('Escape leaves selection before it closes the room', () => {
-    expect(tagWith(tpl, 'div', 'class="mm-shell"')).toContain('@keydown.esc="onEscape"')
-    const body = fnBody(script, 'onEscape')
-    expect(body).toMatch(/if \(!selecting\.value \|\| confirming\.value\) return/)
-    expect(body).toContain('e.stopPropagation()')
-    expect(body).toContain('cancelSelection()')
+  it('Escape leaves selection, and only selection, wherever focus is in the room', () => {
+    // ModalBase answers Escape for the whole dialog — focus lands on its sheet
+    // after a row click — so the room asks it first rather than listening below it.
+    expect(tagWith(tpl, 'ModalBase', '<ModalBase')).toContain(':escape-guard="escapeSelection"')
+    expect(tagWith(tpl, 'div', 'class="mm-shell"')).not.toContain('@keydown.esc')
+    const body = fnBody(script, 'escapeSelection')
+    // An open confirmation or menu has its own Escape.
+    expect(body).toMatch(/if \(!selecting\.value \|\| confirming\.value \|\| menu\.open\) return false/)
+    expect(body).toMatch(/cancelSelection\(\)\s*return true/)
+  })
+
+  it('ModalBase asks the guard before it closes, and stays open when it answers', () => {
+    const base = scriptOf(modalBase)
+    expect(base).toMatch(/escapeGuard\?: \(\) => boolean/)
+    expect(base).toMatch(/if \(e\.key === 'Escape'\) \{ e\.stopPropagation\(\); if \(props\.escapeGuard\?\.\(\)\) return; requestClose\(\); return \}/)
+  })
+
+  it('after a confirmed removal the keyboard is on the bar, whose Delete the run has turned off', () => {
+    expect(fnBody(script, 'removePicked')).toContain('void nextTick(() => selBar.value?.focusCancel())')
+    expect(tagWith(tpl, 'LibrarySelectionBar', '<LibrarySelectionBar')).toContain('ref="selBar"')
+    expect(barScript).toMatch(/defineExpose\(\{ focusCancel: \(\) => cancelBtn\.value\?\.focus\(\) \}\)/)
+    expect(tagWith(barTpl, 'button', "emit('cancel')")).toContain('ref="cancelBtn"')
+  })
+
+  it('leaving puts the keyboard back on Select when it was on the bar, a checkbox, or nowhere', () => {
+    const body = fnBody(script, 'leaveSelection')
+    expect(body).toMatch(/const lost = !focused \|\| focused === document\.body \|\| !!focused\.closest\('\.lsb, \.mm-check'\)/)
+    // With no Select left (the list emptied), the dialog itself, so Tab stays inside.
+    expect(body).toMatch(/if \(lost\) void nextTick\(\(\) => \(selectBtn\.value \?\? mainEl\.value\?\.closest<HTMLElement>\('\[role="dialog"\]'\)\)\?\.focus\(\)\)/)
   })
 
   it('Cancel during a run stops after the song in hand', () => {

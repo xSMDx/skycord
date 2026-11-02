@@ -33,11 +33,11 @@ import { coverTheme, type CoverTheme } from '@/composables/coverTheme'
 import { appearance } from '@/composables/useAppearance'
 import {
   player, queue, queueView, playFrom, toggle, next, previous, jumpTo, seek, setVolume,
-  forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue,
+  forget, toggleShuffle, setShuffleOn, cycleRepeat, playNext, addToQueue, addAllToQueue,
   removeFromQueue, clearQueue, moveInQueue, okToPlaySolo, type QueueContext,
 } from '@/composables/useMusicPlayer'
 import { useQueueDrag, stableKeys } from '@/composables/queueDrag'
-import { openMenu, type MenuItem, type MenuAnchor } from '@/composables/useContextMenu'
+import { menu, openMenu, type MenuItem, type MenuAnchor } from '@/composables/useContextMenu'
 import { voice } from '@/composables/useVoice'
 import {
   music, musicAvailable, shareToChannel, createMusicChannel,
@@ -216,8 +216,8 @@ const menuTail = (t: LibTrack, i: number): MenuItem[] => {
     })
   }
   items.push({ sep: true }, library.open
-    ? { label: 'Remove from this playlist', icon: X, onSelect: () => removeHere(t, i) }
-    : { label: 'Delete from your library', icon: Trash2, danger: true, onSelect: () => removeHere(t, i) })
+    ? { label: 'Remove from this playlist', icon: X, onSelect: () => removeHere(t, i), disabled: !!bulk.total }
+    : { label: 'Delete from your library', icon: Trash2, danger: true, onSelect: () => removeHere(t, i), disabled: !!bulk.total })
   return items
 }
 
@@ -503,6 +503,9 @@ const deleteOne = async (t: LibTrack, opts: Quiet = {}): Promise<string | null> 
 }
 
 const removeHere = async (t: LibTrack, index: number): Promise<void> => {
+  // Not while a bulk removal runs: it removes by the places it was confirmed
+  // with, and taking any row out now would move the ones it has still to take.
+  if (bulk.total) return
   // Inside a playlist the X means "take it out of this list". In the library
   // it means "delete it". Same glyph, genuinely different acts, so they are
   // labelled differently and the destructive one is styled as such.
@@ -549,6 +552,9 @@ type PickedRow = (typeof picked.value)[number]
  * rows' own changes (each song leaving) do not trim it until it ends.
  */
 const bulk = reactive({ verb: 'Deleting', done: 0, total: 0, stop: false })
+/** The room has closed. A run in hand stops after its current song and then does nothing. */
+let disposed = false
+const selBar = ref<InstanceType<typeof LibrarySelectionBar> | null>(null)
 /** Why a row did not go, by row key. It stays picked and says this under its name. */
 const failures = ref(new Map<string, string>())
 /** After a run that left something behind: what, said on the bar. */
@@ -569,7 +575,8 @@ const sayInLibrary = (message: string): void => {
 const selectBtn = ref<HTMLButtonElement | null>(null)
 const leaveSelection = (): void => {
   const focused = document.activeElement as HTMLElement | null
-  if (focused?.closest('.lsb, .mm-check')) void nextTick(() => selectBtn.value?.focus())
+  const lost = !focused || focused === document.body || !!focused.closest('.lsb, .mm-check')
+  if (lost) void nextTick(() => (selectBtn.value ?? mainEl.value?.closest<HTMLElement>('[role="dialog"]'))?.focus())
   selecting.value = false
   sel.value = Sel.clear(sel.value)
   failures.value = new Map()
@@ -618,11 +625,18 @@ const onRowContext = (e: MouseEvent, t: LibTrack, i: number): void => {
   rowMenu(e, t, i)
 }
 
-const onEscape = (e: KeyboardEvent): void => {
-  if (!selecting.value || confirming.value) return
-  // Ours, not the room's: Escape steps out of picking before it closes anything.
-  e.stopPropagation()
+/**
+ * Escape while picking steps out of picking and leaves the room open.
+ *
+ * ModalBase answers Escape for the whole dialog, and a click on a row leaves
+ * focus on its sheet rather than on anything of ours, so a listener down here
+ * never heard it and the room closed. ModalBase asks this first instead. An
+ * open confirmation or row menu keeps its own Escape.
+ */
+const escapeSelection = (): boolean => {
+  if (!selecting.value || confirming.value || menu.open) return false
   cancelSelection()
+  return true
 }
 
 watch(rowKeys, (keys) => { if (!bulk.total) sel.value = Sel.retainVisible(sel.value, keys) })
@@ -640,7 +654,7 @@ const songs = (n: number): string => `${n} ${n === 1 ? 'song' : 'songs'}`
 const queuePicked = (): void => {
   const rows = picked.value
   if (!rows.length || bulk.total) return
-  for (const { t } of rows) addToQueue(t)
+  addAllToQueue(rows.map(r => r.t))
   const message = `Added ${songs(rows.length)} to your queue`
   leaveSelection()
   if (live.value) say(message)
@@ -689,6 +703,8 @@ const removePicked = async (): Promise<void> => {
   failures.value = new Map()
   failNote.value = ''
   Object.assign(bulk, { verb: list ? 'Removing' : 'Deleting', done: 0, total: rows.length, stop: false })
+  // The confirmation gives focus back to Delete, which this has just turned off.
+  void nextTick(() => selBar.value?.focusCancel())
 
   const order = list ? [...rows].sort((a, b) => b.i - a.i) : rows
   const kept: PickedRow[] = []
@@ -704,6 +720,8 @@ const removePicked = async (): Promise<void> => {
     if (failed) { kept.push(r); why.set(r, failed) } else removedAt.push(r.i)
     bulk.done++
   }
+  // The room closed under it: it stopped at the song in hand, and has no rows to tell.
+  if (disposed) return
   kept.push(...order.slice(at))
   const stopped = at < order.length
   Object.assign(bulk, { done: 0, total: 0, stop: false })
@@ -775,6 +793,8 @@ onMounted(async () => {
 // elsewhere — so only this component's own timer, observer and window
 // listeners are cleaned up here.
 onBeforeUnmount(() => {
+  disposed = true
+  bulk.stop = true
   if (searchTimer) clearTimeout(searchTimer)
   listsWatch?.disconnect()
   unguardDrops?.()
@@ -787,8 +807,8 @@ const pct = (at: number, dur: number | null | undefined): number =>
 </script>
 
 <template>
-  <ModalBase width="1240px" title="Music" @close="emit('close')">
-    <div class="mm-shell" :style="headerStyle" @keydown.esc="onEscape">
+  <ModalBase width="1240px" title="Music" :escape-guard="escapeSelection" @close="emit('close')">
+    <div class="mm-shell" :style="headerStyle">
     <!-- Over the header rather than in a bar of its own: the art is the
          header, and a title strip above it would push the thing this modal
          is actually about down the screen. -->
@@ -1035,7 +1055,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
                 <span>Select</span>
               </button>
               <button
-                v-if="library.open" class="mm-ghost danger"
+                v-if="library.open" class="mm-ghost danger" :disabled="!!bulk.total"
                 v-tip="'Delete this playlist'" :aria-label="`Delete the playlist ${library.open.name}`"
                 @click="deletePlaylist(library.open.id)"
               >
@@ -1157,7 +1177,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
                 class="mm-icon" :class="{ danger: !library.open }"
                 :aria-label="library.open ? `Remove ${t.title} from this playlist` : `Delete ${t.title}`"
                 v-tip="library.open ? 'Remove from this playlist' : 'Delete from your library'"
-                @click="removeHere(t, i)"
+                :disabled="!!bulk.total" @click="removeHere(t, i)"
               >
                 <component :is="library.open ? X : Trash2" :size="14" :stroke-width="2.25" />
               </button>
@@ -1191,7 +1211,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
 
         <Transition name="mm-selbar">
           <LibrarySelectionBar
-            v-if="selecting"
+            v-if="selecting" ref="selBar"
             :count="picked.length" :in-playlist="!!library.open"
             :progress="bulk.total ? bulk : null" :note="failNote"
             @queue="queuePicked" @remove="askToRemovePicked" @cancel="cancelSelection"
@@ -1704,9 +1724,11 @@ const pct = (at: number, dur: number | null | undefined): number =>
   transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .mm-icon:hover { background: var(--hover); color: var(--text-1); }
-  .mm-icon.danger:hover { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger-text); }
+  .mm-icon:hover:not(:disabled) { background: var(--hover); color: var(--text-1); }
+  .mm-icon.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger-text); }
 }
+/* Off, as a row's ✕ is while a bulk removal runs: dimmed, and deaf to hover. */
+.mm-acts .mm-icon:disabled { opacity: .4; cursor: default; }
 .mm-add {
   width: 26px; height: 26px; border: none; border-radius: var(--edge-sm);
   background: none; color: var(--text-3); cursor: pointer;

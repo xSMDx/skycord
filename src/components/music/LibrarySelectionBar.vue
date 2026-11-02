@@ -13,7 +13,7 @@
  * to, said aloud, and a rail along the top edge that fills. The acts are off
  * until it ends; Cancel stops it after the song in hand.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ListEnd, Trash2, X } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -33,6 +33,14 @@ const status = computed(() => {
   if (p) return `${p.verb} ${Math.min(p.done + 1, p.total)} of ${p.total}…`
   return `${props.count} selected`
 })
+/**
+ * Where the keyboard goes once a removal is confirmed. The confirmation hands
+ * focus back to Delete, which the run turns off in the same moment, so the
+ * room moves it here: Cancel is the one control a run leaves on.
+ */
+const cancelBtn = ref<HTMLButtonElement | null>(null)
+defineExpose({ focusCancel: () => cancelBtn.value?.focus() })
+
 const filled = computed(() => {
   const p = props.progress
   return p && p.total ? p.done / p.total : 0
@@ -61,7 +69,7 @@ const filled = computed(() => {
         <component :is="inPlaylist ? X : Trash2" :size="16" :stroke-width="2.25" aria-hidden="true" />
         <span>{{ inPlaylist ? 'Remove from playlist' : 'Delete' }}</span>
       </button>
-      <button type="button" class="lsb-btn quiet" @click="emit('cancel')">
+      <button ref="cancelBtn" type="button" class="lsb-btn quiet" @click="emit('cancel')">
         <span>Cancel</span>
       </button>
     </div>
