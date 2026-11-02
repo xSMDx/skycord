@@ -119,7 +119,14 @@
 ];
 
   var RELEASES = [{
-    v: 'v0.20.99', date: 'Nov 7, 2026', time: '20:00 UTC+1', title: 'Calls in your pocket, music on hold',
+    v: 'v0.20.100', date: 'Nov 2, 2026', time: '20:00 UTC+1', title: 'Windows only: buttons that match',
+    items: [
+      ['imp', 'Skycord draws its own minimise, maximise and close buttons in the Windows app, to match the rest of the title bar: they take your theme’s colours, close turns red under the mouse, and maximise becomes restore while the window fills the screen. One thing goes with Windows’ own buttons: the Snap Layouts menu that appeared when you hovered over maximise. Win+Z still opens it, and dragging the window to an edge of the screen still snaps it. **This update is for the Windows app only; servers stay on v0.20.99.**'],
+      ['fix', 'After updating to v0.20.99, the taskbar and Alt+Tab kept showing the old icon. The app now sets its icon itself every time it starts, and the installer asks Windows to rebuild its icon cache, so a shortcut pinned to the taskbar or Start picks up the new one too.'],
+      ['fix', 'The title in the Windows app’s bar clipped the bottom of letters like g and q.'],
+    ]
+  }, {
+    v: 'v0.20.99', date: 'Nov 2, 2026', time: '08:53 UTC+1', title: 'Calls in your pocket, music on hold',
     items: [
       ['add', 'A call screen made for phones, in the browser you already have. It is full screen, with big round buttons on a sheet at the bottom — mute, camera and hang up — and swiping the sheet up shows who is in the call, the music playing in it, Invite people and Voice settings. When someone turns their camera on, their video fills the screen with everyone else in small tiles, and the buttons step aside after a few seconds until you tap. The person talking gets the big spot, and it doesn’t jump around when two people talk over each other. Tap the arrow to keep chatting, and a bar at the top takes you back to the call. The screen stays on while you’re in one.'],
       ['add', 'Hold to talk on phones. In a channel that uses push to talk, a big Hold to talk bar replaces the keyboard key you don’t have. It asks for the microphone when you join, so the first press isn’t interrupted, and it tells you if your voice isn’t getting through.'],

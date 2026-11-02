@@ -30,9 +30,11 @@ central service that self-hosters depend on.
 - Licence: AGPL-3.0
 - Source: https://github.com/xSMDx/skycord
 - Self-host: `curl -fsSL https://skycord.xyz/install.sh | sudo bash`
-- Latest release: v0.20.99 (7 November 2026) — a call screen for phones in the
-  browser, hold to talk on phones, pausing music for everyone, joining a screen
-  share to watch it, and the new logo
+- Latest release: v0.20.100 (2 November 2026), for the Windows app only — its
+  own minimise, maximise and close buttons, and the new icon on the taskbar
+- Latest server release: v0.20.99 (2 November 2026) — a call screen for phones
+  in the browser, hold to talk on phones, pausing music for everyone, joining a
+  screen share to watch it, and the new logo
 - Windows app: https://github.com/xSMDx/skycord-desktop-releases/releases/latest
 - Hosted instance: https://app.skycord.xyz
 - Voice and video are peer-routed through LiveKit; an instance owner may point
