@@ -5,8 +5,12 @@
  * The title bar is a local page the app draws, not part of the web client, so
  * it is there for every server, including ones whose client predates it. The
  * client only feeds it: the page title, back/forward, and its theme's colours.
- * Windows' own minimise, maximise and close sit over its right end
- * (titleBarOverlay), recoloured to match; maximise keeps Snap Layouts.
+ * Minimise, maximise/restore and close are the bar's own buttons too, drawn to
+ * match: the window is frameless (`titleBarStyle: 'hidden'`, no overlay), so
+ * Windows draws none. That gives up Snap Layouts' menu on hovering maximise;
+ * Win+Z still opens it, and dragging to an edge still snaps. The frame stays
+ * resizable from its edges, and the bar's drag region still maximises on a
+ * double-click.
  *
  * Light turns the bar off (perf.ts, `skycordTitleBar`): the plain Windows
  * frame instead, one process fewer, and no local page to draw. The returned
@@ -100,8 +104,8 @@ const createBarredWindow = (preload: string, onNavigate: (dir: 'back' | 'forward
     title: 'Skycord',
     icon: APP_ICON,
     backgroundColor: colors.bar,
+    // Frameless, but still a resizable, snappable window: no native caption buttons.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: colors.bar, symbolColor: colors.text, height: TITLEBAR_HEIGHT },
     webPreferences: secure,
   })
   const view = new WebContentsView({ webPreferences: secure })
@@ -125,9 +129,17 @@ const createBarredWindow = (preload: string, onNavigate: (dir: 'back' | 'forward
   // The bar is a fixed local page: it never navigates and opens nothing.
   win.webContents.on('will-navigate', e => e.preventDefault())
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  // Whether the window is maximised (maximise or restore) and in full screen (no buttons).
+  const pushWindow = () => {
+    if (win.isDestroyed()) return
+    win.webContents.send('titlebar:maximized', win.isMaximized())
+    win.webContents.send('titlebar:fullscreen', win.isFullScreen())
+  }
+  for (const e of ['maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) win.on(e as 'maximize', pushWindow)
   const push = () => {
     win.webContents.send('titlebar:state', state)
     win.webContents.send('titlebar:colors', colors)
+    pushWindow()
   }
   win.webContents.on('did-finish-load', push)
   void win.webContents.loadFile(TITLEBAR)
@@ -141,6 +153,14 @@ const createBarredWindow = (preload: string, onNavigate: (dir: 'back' | 'forward
   const navigate = (dir: 'back' | 'forward') => { onNavigate(dir); page.focus() }
   ipcMain.on('titlebar:nav', (event, dir: unknown) => {
     if (event.sender === win.webContents && (dir === 'back' || dir === 'forward')) navigate(dir)
+  })
+  // The bar's own minimise, maximise/restore and close. Close is win.close(), so
+  // main.ts's close handler still decides between hiding to the tray and quitting.
+  ipcMain.on('titlebar:window', (event, action: unknown) => {
+    if (event.sender !== win.webContents) return
+    if (action === 'minimize') win.minimize()
+    else if (action === 'toggle-maximize') win.isMaximized() ? win.unmaximize() : win.maximize()
+    else if (action === 'close') win.close()
   })
   // The mouse's own back and forward buttons.
   win.on('app-command', (_e, cmd) => {
@@ -176,7 +196,6 @@ const createBarredWindow = (preload: string, onNavigate: (dir: 'back' | 'forward
     setColors(next) {
       colors = next
       win.setBackgroundColor(next.bar)
-      win.setTitleBarOverlay({ color: next.bar, symbolColor: next.text, height: TITLEBAR_HEIGHT })
       push()
     },
   }

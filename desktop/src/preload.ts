@@ -3,7 +3,8 @@
  *
  *   - the local server picker gets `skycordPicker` (look up, choose, saved servers);
  *   - the local share picker gets `skycordShare` (list sources, choose one);
- *   - the local title bar gets `skycordTitleBar` (what to show, back/forward);
+ *   - the local title bar gets `skycordTitleBar` (what to show, back/forward,
+ *     minimise, maximise/restore and close);
  *   - the incoming-call window gets `skycordCall` (who is calling, answer);
  *   - the launch screen gets nothing (it is static);
  *   - the chosen instance gets `skycordDesktop`.
@@ -37,6 +38,10 @@ if (local && page === 'share.html') {
     onState: (cb: (state: unknown) => void) => { ipcRenderer.on('titlebar:state', (_e, s) => cb(s)) },
     onColors: (cb: (colors: unknown) => void) => { ipcRenderer.on('titlebar:colors', (_e, c) => cb(c)) },
     nav: (dir: 'back' | 'forward') => ipcRenderer.send('titlebar:nav', dir),
+    // The bar's own window buttons, and the window state they show.
+    windowAction: (action: 'minimize' | 'toggle-maximize' | 'close') => ipcRenderer.send('titlebar:window', action),
+    onMaximized: (cb: (maximized: unknown) => void) => { ipcRenderer.on('titlebar:maximized', (_e, m) => cb(m)) },
+    onFullScreen: (cb: (fullScreen: unknown) => void) => { ipcRenderer.on('titlebar:fullscreen', (_e, f) => cb(f)) },
   })
 } else if (local) {
   contextBridge.exposeInMainWorld('skycordPicker', {
