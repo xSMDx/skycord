@@ -28,6 +28,16 @@
  *    Playing on from what was buffered would end the song early and skip
  *    it. So a source that closes before its end is played out to where it
  *    got, then fetched again and decoded from there (playThrough).
+ *
+ * ## A hold has an end
+ *
+ * Rooms live in the API's memory, not here. An API restarted during a pause
+ * has forgotten the room: nobody can resume it or close it, and the held
+ * decoder and its fetch would wait here forever. So a hold lasts at most
+ * MAX_HOLD_MS. Past that the song is let go like a skip — stopped, reported
+ * as replaced, so no end is sent and no queue moves. A resume after that
+ * finds nothing held (the service answers 409), and the API starts the song
+ * again from the point it froze at, the same path as a service restart.
  */
 import type { Readable } from 'stream'
 import { frames, type Decoder } from './decode.js'
@@ -50,6 +60,20 @@ export interface Sink {
  */
 const KEEP = 60
 
+/**
+ * How long a song is held before it is let go. Long enough that no real
+ * pause notices — and one that does only hears the song restart from where
+ * it froze — short enough that a forgotten room frees its decoder and fetch.
+ */
+export const MAX_HOLD_MS = 30 * 60 * 1000
+
+export interface PlayheadOptions {
+  /** Overrides MAX_HOLD_MS. */
+  maxHoldMs?: number
+  /** Told once a hold ran out and the song was let go. */
+  onHoldExpired?: () => void
+}
+
 export class Playhead {
   /** Frames the listener has heard or will hear, net of any taken back. */
   private sent = 0
@@ -61,8 +85,14 @@ export class Playhead {
   private gate: Promise<void> | null = null
   private open: () => void = () => {}
   private done = false
+  /** Lets the song go when a hold outlasts its bound. Armed only while held. */
+  private expiry: ReturnType<typeof setTimeout> | null = null
 
-  constructor(private readonly startMs: number, private readonly sink: Sink) {}
+  constructor(
+    private readonly startMs: number,
+    private readonly sink: Sink,
+    private readonly opts: PlayheadOptions = {},
+  ) {}
 
   get paused(): boolean { return this.gate !== null }
   /** Over: replaced, closed, or played to the end. Nothing left to pause. */
@@ -79,10 +109,19 @@ export class Playhead {
     this.next.unshift(...back)
     this.sent -= back.length
     this.gate = new Promise(r => { this.open = r })
+    // Unref'd: a held song is no reason for the process to stay up.
+    this.expiry = setTimeout(() => {
+      this.expiry = null
+      if (this.done) return
+      this.stop()
+      this.opts.onHoldExpired?.()
+    }, this.opts.maxHoldMs ?? MAX_HOLD_MS)
+    this.expiry.unref?.()
   }
 
   /** Carry on. Resuming a song that is playing does nothing. */
   resume(): void {
+    if (this.expiry) { clearTimeout(this.expiry); this.expiry = null }
     if (!this.gate) return
     this.gate = null
     this.open()
@@ -186,9 +225,11 @@ const watch = (body: Readable, head: Playhead) => {
  */
 export const playThrough = async (o: PlayOptions): Promise<'ended' | 'replaced' | 'failed'> => {
   const { head } = o
-  let dec = o.decode(o.body, o.startSec)
+  // The body being read now, so the end of the song can let go of it.
+  let body = o.body
+  let dec = o.decode(body, o.startSec)
   o.onDecoder?.(dec)
-  let src = watch(o.body, head)
+  let src = watch(body, head)
   let openedAt = head.positionMs
   let playingRefetches = 0
   try {
@@ -215,6 +256,8 @@ export const playThrough = async (o: PlayOptions): Promise<'ended' | 'replaced' 
       const fresh = await o.reopen()
       if (head.stopped) { fresh?.destroy(); break }
       if (!fresh) return 'failed'
+      body.destroy()
+      body = fresh
       // Where the listener is NOW, not before the fetch: a pause during it
       // took back what the source had queued, which may cross a second.
       const atSec = Math.floor(head.positionMs / 1000)
@@ -235,5 +278,8 @@ export const playThrough = async (o: PlayOptions): Promise<'ended' | 'replaced' 
   } finally {
     head.stop()
     dec.stop()
+    // A stopped or failed song's fetch is otherwise left open until its far
+    // end gives up — five minutes for the API's own. An ended one is spent.
+    body.destroy()
   }
 }

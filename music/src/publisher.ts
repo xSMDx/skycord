@@ -154,6 +154,15 @@ export class MusicPublisher {
       capture: f => source.captureFrame(new AudioFrame(f, SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME)),
       queuedMs: () => source.queuedDuration,
       clear: () => source.clearQueue(),
+    }, {
+      // Held past MAX_HOLD_MS: most likely the API restarted during the pause
+      // and forgot the room. Let the song go like a skip — no end reported —
+      // so ffmpeg and the fetch are not held forever. A resume after this
+      // gets a 409, and the API starts the song again where it froze.
+      onHoldExpired: () => {
+        this.log(`${roomName}/${channelId}: held too long, letting the song go`)
+        if (channel.head === head) channel.stop()
+      },
     })
     let current: Decoder | null = null
     channel.head = head

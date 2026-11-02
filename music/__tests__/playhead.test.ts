@@ -9,11 +9,11 @@
  * sink, so it is proven here frame by frame. Each test frame carries its own
  * index in its first sample, so order, gaps and repeats are all visible.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { PassThrough, Readable, Transform } from 'stream'
 import { BYTES_PER_FRAME } from '../src/decode.js'
 import type { Decoder } from '../src/decode.js'
-import { Playhead, playThrough, FRAME_MS, type Sink } from '../src/playhead.js'
+import { Playhead, playThrough, FRAME_MS, MAX_HOLD_MS, type Sink } from '../src/playhead.js'
 
 const FRAMES_PER_SEC = 1000 / FRAME_MS
 
@@ -387,5 +387,99 @@ describe('a source that dies during a long pause', () => {
     first.destroy()
     expect(await done).toBe('replaced')
     expect(reopened).toBe(0)
+  })
+})
+
+describe('a hold nobody comes back for', () => {
+  // Rooms live in the API's memory. An API restarted during a pause has
+  // forgotten the room, so nobody can resume or close it, and the held
+  // decoder and fetch would sit here forever. A hold is bounded: past
+  // MAX_HOLD_MS the song is let go, reported as replaced so no end is sent.
+  // A later /resume then gets a 409, and the API starts the song again from
+  // where it froze.
+  afterEach(() => { vi.useRealTimers() })
+  /** Streams run on nextTick and setImmediate, which stay real. */
+  const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r)) }
+
+  it('is a named, generous bound', () => {
+    expect(MAX_HOLD_MS).toBe(30 * 60 * 1000)
+  })
+
+  it('lets the song go once the bound passes, reported as replaced, and releases the fetch', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let head!: Playhead
+    let expired = 0
+    const rec = recorder({ onFrame: (_i, n) => { if (n === 3) head.pause() } })
+    head = new Playhead(0, rec.sink, { onHoldExpired: () => { expired++ } })
+    const body = new PassThrough()
+    body.write(pcm(20))                              // never ended: a live fetch
+    let outcome: string | null = null
+    void playThrough({ head, body, startSec: 0, decode: fakeDecode }).then(h => { outcome = h })
+    await flush()
+    expect(head.paused).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(MAX_HOLD_MS - 1)
+    await flush()
+    expect(head.stopped).toBe(false)
+    expect(outcome).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await flush()
+    expect(head.stopped).toBe(true)
+    expect(expired).toBe(1)
+    expect(outcome).toBe('replaced')
+    expect(body.destroyed).toBe(true)                // the fetch is not left open
+    expect(rec.seen).toEqual([0, 1, 2])
+    // Nothing left to resume: the service answers 409 and the API restarts it.
+    head.resume()
+    expect(head.paused).toBe(false)
+  })
+
+  it('starts counting again at each pause: a resume clears it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const head = new Playhead(0, recorder().sink)
+    head.pause()
+    await vi.advanceTimersByTimeAsync(MAX_HOLD_MS - 1000)
+    head.resume()
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(MAX_HOLD_MS)
+    expect(head.stopped).toBe(false)
+
+    head.pause()
+    await vi.advanceTimersByTimeAsync(MAX_HOLD_MS - 1)
+    expect(head.stopped).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(head.stopped).toBe(true)
+  })
+
+  it('is cleared by a stop (a skip, a close), so nothing fires later', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let expired = 0
+    const head = new Playhead(0, recorder().sink, { onHoldExpired: () => { expired++ } })
+    head.pause()
+    head.stop()
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(MAX_HOLD_MS * 2)
+    expect(expired).toBe(0)
+  })
+
+  it('takes a shorter bound when given one', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const head = new Playhead(0, recorder().sink, { maxHoldMs: 1000 })
+    head.pause()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(head.stopped).toBe(true)
+  })
+})
+
+describe('a song that is over', () => {
+  it('lets go of its fetch when stopped, rather than leaving the socket to idle out', async () => {
+    let head!: Playhead
+    const rec = recorder({ onFrame: (_i, n) => { if (n === 2) head.stop() } })
+    head = new Playhead(0, rec.sink)
+    const body = new PassThrough()
+    body.write(pcm(20))
+    expect(await playThrough({ head, body, startSec: 0, decode: fakeDecode })).toBe('replaced')
+    expect(body.destroyed).toBe(true)
   })
 })
