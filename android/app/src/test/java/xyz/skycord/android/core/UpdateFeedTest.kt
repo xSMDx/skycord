@@ -38,6 +38,9 @@ class UpdateFeedTest {
         assertTrue(UpdateFeed.isNewer("0.21.1", "0.21.0"))
         assertTrue(UpdateFeed.isNewer("0.22.0", "0.21.9"))
         assertTrue(UpdateFeed.isNewer("1.0.0", "0.99.99"))
+        // The phone app's first release is 0.20.99: by number, not by string, it follows 0.20.9.
+        assertTrue(UpdateFeed.isNewer("0.20.99", "0.20.9"))
+        assertFalse(UpdateFeed.isNewer("0.20.9", "0.20.99"))
         assertTrue(UpdateFeed.isNewer("0.21.1", "0.21.0-debug"))
         assertFalse(UpdateFeed.isNewer("0.21.0", "0.21.0"))
         assertFalse(UpdateFeed.isNewer("0.20.9", "0.21.0"))
