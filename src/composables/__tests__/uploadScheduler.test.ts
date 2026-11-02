@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
-  createUploadQueue, nextAction, retryAfterMs, looksLikeAudio,
-  RETRY_FALLBACK_MS, NOT_REACHED,
+  createUploadQueue, nextAction, retryAfterMs, looksLikeAudio, judge, announcement, snapshot,
+  RETRY_FALLBACK_MS, NOT_REACHED, HELD_SAYS,
   type Attempt, type UploadItem,
 } from '../uploadScheduler'
 
@@ -30,13 +30,14 @@ const refused = (status: number, message: string, headers: Record<string, string
 const byHand = () => {
   const calls: {
     name: string
+    file: File
     progress: (fraction: number) => void
     signal: AbortSignal
     answer: (a: Attempt<string>) => void
   }[] = []
   const send = (file: File, progress: (fraction: number) => void, signal: AbortSignal) =>
     new Promise<Attempt<string>>((resolve) => {
-      calls.push({ name: file.name, progress, signal, answer: resolve })
+      calls.push({ name: file.name, file, progress, signal, answer: resolve })
       // What the real XHR does when it is aborted: it answers, with nothing.
       signal.addEventListener('abort', () => resolve(refused(0, 'stopped')))
     })
@@ -82,7 +83,7 @@ type Send = (file: File, progress: (fraction: number) => void, signal: AbortSign
 
 const queueWith = (send: Send, more: { refuse?: (f: File) => string | null; lingerMs?: number } = {}) => {
   const items: UploadItem[] = []
-  const batch = { total: 0, done: 0 }
+  const batch = { total: 0, done: 0, held: false }
   const uploaded: string[] = []
   const q = createUploadQueue<string>({ items, batch, send, uploaded: v => { uploaded.push(v) }, ...more })
   const named = (name: string) => items.find(i => i.name === name)
@@ -120,7 +121,7 @@ describe('the queue', () => {
 
     expect(q.uploaded).toEqual(['song-01.mp3', 'song-02.mp3', 'song-03.mp3'])
     expect(server.calls).toHaveLength(3)
-    expect(q.batch).toEqual({ total: 3, done: 3 })
+    expect(q.batch).toEqual({ total: 3, done: 3, held: false })
   })
 
   it('a failure moves on to the next', async () => {
@@ -142,10 +143,31 @@ describe('the queue', () => {
     server.calls[2].answer(ok('song-03.mp3'))
     await settle()
     expect(q.uploaded).toEqual(['song-01.mp3', 'song-03.mp3'])
-    expect(q.batch).toEqual({ total: 3, done: 2 })
+    expect(q.batch).toEqual({ total: 3, done: 2, held: false })
   })
 
-  it('a network error fails that file alone, saying it never arrived', async () => {
+  it('a network error holds the batch and keeps the file', async () => {
+    const server = byHand()
+    const q = queueWith(server.send)
+    q.enqueue(files(3))
+    await settle()
+    server.calls[0].progress(0.6)
+    server.calls[0].answer(refused(0, ''))
+    await settle()
+
+    // Not failed, and the rest not thrown after it: an offline moment is the
+    // connection's, not the file's. The file goes back to the head of the line.
+    expect(q.named('song-01.mp3')).toMatchObject({ state: 'waiting', pct: 0, error: NOT_REACHED })
+    expect(q.items.map(i => i.state)).toEqual(['waiting', 'waiting', 'waiting'])
+    expect(q.batch).toEqual({ total: 3, done: 0, held: true })
+
+    // Held: nothing more goes out by itself, however long it is left.
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(server.calls).toHaveLength(1)
+    expect(q.items).toHaveLength(3)
+  })
+
+  it('Retry sends the same file again', async () => {
     const server = byHand()
     const q = queueWith(server.send)
     q.enqueue(files(2))
@@ -153,8 +175,96 @@ describe('the queue', () => {
     server.calls[0].answer(refused(0, ''))
     await settle()
 
-    expect(q.named('song-01.mp3')).toMatchObject({ state: 'failed', error: NOT_REACHED })
+    q.resume()
+    await settle()
+    expect(q.batch.held).toBe(false)
+    expect(server.calls.map(c => c.name)).toEqual(['song-01.mp3', 'song-01.mp3'])
+    expect(server.calls[1].file).toBe(server.calls[0].file)
+    expect(q.named('song-01.mp3')?.state).toBe('uploading')
+    expect(q.named('song-01.mp3')?.error).toBeUndefined()
+
+    server.calls[1].answer(ok('song-01.mp3'))
+    await settle()
+    expect(q.uploaded).toEqual(['song-01.mp3'])
+    expect(server.calls.at(-1)?.name).toBe('song-02.mp3')
+  })
+
+  it('a retry that cannot reach the server either holds again', async () => {
+    const server = byHand()
+    const q = queueWith(server.send)
+    q.enqueue(files(2))
+    await settle()
+    server.calls[0].answer(refused(0, ''))
+    await settle()
+    q.resume()
+    await settle()
+    server.calls[1].answer(refused(0, ''))
+    await settle()
+    expect(q.batch.held).toBe(true)
+    expect(q.named('song-01.mp3')).toMatchObject({ state: 'waiting', error: NOT_REACHED })
+    expect(server.calls).toHaveLength(2)
+  })
+
+  it('files added while held join the batch and wait for Retry', async () => {
+    const server = byHand()
+    const q = queueWith(server.send)
+    q.enqueue(files(1))
+    await settle()
+    server.calls[0].answer(refused(0, ''))
+    await settle()
+    q.enqueue(files(1, 'late'))
+    await settle()
+    expect(server.calls).toHaveLength(1)
+    expect(q.batch).toEqual({ total: 2, done: 0, held: true })
+  })
+
+  it('the file held can still be dropped; with nothing left to send the hold lets go', async () => {
+    const server = byHand()
+    const q = queueWith(server.send)
+    q.enqueue(files(1))
+    await settle()
+    server.calls[0].answer(refused(0, ''))
+    await settle()
+    expect(q.batch.held).toBe(true)
+    expect(q.drop(q.named('song-01.mp3')!.id)).toBe(true)
+    expect(q.items).toEqual([])
+    expect(q.batch.held).toBe(false)
+  })
+
+  it('dropping the file going up does not hold the queue', async () => {
+    const server = byHand()
+    const q = queueWith(server.send)
+    q.enqueue(files(3))
+    await settle()
+    server.calls[0].progress(0.4)
+
+    q.drop(q.named('song-01.mp3')!.id)
+    await settle()
+    // The stopped try answers status 0, as XHR does. That is not the network.
+    expect(server.calls[0].signal.aborted).toBe(true)
+    expect(q.batch.held).toBe(false)
     expect(server.calls.map(c => c.name)).toEqual(['song-01.mp3', 'song-02.mp3'])
+    expect(q.named('song-02.mp3')?.state).toBe('uploading')
+    expect(q.named('song-02.mp3')?.error).toBeUndefined()
+  })
+
+  it('clear while held forgets the hold', async () => {
+    const server = byHand()
+    const q = queueWith(server.send)
+    q.enqueue(files(2))
+    await settle()
+    server.calls[0].answer(refused(0, ''))
+    await settle()
+    expect(q.batch.held).toBe(true)
+
+    q.clear()
+    expect(q.items).toEqual([])
+    expect(q.batch).toEqual({ total: 0, done: 0, held: false })
+
+    // The next batch goes at once, not held by the last one's lost connection.
+    q.enqueue(files(1, 'next'))
+    await settle()
+    expect(server.calls.map(c => c.name)).toEqual(['song-01.mp3', 'next-01.mp3'])
   })
 
   it('a 429 waits Retry-After then retries the same file', async () => {
@@ -228,7 +338,7 @@ describe('the queue', () => {
     await settle()
 
     expect(server.calls.map(c => c.name)).toEqual(['song-01.mp3', 'song-03.mp3'])
-    expect(q.batch).toEqual({ total: 2, done: 2 })
+    expect(q.batch).toEqual({ total: 2, done: 2, held: false })
   })
 
   it('dropping the file going up stops it and moves on', async () => {
@@ -309,7 +419,7 @@ describe('the queue', () => {
 
     q.clear()
     expect(q.items).toEqual([])
-    expect(q.batch).toEqual({ total: 0, done: 0 })
+    expect(q.batch).toEqual({ total: 0, done: 0, held: false })
     expect(server.calls[0].signal.aborted).toBe(true)
 
     // Even a success that lands now must not reach the next person's library.
@@ -386,12 +496,12 @@ describe('the queue', () => {
     await settle()
     // More files while the first batch is going join it.
     q.enqueue(files(1, 'late'))
-    expect(q.batch).toEqual({ total: 3, done: 0 })
+    expect(q.batch).toEqual({ total: 3, done: 0, held: false })
     for (let i = 0; i < 3; i++) { server.calls[i].answer(ok(server.calls[i].name)); await settle() }
-    expect(q.batch).toEqual({ total: 3, done: 3 })
+    expect(q.batch).toEqual({ total: 3, done: 3, held: false })
 
     q.enqueue(files(2, 'next'))
-    expect(q.batch).toEqual({ total: 2, done: 0 })
+    expect(q.batch).toEqual({ total: 2, done: 0, held: false })
   })
 
   it('25 files under 20/min finish', async () => {
@@ -411,7 +521,7 @@ describe('the queue', () => {
     const after = server.log.filter(r => r.at > turnedAway[0].at)
     expect(after.every(r => r.at >= turnedAway[0].at + 50_000)).toBe(true)
     expect(q.items.filter(i => i.state !== 'done')).toEqual([])
-    expect(q.batch).toEqual({ total: 25, done: 25 })
+    expect(q.batch).toEqual({ total: 25, done: 25, held: false })
   })
 
   it('25 files under 20/min finish when the 429 carries no headers at all', async () => {
@@ -437,7 +547,7 @@ describe('the queue', () => {
     expect(q.uploaded).toHaveLength(24)
     expect(q.uploaded).not.toContain('song-07.mp3')
     expect(q.items.map(i => i.state)).toEqual(['failed'])
-    expect(q.batch).toEqual({ total: 25, done: 24 })
+    expect(q.batch).toEqual({ total: 25, done: 24, held: false })
   })
 })
 
@@ -464,6 +574,72 @@ describe('nextAction', () => {
   it('has nothing to do when nothing is left', () => {
     expect(nextAction([row('a', 'done'), row('b', 'failed')], 0, 0)).toEqual({ kind: 'idle' })
     expect(nextAction([], 0, 0)).toEqual({ kind: 'idle' })
+  })
+
+  it('starts nothing while held, not even once the limit has lifted', () => {
+    expect(nextAction([row('a', 'waiting'), row('b', 'waiting')], 0, 0, true)).toEqual({ kind: 'held' })
+    expect(nextAction([row('a', 'limited')], 5000, 1000, true)).toEqual({ kind: 'held' })
+    // With nothing left to send there is nothing to hold.
+    expect(nextAction([row('a', 'failed')], 0, 0, true)).toEqual({ kind: 'idle' })
+  })
+})
+
+describe('judge', () => {
+  const lost: Attempt<string> = { ok: false, status: 0, headers: {}, message: '' }
+
+  it('holds on a try that never reached the server', () => {
+    expect(judge(lost, 0)).toEqual({ kind: 'held' })
+  })
+
+  it('does not hold on a try that was stopped on purpose', () => {
+    expect(judge(lost, 0, { stopped: true })).toEqual({ kind: 'failed', error: NOT_REACHED })
+  })
+
+  it('still fails a file the server refused, and waits out a 429', () => {
+    expect(judge(refused(415, 'That is not a song.'), 0)).toEqual({ kind: 'failed', error: 'That is not a song.' })
+    expect(judge(refused(429, LIMIT_SAYS, { 'Retry-After': '5' }), 0)).toEqual({ kind: 'retry', at: 5000 })
+  })
+})
+
+describe('announcement', () => {
+  const row = (id: string, state: UploadItem['state'], more: Partial<UploadItem> = {}): UploadItem =>
+    ({ id, name: `${id}.mp3`, state, pct: 0, ...more })
+  const said = (before: UploadItem[], after: UploadItem[], b0 = { total: 1, done: 0, held: false }, b1 = b0) =>
+    announcement(snapshot(before, b0), after, b1)
+
+  it('says nothing when nothing worth saying changed', () => {
+    expect(said([row('a', 'waiting')], [row('a', 'waiting')])).toBe('')
+    expect(said([row('a', 'waiting')], [row('a', 'uploading', { pct: 40 })])).toBe('')
+  })
+
+  it('says when the limit is being waited out', () => {
+    expect(said([row('a', 'uploading')], [row('a', 'limited')])).toBe('Waiting for the upload limit…')
+  })
+
+  it('names a file that went up, with how far the batch has got', () => {
+    expect(said([row('a', 'converting')], [row('a', 'done')], { total: 1, done: 0, held: false }, { total: 1, done: 1, held: false }))
+      .toBe('a.mp3 added to your library.')
+    expect(said(
+      [row('a', 'converting'), row('b', 'waiting')], [row('a', 'done'), row('b', 'uploading')],
+      { total: 8, done: 2, held: false }, { total: 8, done: 3, held: false },
+    )).toBe('a.mp3 added to your library. 3 of 8 uploaded.')
+  })
+
+  it('names a file that failed, and why', () => {
+    expect(said([row('a', 'uploading')], [row('a', 'failed', { error: 'That is not a song.' })]))
+      .toBe('a.mp3 failed: That is not a song.')
+  })
+
+  it('says when the server could not be reached', () => {
+    expect(said(
+      [row('a', 'uploading')], [row('a', 'waiting', { error: NOT_REACHED })],
+      { total: 1, done: 0, held: false }, { total: 1, done: 0, held: true },
+    )).toBe(`${HELD_SAYS}.`)
+  })
+
+  it('a file refused before it was sent is new, and said as failed', () => {
+    expect(said([], [row('a', 'failed', { error: 'That file is too big — 25MB at most.' })]))
+      .toBe('a.mp3 failed: That file is too big — 25MB at most.')
   })
 })
 

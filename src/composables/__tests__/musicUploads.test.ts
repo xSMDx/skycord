@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useAuth, type PublicUser } from '../useAuth'
 import {
-  library, uploads, uploadBatch, uploadTrack, enqueueUploads, dropUpload, importTrack,
+  library, uploads, uploadBatch, uploadTrack, enqueueUploads, dropUpload, importTrack, retryUploads,
+  UPLOAD_STALL_MS,
   type LibTrack,
 } from '../useMusicLibrary'
+import { NOT_REACHED } from '../uploadScheduler'
 
 /**
  * The upload queue as useMusicLibrary wires it: XHR for the bytes, the
@@ -139,6 +141,57 @@ describe('uploadTrack', () => {
     expect(seen).toEqual([0.25, 1, 1])
   })
 
+  it('gives up on an upload that has stopped moving, as one that never arrived', async () => {
+    expect(UPLOAD_STALL_MS).toBe(60_000)
+    let got: unknown = null
+    void uploadTrack(song('a.mp3'), 'tok').then(a => { got = a })
+    const x = FakeXHR.made[0]
+
+    // Moving, however slowly: each sign of progress starts the minute again.
+    await vi.advanceTimersByTimeAsync(59_999)
+    x.progress(10, 100)
+    await vi.advanceTimersByTimeAsync(59_999)
+    x.progress(20, 100)
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(got).toBeNull()
+    expect(x.aborted).toBe(false)
+
+    // A whole minute with nothing: let it go, and say it never got there.
+    await vi.advanceTimersByTimeAsync(1)
+    expect(x.aborted).toBe(true)
+    expect(got).toEqual({ ok: false, status: 0, headers: {}, message: NOT_REACHED })
+  })
+
+  it('does not time the server’s checking and converting once every byte is there', async () => {
+    let got: unknown = null
+    void uploadTrack(song('a.mp3'), 'tok').then(a => { got = a })
+    const x = FakeXHR.made[0]
+    x.progress(100, 100)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(x.aborted).toBe(false)
+    x.respond(201, { track: track('t1') })
+    await settle()
+    expect(got).toEqual({ ok: true, value: track('t1') })
+  })
+
+  it('leaves no watchdog behind, however it ends', async () => {
+    const ends: ((x: FakeXHR, stop: AbortController) => void)[] = [
+      x => x.respond(201, { track: track('t1') }),
+      x => x.respond(500, { message: 'no' }),
+      x => x.fail(),
+      (_x, stop) => stop.abort(),
+    ]
+    for (const end of ends) {
+      FakeXHR.made = []
+      const stop = new AbortController()
+      const got = uploadTrack(song('a.mp3'), 'tok', { signal: stop.signal })
+      FakeXHR.made[0].progress(5, 100)
+      end(FakeXHR.made[0], stop)
+      await got
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  })
+
   it('stops when asked to', async () => {
     const stop = new AbortController()
     const got = uploadTrack(song('a.mp3'), 'tok', { signal: stop.signal })
@@ -199,7 +252,7 @@ describe('the upload queue', () => {
 
     signOut()
     expect(uploads).toEqual([])
-    expect(uploadBatch).toEqual({ total: 0, done: 0 })
+    expect(uploadBatch).toEqual({ total: 0, done: 0, held: false })
     expect(first.aborted).toBe(true)
 
     await vi.advanceTimersByTimeAsync(10 * 60_000)
@@ -255,6 +308,72 @@ describe('the upload queue', () => {
     expect(uploads.find(u => u.name === 'big.mp3')).toMatchObject({ state: 'failed' })
     expect(uploads.find(u => u.name === 'big.mp3')?.error).toMatch(/too big/)
     expect(FakeXHR.made.map(x => (x.body as File).name)).toEqual(['small.mp3'])
+  })
+
+  it('a lost connection holds the batch, and Retry sends the same file again', async () => {
+    enqueueUploads([song('a.mp3'), song('b.mp3')])
+    await settle()
+    FakeXHR.made[0].fail()
+    await settle()
+    expect(uploadBatch.held).toBe(true)
+    expect(uploads.map(u => u.state)).toEqual(['waiting', 'waiting'])
+    expect(uploads[0].error).toBe(NOT_REACHED)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(FakeXHR.made).toHaveLength(1)
+
+    retryUploads()
+    await settle()
+    expect(uploadBatch.held).toBe(false)
+    expect(FakeXHR.made).toHaveLength(2)
+    expect(FakeXHR.made[1].body).toBe(FakeXHR.made[0].body)
+  })
+
+  it('an upload that stalls for a minute holds the batch too', async () => {
+    enqueueUploads([song('a.mp3'), song('b.mp3')])
+    await settle()
+    FakeXHR.made[0].progress(10, 100)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(FakeXHR.made[0].aborted).toBe(true)
+    expect(uploadBatch.held).toBe(true)
+    expect(FakeXHR.made).toHaveLength(1)
+  })
+
+  it('carries on by itself when the connection comes back', async () => {
+    const win = new EventTarget()
+    vi.stubGlobal('window', win)
+    enqueueUploads([song('a.mp3')])
+    await settle()
+    FakeXHR.made[0].fail()
+    await settle()
+    expect(uploadBatch.held).toBe(true)
+
+    win.dispatchEvent(new Event('online'))
+    await settle()
+    expect(uploadBatch.held).toBe(false)
+    expect(FakeXHR.made).toHaveLength(2)
+
+    // Not held any more, so it is not listening: coming online again sends nothing.
+    FakeXHR.made[1].respond(201, { track: track('a') })
+    await settle()
+    win.dispatchEvent(new Event('online'))
+    await settle()
+    expect(FakeXHR.made).toHaveLength(2)
+  })
+
+  it('stops listening for the connection once signed out', async () => {
+    const win = new EventTarget()
+    const off = vi.spyOn(win, 'removeEventListener')
+    vi.stubGlobal('window', win)
+    enqueueUploads([song('a.mp3')])
+    await settle()
+    FakeXHR.made[0].fail()
+    await settle()
+    signOut()
+    expect(off).toHaveBeenCalledWith('online', expect.any(Function))
+    signIn('u1', 't1')
+    win.dispatchEvent(new Event('online'))
+    await settle()
+    expect(FakeXHR.made).toHaveLength(1)
   })
 
   it('dropUpload removes a waiting file before it is sent', async () => {

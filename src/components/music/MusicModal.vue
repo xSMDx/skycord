@@ -50,7 +50,7 @@ import {
   type LibTrack,
 } from '@/composables/useMusicLibrary'
 import { AUDIO_ACCEPT } from '@/composables/uploadScheduler'
-import { useFileDrop } from '@/composables/fileDrop'
+import { useFileDrop, guardWindowDrops } from '@/composables/fileDrop'
 import UploadList from './UploadList.vue'
 
 defineProps<{ rooms?: VoiceRoomChoice[] }>()
@@ -451,8 +451,11 @@ const onFile = (e: Event): void => {
   enqueueUploads(files)
 }
 
-/** Files dragged anywhere onto the player join the same queue. */
+/** Files dragged anywhere onto the player join the same queue. One let go
+ *  of beside it, on the backdrop, is refused at the window while this is open
+ *  — the browser would otherwise open the file in place of the app. */
 const { dropping, onDragEnter, onDragOver, onDragLeave, onDrop } = useFileDrop(enqueueUploads)
+let unguardDrops: (() => void) | null = null
 
 const submitLink = async (): Promise<void> => {
   const u = linkUrl.value.trim()
@@ -512,6 +515,7 @@ watch(() => library.open?.id, () => {
 })
 
 onMounted(async () => {
+  unguardDrops = guardWindowDrops()
   if (listsEl.value && typeof ResizeObserver !== 'undefined') {
     listsWatch = new ResizeObserver(measureEdges)
     listsWatch.observe(listsEl.value)
@@ -520,10 +524,13 @@ onMounted(async () => {
   await Promise.all([loadLibrary(), loadPlaylists()])
 })
 // The player keeps going when this closes — that is the point of it living
-// elsewhere — so only this component's own timer is cleaned up here.
+// elsewhere — so only this component's own timer, observer and window
+// listeners are cleaned up here.
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
   listsWatch?.disconnect()
+  unguardDrops?.()
+  unguardDrops = null
 })
 
 /** How far through, 0–100, for the phone's seek bar to paint its own fill. */

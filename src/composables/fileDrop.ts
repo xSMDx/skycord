@@ -60,3 +60,33 @@ export const useFileDrop = (onFiles: (files: File[]) => void): FileDrop => {
 
   return { dropping, onDragEnter, onDragOver, onDragLeave, onDrop }
 }
+
+/**
+ * While a drop zone is on screen, a file let go of beside it — on a modal's
+ * backdrop, say — is otherwise the browser's, and the browser opens it in
+ * place of the app, taking the session with it. This claims every drag of
+ * files at the window: anything the zone has not already claimed is refused,
+ * with the pointer saying so, rather than opened. Drags of anything else pass.
+ *
+ * Returns the undo. Pass the window to guard (by default the real one, and
+ * nothing at all where there is none).
+ */
+export const guardWindowDrops = (
+  target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> | undefined =
+  typeof window === 'undefined' ? undefined : window,
+): (() => void) => {
+  if (!target) return () => {}
+  const refuse = (e: Event): void => {
+    const d = e as DragEvent
+    // The zone said "copy" on its own dragover; that bubbled here. Leave it.
+    if (!carriesFiles(d) || d.defaultPrevented) return
+    d.preventDefault()
+    if (d.type === 'dragover' && d.dataTransfer) d.dataTransfer.dropEffect = 'none'
+  }
+  target.addEventListener('dragover', refuse)
+  target.addEventListener('drop', refuse)
+  return () => {
+    target.removeEventListener('dragover', refuse)
+    target.removeEventListener('drop', refuse)
+  }
+}

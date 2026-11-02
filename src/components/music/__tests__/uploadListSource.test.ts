@@ -86,6 +86,15 @@ describe('choosing and dropping songs', () => {
     // The library pane says it will take them.
     expect(tagWith(mTpl, 'section', 'ref="mainEl"')).toMatch(/dropping/)
   })
+
+  it('a file let go of beside the player, on the backdrop, does not open in place of the app', () => {
+    // Claimed at the window while the player is open, and let go when it closes.
+    expect(mScript).toMatch(/import \{[^}]*\bguardWindowDrops\b[^}]*\} from '@\/composables\/fileDrop'/)
+    const mounted = /onMounted\(async \(\) => \{([\s\S]*?)\n\}\)/.exec(mScript)?.[1] ?? ''
+    expect(mounted).toMatch(/unguardDrops = guardWindowDrops\(\)/)
+    const unmounts = [...mScript.matchAll(/onBeforeUnmount\(\(\) => \{([\s\S]*?)\}\)\n/g)].map(m => m[1])
+    expect(unmounts.some(u => /unguardDrops\?\.\(\)/.test(u))).toBe(true)
+  })
 })
 
 describe('where the upload list sits', () => {
@@ -133,10 +142,12 @@ describe('a row', () => {
     expect(lScript).toMatch(/retryAt/)
   })
 
-  it('a failure says why, and says it out loud', () => {
+  it('a failure says why, as plain text — the live region is what says it aloud', () => {
     const err = tagWith(lTpl, 'p', 'class="ul-err"')
     expect(err).toMatch(/v-(else-)?if="u\.state === 'failed'"/)
-    expect(err).toMatch(/role="alert"/)
+    // An alert per row would interrupt for every one of twenty failures.
+    expect(err).not.toMatch(/role=/)
+    expect(err).not.toMatch(/aria-live/)
     expect(lTpl).toMatch(/\{\{ u\.error \}\}/)
   })
 
@@ -176,8 +187,47 @@ describe('the list', () => {
   it('says how far the batch has got, quietly, only when there is a batch', () => {
     const sum = tagWith(lTpl, 'p', 'class="ul-sum"')
     expect(sum).toMatch(/v-if="uploadBatch\.total > 1"/)
-    expect(sum).toMatch(/role="status"/)
+    // Said aloud by the one live region, not by a second one of its own.
+    expect(sum).not.toMatch(/role=/)
     expect(lScript).toMatch(/`\$\{uploadBatch\.done\} of \$\{uploadBatch\.total\} uploaded`/)
+  })
+
+  it('has one live region, always there, so what it says is heard', () => {
+    // A region that appears with its text is not announced by most readers:
+    // it has to be in the page, empty, before the words arrive.
+    const live = [...lTpl.matchAll(/aria-live="polite"/g)]
+    expect(live).toHaveLength(1)
+    const region = tagWith(lTpl, 'p', 'aria-live="polite"')
+    expect(region).not.toMatch(/v-if|v-show|v-else/)
+    expect(region).toMatch(/class="ul-sr"/)
+    // Outside the section that comes and goes with the rows.
+    expect(lTpl.indexOf('aria-live="polite"')).toBeLessThan(lTpl.indexOf('<section'))
+    expect(lTpl).toMatch(/\{\{ said \}\}/)
+    expect(lScript).toMatch(/announcement\(/)
+    const sr = rulesOf(lCss, '.ul-sr').join(';')
+    expect(sr).toMatch(/position:\s*absolute/)
+    expect(sr).toMatch(/clip-path:\s*inset\(50%\)/)
+    expect(px(sr, 'width')).toBe(1)
+  })
+
+  it('a lost connection says so once, with a Retry, and keeps the ✕ on the file', () => {
+    const line = tagWith(lTpl, 'div', 'class="ul-held"')
+    expect(line).toMatch(/v-if="uploadBatch\.held"/)
+    expect(lScript).toMatch(/HELD_SAYS/)
+    const retry = tagWith(lTpl, 'button', 'class="ul-retry"')
+    expect(retry).toMatch(/type="button"/)
+    expect(retry).toMatch(/@click="retryUploads\(\)"/)
+    expect(lTpl).toMatch(/>\s*Retry\s*</)
+    expect(lScript).toMatch(/import \{[^}]*\bretryUploads\b[^}]*\} from '@\/composables\/useMusicLibrary'/)
+    // A waiting file can always be dropped, the one held at the head included.
+    const canDrop = /const canDrop = \(u: UploadItem\): boolean =>([^\n]*)/.exec(lScript)?.[1] ?? ''
+    expect(canDrop).not.toMatch(/'waiting'/)
+  })
+
+  it('Retry is at least 44px to a finger', () => {
+    const rules = rulesOf(mediaBlocks(lCss, '(pointer: coarse)'), '.ul-retry')
+    expect(Math.max(0, ...rules.map(r => Math.max(px(r, 'width'), px(r, 'min-width'))))).toBeGreaterThanOrEqual(44)
+    expect(Math.max(0, ...rules.map(r => Math.max(px(r, 'height'), px(r, 'min-height'))))).toBeGreaterThanOrEqual(44)
   })
 
   it('keeps its height in the library pane, however long the library under it', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { carriesFiles, useFileDrop } from '../fileDrop'
+import { carriesFiles, useFileDrop, guardWindowDrops } from '../fileDrop'
 
 /**
  * Dragging songs onto the music player.
@@ -71,5 +71,57 @@ describe('useFileDrop', () => {
     expect(e.preventDefault).not.toHaveBeenCalled()
     expect(z.dropping.value).toBe(false)
     expect(got).not.toHaveBeenCalled()
+  })
+})
+
+describe('guardWindowDrops', () => {
+  /** A drag event that can be dispatched, with the browser's defaultPrevented. */
+  const event = (type: string, types: string[]) => {
+    const e = new Event(type, { cancelable: true }) as Event & { dataTransfer: { types: string[]; files: File[]; dropEffect: string } }
+    e.dataTransfer = { types, files: songs, dropEffect: 'copy' }
+    return e
+  }
+
+  it('claims a drag of files anywhere, so a miss does not open the file in place of the app', () => {
+    const win = new EventTarget()
+    guardWindowDrops(win)
+    const over = event('dragover', ['Files'])
+    win.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(true)
+    // Outside the drop zone it is not taken: the pointer says so.
+    expect(over.dataTransfer.dropEffect).toBe('none')
+    const drop = event('drop', ['Files'])
+    win.dispatchEvent(drop)
+    expect(drop.defaultPrevented).toBe(true)
+  })
+
+  it('leaves the drop zone’s own claim alone', () => {
+    const win = new EventTarget()
+    guardWindowDrops(win)
+    const over = event('dragover', ['Files'])
+    over.preventDefault()                      // the zone took it, and said copy
+    win.dispatchEvent(over)
+    expect(over.dataTransfer.dropEffect).toBe('copy')
+  })
+
+  it('leaves drags that are not files alone', () => {
+    const win = new EventTarget()
+    guardWindowDrops(win)
+    const over = event('dragover', ['text/plain'])
+    win.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(false)
+  })
+
+  it('lets go when undone', () => {
+    const win = new EventTarget()
+    const undo = guardWindowDrops(win)
+    undo()
+    const drop = event('drop', ['Files'])
+    win.dispatchEvent(drop)
+    expect(drop.defaultPrevented).toBe(false)
+  })
+
+  it('does nothing where there is no window', () => {
+    expect(() => guardWindowDrops(undefined)()).not.toThrow()
   })
 })

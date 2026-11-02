@@ -10,6 +10,12 @@
  * runs under fake timers against a fake server exactly as it runs against
  * XHR. It knows nothing of Vue: give it a reactive array and the rows render.
  *
+ * A lost connection holds the batch rather than failing it: the file that
+ * could not get through goes back to the head of the line, nothing more goes
+ * out, and Retry — or the browser saying it is online again — carries on.
+ * Failing it would fail every file after it too, in the second the network
+ * was gone, and throw away the files with them.
+ *
  * One at a time, on purpose. The server would take a few in parallel, but the
  * limit is per member, so parallel uploads only reach it sooner; and one bar
  * moving at a time reads as progress where five crawling together read as a
@@ -46,6 +52,8 @@ const MAX_WAIT_MS = 15 * 60_000
 /** How long a finished row stays to say so before it clears itself. */
 export const DONE_LINGER_MS = 3000
 export const NOT_REACHED = 'That upload did not reach the server.'
+/** The one line the list shows while the batch is held. */
+export const HELD_SAYS = 'Couldn’t reach the server'
 
 const clampWait = (ms: number): number => Math.min(MAX_WAIT_MS, Math.max(MIN_WAIT_MS, Math.round(ms)))
 const seconds = (s: string): number | null => (/^\d+(\.\d+)?$/.test(s) ? Number(s) : null)
@@ -83,35 +91,44 @@ export type Verdict =
   /** The limit: the same file again once it lifts. */
   | { kind: 'retry'; at: number }
   | { kind: 'failed'; error: string }
+  /** The connection: the same file again, but only once someone says go. */
+  | { kind: 'held' }
 
 /**
  * What one try's answer means for that file. A 429 is the server's limit, not
  * the file's fault: wait, then the same file again. Anything else that is not
  * a success — a 413, a file that is not audio, a full library — fails that
- * file alone, in the server's words, and the queue moves on. A try that never
- * reached the server fails it too, saying so; the person can add it again.
+ * file alone, in the server's words, and the queue moves on.
+ *
+ * A try that never reached the server is not the file's fault either, nor
+ * something a wait of known length will fix: it holds the batch. Unless it
+ * was stopped on purpose — a dropped file, a sign-out — which also answers
+ * status 0, and must not hold up what comes after it.
  */
-export const judge = <T>(a: Attempt<T>, now: number): Verdict => {
+export const judge = <T>(a: Attempt<T>, now: number, how: { stopped?: boolean } = {}): Verdict => {
   if (a.ok) return { kind: 'done' }
   if (a.status === 429) return { kind: 'retry', at: now + retryAfterMs(a.headers, now) }
-  if (a.status === 0) return { kind: 'failed', error: NOT_REACHED }
+  if (a.status === 0) return how.stopped ? { kind: 'failed', error: NOT_REACHED } : { kind: 'held' }
   return { kind: 'failed', error: a.message || 'That file could not be added.' }
 }
 
 export type Next =
   | { kind: 'busy' }
   | { kind: 'idle' }
+  | { kind: 'held' }
   | { kind: 'wait'; id: string; until: number }
   | { kind: 'start'; id: string }
 
 const inFlight = (s: UploadState): boolean => s === 'uploading' || s === 'converting'
 const pending = (s: UploadState): boolean => s === 'waiting' || s === 'limited'
 
-/** The next thing to do, given the rows, when the limit lifts, and the time. */
-export const nextAction = (items: readonly UploadItem[], gateUntil: number, now: number): Next => {
+/** The next thing to do, given the rows, when the limit lifts, the time, and
+ *  whether a lost connection is holding the batch. */
+export const nextAction = (items: readonly UploadItem[], gateUntil: number, now: number, held = false): Next => {
   if (items.some(i => inFlight(i.state))) return { kind: 'busy' }
   const head = items.find(i => pending(i.state))
   if (!head) return { kind: 'idle' }
+  if (held) return { kind: 'held' }
   if (now < gateUntil) return { kind: 'wait', id: head.id, until: gateUntil }
   return { kind: 'start', id: head.id }
 }
@@ -133,8 +150,9 @@ export type QueueOptions<T> = {
   /** The rows. Pass a reactive array and they render as they change. */
   items: UploadItem[]
   /** Files done of files in this batch, for "3 of 8 uploaded". A batch starts
-   *  when files are added to a queue with nothing left to send. */
-  batch: { total: number; done: number }
+   *  when files are added to a queue with nothing left to send. `held`: a try
+   *  could not reach the server, and nothing goes out until resume(). */
+  batch: UploadBatch
   /** One try. `progress` takes the fraction of bytes sent; 1 means all of
    *  them, and the server is now checking and converting. */
   send: (file: File, progress: (fraction: number) => void, signal: AbortSignal) => Promise<Attempt<T>>
@@ -146,6 +164,8 @@ export type QueueOptions<T> = {
   lingerMs?: number
 }
 
+export type UploadBatch = { total: number; done: number; held: boolean }
+
 export type UploadQueue = {
   enqueue: (files: File[]) => void
   /** Drop a row. A file still waiting is skipped; one going up is stopped. One
@@ -155,6 +175,8 @@ export type UploadQueue = {
   /** Stop everything and forget it all — signing out. An answer still on its
    *  way is ignored, even a success. */
   clear: () => void
+  /** Carry on after a lost connection: the held file goes again first. */
+  resume: () => void
 }
 
 export const createUploadQueue = <T>(o: QueueOptions<T>): UploadQueue => {
@@ -181,7 +203,9 @@ export const createUploadQueue = <T>(o: QueueOptions<T>): UploadQueue => {
   const pump = (): void => {
     if (timer) { clearTimeout(timer); timer = null }
     const now = Date.now()
-    const next = nextAction(items, gateUntil, now)
+    const next = nextAction(items, gateUntil, now, batch.held)
+    // Nothing left to send: nothing to hold, and no line asking for a Retry.
+    if (next.kind === 'idle') batch.held = false
     // Only the file at the head is waiting for the limit; the rest are just
     // waiting. A drop or a retry can move the head, so this is re-said each time.
     for (const it of items) {
@@ -226,11 +250,11 @@ export const createUploadQueue = <T>(o: QueueOptions<T>): UploadQueue => {
     if (mine !== era) return
 
     if (answer.ok) o.uploaded(answer.value)
-    const v = judge(answer, Date.now())
+    const row = find(id)
+    const v = judge(answer, Date.now(), { stopped: stop.signal.aborted || !row })
     // The limit is the server's, not the file's: it holds for whatever goes
     // next, even if this row was dropped as the 429 came back.
     if (v.kind === 'retry') gateUntil = v.at
-    const row = find(id)
     if (row) {
       if (v.kind === 'done') {
         row.state = 'done'
@@ -242,6 +266,12 @@ export const createUploadQueue = <T>(o: QueueOptions<T>): UploadQueue => {
         // Back in line at the head; pump() marks it limited until gateUntil.
         row.state = 'waiting'
         row.pct = 0
+      } else if (v.kind === 'held') {
+        // Back at the head with its File kept, saying why it has not gone.
+        row.state = 'waiting'
+        row.pct = 0
+        row.error = NOT_REACHED
+        batch.held = true
       } else {
         row.state = 'failed'
         row.error = v.error
@@ -289,9 +319,46 @@ export const createUploadQueue = <T>(o: QueueOptions<T>): UploadQueue => {
     items.splice(0, items.length)
     batch.total = 0
     batch.done = 0
+    batch.held = false
     gateUntil = 0
     for (const s of inFlightNow) s.abort()
   }
 
-  return { enqueue, drop, clear }
+  const resume = (): void => {
+    batch.held = false
+    pump()
+  }
+
+  return { enqueue, drop, clear, resume }
+}
+
+// ── what to say aloud ───────────────────────────────────────────────────────
+
+/** What a list of rows looked like, to tell what has changed since. */
+export type Snapshot = { states: ReadonlyMap<string, UploadState>; held: boolean }
+
+export const snapshot = (items: readonly UploadItem[], batch: UploadBatch): Snapshot =>
+  ({ states: new Map(items.map(i => [i.id, i.state])), held: batch.held })
+
+const sentence = (s: string): string => (/[.…!?]$/.test(s) ? s : `${s}.`)
+
+/**
+ * What a screen reader should hear about the change from `before` to now, or
+ * '' for nothing. Only what someone not looking would want to know: the limit
+ * being waited out, a file in, a file refused and why, the connection lost,
+ * and — with a file in — how far the batch has got. Progress is not said;
+ * the bar carries it, and twenty per cent steps read aloud are noise.
+ */
+export const announcement = (before: Snapshot, items: readonly UploadItem[], batch: UploadBatch): string => {
+  const lines: string[] = []
+  let landed = false
+  for (const it of items) {
+    if (before.states.get(it.id) === it.state) continue
+    if (it.state === 'limited') lines.push('Waiting for the upload limit…')
+    else if (it.state === 'done') { lines.push(`${it.name} added to your library`); landed = true }
+    else if (it.state === 'failed') lines.push(it.error ? `${it.name} failed: ${it.error}` : `${it.name} failed`)
+  }
+  if (batch.held && !before.held) lines.push(HELD_SAYS)
+  if (landed && batch.total > 1) lines.push(`${batch.done} of ${batch.total} uploaded`)
+  return [...new Set(lines)].map(sentence).join(' ')
 }

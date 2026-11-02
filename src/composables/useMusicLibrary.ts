@@ -14,7 +14,7 @@ import { useAuth, silentRefresh } from './useAuth'
 import { uploadFailure, tooBigToUpload } from './uploadFailure'
 import {
   createUploadQueue, looksLikeAudio, NOT_REACHED,
-  type Attempt, type RateHeaders, type UploadItem,
+  type Attempt, type RateHeaders, type UploadItem, type UploadBatch,
 } from './uploadScheduler'
 
 // The wire shapes are defined once, in useApi, beside every other one.
@@ -94,6 +94,15 @@ const rateHeaders = (xhr: XMLHttpRequest): RateHeaders => ({
 })
 
 /**
+ * How long an upload may go without a byte moving before it is given up on.
+ * A connection that dies quietly — a phone between towers, a laptop lid shut
+ * mid-upload — sends no error, and XHR waits for ever. A total timeout would
+ * cut off a large file on a slow line that is working fine, so this times the
+ * silence instead: every progress event starts the minute again.
+ */
+export const UPLOAD_STALL_MS = 60_000
+
+/**
  * Upload one file. XHR rather than fetch, for one reason: progress.
  *
  * fetch cannot report how much of a request body has gone out, and a
@@ -104,27 +113,48 @@ const rateHeaders = (xhr: XMLHttpRequest): RateHeaders => ({
  * It never throws and never touches the library: it says what happened —
  * the track, or the status, the rate headers and a sentence — and the upload
  * queue decides. A 429 is waited out, anything else fails that file alone,
- * and status 0 is a request that never got an answer.
+ * and status 0 is a request that never got an answer — a dead connection, or
+ * one stalled for UPLOAD_STALL_MS, which holds the queue for a Retry.
+ *
+ * The stall is timed only while bytes are going out. Once all of them are
+ * there the server is scanning and converting, which it bounds itself, and
+ * giving up then would send the same song twice: the first one still lands.
  */
 export const uploadTrack = (
   file: File,
   token: string,
   opts: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
 ): Promise<UploadAttempt> =>
-  new Promise((resolve) => {
+  new Promise((answer) => {
     const stopped: UploadAttempt = { ok: false, status: 0, headers: {}, message: 'The upload was stopped.' }
-    if (opts.signal?.aborted) { resolve(stopped); return }
+    if (opts.signal?.aborted) { answer(stopped); return }
     const xhr = new XMLHttpRequest()
+
+    let stall: ReturnType<typeof setTimeout> | null = null
+    const calm = (): void => { if (stall) { clearTimeout(stall); stall = null } }
+    // Every way this ends goes through here, so no watchdog outlives it.
+    const resolve = (a: UploadAttempt): void => { calm(); answer(a) }
+    const watch = (): void => {
+      calm()
+      stall = setTimeout(() => {
+        stall = null
+        // Answered first: the abort that follows would answer "stopped".
+        resolve({ ok: false, status: 0, headers: {}, message: NOT_REACHED })
+        xhr.abort()
+      }, UPLOAD_STALL_MS)
+    }
+
     xhr.open('POST', '/music/tracks/upload')
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.withCredentials = true
 
     xhr.upload.onprogress = (e) => {
+      watch()
       if (e.lengthComputable && e.total) opts.onProgress?.(e.loaded / e.total)
     }
     // Every byte is there. What follows is the server scanning and converting.
-    xhr.upload.onload = () => opts.onProgress?.(1)
+    xhr.upload.onload = () => { calm(); opts.onProgress?.(1) }
 
     xhr.onload = () => {
       let body: { track?: LibTrack } = {}
@@ -143,6 +173,7 @@ export const uploadTrack = (
     opts.signal?.addEventListener('abort', () => xhr.abort(), { once: true })
 
     xhr.send(file)
+    watch()
   })
 
 // ── the upload queue ────────────────────────────────────────────────────────
@@ -154,8 +185,9 @@ export const uploadTrack = (
 /** One row per file: waiting, going up, checking and converting, done, failed,
  *  or waiting out the server's limit. */
 export const uploads = reactive<UploadItem[]>([])
-/** Files done of files in this batch, for "3 of 8 uploaded". */
-export const uploadBatch = reactive({ total: 0, done: 0 })
+/** Files done of files in this batch, for "3 of 8 uploaded"; and whether a
+ *  lost connection is holding it for a Retry. */
+export const uploadBatch = reactive<UploadBatch>({ total: 0, done: 0, held: false })
 
 const { user, accessToken } = useAuth()
 
@@ -194,6 +226,26 @@ const session = (): string | null => (accessToken.value ? user.value?.id ?? null
  * theirs. Sync, so no file can start between the change and the clear.
  */
 watch(session, (now, before) => { if (now !== before) queue.clear() }, { flush: 'sync' })
+
+/** Carry on after a lost connection, starting with the file that was held. */
+export const retryUploads = (): void => { queue.resume() }
+
+/*
+ * And carry on by itself when the browser says the connection is back. Only
+ * listened for while held, so an online event at any other time is nobody's
+ * business here, and a sign-out (which clears the hold) stops the listening.
+ * Not a promise that the server can be reached — a captive portal is
+ * "online" — but a wrong guess only holds the batch again.
+ */
+let stopListening: (() => void) | null = null
+watch(() => uploadBatch.held, (held) => {
+  stopListening?.()
+  stopListening = null
+  if (!held || typeof window === 'undefined') return
+  const target = window
+  target.addEventListener('online', retryUploads)
+  stopListening = () => target.removeEventListener('online', retryUploads)
+}, { flush: 'sync' })
 
 /**
  * Add files to the queue, in the order given. What is not audio is left out

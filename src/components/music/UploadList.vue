@@ -7,15 +7,20 @@
  * changing, so it changes as little as it can: one bar moves at a time,
  * states are words with a small icon rather than colour, and a finished row
  * says so and goes. A failure stays, in the server's words, until it is
- * dismissed — the only row that needs anything from you.
+ * dismissed — the only row that needs anything from you. A lost connection
+ * is one line over the rows, with a Retry, rather than a failure on each.
+ *
+ * What changes without anyone touching it is said aloud by one live region,
+ * there from the start and outside the list that comes and goes — a region
+ * that arrives with its words is, to most screen readers, not heard at all.
  *
  * The queue is useMusicLibrary's, not this component's, so it carries on with
  * the modal closed and this only draws it.
  */
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
-import { Clock, Hourglass, LoaderCircle, Check, CircleAlert, X } from 'lucide-vue-next'
-import { uploads, uploadBatch, dropUpload, clock } from '@/composables/useMusicLibrary'
-import type { UploadItem } from '@/composables/uploadScheduler'
+import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { Clock, Hourglass, LoaderCircle, Check, CircleAlert, WifiOff, X } from 'lucide-vue-next'
+import { uploads, uploadBatch, dropUpload, retryUploads, clock } from '@/composables/useMusicLibrary'
+import { announcement, snapshot, HELD_SAYS, type UploadItem } from '@/composables/uploadScheduler'
 
 /** A second hand, running only while a row waits out the limit. */
 const now = ref(Date.now())
@@ -38,7 +43,8 @@ const left = (u: UploadItem): string => {
 
 const status = (u: UploadItem): string => {
   switch (u.state) {
-    case 'waiting': return 'Waiting'
+    // The file held by a lost connection says why it has not gone.
+    case 'waiting': return u.error ?? 'Waiting'
     case 'uploading': return `Uploading… ${u.pct}%`
     case 'converting': return 'Checking and converting…'
     case 'done': return 'Added to your library'
@@ -63,11 +69,37 @@ const dropTip = (u: UploadItem): string =>
   u.state === 'uploading' ? 'Stop' : u.state === 'failed' ? 'Dismiss' : 'Don’t upload'
 
 const summary = computed(() => `${uploadBatch.done} of ${uploadBatch.total} uploaded`)
+
+/*
+ * The live region's words. Rows already there when the list mounted are not
+ * news. Emptied for a tick before each new line, so the same words twice —
+ * the connection lost again after a Retry — are said twice.
+ */
+const said = ref('')
+let seen = snapshot(uploads, uploadBatch)
+let mounted = true
+watch(
+  () => [uploads.map(u => `${u.id}:${u.state}`).join('|'), uploadBatch.held, uploadBatch.done, uploadBatch.total],
+  () => {
+    const line = announcement(seen, uploads, uploadBatch)
+    seen = snapshot(uploads, uploadBatch)
+    if (!line) return
+    said.value = ''
+    void nextTick(() => { if (mounted) said.value = line })
+  },
+)
+onBeforeUnmount(() => { mounted = false })
 </script>
 
 <template>
+  <p class="ul-sr" aria-live="polite">{{ said }}</p>
   <section v-if="uploads.length" class="ul" aria-label="Uploads">
-    <p v-if="uploadBatch.total > 1" class="ul-sum" role="status">{{ summary }}</p>
+    <div v-if="uploadBatch.held" class="ul-held">
+      <WifiOff class="ul-ico" :size="14" :stroke-width="2.25" aria-hidden="true" />
+      <span class="ul-held-say">{{ HELD_SAYS }}</span>
+      <button type="button" class="ul-retry" @click="retryUploads()">Retry</button>
+    </div>
+    <p v-if="uploadBatch.total > 1" class="ul-sum">{{ summary }}</p>
     <TransitionGroup tag="ul" name="ul-row" class="ul-list">
       <li v-for="u in uploads" :key="u.id" class="ul-row" :class="u.state">
         <LoaderCircle v-if="busy(u)" class="ul-ico spin" :size="14" :stroke-width="2.25" aria-hidden="true" />
@@ -78,7 +110,7 @@ const summary = computed(() => `${uploadBatch.done} of ${uploadBatch.total} uplo
         <span v-if="u.state === 'limited'" class="ul-state">
           Waiting for the upload limit…<span v-if="left(u)" class="ul-left">{{ left(u) }}</span>
         </span>
-        <p v-else-if="u.state === 'failed'" class="ul-err" role="alert">{{ u.error }}</p>
+        <p v-else-if="u.state === 'failed'" class="ul-err">{{ u.error }}</p>
         <span v-else class="ul-state">{{ status(u) }}</span>
 
         <div
@@ -113,6 +145,37 @@ const summary = computed(() => `${uploadBatch.done} of ${uploadBatch.total} uplo
      shrank to nothing while the table kept its height. */
   flex-shrink: 0;
 }
+/* Said aloud, not shown: the rows already show it. */
+.ul-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* The connection, not any one file: one line over the rows, its icon in the
+   rows' column so it reads as part of the list, and the one thing on it to
+   press. Amber, like the limit: something to wait out, not a failure. */
+.ul-held {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto;
+  column-gap: 10px; align-items: center;
+  padding: 6px 6px 6px 14px;
+  border-bottom: 1px solid var(--divider);
+}
+.ul-held .ul-ico { color: var(--warning-text); }
+.ul-held-say { grid-column: 2; min-width: 0; font-size: 13px; font-weight: 500; line-height: 18px; color: var(--text-1); }
+.ul-retry {
+  grid-column: 3;
+  height: 28px; padding: 0 12px;
+  /* Outlined, as settings' Retry is: transparent until hovered, but still
+     a button to a finger that cannot hover. Only the bar carries the accent. */
+  border: 1px solid var(--border); background: none; border-radius: var(--edge-md);
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--text-1);
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ul-retry:hover { background: var(--hover); }
+}
+
 .ul-sum {
   margin: 0; padding: 10px 14px 2px;
   font-size: 12px; color: var(--text-3);
@@ -192,6 +255,8 @@ const summary = computed(() => `${uploadBatch.done} of ${uploadBatch.total} uplo
 @media (pointer: coarse) {
   .ul-row { grid-template-columns: 16px minmax(0, 1fr) 44px; padding-block: 6px; }
   .ul-x { width: 44px; height: 44px; }
+  .ul-held { padding-block: 0; }
+  .ul-retry { min-width: 44px; min-height: 44px; height: 44px; }
 }
 @media (max-width: 768px) {
   .ul { margin-inline: 16px; }
@@ -199,6 +264,6 @@ const summary = computed(() => `${uploadBatch.done} of ${uploadBatch.total} uplo
 
 @media (prefers-reduced-motion: reduce) {
   .ul-row-enter-from { transform: none; }
-  .ul-row-move, .ul-bar > span, .ul-x { transition: none; }
+  .ul-row-move, .ul-bar > span, .ul-x, .ul-retry { transition: none; }
 }
 </style>
