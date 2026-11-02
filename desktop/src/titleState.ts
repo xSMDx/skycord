@@ -47,7 +47,7 @@ export const parseTitleState = (value: unknown): TitleState | null => {
 
 const HEX = /^#[0-9a-f]{6}$/i
 
-/** Plain #rrggbb only: these reach the window frame's own buttons. */
+/** Plain #rrggbb only: these reach the window's background colour and the bar's CSS. */
 export const parseColors = (value: unknown): TitleColors | null => {
   if (!value || typeof value !== 'object') return null
   const v = value as Record<string, unknown>

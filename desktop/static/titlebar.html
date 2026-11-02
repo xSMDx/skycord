@@ -6,7 +6,9 @@
 <title>Skycord</title>
 <script src="../dist/titlebarPage.js" defer></script>
 <style>
-  :root { color-scheme: dark; --bar: #111214; --text: #dcddde; --muted: #abb1b8; --ease: cubic-bezier(.32,.72,0,1); }
+  :root { color-scheme: dark; --bar: #111214; --text: #dcddde; --muted: #abb1b8;
+    /* The close button's hover, whatever the theme: the app's solid red, which takes white. */
+    --danger: #da373c; --ease: cubic-bezier(.32,.72,0,1); }
   * { box-sizing: border-box; margin: 0; }
   /* This page fills the window behind the app's page; only its top strip shows,
      so everything lives in those 32px. */
@@ -30,7 +32,26 @@
   .nav button:active:not(:disabled) { background: color-mix(in srgb, var(--text) 18%, transparent); }
   .nav button:disabled { color: var(--muted); opacity: .4; cursor: default; }
   .nav button:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
-  /* Centred on the window, as Discord's is, and clear of the window buttons. */
+  /* Minimise, maximise/restore and close, in the Windows idiom: 46 × 32 each, flush right. */
+  .winctl { display: flex; align-self: stretch; margin-left: auto; -webkit-app-region: no-drag; }
+  .winctl button {
+    width: 46px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 0;
+    background: transparent; color: var(--text); cursor: default;
+    transition: background-color .12s var(--ease), color .12s var(--ease);
+  }
+  .winctl svg { width: 16px; height: 16px; }
+  .winctl button:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
+  .winctl button:active { background: color-mix(in srgb, var(--text) 18%, transparent); }
+  .winctl button:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+  #win-close:hover { background: var(--danger); color: #fff; }
+  #win-close:active { background: color-mix(in srgb, var(--danger) 85%, #000); color: #fff; }
+  #win-close:focus-visible:hover { outline-color: #fff; }
+  /* One of maximise's two icons: maximise while floating, restore while maximised. */
+  [data-maximized] .when-floating, body:not([data-maximized]) .when-maximized { display: none; }
+  /* Full screen hides the bar under the page anyway; nothing to click there. */
+  [data-fullscreen] .winctl { display: none; }
+  /* Centred on the window, as Discord's is, and clear of the window buttons
+     (3 × 46px on the right; the 160px each side leaves a gap). */
   .title {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
     display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 320px); pointer-events: none;
@@ -42,7 +63,8 @@
     width: 16px; height: 16px; display: grid; place-items: center; border-radius: 5px;
     background: color-mix(in srgb, var(--text) 18%, transparent); font-size: 10px;
   }
-  .text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* line-height 1 (from body) would clip the tails of g, q and y under overflow: hidden. */
+  .text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 18px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -56,5 +78,17 @@
     </button>
   </div>
   <div class="title" id="title"><span class="glyph" id="glyph"></span><span class="text" id="text">Skycord</span></div>
+  <div class="winctl">
+    <button type="button" id="win-min" aria-label="Minimise" title="Minimise">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+    </button>
+    <button type="button" id="win-max" aria-label="Maximise" title="Maximise">
+      <svg class="when-floating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+      <svg class="when-maximized" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+    </button>
+    <button type="button" id="win-close" aria-label="Close" title="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
 </body>
 </html>

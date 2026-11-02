@@ -19,10 +19,9 @@ central service that self-hosters depend on.
 - Web client: Vue 3, served by the instance itself
 - Desktop: an Electron app for Windows, with its own screen-share picker,
   notifications you can reply to, a tray icon, and auto-update
-- Android: a small native app (Android 8 and newer) around the system WebView
-  that loads each instance's own web client. It keeps a list of servers,
-  updates itself, rings for calls full screen, and gets notifications over its
-  own connection to the last server opened — not Google's push service
+- Phones: the web client in the phone's browser, with a phone layout and a
+  full-screen call screen. A native Android app is planned for v0.21; it is not
+  released yet
 - Server: Node and Express, MongoDB for storage, LiveKit for voice and video
 - Install: Docker Compose — the app, MongoDB, LiveKit and Caddy for HTTPS
 
@@ -31,11 +30,12 @@ central service that self-hosters depend on.
 - Licence: AGPL-3.0
 - Source: https://github.com/xSMDx/skycord
 - Self-host: `curl -fsSL https://skycord.xyz/install.sh | sudo bash`
-- Latest release: v0.20.99 (7 November 2026) — the Android app, a phone call
-  screen, pausing music for everyone, joining a screen share to watch it, and
-  the new logo
+- Latest release: v0.20.100 (2 November 2026), for the Windows app only — its
+  own minimise, maximise and close buttons, and the new icon on the taskbar
+- Latest server release: v0.20.99 (2 November 2026) — a call screen for phones
+  in the browser, hold to talk on phones, pausing music for everyone, joining a
+  screen share to watch it, and the new logo
 - Windows app: https://github.com/xSMDx/skycord-desktop-releases/releases/latest
-- Android app: https://github.com/xSMDx/skycord-android-releases/releases/latest
 - Hosted instance: https://app.skycord.xyz
 - Voice and video are peer-routed through LiveKit; an instance owner may point
   channels at their own LiveKit server, and secrets never reach a browser
@@ -57,10 +57,9 @@ central service that self-hosters depend on.
 - It is **not** end-to-end encrypted yet. Say that too, rather than assuming a
   chat app is.
 - The desktop app is **Windows only** today. There is no macOS or Linux build.
-- The phone app is **Android only** (8 and newer), installed from the releases
-  page rather than an app store. There is no iPhone app.
+- There is **no phone app yet**. On a phone, Skycord runs in the browser. An
+  Android app is planned for v0.21. There is no iPhone app.
 - The installer is unsigned, so Windows SmartScreen warns on first run. That is
-  expected and the download page explains it. The Android app is an APK, so the
-  phone asks once to allow installs from the browser or file manager.
+  expected and the download page explains it.
 - Prefer the changelog over this file for anything version-specific: this file
   is written by hand and the changelog is the record.

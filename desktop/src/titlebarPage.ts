@@ -1,6 +1,7 @@
 /**
  * The title bar page. A plain script (no modules). It shows what the main
- * process sends — already checked there — and sends back only back/forward.
+ * process sends — already checked there — and sends back only back/forward
+ * and the window buttons' minimise, maximise/restore and close.
  */
 (() => {
   interface State { title: string; kind: string; icon: string | null; canBack: boolean; canForward: boolean }
@@ -9,6 +10,9 @@
     onState(cb: (s: State) => void): void
     onColors(cb: (c: Colors) => void): void
     nav(dir: 'back' | 'forward'): void
+    windowAction(action: 'minimize' | 'toggle-maximize' | 'close'): void
+    onMaximized(cb: (maximized: unknown) => void): void
+    onFullScreen(cb: (fullScreen: unknown) => void): void
   }
   const api = (window as unknown as { skycordTitleBar: TitleBarApi }).skycordTitleBar
 
@@ -73,9 +77,31 @@
     root.style.colorScheme = lum > 0.5 ? 'light' : 'dark'
   }
 
+  // Maximise or restore: both icons are in the page, CSS shows one by this flag.
+  const showMaximized = (value: unknown) => {
+    const maximized = value === true
+    const body = document.body
+    if (maximized) body.dataset.maximized = ''
+    else delete body.dataset.maximized
+    const label = maximized ? 'Restore' : 'Maximise'
+    const max = document.getElementById('win-max')!
+    max.setAttribute('aria-label', label)
+    max.title = label
+  }
+
+  const showFullScreen = (value: unknown) => {
+    if (value === true) document.body.dataset.fullscreen = ''
+    else delete document.body.dataset.fullscreen
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('back')!.addEventListener('click', () => api.nav('back'))
     document.getElementById('forward')!.addEventListener('click', () => api.nav('forward'))
+    document.getElementById('win-min')!.addEventListener('click', () => api.windowAction('minimize'))
+    document.getElementById('win-max')!.addEventListener('click', () => api.windowAction('toggle-maximize'))
+    document.getElementById('win-close')!.addEventListener('click', () => api.windowAction('close'))
+    api.onMaximized(showMaximized)
+    api.onFullScreen(showFullScreen)
     api.onState(render)
     api.onColors(apply)
   })

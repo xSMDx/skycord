@@ -1,4 +1,4 @@
-# The Android app's release. A tag like android-v0.20.99 builds the APK,
+# The Android app's release. A tag like android-v0.21.0 builds the APK,
 # signs it, and publishes it with latest.json — which installed apps check —
 # to the public releases-only repo.
 #

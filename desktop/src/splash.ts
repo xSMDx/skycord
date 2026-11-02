@@ -10,6 +10,7 @@
  */
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
+import { APP_ICON } from './appIcon'
 
 const SPLASH = join(app.getAppPath(), 'static', 'splash.html')
 
@@ -28,6 +29,7 @@ export const showSplash = (preload: string): Splash => {
     fullscreenable: false,
     show: false,
     title: 'Skycord',
+    icon: APP_ICON,
     backgroundColor: '#111214',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload },
   })

@@ -384,9 +384,10 @@
 .demo[data-paused="true"] .mu-cover i { animation-play-state: paused; }
 
 /* ── Demo: phone ───────────────────────────────────────────────────── */
-/* The Android app: a call that rings full screen, the call screen with its
-   sheet (music card, hold to talk, three round buttons), and the lock screen
-   a message reaches with the app closed. */
+/* Skycord in a phone's browser: a call coming in, the call screen with its
+   sheet (music card, hold to talk, three round buttons), and the call ended,
+   with what the Android app adds in v0.21 — named as coming, not shown as
+   working. */
 .ph {
   align-self: center; width: 236px; max-width: 100%;
   padding: 7px; border-radius: 30px;
@@ -493,25 +494,23 @@
 .ph-ptt[aria-disabled="true"] { color: var(--text-3); }
 .ph-ctrls { display: flex; justify-content: space-around; }
 
-/* The app closed, and a message arriving anyway */
-.ph-lock {
+/* The call ended */
+.ph-end {
   align-items: center; padding: 34px 12px 16px;
   background: radial-gradient(120% 60% at 50% 0%, rgba(var(--accent-rgb), .16), transparent 70%), var(--ink);
 }
 .ph-clock { font: 700 46px/1 var(--font-display); letter-spacing: -.02em; color: var(--text-strong); }
 .ph-date { margin-top: 7px; font-size: 12px; color: var(--text-2); }
-.ph-notes { margin-top: 24px; width: 100%; display: grid; gap: 8px; }
 .ph-note {
   display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 9px; align-items: start;
   padding: 10px; border-radius: 14px; background: var(--raised); border: 1px solid var(--border);
 }
-.ph-note.fresh { animation: muIn 420ms var(--ease-out); }
+.ph-soon { margin-top: 24px; width: 100%; }
 .ph-note-ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--sunk); color: var(--accent); transition: color var(--dur-panel) var(--ease-out); }
 .ph-note-ic svg { width: 17px; height: 17px; }
 .ph-note-app { display: block; font-size: 10.5px; color: var(--text-3); }
 .ph-note b { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 600; color: var(--text-strong); }
 .ph-note p { font-size: 12px; line-height: 1.4; color: var(--text-2); }
-.ph-reply { display: inline-block; margin-top: 6px; font: 600 11px/1 var(--font-ui); color: var(--accent-text); }
 .ph-again {
   margin-top: auto; height: 38px; padding: 0 16px; border-radius: 999px;
   background: var(--panel); border: 1px solid var(--border);
@@ -529,7 +528,7 @@
 
 /* ── Reduced motion ────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .ph-view, .ph-note.fresh, .demo[data-visible="true"] .ph-ring .ph-av::after { animation: none !important; }
+  .ph-view, .demo[data-visible="true"] .ph-ring .ph-av::after { animation: none !important; }
   .ph-ptt[aria-pressed="true"] { transform: none; }
   .gcursor, .ripple { display: none !important; }
   .rx-chip.pop, .rx-chip .n.bump { animation: none; }
