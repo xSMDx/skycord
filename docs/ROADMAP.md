@@ -31,7 +31,7 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
        assumed: `syk_rt` carries HttpOnly, Secure and SameSite=Strict.
 
        443 was reclaimed from `forward443.service`, a socat unit relaying the whole
-       port to 91.107.243.162. Sampled at zero established connections and disabled,
+       port to another server. Sampled at zero established connections and disabled,
        **not deleted** — `systemctl enable --now forward443` restores it if the far end
        turns out to need it. 2053 stays as a fallback.
 

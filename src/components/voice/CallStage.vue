@@ -6,7 +6,7 @@ import { colorForUsername } from '@/composables/useAvatar'
 import { voiceSettings } from '@/composables/useVoiceSettings'
 import { keyFor, media, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { getRoom, participantName } from '@/composables/voiceRoom'
-import { userPref, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
+import { userPref, joinedStreams, chosenStream, joinStream, leaveStream } from '@/composables/useVoice'
 import { visibleTiles, type TileCandidate } from '@/composables/callLimits'
 import { perf } from '@/composables/usePerformance'
 
@@ -172,18 +172,6 @@ const renderCells = computed(() =>
 const focus  = (key: string) => { focusedKey.value = key }
 const unfocus = () => { focusedKey.value = null }
 
-// Joining a stream is asking to watch it, so it comes to the front: the
-// cell keeps its key from tile to picture, and the spotlight holds through.
-const onJoin = (key: string, owner: string) => {
-  joinStream(owner)
-  focus(key)
-}
-// Leaving puts the grid back rather than spotlighting the tile you just left.
-const onLeave = (key: string, owner: string) => {
-  leaveStream(owner)
-  if (focusedKey.value === key) unfocus()
-}
-
 // If the focused participant leaves or stops their video, the key no longer
 // resolves — drop back to grid rather than freezing on an empty spotlight.
 watch(cells, () => {
@@ -216,6 +204,28 @@ const syncFs = () => {
   const cur = document.fullscreenElement
   fsKey.value = cur ? ([...cellEls.entries()].find(([, el]) => el === cur)?.[0] ?? null) : null
 }
+
+// ── Join stream / Leave stream, from any surface ────────────────────────────
+// They are offered here, in the stream's and the person's right-click menus
+// and in the voice channel's member list. The stage follows useVoice's state
+// rather than its own buttons, so all four do the same thing.
+
+// Joining a stream is asking to watch it, so it comes to the front: the cell
+// keeps its key from tile to picture, and the spotlight holds through.
+// chosenStream is set by joinStream alone — the member's own choice, never a
+// reconnect or a share that ended.
+watch(chosenStream, id => { if (id) focus(keyFor(id, 'screen')) })
+
+// Leaving puts the grid back rather than keeping the tile you just left
+// enlarged — in the spotlight, or full-screen on its own.
+watch(() => [...joinedStreams], (now, before) => {
+  for (const id of before) {
+    if (now.includes(id)) continue
+    const key = keyFor(id, 'screen')
+    if (focusedKey.value === key) unfocus()
+    if (fsKey.value === key) void toggleCellFs(key)
+  }
+})
 
 // Esc exits spotlight (when fullscreen is also on, the browser eats the first
 // Esc for fullscreen; the next one lands here).
@@ -292,7 +302,7 @@ onBeforeUnmount(() => {
              and their voice carry on. Never on your own share — that is the
              Share button's to stop. -->
         <button v-if="c.source === 'screen' && !c.video.local" class="g-leave"
-                @click.stop="onLeave(c.key, c.video.participantId)">
+                @click.stop="leaveStream(c.video.participantId)">
           <MonitorOff :size="14" :stroke-width="2.25" aria-hidden="true" />
           Leave stream
         </button>
@@ -307,7 +317,7 @@ onBeforeUnmount(() => {
           </div>
           <!-- One button through the join, so keyboard focus stays on it
                when it turns from Join to Leave. -->
-          <button class="g-join" @click.stop="c.joined ? onLeave(c.key, c.owner) : onJoin(c.key, c.owner)">
+          <button class="g-join" @click.stop="c.joined ? leaveStream(c.owner) : joinStream(c.owner)">
             <component :is="c.joined ? MonitorOff : MonitorPlay" :size="16" :stroke-width="2.25" aria-hidden="true" />
             {{ c.joined ? 'Leave stream' : 'Join stream' }}
           </button>
