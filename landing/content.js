@@ -39,17 +39,19 @@
     ]
   },
   {
-    // Next up, and first: the Android app is v0.21 (owner, 2026-11-02 — it
-    // was built for 0.20.99 and held back). The phone layout and call screen
-    // in the browser shipped in v0.20.99 and live on the Phone layout card.
-    stage: 'next', label: 'Next up', title: 'Phone app — v0.21',
+    // Shipped in v0.21.0, the first Android release (built for 0.20.99 and
+    // held back, owner 2026-11-02). Kept where it was rather than moved to
+    // the end: it is the newest thing that went live. The phone layout and
+    // call screen in the browser shipped in v0.20.99 and live on the Phone
+    // layout card.
+    stage: 'shipped', label: 'Live now', title: 'Android app',
     items: [
-      'A real app rather than a website saved to your home screen — for Android first',
+      'A real app rather than a website saved to your home screen, for Android 8 and newer',
       'Notifications that arrive when the app is closed, over the app’s own connection rather than Google’s',
       'Calls that ring full screen, even on the lock screen, with Answer and Decline',
       'Your own list of servers to switch between, like the desktop app',
       'It updates itself, the way the Windows app does',
-      'iPhone, and the app stores, are not part of it. It starts as a download from the releases page'
+      'iPhone, and the app stores, are not part of it. It is a download from the releases page'
     ]
   },
   {
@@ -58,7 +60,7 @@
     stage: 'next', label: 'Next up', title: 'Desktop app, further',
     items: [
       'A real desktop app instead of a browser tab — for Windows, live now',
-      'Much more of what a real Windows app can do, beyond the web app in a window — next, after the phone app',
+      'Much more of what a real Windows app can do, beyond the web app in a window — next',
       'Add other people’s servers and switch between them, like TeamSpeak — your friend hosts his, you host yours, one app for both — live now',
       'Your own screen-share picker, with the stream quality you choose — live now',
       'Notifications you can reply to, a tray icon, and an unread count on the taskbar — live now',
@@ -119,6 +121,19 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.21.0', date: 'Nov 7, 2026', time: '22:00 UTC+1', title: 'Skycord for Android',
+    items: [
+      ['add', 'An Android app. Install Skycord on an Android phone (Android 8 or newer) from its releases page. It opens your own server, or skycord.xyz, keeps a list of the servers you use, and updates itself. Links to other sites open in your browser, the back button closes whatever is on top before it leaves a chat, and files you attach come from the phone’s own picker. **If you host your own instance, update the server before handing out the app: it shows your server’s own web client, and its phone screens come with v0.20.99 or newer.**'],
+      ['add', 'Notifications on Android, without Google. The app keeps its own quiet connection to your last server, so messages, mentions and calls reach you even with Skycord closed. You get one notification per conversation, with every line, and you can reply from it. Tapping it opens that chat. If the phone was off for a while, it catches up on what you missed when it comes back. Your friends don’t see you online just because the app is listening. There is nothing to set up on the server for it.'],
+      ['add', 'Calls ring like a phone call. A DM or group call shows a full-screen incoming call with Answer and Decline, even on the lock screen. Answer opens the call, and a call you didn’t pick up leaves a missed-call notification.'],
+      ['add', 'Back in a call. In the app, pressing Back on the call screen keeps the call going and takes you back to chatting, with a bar at the top to return to the call.'],
+      ['add', 'The new logo on Android. The headphones mark is the launcher icon and the notification icon.'],
+      ['add', 'Right-click a shared screen for its own menu: its Stream Volume, even before you join, and Join stream or Leave stream, with the sharer’s usual options below. Right-clicking the person, in the call or in the voice channel’s list, offers Join stream and Leave stream too. Joining from any of them brings the stream to the front, and leaving puts the grid back.'],
+      ['imp', 'Calls show the caller’s display name instead of their username on the ringing screen, the call screen and the missed-call notification.'],
+      ['fix', 'The Windows app’s launch and update-check window showed the old logo. Installs from before v0.20.99 still opened it with the old mark. It now shows the new one, and it no longer waits for the update check before the app opens. Updating once is enough.'],
+      ['fix', 'On a phone, the member list couldn’t be closed with Back without leaving the channel.'],
+    ]
+  }, {
     v: 'v0.20.100', date: 'Nov 2, 2026', time: '20:00 UTC+1', title: 'Windows only: buttons that match',
     items: [
       ['imp', 'Skycord draws its own minimise, maximise and close buttons in the Windows app, to match the rest of the title bar: they take your theme’s colours, close turns red under the mouse, and maximise becomes restore while the window fills the screen. One thing goes with Windows’ own buttons: the Snap Layouts menu that appeared when you hovered over maximise. Win+Z still opens it, and dragging the window to an edge of the screen still snaps it. **This update is for the Windows app only; servers stay on v0.20.99.**'],
