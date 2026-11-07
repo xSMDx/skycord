@@ -85,10 +85,9 @@ describe('the call stage, a share you have not joined', () => {
     expect(script).toMatch(/v\.source === 'screen'/)
   })
 
-  it('Join stream joins that person\'s stream and brings it to the front', () => {
-    const onJoin = /const onJoin = [^\n]*(\n(?!const )[^\n]*)*/.exec(script)?.[0] ?? ''
-    expect(onJoin).toMatch(/joinStream\(owner\)/)
-    expect(onJoin).toMatch(/focus\(key\)/)
+  it('Join stream joins that person\'s stream', () => {
+    const join = elementWith(stage, 'class="g-join"')
+    expect(join).toMatch(/c\.joined \? leaveStream\(c\.owner\) : joinStream\(c\.owner\)/)
     expect(script).toMatch(/import \{[^}]*\bjoinStream\b[^}]*\} from '@\/composables\/useVoice'/)
   })
 
@@ -127,9 +126,39 @@ describe('the call stage, a share you joined', () => {
     const leave = elementWith(video, 'class="g-leave"')
     expect(leave).toContain('Leave stream')
     expect(leave).toMatch(/v-if="c\.source === 'screen' && !c\.video\.local"/)
+    expect(leave).toMatch(/@click\.stop="leaveStream\(c\.video\.participantId\)"/)
+  })
+})
 
-    const onLeave = /const onLeave = [^\n]*(\n(?!const )[^\n]*)*/.exec(script)?.[0] ?? ''
-    expect(onLeave).toMatch(/leaveStream\(owner\)/)
+/*
+ * Join stream and Leave stream are offered in four places: the stage's own
+ * buttons, the stream's right-click menu, the person's right-click menu and
+ * the voice channel's member list. Whichever one is used, the stage answers
+ * the same way, so it follows useVoice's state rather than its own buttons.
+ */
+describe('the call stage follows Join and Leave stream from any surface', () => {
+  it('a joined stream comes to the front, wherever it was joined', () => {
+    // chosenStream is set by joinStream alone — the member's own choice,
+    // never a reconnect or a share that ended.
+    expect(script).toMatch(/import \{[^}]*\bchosenStream\b[^}]*\} from '@\/composables\/useVoice'/)
+    const onChosen = /watch\(chosenStream, [^\n]*/.exec(script)?.[0] ?? ''
+    expect(onChosen, 'a watcher on chosenStream').not.toBe('')
+    expect(onChosen).toMatch(/if \(id\) focus\(keyFor\(id, 'screen'\)\)/)
+  })
+
+  it('a stream left while enlarged puts the grid back, and leaves fullscreen too', () => {
+    const onLeft = /watch\(\(\) => \[\.\.\.joinedStreams\], [\s\S]*?\n\}\)/.exec(script)?.[0] ?? ''
+    expect(onLeft, 'a watcher on joinedStreams').not.toBe('')
+    // Only the streams that were joined before and are not now.
+    expect(onLeft).toMatch(/for \(const id of before\)/)
+    expect(onLeft).toMatch(/if \(now\.includes\(id\)\) continue/)
+    expect(onLeft).toMatch(/const key = keyFor\(id, 'screen'\)/)
+    expect(onLeft).toMatch(/if \(focusedKey\.value === key\) unfocus\(\)/)
+    expect(onLeft).toMatch(/if \(fsKey\.value === key\) void toggleCellFs\(key\)/)
+  })
+
+  it('the stage\'s own buttons leave the focusing to those watchers', () => {
+    expect(script).not.toMatch(/const onJoin\b|const onLeave\b/)
   })
 })
 
