@@ -24,6 +24,7 @@ const callHandlers = (): CallMenuHandlers => ({
   openProfile: vi.fn(), previewCamera: vi.fn(), toggleMute: vi.fn(), toggleDeafen: vi.fn(),
   openVoiceSettings: vi.fn(), copy: vi.fn(),
   setUserVolume: vi.fn(), setStreamVolume: vi.fn(), toggleUserMute: vi.fn(), toggleUserVideo: vi.fn(),
+  joinStream: vi.fn(), leaveStream: vi.fn(),
   toggleShowNonVideo: vi.fn(), toggleShowOwnCamera: vi.fn(),
 })
 const callState = {
@@ -33,6 +34,7 @@ const callState = {
 const occupantHandlers = (): VoiceOccupantHandlers => ({
   openProfile: vi.fn(), openDM: vi.fn(), startCall: vi.fn(), inviteToServer: vi.fn(), copy: vi.fn(),
   setUserVolume: vi.fn(), setStreamVolume: vi.fn(), toggleUserMute: vi.fn(), toggleUserVideo: vi.fn(),
+  joinStream: vi.fn(), leaveStream: vi.fn(),
   toggleMute: vi.fn(), toggleDeafen: vi.fn(), openVoiceSettings: vi.fn(),
 })
 const occupantState = { channelId: 'vc1', volume: 150, muted: false, videoOff: false, inCallWithThem: true }

@@ -1,8 +1,8 @@
 /**
  * Call-bar tile menus: one for your own tile, one for everybody else's.
  *
- * Everything here that says "Mute", "Disable Video", "User Volume" or "Stream
- * Volume" is LOCAL —
+ * Everything here that says "Mute", "Disable Video", "User Volume", "Stream
+ * Volume", "Join stream" or "Leave stream" is LOCAL —
  * it changes what you hear and see, is never sent to the server, and the other
  * person is never told. That's deliberate, and it's why none of these need a
  * backend.
@@ -19,9 +19,9 @@
  */
 import {
   User, MicOff, Headphones, VideoOff, Copy, BellOff,
-  Eye, UsersRound, Video, SlidersHorizontal, UserMinus, Phone,
+  Eye, UsersRound, Video, SlidersHorizontal, UserMinus, Phone, MonitorPlay, MonitorOff,
 } from 'lucide-vue-next'
-import type { MenuItem, MenuSlider } from '../useContextMenu'
+import type { MenuAction, MenuItem, MenuSlider } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
 import { USER_VOLUME_MAX } from '../remoteGain'
 
@@ -38,6 +38,9 @@ export interface CallMenuHandlers {
   setStreamVolume:(id: string, v: number) => void
   toggleUserMute: (id: string) => void
   toggleUserVideo:(id: string) => void
+  /** Start or stop loading their shared screen (useVoice's joinStream / leaveStream). */
+  joinStream:     (id: string) => void
+  leaveStream:    (id: string) => void
   removeFriend?:  (id: string) => void
   /** Grid display prefs, shared with the ⋯ flyout. */
   toggleShowNonVideo: () => void
@@ -150,37 +153,89 @@ export const volumeSliders = (
   h: Pick<CallMenuHandlers, 'setUserVolume' | 'setStreamVolume'>,
 ): MenuSlider[] => [userVolumeRow(id, s, h.setUserVolume), ...streamVolumeRow(id, s, h.setStreamVolume)]
 
+/**
+ * Join stream, or Leave stream once joined, while this person shares a
+ * screen; nothing while they share none. The words and icons are the stage
+ * button's and the phone person sheet's, so all three read the same.
+ */
+export const streamJoinRow = (
+  id: string, s: { sharing: boolean; joined: boolean },
+  h: Pick<CallMenuHandlers, 'joinStream' | 'leaveStream'>,
+): MenuAction[] => !s.sharing ? []
+  : s.joined
+    ? [{ label: 'Leave stream', icon: MonitorOff,  onSelect: () => h.leaveStream(id) }]
+    : [{ label: 'Join stream',  icon: MonitorPlay, onSelect: () => h.joinStream(id) }]
+
+/**
+ * What a right-clicked shared screen offers first: its sound (Stream Volume,
+ * while it has any — known from the publication, so before you join too) and
+ * the way in or out. Your own share offers neither: joining does not touch
+ * your preview (spec 6), and its sound is not played back to you.
+ */
+export const streamMenuRows = (
+  id: string,
+  s: { joined: boolean; hasAudio: boolean; streamVolume?: number; own?: boolean },
+  h: Pick<CallMenuHandlers, 'setStreamVolume' | 'joinStream' | 'leaveStream'>,
+): MenuItem[] => s.own ? [] : [
+  ...streamVolumeRow(id, { streamVolume: s.streamVolume, sharesScreenAudio: s.hasAudio }, h.setStreamVolume),
+  ...streamJoinRow(id, { sharing: true, joined: s.joined }, h),
+]
+
+/** Everything participantMenu reads about another participant. */
+export type ParticipantMenuState = CallMenuState & {
+  volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean
+  /** The User Volume slider's top: 200, or 100 where the output device cannot be kept past it. */
+  userVolumeMax?: number
+  /** Their Stream Volume, and whether they are sharing a screen with sound right now. */
+  streamVolume?: number; sharesScreenAudio?: boolean
+  /** Whether they share a screen right now, and whether you joined it. */
+  sharing?: boolean; joinedStream?: boolean
+}
+
 /** Another participant's tile. */
 export const participantMenu = (
   p: MenuUser,
-  s: CallMenuState & {
-    volume: number; muted: boolean; videoOff: boolean; isFriend?: boolean
-    /** The User Volume slider's top: 200, or 100 where the output device cannot be kept past it. */
-    userVolumeMax?: number
-    /** Their Stream Volume, and whether they are sharing a screen with sound right now. */
-    streamVolume?: number; sharesScreenAudio?: boolean
-  },
+  s: ParticipantMenuState,
   h: CallMenuHandlers,
+): MenuItem[] => {
+  const stream = streamJoinRow(p.id, { sharing: !!s.sharing, joined: !!s.joinedStream }, h)
+  return [
+    { label: 'Profile', icon: User, onSelect: () => h.openProfile(p) },
+    { sep: true },
+    ...volumeSliders(p.id, s, h),
+    { sep: true },
+    { label: 'Mute',          icon: MicOff,  check: s.muted, keepOpen: true,
+      onSelect: () => h.toggleUserMute(p.id) },
+    { label: 'Disable Video', icon: VideoOff, check: s.videoOff, keepOpen: true,
+      onSelect: () => h.toggleUserVideo(p.id) },
+    ...(stream.length ? [{ sep: true } as MenuItem, ...stream] : []),
+    { sep: true },
+    { label: 'Show Non-Video Participants', icon: UsersRound, check: s.showNonVideo, keepOpen: true,
+      onSelect: () => h.toggleShowNonVideo() },
+    { sep: true },
+    { label: 'Copy User ID', icon: Copy, onSelect: () => h.copy(p.id, 'User ID') },
+    ...(s.channelId
+      ? [{ label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(s.channelId!, 'Channel ID') }]
+      : []),
+    ...(s.isFriend && h.removeFriend
+      ? [{ sep: true } as MenuItem,
+         { label: 'Remove Friend', icon: UserMinus, danger: true,
+           onSelect: () => h.removeFriend!(p.id) } as MenuItem]
+      : []),
+  ]
+}
+
+/**
+ * Someone else's shared screen, right-clicked: the stream's rows, then the
+ * sharer's own menu below a divider, so User Volume and Mute stay one
+ * right-click away. The person half leaves out Stream Volume and Join /
+ * Leave stream, which the stream half already offers. Your own share never
+ * comes here: it keeps your own tile's menu.
+ */
+export const streamTileMenu = (
+  p: MenuUser, s: ParticipantMenuState, h: CallMenuHandlers,
 ): MenuItem[] => [
-  { label: 'Profile', icon: User, onSelect: () => h.openProfile(p) },
+  ...streamMenuRows(p.id, { joined: !!s.joinedStream, hasAudio: !!s.sharesScreenAudio, streamVolume: s.streamVolume }, h),
   { sep: true },
-  ...volumeSliders(p.id, s, h),
-  { sep: true },
-  { label: 'Mute',          icon: MicOff,  check: s.muted, keepOpen: true,
-    onSelect: () => h.toggleUserMute(p.id) },
-  { label: 'Disable Video', icon: VideoOff, check: s.videoOff, keepOpen: true,
-    onSelect: () => h.toggleUserVideo(p.id) },
-  { sep: true },
-  { label: 'Show Non-Video Participants', icon: UsersRound, check: s.showNonVideo, keepOpen: true,
-    onSelect: () => h.toggleShowNonVideo() },
-  { sep: true },
-  { label: 'Copy User ID', icon: Copy, onSelect: () => h.copy(p.id, 'User ID') },
-  ...(s.channelId
-    ? [{ label: 'Copy Channel ID', icon: Copy, onSelect: () => h.copy(s.channelId!, 'Channel ID') }]
-    : []),
-  ...(s.isFriend && h.removeFriend
-    ? [{ sep: true } as MenuItem,
-       { label: 'Remove Friend', icon: UserMinus, danger: true,
-         onSelect: () => h.removeFriend!(p.id) } as MenuItem]
-    : []),
+  ...participantMenu(p, { ...s, sharesScreenAudio: false, sharing: false }, h),
 ]

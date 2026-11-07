@@ -27,8 +27,10 @@ const props = defineProps<{
 
 // The stage stays presentational: it reports WHICH tile was right-clicked and
 // lets the call bar, which owns the voice state, decide what the menu contains.
+// `stream` says the click was on a shared screen rather than on the person, so
+// the menu can lead with Stream Volume and Join stream / Leave stream.
 const emit = defineEmits<{
-  tileCtx: [e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean }]
+  tileCtx: [e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean; stream?: boolean }]
 }>()
 
 /**
@@ -83,6 +85,8 @@ const hiddenTiles = computed(() => props.tiles.filter(t => !visibleIds.value.has
 const hiddenIds   = computed(() => new Set(hiddenTiles.value.map(t => t.id)))
 
 const cellOwner  = (c: Cell) => c.kind === 'video' ? c.video.participantId : c.kind === 'stream' ? c.owner : c.key
+/** A shared screen: its picture, or the tile standing in for one not loaded yet. */
+const isScreenCell = (c: Cell) => c.kind === 'stream' || (c.kind === 'video' && c.source === 'screen')
 const cellAvatar = (c: Cell) => c.kind !== 'video' ? c.avatar
   : (props.tiles.find(t => t.id === c.video.participantId)?.avatar ?? '')
 
@@ -271,7 +275,7 @@ onBeforeUnmount(() => {
       role="button"
       v-tip="inSpotlight && c.key === focusedKey ? 'Back to grid' : `Focus ${c.name}`"
       @click="inSpotlight && c.key === focusedKey ? unfocus() : focus(c.key)"
-      @contextmenu="emit('tileCtx', $event, { id: cellOwner(c), name: c.name, avatar: cellAvatar(c), local: cellOwner(c) === localId })"
+      @contextmenu="emit('tileCtx', $event, { id: cellOwner(c), name: c.name, avatar: cellAvatar(c), local: cellOwner(c) === localId, stream: isScreenCell(c) })"
     >
       <template v-if="c.kind === 'video'">
         <!-- Fullscreen forces `contain`: a cropped camera is fine in a small

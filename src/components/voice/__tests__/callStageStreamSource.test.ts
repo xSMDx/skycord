@@ -172,7 +172,7 @@ describe('the stream controls', () => {
 
 describe('the menus that offer Stream Volume', () => {
   it('the call bar tells the tile menu who shares a screen with sound, and how loud their stream is', () => {
-    const call = /participantMenu\(u, \{[^}]*\}/.exec(bar)?.[0] ?? ''
+    const call = /const state = \{[^}]*\}/.exec(bar)?.[0] ?? ''
     expect(call).toMatch(/streamVolume: p\.streamVolume/)
     expect(call).toMatch(/sharesScreenAudio: media\.streamsWithAudio\.has\(t\.id\)/)
     expect(bar).toMatch(/setStreamVolume:\s*\(id: string, v: number\) => setStreamVolume\(id, v\)/)
@@ -183,5 +183,53 @@ describe('the menus that offer Stream Volume', () => {
     expect(call).toMatch(/streamVolume: pref\.streamVolume/)
     expect(call).toMatch(/sharesScreenAudio: media\.streamsWithAudio\.has\(o\.id\)/)
     expect(chatApp).toMatch(/setStreamVolume:\s*\(id: string, v: number\) => setStreamVolume\(id, v\)/)
+  })
+})
+
+/*
+ * Right-clicking a shared screen opens the stream's menu, not just the
+ * sharer's: Stream Volume while it has sound, Join stream or Leave stream,
+ * then the person rows. The stage only says WHICH tile was a stream; the
+ * call bar, which owns the voice state, builds the menu (callMenu's
+ * streamTileMenu, unit-tested in streamMenu.test.ts).
+ */
+describe('the stream\'s context menu', () => {
+  const grid = elementWith(stage, 'v-for="c in renderCells"')
+  const gridOpen = grid.slice(0, grid.indexOf('>', grid.indexOf('@contextmenu')) + 1)
+
+  it('CallStage marks a screen cell\'s right-click as a stream, and no other', () => {
+    expect(script).toMatch(/tileCtx: \[e: MouseEvent, t: \{[^}]*\bstream\?: boolean[^}]*\}\]/)
+    const ctx = /@contextmenu="emit\('tileCtx', \$event, \{([^}]*)\}\)"/.exec(gridOpen)?.[1] ?? ''
+    expect(ctx).toMatch(/\bstream: isScreenCell\(c\)/)
+    // A screen is a shared picture, or the tile standing in for one not loaded yet.
+    const isScreen = /const isScreenCell = [^\n]*/.exec(script)?.[0] ?? ''
+    expect(isScreen).toMatch(/c\.kind === 'stream'/)
+    expect(isScreen).toMatch(/c\.kind === 'video' && c\.source === 'screen'/)
+    // The round person tiles of the no-video layout are people, never streams.
+    const tile = elementWith(stage, 'class="s-tile"')
+    expect(tile.slice(0, tile.indexOf('>') + 1)).not.toMatch(/stream/)
+  })
+
+  it('the call bar opens the stream menu for a stream and the person menu otherwise', () => {
+    expect(bar).toMatch(/import \{[^}]*\bstreamTileMenu\b[^}]*\} from '@\/composables\/contextMenus\/callMenu'/)
+    expect(bar).toMatch(/t\.stream \? streamTileMenu\(u, state, menuHandlers\) : participantMenu\(u, state, menuHandlers\)/)
+    // Your own share keeps your own menu: no Join, Leave or Stream Volume on it.
+    expect(bar).toMatch(/if \(t\.local\) openCtxMenu\(e, \(\) => ownTileMenu\(/)
+  })
+
+  it('the call bar tells both menus whether they share a screen and whether you joined it, read on open', () => {
+    const state = /const state = \{[^}]*\}/.exec(bar)?.[0] ?? ''
+    expect(state).toMatch(/sharing: media\.streamsAvailable\.has\(t\.id\)/)
+    expect(state).toMatch(/joinedStream: joinedStreams\.has\(t\.id\)/)
+    expect(bar).toMatch(/joinStream:\s*\(id: string\) => joinStream\(id\)/)
+    expect(bar).toMatch(/leaveStream:\s*\(id: string\) => leaveStream\(id\)/)
+  })
+
+  it('the sidebar\'s occupant menu offers Join stream and Leave stream the same way', () => {
+    const call = /voiceOccupantMenu\(u, \{[\s\S]*?\}, handlers\)/.exec(chatApp)?.[0] ?? ''
+    expect(call).toMatch(/sharing: media\.streamsAvailable\.has\(o\.id\)/)
+    expect(call).toMatch(/joinedStream: joinedStreams\.has\(o\.id\)/)
+    expect(chatApp).toMatch(/joinStream:\s*\(id: string\) => joinStream\(id\)/)
+    expect(chatApp).toMatch(/leaveStream:\s*\(id: string\) => leaveStream\(id\)/)
   })
 })
