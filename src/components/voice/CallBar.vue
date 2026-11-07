@@ -29,7 +29,7 @@ import CameraFlyout from './CameraFlyout.vue'
 import MoreFlyout from './MoreFlyout.vue'
 import { useVoiceMedia, canScreenShare, type VideoTrackInfo } from '@/composables/useVoiceMedia'
 import { voiceSettings, setVoiceSettings, noPushToTalkKey } from '@/composables/useVoiceSettings'
-import { userPref, setUserPref, setStreamVolume, userVolumeMax } from '@/composables/useVoice'
+import { userPref, setUserPref, setStreamVolume, userVolumeMax, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
 import PhoneCallScreen from './phone/PhoneCallScreen.vue'
 import PhoneCallSheet from './phone/PhoneCallSheet.vue'
 import PhoneMusicSheet from './phone/PhoneMusicSheet.vue'
@@ -41,7 +41,7 @@ import { micNotice } from '@/composables/micState'
 import { soundDialStart, soundDialStop } from '@/composables/useSocket'
 // Aliased: this component already has its own `openMenu` ref for the flyouts.
 import { openMenu as openCtxMenu } from '@/composables/useContextMenu'
-import { ownTileMenu, participantMenu, calleeMenu } from '@/composables/contextMenus/callMenu'
+import { ownTileMenu, participantMenu, streamTileMenu, calleeMenu } from '@/composables/contextMenus/callMenu'
 
 // Persistent call surface at the top of the chat. Shows whenever a call is active
 // in THIS conversation — joined, connecting, or ongoing-not-joined.
@@ -329,6 +329,8 @@ const menuHandlers = {
   setStreamVolume: (id: string, v: number) => setStreamVolume(id, v),
   toggleUserMute:  (id: string) => setUserPref(id, { muted: !userPref(id).muted }),
   toggleUserVideo: (id: string) => setUserPref(id, { videoOff: !userPref(id).videoOff }),
+  joinStream:      (id: string) => joinStream(id),
+  leaveStream:     (id: string) => leaveStream(id),
   toggleShowNonVideo:  () => setVoiceSettings({ showNonVideo:  !voiceSettings.showNonVideo }),
   toggleShowOwnCamera: () => setVoiceSettings({ showOwnCamera: !voiceSettings.showOwnCamera }),
 }
@@ -336,7 +338,7 @@ const menuHandlers = {
 // Passed as BUILDERS, not arrays: these menus contain live state (checkmarks
 // for mute/deafen, the volume readout), and an array is a snapshot that can
 // never update while the menu is open.
-const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean }) => {
+const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string; local: boolean; stream?: boolean }) => {
   const u = { id: t.id, displayName: t.name, avatar: t.avatar }
   const base = () => ({
     selfMuted: voice.localMuted, selfDeafened: voice.localDeafened,
@@ -352,14 +354,21 @@ const onTileCtx = (e: MouseEvent, t: { id: string; name: string; avatar: string;
     }))
     return
   }
+  // Your own share keeps your own menu: joining does not touch your preview,
+  // so there is no Join, Leave or Stream Volume for it.
   if (t.local) openCtxMenu(e, () => ownTileMenu(u, base(), menuHandlers))
   else openCtxMenu(e, () => {
     const p = userPref(t.id)
-    // Read inside the builder: the Stream Volume slider comes and goes as they
-    // start or stop sharing sound, even while the menu is open.
-    return participantMenu(u, { ...base(), volume: p.volume, muted: p.muted, videoOff: p.videoOff,
+    // Read inside the builder: the Stream Volume slider and Join / Leave
+    // stream come and go as they start or stop sharing, or you join, even
+    // while the menu is open.
+    const state = { ...base(), volume: p.volume, muted: p.muted, videoOff: p.videoOff,
       userVolumeMax: userVolumeMax(),
-      streamVolume: p.streamVolume, sharesScreenAudio: media.streamsWithAudio.has(t.id) }, menuHandlers)
+      streamVolume: p.streamVolume, sharesScreenAudio: media.streamsWithAudio.has(t.id),
+      sharing: media.streamsAvailable.has(t.id), joinedStream: joinedStreams.has(t.id) }
+    // A right-clicked shared screen leads with the stream's rows; a person's
+    // tile offers Join / Leave stream among theirs while they share.
+    return t.stream ? streamTileMenu(u, state, menuHandlers) : participantMenu(u, state, menuHandlers)
   })
 }
 

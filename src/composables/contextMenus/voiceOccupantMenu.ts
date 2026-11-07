@@ -8,8 +8,8 @@
  * they do share — the local volume/mute/video controls — is shared by taking
  * the same handler interface rather than by copying rows.
  *
- * **Local means local.** User Volume, Stream Volume, Mute and Disable Video here change only
- * what THIS client hears and shows. Nothing is sent, and the other person is
+ * **Local means local.** User Volume, Stream Volume, Mute, Disable Video and
+ * Join / Leave stream here change only what THIS client hears and shows. Nothing is sent, and the other person is
  * never told.
  *
  * **Server Mute, Server Deafen and Disconnect are the opposite** and are
@@ -36,7 +36,7 @@ import {
 } from 'lucide-vue-next'
 import type { MenuItem } from '../useContextMenu'
 import type { MenuUser } from './userMenu'
-import { volumeSliders } from './callMenu'
+import { volumeSliders, streamJoinRow } from './callMenu'
 
 export interface VoiceOccupantHandlers {
   openProfile:    (u: MenuUser) => void
@@ -51,6 +51,9 @@ export interface VoiceOccupantHandlers {
   setStreamVolume:(id: string, v: number) => void
   toggleUserMute: (id: string) => void
   toggleUserVideo:(id: string) => void
+  /** Start or stop loading their shared screen (useVoice's joinStream / leaveStream). */
+  joinStream:     (id: string) => void
+  leaveStream:    (id: string) => void
   /** Your own controls, for the self menu. */
   toggleMute:     () => void
   toggleDeafen:   () => void
@@ -72,6 +75,9 @@ export interface VoiceOccupantState {
   /** Their Stream Volume, and whether they share a screen with sound right now. */
   streamVolume?:      number
   sharesScreenAudio?: boolean
+  /** Whether they share a screen right now, and whether you joined it. */
+  sharing?:      boolean
+  joinedStream?: boolean
   isFriend?: boolean
   /** Whether this client can actually act on them — i.e. we share the call.
    *  Volume and local mute have nothing to act on otherwise. */
@@ -111,6 +117,9 @@ export const voiceOccupantMenu = (
       { label: 'Disable Video', icon: VideoOff, check: s.videoOff, keepOpen: true,
         onSelect: () => h.toggleUserVideo(u.id) },
     )
+    // The way into their shared screen from the people list, and out again.
+    const stream = streamJoinRow(u.id, { sharing: !!s.sharing, joined: !!s.joinedStream }, h)
+    if (stream.length) items.push({ sep: true }, ...stream)
   }
 
   /*

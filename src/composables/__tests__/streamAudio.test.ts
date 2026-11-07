@@ -578,10 +578,15 @@ describe('media.streamsAvailable', () => {
     expect([...media.streamsAvailable]).toEqual(['u1'])
     expect([...media.streamsWithAudio]).toEqual([])
 
+    const a2 = screenAudio()
     room.publish('u2', screen())
-    room.publish('u2', screenAudio())
+    room.publish('u2', a2)
     expect(new Set(media.streamsAvailable)).toEqual(new Set(['u1', 'u2']))
     expect([...media.streamsWithAudio]).toEqual(['u2'])
+    // Read from the publication, not the track: nobody joined u2's stream, so
+    // its sound is not downloaded, and the menu still knows to offer Stream Volume.
+    expect(a2.track).toBeUndefined()
+    expect(a2.isDesired).toBe(false)
 
     room.unpublish('u1', v1)
     expect([...media.streamsAvailable]).toEqual(['u2'])

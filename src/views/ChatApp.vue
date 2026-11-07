@@ -85,7 +85,7 @@ import { familyOf, type DarkVariant, type LightVariant } from '@/composables/the
 import { resolveAccentHex } from '@/composables/onAccent'
 import { THEME_OPTS, STUDIO_OPTS, ALL_PRESETS, type ThemeOpt } from '@/composables/themePresets'
 import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/useSavedThemes'
-import { useVoice, isConnectedVoiceRoom, userPref, setUserPref, setStreamVolume, userVolumeMax } from '@/composables/useVoice'
+import { useVoice, isConnectedVoiceRoom, userPref, setUserPref, setStreamVolume, userVolumeMax, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
 import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
@@ -3105,6 +3105,8 @@ const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string
     setStreamVolume: (id: string, v: number) => setStreamVolume(id, v),
     toggleUserMute:  (id: string) => setUserPref(id, { muted: !userPref(id).muted }),
     toggleUserVideo: (id: string) => setUserPref(id, { videoOff: !userPref(id).videoOff }),
+    joinStream:      (id: string) => joinStream(id),
+    leaveStream:     (id: string) => leaveStream(id),
     toggleMute:   onToggleMute,
     toggleDeafen: onToggleDeafen,
     openVoiceSettings: () => openSettings('voice'),
@@ -3134,6 +3136,8 @@ const openVoiceOccupantMenu = (e: MouseEvent, channelId: string, o: { id: string
       // The slider shows only while they share a screen with sound, and only
       // in the call with them, which inCallWithThem below decides.
       streamVolume: pref.streamVolume, sharesScreenAudio: media.streamsWithAudio.has(o.id),
+      // Join stream / Leave stream while they share a screen, likewise in the call only.
+      sharing: media.streamsAvailable.has(o.id), joinedStream: joinedStreams.has(o.id),
       isFriend: apiFriends.value.some(f => f.id === o.id),
       // Volume and local mute act on an audio element that only exists
       // while you share a room; from a channel you are merely looking at
