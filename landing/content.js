@@ -44,7 +44,7 @@
     // the end: it is the newest thing that went live. The phone layout and
     // call screen in the browser shipped in v0.20.99 and live on the Phone
     // layout card.
-    stage: 'shipped', label: 'Live now', title: 'Android app',
+    stage: 'shipped', label: 'Live now', title: 'Android app, in beta',
     items: [
       'A real app rather than a website saved to your home screen, for Android 8 and newer',
       'Notifications that arrive when the app is closed, over the app’s own connection rather than Google’s',
@@ -121,9 +121,9 @@
 ];
 
   var RELEASES = [{
-    v: 'v0.21.0', date: 'Nov 7, 2026', time: '22:00 UTC+1', title: 'Skycord for Android',
+    v: 'v0.21.0', date: 'Nov 8, 2026', time: '06:00 UTC+1', title: 'Skycord for Android, in beta',
     items: [
-      ['add', 'An Android app. Install Skycord on an Android phone (Android 8 or newer) from its releases page. It opens your own server, or skycord.xyz, keeps a list of the servers you use, and updates itself. Links to other sites open in your browser, the back button closes whatever is on top before it leaves a chat, and files you attach come from the phone’s own picker. **If you host your own instance, update the server before handing out the app: it shows your server’s own web client, and its phone screens come with v0.20.99 or newer.**'],
+      ['add', 'An Android app, in beta: the first version, so tell us what goes wrong. Install Skycord on an Android phone (Android 8 or newer) from its releases page. It opens your own server, or skycord.xyz, keeps a list of the servers you use, and updates itself. Links to other sites open in your browser, the back button closes whatever is on top before it leaves a chat, and files you attach come from the phone’s own picker. **If you host your own instance, update the server before handing out the app: it shows your server’s own web client, and its phone screens come with v0.20.99 or newer.**'],
       ['add', 'Notifications on Android, without Google. The app keeps its own quiet connection to your last server, so messages, mentions and calls reach you even with Skycord closed. You get one notification per conversation, with every line, and you can reply from it. Tapping it opens that chat. If the phone was off for a while, it catches up on what you missed when it comes back. Your friends don’t see you online just because the app is listening. There is nothing to set up on the server for it.'],
       ['add', 'Calls ring like a phone call. A DM or group call shows a full-screen incoming call with Answer and Decline, even on the lock screen. Answer opens the call, and a call you didn’t pick up leaves a missed-call notification.'],
       ['add', 'Back in a call. In the app, pressing Back on the call screen keeps the call going and takes you back to chatting, with a bar at the top to return to the call.'],
