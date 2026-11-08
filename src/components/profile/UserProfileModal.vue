@@ -241,9 +241,13 @@ img { display: block; object-fit: cover; }
 .up-close:hover  { background: var(--media-veil-strong); }
 .up-close:active { transform: scale(.94); }
 
-/* Your own profile is the card alone, so it carries the margin on all sides. */
+/* Your own profile is the card alone, so it carries the margin on all sides.
+   It must GROW into the row: the base rule is `flex: none`, and a flex item
+   with no fixed width that may not grow shrinks to its widest line of text —
+   with no bio, the Edit profile row — which cut the banner short and clipped
+   the status pill mid-word. */
 .up.solo .up-cols { min-height: 0; }
-.up.solo .up-left { width: auto; margin: 14px; }
+.up.solo .up-left { flex: 1; width: auto; margin: 14px; }
 
 .up-state { padding: 72px 24px; text-align: center; color: var(--text-3); font-size: 14px; }
 .up-state.err { color: var(--danger-text); }
