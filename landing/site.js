@@ -12,9 +12,10 @@
 
   /* ── The download that fits this visitor ───────────────────────────
      The main button follows the visitor's system. Windows keeps the
-     Windows app. An Android phone gets the Android app instead. Where
-     there is no app yet (Mac, Linux, ChromeOS, iPhone, iPad) the download
-     goes and the browser becomes the main way in. With no script, or on
+     Windows app, and Linux gets the Linux one from the same releases. An
+     Android phone gets the Android app instead. Where there is no app yet
+     (Mac, ChromeOS, iPhone, iPad) the download goes and the browser
+     becomes the main way in. With no script, or on
      a system it cannot name, the page stays as written: Windows first.
      Runs before the reveals, which keep these rows hidden until then, so
      the swap is never seen. Android is tested before Linux because its
@@ -32,10 +33,17 @@
     document.documentElement.setAttribute('data-os', os || 'unknown');
     if (!os || os === 'windows') return;
     $$('[data-dl]').forEach(function (a) {
+      var label = $('[data-dl-label]', a);
       if (os === 'android') {
         a.href = 'https://github.com/xSMDx/skycord-android-releases/releases/latest';
-        var label = $('[data-dl-label]', a);
         if (label) label.textContent = 'Download for Android (beta)';
+        return;
+      }
+      // The desktop releases carry the Linux AppImage and .deb beside the
+      // Windows installer, so the link stays; only the label changes.
+      if (os === 'linux') {
+        a.href = 'https://github.com/xSMDx/skycord-desktop-releases/releases/latest';
+        if (label) label.textContent = 'Download for Linux';
         return;
       }
       // No app for this system: the browser button takes the download's place and weight.
