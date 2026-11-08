@@ -6,6 +6,7 @@ import { Message, SystemType } from '../models/Message'
 import { User } from '../models/User'
 import { Friendship } from '../models/Friendship'
 import { resolveMessages, toReplyPreview } from './messagesController'
+import { createWithAttachments, hasKeys, wireAttachments } from '../services/attachments'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
@@ -264,9 +265,9 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
     const userId = req.user!.sub
     const { groupId } = req.params
     // authorName is still accepted in the body by older clients, and ignored.
-    const { content, replyToIds } = req.body as { content: string; replyToIds?: string[] }
+    const { content, replyToIds, attachments: keys } = req.body as { content?: string; replyToIds?: string[]; attachments?: unknown }
 
-    if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
+    if (!content?.trim() && !hasKeys(keys)) { res.status(400).json({ message: 'Content required' }); return }
     if (!mongoose.isValidObjectId(groupId)) { res.status(400).json({ message: 'Invalid group' }); return }
 
     const group = await Conversation.findById(groupId)
@@ -298,18 +299,22 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       .filter((t): t is NonNullable<typeof t> => !!t)
       .map(toReplyPreview)
 
-    const msg = await Message.create({
+    const made = await createWithAttachments(keys, userId, groupId, (_id, attachments) => Message.create({
+      _id,
       conversationId: groupId,
       kind:           'group',
       authorId:       userId,
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
-      content:        wellFormed(content.trim()),
+      content:        wellFormed((content ?? '').trim()),
+      attachments,
       // Persist only the ids that survived scope validation above — matches
       // the channel path's persistence rule, never the raw request-body ids.
       replyToIds:     replyPreviews.map(r => r.id),
-    })
+    }))
+    if (!made.ok) { res.status(made.status).json({ message: made.message }); return }
+    const msg = made.value
     group.lastMessageAt = msg.createdAt
     await group.save()
 
@@ -321,6 +326,7 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:        msg.content,
+      attachments:    wireAttachments(msg.attachments),
       reactions:      [],
       pinned:         false,
       edited:         false,

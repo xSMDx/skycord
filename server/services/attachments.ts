@@ -76,3 +76,26 @@ export const summarize = (list: readonly EmbeddedAttachment[] | undefined | null
   const kind = list.every(a => a.kind === first.kind) ? first.kind : 'file'
   return { count: list.length, kind, name: first.name, mime: first.mime }
 }
+
+/** Whether a send named any files at all — what decides if empty text is allowed. */
+export const hasKeys = (keys: unknown): boolean => Array.isArray(keys) && keys.length > 0
+
+/**
+ * Claim, create, and give the claim back if creating fails — the one
+ * sequence every send path runs. The message id is made here so the claim
+ * can point at it before the message exists.
+ */
+export const createWithAttachments = async <T>(
+  keys: unknown, ownerId: string, conversationId: string,
+  create: (id: Types.ObjectId, attachments: EmbeddedAttachment[]) => Promise<T>,
+): Promise<{ ok: true; value: T } | { ok: false; status: 400 | 409; message: string }> => {
+  const id = new Types.ObjectId()
+  const claim = await claimAttachments(keys, ownerId, id, conversationId)
+  if (!claim.ok) return claim
+  try {
+    return { ok: true, value: await create(id, claim.attachments) }
+  } catch (err) {
+    if (claim.attachments.length) await releaseClaims(id)
+    throw err
+  }
+}
