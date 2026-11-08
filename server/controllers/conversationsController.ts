@@ -6,7 +6,7 @@ import { Message, SystemType } from '../models/Message'
 import { User } from '../models/User'
 import { Friendship } from '../models/Friendship'
 import { resolveMessages, toReplyPreview } from './messagesController'
-import { createWithAttachments, hasKeys, wireAttachments } from '../services/attachments'
+import { createWithAttachments, hasKeys, wireAttachments, summarize } from '../services/attachments'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
@@ -200,6 +200,7 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
         lastMessageAt: { $first: '$createdAt' },
         lastMessage:   { $first: '$content' },
         lastKind:      { $first: '$systemType' },
+        lastAttachments: { $first: '$attachments' },
       }},
     ])
 
@@ -227,6 +228,8 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
         avatarCrop:    p.avatarCrop ?? null,
         status:        effectiveStatus(p.status, p._id.toString(), p.statusUntil),
         lastMessage:   r.lastKind ? '' : String(r.lastMessage || ''),
+        // So the list can say "Sent a photo" for a message with no text.
+        lastAttachments: r.lastKind ? null : summarize(r.lastAttachments),
         lastMessageAt: r.lastMessageAt,
       }
     }).sort((x, y) => +new Date(y.lastMessageAt) - +new Date(x.lastMessageAt))

@@ -12,7 +12,7 @@ import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf } from '..
 import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
 import { dmConvId, canDM, dmReceivePayload, buildReplyPreviews } from '../controllers/messagesController'
 import { wellFormed } from '../utils/wellFormed'
-import { createWithAttachments, hasKeys, wireAttachments } from '../services/attachments'
+import { createWithAttachments, hasKeys, wireAttachments, removeAttachmentsOf } from '../services/attachments'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
 import { MusicRooms } from './musicState'
@@ -1204,6 +1204,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         const isChannel = msg.kind === 'channel'
         const conversationId = msg.conversationId
         await msg.deleteOne()
+        await removeAttachmentsOf(msg._id)
 
         const payload = { messageId: data.messageId }
         // See message:edit above for why channel routing can't go through

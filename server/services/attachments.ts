@@ -15,7 +15,8 @@ import { Types } from 'mongoose'
 import { Attachment, type EmbeddedAttachment, type WireAttachment } from '../models/Attachment'
 import type { AttachmentKind } from '../utils/attachmentSniff'
 import { MAX_FILES } from '../utils/attachmentLimits'
-import { toWire } from '../utils/attachmentStore'
+import { attachmentStore, toWire } from '../utils/attachmentStore'
+import { Message } from '../models/Message'
 
 export type ClaimResult =
   | { ok: true; attachments: EmbeddedAttachment[] }
@@ -39,7 +40,7 @@ export const claimAttachments = async (
 
   const res = await Attachment.updateMany(
     { key: { $in: wanted }, ownerId, messageId: null },
-    { $set: { messageId, conversationId } },
+    { $set: { messageId, conversationId, claimedAt: new Date() } },
   )
   if (res.modifiedCount !== wanted.length) {
     await releaseClaims(messageId)
@@ -57,7 +58,7 @@ export const claimAttachments = async (
 
 /** Put back everything one message claimed — for a send that failed after claiming. */
 export const releaseClaims = async (messageId: Types.ObjectId): Promise<void> => {
-  await Attachment.updateMany({ messageId }, { $set: { messageId: null, conversationId: null } })
+  await Attachment.updateMany({ messageId }, { $set: { messageId: null, conversationId: null, claimedAt: null } })
 }
 
 export const wireAttachments = (list: EmbeddedAttachment[] | undefined | null): WireAttachment[] =>
@@ -98,4 +99,51 @@ export const createWithAttachments = async <T>(
     if (claim.attachments.length) await releaseClaims(id)
     throw err
   }
+}
+
+// ── leaving ─────────────────────────────────────────────────────────────────
+
+const DAY = 24 * 60 * 60 * 1000
+/**
+ * How long a claimed file must have been claimed before the sweep may call
+ * it orphaned. A send claims first and creates the message a moment later;
+ * without this margin a sweep landing in that moment would delete the files
+ * of a message that is about to exist.
+ */
+const CLAIM_GRACE = 10 * 60 * 1000
+
+const removeDocs = async (docs: { _id: Types.ObjectId; store: { kind: 'gridfs'; id: Types.ObjectId } }[]): Promise<number> => {
+  if (docs.length === 0) return 0
+  await Promise.all(docs.map(d => attachmentStore.remove(d.store)))
+  await Attachment.deleteMany({ _id: { $in: docs.map(d => d._id) } })
+  return docs.length
+}
+
+/** Everything a deleted message carried: the documents and the bytes. */
+export const removeAttachmentsOf = async (messageId: Types.ObjectId | string): Promise<void> => {
+  await removeDocs(await Attachment.find({ messageId }).select('store').lean())
+}
+
+/**
+ * The hourly cleanup. Removes uploads never sent after a day (a closed tab,
+ * a × that never reached the server), and sent files whose message no longer
+ * exists — which covers every way a message disappears without going through
+ * message delete: a channel removed with its history, a server deleted.
+ */
+export const sweepAttachments = async (now = Date.now()): Promise<{ unsent: number; orphaned: number }> => {
+  const unsent = await removeDocs(await Attachment.find({
+    messageId: null, createdAt: { $lt: new Date(now - DAY) },
+  }).select('store').lean())
+
+  let orphaned = 0
+  const claimed = await Attachment.find({
+    messageId: { $ne: null }, claimedAt: { $lt: new Date(now - CLAIM_GRACE) },
+  }).select('messageId store').lean()
+  for (let i = 0; i < claimed.length; i += 500) {
+    const batch = claimed.slice(i, i + 500)
+    const alive = new Set((await Message.find({ _id: { $in: batch.map(d => d.messageId) } }).select('_id').lean())
+      .map(m => m._id.toString()))
+    orphaned += await removeDocs(batch.filter(d => !alive.has(String(d.messageId))))
+  }
+  return { unsent, orphaned }
 }

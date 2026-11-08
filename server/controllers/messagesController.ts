@@ -5,7 +5,7 @@ import mongoose from 'mongoose'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 import { wellFormed } from '../utils/wellFormed'
 import { getIO } from '../sockets/chatSocket'
-import { summarize, createWithAttachments, hasKeys, wireAttachments, type AttachmentSummary } from '../services/attachments'
+import { summarize, createWithAttachments, hasKeys, wireAttachments, removeAttachmentsOf, type AttachmentSummary } from '../services/attachments'
 import type { EmbeddedAttachment } from '../models/Attachment'
 
 // Make a stable conversation ID from two user IDs (sorted so A↔B = B↔A)
@@ -273,6 +273,7 @@ export const deleteMessage = async (req: Request, res: Response, next: NextFunct
     }
 
     await msg.deleteOne()
+    await removeAttachmentsOf(msg._id)
     res.json({ message: 'Deleted' })
   } catch (err) { next(err) }
 }

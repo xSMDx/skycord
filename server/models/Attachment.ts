@@ -31,6 +31,8 @@ export interface IAttachment extends Document, EmbeddedAttachment {
   store:          { kind: 'gridfs'; id: Types.ObjectId }
   messageId:      Types.ObjectId | null
   conversationId: string | null
+  /** When a send claimed it; the sweep leaves fresh claims alone. */
+  claimedAt:      Date | null
   createdAt:      Date
 }
 
@@ -47,6 +49,7 @@ const AttachmentSchema = new Schema<IAttachment>(
     store:          { type: { kind: { type: String, enum: ['gridfs'] }, id: Schema.Types.ObjectId }, required: true, _id: false },
     messageId:      { type: Schema.Types.ObjectId, ref: 'Message', default: null },
     conversationId: { type: String, default: null },
+    claimedAt:      { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false }, versionKey: false },
 )
