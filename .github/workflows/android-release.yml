@@ -68,7 +68,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # Only platform-tools. The action's default list is "tools platform-tools", and Google has
+      # removed the old `tools` package, so sdkmanager stops with "Failed to find package 'tools'"
+      # (android-v0.21.0's first run, 2026-11-08). The runner image already has the platforms and
+      # build-tools, and Gradle fetches whatever else the build asks for.
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: platform-tools
       # No signing secrets in the environment from here to the signing step.
       - name: Unit tests
         working-directory: android
