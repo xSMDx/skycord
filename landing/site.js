@@ -10,6 +10,41 @@
 
   document.documentElement.classList.add('js');
 
+  /* ── The download that fits this visitor ───────────────────────────
+     The main button follows the visitor's system. Windows keeps the
+     Windows app. An Android phone gets the Android app instead. Where
+     there is no app yet (Mac, Linux, ChromeOS, iPhone, iPad) the download
+     goes and the browser becomes the main way in. With no script, or on
+     a system it cannot name, the page stays as written: Windows first.
+     Runs before the reveals, which keep these rows hidden until then, so
+     the swap is never seen. Android is tested before Linux because its
+     user agent says Linux too; an iPad asking for the desktop site calls
+     itself a Macintosh, and only its touch points give it away. */
+  (function platformCta() {
+    var ua = navigator.userAgent || '';
+    var os = /Android/i.test(ua) ? 'android'
+      : /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1) ? 'ios'
+      : /Windows/i.test(ua) ? 'windows'
+      : /CrOS/i.test(ua) ? 'chromeos'
+      : /Macintosh|Mac OS X/i.test(ua) ? 'mac'
+      : /Linux|X11/i.test(ua) ? 'linux'
+      : null;
+    document.documentElement.setAttribute('data-os', os || 'unknown');
+    if (!os || os === 'windows') return;
+    $$('[data-dl]').forEach(function (a) {
+      if (os === 'android') {
+        a.href = 'https://github.com/xSMDx/skycord-android-releases/releases/latest';
+        var label = $('[data-dl-label]', a);
+        if (label) label.textContent = 'Download for Android (beta)';
+        return;
+      }
+      // No app for this system: the browser button takes the download's place and weight.
+      var web = a.parentNode && $('[data-web]', a.parentNode);
+      if (web) { web.classList.remove('ghost'); web.classList.add('primary'); }
+      a.parentNode.removeChild(a);
+    });
+  })();
+
   /* ── Reveal on scroll ───────────────────────────────────────────────
      Siblings that come into view together are staggered, because a row
      of things appearing at the same instant reads as a page repaint
