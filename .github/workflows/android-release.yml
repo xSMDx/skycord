@@ -107,7 +107,12 @@ jobs:
             --out "$OUT" "$ALIGNED"
           certs=$("$BT/apksigner" verify --print-certs "$OUT")
           echo "$certs"
-          got=$(printf '%s\n' "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: *//p' | tr -d ': \r' | tr 'A-Z' 'a-z')
+          # Every signer's certificate, in either way apksigner prints it: "Signer #1 certificate SHA-256
+          # digest: …" (build-tools 35) or "V3.0 Signer: certificate SHA-256 digest: …" (the runner's newer
+          # ones, which made android-v0.21.0's second run read "unreadable" from a correctly signed APK).
+          # sort -u: one signing key leaves one line; two different keys leave two lines, which can never
+          # equal $want, so a mixed signature still fails.
+          got=$(printf '%s\n' "$certs" | sed -n -E 's/^(Signer #[0-9]+|V[0-9.]+ Signer:) certificate SHA-256 digest: *//p' | tr -d ': \r' | tr 'A-Z' 'a-z' | sort -u)
           want=$(printf '%s' "$EXPECTED_CERT" | tr -d ': \r\n' | tr 'A-Z' 'a-z')
           if [ -z "$got" ] || [ "$got" != "$want" ]; then
             echo "::error::The APK is signed by a different key than the one installed phones trust (certificate SHA-256 ${got:-unreadable}, expected $want). Not publishing: phones with the app could not update to it."
