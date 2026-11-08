@@ -19,7 +19,7 @@ central service that self-hosters depend on.
 - Web client: Vue 3, served by the instance itself
 - Desktop: an Electron app for Windows, with its own screen-share picker,
   notifications you can reply to, a tray icon, and auto-update
-- Phones: an Android app (Android 8 and newer), a native shell around each
+- Phones: an Android app in beta (Android 8 and newer), a native shell around each
   server's own web client, with notifications over its own connection (no
   Google push) and calls that ring full screen; or the web client in the
   phone's browser, with the same phone layout and call screen
@@ -31,7 +31,7 @@ central service that self-hosters depend on.
 - Licence: AGPL-3.0
 - Source: https://github.com/xSMDx/skycord
 - Self-host: `curl -fsSL https://skycord.xyz/install.sh | sudo bash`
-- Latest release: v0.21.0 (7 November 2026) — the first Android app, with
+- Latest release: v0.21.0 (8 November 2026) — the first Android app, in beta, with
   notifications and calls that ring while it is closed, and a right-click menu
   for a shared screen
 - Windows app: https://github.com/xSMDx/skycord-desktop-releases/releases/latest

@@ -117,12 +117,16 @@ jobs:
           {"version":"$V","url":"https://github.com/xSMDx/skycord-android-releases/releases/download/android-v$V/skycord-$V.apk","sha256":"$SHA","notes":"https://skycord.xyz/changelog/"}
           EOF
           cat "$RUNNER_TEMP/latest.json"
+      # The app is a beta (owner, 2026-11-08), and the title says so. It is NOT a GitHub
+      # pre-release on purpose: installed apps find updates at releases/latest (UpdateFeed.FEED_URL),
+      # and GitHub's "latest" skips pre-releases, so a pre-release would never reach a phone, and the
+      # landing page's download button, which points at releases/latest too, would find nothing.
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.ANDROID_RELEASES_TOKEN }}
           V: ${{ steps.version.outputs.v }}
           REPO: xSMDx/skycord-android-releases
         run: |
-          gh release create "android-v$V" -R "$REPO" --title "Skycord for Android $V" \
-            --notes "Download **skycord-$V.apk** below and open it on your phone. Installed copies offer each update themselves." \
+          gh release create "android-v$V" -R "$REPO" --title "Skycord for Android $V (beta)" \
+            --notes "**Beta.** Download **skycord-$V.apk** below and open it on your phone. Installed copies offer each update themselves." \
             "$RUNNER_TEMP/skycord-$V.apk" "$RUNNER_TEMP/latest.json"
