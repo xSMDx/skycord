@@ -2,6 +2,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose'
 import { classifyHas, mentionNames, resolveMentions, SEARCH_HAS, type SearchHas } from '../utils/searchFields'
 import { mentionCandidates } from '../utils/searchMembers'
 import { searchWords } from '../utils/searchWords'
+import type { EmbeddedAttachment } from './Attachment'
 
 export type SystemType = 'rename' | 'icon' | 'add' | 'join' | 'leave' | 'call'
 
@@ -15,7 +16,15 @@ export interface IMessage extends Document {
   /** Framing for an animated authorAvatar. Static avatars are cropped at
    *  upload, so this is null for all but GIFs. */
   authorAvatarCrop: { zoom: number; x: number; y: number } | null
+  /** May be empty when the message carries attachments; never otherwise. */
   content:    string
+  /**
+   * Files sent with the message, copied from their Attachment documents when
+   * the send claimed them (server/services/attachments). Copied rather than
+   * referenced so reading history is one query, and so a message shows what
+   * it was sent with even if a sweep has since removed an orphaned upload.
+   */
+  attachments: EmbeddedAttachment[]
   systemType: SystemType | null
   reactions:  { emoji: string; userIds: Types.ObjectId[] }[]
   pinned:     boolean
@@ -46,6 +55,19 @@ export interface IMessage extends Document {
   updatedAt:  Date
 }
 
+const AttachmentSubSchema = new Schema<EmbeddedAttachment>(
+  {
+    key:    { type: String, required: true },
+    name:   { type: String, required: true },
+    size:   { type: Number, required: true },
+    mime:   { type: String, required: true },
+    kind:   { type: String, enum: ['image', 'video', 'file'], required: true },
+    width:  { type: Number, default: null },
+    height: { type: Number, default: null },
+  },
+  { _id: false },
+)
+
 const MessageSchema = new Schema<IMessage>(
   {
     conversationId: { type: String, required: true, index: true },
@@ -54,7 +76,16 @@ const MessageSchema = new Schema<IMessage>(
     authorName:     { type: String, required: true },
     authorAvatar:   { type: String, default: null },
     authorAvatarCrop: { type: { zoom: Number, x: Number, y: Number }, default: null, _id: false },
-    content:        { type: String, required: true, maxlength: 4000 },
+    // Not `required`: an attachments-only message has no text. The validator
+    // keeps the old rule — no empty messages — for everything else.
+    content:        {
+      type: String, default: '', maxlength: 4000,
+      validate: {
+        validator(this: IMessage, v: string) { return !!v?.trim() || (this.attachments?.length ?? 0) > 0 },
+        message: 'Content required',
+      },
+    },
+    attachments:    { type: [AttachmentSubSchema], default: [] },
     systemType:     { type: String, enum: ['rename','icon','add','join','leave','call'], default: null },
     reactions:      [{ emoji: String, userIds: [{ type: Schema.Types.ObjectId, ref: 'User' }] }],
     pinned:         { type: Boolean, default: false },
@@ -93,7 +124,7 @@ MessageSchema.index({ conversationId: 1, authorId: 1, createdAt: -1 })
 MessageSchema.pre('validate', async function () {
   if (!this.isNew && !this.isModified('content')) return
   if (this.kind === 'system') { this.has = []; this.mentions = []; this.words = []; return }
-  this.has = classifyHas(this.content)
+  this.has = classifyHas(this.content, this.attachments ?? [])
   this.words = searchWords(this.content)
   const names = mentionNames(this.content)
   const people = names.length ? await mentionCandidates(this.kind, this.conversationId, names) : []

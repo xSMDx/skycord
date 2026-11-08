@@ -5,7 +5,7 @@ import { GroupInvite, generateInviteCode, inviteExpiry } from '../models/GroupIn
 import { Message, SystemType } from '../models/Message'
 import { User } from '../models/User'
 import { Friendship } from '../models/Friendship'
-import { resolveMessages } from './messagesController'
+import { resolveMessages, toReplyPreview } from './messagesController'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
@@ -290,13 +290,13 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
     // this group's preview — both in this response and, since it's persisted
     // below, on every future GET of this group's history too.
     const targets = ids.length
-      ? await Message.find({ _id: { $in: ids }, conversationId: groupId }).select('authorName content').lean()
+      ? await Message.find({ _id: { $in: ids }, conversationId: groupId }).select('authorName content attachments').lean()
       : []
     const targetById = new Map(targets.map(t => [t._id.toString(), t]))
     const replyPreviews = ids
       .map(id => targetById.get(id))
       .filter((t): t is NonNullable<typeof t> => !!t)
-      .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+      .map(toReplyPreview)
 
     const msg = await Message.create({
       conversationId: groupId,

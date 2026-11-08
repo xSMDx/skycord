@@ -7,7 +7,7 @@ import { Category } from '../models/Category'
 import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversController'
 import { Message } from '../models/Message'
 import { User } from '../models/User'
-import { resolveMessages } from './messagesController'
+import { resolveMessages, toReplyPreview } from './messagesController'
 import { getIO, rememberChannelServer, forgetChannelServer } from '../sockets/chatSocket'
 import { loadAccess, channelBits, has, requirePerm, requireBits, validateOverwrites } from '../utils/access'
 import { parseOverwrites } from '../permissions'
@@ -487,13 +487,13 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
     // nothing at all — silently dropped, never leaked.
     const targets = ids.length
       ? await Message.find({ _id: { $in: ids }, conversationId: found.channel._id.toString() })
-          .select('authorName content').lean()
+          .select('authorName content attachments').lean()
       : []
     const byId = new Map(targets.map(t => [t._id.toString(), t]))
     const replyTo = ids
       .map(id => byId.get(id))
       .filter((t): t is NonNullable<typeof t> => !!t)
-      .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+      .map(toReplyPreview)
 
     const channelId = found.channel._id.toString()
     /*

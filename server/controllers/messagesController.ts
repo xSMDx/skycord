@@ -5,6 +5,8 @@ import mongoose from 'mongoose'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 import { wellFormed } from '../utils/wellFormed'
 import { getIO } from '../sockets/chatSocket'
+import { summarize, type AttachmentSummary } from '../services/attachments'
+import type { EmbeddedAttachment } from '../models/Attachment'
 
 // Make a stable conversation ID from two user IDs (sorted so A↔B = B↔A)
 export const dmConvId = (a: string, b: string) =>
@@ -55,7 +57,18 @@ export const canDM = async (userId: string, partnerId: string): Promise<boolean>
 // Shape of a resolved reply preview, matching what chatSocket.ts's message:get
 // already produces over the socket path. Kept in one place so REST and socket
 // never silently drift apart on what a "resolved" replyTo actually looks like.
-export interface ReplyPreview { id: string; author: string; content: string }
+/** `attachments` is there only when the parent has files, so a pill for a
+ *  message sent with no text can still say what it was ("Sent 2 photos"). */
+export interface ReplyPreview { id: string; author: string; content: string; attachments?: AttachmentSummary }
+
+/** One shape for every reply preview, whichever path builds it. */
+export const toReplyPreview = (t: { _id: { toString(): string }; authorName: string; content?: string | null; attachments?: EmbeddedAttachment[] }): ReplyPreview => {
+  const summary = summarize(t.attachments)
+  return {
+    id: t._id.toString(), author: t.authorName, content: (t.content ?? '').slice(0, 80),
+    ...(summary ? { attachments: summary } : {}),
+  }
+}
 
 // Resolve a list of parent message ids into reply previews, preserving order
 // and dropping any that no longer exist. `conversationId` is required, not
@@ -66,12 +79,12 @@ export interface ReplyPreview { id: string; author: string; content: string }
 // a content snippet into whatever conversation the caller chose.
 export const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string): Promise<ReplyPreview[]> => {
   if (!Array.isArray(ids) || ids.length === 0) return []
-  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content').lean()
+  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content attachments').lean()
   const byId = new Map(targets.map(t => [t._id.toString(), t]))
   return ids
     .map(id => byId.get(id))
     .filter((t): t is NonNullable<typeof t> => !!t)
-    .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+    .map(toReplyPreview)
 }
 
 /**
@@ -124,13 +137,10 @@ export const resolveMessages = async (messages: any[], conversationId: string) =
   let replyPreviewById = new Map<string, ReplyPreview>()
   if (replyIds.length > 0) {
     const replyTargets = await Message.find({ _id: { $in: replyIds }, conversationId })
-      .select('authorName content')
+      .select('authorName content attachments')
       .lean()
     replyPreviewById = new Map(
-      replyTargets.map(rt => [
-        rt._id.toString(),
-        { id: rt._id.toString(), author: rt.authorName, content: rt.content.slice(0, 80) },
-      ])
+      replyTargets.map(rt => [rt._id.toString(), toReplyPreview(rt)])
     )
   }
 

@@ -86,6 +86,6 @@ describe('toSearchParams', () => {
 describe('has types', () => {
   it('lists the nine, with the ones Skycord lacks marked soon', () => {
     expect(HAS_TYPES.map(h => h.value)).toEqual(['image', 'video', 'link', 'file', 'embed', 'sound', 'poll', 'sticker', 'forward'])
-    expect(HAS_TYPES.filter(h => h.soon).map(h => h.value)).toEqual(['file', 'sound', 'poll', 'sticker', 'forward'])
+    expect(HAS_TYPES.filter(h => h.soon).map(h => h.value)).toEqual(['sound', 'poll', 'sticker', 'forward'])
   })
 })
