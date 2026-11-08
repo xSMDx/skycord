@@ -15,6 +15,7 @@ import { join } from 'path'
 import { release } from 'os'
 import { pathToFileURL } from 'url'
 import { lookupInstance, normaliseAddress, type InstanceProfile } from './instanceAddress'
+import { appUserModelId } from './appUserModelId'
 import { readStore, writeStore } from './store'
 import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
@@ -333,9 +334,10 @@ app.on('web-contents-created', (_e, contents) => {
 
 app.whenReady().then(async () => {
   if (!primary) return
-  // Windows shows an app's toasts under the identity it declares; this must
-  // match the installer's appId (electron-builder.yml).
-  if (process.platform === 'win32') app.setAppUserModelId('xyz.skycord.desktop')
+  // The identity Windows groups the taskbar button, pins and toasts under: the
+  // installer's appId when installed, an id of its own for a dev run, so a
+  // shortcut made while testing can never claim the installed app (appUserModelId.ts).
+  if (process.platform === 'win32') app.setAppUserModelId(appUserModelId(app.isPackaged))
   // Permissions go to the chosen origin only, and only the ones a chat app needs.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
     callback(permissionAllowed(permission, details.requestingUrl, current)))
