@@ -17,6 +17,30 @@ export type SystemType = 'rename' | 'icon' | 'add' | 'join' | 'leave' | 'call'
  */
 export interface AvatarCrop { zoom: number; x: number; y: number }
 
+/**
+ * A file sent with a message, as the server describes it. `kind` and `mime`
+ * come from the file's bytes, not its name: only `image` and `video` are ever
+ * shown inline. `width`/`height` are an image's own, for reserving its box.
+ */
+export interface Attachment {
+  key:    string
+  name:   string
+  size:   number
+  mime:   string
+  kind:   'image' | 'video' | 'file'
+  width:  number | null
+  height: number | null
+  url:    string
+}
+
+/** Enough to describe a message's files in one line where they aren't shown. */
+export interface AttachmentSummary {
+  count: number
+  kind:  'image' | 'video' | 'file'
+  name:  string
+  mime:  string
+}
+
 export interface Message {
   id:          number
   author:      string
@@ -36,7 +60,9 @@ export interface Message {
   // which breaks Copy Message ID on replies and any future "jump to original" feature.
   // A reply can target multiple parent messages (multi-parent). Empty/undefined
   // means it's not a reply.
-  replyTo?:    { id: string; author: string; content: string }[]
+  replyTo?:    { id: string; author: string; content: string; attachments?: AttachmentSummary }[]
+  /** Files sent with the message. Absent when there are none. */
+  attachments?: Attachment[]
   dbId?:       string
   /** Whether this message pings everyone. The server's verdict, stored at send
    *  time; the client never works it out from the text. */
