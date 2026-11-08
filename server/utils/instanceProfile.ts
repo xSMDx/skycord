@@ -11,6 +11,7 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { LEGAL_KINDS, LEGAL_URL_VARS, UPSTREAM_REPO, legalFile, type LegalKind } from './legalKinds'
+import { maxBytesFromEnv, MAX_FILES } from './attachmentLimits'
 
 export type Env = Record<string, string | undefined>
 
@@ -61,6 +62,9 @@ export interface InstanceProfile {
    * is, and the client fetches that once per page load anyway.
    */
   music: boolean
+  /** The attachment limits, so the composer can refuse a file before
+   *  uploading it rather than after. The upload route enforces the same. */
+  attachments: { maxBytes: number; maxFiles: number }
 }
 
 export interface InstanceResolution {
@@ -167,6 +171,7 @@ export const readInstanceProfile = (env: Env, files: InstanceFiles): InstanceRes
     software: 'skycord',
     version,
     music: Boolean(env.MUSIC_SERVICE_URL && env.MUSIC_INTERNAL_SECRET),
+    attachments: { maxBytes: maxBytesFromEnv(env), maxFiles: MAX_FILES },
     address,
     name: name ?? hostOf(address),
     nameIsAddress: name === null,

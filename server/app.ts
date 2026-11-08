@@ -8,6 +8,7 @@ import { config } from './config/env'
 import authRoutes     from './routes/auth'
 import usersRoutes    from './routes/users'
 import messagesRoutes from './routes/messages'
+import attachmentsRoutes from './routes/attachments'
 import stickersRoutes from './routes/stickers'
 import conversationsRoutes from './routes/conversations'
 import themesRoutes   from './routes/themes'
@@ -112,6 +113,11 @@ export const createApp = () => {
   // /auth keeps its own tighter limiters and is deliberately outside this one —
   // a login attempt shouldn't consume the same budget as reading messages.
   app.use('/auth',          authRoutes)
+
+  // Attachments sit outside apiLimit too, with limiters of their own — see
+  // routes/attachments.ts. Ahead of /messages, whose router would otherwise
+  // take DELETE /messages/attachments/:key for a message id.
+  app.use('/messages/attachments', attachmentsRoutes)
 
   // Backstop for everything authenticated. Per-route limiters below are tighter
   // where the work is expensive; this catches the rest, including any route

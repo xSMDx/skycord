@@ -38,6 +38,11 @@ describe('GET /instance', () => {
     expect(res.headers['cache-control']).toBe('public, max-age=300')
   })
 
+  it('lists the attachment limits, so the composer can refuse a big file before uploading it', async () => {
+    const res = await api().get('/instance')
+    expect(res.body.attachments).toEqual({ maxBytes: 26214400, maxFiles: 10 })
+  })
+
   it('is readable from any origin, and allows no credentials', async () => {
     const res = await api().get('/instance').set('Origin', 'https://elsewhere.example')
     expect(res.headers['access-control-allow-origin']).toBe('*')
