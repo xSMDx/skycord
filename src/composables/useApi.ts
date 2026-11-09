@@ -139,8 +139,13 @@ export const useApi = () => {
   const getDMMessages = (partnerId: string, cursor: HistoryCursor = {}) =>
     get<HistoryPage>(`/messages/dm/${partnerId}${historyQuery(cursor)}`)
 
-  const sendDMRest = (partnerId: string, content: string, authorName: string, authorAvatar: string, replyToIds: string[] = []) =>
-    post<{ message: ApiMessage }>(`/messages/dm/${partnerId}`, { content, authorName, authorAvatar, replyToIds })
+  const sendDMRest = (partnerId: string, content: string, authorName: string, authorAvatar: string, replyToIds: string[] = [], attachments: string[] = []) =>
+    post<{ message: ApiMessage }>(`/messages/dm/${partnerId}`, { content, authorName, authorAvatar, replyToIds, attachments })
+
+  // An upload the composer's × threw away before sending. Uploading itself is
+  // XHR, for progress — see attachmentUpload.ts.
+  const discardAttachment = (key: string) =>
+    del<{ ok: true }>(`/messages/attachments/${encodeURIComponent(key)}`)
 
   // ── Groups ───────────────────────────────────────────────────────────────
   const createGroup = (memberIds: string[], name?: string) =>
@@ -152,8 +157,8 @@ export const useApi = () => {
   const getGroupMessages = (groupId: string, cursor: HistoryCursor = {}) =>
     get<HistoryPage>(`/conversations/groups/${groupId}/messages${historyQuery(cursor)}`)
 
-  const sendGroupRest = (groupId: string, content: string, authorName: string, replyToIds: string[] = []) =>
-    post<{ message: ApiMessage }>(`/conversations/groups/${groupId}/messages`, { content, authorName, replyToIds })
+  const sendGroupRest = (groupId: string, content: string, authorName: string, replyToIds: string[] = [], attachments: string[] = []) =>
+    post<{ message: ApiMessage }>(`/conversations/groups/${groupId}/messages`, { content, authorName, replyToIds, attachments })
 
   const createGroupInvite = (groupId: string) =>
     post<{ code: string; expiresAt: string }>(`/conversations/groups/${groupId}/invites`)
@@ -247,9 +252,9 @@ export const useApi = () => {
     return get<SearchResponse>(`${base}?${params.toString()}`)
   }
 
-  const sendChannelRest = (sid: string, cid: string, content: string, replyToIds: string[] = []) =>
+  const sendChannelRest = (sid: string, cid: string, content: string, replyToIds: string[] = [], attachments: string[] = []) =>
     post<{ message: ApiMessage }>(
-      `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds }
+      `/servers/${sid}/channels/${cid}/messages`, { content, replyToIds, attachments }
     )
 
   // `category` defaults to null rather than being left off the body: both mean
@@ -572,7 +577,7 @@ export const useApi = () => {
     searchUsers, getFriends, getPending,
     sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend, getUserProfile,
     getConvPrefs, setConvPref,
-    getDMMessages, sendDMRest,
+    getDMMessages, sendDMRest, discardAttachment,
     createGroup, getMyGroups, getGroupMessages, sendGroupRest,
     createGroupInvite, getInvite, joinViaInvite, leaveGroup,
     updateGroup, addGroupMembers,
