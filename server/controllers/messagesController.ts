@@ -5,6 +5,8 @@ import mongoose from 'mongoose'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
 import { wellFormed } from '../utils/wellFormed'
 import { getIO } from '../sockets/chatSocket'
+import { summarize, createWithAttachments, hasKeys, wireAttachments, removeAttachmentsOf, type AttachmentSummary } from '../services/attachments'
+import type { EmbeddedAttachment } from '../models/Attachment'
 
 // Make a stable conversation ID from two user IDs (sorted so A↔B = B↔A)
 export const dmConvId = (a: string, b: string) =>
@@ -55,7 +57,29 @@ export const canDM = async (userId: string, partnerId: string): Promise<boolean>
 // Shape of a resolved reply preview, matching what chatSocket.ts's message:get
 // already produces over the socket path. Kept in one place so REST and socket
 // never silently drift apart on what a "resolved" replyTo actually looks like.
-export interface ReplyPreview { id: string; author: string; content: string }
+/** `attachments` is there only when the parent has files, so a pill for a
+ *  message sent with no text can still say what it was ("Sent 2 photos"). */
+export interface ReplyPreview { id: string; author: string; content: string; attachments?: AttachmentSummary }
+
+/**
+ * The first 80 characters — except a message that is one link and nothing
+ * else, which is kept whole. Cut, a GIF-picker message stops ending in .gif
+ * and the client can no longer tell it is a GIF, so the pill would show half
+ * a URL instead of "GIF". A link is one word; it cannot run on for paragraphs.
+ */
+const previewSnippet = (content: string): string => {
+  const t = content.trim()
+  return /^https?:\/\/\S+$/.test(t) && t.length <= 2048 ? t : content.slice(0, 80)
+}
+
+/** One shape for every reply preview, whichever path builds it. */
+export const toReplyPreview = (t: { _id: { toString(): string }; authorName: string; content?: string | null; attachments?: EmbeddedAttachment[] }): ReplyPreview => {
+  const summary = summarize(t.attachments)
+  return {
+    id: t._id.toString(), author: t.authorName, content: previewSnippet(t.content ?? ''),
+    ...(summary ? { attachments: summary } : {}),
+  }
+}
 
 // Resolve a list of parent message ids into reply previews, preserving order
 // and dropping any that no longer exist. `conversationId` is required, not
@@ -66,12 +90,12 @@ export interface ReplyPreview { id: string; author: string; content: string }
 // a content snippet into whatever conversation the caller chose.
 export const buildReplyPreviews = async (ids: string[] | undefined, conversationId: string): Promise<ReplyPreview[]> => {
   if (!Array.isArray(ids) || ids.length === 0) return []
-  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content').lean()
+  const targets = await Message.find({ _id: { $in: ids }, conversationId }).select('authorName content attachments').lean()
   const byId = new Map(targets.map(t => [t._id.toString(), t]))
   return ids
     .map(id => byId.get(id))
     .filter((t): t is NonNullable<typeof t> => !!t)
-    .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+    .map(toReplyPreview)
 }
 
 /**
@@ -89,6 +113,7 @@ export const dmReceivePayload = (msg: IMessage, replyTo: ReplyPreview[]) => ({
   authorName:     msg.authorName,
   authorAvatar:   msg.authorAvatar,
   content:        msg.content,
+  attachments:    wireAttachments(msg.attachments),
   reactions:      [],
   pinned:         false,
   edited:         false,
@@ -124,13 +149,10 @@ export const resolveMessages = async (messages: any[], conversationId: string) =
   let replyPreviewById = new Map<string, ReplyPreview>()
   if (replyIds.length > 0) {
     const replyTargets = await Message.find({ _id: { $in: replyIds }, conversationId })
-      .select('authorName content')
+      .select('authorName content attachments')
       .lean()
     replyPreviewById = new Map(
-      replyTargets.map(rt => [
-        rt._id.toString(),
-        { id: rt._id.toString(), author: rt.authorName, content: rt.content.slice(0, 80) },
-      ])
+      replyTargets.map(rt => [rt._id.toString(), toReplyPreview(rt)])
     )
   }
 
@@ -148,6 +170,9 @@ export const resolveMessages = async (messages: any[], conversationId: string) =
     ...m,
     authorAvatar:     avatarByAuthorId.get(m.authorId.toString())?.src  ?? null,
     authorAvatarCrop: avatarByAuthorId.get(m.authorId.toString())?.crop ?? null,
+    // Stored without URLs (the key and name are enough to rebuild one), so
+    // every reader gets the same URL shape from one place.
+    attachments: wireAttachments(m.attachments),
     // replyTo is now an array of resolved previews (drop ids that 404 / were deleted).
     replyTo: parentIdsOf(m)
       .map(id => replyPreviewById.get(id))
@@ -179,9 +204,9 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
     const userId = req.user!.sub
     const { partnerId } = req.params
     // authorName is accepted in the body by older clients but deliberately ignored.
-    const { content, replyToIds } = req.body as { content: string; replyToIds?: string[] }
+    const { content, replyToIds, attachments: keys } = req.body as { content?: string; replyToIds?: string[]; attachments?: unknown }
 
-    if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
+    if (!content?.trim() && !hasKeys(keys)) { res.status(400).json({ message: 'Content required' }); return }
 
     if (!await canDM(userId, partnerId)) {
       res.status(403).json({ message: 'You can’t message this user' }); return
@@ -209,16 +234,20 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
         )
       : new Set<string>()
 
-    const msg = await Message.create({
+    const made = await createWithAttachments(keys, userId, conversationId, (_id, attachments) => Message.create({
+      _id,
       conversationId,
       kind:           'dm',
       authorId:       userId,
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
-      content:        wellFormed(content.trim()),
+      content:        wellFormed((content ?? '').trim()),
+      attachments,
       replyToIds:     rawReplyIds.filter(id => validReplyIds.has(id)),
-    })
+    }))
+    if (!made.ok) { res.status(made.status).json({ message: made.message }); return }
+    const msg = made.value
 
     // Reach connected clients live — the partner's, and the sender's own other
     // devices. The sender used REST (a phone answering a notification, say)
@@ -238,7 +267,7 @@ export const sendDMMessage = async (req: Request, res: Response, next: NextFunct
       }
     } catch (err) { console.error('[REST] dm live emit', err) }
 
-    res.status(201).json({ message: msg })
+    res.status(201).json({ message: { ...msg.toJSON(), attachments: wireAttachments(msg.attachments) } })
   } catch (err) { next(err) }
 }
 
@@ -255,6 +284,7 @@ export const deleteMessage = async (req: Request, res: Response, next: NextFunct
     }
 
     await msg.deleteOne()
+    await removeAttachmentsOf(msg._id)
     res.json({ message: 'Deleted' })
   } catch (err) { next(err) }
 }
@@ -264,17 +294,18 @@ export const editMessageContent = async (req: Request, res: Response, next: Next
   try {
     const userId = req.user!.sub
     const { messageId } = req.params
-    const { content } = req.body
-
-    if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
+    const text = wellFormed(String(req.body?.content ?? '').trim())
 
     const msg = await Message.findById(messageId)
     if (!msg) { res.status(404).json({ message: 'Message not found' }); return }
     if (msg.authorId.toString() !== userId) {
       res.status(403).json({ message: 'Cannot edit another user\'s message' }); return
     }
+    // A caption can be emptied while the files stay; a text-only message
+    // cannot be edited down to nothing.
+    if (!text && !msg.attachments?.length) { res.status(400).json({ message: 'Content required' }); return }
 
-    msg.content = wellFormed(content.trim())
+    msg.content = text
     msg.edited  = true
     await msg.save()
     res.json({ message: msg })

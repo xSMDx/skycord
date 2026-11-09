@@ -6,6 +6,7 @@ import { initSocket, cancelAllCallEnds } from './sockets/chatSocket'
 import { loadInstanceVoiceServers, setInstanceVoiceServers } from './config/instanceVoice'
 import { backfillSearchFields } from './utils/searchBackfill'
 import { readInstanceProfile, scanInstanceDir, instanceDir } from './utils/instanceProfile'
+import { sweepAttachments } from './services/attachments'
 
 const start = async () => {
   try { config } catch (err) {
@@ -46,6 +47,14 @@ const start = async () => {
   backfillSearchFields()
     .then(n => { if (n) console.log(`✓ Search fields filled on ${n} message(s)`) })
     .catch(err => console.error('❌ Search backfill failed:', err))
+
+  // Uploads nobody sent, and files whose message is gone. Hourly; unref'd
+  // so it never holds the process open on shutdown.
+  setInterval(() => {
+    sweepAttachments()
+      .then(r => { if (r.unsent || r.orphaned) console.log(`✓ Attachments swept: ${r.unsent} unsent, ${r.orphaned} orphaned`) })
+      .catch(err => console.error('❌ Attachment sweep failed:', err))
+  }, 60 * 60 * 1000).unref()
 
   const app        = createApp()
   const httpServer = createServer(app)

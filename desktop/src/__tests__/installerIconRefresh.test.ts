@@ -34,7 +34,12 @@ describe('every taskbar window sets the app icon at runtime', () => {
   it('the main window (both kinds) and the splash pass APP_ICON', () => {
     expect(read('src/appWindow.ts').match(/icon: APP_ICON/g)?.length).toBe(2)
     expect(read('src/splash.ts')).toMatch(/icon: APP_ICON/)
-    expect(read('src/appIcon.ts')).toMatch(/'static', 'icon\.ico'/)
+    expect(read('src/appIcon.ts')).toMatch(/'static', process\.platform === 'win32' \? 'icon\.ico' : 'icon\.png'/)
+  })
+
+  // Linux cannot read an .ico, so its windows get the PNG.
+  it('ships static/icon.png identical to build/icon.png', () => {
+    expect(readFileSync(resolve(root, 'static/icon.png')).equals(readFileSync(resolve(root, 'build/icon.png')))).toBe(true)
   })
 })
 

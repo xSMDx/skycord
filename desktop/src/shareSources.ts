@@ -32,3 +32,12 @@ export const toTiles = (sources: readonly RawSource[], own: ReadonlySet<string>,
   }
   return tiles
 }
+
+/**
+ * Whether capture goes through the desktop portal: a Linux Wayland session.
+ * It is the same test WebRTC makes before it picks PipeWire over X11, so the
+ * two cannot disagree. There, every source request opens the desktop's own
+ * picker, and the answer is the one source chosen in it.
+ */
+export const capturesThroughPortal = (platform: string, env: Record<string, string | undefined>): boolean =>
+  platform === 'linux' && (env.XDG_SESSION_TYPE ?? '').startsWith('wayland') && !!env.WAYLAND_DISPLAY

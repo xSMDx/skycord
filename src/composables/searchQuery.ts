@@ -9,12 +9,12 @@ export interface SearchQuery { chips: SearchChip[]; text: string }
 export type SearchSort = 'newest' | 'relevant'
 
 export interface HasType { value: string; label: string; soon?: boolean }
-/** The nine the reference shows. Five are features Skycord does not have yet. */
+/** The nine the reference shows. Four are features Skycord does not have yet. */
 export const HAS_TYPES: readonly HasType[] = [
   { value: 'image',   label: 'image' },
   { value: 'video',   label: 'video' },
   { value: 'link',    label: 'link' },
-  { value: 'file',    label: 'file',    soon: true },
+  { value: 'file',    label: 'file' },
   { value: 'embed',   label: 'embed' },
   { value: 'sound',   label: 'sound',   soon: true },
   { value: 'poll',    label: 'poll',    soon: true },

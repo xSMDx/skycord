@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { X, Pin } from 'lucide-vue-next'
 import type { Message } from '@/types'
+import { previewText } from '@/utils/attachments'
 
 const props = defineProps<{ messages: Message[] }>()
 const emit  = defineEmits<{ close: []; jump: [dbId: string] }>()
@@ -43,7 +44,7 @@ const pinned = computed(() => props.messages.filter(m => m.pinned))
               <span class="pm-author">{{ m.author }}</span>
               <span class="pm-time">{{ m.time }}</span>
             </div>
-            <p class="pm-content">{{ m.content }}</p>
+            <p class="pm-content">{{ previewText(m) }}</p>
           </div>
         </button>
       </template>

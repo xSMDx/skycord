@@ -1,5 +1,6 @@
 import dotenv from 'dotenv'
 import { durationMs } from '../utils/duration'
+import { maxBytesFromEnv } from '../utils/attachmentLimits'
 dotenv.config()
 
 const req = (key: string): string => {
@@ -67,6 +68,11 @@ export const config = {
      *  normal case for a deployment using only the three variables above. */
     serversFile: opt('VOICE_SERVERS_FILE', 'voice-servers.json'),
   },
+  /** Chat attachments. Mutable so tests can lower the cap; nothing else writes it. */
+  attachments: {
+    maxBytes: maxBytesFromEnv(process.env),
+  },
+
   /**
    * Hosts an avatar, banner or sticker may be linked FROM.
    *

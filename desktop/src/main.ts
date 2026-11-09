@@ -15,6 +15,7 @@ import { join } from 'path'
 import { release } from 'os'
 import { pathToFileURL } from 'url'
 import { lookupInstance, normaliseAddress, type InstanceProfile } from './instanceAddress'
+import { appUserModelId } from './appUserModelId'
 import { readStore, writeStore } from './store'
 import { externalSafe, needsSecureOriginSwitch, permissionAllowed, sameOrigin } from './rules'
 import { handleDisplayMedia } from './displayMedia'
@@ -67,6 +68,12 @@ let quitting = false
 /** The page's theme colours, as the title bar last received them — the call window wears them too. */
 let lastColors: CallColors = null
 const keepInTray = () => readStore().keepInTray !== false
+// Not every Linux desktop shows tray icons (GNOME without an extension has
+// none), so it also says the two ways out that always work: opening Skycord
+// again brings the window back, and Settings can stop it hiding at all.
+const TRAY_HINT = process.platform === 'linux'
+  ? 'It keeps notifications and calls coming. Open Skycord again to bring it back. To quit, use the tray icon, or turn this off in Settings › Notifications.'
+  : 'It keeps notifications and calls coming. Quit from the tray icon.'
 const showWindow = () => {
   const w = shellWin?.win
   if (!w) return
@@ -333,9 +340,10 @@ app.on('web-contents-created', (_e, contents) => {
 
 app.whenReady().then(async () => {
   if (!primary) return
-  // Windows shows an app's toasts under the identity it declares; this must
-  // match the installer's appId (electron-builder.yml).
-  if (process.platform === 'win32') app.setAppUserModelId('xyz.skycord.desktop')
+  // The identity Windows groups the taskbar button, pins and toasts under: the
+  // installer's appId when installed, an id of its own for a dev run, so a
+  // shortcut made while testing can never claim the installed app (appUserModelId.ts).
+  if (process.platform === 'win32') app.setAppUserModelId(appUserModelId(app.isPackaged))
   // Permissions go to the chosen origin only, and only the ones a chat app needs.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
     callback(permissionAllowed(permission, details.requestingUrl, current)))
@@ -383,7 +391,7 @@ app.whenReady().then(async () => {
       writeStore({ ...readStore(), trayHintShown: true })
       showToast({
         id: 'tray-hint', kind: 'friend', conversation: null, title: 'Skycord is still running',
-        body: 'It keeps notifications and calls coming. Quit from the tray icon.', icon: null, group: null, canReply: false, flash: false,
+        body: TRAY_HINT, icon: null, group: null, canReply: false, flash: false,
       })
     }
   })

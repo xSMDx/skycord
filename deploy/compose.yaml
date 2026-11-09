@@ -30,6 +30,11 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       LIVEKIT_ADMIN_URL: ${LIVEKIT_ADMIN_URL:-}
       KLIPY_API_KEY: ${KLIPY_API_KEY:-}
+      # Chat attachments: the per-file cap (empty = 25 MB) and the virus
+      # scanner. compose.scan.yaml fills CLAMD_HOST in when the scanner is on.
+      ATTACH_MAX_BYTES: ${ATTACH_MAX_BYTES:-}
+      CLAMD_HOST: ${CLAMD_HOST:-}
+      CLAMD_PORT: ${CLAMD_PORT:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       TRUST_CF_IP: ${TRUST_CF_IP:-false}

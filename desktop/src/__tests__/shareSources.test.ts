@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toTiles, type RawSource, type DisplayInfo } from '../shareSources'
+import { capturesThroughPortal, toTiles, type RawSource, type DisplayInfo } from '../shareSources'
 
 const displays: DisplayInfo[] = [
   { id: '100', width: 2560, height: 1440, primary: true },
@@ -41,5 +41,21 @@ describe('toTiles', () => {
 
   it('ignores ids that are neither a screen nor a window', () => {
     expect(toTiles([{ id: 'tab:1', name: 'x', displayId: '' }], new Set(), displays)).toEqual([])
+  })
+})
+
+describe('capturesThroughPortal', () => {
+  it('is a Linux Wayland session, tested as WebRTC tests it', () => {
+    expect(capturesThroughPortal('linux', { XDG_SESSION_TYPE: 'wayland', WAYLAND_DISPLAY: 'wayland-0' })).toBe(true)
+  })
+
+  it('is not X11, nor a Wayland session with no display to talk to', () => {
+    expect(capturesThroughPortal('linux', { XDG_SESSION_TYPE: 'x11', DISPLAY: ':0' })).toBe(false)
+    expect(capturesThroughPortal('linux', { XDG_SESSION_TYPE: 'wayland' })).toBe(false)
+    expect(capturesThroughPortal('linux', { WAYLAND_DISPLAY: 'wayland-0' })).toBe(false)
+  })
+
+  it('is never Windows', () => {
+    expect(capturesThroughPortal('win32', { XDG_SESSION_TYPE: 'wayland', WAYLAND_DISPLAY: 'wayland-0' })).toBe(false)
   })
 })

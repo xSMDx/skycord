@@ -25,7 +25,10 @@ let hooks: ToastHooks | null = null
 
 export const initToasts = (h: ToastHooks): void => {
   hooks = h
-  Notification.handleActivation(() => h.showWindow())
+  // Windows only: elsewhere the method does not exist, and calling it threw
+  // before the tray was made. Linux has no toasts left behind to cold-start
+  // from — its notifications only act through their own objects' events.
+  if (process.platform === 'win32') Notification.handleActivation(() => h.showWindow())
 }
 
 const send = (type: 'click' | 'reply' | 'read', notice: ShellNotice, reply?: string) =>

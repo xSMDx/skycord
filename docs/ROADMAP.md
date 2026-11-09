@@ -88,6 +88,7 @@ multi-instance split out to v0.21, then the phone app, then E2EE.
 | 5c | **Music — listen together** | **built 2026-10-03/04, not yet in production.** A personal library (upload or link, re-encoded, optionally virus-scanned), playlists, a player with a real queue, and music channels inside voice calls that everyone can tune into: shared queue, seek, previous, play-now, chat commands (`/play`, `/skip`, `/prev`…). Production runs it off until the container cutover (music is a second container). Branch `share-app-audio`, ahead of main. Plans: `docs/superpowers/plans/2026-10-04-music-*.md`; design and what is unverified: `docs/music-phase-2.md` |
 | 6 | Native phone app — **v0.21** | **shipped in v0.21.0** — held back from 0.20.99 by the owner (2026-11-02); v0.21.0 is the first Android release. Android 8 and newer, an APK from `xSMDx/skycord-android-releases` that updates itself; a native shell around each server's own web client; a saved-server list like the desktop's; notifications over the app's own connection to the last server opened (no Google push), with reply; calls that ring full screen, on the lock screen too. The phone call screen it shows shipped in the web client in v0.20.99. Not built: iOS, a store listing. Changelog: `docs/changelog/v0.21.0.md`. Specs: `docs/superpowers/specs/2026-10-05-android-shell-design.md`, `2026-10-23-android-notifications-design.md`, `2026-10-25-phone-call-screen-design.md`. Blocks E2EE |
 | 6a | **Windows desktop app, to its full potential** | **next after v0.21** (owner, 2026-10-26). Customise the Electron shell much further than the web client in a window. The owner has ideas of their own for this, so it starts with a brainstorming session with the owner, before anything is designed. Open slices it can fold in: 5.5 (push-to-talk while unfocused) and 5.7 (invite links that open the app). |
+| 6b | **Phone follow-ups** | **queued for a later update** (owner, 2026-11-08). Not started; begin only when the owner says. (1) **Online from a phone shows a green phone, not a green dot**, wherever presence shows (avatars, member list, friends, DMs). This needs the server to know which of a person's connections are phones (the Android app's page, or a phone browser) and to say so in presence; the Android app's background connection still never counts as online. (2) **Switch camera on a phone**: while your camera is on in a call, a control to flip between the front and back cameras. (3) **No camera preview on a phone**: turning the camera on starts it straight away, with no preview step whatever "Always preview video" says, and "Preview Camera" is not offered on a phone. Phone behaviour is keyed on `noPushToTalkKey`, 44px touch targets. |
 | 7 | E2EE (DMs only) | designed, not built — `docs/superpowers/specs/2026-08-30-e2ee-revision.md`. **After both apps**, not by preference: delete-on-delivery makes the device the only copy, and a browser tab that "clear site data" wipes is the wrong home for it. Write the protocol spec first — see that doc |
 
 ### 5. Windows desktop app — the slices
@@ -391,13 +392,13 @@ Every one is now either enforced or honestly labelled. **Nothing is left `unenfo
 
 | State | Count | Meaning |
 |---|---|---|
-| enforced | 18 | the switch works |
-| `soon` | 12 | the FEATURE does not exist — granting it does nothing |
+| enforced | 19 | the switch works |
+| `soon` | 11 | the FEATURE does not exist — granting it does nothing |
 | `advisory` | 1 | `UseVoiceActivity` — wired and honoured by every stock client, but LiveKit has no push-to-talk concept, so a modified client can ignore it |
 | `unenforced` | **0** | — |
 
 Still `soon`, and each needs its own feature first: ManageEmojis, ViewAuditLog,
-ManageWebhooks, ChangeNickname, ManageNicknames, BanMembers, EmbedLinks, AttachFiles,
+ManageWebhooks, ChangeNickname, ManageNicknames, BanMembers, EmbedLinks,
 UseExternalEmojis, SendTTSMessages, UseSlashCommands, PrioritySpeaker.
 
 `permissionMeta.test.ts` reads the server tree and fails in BOTH directions — an

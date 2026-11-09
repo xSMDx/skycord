@@ -5,6 +5,9 @@ import type { Message } from '@/types'
 import GroupInviteCard from './GroupInviteCard.vue'
 import ServerInviteCard from './ServerInviteCard.vue'
 import ThemeCard from './ThemeCard.vue'
+import AttachmentList from './AttachmentList.vue'
+import GifImage from './GifImage.vue'
+import { isGifOnly, klipyGifLinks, previewText } from '@/utils/attachments'
 import { renderMessage, stripMarkers } from '@/utils/richText'
 import { appearance, THEME_CODE_RE } from '@/composables/useAppearance'
 
@@ -61,14 +64,12 @@ const systemIcon = computed(() => {
   }
 })
 
-// A message whose ENTIRE content is a .gif URL (what GIF picker sends —
-// see ChatApp's handleGifSelect) renders as an actual image instead of text.
-// Matches any source and tolerates query params, which some GIF CDNs append.
-const GIF_URL_RE = /^https?:\/\/\S+\.gif(\?\S*)?$/i
-const gifUrl = (content: string): string | null => {
-  const trimmed = content.trim()
-  return GIF_URL_RE.test(trimmed) ? trimmed : null
-}
+// A message whose ENTIRE content is a .gif link (what the GIF picker sends —
+// see ChatApp's handleGifSelect) plays as a GIF instead of showing the link.
+// KLIPY GIF links inside longer text get the same preview under the text.
+// Both rules live in utils/attachments, beside the preview-text one, so the
+// conversation list and this row agree on what counts as a GIF.
+const gifLinks = computed(() => (isGifOnly(props.msg.content || '') ? [] : klipyGifLinks(props.msg.content || '')))
 
 // Emoji-only messages (1-3 emoji, nothing else) render larger — matches the
 // convention Discord/Slack/Telegram all use. Built from a proper "emoji cluster"
@@ -184,7 +185,7 @@ const onReplyPillLeave = () => {
             <path d="M9 17l-5-5 5-5M4 12h11a4 4 0 0 1 4 4v1"/>
           </svg>
           <span class="reply-author">{{ p.author }}</span>
-          <span class="reply-content">{{ stripMarkers(p.content) }}</span>
+          <span class="reply-content">{{ stripMarkers(previewText({ content: p.content, summary: p.attachments })) }}</span>
         </div>
       </div>
 
@@ -198,9 +199,13 @@ const onReplyPillLeave = () => {
 
       <template v-if="!isEditing">
         <span v-if="compact" class="msg-author msg-author-inline" @click.stop="emit('clickAuthor', msg.authorId)">{{ msg.author }}</span>
-        <img v-if="gifUrl(msg.content)" :src="gifUrl(msg.content)!" class="msg-gif" alt="GIF" loading="lazy" />
+        <GifImage v-if="isGifOnly(msg.content)" :src="msg.content.trim()" class="msg-gif" />
         <p v-else-if="displayContent" class="msg-text" :class="{ jumbo: isJumboEmoji(displayContent) }" v-html="renderMessage(displayContent)" />
         <span v-if="compact && msg.edited" class="msg-edited">(edited)</span>
+        <div v-if="gifLinks.length" class="msg-gifs">
+          <GifImage v-for="u in gifLinks" :key="u" :src="u" />
+        </div>
+        <AttachmentList v-if="msg.attachments?.length" :attachments="msg.attachments" :author="msg.author" />
       </template>
       <template v-else>
         <div class="edit-wrap">
@@ -314,7 +319,8 @@ img{display:block;width:100%;height:100%;object-fit:cover}
    layout mistake. Discord does not cap this either, so it is a deliberate
    departure — revert by deleting the max-width alone. */
 .msg-text{font-size:var(--msg-font-size, 15px);line-height:1.5;color:var(--text-1);word-break:break-word;max-width:80ch}
-.msg-gif{max-width:320px;max-height:240px;border-radius: var(--edge-lg);display:block;cursor:pointer}
+.msg-gif{margin-top: 2px}
+.msg-gifs{display:flex;flex-wrap:wrap;gap: 6px;margin-top: 6px}
 .msg-text.jumbo{font-size:42px;line-height:1.25}
 .msg-text :deep(.mention){color:var(--mention-fg);background:var(--mention-bg);padding: 0 4px;border-radius: var(--edge-sm);cursor:pointer;font-weight:500}
 .msg-text :deep(.emoji){width:1.35em;height:1.35em;vertical-align:-.28em;margin: 0 .02em;object-fit:contain;display:inline-block}

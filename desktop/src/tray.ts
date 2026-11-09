@@ -45,6 +45,10 @@ const render = () => {
     const badge = badgeAsset(state.unread)
     win.setOverlayIcon(badge ? img(`badge-${badge}`) : null, badge ? `${state.unread} unread` : '')
   }
+  // Linux has no overlay icon. The count goes to the launcher instead, on docks
+  // that read it (KDE, Ubuntu's dock), matched by the .desktop file's name —
+  // which is why package.json carries desktopName. Elsewhere it does nothing.
+  if (process.platform === 'linux') app.setBadgeCount(state.unread)
 }
 
 export const initTray = (h: TrayHooks): void => {
@@ -56,10 +60,17 @@ export const initTray = (h: TrayHooks): void => {
 
 export const updateTray = (next: Partial<TrayState>): void => { state = { ...state, ...next }; render() }
 
-/** Flash the taskbar button until the window is focused (Windows stops it on focus). */
+/** Flash the taskbar button until the window is focused. Windows stops it on
+ *  focus by itself; on Linux it is an urgency hint, which some window managers
+ *  leave set, so it is cleared here. */
+let clearOnFocus = false
 export const flashTaskbar = (): void => {
   const win = hooks?.window()
-  if (win && !win.isFocused()) win.flashFrame(true)
+  if (!win || win.isFocused()) return
+  win.flashFrame(true)
+  if (process.platform === 'win32' || clearOnFocus) return
+  clearOnFocus = true
+  win.once('focus', () => { clearOnFocus = false; if (!win.isDestroyed()) win.flashFrame(false) })
 }
 
 export const destroyTray = (): void => { tray?.destroy(); tray = null }

@@ -7,6 +7,7 @@
  */
 import { ref, computed, watch } from 'vue'
 import { X, Hash } from 'lucide-vue-next'
+import { previewText } from '@/utils/attachments'
 import Skeleton from '@/components/ui/Skeleton.vue'
 import { useSearch, type SearchHit } from '@/composables/useSearch'
 import { renderMessage } from '@/utils/richText'
@@ -115,6 +116,8 @@ watch(() => results.value[0], () => body.value?.scrollTo({ top: 0 }))
               <img v-if="gifOf(hit.message.content)" :src="gifOf(hit.message.content)!" class="srp-gif" alt="GIF" loading="lazy" />
               <!-- renderMessage escapes the text before it adds any markup, and
                    highlightHtml only wraps text between tags. -->
+              <!-- A message sent as files alone: say what they were. -->
+              <p v-else-if="!hit.message.content?.trim()" class="srp-text">{{ previewText(hit.message) }}</p>
               <div v-else class="srp-text" v-html="html(hit.message.content)" />
             </div>
             <button type="button" class="srp-jump" @click.stop="emit('open', hit)">Jump</button>

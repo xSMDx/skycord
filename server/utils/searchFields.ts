@@ -6,8 +6,8 @@
  * embed patterns still match what the client draws as cards.
  */
 
-export type SearchHas = 'link' | 'image' | 'video' | 'embed'
-export const SEARCH_HAS: readonly SearchHas[] = ['link', 'image', 'video', 'embed']
+export type SearchHas = 'link' | 'image' | 'video' | 'file' | 'embed'
+export const SEARCH_HAS: readonly SearchHas[] = ['link', 'image', 'video', 'file', 'embed']
 
 const URL_RE    = /https?:\/\/[^\s<>"']+/gi
 const IMAGE_EXT = /\.(?:gif|png|jpe?g|webp|avif)(?:\?\S*)?$/i
@@ -21,8 +21,13 @@ const MENTION_RE = /<@([^>\n]+)>/g
 /** Sentence punctuation after a link is not part of it. */
 const trimUrl = (u: string) => u.replace(/[).,!?:;]+$/, '')
 
-export const classifyHas = (content: string): SearchHas[] => {
+/**
+ * Attachments count by what they are: an image or video file is `image` or
+ * `video`, as a link to one is, and anything else is a `file`.
+ */
+export const classifyHas = (content: string, attachments: readonly { kind: string }[] = []): SearchHas[] => {
   const found = new Set<SearchHas>()
+  for (const a of attachments) found.add(a.kind === 'image' ? 'image' : a.kind === 'video' ? 'video' : 'file')
   const urls = (content.match(URL_RE) ?? []).map(trimUrl)
   if (urls.length) found.add('link')
   for (const u of urls) {

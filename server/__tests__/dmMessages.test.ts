@@ -163,6 +163,7 @@ describe('DM messages: a send over REST arrives live', () => {
       authorName: a.username,
       authorAvatar: null,
       content: 'replying',
+      attachments: [],
       reactions: [],
       pinned: false,
       edited: false,

@@ -18,6 +18,8 @@
     last: Quality & { windowAudio: boolean; screenAudio: boolean; hidePreview: boolean }
     /** Whether this Windows can capture one application's sound. */
     perAppAudio: boolean
+    /** Whether a whole screen can carry sound: Windows only. */
+    screenAudio: boolean
     /** Rendered in the main process; `{app}` is filled in here. */
     audioCopy: { windowOn: string; windowOff: string; screenOn: string; screenOff: string }
     presets: Record<string, Quality>
@@ -49,6 +51,7 @@
     quality: false, audio: false,
     last: { resolution: 720, frameRate: 60, windowAudio: true, screenAudio: false, hidePreview: false },
     perAppAudio: false,
+    screenAudio: true,
     audioCopy: { windowOn: '', windowOff: '', screenOn: '', screenOff: '' },
     presets: {}, resolutions: [], frameRates: [],
   }
@@ -97,7 +100,7 @@
     // the main process — this page cannot import the module that writes them.
     const audioItem = document.getElementById('audio-item')
     if (audioItem) {
-      const off = tab === 'window' && !settings.perAppAudio
+      const off = tab === 'window' ? !settings.perAppAudio : !settings.screenAudio
       audioItem.setAttribute('aria-disabled', String(off))
       audioItem.setAttribute('aria-checked', String(!off && audio))
       const key = tab === 'window'

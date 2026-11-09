@@ -58,7 +58,15 @@ const frameRateOf = (v: unknown): FrameRate => FRAME_RATES.find(f => f === v) ??
  * It cannot name the application: this line is read in the gear menu, and the
  * picker has no selection to name — clicking a tile is what chooses it.
  */
-export const audioLine = (kind: 'screen' | 'window', on: boolean, supported: boolean): string => {
+export const audioLine = (kind: 'screen' | 'window', on: boolean, supported: boolean, platform = 'win32'): string => {
+  if (!supported && platform !== 'win32') {
+    // Off Windows neither capture exists yet: the app's sound needs the WASAPI
+    // addon, and a whole screen's needs Chromium's loopback, Windows-only too.
+    const os = platform === 'linux' ? 'Linux' : platform === 'darwin' ? 'macOS' : 'this system'
+    return kind === 'window'
+      ? `Sharing one app’s sound isn’t available on ${os} yet`
+      : `Sharing your computer’s sound isn’t available on ${os} yet`
+  }
   if (kind === 'window' && !supported) return 'Your version of Windows cannot share one app’s sound'
   if (!on) return 'No sound goes with this share'
   return kind === 'window'
@@ -70,12 +78,26 @@ export const audioLine = (kind: 'screen' | 'window', on: boolean, supported: boo
  * Every line the picker might show, rendered once for the page to index. The
  * page is a plain script and cannot import this module.
  */
-export const audioCopy = (supported: boolean) => ({
-  windowOn: audioLine('window', true, supported),
-  windowOff: audioLine('window', false, supported),
-  screenOn: audioLine('screen', true, supported),
-  screenOff: audioLine('screen', false, supported),
-})
+export const audioCopy = (perAppAudio: boolean, platform = 'win32') => {
+  const screen = screenAudioSupported(platform)
+  return {
+    windowOn: audioLine('window', true, perAppAudio, platform),
+    windowOff: audioLine('window', false, perAppAudio, platform),
+    screenOn: audioLine('screen', true, screen, platform),
+    screenOff: audioLine('screen', false, screen, platform),
+  }
+}
+
+/**
+ * Whether a whole-screen share can carry sound: Electron's system loopback,
+ * which it supports on Windows only. A window's sound is the addon's to say
+ * (shareAudio.ts `supportsPerAppAudio`).
+ */
+export const screenAudioSupported = (platform: string): boolean => platform === 'win32'
+
+/** Whether a share of this kind can carry sound at all here. */
+export const audioSupported = (kind: 'screen' | 'window', perAppAudio: boolean, platform: string): boolean =>
+  kind === 'window' ? perAppAudio : screenAudioSupported(platform)
 
 const pidOf = (v: unknown): number | null =>
   typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null

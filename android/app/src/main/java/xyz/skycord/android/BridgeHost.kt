@@ -328,6 +328,12 @@ class BridgeHost(private val activity: MainActivity) {
                     "screen.keepOn" -> (m.args.opt(0) as? Boolean)?.let(activity::keepScreenOn)
                     "androidNotifications.openSystemSettings" -> later { activity.openNotificationSettings() }
                     "androidNotifications.requestBatteryExemption" -> later { activity.requestBatteryExemption() }
+                    // A chat attachment's Download link, which the shim takes (WebView does nothing with an
+                    // <a download> click): the URL and the link's name. The activity checks the address again.
+                    "download" -> (m.args.opt(0) as? String)?.let { url ->
+                        val name = m.args.opt(1) as? String
+                        later { activity.saveAttachmentLink(url, name) }
+                    }
                     else -> m.id?.let { proxy.postMessage(BridgeProtocol.error(it, "unknown method")) }
                 }
             }

@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { classifyHas, mentionNames, resolveMentions } from '../utils/searchFields'
 
 describe('classifyHas', () => {
+  it('counts attachments: images and videos by kind, everything else as a file', () => {
+    expect(classifyHas('', [{ kind: 'image' }, { kind: 'file' }])).toEqual(['image', 'file'])
+    expect(classifyHas('see https://example.com', [{ kind: 'video' }])).toEqual(['link', 'video'])
+    expect(classifyHas('words', [])).toEqual([])
+  })
   it('finds nothing in plain text', () => {
     expect(classifyHas('just words here')).toEqual([])
   })

@@ -28,6 +28,8 @@ export type LegalEntry = { kind: LegalKind; source: 'url'; href: string } | Docu
 export interface Contact { kind: 'email' | 'url' | 'text'; value: string }
 
 export interface InstanceProfile {
+  /** Attachment limits; absent from servers older than attachments. */
+  attachments?: { maxBytes: number; maxFiles: number }
   software: 'skycord'
   version: string
   address: string

@@ -11,6 +11,7 @@ import java.time.format.DateTimeParseException
  * up. [kind] is "dm", "group" or "channel"; [conversationId] is the DM's two
  * user ids joined by `_`, the group's id or the channel's id. [createdAt] is
  * epoch ms on the server's clock, null when the event did not say.
+ * [attachments] sums up the files the message carries, null when it carries none.
  */
 data class RawMessage(
     val kind: String,
@@ -24,6 +25,7 @@ data class RawMessage(
     val categoryId: String? = null,
     val mentionsEveryone: Boolean = false,
     val createdAt: Long? = null,
+    val attachments: AttachmentSummary? = null,
 )
 
 /** Catch-up's answer: the server's clock when it was asked ([now], the next `since`), and the events, newest first. */
@@ -98,11 +100,11 @@ object MessageEvents {
     /** The rules' view of [raw], or null when it cannot be placed (a DM that is not [me]'s). */
     fun toIncoming(raw: RawMessage, me: String, names: Names, fallbacks: Fallbacks): IncomingMessage? = when (raw.kind) {
         "dm" -> dmPartner(raw.conversationId, me)?.let { partner ->
-            IncomingMessage.Dm(raw.messageId, partner, raw.authorId, raw.authorName, raw.content, raw.system)
+            IncomingMessage.Dm(raw.messageId, partner, raw.authorId, raw.authorName, raw.content, raw.system, raw.attachments)
         }
         "group" -> IncomingMessage.Group(
             raw.messageId, raw.conversationId, names.groupName(raw.conversationId) ?: fallbacks.group,
-            raw.authorId, raw.authorName, raw.content, raw.system,
+            raw.authorId, raw.authorName, raw.content, raw.system, raw.attachments,
         )
         "channel" -> raw.serverId?.let { serverId ->
             IncomingMessage.Channel(
@@ -117,6 +119,7 @@ object MessageEvents {
                 content = raw.content,
                 mentionsEveryone = raw.mentionsEveryone,
                 system = raw.system,
+                attachments = raw.attachments,
             )
         }
         else -> null
@@ -156,7 +159,26 @@ object MessageEvents {
             categoryId = if (kind == "channel") o.string("categoryId") else null,
             mentionsEveryone = kind == "channel" && o.opt("mentionsEveryone") == true,
             createdAt = epochMs(o.opt("createdAt") as? String),
+            attachments = attachments(o),
         )
+    }
+
+    /**
+     * The message's `attachments` (the server's wireAttachments: objects with kind, name and mime) as one
+     * summary, or null when it has none. An entry that is not an object is skipped; a kind the app does
+     * not know is a plain file, which is how the web's words treat it too.
+     */
+    private fun attachments(o: JSONObject): AttachmentSummary? {
+        val list = o.opt("attachments") as? JSONArray ?: return null
+        val files = (0 until list.length()).mapNotNull { i ->
+            val a = list.opt(i) as? JSONObject ?: return@mapNotNull null
+            Attachment(
+                kind = (a.opt("kind") as? String)?.takeIf { it in Attachment.KINDS } ?: "file",
+                name = a.opt("name") as? String ?: "",
+                mime = a.opt("mime") as? String ?: "",
+            )
+        }
+        return AttachmentText.summarize(files)
     }
 
     /** A real, non-empty JSON string; Android's optString would turn null into "null". */

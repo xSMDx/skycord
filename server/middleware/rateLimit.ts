@@ -55,3 +55,10 @@ export const writeLimit = make(60_000, 120, 'Too many requests — wait a moment
  *  client once per page load and by the desktop picker. Keyed by IP, since
  *  nobody here is signed in. */
 export const instanceLimit = make(60_000, 120, 'Too many requests — wait a moment')
+
+/** Chat attachment uploads: each one is up to 25 MB of buffering and a scan. */
+export const attachmentUploadLimit = make(60_000, 30, 'Too many uploads — wait a moment')
+
+/** Reading attachments: one request per photo or video on screen, so far
+ *  more generous than apiLimit, which these deliberately sit outside. */
+export const attachmentReadLimit = make(60_000, 600, 'Slow down a moment')

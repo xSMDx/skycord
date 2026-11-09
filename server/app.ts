@@ -8,6 +8,7 @@ import { config } from './config/env'
 import authRoutes     from './routes/auth'
 import usersRoutes    from './routes/users'
 import messagesRoutes from './routes/messages'
+import attachmentsRoutes from './routes/attachments'
 import stickersRoutes from './routes/stickers'
 import conversationsRoutes from './routes/conversations'
 import themesRoutes   from './routes/themes'
@@ -82,7 +83,7 @@ export const createApp = () => {
     origin:      config.cors.clientOrigin,
     credentials: true,
     methods:     ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','Authorization'],
+    allowedHeaders: ['Content-Type','Authorization','X-Filename'],
   }))
 
   // Profile updates carry base64 data URLs and are bounded by the controller at
@@ -95,9 +96,16 @@ export const createApp = () => {
   app.use((req, res, next) =>
     req.method === 'PATCH' && req.path === '/users/me' ? profileJson(req, res, next) : next())
 
+  // An attachment upload is raw bytes the controller counts as they arrive.
+  // A .json or form file sent with its own Content-Type would otherwise be
+  // eaten by these parsers first, leaving the upload a stream that never ends.
+  const isUpload = (req: express.Request) => req.method === 'POST' && req.path === '/messages/attachments'
+  const unlessUpload = (mw: express.RequestHandler): express.RequestHandler =>
+    (req, res, next) => (isUpload(req) ? next() : mw(req, res, next))
+
   // Raised from 10kb to 2mb to allow base64-encoded sticker image uploads.
-  app.use(express.json({ limit: '2mb' }))
-  app.use(express.urlencoded({ extended: false }))
+  app.use(unlessUpload(express.json({ limit: '2mb' })))
+  app.use(unlessUpload(express.urlencoded({ extended: false })))
   app.use(cookieParser())
 
   if (!config.isProd) app.use(morgan('dev'))
@@ -112,6 +120,11 @@ export const createApp = () => {
   // /auth keeps its own tighter limiters and is deliberately outside this one —
   // a login attempt shouldn't consume the same budget as reading messages.
   app.use('/auth',          authRoutes)
+
+  // Attachments sit outside apiLimit too, with limiters of their own — see
+  // routes/attachments.ts. Ahead of /messages, whose router would otherwise
+  // take DELETE /messages/attachments/:key for a message id.
+  app.use('/messages/attachments', attachmentsRoutes)
 
   // Backstop for everything authenticated. Per-route limiters below are tighter
   // where the work is expensive; this catches the rest, including any route

@@ -12,6 +12,7 @@ import { loadAccess, channelBits, categoryOverwriteMap, channelViewOf } from '..
 import { parseOverwrites, has as hasPerm, type PermissionName } from '../permissions'
 import { dmConvId, canDM, dmReceivePayload, buildReplyPreviews } from '../controllers/messagesController'
 import { wellFormed } from '../utils/wellFormed'
+import { createWithAttachments, hasKeys, wireAttachments, removeAttachmentsOf } from '../services/attachments'
 import * as presence from '../state/presence'
 import { config }   from '../config/env'
 import { MusicRooms } from './musicState'
@@ -1092,10 +1093,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     // ── Send DM ───────────────────────────────────────────────────────────
     socket.on('dm:send', async (data: {
       partnerId: string; content: string
-      authorName: string; replyToIds?: string[]
+      authorName: string; replyToIds?: string[]; attachments?: string[]
     }, ack) => {
       try {
-        if (!data.content?.trim()) { ack?.({ ok: false, error: 'Empty' }); return }
+        if (!data.content?.trim() && !hasKeys(data.attachments)) { ack?.({ ok: false, error: 'Empty' }); return }
         if (!await canDM(userId, data.partnerId)) {
           ack?.({ ok: false, error: 'Not allowed' }); return
         }
@@ -1105,7 +1106,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         // message outside this conversation is dropped from both, not merely
         // hidden from the response while still sitting in the stored doc.
         const replyTo = await buildReplyPreviews(data.replyToIds, conversationId)
-        const msg = await Message.create({
+        const made = await createWithAttachments(data.attachments, userId, conversationId, (_id, attachments) => Message.create({
+          _id,
           conversationId,
           kind:           'dm',
           authorId:       userId,
@@ -1114,9 +1116,12 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorName:     myName,
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
-          content:        wellFormed(data.content.trim()),
+          content:        wellFormed(String(data.content ?? '').trim()),
+          attachments,
           replyToIds:     replyTo.map(r => r.id),
-        })
+        }))
+        if (!made.ok) { ack?.({ ok: false, error: made.message }); return }
+        const msg = made.value
         const payload = dmReceivePayload(msg, replyTo)
         io.to(`user:${data.partnerId}`).emit('dm:receive', payload)
         if (/@everyone\b/.test(msg.content)) io.to(`user:${data.partnerId}`).emit('mention:everyone', { conversationId: msg.conversationId, authorName: msg.authorName })
@@ -1136,7 +1141,9 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         if (!msg)                              { ack?.({ ok: false, error: 'Not found' });   return }
         if (msg.authorId.toString() !== userId){ ack?.({ ok: false, error: 'Not allowed' }); return }
 
-        msg.content = wellFormed(data.content.trim())
+        const next = wellFormed(String(data.content ?? '').trim())
+        if (!next && !msg.attachments?.length) { ack?.({ ok: false, error: 'Empty' }); return }
+        msg.content = next
         msg.edited  = true
         await msg.save()
 
@@ -1197,6 +1204,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         const isChannel = msg.kind === 'channel'
         const conversationId = msg.conversationId
         await msg.deleteOne()
+        await removeAttachmentsOf(msg._id)
 
         const payload = { messageId: data.messageId }
         // See message:edit above for why channel routing can't go through
@@ -1335,25 +1343,30 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       content:      string
       replyToIds:   string[]
       authorName:   string
+      attachments?: string[]
     }, ack) => {
       try {
-        if (!data.content?.trim()) { ack?.({ ok: false, error: 'Empty' }); return }
+        if (!data.content?.trim() && !hasKeys(data.attachments)) { ack?.({ ok: false, error: 'Empty' }); return }
         if (!await canDM(userId, data.partnerId)) {
           ack?.({ ok: false, error: 'Not allowed' }); return
         }
 
         const conversationId = dmConvId(userId, data.partnerId)
         const replyTo = await buildReplyPreviews(data.replyToIds, conversationId)
-        const msg = await Message.create({
+        const made = await createWithAttachments(data.attachments, userId, conversationId, (_id, attachments) => Message.create({
+          _id,
           conversationId,
           kind:           'dm',
           authorId:       userId,
           authorName:     myName,
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
-          content:        wellFormed(data.content.trim()),
+          content:        wellFormed(String(data.content ?? '').trim()),
+          attachments,
           replyToIds:     replyTo.map(r => r.id),
-        })
+        }))
+        if (!made.ok) { ack?.({ ok: false, error: made.message }); return }
+        const msg = made.value
 
         const payload = dmReceivePayload(msg, replyTo)
 
@@ -1368,10 +1381,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
 
     // ── Send group message ──────────────────────────────────────────────────
     socket.on('group:send', async (data: {
-      groupId: string; content: string; authorName: string; replyToIds?: string[]
+      groupId: string; content: string; authorName: string; replyToIds?: string[]; attachments?: string[]
     }, ack) => {
       try {
-        if (!data.content?.trim()) { ack?.({ ok: false, error: 'Empty' }); return }
+        if (!data.content?.trim() && !hasKeys(data.attachments)) { ack?.({ ok: false, error: 'Empty' }); return }
 
         // Membership check — can't post to a group you're not in, even if you
         // somehow know its id.
@@ -1381,16 +1394,20 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         }
 
         const replyTo = await buildReplyPreviews(data.replyToIds, data.groupId)
-        const msg = await Message.create({
+        const made = await createWithAttachments(data.attachments, userId, data.groupId, (_id, attachments) => Message.create({
+          _id,
           conversationId: data.groupId,
           kind:           'group',
           authorId:       userId,
           authorName:     myName,
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
-          content:        wellFormed(data.content.trim()),
+          content:        wellFormed(String(data.content ?? '').trim()),
+          attachments,
           replyToIds:     replyTo.map(r => r.id),
-        })
+        }))
+        if (!made.ok) { ack?.({ ok: false, error: made.message }); return }
+        const msg = made.value
 
         // Bump lastMessageAt so the group sorts to the top of conversation lists.
         group.lastMessageAt = msg.createdAt
@@ -1404,6 +1421,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           authorAvatar:   myAvatar,
           authorAvatarCrop: myAvatarCrop,
           content:        msg.content,
+          attachments:    wireAttachments(msg.attachments),
           reactions:      [],
           pinned:         false,
           edited:         false,

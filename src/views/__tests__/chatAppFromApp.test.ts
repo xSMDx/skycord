@@ -22,7 +22,8 @@ describe('the delete-confirm preview', () => {
   it('collapses whitespace, not the letter s', () => {
     // \s+ with its backslash dropped is /s+/: "classes" would read "clases".
     expect(source).not.toMatch(/\.replace\(\/s\+\//)
-    expect(source).toContain('stripMarkers(msg.content || "").replace(/\\s+/g, " ")')
+    // previewText: a message sent as files alone still has words to show.
+    expect(source).toContain('stripMarkers(previewText(msg)).replace(/\\s+/g, " ")')
   })
 })
 
