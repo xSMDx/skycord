@@ -189,4 +189,63 @@ class MessageEventsTest {
         assertEquals(42L, missed.now)
         assertTrue(missed.events.isEmpty())
     }
+
+    // ---- files (wireAttachments: key, name, size, mime, kind, width, height, url) --------------
+
+    private fun wire(kind: String, name: String, mime: String) =
+        """{"key":"k-$name","name":"$name","size":1024,"mime":"$mime","kind":"$kind","width":null,"height":null,"url":"/messages/attachments/k-$name/$name"}"""
+
+    @Test fun aDmSentAsFilesAlone_carriesWhatTheFilesAre() {
+        val raw = MessageEvents.live(
+            "dm",
+            json("""{"_id":"f1","conversationId":"$dmConv","authorId":"$ana","authorName":"Ana","content":"","attachments":[${wire("image", "IMG_1.jpg", "image/jpeg")}]}"""),
+        )!!
+        assertEquals("", raw.content)
+        assertEquals(AttachmentSummary(1, "image", "IMG_1.jpg", "image/jpeg"), raw.attachments)
+        val e = MessageEvents.toIncoming(raw, me, names, fallbacks)!!
+        assertEquals(raw.attachments, e.attachments)
+        assertEquals("Sent a photo", NoticeText.body(e.content, "New message", e.attachments))
+    }
+
+    @Test fun aGroupAndAChannelMessage_carryTheirFilesToo() {
+        val group = MessageEvents.live(
+            "group",
+            json("""{"_id":"f2","conversationId":"g1","authorId":"$ana","authorName":"Ana","content":"","attachments":[${wire("file", "a.pdf", "application/pdf")},${wire("file", "b.zip", "application/zip")}]}"""),
+        )!!
+        val g = MessageEvents.toIncoming(group, me, names, fallbacks) as IncomingMessage.Group
+        assertEquals(AttachmentSummary(2, "file", "a.pdf", "application/pdf"), g.attachments)
+
+        val channel = MessageEvents.live(
+            "channel",
+            json("""{"_id":"f3","conversationId":"c1","serverId":"s1","authorId":"$ana","authorName":"Ana","content":"","attachments":[${wire("image", "a.png", "image/png")},${wire("video", "b.mp4", "video/mp4")}]}"""),
+        )!!
+        val c = MessageEvents.toIncoming(channel, me, names, fallbacks) as IncomingMessage.Channel
+        assertEquals(AttachmentSummary(2, "file", "a.png", "image/png"), c.attachments) // a mix is files
+        assertEquals("Sent 2 files", NoticeText.body(c.content, "New message", c.attachments))
+    }
+
+    @Test fun noFiles_orAnEmptyList_isNoAttachments() {
+        val plain = MessageEvents.live("dm", json("""{"_id":"f4","conversationId":"$dmConv","authorId":"$ana","content":"hi"}"""))!!
+        assertNull(plain.attachments)
+        val empty = MessageEvents.live("dm", json("""{"_id":"f5","conversationId":"$dmConv","authorId":"$ana","content":"hi","attachments":[]}"""))!!
+        assertNull(empty.attachments)
+        val notAList = MessageEvents.live("dm", json("""{"_id":"f6","conversationId":"$dmConv","authorId":"$ana","content":"","attachments":"x.png"}"""))!!
+        assertNull(notAList.attachments)
+    }
+
+    @Test fun aFileEntryThatCannotBeRead_isSkipped_andAnUnknownKindIsAFile() {
+        val raw = MessageEvents.live(
+            "dm",
+            json("""{"_id":"f7","conversationId":"$dmConv","authorId":"$ana","content":"","attachments":["junk",{"kind":"audio","name":"song.mp3","mime":"audio/mpeg"},{"kind":7,"name":null}]}"""),
+        )!!
+        // Two readable entries: an unknown kind and a broken one both read as files; the string is skipped.
+        assertEquals(AttachmentSummary(2, "file", "song.mp3", "audio/mpeg"), raw.attachments)
+    }
+
+    @Test fun catchUpReadsFilesToo_whenTheServerSendsThem() {
+        val missed = MessageEvents.missed(
+            json("""{"now":5,"events":[{"type":"dm","_id":"f8","conversationId":"$dmConv","authorId":"$ana","content":"","attachments":[${wire("video", "clip.mp4", "video/mp4")}]}]}"""),
+        )!!
+        assertEquals(AttachmentSummary(1, "video", "clip.mp4", "video/mp4"), missed.events.single().attachments)
+    }
 }

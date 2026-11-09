@@ -21,6 +21,9 @@
          background (MainActivity, once). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Saving a chat attachment to Downloads (MainActivity.saveAttachment): DownloadManager needs it to write
+         there on Android 8 and 9 only, asked at the first download. From Android 10 it is not needed, and gone. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 

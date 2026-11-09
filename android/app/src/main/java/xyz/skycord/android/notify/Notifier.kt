@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import xyz.skycord.android.MainActivity
 import xyz.skycord.android.R
 import xyz.skycord.android.core.Alert
+import xyz.skycord.android.core.AttachmentText
 import xyz.skycord.android.core.ConvLines
 import xyz.skycord.android.core.ConvRef
 import xyz.skycord.android.core.IncomingMessage
@@ -156,15 +157,26 @@ class Notifier(context: Context) {
         val newest = notes.lastOrNull() ?: return
         val conv = Conv(origin, NoticeText.ref(newest.e), NoticeText.conversationTitle(newest.e))
         val noText = app.getString(R.string.notice_no_text)
+        val words = attachmentWords()
         val added = notes.map { n ->
             val sender = Person.Builder().setName(NoticeText.authorName(n.e)).setKey("user:${n.e.authorId}").build()
-            Line(NoticeText.body(n.e.content, noText), n.at, sender, n.e.messageId.takeIf { it.isNotBlank() })
+            Line(NoticeText.body(n.e.content, noText, n.e.attachments, words), n.at, sender, n.e.messageId.takeIf { it.isNotBlank() })
         }
         publish(
             conv, headline = NoticeText.title(newest.e), mentions = notes.any { it.kind == Kind.MENTION },
             loud = alert == Alert.LOUD, at = newest.at, create = true, added = added,
         )
     }
+
+    /** What a message sent as files alone is called ("Sent a photo", "Sent 3 files"), as strings.xml words it. */
+    private fun attachmentWords() = AttachmentText.Words(
+        photo = app.getString(R.string.notice_sent_photo),
+        video = app.getString(R.string.notice_sent_video),
+        gif = app.getString(R.string.notice_gif),
+        photos = app.getString(R.string.notice_sent_photos),
+        videos = app.getString(R.string.notice_sent_videos),
+        files = app.getString(R.string.notice_sent_files),
+    )
 
     /** Your reply went through: "You: …" joins the conversation, quietly. Nothing to do if the notice has gone. */
     internal fun appendReply(conv: Conv, text: String, at: Long = System.currentTimeMillis()) {

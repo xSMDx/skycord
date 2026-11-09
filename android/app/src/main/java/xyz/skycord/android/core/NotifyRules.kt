@@ -58,6 +58,8 @@ sealed interface IncomingMessage {
     val content: String
     /** A notice the server posts ("Ana joined"), not something a person said. */
     val system: Boolean
+    /** The files it carries, summed up (for the words of a message sent as files alone); null when none. */
+    val attachments: AttachmentSummary?
 
     data class Dm(
         override val messageId: String,
@@ -66,6 +68,7 @@ sealed interface IncomingMessage {
         val authorName: String,
         override val content: String,
         override val system: Boolean,
+        override val attachments: AttachmentSummary? = null,
     ) : IncomingMessage
 
     data class Group(
@@ -76,6 +79,7 @@ sealed interface IncomingMessage {
         val authorName: String,
         override val content: String,
         override val system: Boolean,
+        override val attachments: AttachmentSummary? = null,
     ) : IncomingMessage
 
     data class Channel(
@@ -90,6 +94,7 @@ sealed interface IncomingMessage {
         override val content: String,
         val mentionsEveryone: Boolean,
         override val system: Boolean,
+        override val attachments: AttachmentSummary? = null,
     ) : IncomingMessage
 }
 
