@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Paperclip, Smile, Send, X, CornerUpLeft, Timer,
+  Plus, Smile, Send, X, CornerUpLeft, Timer,
   Bold, Italic, Underline, Strikethrough, Quote, Code, Link,
 } from 'lucide-vue-next'
 import AutocompletePopup from './AutocompletePopup.vue'
 import TimeTokenPicker from './TimeTokenPicker.vue'
 import AttachmentTray from './AttachmentTray.vue'
 import { useAttachmentTray } from '@/composables/useAttachmentTray'
+import { openMenu } from '@/composables/useContextMenu'
+import { buildComposerMenu } from '@/composables/contextMenus/composerMenu'
 import { matchCommands, resolveSlash, type SlashCommand } from '@/composables/useChatCommands'
 import { suggestTracks } from '@/composables/musicCommands'
 import { music, clearMusicError, PAUSE_SETTLE_MS } from '@/composables/useMusic'
@@ -45,6 +47,8 @@ const emit = defineEmits<{
   typing:              []
   openEmoji:           []
   openGif:             []
+  /** The emoji picker, opened on its Stickers tab. */
+  openStickers:        []
   clearReply:          [id: string]
   clearAllReply:       []
   /** Something to tell the person that is not an error in the message itself. */
@@ -69,6 +73,32 @@ const addFiles = (files: File[]): void => {
   inputEl.value?.focus()
 }
 const pickFiles = (): void => { if (props.canAttach) fileInput.value?.click() }
+
+/**
+ * The "+": the app's shared menu, opened above the button. Anchored to the
+ * button's own box rather than the pointer, so Enter and Space open it in the
+ * same place a click does; the menu flips up from the top edge because the
+ * composer sits at the bottom of the screen. On a phone the same menu is a
+ * bottom sheet, as every menu there is.
+ */
+const plusBtn = ref<HTMLButtonElement | null>(null)
+const openPlusMenu = (e: MouseEvent): void => {
+  const r = (plusBtn.value ?? (e.currentTarget as HTMLElement)).getBoundingClientRect()
+  openMenu({ clientX: r.left, clientY: r.top, preventDefault: () => e.preventDefault(), stopPropagation: () => e.stopPropagation() },
+    buildComposerMenu({ canAttach: props.canAttach }, {
+      uploadFile:   pickFiles,
+      openGif:      () => emit('openGif'),
+      openStickers: () => emit('openStickers'),
+      insertTime: () => {
+        // At the caret, with nothing typed to replace — unlike @time, which
+        // swaps its own trigger text for the token.
+        const el = inputEl.value
+        mentionStart = el?.selectionStart ?? props.modelValue.length
+        ac.value = null
+        showTimePicker.value = true
+      },
+    }))
+}
 const onFilesPicked = (e: Event): void => {
   const el = e.target as HTMLInputElement
   addFiles([...(el.files ?? [])])
@@ -564,11 +594,10 @@ onMounted(autoGrow)
     </Transition>
 
     <div class="input-wrapper" :class="{ sending, 'with-reply': replyTargets && replyTargets.length }">
-      <button class="input-attach btn-attach" type="button"
-        v-tip="canAttach ? 'Attach files' : 'You can’t attach files here'"
-        :aria-label="canAttach ? 'Attach files' : 'You can’t attach files here'"
-        :disabled="!canAttach" @click.stop="pickFiles">
-        <Paperclip :size="20" :stroke-width="1.5" />
+      <button class="input-attach btn-attach" type="button" ref="plusBtn" aria-haspopup="menu"
+        v-tip="'Upload a file, GIFs and more'" aria-label="Upload a file, GIFs and more"
+        @click.stop="openPlusMenu">
+        <Plus :size="22" :stroke-width="1.75" />
       </button>
       <input ref="fileInput" type="file" multiple hidden tabindex="-1" @change="onFilesPicked" />
 
@@ -731,9 +760,9 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
   color: var(--text-faint); flex-shrink: 0;
   transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.input-attach:hover { color: var(--text-1); transform: rotate(15deg); }
-.input-attach:active { transform: rotate(15deg) scale(.94); }
-.input-attach:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+/* Colour carries the hover; a "+" turned 15° just looks crooked. */
+.input-attach:hover { color: var(--text-1); }
+.input-attach:active { transform: scale(.94); }
 
 .msg-input {
   flex: 1; padding: 12px 4px;
