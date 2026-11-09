@@ -60,6 +60,18 @@ describe('upload', () => {
     expect(r.body.attachment.name).toBe('secret.txt')
   })
 
+  it('takes a JSON or form file as bytes, not as a request body to parse', async () => {
+    // A string, not a Buffer: supertest would JSON-encode a Buffer sent as application/json.
+    const json = await app().post('/messages/attachments').set(auth(u))
+      .set('Content-Type', 'application/json').set('X-Filename', 'config.json').send('{"a":1}')
+    expect(json.status).toBe(201)
+    expect(json.body.attachment).toMatchObject({ name: 'config.json', kind: 'file', size: 7 })
+    const form = await app().post('/messages/attachments').set(auth(u))
+      .set('Content-Type', 'application/x-www-form-urlencoded').set('X-Filename', 'form.txt').send('a=1&b=2')
+    expect(form.status).toBe(201)
+    expect(form.body.attachment.size).toBe(7)
+  })
+
   it('refuses an empty file', async () => {
     const r = await upload(u, Buffer.alloc(0), 'empty.txt')
     expect(r.status).toBe(400)

@@ -20,7 +20,9 @@ export const uploadAttachment = (
     if (opts.signal.aborted) { resolve({ ok: false, status: 0, message: 'The upload was stopped.' }); return }
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/messages/attachments')
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    // Always plain bytes: the server judges the type from the contents, and a
+    // claimed application/json would invite a body parser to read it first.
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
     xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name))
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.withCredentials = true
