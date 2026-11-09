@@ -178,7 +178,8 @@ LIVEKIT_API_SECRET=...
 ```
 
 `LIVEKIT_URL` is sent to the **browser**, so it must be publicly reachable — not
-`localhost`, not a private IP. Setup and the UDP requirements are in
+`localhost`, not a private IP. LiveKit must be 1.9.1 or newer, or calls re-join
+every 15 seconds. Setup and the UDP requirements are in
 [networking.md §6](./networking.md#6-voice-and-video-livekit).
 
 **If you skip this**, text, servers, channels, DMs and everything else work
