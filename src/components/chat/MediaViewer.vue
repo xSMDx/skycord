@@ -107,14 +107,17 @@ button { background: none; border: none; padding: 0; font: inherit; color: inher
 
 .mv {
   position: fixed; inset: 0; z-index: 1000;
-  background: var(--media-veil-strong);
+  /* The modal backdrop every dialog uses. */
+  background: var(--scrim);
   color: var(--on-media);
   touch-action: pan-x;
 }
 .bar {
   position: absolute; top: 0; left: 0; right: 0; z-index: 2;
   display: flex; align-items: center; gap: 4px;
-  padding: max(10px, env(safe-area-inset-top)) 12px 10px 20px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 18px 20px;
+  /* Whatever is behind the scrim must not read through the name. */
+  background: linear-gradient(var(--media-veil-strong), transparent);
 }
 .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .who b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
