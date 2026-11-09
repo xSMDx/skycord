@@ -50,7 +50,9 @@
  * connection running. It clears the device's logs (`logcat -c`, and the events
  * buffer) before each window it counts, so what it counts is its own, and it
  * writes one file on the device, `/sdcard/e2e-ui.xml` (the screen dump), which
- * it leaves there. On the local dev API it registers two throwaway accounts
+ * it leaves there. On this computer it writes one file, the run's whole device
+ * log (see "The run's own record of the device log"), in the system temp folder,
+ * and prints its path at the end. On the local dev API it registers two throwaway accounts
  * (the phone's and a friend's, who is made a friend of the first) and a server
  * they share; they stay in the local dev database. Nothing here touches a real
  * server. Every message it sends is tagged `e2e-` and comes from the friend.
@@ -70,7 +72,10 @@
  * two accounts are got from the cookie their registration set.
  */
 import { createRequire } from 'module'
-import { execSync, execFileSync } from 'child_process'
+import { execSync, execFileSync, spawn } from 'child_process'
+import { openSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 
 // The number of checks below. A run that makes fewer or more has lost or grown
 // a check by accident, and fails.
@@ -151,6 +156,25 @@ if (!sh(`pm list packages ${PKG}`).includes(`package:${PKG}`)) {
   console.error('the debug APK is not installed: `cd android && ./gradlew assembleDebug`, then `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`')
   process.exit(1)
 }
+
+// ── The run's own record of the device log ────────────────────────────────
+// The checks clear the device's log before each window they count, and the last
+// phase reboots the device, so a failing check's log is gone by the time anyone
+// looks. android-v0.21.0's first run failed three checks that two logged reruns
+// never repeated, and nothing was left to say why. One logcat stream from here
+// keeps everything the device logs in a file on this computer: a clear does not
+// stop a stream that is already reading, and the stream is started again after
+// the reboot. The path is printed at the end, whatever the result.
+const deviceLog = join(tmpdir(), `skycord-notify-e2e-${new Date().toISOString().replace(/[:.]/g, '-')}.log`)
+let logcat = null
+const recordDeviceLog = () => {
+  const out = openSync(deviceLog, 'a')
+  logcat = spawn('adb', ['-s', serial, 'logcat', '-v', 'threadtime', '-b', 'main,system,crash'], { stdio: ['ignore', out, out] })
+  logcat.on('error', () => { /* the record is a help, never a reason to fail the run */ })
+}
+const stopDeviceLog = () => { try { logcat?.kill() } catch { /* already gone */ } logcat = null }
+process.on('exit', stopDeviceLog)
+recordDeviceLog()
 const reverseAll = () => { for (const p of [6200, 7880, 7881]) adb('reverse', `tcp:${p}`, `tcp:${p}`) }
 reverseAll()
 
@@ -343,6 +367,8 @@ const finish = () => {
   console.log(`\n${passed}/${EXPECTED} passed${results.length !== EXPECTED ? ` (${results.length} checks ran)` : ''}`)
   if (failed.length) console.log(`failed: ${scrub(failed.join('; '))}`)
   if (results.length !== EXPECTED) console.log(`FAIL  expected ${EXPECTED} checks, ran ${results.length}`)
+  stopDeviceLog()
+  console.log(`device log: ${deviceLog}`)
   friend?.close()
   process.exit(passed === EXPECTED && results.length === EXPECTED && !failed.length ? 0 : 1)
 }
@@ -728,6 +754,9 @@ await phase('reboot the emulator', async () => {
   // Wait for the old system to be gone, then for the new one: the old one still answers for a moment.
   await until(() => !execSync('adb devices', { stdio: 'pipe' }).toString().includes(`${serial}\tdevice`), 60000, 500)
   adb('wait-for-device')
+  // The reboot ended the log stream; this boot's log goes into the same file.
+  stopDeviceLog()
+  recordDeviceLog()
   const booted = await until(() => sh('getprop sys.boot_completed').trim() === '1', 240000, 2000)
   // The reverse is lost with the reboot; the service backs off until the server can be reached.
   reverseAll()
