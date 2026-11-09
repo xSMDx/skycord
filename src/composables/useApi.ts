@@ -5,6 +5,7 @@
 import { useAuth } from './useAuth'
 import type { ConvPref } from './useConvPrefs'
 import type { LevelChoice } from './notifyLevels'
+import type { AttachmentSummary } from '@/types'
 
 /**
  * Turn a failed response into something a caller can actually branch on.
@@ -659,6 +660,8 @@ export interface ApiDM {
   status:        string
   lastMessage:   string
   lastMessageAt: string
+  /** What the last message carried when it was files alone; null otherwise. */
+  lastAttachments?: AttachmentSummary | null
 }
 
 /** One signed-in device on Settings → Devices. Note there is no sid: rows are

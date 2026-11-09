@@ -146,3 +146,18 @@ describe('summaries for previews', () => {
     expect(resolved.replyTo[0]).toEqual({ id: parent._id.toString(), author: 'me', content: 'hello' })
   })
 })
+
+describe('reply preview text', () => {
+  it('keeps a link-only parent whole, so a GIF still reads as a GIF', async () => {
+    const { toReplyPreview } = await import('../controllers/messagesController')
+    // Picker links are about 79 characters today; a longer rendition name must not tip one over.
+    const url = 'https://static.klipy.com/ii/925f17378dd1893b674a723c07535afe/61/a3/AOIHCTK0aLongerName.gif'
+    expect(url.length).toBeGreaterThan(80)
+    expect(toReplyPreview({ _id: new Types.ObjectId(), authorName: 'a', content: url }).content).toBe(url)
+  })
+
+  it('still cuts long text at 80 characters', async () => {
+    const { toReplyPreview } = await import('../controllers/messagesController')
+    expect(toReplyPreview({ _id: new Types.ObjectId(), authorName: 'a', content: 'word '.repeat(40) }).content).toHaveLength(80)
+  })
+})

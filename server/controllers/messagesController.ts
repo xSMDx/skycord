@@ -61,11 +61,22 @@ export const canDM = async (userId: string, partnerId: string): Promise<boolean>
  *  message sent with no text can still say what it was ("Sent 2 photos"). */
 export interface ReplyPreview { id: string; author: string; content: string; attachments?: AttachmentSummary }
 
+/**
+ * The first 80 characters — except a message that is one link and nothing
+ * else, which is kept whole. Cut, a GIF-picker message stops ending in .gif
+ * and the client can no longer tell it is a GIF, so the pill would show half
+ * a URL instead of "GIF". A link is one word; it cannot run on for paragraphs.
+ */
+const previewSnippet = (content: string): string => {
+  const t = content.trim()
+  return /^https?:\/\/\S+$/.test(t) && t.length <= 2048 ? t : content.slice(0, 80)
+}
+
 /** One shape for every reply preview, whichever path builds it. */
 export const toReplyPreview = (t: { _id: { toString(): string }; authorName: string; content?: string | null; attachments?: EmbeddedAttachment[] }): ReplyPreview => {
   const summary = summarize(t.attachments)
   return {
-    id: t._id.toString(), author: t.authorName, content: (t.content ?? '').slice(0, 80),
+    id: t._id.toString(), author: t.authorName, content: previewSnippet(t.content ?? ''),
     ...(summary ? { attachments: summary } : {}),
   }
 }

@@ -7,7 +7,7 @@ import ServerInviteCard from './ServerInviteCard.vue'
 import ThemeCard from './ThemeCard.vue'
 import AttachmentList from './AttachmentList.vue'
 import GifImage from './GifImage.vue'
-import { isGifOnly, klipyGifLinks } from '@/utils/attachments'
+import { isGifOnly, klipyGifLinks, previewText } from '@/utils/attachments'
 import { renderMessage, stripMarkers } from '@/utils/richText'
 import { appearance, THEME_CODE_RE } from '@/composables/useAppearance'
 
@@ -185,7 +185,7 @@ const onReplyPillLeave = () => {
             <path d="M9 17l-5-5 5-5M4 12h11a4 4 0 0 1 4 4v1"/>
           </svg>
           <span class="reply-author">{{ p.author }}</span>
-          <span class="reply-content">{{ stripMarkers(p.content) }}</span>
+          <span class="reply-content">{{ stripMarkers(previewText({ content: p.content, summary: p.attachments })) }}</span>
         </div>
       </div>
 

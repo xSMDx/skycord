@@ -2283,7 +2283,7 @@ const loadFriends = async () => {
         name:     d.displayName || d.username,
         avatar:   avatarFor(d.username, d.avatar),
         status:   d.status as any,
-        lastMsg:  d.lastMessage || '',
+        lastMsg:  previewText({ content: d.lastMessage, summary: d.lastAttachments }),
         lastActiveAt: d.lastMessageAt ? +new Date(d.lastMessageAt) : 0,
       }))))
       .catch(e => console.warn('[dms] history unavailable — showing friends only', e))
@@ -2687,7 +2687,7 @@ const setupSocket = () => {
       // without feeding the "jump to present" count, which is for what others said.
       if (windowOf('dm', partnerId).live) pushDMMessage(partnerId, msg)
       const mine = dmsData.value.find(d => d.id === partnerId)
-      if (mine) { mine.lastMsg = payload.content; mine.lastActiveAt = Date.now() }
+      if (mine) { mine.lastMsg = previewText(payload); mine.lastActiveAt = Date.now() }
       return
     }
 
@@ -2698,7 +2698,7 @@ const setupSocket = () => {
     // Update sidebar
     const dm = dmsData.value.find(d => d.id === partnerId)
     if (dm) {
-      dm.lastMsg = payload.content
+      dm.lastMsg = previewText(payload)
       dm.lastActiveAt = Date.now()
       if (!(view.value === 'dm' && activeDM.value?.id === partnerId && appFocused.value)) {
         dm.unread = (dm.unread || 0) + 1
@@ -2711,14 +2711,14 @@ const setupSocket = () => {
         avatar:  payload.authorAvatar || avatarFor(payload.authorName),
         avatarCrop: payload.authorAvatarCrop ?? null,
         status:  'online' as any,
-        lastMsg: payload.content,
+        lastMsg: previewText(payload),
         unread:  1,
         lastActiveAt: Date.now(),
       })
     }
     consider({
       type: 'dm', messageId: String(payload._id ?? payload.id ?? ''), partnerId,
-      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: previewText(payload),
     }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
   })
 
@@ -2800,14 +2800,14 @@ const setupSocket = () => {
     else if (!holdIfAway('group', groupId)) pushGroupMessage(groupId, msg)
     const g = groupsData.value.find(x => x.id === groupId)
     if (g) {
-      g.lastMsg = payload.content
+      g.lastMsg = previewText(payload)
       g.lastMessageAt = payload.createdAt || new Date().toISOString()
       if (!mine && !(view.value === 'group' && activeGroup.value?.id === groupId && appFocused.value)) g.unread = (g.unread || 0) + 1
     }
     consider({
       type: 'group', messageId: String(payload._id ?? ''), groupId,
       groupName: g ? groupDisplayName(g) : 'a group',
-      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: previewText(payload),
     }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
   })
 
@@ -2833,7 +2833,7 @@ const setupSocket = () => {
         channelName: home?.ch.name ?? 'a channel',
         categoryId: home ? (home.ch.category ?? null) : (payload.categoryId ?? null), serverId,
         serverName: home?.srv.name ?? servers.value.find(s => s.id === serverId)?.name ?? 'a server',
-        authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+        authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: previewText(payload),
         mentionsEveryone: !!payload.mentionsEveryone,
       }
     }
@@ -4136,7 +4136,7 @@ const handleDeleteById = (msgId: number) => {
   const msg  = list.find(m => m.id === msgId)
   if (!msg) return
 
-  const body = stripMarkers(msg.content || "").replace(/\s+/g, " ").trim()
+  const body = stripMarkers(previewText(msg)).replace(/\s+/g, " ").trim()
   const preview = body.length > DELETE_PREVIEW_MAX
     ? body.slice(0, DELETE_PREVIEW_MAX) + "…"
     : body
