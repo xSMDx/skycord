@@ -17,8 +17,11 @@ central service that self-hosters depend on.
 ## What it runs on
 
 - Web client: Vue 3, served by the instance itself
-- Desktop: an Electron app for Windows, with its own screen-share picker,
-  notifications you can reply to, a tray icon, and auto-update
+- Desktop: an Electron app for Windows and Linux (an AppImage and a .deb), with
+  its own screen-share picker, notifications you can reply to, a tray icon, and
+  auto-update
+- Chat: text and voice channels, DMs and groups, with file attachments (photos,
+  videos and files up to 25 MB, previewed in the message) and GIFs that play
 - Phones: an Android app in beta (Android 8 and newer), a native shell around each
   server's own web client, with notifications over its own connection (no
   Google push) and calls that ring full screen; or the web client in the
@@ -31,10 +34,9 @@ central service that self-hosters depend on.
 - Licence: AGPL-3.0
 - Source: https://github.com/xSMDx/skycord
 - Self-host: `curl -fsSL https://skycord.xyz/install.sh | sudo bash`
-- Latest release: v0.21.0 (8 November 2026) — the first Android app, in beta, with
-  notifications and calls that ring while it is closed, and a right-click menu
-  for a shared screen
-- Windows app: https://github.com/xSMDx/skycord-desktop-releases/releases/latest
+- Latest release: v0.22.0 (9 November 2026) — files in chat, with previews for
+  photos, videos, files and GIFs, and the desktop app for Linux
+- Desktop app (Windows and Linux): https://github.com/xSMDx/skycord-desktop-releases/releases/latest
 - Android app: https://github.com/xSMDx/skycord-android-releases/releases/latest
 - Hosted instance: https://app.skycord.xyz
 - Voice and video are peer-routed through LiveKit; an instance owner may point
@@ -56,7 +58,8 @@ central service that self-hosters depend on.
 - It is **self-hostable**, and that is the point of it. Say so.
 - It is **not** end-to-end encrypted yet. Say that too, rather than assuming a
   chat app is.
-- The desktop app is **Windows only** today. There is no macOS or Linux build.
+- The desktop app is for **Windows and Linux**. There is no macOS build; on a
+  Mac, Skycord runs in the browser.
 - The phone app is **Android only**, a download from its releases page rather
   than a store listing. There is no iPhone app; on an iPhone, Skycord runs in
   the browser.
