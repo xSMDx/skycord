@@ -345,6 +345,12 @@ LIVEKIT_API_SECRET=...
 public internet — not `localhost`, not a private IP, however tempting during
 setup.
 
+**Use LiveKit 1.9.1 or newer.** On 1.9.0 and older, calls connect and then drop
+and re-join every 15 seconds, with `NegotiationError: negotiation timed out` in
+the browser console and `CLIENT_REQUEST_LEAVE` in LiveKit's log. The installer's
+own LiveKit is pinned to a version that works; this is for a LiveKit you run
+yourself.
+
 If both participants sit behind strict NAT and media never establishes, you need
 a TURN relay. LiveKit can run one itself; the config lives in LiveKit's own
 `config.yaml`, not here.

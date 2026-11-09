@@ -4,9 +4,13 @@
 # Two ports, not a range of thousands: media is muxed onto a single UDP port,
 # with TCP as the fallback for networks that block UDP. On a home server that
 # is two port forwards.
+#
+# The web client needs LiveKit 1.9.1 or newer: it waits for the server to echo
+# each offer's id in its answer, which 1.9.0 never does, so on 1.9.0 every call
+# timed out and re-joined every 15 seconds.
 services:
   livekit:
-    image: livekit/livekit-server:v1.9.0
+    image: livekit/livekit-server:v1.13.11
     restart: unless-stopped
     command: ["--config", "/etc/livekit.yaml"]
     volumes:
