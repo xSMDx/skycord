@@ -26,6 +26,7 @@ import { useApi, type WireRole } from '@/composables/useApi'
 import { useServers, type ServerMember } from '@/composables/useServers'
 import Avatar from '@/components/ui/Avatar.vue'
 import { avatarFor } from '@/composables/useAvatar'
+import { useModalPart } from '@/composables/modalHistory'
 import '@/styles/settingsShared.css'
 
 const props = defineProps<{ serverId: string; isOwner: boolean }>()
@@ -84,6 +85,7 @@ onMounted(async () => {
     // `ordered`, so nothing here needs to know where it sits.
     roles.value = wire.map(fromWire)
     selectedId.value = roles.value[0]?.id ?? ''
+    if (wanted) { showPlace(wanted); wanted = null }
   } catch (e: any) {
     emit('toast', e?.message || 'Could not load roles')
   } finally {
@@ -158,6 +160,24 @@ const setFlag = (r: Role, key: 'hoist' | 'mentionable', v: boolean) => {
 // ── Editor ────────────────────────────────────────────────────────────────
 const tab = ref<'display' | 'perms' | 'members'>('display')
 const search = ref('')
+
+/*
+ * Back and forward step through the roles and tabs you opened, inside Server
+ * Settings' own history (modalHistory.ts). Until the roles have loaded there is
+ * no page to tell; one asked for before then (back, onto this page) is shown
+ * once they have.
+ */
+interface RolesPlace { role: string; tab: 'display' | 'perms' | 'members' }
+let wanted: RolesPlace | null = null
+const showPlace = (p: RolesPlace) => {
+  // A role deleted since: the first one, as after a delete.
+  selectedId.value = roles.value.some(r => r.id === p.role) ? p.role : roles.value[0]?.id ?? ''
+  tab.value = p.tab
+}
+useModalPart<RolesPlace>('roles', {
+  read: () => (loading.value ? undefined : { role: selected.value?.id ?? '', tab: tab.value }),
+  go: p => { if (loading.value) wanted = p; else showPlace(p) },
+})
 
 /** Groups with their permissions filtered by the search box; empty ones drop. */
 const visibleGroups = computed(() => {

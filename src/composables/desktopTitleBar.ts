@@ -8,30 +8,15 @@
  */
 import { watch, onScopeDispose, type ComputedRef } from 'vue'
 import { appBridge } from './desktopBridge'
+import { createNavHistory } from './navHistory'
+import { modalNav, navigateModals } from './modalHistory'
+
+export { createNavHistory }
 
 export type View = 'friends' | 'dm' | 'server' | 'group' | 'discover'
 export interface Place { view: View; serverId: string | null; channelId: string | null; dmId: string | null; groupId: string | null }
 
 export const placeKey = (p: Place): string => [p.view, p.serverId, p.channelId, p.dmId, p.groupId].map(x => x ?? '').join(':')
-
-/** Places visited, browser-style: a new place after going back drops the way forward. */
-export const createNavHistory = <T>(key: (entry: T) => string, limit = 50) => {
-  let entries: T[] = []
-  let at = -1
-  return {
-    push(entry: T) {
-      if (at >= 0 && key(entries[at]) === key(entry)) { entries[at] = entry; return }
-      entries = entries.slice(0, at + 1)
-      entries.push(entry)
-      if (entries.length > limit) entries.shift()
-      at = entries.length - 1
-    },
-    back(): T | null { if (at <= 0) return null; at -= 1; return entries[at] },
-    forward(): T | null { if (at >= entries.length - 1) return null; at += 1; return entries[at] },
-    get canBack() { return at > 0 },
-    get canForward() { return at < entries.length - 1 },
-  }
-}
 
 export interface TitleInfo { title: string; kind: 'friends' | 'dms' | 'server' | 'discover'; icon: string | null }
 
@@ -91,16 +76,20 @@ export const useDesktopTitleBar = (opts: {
   // While stepping back or forward, the places passed on the way aren't visits.
   let stepping = false
 
+  // While a modal is open, back and forward are its own (modalHistory.ts), and so
+  // is what the buttons offer; the app's history waits, untouched, underneath.
   const report = () => bar.update({
     ...titleOf(opts.place.value.view, opts.server.value, opts.channel.value, location.origin),
-    canBack: history.canBack,
-    canForward: history.canForward,
+    canBack: modalNav.value?.canBack ?? history.canBack,
+    canForward: modalNav.value?.canForward ?? history.canForward,
   })
   watch(opts.place, p => { if (!stepping) history.push(p); report() }, { immediate: true })
   // A rename, or a new icon, while you're there.
   watch([opts.server, opts.channel], report)
+  watch(modalNav, report, { deep: true })
 
   const step = async (dir: 'back' | 'forward') => {
+    if (navigateModals(dir)) return
     if (stepping) return
     stepping = true
     try {

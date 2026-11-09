@@ -22,6 +22,7 @@ import { useApi } from '@/composables/useApi'
 import { useAuth } from '@/composables/useAuth'
 import { avatarFor } from '@/composables/useAvatar'
 import StatusDot from '@/components/ui/StatusDot.vue'
+import type { ModalPages } from '@/composables/modalHistory'
 
 const props = defineProps<{ userId: string }>()
 // Emits the whole user, not just an id: a mutual friend you aren't friends with
@@ -44,6 +45,12 @@ const error        = ref('')
 // mutual friend; the prop stays the entry point.
 const currentId = ref(props.userId)
 watch(() => props.userId, id => { currentId.value = id })
+// Each profile you walk to is a page: back returns to the one before
+// (modalHistory.ts), and from the first one closes.
+const pages: ModalPages<string> = {
+  read: () => currentId.value,
+  go: id => { currentId.value = id },
+}
 
 const load = async (id: string) => {
   loading.value = true; error.value = ''
@@ -110,7 +117,7 @@ const copyId = () => {
 </script>
 
 <template>
-  <ModalBase :width="isSelf ? '440px' : '960px'" @close="emit('close')">
+  <ModalBase :width="isSelf ? '440px' : '960px'" :pages="pages" @close="emit('close')">
     <div class="up" :class="{ solo: isSelf }">
       <button class="up-close" aria-label="Close" @click="emit('close')"><X :size="18" :stroke-width="2.25" /></button>
 

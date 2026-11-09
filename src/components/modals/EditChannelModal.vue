@@ -10,6 +10,7 @@ import { useServers } from '@/composables/useServers'
 import { formatChannelName } from '@/utils/channelName'
 import type { Channel } from '@/types'
 import PermissionsTab from '@/components/settings/PermissionsTab.vue'
+import type { ModalPages } from '@/composables/modalHistory'
 
 /** The sidebar's Channel, not WireChannel — that is what the call site has,
  *  and its Overview fields are optional, so everything below defaults. */
@@ -39,6 +40,11 @@ const TABS = [
 ] as const
 type TabId = typeof TABS[number]['id']
 const tab = ref<TabId>('overview')
+// Back and forward step through the tabs you opened (modalHistory.ts).
+const pages: ModalPages<TabId> = {
+  read: () => tab.value,
+  go: t => { tab.value = t },
+}
 
 // ── Permissions tab ───────────────────────────────────────────────────────
 const permRoles = ref<WireRole[]>([])
@@ -200,7 +206,7 @@ const expiry = (iso: string | null) => {
 </script>
 
 <template>
-  <ModalBase width="740px" @close="emit('close')">
+  <ModalBase width="740px" :pages="pages" @close="emit('close')">
     <div class="ec">
       <!-- Rail -->
       <aside class="ec-rail">

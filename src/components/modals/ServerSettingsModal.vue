@@ -20,6 +20,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useViewport } from '@/composables/useViewport'
 import ServerProfilePage from '../settings/server/ServerProfilePage.vue'
 import RolesPage from '../settings/server/RolesPage.vue'
+import { useModalHistory } from '@/composables/modalHistory'
 import '@/styles/settingsShared.css'
 
 const props = defineProps<{ serverId: string }>()
@@ -87,11 +88,35 @@ const currentLabel = computed(() =>
 
 /** On a phone the nav is a screen of its own, pushed aside by the detail. */
 const mobileDetail = ref(false)
-watch(isMobile, m => { if (!m) mobileDetail.value = false })
+// Not a step of yours, so back and forward don't count it (`nav` is below).
+watch(isMobile, m => nav.quietly(() => { if (!m) mobileDetail.value = false }))
 const selectPage = (id: string) => {
   page.value = id
   if (isMobile.value) mobileDetail.value = true
 }
+
+/*
+ * Back and forward — the desktop title bar, the mouse's buttons, Alt+Left and
+ * Alt+Right, the Android back button, a browser's history — go through the
+ * pages you opened here (and the roles editor's own steps), and close from the
+ * first one; the app behind never moves (modalHistory.ts). As in Settings, on a
+ * phone the list is one place whichever page was last open behind it.
+ */
+interface ServerSettingsPlace { page: string; detail: boolean }
+const overlayEl = ref<HTMLElement | null>(null)
+const nav = useModalHistory<ServerSettingsPlace>({
+  el: () => overlayEl.value,
+  close: () => emit('close'),
+  read: () => isMobile.value && !mobileDetail.value
+    ? { page: '', detail: false }
+    : { page: page.value, detail: isMobile.value },
+  go: s => {
+    if (s.page) page.value = s.page
+    if (isMobile.value) mobileDetail.value = s.detail
+  },
+})
+/** The phone's back arrow (and Escape there) is a back like any other. */
+const backToList = () => nav.backOr(prev => !prev.detail, () => { mobileDetail.value = false })
 
 onMounted(async () => {
   try { server.value = (await getServerDetail(props.serverId)).server }
@@ -103,7 +128,7 @@ onMounted(async () => {
 // actually looking at.
 const onKey = (e: KeyboardEvent) => {
   if (e.key !== 'Escape') return
-  if (isMobile.value && mobileDetail.value) { mobileDetail.value = false; return }
+  if (isMobile.value && mobileDetail.value) { backToList(); return }
   emit('close')
 }
 onMounted(() => window.addEventListener('keydown', onKey))
@@ -112,7 +137,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <Teleport to="body">
-    <div class="sv-overlay" data-overlay>
+    <div ref="overlayEl" class="sv-overlay" data-overlay>
       <div class="sv" :class="{ mobile: isMobile, 'm-detail': mobileDetail }">
 
         <!-- ── Nav ── -->
@@ -161,7 +186,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <!-- On a phone the detail is its own screen: the section's name, a back
                arrow to the list and a close, as in user settings. -->
           <div v-if="isMobile" class="sv-mhead sv-mhead-detail">
-            <button class="sv-mhead-btn" aria-label="Back to server settings" @click="mobileDetail = false">
+            <button class="sv-mhead-btn" aria-label="Back to server settings" @click="backToList">
               <ChevronLeft :size="22" :stroke-width="2.25" />
             </button>
             <h2 class="sv-mhead-title">{{ currentLabel }}</h2>
