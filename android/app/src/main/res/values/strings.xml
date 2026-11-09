@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Skycord</string>
     <string name="unreachable_title">Can’t reach %1$s</string>
     <string name="unreachable_body">Check your connection, or that the server is running.</string>
@@ -25,6 +25,20 @@
     <string name="notice_reply_hint">Write a reply</string>
     <string name="notice_send_failed">Couldn’t send — open Skycord to try again</string>
     <string name="notice_signed_out">Signed out — open Skycord to sign in</string>
+
+    <!-- A message sent as files alone: what its notification says instead of text. The web client's own
+         words (previewText in src/utils/attachments.ts); one file is called by its name. The counted ones
+         are only ever for two or more (one has its own words above), so they are not plurals. -->
+    <string name="notice_sent_photo">Sent a photo</string>
+    <string name="notice_sent_video">Sent a video</string>
+    <string name="notice_gif">GIF</string>
+    <string name="notice_sent_photos" tools:ignore="PluralsCandidate">Sent %1$d photos</string>
+    <string name="notice_sent_videos" tools:ignore="PluralsCandidate">Sent %1$d videos</string>
+    <string name="notice_sent_files" tools:ignore="PluralsCandidate">Sent %1$d files</string>
+
+    <!-- Saving a chat attachment to the phone's Downloads (MainActivity). Android's own download notification follows. -->
+    <string name="download_started">Downloading %1$s…</string>
+    <string name="download_failed">Couldn’t save %1$s</string>
 
     <!-- A call that rings (the Calls channel), the screen it opens, and the one left behind when nobody answered. -->
     <string name="call_incoming">Incoming call</string>

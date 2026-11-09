@@ -66,10 +66,19 @@ object NoticeText {
 
     /**
      * The message as the notification shows it: plain text, markers turned into
-     * words, cut short. A message with nothing left to show (a picture alone, say)
-     * gets [fallback], as the web's notices say "New message".
+     * words, cut short. A message sent as files alone says what was sent, in the
+     * web client's words ([AttachmentText]: "Sent a photo", "notes.pdf", "Sent 3
+     * files"), as the web's notices do. A message with nothing left to show gets
+     * [fallback], as the web's notices say "New message".
      */
-    fun body(content: String, fallback: String): String = plainBody(content).ifEmpty { fallback }
+    fun body(
+        content: String,
+        fallback: String,
+        attachments: AttachmentSummary? = null,
+        words: AttachmentText.Words = AttachmentText.Words(),
+    ): String = plainBody(content)
+        .ifEmpty { attachments?.let { plainBody(AttachmentText.describe(it, words)) }.orEmpty() }
+        .ifEmpty { fallback }
 
     /**
      * The missed-call notification's title: "Missed call from Sam". [template] is the

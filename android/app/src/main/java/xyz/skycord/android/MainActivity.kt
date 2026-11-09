@@ -1,6 +1,7 @@
 package xyz.skycord.android
 
 import android.Manifest
+import android.app.DownloadManager
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -11,6 +12,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -29,6 +31,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
@@ -43,6 +46,7 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
+import xyz.skycord.android.core.AttachmentDownload
 import xyz.skycord.android.core.BackAction
 import xyz.skycord.android.core.BackGate
 import xyz.skycord.android.core.CssColor
@@ -150,6 +154,18 @@ class MainActivity : AppCompatActivity() {
         val callback = fileCallback ?: return@registerForActivityResult
         fileCallback = null
         callback.onReceiveValue(pickedUris(result.resultCode, result.data))
+    }
+
+    /** An attachment to save: where from, under what name, as what type, and the page's user agent. */
+    private class Download(val url: String, val name: String, val mime: String?, val userAgent: String?)
+
+    /** Downloads tapped while Android 8 or 9 asks for storage (saveAttachment): they all go once it is answered. */
+    private val waitingDownloads = mutableListOf<Download>()
+
+    private val askStorage = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val waiting = waitingDownloads.toList()
+        waitingDownloads.clear()
+        waiting.forEach { enqueueDownload(it, shared = granted) }
     }
 
     // The one-time questions (askFirstRun): at most one on screen, whichever it is.
@@ -420,6 +436,12 @@ class MainActivity : AppCompatActivity() {
             override fun onPermissionRequestCanceled(request: PermissionRequest) {
                 if (pendingPermission?.first == request) pendingPermission = null
             }
+        }
+
+        // A navigation the WebView turns into a download (an attachment opened by its address). A Download
+        // link's click never arrives here: the bridge's shim passes it on instead (saveAttachmentLink).
+        web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            saveAttachment(url, userAgent, AttachmentDownload.fileName(contentDisposition, url), AttachmentDownload.mimeType(mimeType))
         }
     }
 
@@ -737,6 +759,68 @@ class MainActivity : AppCompatActivity() {
             fileCallback = null
             callback.onReceiveValue(null)
             true
+        }
+    }
+
+    /**
+     * A file card's or the large view's Download, which the bridge passes on: WebView does nothing with an
+     * <a download> click, so the page's shim takes it (app-shim.js). [name] is the link's own; the type
+     * comes from the server's answer.
+     */
+    fun saveAttachmentLink(url: String, name: String?) =
+        saveAttachment(url, web.settings.userAgentString, AttachmentDownload.linkName(name, url), mime = null)
+
+    /**
+     * An attachment to save, under [name]. Only the current server's own attachments (core/AttachmentDownload),
+     * from its own page, are saved, the way the file picker and the microphone are only the current
+     * server's. They go to the phone's Downloads through Android's DownloadManager, which shows its own
+     * progress and done notification (a tap opens the file). The attachment route needs no sign-in, so no
+     * cookie goes with the request. Android 8 and 9 need the storage permission to write to Downloads: it is
+     * asked at a download, and if it is refused the file goes to the app's own Downloads folder instead
+     * (still opened from the notification, but removed with the app).
+     */
+    private fun saveAttachment(url: String, userAgent: String?, name: String, mime: String?) {
+        val server = currentServer
+        if (!AttachmentDownload.isAttachment(url, server) || Origins.of(web.url ?: "") != server) {
+            Log.w("MainActivity", "refused a download that is not the current server's attachment")
+            return
+        }
+        val download = Download(url, name, mime, userAgent)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // One prompt at a time (a second would cancel the first): whatever is tapped meanwhile waits for the same answer.
+            waitingDownloads += download
+            if (waitingDownloads.size == 1) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+        enqueueDownload(download, shared = true)
+    }
+
+    /** Hands [d] to DownloadManager: into the phone's Downloads when [shared], else into the app's own. */
+    private fun enqueueDownload(d: Download, shared: Boolean) {
+        try {
+            val manager = getSystemService(DownloadManager::class.java) ?: throw IllegalStateException("no DownloadManager")
+            val request = DownloadManager.Request(Uri.parse(d.url))
+                .setTitle(d.name)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            d.mime?.let { request.setMimeType(it) }
+            d.userAgent?.takeIf { it.isNotBlank() }?.let { request.addRequestHeader("User-Agent", it) }
+            if (shared) {
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, d.name)
+                // Before Android 10 a file in shared storage reaches the gallery and the file apps only once scanned.
+                @Suppress("DEPRECATION") // deprecated from API 29, where scanning is automatic
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) request.allowScanningByMediaScanner()
+            } else {
+                request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, d.name)
+            }
+            manager.enqueue(request)
+            Toast.makeText(this, getString(R.string.download_started, d.name), Toast.LENGTH_SHORT).show()
+        } catch (e: RuntimeException) {
+            // IllegalStateException: no shared storage, or its Downloads folder cannot be made.
+            // IllegalArgumentException: the phone's Download Manager app is switched off. SecurityException: storage refused after all.
+            Log.w("MainActivity", "couldn't start a download: ${e.javaClass.simpleName}")
+            Toast.makeText(this, getString(R.string.download_failed, d.name), Toast.LENGTH_SHORT).show()
         }
     }
 

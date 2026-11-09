@@ -104,6 +104,37 @@ class NoticeTextTest {
         assertEquals("New message", NoticeText.body("``` ```", "New message"))
     }
 
+    // A message sent as files alone says what was sent, as the web's notices do (previewText).
+    private val photo = AttachmentSummary(1, "image", "IMG_1.jpg", "image/jpeg")
+    private val pdf = AttachmentSummary(1, "file", "notes.pdf", "application/pdf")
+
+    @Test fun filesAlone_sayWhatWasSent() {
+        assertEquals("Sent a photo", NoticeText.body("", "New message", photo))
+        assertEquals("GIF", NoticeText.body("", "New message", AttachmentSummary(1, "image", "a.gif", "image/gif")))
+        assertEquals("Sent a video", NoticeText.body("", "New message", AttachmentSummary(1, "video", "a.mp4", "video/mp4")))
+        assertEquals("notes.pdf", NoticeText.body("  \n ", "New message", pdf))
+        assertEquals("Sent 3 photos", NoticeText.body("", "New message", AttachmentSummary(3, "image", "a.jpg", "image/jpeg")))
+        assertEquals("Sent 2 videos", NoticeText.body("", "New message", AttachmentSummary(2, "video", "a.mp4", "video/mp4")))
+        assertEquals("Sent 2 files", NoticeText.body("", "New message", AttachmentSummary(2, "file", "a.pdf", "application/pdf")))
+    }
+
+    @Test fun aCaption_isShownOverTheFiles() {
+        assertEquals("look at this", NoticeText.body("look at **this**", "New message", photo))
+    }
+
+    @Test fun theFilesWords_comeFromTheGivenStrings() {
+        val words = AttachmentText.Words(photo = "Photo", files = "%1\$d files")
+        assertEquals("Photo", NoticeText.body("", "New message", photo, words))
+        assertEquals("4 files", NoticeText.body("", "New message", AttachmentSummary(4, "file", "a", ""), words))
+    }
+
+    @Test fun aFilesName_isPlainTextLikeAnyMessage() {
+        // A name is the sender's to choose: markers in it are words, as in a message.
+        assertEquals("@Sam.pdf", NoticeText.body("", "New message", AttachmentSummary(1, "file", "<@Sam>.pdf", "")))
+        // A file with no name left to show falls back like an empty message.
+        assertEquals("New message", NoticeText.body("", "New message", AttachmentSummary(1, "file", "", "")))
+    }
+
     // ---- who said it ----------------------------------------------------------------------------
 
     @Test fun theAuthorIsTheSameWhereverTheMessageCameFrom() {

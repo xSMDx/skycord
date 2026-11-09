@@ -107,5 +107,21 @@
       requestBatteryExemption: () => fire('androidNotifications.requestBatteryExemption'),
     }),
   })
+  // A chat attachment's Download: the <a download> on a file card or in the large view. WebView does
+  // nothing with such a click (it never reaches the app's DownloadListener), so the shim takes it and the
+  // app saves the file to the phone's Downloads (MainActivity.saveAttachmentLink, which checks the address
+  // again). Only this server's own attachments; any other link is left alone. On window, in the capture
+  // phase: before any of the page's own handlers.
+  const ATTACHMENT_PATH = /^\/messages\/attachments\/[A-Za-z0-9_-]{1,64}\/[^/]+$/
+  window.addEventListener('click', (event) => {
+    const target = event.target
+    const link = target && typeof target.closest === 'function' ? target.closest('a[download]') : null
+    if (!link) return
+    let url
+    try { url = new URL(link.getAttribute('href') || '', location.href) } catch { return }
+    if (url.origin !== location.origin || !ATTACHMENT_PATH.test(url.pathname)) return
+    event.preventDefault()
+    fire('download', url.href, link.getAttribute('download') || '')
+  }, true)
   send({ type: 'hello' })
 })()
