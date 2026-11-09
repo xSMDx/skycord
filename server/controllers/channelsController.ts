@@ -7,7 +7,8 @@ import { Category } from '../models/Category'
 import { loadServer, requireOwner, shapeChannel, emitToServer } from './serversController'
 import { Message } from '../models/Message'
 import { User } from '../models/User'
-import { resolveMessages } from './messagesController'
+import { resolveMessages, toReplyPreview } from './messagesController'
+import { createWithAttachments, hasKeys, wireAttachments } from '../services/attachments'
 import { getIO, rememberChannelServer, forgetChannelServer } from '../sockets/chatSocket'
 import { loadAccess, channelBits, has, requirePerm, requireBits, validateOverwrites } from '../utils/access'
 import { parseOverwrites } from '../permissions'
@@ -431,8 +432,14 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       res.status(403).json({ message: 'You cannot send messages in this channel' }); return
     }
 
-    const { content, replyToIds } = req.body as { content?: string; replyToIds?: string[] }
-    if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
+    const { content, replyToIds, attachments: keys } = req.body as { content?: string; replyToIds?: string[]; attachments?: unknown }
+    if (!content?.trim() && !hasKeys(keys)) { res.status(400).json({ message: 'Content required' }); return }
+
+    // Before slowmode and before anything is claimed, so a refusal costs the
+    // member nothing: their uploads stay theirs to send somewhere else.
+    if (hasKeys(keys) && !has(found.bits, 'AttachFiles')) {
+      res.status(403).json({ message: 'You can’t attach files in this channel.' }); return
+    }
 
     /**
      * Slowmode.
@@ -487,13 +494,13 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
     // nothing at all — silently dropped, never leaked.
     const targets = ids.length
       ? await Message.find({ _id: { $in: ids }, conversationId: found.channel._id.toString() })
-          .select('authorName content').lean()
+          .select('authorName content attachments').lean()
       : []
     const byId = new Map(targets.map(t => [t._id.toString(), t]))
     const replyTo = ids
       .map(id => byId.get(id))
       .filter((t): t is NonNullable<typeof t> => !!t)
-      .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+      .map(toReplyPreview)
 
     const channelId = found.channel._id.toString()
     /*
@@ -507,17 +514,19 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
      * The pattern matches the client's old inline regex so the visible
      * behaviour is unchanged for anyone who does hold the bit.
      */
-    const mentionsEveryone = /@(everyone|here)\b/.test(content)
+    const mentionsEveryone = /@(everyone|here)\b/.test(content ?? '')
       && has(found.bits, 'MentionEveryone')
 
-    const msg = await Message.create({
+    const made = await createWithAttachments(keys, userId, channelId, (_id, attachments) => Message.create({
+      _id,
+      attachments,
       conversationId:   channelId,
       kind:             'channel',
       authorId:         userId,
       authorName:       sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:     sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
-      content:          wellFormed(content.trim()),
+      content:          wellFormed((content ?? '').trim()),
       mentionsEveryone,
       // Persist only the ids that survived the channel-scoped validation
       // above (replyTo.map), never the raw request-body ids. Storing `ids`
@@ -528,7 +537,9 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       // snippet back in on every future GET of this channel — a permanent
       // leak, not merely a one-time echo.
       replyToIds:       replyTo.map(r => r.id),
-    })
+    }))
+    if (!made.ok) { res.status(made.status).json({ message: made.message }); return }
+    const msg = made.value
 
     const payload = {
       _id:              msg._id.toString(),
@@ -544,6 +555,7 @@ export const sendChannelMessage = async (req: Request, res: Response, next: Next
       authorAvatar:     sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:          msg.content,
+      attachments:      wireAttachments(msg.attachments),
       reactions:        [],
       pinned:           false,
       mentionsEveryone,

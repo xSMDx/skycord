@@ -2,7 +2,7 @@
 import {
   ref, computed, nextTick, onMounted, onBeforeUnmount, watch, watchEffect } from 'vue'
 import {
-  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff, Music2,
+  Hash, Volume2, Plus, ChevronRight, ChevronLeft, Search, Users, ChevronDown, Mic, MicOff, Headphones, Settings, Pin, BellOff, PanelLeft, Compass, MessageCircle, X, UserPlus, HeadphoneOff, Check, Ellipsis, Pencil, UsersRound, Copy, Phone, Camera, PhoneOff, Smile, CornerUpLeft, Trash2, SmilePlus, GitBranch, Inbox, Moon, CameraOff, Music2, Upload,
 } from 'lucide-vue-next'
 
 import { useAuth }                          from '@/composables/useAuth'
@@ -57,6 +57,8 @@ import ModalBase           from '@/components/modals/ModalBase.vue'
 
 import MessageList   from '@/components/chat/MessageList.vue'
 import MessageInput  from '@/components/chat/MessageInput.vue'
+import { useAttachmentTray } from '@/composables/useAttachmentTray'
+import { previewText } from '@/utils/attachments'
 import ServerInviteCard from '@/components/chat/ServerInviteCard.vue'
 import ReactionPickerModal  from '@/components/modals/ReactionPickerModal.vue'
 import ReplyTreeModal       from '@/components/modals/ReplyTreeModal.vue'
@@ -1599,7 +1601,7 @@ const musicModal = ref(false)
  * page, so the music button vanished on every reload. The shell asks for
  * it itself now. Idempotent: one request per page load, shared.
  */
-useInstance()
+const { profile: instanceProfile } = useInstance()
 
 // Resolving costs a request per server, so it waits until the room is
 // actually opened rather than running for everyone on every page load.
@@ -2281,7 +2283,7 @@ const loadFriends = async () => {
         name:     d.displayName || d.username,
         avatar:   avatarFor(d.username, d.avatar),
         status:   d.status as any,
-        lastMsg:  d.lastMessage || '',
+        lastMsg:  previewText({ content: d.lastMessage, summary: d.lastAttachments }),
         lastActiveAt: d.lastMessageAt ? +new Date(d.lastMessageAt) : 0,
       }))))
       .catch(e => console.warn('[dms] history unavailable — showing friends only', e))
@@ -2685,7 +2687,7 @@ const setupSocket = () => {
       // without feeding the "jump to present" count, which is for what others said.
       if (windowOf('dm', partnerId).live) pushDMMessage(partnerId, msg)
       const mine = dmsData.value.find(d => d.id === partnerId)
-      if (mine) { mine.lastMsg = payload.content; mine.lastActiveAt = Date.now() }
+      if (mine) { mine.lastMsg = previewText(payload); mine.lastActiveAt = Date.now() }
       return
     }
 
@@ -2696,7 +2698,7 @@ const setupSocket = () => {
     // Update sidebar
     const dm = dmsData.value.find(d => d.id === partnerId)
     if (dm) {
-      dm.lastMsg = payload.content
+      dm.lastMsg = previewText(payload)
       dm.lastActiveAt = Date.now()
       if (!(view.value === 'dm' && activeDM.value?.id === partnerId && appFocused.value)) {
         dm.unread = (dm.unread || 0) + 1
@@ -2709,14 +2711,14 @@ const setupSocket = () => {
         avatar:  payload.authorAvatar || avatarFor(payload.authorName),
         avatarCrop: payload.authorAvatarCrop ?? null,
         status:  'online' as any,
-        lastMsg: payload.content,
+        lastMsg: previewText(payload),
         unread:  1,
         lastActiveAt: Date.now(),
       })
     }
     consider({
       type: 'dm', messageId: String(payload._id ?? payload.id ?? ''), partnerId,
-      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: previewText(payload),
     }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
   })
 
@@ -2798,14 +2800,14 @@ const setupSocket = () => {
     else if (!holdIfAway('group', groupId)) pushGroupMessage(groupId, msg)
     const g = groupsData.value.find(x => x.id === groupId)
     if (g) {
-      g.lastMsg = payload.content
+      g.lastMsg = previewText(payload)
       g.lastMessageAt = payload.createdAt || new Date().toISOString()
       if (!mine && !(view.value === 'group' && activeGroup.value?.id === groupId && appFocused.value)) g.unread = (g.unread || 0) + 1
     }
     consider({
       type: 'group', messageId: String(payload._id ?? ''), groupId,
       groupName: g ? groupDisplayName(g) : 'a group',
-      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+      authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: previewText(payload),
     }, payload.authorAvatar || avatarFor(payload.authorName ?? ''))
   })
 
@@ -2831,7 +2833,7 @@ const setupSocket = () => {
         channelName: home?.ch.name ?? 'a channel',
         categoryId: home ? (home.ch.category ?? null) : (payload.categoryId ?? null), serverId,
         serverName: home?.srv.name ?? servers.value.find(s => s.id === serverId)?.name ?? 'a server',
-        authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: payload.content ?? '',
+        authorId: payload.authorId, authorName: payload.authorName ?? 'Someone', content: previewText(payload),
         mentionsEveryone: !!payload.mentionsEveryone,
       }
     }
@@ -3836,9 +3838,54 @@ const onServerCreated = async (serverId: string) => {
 }
 
 // ── Send message ───────────────────────────────────────────────────────────
+// ── Attachments in the composer ─────────────────────────────────────────────
+// The tray belongs to the conversation it was filled in (see useAttachmentTray);
+// these say which conversation that is, whether files may go there, and how big.
+const tray = useAttachmentTray()
+const composerRef = ref<InstanceType<typeof MessageInput> | null>(null)
+const convKey = computed(() =>
+  view.value === 'dm' && activeDM.value ? `dm:${activeDM.value.id}`
+  : view.value === 'group' && activeGroup.value ? `group:${activeGroup.value.id}`
+  : view.value === 'server' && activeChannelId.value ? `chan:${activeChannelId.value}`
+  : 'none')
+/** DMs and groups have no roles; a server's say so. Presentation only — the
+ *  send is checked again, against the channel's own overwrites too. */
+const canAttach = computed(() => view.value !== 'server' || canInServer(activeServerId.value, 'AttachFiles'))
+const attachLimits = computed(() => instanceProfile.value?.attachments ?? { maxBytes: 25 * 1024 * 1024, maxFiles: 10 })
+const dropTarget = computed(() =>
+  view.value === 'dm' && activeDM.value ? `@${activeDM.value.name}`
+  : view.value === 'group' && activeGroup.value ? groupDisplayName(activeGroup.value)
+  : `#${activeChannel.value?.name ?? ''}`)
+
+// Dropping files anywhere on the conversation. dragenter/dragleave fire for
+// every child crossed, so a depth count — not a boolean — says when the
+// pointer has really left.
+const dragDepth = ref(0)
+const draggingFiles = computed(() => dragDepth.value > 0)
+const carriesFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes('Files')
+const onDragEnter = (e: DragEvent) => { if (carriesFiles(e)) { e.preventDefault(); dragDepth.value++ } }
+const onDragOver = (e: DragEvent) => {
+  if (!carriesFiles(e)) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = canAttach.value ? 'copy' : 'none'
+}
+const onDragLeave = (e: DragEvent) => { if (carriesFiles(e)) dragDepth.value = Math.max(0, dragDepth.value - 1) }
+const onDrop = (e: DragEvent) => {
+  if (!carriesFiles(e)) return
+  e.preventDefault()
+  dragDepth.value = 0
+  composerRef.value?.addFiles([...(e.dataTransfer?.files ?? [])])
+}
+
 const doSend = async () => {
   const text = newMessage.value.trim()
-  if (!text || sendingMsg.value) return
+  const conv = convKey.value
+  // Null while a file is still going up or cannot go; the composer holds
+  // Send then too, so this only guards a stray Enter.
+  const ready = tray.ready(conv)
+  if (sendingMsg.value || ready === null) return
+  if (!text && ready.length === 0) return
+  const keys = ready.map(a => a.key)
 
   // A sent message goes on the newest end, which is not what is on screen while
   // you are back in history — so go there first, then send.
@@ -3851,6 +3898,7 @@ const doSend = async () => {
   if (view.value === 'dm' && activeDM.value) {
     sendingMsg.value = true
     newMessage.value = ''
+    const taken = tray.take(conv)
     if (_typingTimer) clearTimeout(_typingTimer)
     sendTypingStop(activeDM.value.id)
 
@@ -3862,18 +3910,19 @@ const doSend = async () => {
     // Optimistic add
     const optimistic = sendDM(
       activeDM.value.id, name, userId, myAvatar.value, text,
-      replies.map(r => ({ id: r.id, author: r.author, content: '' }))
+      replies.map(r => ({ id: r.id, author: r.author, content: '' })),
+      ready,
     )
     const dm = dmsData.value.find(d => d.id === activeDM.value!.id)
-    if (dm) { dm.lastMsg = text; dm.lastActiveAt = Date.now() }
+    if (dm) { dm.lastMsg = previewText({ content: text, attachments: ready }); dm.lastActiveAt = Date.now() }
 
     await nextTick(); msgListRef.value?.scrollToBottom()
 
     try {
       if (socketConnected.value) {
         const ack = replyIds.length
-          ? await sendReplySocket(activeDM.value.id, text, replyIds, name, myAvatar.value)
-          : await sendDMSocket(activeDM.value.id, text, name, myAvatar.value)
+          ? await sendReplySocket(activeDM.value.id, text, replyIds, name, myAvatar.value, keys)
+          : await sendDMSocket(activeDM.value.id, text, name, myAvatar.value, [], keys)
         if (!ack.ok) throw new Error(ack.error)
         // Stamp dbId + resolved reply previews so socket ops work + pills show authors
         if (ack.message?._id) {
@@ -3884,7 +3933,7 @@ const doSend = async () => {
       } else {
         // Stamp from the 201 as the socket branch does from its ack, so the
         // echo the server now sends back to our own sockets finds it and stops.
-        const res = await sendDMRest(activeDM.value.id, text, name, myAvatar.value, replyIds)
+        const res = await sendDMRest(activeDM.value.id, text, name, myAvatar.value, replyIds, keys)
         const msgs = getDMMessages(activeDM.value.id)
         const m = msgs.find(m => m.id === optimistic.id)
         if (m && res.message?._id) { (m as any).dbId = res.message._id; if (res.message.replyTo) m.replyTo = res.message.replyTo as any }
@@ -3894,12 +3943,15 @@ const doSend = async () => {
       const msgs = getDMMessages(activeDM.value.id)
       const m = msgs.find(m => m.id === optimistic.id)
       if (m) (m as any).failed = true
+      // The files were never claimed: give them back to send again.
+      tray.restore(conv, taken)
     } finally {
       sendingMsg.value = false
     }
   } else if (view.value === 'group' && activeGroup.value) {
     sendingMsg.value = true
     newMessage.value = ''
+    const taken = tray.take(conv)
     if (_typingTimer) clearTimeout(_typingTimer)
 
     const replies  = replyTargetMeta.value
@@ -3908,16 +3960,17 @@ const doSend = async () => {
 
     const optimistic = sendGroup(
       activeGroup.value.id, name, userId, myAvatar.value, text,
-      replies.map(r => ({ id: r.id, author: r.author, content: '' }))
+      replies.map(r => ({ id: r.id, author: r.author, content: '' })),
+      ready,
     )
     const gEntry = groupsData.value.find(d => d.id === activeGroup.value!.id)
-    if (gEntry) { gEntry.lastMsg = text; gEntry.lastMessageAt = new Date().toISOString() }
+    if (gEntry) { gEntry.lastMsg = previewText({ content: text, attachments: ready }); gEntry.lastMessageAt = new Date().toISOString() }
 
     await nextTick(); msgListRef.value?.scrollToBottom()
 
     try {
       if (socketConnected.value) {
-        const ack = await sendGroupSocket(activeGroup.value.id, text, name, replyIds)
+        const ack = await sendGroupSocket(activeGroup.value.id, text, name, replyIds, keys)
         if (!ack.ok) throw new Error(ack.error)
         if (ack.message?._id) {
           const msgs = getGroupMsgs(activeGroup.value.id)
@@ -3926,7 +3979,7 @@ const doSend = async () => {
         }
       } else {
         // Socket down — persist over REST so the message survives a reload.
-        const res = await sendGroupRest(activeGroup.value.id, text, name, replyIds)
+        const res = await sendGroupRest(activeGroup.value.id, text, name, replyIds, keys)
         const msgs = getGroupMsgs(activeGroup.value.id)
         const m = msgs.find(m => m.id === optimistic.id)
         if (m && res.message?._id) { (m as any).dbId = res.message._id; if (res.message.replyTo) m.replyTo = res.message.replyTo as any }
@@ -3936,6 +3989,7 @@ const doSend = async () => {
       const msgs = getGroupMsgs(activeGroup.value.id)
       const m = msgs.find(m => m.id === optimistic.id)
       if (m) (m as any).failed = true
+      tray.restore(conv, taken)
     } finally {
       sendingMsg.value = false
     }
@@ -3952,11 +4006,12 @@ const doSend = async () => {
     replyTargets.value = []
 
     newMessage.value = ''
+    const taken = tray.take(conv)
     // No optimistic insert: the POST returns the real message and the round
     // trip is local. An optimistic copy would need reconciling against both
     // the 201 and the channel:receive echo.
     try {
-      const { message } = await sendChannelRest(sid, cid, text, replyIds)
+      const { message } = await sendChannelRest(sid, cid, text, replyIds, keys)
       pushChannelMessage(cid, toClientMessage(message, authUser.value?.id))
       // Started from the send that succeeded, not from the click: a failed
       // send must not lock the composer.
@@ -3964,6 +4019,7 @@ const doSend = async () => {
     } catch (e: any) {
       newMessage.value = text     // give the text back rather than losing it
       replyTargets.value = replies // ...and the reply targets it was attached to
+      tray.restore(conv, taken)    // ...and the files, which were never claimed
       // Slowmode is not an error. The composer already explains itself with a
       // countdown, and a red toast on top of it would read as a fault. The
       // server's remaining time wins over anything counted locally — a reload,
@@ -4080,7 +4136,7 @@ const handleDeleteById = (msgId: number) => {
   const msg  = list.find(m => m.id === msgId)
   if (!msg) return
 
-  const body = stripMarkers(msg.content || "").replace(/\s+/g, " ").trim()
+  const body = stripMarkers(previewText(msg)).replace(/\s+/g, " ").trim()
   const preview = body.length > DELETE_PREVIEW_MAX
     ? body.slice(0, DELETE_PREVIEW_MAX) + "…"
     : body
@@ -5909,7 +5965,19 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
              opts into via the CallBar; for a voice channel there is no text
              conversation to go back to, so viewing the stage simply IS the
              expanded state and the toggle does not exist. -->
-        <section class="chat" :class="{ 'call-expanded': callExpanded || voiceStageOpen }">
+        <section class="chat" :class="{ 'call-expanded': callExpanded || voiceStageOpen }"
+          @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+          <!-- Files dragged over the conversation. Says where they will go, or
+               why they cannot, before anything is dropped. -->
+          <Transition name="drop-veil">
+            <div v-if="draggingFiles" class="drop-veil" :class="{ refused: !canAttach }" aria-hidden="true">
+              <div class="drop-card">
+                <Upload :size="28" :stroke-width="1.75" />
+                <strong>{{ canAttach ? `Drop to send to ${dropTarget}` : 'You can’t attach files here' }}</strong>
+                <span v-if="canAttach">Up to {{ attachLimits.maxFiles }} files, {{ Math.round(attachLimits.maxBytes / 1048576) }} MB each</span>
+              </div>
+            </div>
+          </Transition>
           <!-- Chat header -->
           <div class="chat-header">
             <div class="chat-header-left">
@@ -6105,7 +6173,12 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
 
           <!-- Message input (modular component) — reply strip lives inside it -->
           <MessageInput
+            ref="composerRef"
             v-model="newMessage"
+            :conv-key="convKey"
+            :can-attach="canAttach"
+            :limits="attachLimits"
+            @notice="showToast"
             :placeholder="view==='dm' && activeDM ? `Message @${activeDM.name}` : view==='group' && activeGroup ? `Message ${groupDisplayName(activeGroup)}` : `Message #${activeChannel?.name ?? ''}`"
             :sending="sendingMsg"
             :replyTargets="replyTargetMeta"
@@ -7166,6 +7239,18 @@ img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* ── Chat view ─────────────────────────────────────────────────────────── */
 .chat{flex:1;display:flex;flex-direction:column;background:var(--bg-chat);overflow:hidden;min-width:0;position:relative}
+/* Files dragged over a conversation. pointer-events:none so the drop lands on
+   the section underneath, which owns the handlers. */
+.drop-veil{position:absolute;inset:0;z-index:60;display:grid;place-items:center;padding:24px;background:var(--media-veil);pointer-events:none}
+.drop-card{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:360px;padding:28px 32px;border-radius:var(--edge-xl);background:var(--bg-panel);box-shadow:var(--shadow-md),inset 0 0 0 2px rgba(var(--accent-rgb),.6);color:var(--accent-text);text-align:center}
+.drop-card strong{font-size:16px;font-weight:700;color:var(--text-strong)}
+.drop-card span{font-size:13px;color:var(--text-3)}
+.drop-veil.refused .drop-card{box-shadow:var(--shadow-md),inset 0 0 0 2px rgba(var(--danger-rgb),.6);color:var(--danger-text)}
+.drop-veil-enter-active{transition:opacity var(--dur-2) var(--ease-out)}
+.drop-veil-enter-active .drop-card{transition:transform var(--dur-2) var(--ease-out)}
+.drop-veil-leave-active{transition:opacity var(--dur-exit) var(--ease-in)}
+.drop-veil-enter-from,.drop-veil-leave-to{opacity:0}
+.drop-veil-enter-from .drop-card{transform:scale(.97)}
 /* Call "hide chat": the call takes the whole column — messages and composer step
    aside (rails stay). Beats the :has() 34% split rule below via the extra class. */
 /* ── Members as a bottom sheet (mobile) ──────────────────────────────────────

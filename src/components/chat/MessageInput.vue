@@ -6,6 +6,8 @@ import {
 } from 'lucide-vue-next'
 import AutocompletePopup from './AutocompletePopup.vue'
 import TimeTokenPicker from './TimeTokenPicker.vue'
+import AttachmentTray from './AttachmentTray.vue'
+import { useAttachmentTray } from '@/composables/useAttachmentTray'
 import { matchCommands, resolveSlash, type SlashCommand } from '@/composables/useChatCommands'
 import { suggestTracks } from '@/composables/musicCommands'
 import { music, clearMusicError, PAUSE_SETTLE_MS } from '@/composables/useMusic'
@@ -29,6 +31,12 @@ const props = defineProps<{
   slowmodeExempt?: boolean
   /** Epoch ms until this person may post again here. 0 = free to send. */
   cooldownUntil?: number
+  /** Which conversation's tray this composer shows — `dm:<id>`, `group:<id>`,
+   *  `chan:<id>`. Files stay with the conversation they were added in. */
+  convKey:   string
+  /** Whether files may be attached here. A server role can withhold it. */
+  canAttach: boolean
+  limits:    { maxBytes: number; maxFiles: number }
 }>()
 
 const emit = defineEmits<{
@@ -39,7 +47,34 @@ const emit = defineEmits<{
   openGif:             []
   clearReply:          [id: string]
   clearAllReply:       []
+  /** Something to tell the person that is not an error in the message itself. */
+  notice:              [text: string]
 }>()
+
+// ── Attachments ─────────────────────────────────────────────────────────────
+const tray = useAttachmentTray()
+const fileInput = ref<HTMLInputElement | null>(null)
+const trayItems = computed(() => tray.items(props.convKey))
+const trayReady = computed(() => tray.ready(props.convKey))
+/** A file still going up, or one that cannot go, holds Send. */
+const trayBlocked = computed(() => trayReady.value === null)
+const canSend = computed(() =>
+  !props.sending && !trayBlocked.value && (!!props.modelValue.trim() || (trayReady.value?.length ?? 0) > 0))
+
+const addFiles = (files: File[]): void => {
+  if (!files.length) return
+  if (!props.canAttach) { emit('notice', 'You can’t attach files here.'); return }
+  const said = tray.add(props.convKey, files, props.limits)
+  if (said) emit('notice', said)
+  inputEl.value?.focus()
+}
+const pickFiles = (): void => { if (props.canAttach) fileInput.value?.click() }
+const onFilesPicked = (e: Event): void => {
+  const el = e.target as HTMLInputElement
+  addFiles([...(el.files ?? [])])
+  el.value = ''   // picking the same file again must fire change again
+}
+defineExpose({ addFiles })
 
 /**
  * A textarea, not an input.
@@ -172,6 +207,9 @@ const htmlToMarkers = (html: string): string => {
 const onPaste = (e: ClipboardEvent) => {
   const el = inputEl.value, cb = e.clipboardData
   if (!el || !cb) return
+  // A pasted screenshot or copied file goes to the tray, not into the text.
+  const files = [...cb.files]
+  if (files.length) { e.preventDefault(); addFiles(files); return }
   const start = el.selectionStart ?? 0, end = el.selectionEnd ?? 0
   const selected = props.modelValue.slice(start, end)
   const text = cb.getData('text/plain')
@@ -393,6 +431,8 @@ const submit = () => {
   // only saves a round trip and stops the composer from clearing itself into
   // a request that was never going to land.
   if (cooling.value) return
+  // Enter while a file is still going up waits for it, as the button does.
+  if (trayBlocked.value) return
   const m = /^\/(\w+)(?:\s+([\s\S]*))?$/.exec(props.modelValue)
   if (m) {
     const cmd = resolveSlash(m[1])
@@ -524,9 +564,16 @@ onMounted(autoGrow)
     </Transition>
 
     <div class="input-wrapper" :class="{ sending, 'with-reply': replyTargets && replyTargets.length }">
-      <button class="input-attach btn-attach" v-tip="'Attach file'">
+      <button class="input-attach btn-attach" type="button"
+        v-tip="canAttach ? 'Attach files' : 'You can’t attach files here'"
+        :aria-label="canAttach ? 'Attach files' : 'You can’t attach files here'"
+        :disabled="!canAttach" @click.stop="pickFiles">
         <Paperclip :size="20" :stroke-width="1.5" />
       </button>
+      <input ref="fileInput" type="file" multiple hidden tabindex="-1" @change="onFilesPicked" />
+
+      <AttachmentTray v-if="trayItems.length" :items="trayItems"
+        @remove="id => tray.remove(convKey, id)" @retry="id => tray.retry(convKey, id)" />
 
       <textarea
         ref="inputEl"
@@ -557,9 +604,9 @@ onMounted(autoGrow)
       <button
         v-if="appearance.showSendButton"
         class="send-btn"
-        :class="{ ready: modelValue.trim() && !sending }"
+        :class="{ ready: canSend }"
         @click.stop="submit"
-        :disabled="!modelValue.trim() || sending"
+        :disabled="!canSend"
         v-tip="'Send'"
       >
         <svg v-if="sending" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin">
@@ -652,7 +699,8 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 .reply-strip-enter-from, .reply-strip-leave-to { opacity: 0; transform: translateY(6px); }
 
 .input-wrapper {
-  display: flex; align-items: center; gap: 4px;
+  /* wrap: the attachment tray takes a full row of its own above the text. */
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
   background: var(--bg-chatbar); border-radius: var(--edge-lg);
   padding: 0 8px 0 4px;
   border: 1px solid transparent;
@@ -685,6 +733,7 @@ input, textarea { background: none; border: none; outline: none; color: inherit;
 }
 .input-attach:hover { color: var(--text-1); transform: rotate(15deg); }
 .input-attach:active { transform: rotate(15deg) scale(.94); }
+.input-attach:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 
 .msg-input {
   flex: 1; padding: 12px 4px;

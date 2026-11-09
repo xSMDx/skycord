@@ -169,6 +169,32 @@ so any browser-side call would ship it in the bundle for anyone to read. All GIF
 requests are proxied through `/gifs`, and rate-limited — each call spends your
 quota, so that limit is protecting your account as much as your server.
 
+#### File attachments
+
+Members can attach photos, videos and other files to messages. It works with
+no setup; these change how:
+
+```
+ATTACH_MAX_BYTES=26214400   # largest file, in bytes (empty = 25 MB)
+CLAMD_HOST=                 # a clamd to scan uploads with (empty = no scanning)
+CLAMD_PORT=3310
+```
+
+- **Your reverse proxy must accept bodies bigger than the cap.** nginx allows
+  1 MB by default, so set `client_max_body_size 30m;` in the app's server
+  block, or uploads over a megabyte fail at nginx with a bare 413.
+- **Files live in MongoDB** (GridFS, bucket `attachments`), so they are in your
+  backups — which grow with them. Deleting a message deletes its files; uploads
+  nobody sends are cleared after a day.
+- **Scanning is fail-closed.** With `CLAMD_HOST` set, an upload is refused
+  while clamd is unreachable rather than let through unscanned. ClamAV wants
+  about 1 GB of memory; the music service's scanner container can serve both.
+- Only photos (PNG, JPEG, GIF, WebP) and videos (MP4, MOV, WebM) are shown in
+  the browser, judged from the file's contents, not its name. Everything else
+  is served as a download, so an uploaded web page can never run as your site.
+- Links to files are long and unguessable, and work without signing in, so an
+  `<img>` can show them. Anyone who is given a link can open that file.
+
 #### Voice and video — LiveKit
 
 ```

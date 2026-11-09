@@ -4,6 +4,7 @@ import { X, ZoomIn, ZoomOut, Expand, GitBranch } from 'lucide-vue-next'
 import type { Message, ReplyGraph } from '@/types'
 import ModalBase from './ModalBase.vue'
 import { stripMarkers } from '@/utils/richText'
+import { previewText } from '@/utils/attachments'
 
 const props = defineProps<{
   graph:   ReplyGraph | null
@@ -183,7 +184,7 @@ const ctxEdit = () => { if (ctx.value) emit('edit', ctx.value.msg); closeCtx() }
                   <span class="rt-card-time">{{ n.msg.time }}</span>
                 </div>
                 <img v-if="gifUrl(n.msg.content)" :src="gifUrl(n.msg.content)!" class="rt-card-gif" alt="GIF" loading="lazy" />
-                <p v-else class="rt-card-content">{{ truncate(stripMarkers(n.msg.content), 70) }}</p>
+                <p v-else class="rt-card-content">{{ truncate(stripMarkers(previewText(n.msg)), 70) }}</p>
                 <span v-if="n.isTarget" class="rt-card-badge">you held here</span>
               </div>
 

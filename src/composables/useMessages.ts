@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { Message } from '@/types'
+import type { Message, Attachment } from '@/types'
 import { perf } from './usePerformance'
 
 const dmMessages     = ref<Record<string, Message[]>>({})
@@ -153,7 +153,8 @@ const sendDM = (
   authorId: string,
   avatar: string,
   content: string,
-  replyTo?: ReplyParents | null
+  replyTo?: ReplyParents | null,
+  attachments?: Attachment[],
 ): Message => {
   const msg: Message = {
     id: makeId(),
@@ -165,6 +166,8 @@ const sendDM = (
     avatar,
     reactions: [],
     replyTo: replyTo && replyTo.length ? replyTo : undefined,
+    // Already uploaded, so the real URLs show straight away.
+    attachments: attachments?.length ? attachments : undefined,
   }
   pushDMMessage(dmId, msg)
   return msg
@@ -176,13 +179,15 @@ const sendDM = (
     authorId: string,
     avatar: string,
     content: string,
-    replyTo?: ReplyParents | null
+    replyTo?: ReplyParents | null,
+    attachments?: Attachment[],
   ): Message => {
     const msg: Message = {
       id: makeId(), author, authorId, content,
       time: fmtTime(), timestamp: Date.now(),
       avatar, reactions: [],
       replyTo: replyTo && replyTo.length ? replyTo : undefined,
+      attachments: attachments?.length ? attachments : undefined,
     }
     pushGroupMessage(groupId, msg)
     return msg

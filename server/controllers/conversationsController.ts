@@ -5,7 +5,8 @@ import { GroupInvite, generateInviteCode, inviteExpiry } from '../models/GroupIn
 import { Message, SystemType } from '../models/Message'
 import { User } from '../models/User'
 import { Friendship } from '../models/Friendship'
-import { resolveMessages } from './messagesController'
+import { resolveMessages, toReplyPreview } from './messagesController'
+import { createWithAttachments, hasKeys, wireAttachments, summarize } from '../services/attachments'
 import { effectiveStatus } from '../state/presence'
 import { getIO } from '../sockets/chatSocket'
 import { loadHistoryWindow, type HistoryQuery } from '../utils/historyWindow'
@@ -199,6 +200,7 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
         lastMessageAt: { $first: '$createdAt' },
         lastMessage:   { $first: '$content' },
         lastKind:      { $first: '$systemType' },
+        lastAttachments: { $first: '$attachments' },
       }},
     ])
 
@@ -226,6 +228,8 @@ export const getMyDMs = async (req: Request, res: Response, next: NextFunction):
         avatarCrop:    p.avatarCrop ?? null,
         status:        effectiveStatus(p.status, p._id.toString(), p.statusUntil),
         lastMessage:   r.lastKind ? '' : String(r.lastMessage || ''),
+        // So the list can say "Sent a photo" for a message with no text.
+        lastAttachments: r.lastKind ? null : summarize(r.lastAttachments),
         lastMessageAt: r.lastMessageAt,
       }
     }).sort((x, y) => +new Date(y.lastMessageAt) - +new Date(x.lastMessageAt))
@@ -264,9 +268,9 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
     const userId = req.user!.sub
     const { groupId } = req.params
     // authorName is still accepted in the body by older clients, and ignored.
-    const { content, replyToIds } = req.body as { content: string; replyToIds?: string[] }
+    const { content, replyToIds, attachments: keys } = req.body as { content?: string; replyToIds?: string[]; attachments?: unknown }
 
-    if (!content?.trim()) { res.status(400).json({ message: 'Content required' }); return }
+    if (!content?.trim() && !hasKeys(keys)) { res.status(400).json({ message: 'Content required' }); return }
     if (!mongoose.isValidObjectId(groupId)) { res.status(400).json({ message: 'Invalid group' }); return }
 
     const group = await Conversation.findById(groupId)
@@ -290,26 +294,30 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
     // this group's preview — both in this response and, since it's persisted
     // below, on every future GET of this group's history too.
     const targets = ids.length
-      ? await Message.find({ _id: { $in: ids }, conversationId: groupId }).select('authorName content').lean()
+      ? await Message.find({ _id: { $in: ids }, conversationId: groupId }).select('authorName content attachments').lean()
       : []
     const targetById = new Map(targets.map(t => [t._id.toString(), t]))
     const replyPreviews = ids
       .map(id => targetById.get(id))
       .filter((t): t is NonNullable<typeof t> => !!t)
-      .map(t => ({ id: t._id.toString(), author: t.authorName, content: t.content.slice(0, 80) }))
+      .map(toReplyPreview)
 
-    const msg = await Message.create({
+    const made = await createWithAttachments(keys, userId, groupId, (_id, attachments) => Message.create({
+      _id,
       conversationId: groupId,
       kind:           'group',
       authorId:       userId,
       authorName:     sender?.displayName || sender?.username || 'Unknown',
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
-      content:        wellFormed(content.trim()),
+      content:        wellFormed((content ?? '').trim()),
+      attachments,
       // Persist only the ids that survived scope validation above — matches
       // the channel path's persistence rule, never the raw request-body ids.
       replyToIds:     replyPreviews.map(r => r.id),
-    })
+    }))
+    if (!made.ok) { res.status(made.status).json({ message: made.message }); return }
+    const msg = made.value
     group.lastMessageAt = msg.createdAt
     await group.save()
 
@@ -321,6 +329,7 @@ export const sendGroupMessage = async (req: Request, res: Response, next: NextFu
       authorAvatar:   sender?.avatar ?? null,
       authorAvatarCrop: (sender as any)?.avatarCrop ?? null,
       content:        msg.content,
+      attachments:    wireAttachments(msg.attachments),
       reactions:      [],
       pinned:         false,
       edited:         false,

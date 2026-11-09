@@ -7,6 +7,7 @@ import { Channel } from '../models/Channel'
 import { Category } from '../models/Category'
 import { Conversation } from '../models/Conversation'
 import { loadAccess, categoryOverwriteMap, channelViewOf } from '../utils/access'
+import { wireAttachments } from '../services/attachments'
 
 /**
  * What did I miss: the messages that would have notified this person while a
@@ -180,7 +181,7 @@ export const getMissed = async (req: Request, res: Response, next: NextFunction)
       Message.find({ createdAt: { $gte: since }, authorId: { $ne: me }, ...h.match, conversationId: h.id })
         .sort({ createdAt: -1 })
         .limit(PER_CONVERSATION)
-        .select('conversationId kind authorId authorName content createdAt mentionsEveryone')
+        .select('conversationId kind authorId authorName content attachments createdAt mentionsEveryone')
         .lean()
     let rows: Awaited<ReturnType<typeof read>> = []
     for (let i = 0; i < byRecency.length; i += PARALLEL) {
@@ -193,6 +194,9 @@ export const getMissed = async (req: Request, res: Response, next: NextFunction)
       const common = {
         _id: m._id.toString(), conversationId: m.conversationId,
         authorId: m.authorId.toString(), authorName: m.authorName, content: m.content,
+        // As the live events carry them: a message sent as files alone has
+        // no text, and the phone's notice says what was sent from these.
+        attachments: wireAttachments(m.attachments),
         createdAt: m.createdAt.toISOString(),
       }
       if (m.kind === 'channel') {

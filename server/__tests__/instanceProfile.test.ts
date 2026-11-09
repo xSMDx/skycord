@@ -18,6 +18,7 @@ describe('readInstanceProfile: nothing configured', () => {
     expect(profile).toEqual({
       software: 'skycord',
       music: false,
+      attachments: { maxBytes: 26214400, maxFiles: 10 },
       version: 'v0.20.0',
       address: 'https://chat.example.com',
       name: 'chat.example.com',

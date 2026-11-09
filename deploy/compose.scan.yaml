@@ -1,12 +1,19 @@
-# Virus scanning for music uploads. Opt-in, because ClamAV keeps its whole
+# Virus scanning for music uploads and chat attachments. Opt-in, because ClamAV keeps its whole
 # signature database in memory: about 1 GB steady (measured 1.0 GiB with
 # ClamAV 1.5), and close to twice that for a minute or so each day while a
 # signature update loads alongside the old one. Leave this file out of
 # COMPOSE_FILE and uploads are still re-encoded, just not scanned — and the
 # music room marks every such file as unscanned.
 #
-# Needs compose.music.yaml: this only adds to the music service.
+# Needs compose.music.yaml: the installer offers the scanner together with
+# music. Chat attachments use the same clamd, and are refused while it is
+# unreachable, just as music uploads are.
 services:
+  skycord:
+    environment:
+      CLAMD_HOST: clamav
+      CLAMD_PORT: 3310
+
   music:
     environment:
       MUSIC_CLAMD_HOST: clamav

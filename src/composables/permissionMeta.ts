@@ -142,7 +142,6 @@ export const PERMISSION_META: Record<PermissionName, PermissionMeta> = {
   AttachFiles: {
     label: 'Attach files',
     desc: 'Upload images, video, audio and other files into a message.',
-    soon: true,
   },
   AddReactions: {
     label: 'Add reactions',

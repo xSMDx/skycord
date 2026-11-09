@@ -491,11 +491,11 @@ export const useSocket = () => {
       _socket.emit(event, data, (ack: any) => resolve(ack ?? { ok: false }))
     })
 
-  const sendDMSocket     = (partnerId: string, content: string, authorName: string, authorAvatar: string, replyToIds: string[] = []) =>
-    call<{ ok: boolean; message?: any; error?: string }>('dm:send', { partnerId, content, authorName, authorAvatar, replyToIds })
+  const sendDMSocket     = (partnerId: string, content: string, authorName: string, authorAvatar: string, replyToIds: string[] = [], attachments: string[] = []) =>
+    call<{ ok: boolean; message?: any; error?: string }>('dm:send', { partnerId, content, authorName, authorAvatar, replyToIds, attachments })
 
-  const sendReplySocket  = (partnerId: string, content: string, replyToIds: string[], authorName: string, authorAvatar: string) =>
-    call<{ ok: boolean; message?: any; error?: string }>('dm:reply', { partnerId, content, replyToIds, authorName, authorAvatar })
+  const sendReplySocket  = (partnerId: string, content: string, replyToIds: string[], authorName: string, authorAvatar: string, attachments: string[] = []) =>
+    call<{ ok: boolean; message?: any; error?: string }>('dm:reply', { partnerId, content, replyToIds, authorName, authorAvatar, attachments })
 
   const sendEditSocket   = (messageId: string, content: string) =>
     call<{ ok: boolean }>('message:edit', { messageId, content })
@@ -513,10 +513,10 @@ export const useSocket = () => {
     call<{ ok: boolean; message?: any; error?: string }>('message:get', { messageId })
 
   const sendGroupSocket = (
-    groupId: string, content: string, authorName: string, replyToIds: string[] = []
+    groupId: string, content: string, authorName: string, replyToIds: string[] = [], attachments: string[] = []
   ) =>
     call<{ ok: boolean; message?: any; error?: string }>(
-      'group:send', { groupId, content, authorName, replyToIds }
+      'group:send', { groupId, content, authorName, replyToIds, attachments }
     )
 
   const sendTypingStart  = (partnerId: string) => _socket?.emit('typing:start', { partnerId })
