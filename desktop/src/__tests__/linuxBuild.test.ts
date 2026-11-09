@@ -36,8 +36,10 @@ describe('electron-builder builds Linux', () => {
     expect(builder).toMatch(/^      Categories: Network;InstantMessaging;Chat;$/m)
   })
 
-  it('makes the .deb depend on ALSA, which Electron links and the defaults leave out', () => {
-    expect(builder).toMatch(/^  depends:\n(    - [\w.-]+\n)*    - libasound2$/m)
+  it('makes the .deb depend on the real ALSA, which Electron links and the defaults leave out', () => {
+    // t64 first: apt satisfies a bare libasound2 on Ubuntu 24.04 with OSS's
+    // emulation, which lacks ALSA's symbols.
+    expect(builder).toMatch(/^  depends:\n(    - [\w.-]+\n)*    - libasound2t64 \| libasound2$/m)
     expect(builder).toMatch(/^    - libgtk-3-0$/m)
   })
 
