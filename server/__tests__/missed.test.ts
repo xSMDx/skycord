@@ -93,7 +93,7 @@ describe('GET /users/me/missed', () => {
     expect(contents(res)).toEqual(['after the gap'])
     expect(res.body.events[0]).toEqual({
       type: 'dm', _id: after._id.toString(), conversationId: conv,
-      authorId: b.id, authorName: b.username, content: 'after the gap',
+      authorId: b.id, authorName: b.username, content: 'after the gap', attachments: [],
       createdAt: new Date(t0 + 1000).toISOString(),
     })
   })
@@ -358,6 +358,43 @@ describe('GET /users/me/missed', () => {
     it('requires auth', async () => {
       expect((await app().get('/users/me/missed?since=1')).status).toBe(401)
     })
+  })
+})
+
+/**
+ * A message sent as files alone has no text. The phone's catch-up has to say
+ * what the files were, or the notice it raises after a night offline reads
+ * "New message" where the live one would have said "Sent a photo".
+ */
+describe('files on caught-up messages', () => {
+  const photo = { key: 'k-photo-0000000000000', name: 'IMG_2041.jpg', size: 3100, mime: 'image/jpeg', kind: 'image', width: 4, height: 3 }
+  const notes = { key: 'k-notes-0000000000000', name: 'notes.pdf', size: 900, mime: 'application/octet-stream', kind: 'file', width: null, height: null }
+  const wire = (a: typeof photo | typeof notes) => ({ ...a, url: `/messages/attachments/${a.key}/${encodeURIComponent(a.name)}` })
+
+  it('sends a files-only DM, group and channel message with its attachments, as the live events do', async () => {
+    const { a, b, cid } = await world()
+    expect((await setPref(a, cid, { level: 'all' })).status).toBe(200)
+    const g = await mkGroup(b, [a])
+    const t0 = Date.now() - 10 * MIN
+
+    await put(dmConvId(a.id, b.id), 'dm', b, '', t0 + 1000, { attachments: [photo] })
+    await put(g._id.toString(), 'group', b, '', t0 + 2000, { attachments: [photo, photo] })
+    await put(cid, 'channel', b, '', t0 + 3000, { attachments: [notes] })
+
+    const res = await missed(a, t0)
+    expect(res.status).toBe(200)
+    const byType = Object.fromEntries(res.body.events.map((e: any) => [e.type, e]))
+    expect(byType.dm.attachments).toEqual([wire(photo)])
+    expect(byType.group.attachments).toEqual([wire(photo), wire(photo)])
+    expect(byType.channel.attachments).toEqual([wire(notes)])
+    expect(byType.dm.content).toBe('')
+  })
+
+  it('sends an empty list for a message with no files', async () => {
+    const a = await register(), b = await register()
+    const t0 = Date.now() - 10 * MIN
+    await put(dmConvId(a.id, b.id), 'dm', b, 'just words', t0 + 1000)
+    expect((await missed(a, t0)).body.events[0].attachments).toEqual([])
   })
 })
 
