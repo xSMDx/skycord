@@ -68,6 +68,12 @@ let quitting = false
 /** The page's theme colours, as the title bar last received them — the call window wears them too. */
 let lastColors: CallColors = null
 const keepInTray = () => readStore().keepInTray !== false
+// Not every Linux desktop shows tray icons (GNOME without an extension has
+// none), so it also says the two ways out that always work: opening Skycord
+// again brings the window back, and Settings can stop it hiding at all.
+const TRAY_HINT = process.platform === 'linux'
+  ? 'It keeps notifications and calls coming. Open Skycord again to bring it back. To quit, use the tray icon, or turn this off in Settings › Notifications.'
+  : 'It keeps notifications and calls coming. Quit from the tray icon.'
 const showWindow = () => {
   const w = shellWin?.win
   if (!w) return
@@ -385,7 +391,7 @@ app.whenReady().then(async () => {
       writeStore({ ...readStore(), trayHintShown: true })
       showToast({
         id: 'tray-hint', kind: 'friend', conversation: null, title: 'Skycord is still running',
-        body: 'It keeps notifications and calls coming. Quit from the tray icon.', icon: null, group: null, canReply: false, flash: false,
+        body: TRAY_HINT, icon: null, group: null, canReply: false, flash: false,
       })
     }
   })
