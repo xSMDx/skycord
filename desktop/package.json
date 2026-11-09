@@ -4,6 +4,8 @@
   "version": "0.21.0",
   "private": true,
   "description": "Skycord for Windows — a thin shell around your instance's own web client",
+  "homepage": "https://skycord.xyz",
+  "desktopName": "skycord.desktop",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",

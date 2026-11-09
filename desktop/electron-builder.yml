@@ -1,6 +1,7 @@
-# Windows installer, and where updates are published. The source repo is
-# private, so installers and the update feed live in a public releases-only
-# repo (owner decision, 2026-09-21). Unsigned for now.
+# The Windows installer, the Linux AppImage and .deb, and where updates are
+# published. The source repo is private, so installers and the update feeds
+# live in a public releases-only repo (owner decision, 2026-09-21). Unsigned
+# for now. Windows reads latest.yml, Linux latest-linux.yml.
 appId: xyz.skycord.desktop
 productName: Skycord
 copyright: Skycord contributors — AGPL-3.0
@@ -28,6 +29,66 @@ nsis:
   # Refreshes the shell's icon cache after every install and update, so a changed
   # icon shows on pinned and Start-menu shortcuts straight away.
   include: build/installer.nsh
+# Linux: the AppImage is the one to download, and it updates itself; the .deb
+# is for Debian and Ubuntu, and updates through a password prompt (pkexec).
+# The share-audio addon is Windows-only: native/index.js never loads it here.
+linux:
+  target:
+    - AppImage
+    - deb
+  # A 512 px PNG; electron-builder renders the hicolor sizes from it.
+  icon: build/icon.png
+  executableName: skycord
+  # The .desktop file is named after desktopName in package.json (skycord), so
+  # the running window — whose app_id/WM_CLASS Electron takes from the same
+  # field — groups under the launcher icon, and the unread badge finds it.
+  syncDesktopName: true
+  category: Network
+  synopsis: Voice and text chat on your own server
+  description: Skycord desktop. A thin shell around your own Skycord server's web client, for voice calls, chat and screen share.
+  maintainer: Skycord contributors <149713807+xSMDx@users.noreply.github.com>
+  desktop:
+    entry:
+      Name: Skycord
+      GenericName: Voice and text chat
+      Comment: Voice and text chat on your own server
+      Categories: Network;InstantMessaging;Chat;
+      Keywords: voice;chat;call;screen share;
+appImage:
+  artifactName: Skycord-${version}.${ext}
+deb:
+  artifactName: skycord_${version}_${arch}.${ext}
+  # electron-builder's own list, plus ALSA: Electron links libasound.so.2, and
+  # without it the installed app would not start on a minimal system (a
+  # desktop always has it). Ubuntu 24.04's libasound2t64 provides libasound2.
+  # Setting this replaces the defaults, so they are all repeated here.
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libasound2
+  # Right-click the launcher icon for Switch server, as Windows has in its
+  # Jump List. Only the .deb: its install path is fixed, an AppImage's isn't.
+  desktop:
+    entry:
+      Actions: SwitchServer;
+    desktopActions:
+      SwitchServer:
+        Name: Switch server
+        Exec: /opt/Skycord/skycord --switch-server
+# The AppImage runtime: 1.0.3 is a static one that needs no libfuse2, which
+# Ubuntu stopped installing in 22.04 — with the legacy runtime the AppImage
+# does nothing at all there until someone installs it. It also leaves the
+# Chromium sandbox on, adding --no-sandbox only where user namespaces are
+# blocked (the launcher probes with `unshare`).
+toolsets:
+  appimage: "1.0.3"
 publish:
   provider: github
   owner: xSMDx

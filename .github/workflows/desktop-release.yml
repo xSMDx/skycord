@@ -1,9 +1,19 @@
-# The Windows app's release. A tag like desktop-v0.20.0 builds the installer on
-# Windows and publishes it, with the update feed, to the public releases-only
-# repo — the source repo stays private (owner decision, 2026-09-21).
+# The desktop app's release. A tag like desktop-v0.20.0 builds the Windows
+# installer on Windows and the Linux AppImage and .deb on Ubuntu, and publishes
+# them, with each one's update feed (latest.yml for Windows, latest-linux.yml
+# for Linux), to the public releases-only repo — the source repo stays private
+# (owner decision, 2026-09-21).
 #
 # DESKTOP_RELEASES_TOKEN is a fine-grained token with Contents: read and write
 # on xSMDx/skycord-desktop-releases and nothing else.
+#
+# electron-builder uploads its files in parallel, and each creates the release
+# if it can't find one. Two creations race and GitHub refuses the second
+# ("Published releases must have a valid tag") after the first has already
+# published a release holding half the files (rc.1, 2026-09-21). So the release
+# exists as a draft before either build starts, both only upload into it, and
+# it goes public once every file from both is there. A build that fails leaves
+# the draft unpublished: re-run the failed job, and the publish follows.
 name: Desktop release
 
 on:
@@ -13,8 +23,33 @@ on:
 permissions:
   contents: read
 
+env:
+  REPO: xSMDx/skycord-desktop-releases
+
 jobs:
-  release:
+  draft:
+    runs-on: ubuntu-latest
+    outputs:
+      v: ${{ steps.version.outputs.v }}
+    steps:
+      - name: Version from the tag
+        id: version
+        run: echo "v=${GITHUB_REF_NAME#desktop-v}" >> "$GITHUB_OUTPUT"
+      - name: Draft the release
+        run: |
+          gh release list -R "$REPO" --json tagName --jq '.[].tagName' | grep -qx "v$V" ||
+            gh release create "v$V" -R "$REPO" --draft --title "Skycord desktop $V" \
+              --notes "**Windows:** download **Skycord-Setup-$V.exe** below and run it.
+
+          **Linux:** download **Skycord-$V.AppImage**, make it executable (\`chmod +x\`) and run it. On Debian or Ubuntu, **skycord_${V}_amd64.deb** installs it instead.
+
+          Installed copies update themselves."
+        env:
+          GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+          V: ${{ steps.version.outputs.v }}
+
+  windows:
+    needs: draft
     runs-on: windows-latest
     defaults:
       run:
@@ -33,35 +68,60 @@ jobs:
       - name: Build the audio capture addon
         run: npm run build:native
       - name: Version from the tag
-        id: version
         shell: bash
-        run: |
-          v="${GITHUB_REF_NAME#desktop-v}"
-          npm version "$v" --no-git-tag-version --allow-same-version
-          echo "v=$v" >> "$GITHUB_OUTPUT"
-      # electron-builder uploads its files in parallel, and each creates the
-      # release if it can't find one. Two creations race and GitHub refuses the
-      # second ("Published releases must have a valid tag") after the first has
-      # already published a release holding half the files (rc.1, 2026-09-21).
-      # So the release exists as a draft before electron-builder starts, it only
-      # uploads into it, and the release goes public once every file is there.
-      - name: Draft the release
-        shell: bash
-        run: |
-          gh release list -R "$REPO" --json tagName --jq '.[].tagName' | grep -qx "v$V" ||
-            gh release create "v$V" -R "$REPO" --draft --title "Skycord for Windows $V"               --notes "Download **Skycord-Setup-$V.exe** below and run it. Installed copies update themselves."
+        run: npm version "$V" --no-git-tag-version --allow-same-version
         env:
-          GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
-          V: ${{ steps.version.outputs.v }}
-          REPO: xSMDx/skycord-desktop-releases
+          V: ${{ needs.draft.outputs.v }}
+      # Uploads the installer, its blockmap and latest.yml into the draft.
       - name: Build and upload
         run: npm run release
         env:
           GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+
+  linux:
+    needs: draft
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - name: Version from the tag
+        run: npm version "$V" --no-git-tag-version --allow-same-version
+        env:
+          V: ${{ needs.draft.outputs.v }}
+      # No addon: per-app share audio is Windows-only, and native/index.js
+      # never loads it here. Uploads the AppImage, the .deb and latest-linux.yml.
+      - name: Build and upload
+        run: npx tsc && npx electron-builder --linux --publish always
+        env:
+          GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+
+  publish:
+    needs: [draft, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      # Both feeds must be there before the release goes public: installed
+      # copies read the latest release, and one without its feed is an error
+      # on every check.
+      - name: Check every file arrived
+        run: |
+          have=$(gh release view "v$V" -R "$REPO" --json assets --jq '.assets[].name')
+          echo "$have"
+          for f in "Skycord-Setup-$V.exe" latest.yml "Skycord-$V.AppImage" "skycord_${V}_amd64.deb" latest-linux.yml; do
+            echo "$have" | grep -qxF "$f" || { echo "::error::missing $f"; exit 1; }
+          done
+        env:
+          GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+          V: ${{ needs.draft.outputs.v }}
       - name: Publish the release
-        shell: bash
         run: gh release edit "v$V" -R "$REPO" --draft=false --latest
         env:
           GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
-          V: ${{ steps.version.outputs.v }}
-          REPO: xSMDx/skycord-desktop-releases
+          V: ${{ needs.draft.outputs.v }}

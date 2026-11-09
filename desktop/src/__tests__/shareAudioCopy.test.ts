@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { audioLine, audioCopy } from '../shareQuality'
+import { audioLine, audioCopy, audioSupported, screenAudioSupported } from '../shareQuality'
 
 describe('audioLine', () => {
   it('admits a window share sends the whole application', () => {
@@ -36,5 +36,39 @@ describe('audioCopy', () => {
     expect(c.windowOn).toBe(c.windowOff)
     expect(c.windowOn).toContain('cannot share one app')
     expect(c.screenOn).toBe('Sends everything your PC plays, except this call')
+  })
+})
+
+describe('on Linux', () => {
+  it('says per-app sound is not available rather than offering it', () => {
+    const c = audioCopy(false, 'linux')
+    expect(c.windowOn).toBe('Sharing one app’s sound isn’t available on Linux yet')
+    expect(c.windowOff).toBe(c.windowOn)
+  })
+
+  it('says the same of a whole screen, whose loopback is Windows-only', () => {
+    const c = audioCopy(false, 'linux')
+    expect(c.screenOn).toBe('Sharing your computer’s sound isn’t available on Linux yet')
+    expect(c.screenOff).toBe(c.screenOn)
+    expect(screenAudioSupported('linux')).toBe(false)
+  })
+
+  it('never names Windows', () => {
+    expect(Object.values(audioCopy(false, 'linux')).join(' ')).not.toMatch(/Windows/)
+  })
+
+  it('lets no share carry sound', () => {
+    expect(audioSupported('window', false, 'linux')).toBe(false)
+    expect(audioSupported('screen', false, 'linux')).toBe(false)
+  })
+})
+
+describe('on Windows, unchanged', () => {
+  it('keeps whole-screen sound whether or not the addon works', () => {
+    expect(screenAudioSupported('win32')).toBe(true)
+    expect(audioSupported('screen', false, 'win32')).toBe(true)
+    expect(audioSupported('window', true, 'win32')).toBe(true)
+    expect(audioSupported('window', false, 'win32')).toBe(false)
+    expect(audioCopy(true)).toEqual(audioCopy(true, 'win32'))
   })
 })

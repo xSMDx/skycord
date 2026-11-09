@@ -10,9 +10,9 @@ import { app, BrowserWindow, desktopCapturer, ipcMain, screen, type IpcMainInvok
 import { centredOver } from './windowBounds'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
-import { FRAME_RATES, PRESETS, RESOLUTIONS, audioCopy, parseChoice, type Remembered, type ShareChoice } from './shareQuality'
+import { FRAME_RATES, PRESETS, RESOLUTIONS, audioCopy, audioSupported, parseChoice, screenAudioSupported, type Remembered, type ShareChoice } from './shareQuality'
 import { pidForSource, supportsPerAppAudio } from './shareAudio'
-import { toTiles } from './shareSources'
+import { capturesThroughPortal, toTiles } from './shareSources'
 
 const SHARE = join(app.getAppPath(), 'static', 'share.html')
 const SHARE_URL = pathToFileURL(SHARE).href
@@ -34,6 +34,8 @@ interface Open {
   /** Every source the page has been shown, id → name: the only ids it may choose. */
   shown: Map<string, string>
   finish: (choice: ShareChoice | null) => void
+  /** Under Wayland, the one answer the desktop's own picker gave (see below). */
+  portalTiles?: unknown[]
 }
 let open: Open | null = null
 
@@ -48,7 +50,8 @@ ipcMain.handle('share:init', event => {
   const perAppAudio = supportsPerAppAudio()
   return {
     quality: o.opts.quality, audio: o.opts.audio, last: o.opts.last,
-    perAppAudio, audioCopy: audioCopy(perAppAudio),
+    perAppAudio, screenAudio: screenAudioSupported(process.platform),
+    audioCopy: audioCopy(perAppAudio, process.platform),
     presets: PRESETS, resolutions: RESOLUTIONS, frameRates: FRAME_RATES,
   }
 })
@@ -56,7 +59,16 @@ ipcMain.handle('share:init', event => {
 ipcMain.handle('share:sources', async event => {
   const o = fromPicker(event)
   if (!o) return []
+  // Under Wayland nothing can list the screen's windows: every getSources
+  // opens the desktop's own picker (the xdg portal) and returns the one thing
+  // chosen there. The page refreshes every few seconds, which would reopen it
+  // each time, so the first answer is kept for as long as this picker is open.
+  const portal = capturesThroughPortal(process.platform, process.env)
+  if (portal && o.portalTiles) return o.portalTiles
   const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: THUMB, fetchWindowIcons: true })
+  // The portal may not name what was chosen, and a tile with no name is dropped.
+  const nameOf = (s: Electron.DesktopCapturerSource) =>
+    portal && !s.name.trim() ? (s.id.startsWith('screen:') ? 'Entire screen' : 'Chosen window') : s.name
   const own = new Set(BrowserWindow.getAllWindows().map(w => w.getMediaSourceId()))
   const primary = screen.getPrimaryDisplay().id
   const displays = screen.getAllDisplays().map(d => ({
@@ -66,9 +78,9 @@ ipcMain.handle('share:sources', async event => {
     primary: d.id === primary,
   }))
   const byId = new Map(sources.map(s => [s.id, s]))
-  return toTiles(sources.map(s => ({ id: s.id, name: s.name, displayId: s.display_id })), own, displays).map(t => {
+  const tiles = toTiles(sources.map(s => ({ id: s.id, name: nameOf(s), displayId: s.display_id })), own, displays).map(t => {
     const s = byId.get(t.id)!
-    o.shown.set(t.id, s.name)
+    o.shown.set(t.id, nameOf(s))
     return {
       ...t,
       // JPEG keeps a refresh of twenty previews small. A minimised window has none.
@@ -76,6 +88,8 @@ ipcMain.handle('share:sources', async event => {
       icon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : null,
     }
   })
+  if (portal) o.portalTiles = tiles
+  return tiles
 })
 
 ipcMain.handle('share:choose', (event, value: unknown) => {
@@ -84,7 +98,9 @@ ipcMain.handle('share:choose', (event, value: unknown) => {
   // A hidden control's value is not a choice: audio only if offered, and the
   // preview setting only where the web client asked first and can apply it.
   if (!o || !choice) return
-  const audio = o.opts.audio && choice.audio
+  // Nor is a box this machine cannot honour: on Linux a screen's sound would
+  // ask Electron for a loopback it does not have there.
+  const audio = o.opts.audio && choice.audio && audioSupported(choice.kind, supportsPerAppAudio(), process.platform)
   // The pid is resolved here, not taken from the page: the page only ever
   // names a source, and which process that source belongs to is ours to say.
   const pid = audio && choice.kind === 'window' ? pidForSource(choice.sourceId) : null
