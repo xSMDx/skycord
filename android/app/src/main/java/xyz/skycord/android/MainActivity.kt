@@ -438,9 +438,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // A file card's Download (an <a download> link to the attachment) arrives here, not as a navigation.
+        // A navigation the WebView turns into a download (an attachment opened by its address). A Download
+        // link's click never arrives here: the bridge's shim passes it on instead (saveAttachmentLink).
         web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-            saveAttachment(url, userAgent, contentDisposition, mimeType)
+            saveAttachment(url, userAgent, AttachmentDownload.fileName(contentDisposition, url), AttachmentDownload.mimeType(mimeType))
         }
     }
 
@@ -762,22 +763,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * A download the page started: a file card's Download, or the large view's. Only the current server's
-     * own attachments (core/AttachmentDownload), asked for by its own page, are saved, the way the file
-     * picker and the microphone are only the current server's. They go to the phone's Downloads through
-     * Android's DownloadManager, which shows its own progress and done notification (a tap opens the file),
-     * under the name the server gives in Content-Disposition. The attachment route needs no sign-in, so no
+     * A file card's or the large view's Download, which the bridge passes on: WebView does nothing with an
+     * <a download> click, so the page's shim takes it (app-shim.js). [name] is the link's own; the type
+     * comes from the server's answer.
+     */
+    fun saveAttachmentLink(url: String, name: String?) =
+        saveAttachment(url, web.settings.userAgentString, AttachmentDownload.linkName(name, url), mime = null)
+
+    /**
+     * An attachment to save, under [name]. Only the current server's own attachments (core/AttachmentDownload),
+     * from its own page, are saved, the way the file picker and the microphone are only the current
+     * server's. They go to the phone's Downloads through Android's DownloadManager, which shows its own
+     * progress and done notification (a tap opens the file). The attachment route needs no sign-in, so no
      * cookie goes with the request. Android 8 and 9 need the storage permission to write to Downloads: it is
      * asked at a download, and if it is refused the file goes to the app's own Downloads folder instead
      * (still opened from the notification, but removed with the app).
      */
-    private fun saveAttachment(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
+    private fun saveAttachment(url: String, userAgent: String?, name: String, mime: String?) {
         val server = currentServer
         if (!AttachmentDownload.isAttachment(url, server) || Origins.of(web.url ?: "") != server) {
             Log.w("MainActivity", "refused a download that is not the current server's attachment")
             return
         }
-        val download = Download(url, AttachmentDownload.fileName(contentDisposition, url), AttachmentDownload.mimeType(mimeType), userAgent)
+        val download = Download(url, name, mime, userAgent)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
         ) {

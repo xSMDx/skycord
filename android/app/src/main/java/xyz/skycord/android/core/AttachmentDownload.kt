@@ -59,6 +59,13 @@ object AttachmentDownload {
         return safeName(raw.orEmpty())
     }
 
+    /**
+     * The name for a Download link the page's shim passed on: the link's own `download` attribute (the web
+     * client puts the file's name there), else the last part of [url]; made safe the same way as [fileName].
+     */
+    fun linkName(download: String?, url: String): String =
+        safeName(download?.takeIf { it.isNotBlank() } ?: urlName(url).orEmpty())
+
     /** The type to hand DownloadManager (it picks the app that opens the file), or null when [raw] is no type. */
     fun mimeType(raw: String?): String? =
         raw?.substringBefore(';')?.trim()?.lowercase()?.takeIf { MIME.matches(it) }

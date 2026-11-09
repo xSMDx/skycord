@@ -162,6 +162,24 @@ class AttachmentDownloadTest {
         assertEquals(name, AttachmentDownload.fileName("""attachment; filename="$name"""", url))
     }
 
+    // ---- a Download link the shim passed on ----------------------------------------------------
+
+    @Test fun aLinksOwnName_isUsed() {
+        assertEquals("café menu.pdf", AttachmentDownload.linkName("café menu.pdf", "$server/messages/attachments/$key/caf%C3%A9%20menu.pdf"))
+    }
+
+    @Test fun withNoLinkName_theNameComesFromTheUrl() {
+        assertEquals("caf é.pdf", AttachmentDownload.linkName(null, "$server/messages/attachments/$key/caf%20%C3%A9.pdf"))
+        assertEquals("notes.pdf", AttachmentDownload.linkName("", url))
+        assertEquals("notes.pdf", AttachmentDownload.linkName("   ", url))
+    }
+
+    @Test fun aLinksName_isMadeSafeLikeAnyOther() {
+        assertEquals("_.._etc_passwd", AttachmentDownload.linkName("../../etc/passwd", url))
+        assertEquals("photognp.exe", AttachmentDownload.linkName("photo‮gnp.exe", url))
+        assertEquals(AttachmentDownload.FALLBACK_NAME, AttachmentDownload.linkName("..", url))
+    }
+
     // ---- the type ------------------------------------------------------------------------------
 
     @Test fun theType_isPassedOnWithoutParameters() {
