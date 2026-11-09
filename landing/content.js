@@ -59,7 +59,7 @@
     // further than the web client in a window, then end-to-end encryption.
     stage: 'next', label: 'Next up', title: 'Desktop app, further',
     items: [
-      'A real desktop app instead of a browser tab — for Windows, live now',
+      'A real desktop app instead of a browser tab — for Windows and Linux, live now',
       'Much more of what a real Windows app can do, beyond the web app in a window — next',
       'Add other people’s servers and switch between them, like TeamSpeak — your friend hosts his, you host yours, one app for both — live now',
       'Your own screen-share picker, with the stream quality you choose — live now',
@@ -121,6 +121,16 @@
 ];
 
   var RELEASES = [{
+    v: 'v0.22.0', date: 'Nov 9, 2026', time: '20:00 UTC+1', title: 'Files in chat, and Skycord for Linux',
+    items: [
+      ['add', 'Send files. Attach photos, videos and files to a message in DMs, groups and channels: pick them, paste them or drop them, up to 10 at a time, with or without text. Each one starts uploading as soon as you add it, and if one can’t go, it says why under its tile before you send. In a server it follows the Attach files permission, which is now enforced. **If you host your own instance: files are capped at 25 MB each, kept in your database, and scanned by ClamAV when <code>CLAMD_HOST</code> is set. With a scanner set but unreachable, uploads are refused rather than let through unscanned.**'],
+      ['add', 'Previews instead of links. Photos and videos show in the message, several sharing one box, and open in a large view with download and arrows. Other files show as a card with their name, type and size, and a download button. GIFs play in place, including GIF links in the middle of a sentence; reduced motion and “tap to play” still hold them still until you ask. The conversation list, replies, pins, search and notifications say “Sent a photo”, “GIF” or the file’s name, never a raw link.'],
+      ['add', 'Skycord for Linux. The desktop app now comes for Linux as an AppImage, which runs on a stock Ubuntu with nothing extra installed, and as a .deb. It has its own launcher entry and icon, an unread count where your desktop shows one, and the same custom title bar. Sharing one app’s sound, or the whole computer’s, isn’t available on Linux yet, and the share picker says so.'],
+      ['add', 'Files on Android (beta). Download saves a file to the phone’s Downloads, and a message that is only files is notified as “Sent a photo”, “GIF” or the file’s name instead of “New message”.'],
+      ['fix', 'Calls on a self-hosted server dropped and re-joined every 15 seconds. The bundled voice server is now LiveKit 1.13.11. **If you run your own LiveKit, it needs 1.9.1 or newer.**'],
+      ['fix', 'Your own full profile showed only some of its parts. It now fills its card, banner and status line included, as other people’s profiles do.'],
+    ]
+  }, {
     v: 'v0.21.0', date: 'Nov 8, 2026', time: '06:00 UTC+1', title: 'Skycord for Android, in beta',
     items: [
       ['add', 'An Android app, in beta: the first version, so tell us what goes wrong. Install Skycord on an Android phone (Android 8 or newer) from its releases page. It opens your own server, or skycord.xyz, keeps a list of the servers you use, and updates itself. Links to other sites open in your browser, the back button closes whatever is on top before it leaves a chat, and files you attach come from the phone’s own picker. **If you host your own instance, update the server before handing out the app: it shows your server’s own web client, and its phone screens come with v0.20.99 or newer.**'],

@@ -64,6 +64,10 @@ The ordered queue. Nothing here starts until the user says so — they trigger e
 notifications, notification settings and the landing page's music demo ship as
 **v0.20.9**. The native phone app is **v0.21**.
 
+**v0.22.0 (planned 2026-11-09):** files in chat (attachments with previews, GIFs that play,
+saving on Android) and the desktop app for Linux, with the bundled LiveKit raised to 1.13.11.
+Changelog: `docs/changelog/v0.22.0.md`; plan: `docs/superpowers/plans/2026-11-09-v0.22.0-release.md`.
+
 **Split by the owner 2026-11-02:** most of the batch planned as v0.21 shipped as **v0.20.99**
 (server `v0.20.99` and Windows `desktop-v0.20.99`): the phone call screen in the browser, hold
 to talk on phones, the new logo, the music and screen-share batch, and the phone UI fixes.
