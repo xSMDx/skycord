@@ -391,13 +391,13 @@ Every one is now either enforced or honestly labelled. **Nothing is left `unenfo
 
 | State | Count | Meaning |
 |---|---|---|
-| enforced | 18 | the switch works |
-| `soon` | 12 | the FEATURE does not exist — granting it does nothing |
+| enforced | 19 | the switch works |
+| `soon` | 11 | the FEATURE does not exist — granting it does nothing |
 | `advisory` | 1 | `UseVoiceActivity` — wired and honoured by every stock client, but LiveKit has no push-to-talk concept, so a modified client can ignore it |
 | `unenforced` | **0** | — |
 
 Still `soon`, and each needs its own feature first: ManageEmojis, ViewAuditLog,
-ManageWebhooks, ChangeNickname, ManageNicknames, BanMembers, EmbedLinks, AttachFiles,
+ManageWebhooks, ChangeNickname, ManageNicknames, BanMembers, EmbedLinks,
 UseExternalEmojis, SendTTSMessages, UseSlashCommands, PrioritySpeaker.
 
 `permissionMeta.test.ts` reads the server tree and fails in BOTH directions — an
