@@ -55,6 +55,7 @@ import { noPushToTalkKey } from '@/composables/useVoiceSettings'
 import { AUDIO_ACCEPT } from '@/composables/uploadScheduler'
 import { runBulk, type Refused } from '@/composables/bulkRun'
 import { useFileDrop, guardWindowDrops } from '@/composables/fileDrop'
+import type { ModalPages } from '@/composables/modalHistory'
 import UploadList from './UploadList.vue'
 import LibrarySelectionBar from './LibrarySelectionBar.vue'
 
@@ -770,6 +771,21 @@ const removePicked = async (): Promise<void> => {
 }
 
 /**
+ * All tracks and each playlist are the room's pages: back returns to the one
+ * before (modalHistory.ts). A playlist loads before it shows, so the one asked
+ * for is what is on show meanwhile — its arrival is not a second step.
+ */
+const wantList = ref<string | null>(null)
+const showList = async (id: string): Promise<void> => {
+  wantList.value = id
+  try { await openPlaylist(id || null) } finally { wantList.value = null }
+}
+const pages: ModalPages<string> = {
+  read: () => wantList.value ?? library.open?.id ?? '',
+  go: id => { void showList(id) },
+}
+
+/**
  * Is there more of the playlist strip than fits?
  *
  * On a phone the playlists scroll sideways, and a scrolling row with no
@@ -824,7 +840,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
 </script>
 
 <template>
-  <ModalBase width="1240px" title="Music" :escape-guard="escapeSelection" @close="emit('close')">
+  <ModalBase width="1240px" title="Music" :escape-guard="escapeSelection" :pages="pages" @close="emit('close')">
     <div class="mm-shell" :style="headerStyle">
     <!-- Over the header rather than in a bar of its own: the art is the
          header, and a title strip above it would push the thing this modal
@@ -847,7 +863,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
           />
         </div>
 
-        <button class="mm-nav" :class="{ on: !library.open }" @click="openPlaylist(null)">
+        <button class="mm-nav" :class="{ on: !library.open }" @click="showList('')">
           <ListMusic :size="15" :stroke-width="2.25" />
           <span>All tracks</span>
           <span class="mm-count">{{ library.usage.tracks }}</span>
@@ -876,7 +892,7 @@ const pct = (at: number, dur: number | null | undefined): number =>
           @scroll.passive="measureEdges"
         >
           <li v-for="p in library.playlists" :key="p.id">
-            <button class="mm-nav" :class="{ on: library.open?.id === p.id }" @click="openPlaylist(p.id)">
+            <button class="mm-nav" :class="{ on: library.open?.id === p.id }" @click="showList(p.id)">
               <Music2 :size="15" :stroke-width="2.25" />
               <span class="mm-ellip">{{ p.name }}</span>
               <span class="mm-count">{{ p.count }}</span>

@@ -43,6 +43,7 @@ import UpdatesPage from '@/components/settings/UpdatesPage.vue'
 import DebugPage from '@/components/settings/DebugPage.vue'
 import { debugUnlocked } from '@/composables/debugUnlock'
 import { appBridge } from '@/composables/desktopBridge'
+import { useModalHistory } from '@/composables/modalHistory'
 import LegalPage from '@/components/settings/LegalPage.vue'
 
 const emit = defineEmits<{ close: [] }>()
@@ -545,12 +546,13 @@ const mobileDetail = ref(false)
 if (props.initialPage && props.initialPage !== 'account') mobileDetail.value = true
 
 // Dragging the window across the breakpoint mid-session shouldn't strand the
-// user on a detail pane that no longer exists as a separate screen.
-watch(isMobile, m => {
+// user on a detail pane that no longer exists as a separate screen. Not a step
+// of theirs, so back and forward don't count it (`nav` is below).
+watch(isMobile, m => nav.quietly(() => {
   if (!m) mobileDetail.value = false
   // Keybinds has no row on a phone, so the pane must not be left showing it.
   else if (page.value === 'keybinds') page.value = 'account'
-})
+}))
 
 const currentPageLabel = computed(() => {
   for (const s of navSections.value) {
@@ -694,6 +696,38 @@ onMounted(() => {
 onBeforeUnmount(() => window.removeEventListener('resize', measureTail))
 const requestClose = () => { shown.value = false }
 
+/*
+ * Back and forward — the desktop title bar, the mouse's buttons, Alt+Left and
+ * Alt+Right, the Android back button, a browser's history — go through the
+ * pages you opened here, and close Settings from the first one; the app behind
+ * never moves (modalHistory.ts). On a phone, going from the list into a page is
+ * a step too, and the list is one place whichever page was last open behind it.
+ */
+interface SettingsPlace { page: string; detail: boolean }
+const overlayEl = ref<HTMLElement | null>(null)
+const pageListed = (id: string) => navSections.value.some(s => s.items.some(i => i.id === id))
+const nav = useModalHistory<SettingsPlace>({
+  el: () => overlayEl.value,
+  close: requestClose,
+  active: () => shown.value,
+  read: () => isMobile.value && !mobileDetail.value
+    ? { page: '', detail: false }
+    : { page: page.value, detail: isMobile.value },
+  go: s => {
+    // A page that is no longer listed (Keybinds, on a phone) is passed over.
+    if (s.page && s.page !== page.value && pageListed(s.page)) {
+      page.value = s.page
+      activeSubSection.value = PAGE_SUBSECTIONS[s.page]?.[0]?.id || ''
+      contentEl.value?.scrollTo({ top: 0 })
+      nextTick(measureTail)
+    }
+    if (isMobile.value) mobileDetail.value = s.detail
+  },
+})
+/** The phone's back arrow is a back like any other, so the Android back button
+ *  after it closes Settings rather than returning to the page just left. */
+const backToList = () => nav.backOr(prev => !prev.detail, () => { mobileDetail.value = false })
+
 const handleLogout = () => { requestClose(); logout() }
 
 // The devices page can revoke the row this client is sitting on. The access
@@ -710,7 +744,7 @@ const handleSelfRevoked = () => handleLogout()
          mean @after-leave never fires and Settings stays mounted forever.
          Stuck open is a worse failure than an unanimated close. -->
     <Transition name="sm" appear :duration="{ enter: 240, leave: 140 }" @after-leave="emit('close')">
-    <div v-if="shown" class="sm-overlay" data-overlay @click.self="requestClose">
+    <div v-if="shown" ref="overlayEl" class="sm-overlay" data-overlay @click.self="requestClose">
       <div class="sm-modal" :class="{ mobile: isMobile, 'm-detail': mobileDetail }">
 
         <!-- Nav sidebar -->
@@ -770,7 +804,7 @@ const handleSelfRevoked = () => handleLogout()
           <!-- Sticky so it survives a long settings page being scrolled — a
                back control that scrolls away strands the user. -->
           <div v-if="isMobile" class="sm-mhead sm-mhead-detail">
-            <button class="sm-mhead-btn" aria-label="Back to settings list" @click="mobileDetail = false">
+            <button class="sm-mhead-btn" aria-label="Back to settings list" @click="backToList">
               <ChevronLeft :size="22" :stroke-width="2.25" />
             </button>
             <h2 class="sm-mhead-title">{{ currentPageLabel }}</h2>

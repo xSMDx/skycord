@@ -14,6 +14,7 @@ import LegalDocumentView from '@/components/legal/LegalDocumentView.vue'
 import OpenSourceLicences from './OpenSourceLicences.vue'
 import { useInstance, fetchLegalDocument } from '@/composables/useInstance'
 import { legalRows, sourceHref, LEGAL_TITLES, formatUpdated, type DocumentEntry } from '@/composables/legalDocs'
+import { useModalPart } from '@/composables/modalHistory'
 import '@/styles/settingsShared.css'
 
 const { profile, state, retry } = useInstance()
@@ -24,7 +25,14 @@ type View = { kind: 'list' } | { kind: 'doc'; entry: DocumentEntry } | { kind: '
 const view = ref<View>({ kind: 'list' })
 
 const openDocument = (entry: DocumentEntry) => { view.value = { kind: 'doc', entry } }
-const back = () => { view.value = { kind: 'list' } }
+
+// A document is a step inside Settings' own history (modalHistory.ts): back and
+// forward go between it and the list, and so does the Legal button above one.
+const part = useModalPart<View>('legal', {
+  read: () => view.value,
+  go: v => { view.value = v },
+})
+const back = () => part.backOr(prev => prev.kind === 'list', () => { view.value = { kind: 'list' } })
 
 // The AGPL ships with the app as plain text, and loads only when opened.
 const loadAgpl = () => import('../../../LICENSE?raw').then(m => m.default)
