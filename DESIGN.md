@@ -511,11 +511,17 @@ Rules:
 1. **Opt-out means not loaded.** Under `prefers-reduced-motion: reduce` the
    inline head script never adds `html.anim`, and `site-motion.js` never
    imports the libraries. The page is complete as written.
-2. **Nothing waits on a script.** `html.anim` hides the hero only until the
-   module takes over, or for 2.5 s at most.
+2. **Nothing waits on a script.** `html.anim` hides the hero and the feature
+   tiles only until the module takes over, or for 2.5 s at most. A module that
+   arrives after that never re-hides or replays what is on screen; it only
+   adds the loop, the scroll and the hover.
 3. **Loops run only when seen**: on screen (IntersectionObserver) and in a
-   visible tab. Switching reduced motion on mid-visit tears everything down.
-4. Marketing timings may run longer than the app's bands (up to ~1.1 s for the
+   visible tab, and a pause leaves nobody lit mid-sentence. Switching reduced
+   motion on mid-visit, even mid-intro, jumps the intro to its end, stops
+   every loop and puts the stage back to its still picture.
+4. **Anything that moves on its own can be stopped.** The feature marquee
+   has a pause button (keyboard and touch), and it pauses on hover.
+5. Marketing timings may run longer than the app's bands (up to ~1.1 s for the
    opening), but they still arrive on an ease-out and leave faster than they
    came.
 

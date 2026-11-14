@@ -124,7 +124,7 @@
     <!-- The voice stage: a channel mid-evening, shown rather than described.
          Decorative; the real, working demos are further down. -->
     <div class="stage-wrap a-in">
-      <div class="stage" id="stage" aria-hidden="true">
+      <div class="vstage" id="stage" aria-hidden="true">
         <div class="st-head">
           <svg class="ic"><use href="#i-volume"/></svg><b>Lounge</b><span>The Crew</span>
           <span class="st-count"><i></i>5 in voice</span>
@@ -188,6 +188,10 @@
       <li><svg><use href="#i-mark-s"/></svg>No ads, no upsell</li>
     </ul>
   </div>
+  <!-- Moving content must be pausable by anyone, not only a mouse (WCAG 2.2.2). -->
+  <button class="band-pause" type="button" aria-pressed="false" aria-label="Pause the scrolling list">
+    <svg class="ic i-pause" aria-hidden="true"><use href="#i-pause"/></svg><svg class="ic i-play" aria-hidden="true"><use href="#i-play"/></svg>
+  </button>
 </section>
 
 <!-- Features ------------------------------------------------------------->

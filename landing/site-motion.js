@@ -44,29 +44,43 @@ function start(anime, motion) {
   const stage = $('#stage');
   if (!h1 || !stage) { release(); return; }
 
-  /* ── Hero: the opening ─────────────────────────────────────────── */
-  const words = splitText(h1, { words: { class: 'w' } }).words;
-  words.forEach(hold);
-  const intro = ['.hero .lede', '.hero-act', '.stage-wrap'].map((s) => hold($(s)));
-  const tiles = $$('.st-tile', stage).map(hold);
+  /* Late: the 2.5 s safety timer already showed the page, and the visitor
+     may be reading it. Never hide what is on screen to replay it — keep
+     only the parts that add motion to a page already there (the loop,
+     scroll, hover). */
+  const late = !html.classList.contains('anim');
   const slots = $$('.st-slot', stage);
-  const bubbles = $$('.st-bubble', stage).map(hold);
-  const ctrl = hold($('.st-ctrl', stage));
-  const featureTiles = $$('#features .tile').map(hold);
-  release();
+  const featureTiles = late ? [] : $$('#features .tile');
 
-  createTimeline({ defaults: { ease: 'outExpo', duration: 900 } })
-    .add(words, { opacity: [0, 1], translateY: ['0.45em', '0em'], delay: stagger(55) }, 0)
-    .add(intro[0], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 260)
-    .add(intro[1], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 340)
-    .add(intro[2], { opacity: [0, 1], translateY: [56, 0], duration: 1100 }, 380)
-    .add(tiles, { opacity: [0, 1], scale: [0.9, 1], duration: 700, delay: stagger(60) }, 560)
-    .add(ctrl, { opacity: [0, 1], duration: 500 }, 860)
-    .add(bubbles, { opacity: [0, 1], scale: [0.86, 1], translateY: [10, 0], ease: 'outBack(1.6)', duration: 520, delay: stagger(180) }, 980)
-    .then(() => {
+  /* ── Hero: the opening ─────────────────────────────────────────── */
+  if (late) {
+    stops.push(stageLoop());
+  } else {
+    const words = splitText(h1, { words: { class: 'w' } }).words;
+    words.forEach(hold);
+    const intro = ['.hero .lede', '.hero-act', '.stage-wrap'].map((s) => hold($(s)));
+    const tiles = $$('.st-tile', stage).map(hold);
+    const bubbles = $$('.st-bubble', stage).map(hold);
+    const ctrl = hold($('.st-ctrl', stage));
+    featureTiles.forEach(hold);
+    release();
+
+    const tl = createTimeline({ defaults: { ease: 'outExpo', duration: 900 } })
+      .add(words, { opacity: [0, 1], translateY: ['0.45em', '0em'], delay: stagger(55) }, 0)
+      .add(intro[0], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 260)
+      .add(intro[1], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 340)
+      .add(intro[2], { opacity: [0, 1], translateY: [56, 0], duration: 1100 }, 380)
+      .add(tiles, { opacity: [0, 1], scale: [0.9, 1], duration: 700, delay: stagger(60) }, 560)
+      .add(ctrl, { opacity: [0, 1], duration: 500 }, 860)
+      .add(bubbles, { opacity: [0, 1], scale: [0.86, 1], translateY: [10, 0], ease: 'outBack(1.6)', duration: 520, delay: stagger(180) }, 980);
+    // Reduced motion switched on mid-intro jumps it to the end; the loop
+    // below must then never start.
+    stops.push(() => tl.complete());
+    tl.then(() => {
       [...words, ...intro, ...tiles, ctrl, ...bubbles].forEach((el) => el.removeAttribute('data-held'));
-      stops.push(stageLoop());
+      if (!REDUCE.matches) stops.push(stageLoop());
     });
+  }
 
   /* ── The stage settles as you scroll to it ─────────────────────────
      It starts tipped back, as if lying on the desk, and stands up as it
@@ -101,7 +115,7 @@ function start(anime, motion) {
   // final value for a moment and then snap back. Screen readers read the
   // stable copy beside it (.sr-only), never the moving one.
   const nums = $('.numbers');
-  if (nums) {
+  if (nums && !late) {   // late: the real figures are already showing
     const counters = $$('[data-count]', nums).filter((el) => +el.dataset.count > 0);
     counters.forEach((el) => { el.textContent = '0'; });
     stops.push(inView(nums, () => {
@@ -116,7 +130,7 @@ function start(anime, motion) {
 
   /* ── The install command types itself, once ──────────────────────── */
   const cmd = $('#term-cmd');
-  if (cmd) {
+  if (cmd && !late) {    // late: the command is already on screen, leave it
     // Cleared up front for the same reason as the numbers; the Copy button
     // and the .sr-only copy always carry the whole command.
     const full = cmd.textContent;
@@ -144,6 +158,7 @@ function start(anime, motion) {
   /* ── The stage keeps talking ─────────────────────────────────────── */
   function stageLoop() {
     const people = $$('.st-tile:not(.st-share)', stage);
+    const stillLit = people.filter((p) => p.classList.contains('speaking'));
     const WHO = [
       { n: 'Ada', c: '#5865f2' }, { n: 'Max', c: '#23a55a' }, { n: 'Rin', c: '#eb459e' },
       { n: 'Jo', c: '#9b59b6' }, { n: 'Kai', c: '#e67e22' }
@@ -186,8 +201,18 @@ function start(anime, motion) {
 
     function later(fn, ms) { const t = setTimeout(fn, ms); timers.push(t); return t; }
     function every(fn, ms) { const t = setInterval(fn, ms); timers.push(t); return t; }
-    function run() { if (running) return; running = true; every(speak, 2200); every(post, 4600); }
-    function stop() { running = false; timers.forEach((t) => { clearTimeout(t); clearInterval(t); }); timers = []; }
+    // The loop owns every ring while it runs: the two lit in the markup (the
+    // still picture) go out on their own turn, and a pause puts all of them
+    // out, so nobody is left lit when it resumes and nobody is stuck talking.
+    function hush() { people.forEach((p) => p.classList.remove('speaking')); }
+    function run() {
+      if (running) return;
+      running = true;
+      people.filter((p) => p.classList.contains('speaking'))
+        .forEach((p) => later(() => p.classList.remove('speaking'), 600 + Math.random() * 1200));
+      every(speak, 2200); every(post, 4600);
+    }
+    function stop() { running = false; timers.forEach((t) => { clearTimeout(t); clearInterval(t); }); timers = []; hush(); }
 
     // Only while someone can see it: on screen, in a visible tab.
     let onScreen = false;
@@ -199,6 +224,10 @@ function start(anime, motion) {
     const vis = () => (document.hidden || !onScreen ? stop() : run());
     document.addEventListener('visibilitychange', vis);
 
-    return () => { stop(); io.disconnect(); document.removeEventListener('visibilitychange', vis); };
+    // Torn down for good (reduced motion): back to the still picture.
+    return () => {
+      stop(); io.disconnect(); document.removeEventListener('visibilitychange', vis);
+      stillLit.forEach((p) => p.classList.add('speaking'));
+    };
   }
 }

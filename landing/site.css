@@ -226,7 +226,7 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 /* App greys, not page greys: this is the app, so it wears the app's
    chrome (DESIGN.md, "Color — the app"). */
 .stage-wrap { margin-top: clamp(30px, 3.6vw, 48px); padding-bottom: 34px; perspective: 1600px; }
-.stage {
+.vstage {
   --app-floor: #1e1f22; --app-side: #2b2d31; --app-chat: #313338; --app-raise: #383a40;
   position: relative;
   padding: 10px 12px 44px;
@@ -324,6 +324,18 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 .band-run svg { width: 22px; height: 22px; color: var(--accent); transition: color var(--dur-panel) var(--ease-out); }
 @keyframes marquee { to { transform: translateX(-50%); } }
 @media (hover: hover) and (pointer: fine) { .band:hover .band-track { animation-play-state: paused; } }
+.band { position: relative; }
+.band.paused .band-track { animation-play-state: paused; }
+.band-pause {
+  position: absolute; right: 16px; top: calc(50% + 8px); translate: 0 -50%;
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--ink); border: 1px solid var(--border); color: var(--text-1);
+  box-shadow: 0 0 0 10px var(--ink);
+  transition: background-color var(--dur-ui) ease;
+}
+.band-pause .i-play, .band-pause[aria-pressed="true"] .i-pause { display: none; }
+.band-pause[aria-pressed="true"] .i-play { display: block; }
+@media (hover: hover) and (pointer: fine) { .band-pause:hover { background: var(--panel); } }
 
 /* ── Feature tiles ─────────────────────────────────────────────────── */
 /* Colour at page scale: whole tiles carry Sky (which follows the accent
@@ -481,7 +493,7 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
   .st-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .st-share { grid-column: 1 / -1; grid-row: auto; aspect-ratio: 16 / 9; }
   .st-tile { aspect-ratio: 4 / 3; }
-  .stage { padding: 8px 8px 40px; border-radius: 22px; }
+  .vstage { padding: 8px 8px 40px; border-radius: 22px; }
   .st-slot { max-width: 76%; }
   .st-bubble p { font-size: 13px; }
   .s-1 { top: 64px; }
@@ -512,6 +524,7 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
   .band-track { animation: none; width: auto; }
   .band-run { flex-wrap: wrap; justify-content: center; padding: 0 16px; }
   .band-run[aria-hidden="true"] { display: none; }
+  .band-pause { display: none; }
   .caret { animation: none; }
   .brand-mark.blink .eye, .brand-mark.boop svg { animation: none; }
   .brand-mark .eyes { transition: none; }
