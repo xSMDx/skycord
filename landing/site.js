@@ -1,6 +1,7 @@
 /* ── The page ──────────────────────────────────────────────────────────
-   Scroll reveals, parallax, the sticky bar, the cat, and the ambient life
-   inside the hero's product shot. Demos live in demos.js. */
+   Scroll reveals, parallax, the sticky bar, the cat and the install copy
+   button: what works with or without motion. Demos live in demos.js; the
+   home page's choreography lives in site-motion.js. */
 (function () {
   'use strict';
 
@@ -167,72 +168,6 @@
     }).catch(function () { /* nothing to do; the command is on screen */ });
   });
 
-  /* ── The hero shot is alive ─────────────────────────────────────────
-     Not a screenshot: someone is talking, and messages keep arriving.
-     It is the first thing on the page, so it has to hold up. */
-  (function heroLife() {
-    if (REDUCE.matches) return;
-    var members = $$('.w-vm');
-    var msgs = $('#w-msgs');
-    if (!members.length || !msgs) return;
-
-    var running = false, timers = [];
-    function every(fn, ms) { var t = setInterval(fn, ms); timers.push(t); return t; }
-    function clearAll() { timers.forEach(clearInterval); timers = []; }
-
-    var WHO = [
-      { n: 'Ada', c: '#5865f2', i: 'A' },
-      { n: 'Max', c: '#23a55a', i: 'M' },
-      { n: 'Kai', c: '#e67e22', i: 'K' }
-    ];
-    var LINES = [
-      'ok im in', 'two mins', 'brb kettle', 'who is dropping first',
-      'screen share is up', 'that was not my fault', 'one more?', 'lounge is open'
-    ];
-    var n = 0, lastLine = -1;
-
-    function speak() {
-      // Turn-taking: whoever spoke last does not go again immediately.
-      var pool = members.filter(function (m) { return !m.classList.contains('speaking'); });
-      if (!pool.length) return;
-      var m = pool[Math.floor(Math.random() * pool.length)];
-      m.classList.add('speaking');
-      setTimeout(function () { m.classList.remove('speaking'); }, 800 + Math.random() * 1700);
-    }
-
-    function post() {
-      var w = WHO[n++ % WHO.length];
-      // Never the same line twice running — two people saying the exact
-      // same thing back to back is the tell that it is generated.
-      var i = Math.floor(Math.random() * LINES.length);
-      if (i === lastLine) i = (i + 1) % LINES.length;
-      lastLine = i;
-      var el = document.createElement('div');
-      el.className = 'w-msg new';
-      el.innerHTML = '<span class="w-av" style="background:' + w.c + '">' + w.i + '</span>' +
-        '<div><span class="w-who">' + w.n + '</span> <span class="w-t">now</span>' +
-        '<p>' + LINES[i] + '</p></div>';
-      msgs.appendChild(el);
-      // Next frame, so the transition has a start value to move from.
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () { el.classList.remove('new'); });
-      });
-      while (msgs.children.length > 4) msgs.removeChild(msgs.firstElementChild);
-    }
-
-    function start() {
-      if (running) return;
-      running = true;
-      every(speak, 2200);
-      every(post, 4600);
-    }
-    function stop() { running = false; clearAll(); }
-
-    new IntersectionObserver(function (e) {
-      if (e[0].isIntersecting && !document.hidden) start(); else stop();
-    }, { threshold: 0.2 }).observe($('#shot'));
-
-    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); });
-    REDUCE.addEventListener('change', function () { if (REDUCE.matches) stop(); });
-  })();
+  /* The hero's voice stage, and every other moving part of the home page,
+     live in site-motion.js, which loads only when motion is allowed. */
 })();
