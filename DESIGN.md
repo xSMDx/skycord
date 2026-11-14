@@ -37,13 +37,13 @@ get "improved" back into the bug it was fixing.
 
 | | **App** (`app.skycord.xyz`) | **Landing** (`skycord.xyz`) |
 |---|---|---|
-| Feel | Discord-adjacent, quiet, dense, gets out of the way | **The app itself.** The page is a Skycord server: rail, channels, messages |
+| Feel | Discord-adjacent, quiet, dense, gets out of the way | **Loud on purpose.** A live voice stage under a large headline, then colour at page scale: feature tiles and a closing band in the accent and three presets |
 | Ground | `#111214` → `#313338` (layered greys) | The same greys, `#111214` → `#313338` |
 | Type | **Archivo** for the UI, **Chakra Petch** for headings | The same two, plus **Fira Code** for commands and versions — all self-hosted in `landing/fonts/` |
 | Text tiers | Neutral greys (`#dcddde` → `#949ba4`) | The same greys |
 | Themeable | Yes — 5 presets, 9 accents, custom, Material-You | No — the dark default only, deliberately |
-| Density | Tight. Rows, not cards. | The app's rhythm, with a larger first screen (`#welcome`) |
-| Personality | Restraint. It's a tool people live inside. | Shows, not tells: a visitor is already inside a Skycord window |
+| Density | Tight. Rows, not cards. | Big type and big tiles, each holding a real, working piece of the app |
+| Personality | Restraint. It's a tool people live inside. | Shows, not tells: the app is on stage, mid-evening, and every demo works |
 
 **Which do the tools use?**
 
@@ -257,11 +257,13 @@ was the one the contract did not list.
 
 ## Color — the landing site
 
-**Since 2026-09-21 the landing uses the app's palette, unchanged**: the dark
-default of `tokens.css` above, Sky accent and all. It also uses the app's
-anatomy — `skycord.xyz` is laid out as a Skycord server, with the rail,
-the channel list, messages, embeds and a file attachment for the installer —
-so the landing shows the product instead of describing it.
+**Since 2026-09-21 the landing uses the app's palette**: the dark default of
+`tokens.css` above, Sky accent and all. Since 2026-11-14 (the "Crew room"
+redesign) it spends that palette at page scale instead of in accents: the
+feature tiles are whole fields of Sky, Green `#23a55a`, Yellow `#f0b232` and
+Pink `#eb459e` (accent presets), mixed with dark tiles, and the page closes
+on a band of Sky. The product is shown on a **voice stage** in the hero,
+drawn in the app's own greys (`#1e1f22` → `#383a40`) so it reads as the app.
 
 Rules that follow from it:
 
@@ -269,15 +271,29 @@ Rules that follow from it:
   repeats the app's values by name (`--bg-floor`, `--bg-panel`,
   `--bg-chat`, `--accent` …). A change to the app's palette is a change to
   both files.
-- **Text on Sky is ink** (`#0e0f11`), as in the app (`onAccent.ts`).
-- **Selection is a ring, not a fill**, in the channel list as in the app.
+- **Text on Sky is ink** (`#0e0f11`), as in the app (`onAccent.ts`). The same
+  goes for the Green, Yellow and Pink tiles; secondary text on any coloured
+  tile is ink at 84%, which stays at or above 4.5:1 on all four.
+- **Sky follows the accent.** The Sky tile, the closing band and every
+  accent-coloured detail use `--accent` / `--on-accent`, so the themes demo
+  recolours the page as it claims to. The fixed tiles use `--ink-text`.
+- **Buttons are keys.** A pill on a 4px darker edge (`--edge`), sinking 3px
+  on press with no transition. The edge is the only zero-blur shadow on the
+  page; everything else that floats uses a soft, offset, neutral shadow.
 - **No coloured glows.** Elevation is a neutral shadow; the accent never
   becomes a halo.
 
 History: from 2026-08-24 the landing had its own look — "Ember" (charcoal and
 amber), then true black with Blurple `#5865F2` and Light Blurple `#E0E3FF` —
 kept apart from the app on purpose. The owner moved it onto the app's palette
-on 2026-09-21.
+on 2026-09-21. From 2026-09-21 to 2026-11-14 the page was laid out as a
+Skycord server (rail, channel list, messages); the owner found it "a little
+boring", and the Crew room layout replaced it, keeping the palette, the faces,
+the mark, the copy and the live demos.
+
+Known gap: the page ground in `site.css` (`--ink` `#0a0b0d` and the rest) is
+still a little deeper than the app's greys. The stage uses the app's values
+locally. Moving the whole page ground over is a separate token pass.
 
 ---
 
@@ -372,11 +388,12 @@ with it. Both are the same signature at different weights of attention.
 
 The app's faces, served from `landing/fonts/` (no font CDN sees who visits):
 
-- **Chakra Petch 700** for the `#welcome` headline, `clamp(40px, 6vw, 68px)/1.02`,
-  and each channel's "Welcome to #…" heading.
+- **Chakra Petch 700** for the hero headline, `clamp(50px, 8.6vw, 112px)/.9`
+  with -0.03em tracking, for the tile headings (`clamp(32px, 3.5vw, 48px)`), for
+  the numbers sentence and for the closing band (up to 100px).
 - **Archivo 400–700** for everything else, at the app's sizes: 15px messages,
   11px/700 uppercase category labels.
-- **Fira Code 400–500** for the install command, version tags and the site tag.
+- **Fira Code 400–500** for the install command and the hero's version line.
 
 ---
 
@@ -474,6 +491,33 @@ One global backstop, because 37 files animate without a guard of their own:
 
 The spinner exception matters. "Respect reduced motion" does not mean "freeze
 the thing that tells the user work is happening."
+
+### Landing motion
+
+The landing has two animation libraries, vendored as tree-shaken ES modules in
+`landing/vendor/` (see its README). They have one job each, so they never
+animate the same element:
+
+- **Anime.js 4.5.0** handles anything sequenced: the hero's opening timeline
+  (headline words, then the lede and CTAs, then the stage and its tiles), the
+  stage's loop (speaking rings, bubbles replacing each other), the count-up
+  of the numbers, and the install command typing itself.
+- **Motion 14.9.0** handles scroll and springs: the stage stands up from
+  `rotateX(14deg)` as it scrolls to the middle of the screen, its bubble slots
+  drift, the feature tiles spring in, and they lift 4px under a fine pointer.
+
+Rules:
+
+1. **Opt-out means not loaded.** Under `prefers-reduced-motion: reduce` the
+   inline head script never adds `html.anim`, and `site-motion.js` never
+   imports the libraries. The page is complete as written.
+2. **Nothing waits on a script.** `html.anim` hides the hero only until the
+   module takes over, or for 2.5 s at most.
+3. **Loops run only when seen**: on screen (IntersectionObserver) and in a
+   visible tab. Switching reduced motion on mid-visit tears everything down.
+4. Marketing timings may run longer than the app's bands (up to ~1.1 s for the
+   opening), but they still arrive on an ease-out and leave faster than they
+   came.
 
 ---
 
