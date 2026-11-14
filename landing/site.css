@@ -222,94 +222,9 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 .hero-act .cta-row { margin-top: 0; justify-content: flex-end; }
 .hero-act .meta { margin-top: 14px; font-family: var(--font-mono); font-size: 12.5px; text-wrap: balance; }
 
-/* ── The voice stage ───────────────────────────────────────────────── */
-/* App greys, not page greys: this is the app, so it wears the app's
-   chrome (DESIGN.md, "Color — the app"). */
-.stage-wrap { margin-top: clamp(30px, 3.6vw, 48px); padding-bottom: 34px; perspective: 1600px; }
-.vstage {
-  --app-floor: #1e1f22; --app-side: #2b2d31; --app-chat: #313338; --app-raise: #383a40;
-  position: relative;
-  padding: 10px 12px 44px;
-  border-radius: 28px;
-  background: var(--app-floor);
-  border: 1px solid var(--border);
-  box-shadow: 0 50px 100px -40px rgba(0,0,0,.95), 0 18px 40px -24px rgba(0,0,0,.7);
-  transform-origin: 50% 100%;
-}
-.st-head { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 6px 6px; font-size: 14px; color: var(--text-3); }
-.st-head .ic { width: 18px; height: 18px; color: var(--text-2); }
-.st-head b { color: var(--text-1); font-weight: 600; margin-right: 4px; }
-.st-count { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
-.st-count i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-
-.st-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.st-tile {
-  position: relative; aspect-ratio: 16 / 10;
-  display: grid; place-items: center;
-  border-radius: 16px; background: var(--app-chat); overflow: hidden;
-}
-.st-share { grid-column: span 2; grid-row: span 2; aspect-ratio: auto; background: #16324a; }
-.st-scene { position: absolute; inset: 0; width: 100%; height: 100%; }
-.st-av {
-  display: grid; place-items: center; flex: none;
-  width: clamp(46px, 6.4vw, 84px); aspect-ratio: 1; border-radius: 50%;
-  background: var(--c); color: #fff;
-  font: 700 clamp(18px, 2.3vw, 30px)/1 var(--font-ui);
-  transition: box-shadow 160ms var(--ease-out);
-}
-/* Speaking is the app's green ring, on the tile and the avatar both. */
-.st-tile::after {
-  content: ''; position: absolute; inset: 0; border-radius: inherit;
-  box-shadow: inset 0 0 0 3px var(--green);
-  opacity: 0; transition: opacity 160ms var(--ease-out);
-}
-.st-tile.speaking::after { opacity: 1; }
-.st-tile.speaking .st-av { box-shadow: 0 0 0 4px var(--app-chat), 0 0 0 7px var(--green); }
-.st-tag {
-  position: absolute; left: 10px; bottom: 10px;
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 8px; border-radius: 6px;
-  background: rgba(0,0,0,.62); color: #fff;
-  font: 600 12px/1.45 var(--font-ui);
-}
-.st-tag svg { width: 13px; height: 13px; }
-.st-live {
-  position: absolute; right: 10px; top: 10px;
-  padding: 5px 7px; border-radius: 5px;
-  background: var(--danger); color: var(--on-danger);
-  font: 700 11px/1 var(--font-ui); letter-spacing: .05em;
-}
-
-.st-bubbles { position: absolute; inset: 0; pointer-events: none; }
-.st-bubble {
-  position: relative; display: flex; align-items: center; gap: 10px;
-  max-width: 310px; padding: 9px 14px 9px 9px;
-  border-radius: 16px; background: var(--app-side);
-  border: 1px solid var(--border);
-  box-shadow: 0 22px 44px -16px rgba(0,0,0,.85);
-}
-.st-bubble .st-av { width: 30px; font-size: 12px; }
-.st-bubble p { font-size: 14px; line-height: 1.35; color: var(--text-1); }
-.st-bubble b { color: var(--text-strong); font-weight: 700; margin-right: 3px; }
-.st-slot { position: absolute; max-width: 310px; }
-/* A bubble on its way out is lifted out of the flow, so the one
-   replacing it takes its place underneath without a jump. */
-.st-bubble.leaving { position: absolute; left: 0; top: 0; width: 100%; }
-.s-1 { right: -22px; top: 56px; }
-.s-2 { left: -26px; bottom: 74px; }
-
-
-
-.st-ctrl {
-  position: absolute; left: 50%; bottom: -30px; translate: -50% 0;
-  display: flex; gap: 10px; padding: 8px; border-radius: 999px;
-  background: var(--ink); border: 1px solid var(--border);
-  box-shadow: 0 18px 36px -14px rgba(0,0,0,.9);
-}
-.st-ctrl i { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--app-raise); color: var(--text-1); }
-.st-ctrl i.on { background: var(--green); color: var(--on-accent); }
-.st-ctrl i.red { background: var(--danger); color: var(--on-danger); }
-.st-ctrl svg { width: 22px; height: 22px; }
+/* ── The mini app ──────────────────────────────────────────────────── */
+/* Its frame and everything inside it live in mini.css (home page only). */
+.stage-wrap { margin-top: clamp(30px, 3.6vw, 48px); padding-bottom: 8px; perspective: 1600px; }
 
 /* ── Feature marquee ───────────────────────────────────────────────── */
 .band { padding: 22px 0 6px; overflow: hidden; }
@@ -473,12 +388,6 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 .anim .hero-h, .anim .a-in, .anim .tile { opacity: 0; }
 
 /* ── Responsive ────────────────────────────────────────────────────── */
-@media (max-width: 1240px) {
-  /* The bubbles hang off the stage's edges; with no side margin left
-     they tuck inside instead of running off the page. */
-  .s-1 { right: 14px; }
-  .s-2 { left: 14px; }
-}
 @media (max-width: 900px) {
   .links { display: none; }
   .hero-row { grid-template-columns: minmax(0, 1fr); }
@@ -488,17 +397,6 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
   .tile[data-span] { grid-column: 1 / -1; }
   .tile[data-span="12"] { display: flex; }
   .sh-in { grid-template-columns: minmax(0, 1fr); gap: 34px; }
-}
-@media (max-width: 760px) {
-  .st-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .st-share { grid-column: 1 / -1; grid-row: auto; aspect-ratio: 16 / 9; }
-  .st-tile { aspect-ratio: 4 / 3; }
-  .vstage { padding: 8px 8px 40px; border-radius: 22px; }
-  .st-slot { max-width: 76%; }
-  .st-bubble p { font-size: 13px; }
-  .s-1 { top: 64px; }
-  .s-2 { bottom: 62px; }
-  .st-ctrl i { width: 44px; height: 44px; }
 }
 @media (max-width: 560px) {
   .shell { padding: 0 16px; }

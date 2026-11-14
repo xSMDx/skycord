@@ -4,11 +4,13 @@
    decides, and holds the hero still until this takes over).
 
    Two libraries, one job each, so they never fight over an element:
-     Anime.js — anything sequenced: the hero's opening, the voice stage's
-                loop, the numbers counting, the command typing itself.
-     Motion   — scroll and springs: the stage settling as it comes up,
-                the bubbles drifting, tiles springing in, the hover lift.
-   Both are vendored in vendor/ (see vendor/README.md). */
+     Anime.js — anything sequenced: the hero's opening (the mini app
+                assembling itself), the numbers counting, the command typing.
+     Motion   — scroll and springs: the mini app standing up as it scrolls
+                in, tiles springing in, the hover lift.
+   The mini app's own states (channels, calls, settings) are CSS transitions
+   driven by app-demo.js, so they work with or without this file.
+   Both libraries are vendored in vendor/ (see vendor/README.md). */
 
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)');
 const html = document.documentElement;
@@ -49,19 +51,18 @@ function start(anime, motion) {
      only the parts that add motion to a page already there (the loop,
      scroll, hover). */
   const late = !html.classList.contains('anim');
-  const slots = $$('.st-slot', stage);
   const featureTiles = late ? [] : $$('#features .tile');
 
   /* ── Hero: the opening ─────────────────────────────────────────── */
-  if (late) {
-    stops.push(stageLoop());
-  } else {
+  // The app assembles itself the way it loads: rail, then the channel
+  // list, then the conversation.
+  if (!late) {
     const words = splitText(h1, { words: { class: 'w' } }).words;
     words.forEach(hold);
     const intro = ['.hero .lede', '.hero-act', '.stage-wrap'].map((s) => hold($(s)));
-    const tiles = $$('.st-tile', stage).map(hold);
-    const bubbles = $$('.st-bubble', stage).map(hold);
-    const ctrl = hold($('.st-ctrl', stage));
+    const rail = $$('.m-rail .ri, .m-rail .ri-divider', stage).map(hold);
+    const rows = $$('.sb-header, .ch-group-label, .ch-item, .vc-occ, .user-panel', stage).map(hold);
+    const talk = $$('.chat-header, .m-msgs .msg, .input-wrapper', stage).map(hold);
     featureTiles.forEach(hold);
     release();
 
@@ -70,30 +71,28 @@ function start(anime, motion) {
       .add(intro[0], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 260)
       .add(intro[1], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 340)
       .add(intro[2], { opacity: [0, 1], translateY: [56, 0], duration: 1100 }, 380)
-      .add(tiles, { opacity: [0, 1], scale: [0.9, 1], duration: 700, delay: stagger(60) }, 560)
-      .add(ctrl, { opacity: [0, 1], duration: 500 }, 860)
-      .add(bubbles, { opacity: [0, 1], scale: [0.86, 1], translateY: [10, 0], ease: 'outBack(1.6)', duration: 520, delay: stagger(180) }, 980);
-    // Reduced motion switched on mid-intro jumps it to the end; the loop
-    // below must then never start.
+      .add(rail, { opacity: [0, 1], scale: [0.8, 1], duration: 600, delay: stagger(50) }, 560)
+      .add(rows, { opacity: [0, 1], translateX: [-10, 0], duration: 600, delay: stagger(28) }, 640)
+      .add(talk, { opacity: [0, 1], translateY: [10, 0], duration: 650, delay: stagger(70) }, 780);
+    // Reduced motion switched on mid-intro jumps it to the end.
     stops.push(() => tl.complete());
     tl.then(() => {
-      [...words, ...intro, ...tiles, ctrl, ...bubbles].forEach((el) => el.removeAttribute('data-held'));
-      if (!REDUCE.matches) stops.push(stageLoop());
+      // Hand the elements back to CSS: the mini app's own transitions own
+      // them from here.
+      [...words, ...intro, ...rail, ...rows, ...talk].forEach((el) => {
+        el.removeAttribute('data-held');
+        if (el !== intro[2]) { el.style.transform = ''; el.style.opacity = ''; }
+      });
     });
   }
 
   /* ── The stage settles as you scroll to it ─────────────────────────
      It starts tipped back, as if lying on the desk, and stands up as it
-     reaches the middle of the screen. The bubbles drift a little faster
-     than the stage, which is all the depth it needs. */
+     reaches the middle of the screen. */
   stops.push(scroll(
     mAnimate(stage, { transform: ['rotateX(14deg) scale(.95)', 'rotateX(0deg) scale(1)'] }, { ease: 'linear' }),
     { target: stage, offset: ['start end', 'center center'] }
   ));
-  slots.forEach((slot, i) => stops.push(scroll(
-    mAnimate(slot, { transform: [`translateY(${i ? 40 : 28}px)`, `translateY(${i ? -40 : -28}px)`] }, { ease: 'linear' }),
-    { target: stage, offset: ['start end', 'end start'] }
-  )));
 
   /* ── Feature tiles spring in, and lift under a pointer ───────────── */
   featureTiles.forEach((tile) => {
@@ -147,87 +146,11 @@ function start(anime, motion) {
   REDUCE.addEventListener('change', () => {
     if (!REDUCE.matches) return;
     stops.forEach((s) => { try { typeof s === 'function' ? s() : s && s.stop && s.stop(); } catch (e) { /* already gone */ } });
-    $$('#stage, .st-slot, #features .tile').forEach((el) => { el.style.transform = ''; });
+    $$('#stage, #features .tile').forEach((el) => { el.style.transform = ''; });
     if (cmd) cmd.textContent = cmd.nextElementSibling.textContent;
     $$('[data-count]').forEach((el) => { el.textContent = el.dataset.count; });
     unhideAll();
   });
 
   window.__motionReady = true;
-
-  /* ── The stage keeps talking ─────────────────────────────────────── */
-  function stageLoop() {
-    const people = $$('.st-tile:not(.st-share)', stage);
-    const stillLit = people.filter((p) => p.classList.contains('speaking'));
-    const WHO = [
-      { n: 'Ada', c: '#5865f2' }, { n: 'Max', c: '#23a55a' }, { n: 'Rin', c: '#eb459e' },
-      { n: 'Jo', c: '#9b59b6' }, { n: 'Kai', c: '#e67e22' }
-    ];
-    const LINES = [
-      'ok im in', 'two mins', 'brb kettle', 'who is dropping first', 'that was not my fault',
-      'one more?', 'jo your mic is doing the thing', 'left at the bridge', 'nice', 'kai. the bridge.'
-    ];
-    let timers = [], running = false, turn = 0, lastLine = -1;
-
-    function speak() {
-      // Turn-taking: whoever is talking does not start again on top of themself.
-      const quiet = people.filter((p) => !p.classList.contains('speaking') && p.dataset.who !== 'max');
-      const p = quiet[Math.floor(Math.random() * quiet.length)];
-      if (!p) return;
-      p.classList.add('speaking');
-      aAnimate($('.st-av', p), { scale: [1, 1.06, 1], duration: 520, ease: 'outQuad' });
-      later(() => p.classList.remove('speaking'), 900 + Math.random() * 1800);
-    }
-
-    function post() {
-      const slot = slots[turn++ % slots.length];
-      const w = WHO[Math.floor(Math.random() * WHO.length)];
-      let i = Math.floor(Math.random() * LINES.length);
-      if (i === lastLine) i = (i + 1) % LINES.length;   // never the same line twice running
-      lastLine = i;
-      const old = $('.st-bubble', slot);
-      const el = document.createElement('div');
-      el.className = 'st-bubble';
-      el.innerHTML = `<span class="st-av" style="--c:${w.c}">${w.n[0]}</span><p><b>${w.n}</b> ${LINES[i]}</p>`;
-      el.style.opacity = '0';
-      if (old) {
-        old.classList.add('leaving');
-        aAnimate(old, { opacity: 0, translateY: -10, scale: 0.96, duration: 180, ease: 'inQuad',
-          onComplete: () => old.remove() });
-      }
-      slot.appendChild(el);
-      aAnimate(el, { opacity: [0, 1], scale: [0.86, 1], translateY: [12, 0], duration: 520, delay: 120, ease: 'outBack(1.6)' });
-    }
-
-    function later(fn, ms) { const t = setTimeout(fn, ms); timers.push(t); return t; }
-    function every(fn, ms) { const t = setInterval(fn, ms); timers.push(t); return t; }
-    // The loop owns every ring while it runs: the two lit in the markup (the
-    // still picture) go out on their own turn, and a pause puts all of them
-    // out, so nobody is left lit when it resumes and nobody is stuck talking.
-    function hush() { people.forEach((p) => p.classList.remove('speaking')); }
-    function run() {
-      if (running) return;
-      running = true;
-      people.filter((p) => p.classList.contains('speaking'))
-        .forEach((p) => later(() => p.classList.remove('speaking'), 600 + Math.random() * 1200));
-      every(speak, 2200); every(post, 4600);
-    }
-    function stop() { running = false; timers.forEach((t) => { clearTimeout(t); clearInterval(t); }); timers = []; hush(); }
-
-    // Only while someone can see it: on screen, in a visible tab.
-    let onScreen = false;
-    const io = new IntersectionObserver((e) => {
-      onScreen = e[0].isIntersecting;
-      onScreen && !document.hidden ? run() : stop();
-    }, { threshold: 0.2 });
-    io.observe(stage);
-    const vis = () => (document.hidden || !onScreen ? stop() : run());
-    document.addEventListener('visibilitychange', vis);
-
-    // Torn down for good (reduced motion): back to the still picture.
-    return () => {
-      stop(); io.disconnect(); document.removeEventListener('visibilitychange', vis);
-      stillLit.forEach((p) => p.classList.add('speaking'));
-    };
-  }
 }
