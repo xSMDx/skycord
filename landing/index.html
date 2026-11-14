@@ -28,6 +28,22 @@
 
 <link rel="stylesheet" href="site.css" />
 <link rel="stylesheet" href="demos.css" />
+
+<!-- Motion is opt-out, so the libraries are too. With reduced motion set,
+     nothing below runs: the page is complete as written, and the two
+     libraries are never requested. Otherwise the hero holds still (html.anim)
+     until site-motion.js takes it over, or 2.5 s pass, whichever is first. -->
+<script>
+(function () {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var d = document, h = d.documentElement;
+  h.classList.add('anim');
+  window.__animTimer = setTimeout(function () { h.classList.remove('anim'); }, 2500);
+  ['vendor/anime-4.5.0.js', 'vendor/motion-14.9.0.js'].forEach(function (u) {
+    var l = d.createElement('link'); l.rel = 'modulepreload'; l.href = u; d.head.appendChild(l);
+  });
+})();
+</script>
 </head>
 <body>
 
@@ -84,100 +100,106 @@
 
 <!-- Hero ----------------------------------------------------------------->
 <section class="hero" id="top">
-  <div class="floaters" aria-hidden="true">
-    <span class="fl fl-a" data-par="0.16"></span>
-    <span class="fl fl-b" data-par="-0.10"></span>
-    <span class="fl fl-c" data-par="0.24"></span>
-    <span class="fl fl-d" data-par="-0.18"></span>
-  </div>
-
-  <div class="shell hero-in">
-    <h1 class="reveal">Your crew's<br/>place to <em>talk</em>.</h1>
-    <p class="lede reveal">Text and voice channels, DMs, video calls and screen share — for people
-      who already know each other. On our server, or on one you run yourself.</p>
-
-    <div class="cta-row reveal">
-      <!-- data-dl / data-web: site.js swaps the download for the visitor's system (platformCta). -->
-      <a class="btn big primary" data-dl href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest">
-        <svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>
-        <span data-dl-label>Download for Windows</span>
-      </a>
-      <a class="btn big ghost" data-web href="https://app.skycord.xyz">
-        <svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg>
-        Open in your browser
-      </a>
+  <div class="shell">
+    <h1 class="hero-h" data-split>Your crew's place to <em>talk</em>.</h1>
+    <div class="hero-row">
+      <p class="lede a-in">Text and voice channels, DMs, video calls and screen share — for people
+        who already know each other. On our server, or on one you run yourself.</p>
+      <div class="hero-act a-in">
+        <div class="cta-row">
+          <!-- data-dl / data-web: site.js swaps the download for the visitor's system (platformCta). -->
+          <a class="btn big primary" data-dl href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest">
+            <svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>
+            <span data-dl-label>Download for Windows</span>
+          </a>
+          <a class="btn big ghost" data-web href="https://app.skycord.xyz">
+            <svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg>
+            Open in your browser
+          </a>
+        </div>
+        <p class="meta">v0.22.0 · Windows 10 and 11 · Linux · Android 8 and newer (beta) · or your own box, in one command</p>
+      </div>
     </div>
-    <p class="meta reveal">v0.22.0 · Windows 10 and 11 · Linux · Android 8 and newer (beta) · or run it on your own box in one command</p>
 
-    <!-- The product itself, shown rather than described. -->
-    <div class="shot reveal" id="shot">
-      <div class="shot-glow" aria-hidden="true"></div>
-      <div class="win" aria-label="Skycord, running">
-        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Skycord</span></div>
-        <div class="win-body">
-          <div class="w-rail" aria-hidden="true">
-            <span class="w-guild on"><svg viewBox="0 0 256 256"><use href="#i-mark"/></svg></span>
-            <span class="w-guild">R</span><span class="w-guild">D</span><span class="w-guild">+</span>
+    <!-- The voice stage: a channel mid-evening, shown rather than described.
+         Decorative; the real, working demos are further down. -->
+    <div class="stage-wrap a-in">
+      <div class="vstage" id="stage" aria-hidden="true">
+        <div class="st-head">
+          <svg class="ic"><use href="#i-volume"/></svg><b>Lounge</b><span>The Crew</span>
+          <span class="st-count"><i></i>5 in voice</span>
+        </div>
+        <div class="st-grid">
+          <div class="st-tile st-share" data-who="kai">
+            <svg class="st-scene" viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice">
+              <rect width="640" height="360" fill="#16324a"/>
+              <circle cx="470" cy="104" r="46" fill="#f0b232"/>
+              <path d="M0 250 L120 168 L210 222 L320 140 L430 214 L520 172 L640 236 V360 H0Z" fill="#1d4a3a"/>
+              <path d="M0 296 L150 236 L260 280 L380 228 L500 284 L640 254 V360 H0Z" fill="#23a55a"/>
+              <path d="M0 330 H640 V360 H0Z" fill="#14281f"/>
+              <g fill="#0e0f11"><rect x="292" y="262" width="22" height="30" rx="4"/><circle cx="303" cy="254" r="9"/></g>
+              <g fill="none" stroke="#ffffff" stroke-opacity=".75" stroke-width="3"><circle cx="320" cy="180" r="14"/><path d="M320 158v10M320 192v10M298 180h10M332 180h10"/></g>
+            </svg>
+            <span class="st-live">LIVE</span>
+            <span class="st-tag"><svg><use href="#i-screen"/></svg>Kai</span>
           </div>
-          <div class="w-side" aria-hidden="true">
-            <div class="w-guildname">The Crew</div>
-            <div class="w-cat">Text</div>
-            <div class="w-ch on"><svg><use href="#i-hash"/></svg>general</div>
-            <div class="w-ch"><svg><use href="#i-hash"/></svg>gaming</div>
-            <div class="w-cat">Voice</div>
-            <div class="w-ch"><svg><use href="#i-volume"/></svg>Lounge</div>
-            <ul class="w-vc">
-              <li class="w-vm" data-who="ada"><span class="w-av" style="background:#5865f2">A</span>Ada</li>
-              <li class="w-vm" data-who="max"><span class="w-av" style="background:#23a55a">M</span>Max</li>
-              <li class="w-vm" data-who="kai"><span class="w-av" style="background:#e67e22">K</span>Kai</li>
-            </ul>
-          </div>
-          <div class="w-chat">
-            <div class="w-head" aria-hidden="true"><svg><use href="#i-hash"/></svg><b>general</b></div>
-            <div class="w-msgs" id="w-msgs" aria-hidden="true">
-              <div class="w-msg"><span class="w-av" style="background:#e67e22">K</span>
-                <div><span class="w-who">Kai</span> <span class="w-t">21:02</span>
-                <p>anyone up for a round</p></div></div>
-              <div class="w-msg"><span class="w-av" style="background:#23a55a">M</span>
-                <div><span class="w-who">Max</span> <span class="w-t">21:03</span>
-                <p>im in, joining the lounge</p></div></div>
-              <div class="w-msg"><span class="w-av" style="background:#5865f2">A</span>
-                <div><span class="w-who">Ada</span> <span class="w-t">21:04</span>
-                <p>two secs, putting the kettle on</p></div></div>
-            </div>
-            <div class="w-composer" aria-hidden="true"><span>Message #general</span></div>
-          </div>
+          <div class="st-tile speaking" data-who="ada"><span class="st-av" style="--c:#5865f2">A</span><span class="st-tag">Ada</span></div>
+          <div class="st-tile" data-who="max"><span class="st-av" style="--c:#23a55a">M</span><span class="st-tag"><svg><use href="#i-mic-off"/></svg>Max</span></div>
+          <div class="st-tile speaking" data-who="rin"><span class="st-av" style="--c:#eb459e">R</span><span class="st-tag">Rin</span></div>
+          <div class="st-tile" data-who="jo"><span class="st-av" style="--c:#9b59b6">J</span><span class="st-tag">Jo</span></div>
+        </div>
+        <div class="st-bubbles" id="st-bubbles">
+          <div class="st-slot s-1"><div class="st-bubble"><span class="st-av" style="--c:#23a55a">M</span><p><b>Max</b> muted, eating. carry on</p></div></div>
+          <div class="st-slot s-2"><div class="st-bubble"><span class="st-av" style="--c:#5865f2">A</span><p><b>Ada</b> kai you're on the wrong road</p></div></div>
+        </div>
+        <div class="st-ctrl">
+          <i><svg><use href="#i-mic"/></svg></i><i><svg><use href="#i-cam"/></svg></i><i class="on"><svg><use href="#i-screen"/></svg></i><i class="red"><svg><use href="#i-hangup"/></svg></i>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Marquee band --------------------------------------------------------->
-<section class="band" aria-hidden="true">
+<!-- Feature marquee -------------------------------------------------------->
+<section class="band" aria-label="What's in it">
   <div class="band-track">
-    <div class="band-run">
-      <span>talk</span><svg><use href="#i-mark"/></svg>
-      <span>play</span><svg><use href="#i-mark"/></svg>
-      <span>hang out</span><svg><use href="#i-mark"/></svg>
-      <span>chat</span><svg><use href="#i-mark"/></svg>
-    </div>
-    <div class="band-run">
-      <span>talk</span><svg><use href="#i-mark"/></svg>
-      <span>play</span><svg><use href="#i-mark"/></svg>
-      <span>hang out</span><svg><use href="#i-mark"/></svg>
-      <span>chat</span><svg><use href="#i-mark"/></svg>
-    </div>
+    <ul class="band-run">
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Voice channels</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Screen share with sound</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Calls that ring on Android</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Music for the whole call</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Noise filtering</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Files in chat</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Stickers and GIFs</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Your own accent</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>Run it yourself</li>
+      <li><svg aria-hidden="true"><use href="#i-mark-s"/></svg>No ads, no upsell</li>
+    </ul>
+    <ul class="band-run" aria-hidden="true">
+      <li><svg><use href="#i-mark-s"/></svg>Voice channels</li>
+      <li><svg><use href="#i-mark-s"/></svg>Screen share with sound</li>
+      <li><svg><use href="#i-mark-s"/></svg>Calls that ring on Android</li>
+      <li><svg><use href="#i-mark-s"/></svg>Music for the whole call</li>
+      <li><svg><use href="#i-mark-s"/></svg>Noise filtering</li>
+      <li><svg><use href="#i-mark-s"/></svg>Files in chat</li>
+      <li><svg><use href="#i-mark-s"/></svg>Stickers and GIFs</li>
+      <li><svg><use href="#i-mark-s"/></svg>Your own accent</li>
+      <li><svg><use href="#i-mark-s"/></svg>Run it yourself</li>
+      <li><svg><use href="#i-mark-s"/></svg>No ads, no upsell</li>
+    </ul>
   </div>
+  <!-- Moving content must be pausable by anyone, not only a mouse (WCAG 2.2.2). -->
+  <button class="band-pause" type="button" aria-pressed="false" aria-label="Pause the scrolling list">
+    <svg class="ic i-pause" aria-hidden="true"><use href="#i-pause"/></svg><svg class="ic i-play" aria-hidden="true"><use href="#i-play"/></svg>
+  </button>
 </section>
 
 <!-- Features ------------------------------------------------------------->
-<div id="features">
+<section class="tiles" id="features" aria-label="Features">
+<div class="shell tile-grid">
 
-  <section class="feat" data-flip="0">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-phone"/></svg> On your phone</span>
+  <article class="tile" data-tile="phone" data-tone="sky" data-span="12">
+      <div class="tile-copy">
         <h2>Pick up when<br/>the crew calls.</h2>
         <p>Install the Android app and calls ring and messages arrive even when Skycord is
           closed. Or open it in your phone's browser: either way, a call gets a screen made
@@ -194,7 +216,7 @@
             <svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Download for Android (beta)</a>
         </div>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="phone" data-ph="ring">
           <div class="demo-head"><span class="ic"><svg><use href="#i-phone"/></svg></span><b>On your phone</b><span class="hint">yours — try it</span></div>
           <div class="demo-body">
@@ -256,13 +278,10 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
-  <section class="feat" data-flip="1">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-screen"/></svg> Screen share</span>
+  <article class="tile" data-tile="share" data-tone="dark" data-span="7">
+      <div class="tile-copy">
         <h2>Show them, don't<br/>describe it.</h2>
         <p>Share a window or a whole screen at the quality you choose, not whatever the browser
           decides. Nobody downloads a stream until they join it to watch.</p>
@@ -272,7 +291,7 @@
           <li>Turn a stream's sound down without touching the voice</li>
         </ul>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="share">
           <div class="demo-head"><span class="ic"><svg><use href="#i-screen"/></svg></span><b>Share your screen</b><span class="hint">yours — try it</span></div>
           <div class="demo-body">
@@ -308,13 +327,10 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
-  <section class="feat" data-flip="0">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-mic"/></svg> Voice</span>
+  <article class="tile" data-tile="voice" data-tone="green" data-span="5">
+      <div class="tile-copy">
         <h2>Sound like you're<br/>in the room.</h2>
         <p>Four levels of noise filtering, including DeepFilterNet&nbsp;3 — in beta — for clattery
           keyboards and echoey rooms. Change your mic without leaving the call.</p>
@@ -324,7 +340,7 @@
           <li>Per-person volume, for the one friend who is always too loud</li>
         </ul>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="voice">
           <div class="demo-head"><span class="ic"><svg><use href="#i-mic"/></svg></span><b>Noise filtering</b><span class="hint">yours — try it</span></div>
           <div class="demo-body">
@@ -338,13 +354,10 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
-  <section class="feat" data-flip="1">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-music"/></svg> Music</span>
+  <article class="tile" data-tile="music" data-tone="yellow" data-span="5">
+      <div class="tile-copy">
         <h2>Press play for<br/>the whole call.</h2>
         <p>Open a music channel in any voice call and everyone in it can tune in. The server plays
           it, so nobody has to share their screen or play songs into their mic.</p>
@@ -355,7 +368,7 @@
           <li>Or type /play, /pause, /skip and /queue in chat</li>
         </ul>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="music">
           <div class="demo-head"><span class="ic"><svg><use href="#i-music"/></svg></span><b>Listen together</b><span class="hint">yours — try it</span></div>
           <div class="demo-body">
@@ -395,14 +408,11 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
 
-  <section class="feat" data-flip="0">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-mark-s"/></svg> Themes</span>
+  <article class="tile" data-tile="themes" data-tone="dark" data-span="7">
+      <div class="tile-copy">
         <h2>Make it look<br/>like yours.</h2>
         <p>Pick an accent and the whole app follows — not a preview tile, the actual interface.
           Share a theme in chat and your friends can apply it in one click.</p>
@@ -412,7 +422,7 @@
           <li>A status that expires on its own</li>
         </ul>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="themes">
           <div class="demo-head"><span class="ic"><svg><use href="#i-mark-s"/></svg></span><b>Accent</b><span class="hint">this page too — click one</span></div>
           <div class="demo-body">
@@ -425,13 +435,10 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
-  <section class="feat" data-flip="1">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-bolt"/></svg> Performance</span>
+  <article class="tile" data-tile="perf" data-tone="dark" data-span="6">
+      <div class="tile-copy">
         <h2>Kind to an<br/>older PC.</h2>
         <p>Light mode measured 41% less memory than Max on the machine it was built on. It turns
           off the graphics card, which is most of the saving.</p>
@@ -441,7 +448,7 @@
           <li>Or set each switch yourself, under Advanced</li>
         </ul>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="perf">
           <div class="demo-head"><span class="ic"><svg><use href="#i-bolt"/></svg></span><b>Performance mode</b><span class="hint">yours — try it</span></div>
           <div class="demo-body">
@@ -459,13 +466,10 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
-  <section class="feat" data-flip="0">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-smile"/></svg> Expression</span>
+  <article class="tile" data-tile="reactions" data-tone="pink" data-span="6">
+      <div class="tile-copy">
         <h2>Answer without<br/>typing a word.</h2>
         <p>Reactions, custom stickers and emoji, GIF search, and rich text when you actually do
           have something to say.</p>
@@ -475,7 +479,7 @@
           <li>Right-click menus everywhere they should be</li>
         </ul>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="reactions">
           <div class="demo-head"><span class="ic"><svg><use href="#i-smile"/></svg></span><b>Reactions</b><span class="hint">yours — try it</span></div>
           <div class="demo-body">
@@ -495,13 +499,10 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
-  <section class="feat" data-flip="1">
-    <div class="shell feat-in">
-      <div class="feat-copy reveal">
-        <span class="eyebrow"><svg class="ic"><use href="#i-gauge"/></svg> Diagnostics</span>
+  <article class="tile" data-tile="net" data-tone="dark" data-span="12">
+      <div class="tile-copy">
         <h2>Know why it's<br/>being weird.</h2>
         <p>A live ping graph, packet loss, codec and bitrate — so "it's laggy" becomes a number
           you can act on. Save the lot for a bug report in one click.</p>
@@ -511,7 +512,7 @@
           <li>Diagnostics you can attach to an issue</li>
         </ul>
       </div>
-      <div class="feat-demo reveal">
+      <div class="tile-demo">
         <div class="demo" data-demo="net">
           <div class="demo-head"><span class="ic"><svg><use href="#i-gauge"/></svg></span><b>Connection</b><span class="hint">yours — try it</span></div>
           <div class="demo-body">
@@ -531,16 +532,24 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
+  </article>
 
 </div>
+</section>
+
+<!-- In numbers ----------------------------------------------------------->
+<section class="numbers" aria-label="Skycord in numbers">
+  <p class="shell nums">
+    <span class="n-line"><b><span data-count="40" aria-hidden="true">40</span><span class="sr-only">40</span></b> releases in <b><span data-count="20" aria-hidden="true">20</span><span class="sr-only">20</span></b> weeks.</span>
+    <span class="n-line"><b><span data-count="3" aria-hidden="true">3</span><span class="sr-only">3</span></b> apps and a browser tab.</span>
+    <span class="n-line"><b><span data-count="0" aria-hidden="true">0</span><span class="sr-only">0</span></b> ads, ever.</span>
+  </p>
+</section>
 
 <!-- Self-host ------------------------------------------------------------>
 <section class="selfhost" id="selfhost">
   <div class="shell sh-in">
-    <div class="reveal">
-      <span class="eyebrow"><svg class="ic"><use href="#i-github"/></svg> Open source, AGPL</span>
+    <div class="sh-copy">
       <h2>Or run the whole<br/>thing yourself.</h2>
       <p>One command on a fresh Linux server and you have your own Skycord on HTTPS. It asks for
         the address people will use and an email for certificate notices. Everything else it
@@ -549,12 +558,13 @@
         <li>Your hardware, your data, no company in the middle</li>
         <li>An old laptop in a cupboard is enough</li>
         <li>Updates are one command too</li>
+        <li>Open source, AGPL</li>
       </ul>
     </div>
-    <div class="term reveal">
+    <div class="term">
       <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>root@your-box</span></div>
       <div class="term-main">
-        <pre class="term-body"><code><span class="p">$</span> curl -fsSL https://skycord.xyz/install.sh | sudo bash</code></pre>
+        <pre class="term-body"><code><span class="p" aria-hidden="true">$</span> <span id="term-cmd" aria-hidden="true">curl -fsSL https://skycord.xyz/install.sh | sudo bash</span><span class="sr-only">curl -fsSL https://skycord.xyz/install.sh | sudo bash</span><span class="caret" aria-hidden="true"></span></code></pre>
         <button class="term-copy" type="button" data-copy="curl -fsSL https://skycord.xyz/install.sh | sudo bash">
           <svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span>
         </button>
@@ -563,11 +573,12 @@
   </div>
 </section>
 
-<!-- Closing CTA ---------------------------------------------------------->
+<!-- Closing band --------------------------------------------------------->
 <section class="end">
-  <div class="shell reveal">
+  <div class="shell end-in">
+    <svg class="end-mark" aria-hidden="true" viewBox="0 0 256 256"><use href="#i-mark"/></svg>
     <h2>Get your crew<br/>in one place.</h2>
-    <div class="cta-row center">
+    <div class="cta-row">
       <a class="btn big primary" data-dl href="https://github.com/xSMDx/skycord-desktop-releases/releases/latest">
         <svg class="ic" aria-hidden="true"><use href="#i-download"/></svg><span data-dl-label>Download for Windows</span></a>
       <a class="btn big ghost" data-web href="https://app.skycord.xyz">
@@ -598,5 +609,6 @@
 
 <script src="site.js"></script>
 <script src="demos.js"></script>
+<script type="module" src="site-motion.js"></script>
 </body>
 </html>
