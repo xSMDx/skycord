@@ -97,14 +97,17 @@ function start(anime, motion) {
   }
 
   /* ── The numbers count up when they arrive ───────────────────────── */
+  // Each figure starts at 0 now, not when it arrives, or it would show its
+  // final value for a moment and then snap back. Screen readers read the
+  // stable copy beside it (.sr-only), never the moving one.
   const nums = $('.numbers');
   if (nums) {
+    const counters = $$('[data-count]', nums).filter((el) => +el.dataset.count > 0);
+    counters.forEach((el) => { el.textContent = '0'; });
     stops.push(inView(nums, () => {
-      $$('[data-count]', nums).forEach((el, i) => {
+      counters.forEach((el, i) => {
         const to = +el.dataset.count;
-        if (!to) return;
         const n = { v: 0 };
-        el.textContent = '0';
         aAnimate(n, { v: to, duration: 1400, delay: i * 140, ease: 'outExpo',
           onUpdate: () => { el.textContent = String(Math.round(n.v)); } });
       });
@@ -114,13 +117,15 @@ function start(anime, motion) {
   /* ── The install command types itself, once ──────────────────────── */
   const cmd = $('#term-cmd');
   if (cmd) {
+    // Cleared up front for the same reason as the numbers; the Copy button
+    // and the .sr-only copy always carry the whole command.
     const full = cmd.textContent;
+    cmd.textContent = '';
     stops.push(inView(cmd, () => {
       const n = { c: 0 };
-      cmd.setAttribute('aria-label', full);     // the whole command, for anyone reading along
       aAnimate(n, { c: full.length, duration: 1500, ease: 'linear',
         onUpdate: () => { cmd.textContent = full.slice(0, Math.round(n.c)); },
-        onComplete: () => { cmd.textContent = full; cmd.removeAttribute('aria-label'); } });
+        onComplete: () => { cmd.textContent = full; } });
     }, { amount: 0.6 }));
   }
 
@@ -129,6 +134,8 @@ function start(anime, motion) {
     if (!REDUCE.matches) return;
     stops.forEach((s) => { try { typeof s === 'function' ? s() : s && s.stop && s.stop(); } catch (e) { /* already gone */ } });
     $$('#stage, .st-slot, #features .tile').forEach((el) => { el.style.transform = ''; });
+    if (cmd) cmd.textContent = cmd.nextElementSibling.textContent;
+    $$('[data-count]').forEach((el) => { el.textContent = el.dataset.count; });
     unhideAll();
   });
 
