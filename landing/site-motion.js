@@ -104,11 +104,11 @@ function start(anime, motion) {
   // pointer is still there. Otherwise the entrance, finishing last, would
   // drop a hovered tile back to the floor.
   const fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
-  const lift = (tile) => mAnimate(tile, { transform: 'translateY(-4px)' }, { type: spring, bounce: 0.3, duration: 0.45 });
+  const lift = (tile) => mAnimate(tile, { transform: 'translateY(-4px)' }, { type: spring, bounce: 0, duration: 0.4 });
   featureTiles.forEach((tile) => {
     stops.push(inView(tile, () => {
       mAnimate(tile, { opacity: [0, 1], transform: ['translateY(36px)', 'translateY(0px)'] },
-        { type: spring, bounce: 0.18, duration: 0.8 })
+        { type: spring, bounce: 0, duration: 0.7 })
         .then(() => {
           tile.removeAttribute('data-held');
           if (fine && tile.matches(':hover')) lift(tile);
@@ -119,7 +119,7 @@ function start(anime, motion) {
     stops.push(hover('#features .tile', (tile) => {
       if (!tile.hasAttribute('data-held')) lift(tile);
       // Leaving always settles it, including after a lift applied on landing.
-      return () => mAnimate(tile, { transform: 'translateY(0px)' }, { type: spring, bounce: 0.2, duration: 0.5 });
+      return () => mAnimate(tile, { transform: 'translateY(0px)' }, { type: spring, bounce: 0, duration: 0.4 });
     }));
   }
 

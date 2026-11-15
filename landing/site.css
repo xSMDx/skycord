@@ -111,17 +111,8 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 .lede { margin-top: 22px; font-size: clamp(17px, 1.6vw, 20px); color: var(--text-2); max-width: 46ch; }
 .meta { margin-top: 18px; font-size: 13px; color: var(--text-3); }
 
-.eyebrow {
-  display: inline-flex; align-items: center; gap: 8px;
-  margin-bottom: 18px;
-  font: 600 12px/1 var(--font-ui);
-  letter-spacing: .14em; text-transform: uppercase;
-  color: var(--accent-text);
-  transition: color var(--dur-panel) var(--ease-out);
-}
-.eyebrow .ic { width: 15px; height: 15px; }
 
-.ticks { list-style: none; margin-top: 24px; display: grid; gap: 11px; }
+.ticks { list-style: none; margin-top: 24px; display: grid; gap: 12px; }
 .ticks li { position: relative; padding-left: 28px; color: var(--text-2); font-size: 15px; }
 .ticks li::before {
   content: ''; position: absolute; left: 0; top: .52em;
@@ -187,7 +178,7 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 .links { display: flex; gap: 26px; font-size: 15px; font-weight: 500; color: var(--text-2); }
 .links a { position: relative; display: inline-flex; align-items: center; min-height: 44px; transition: color var(--dur-ui) ease; }
 .links a::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: 7px; height: 2px;
+  content: ''; position: absolute; left: 0; right: 0; bottom: 8px; height: 2px;
   background: var(--accent); border-radius: 2px;
   transform: scaleX(0); transform-origin: left;
   transition: transform var(--dur-ui) var(--ease-out);
@@ -313,19 +304,19 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 .selfhost h2 { font-size: clamp(36px, 4.6vw, 60px); }
 .selfhost p { margin-top: 18px; color: var(--text-2); max-width: 44ch; }
 .term { position: relative; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--sunk); box-shadow: 0 40px 80px -36px rgba(0,0,0,.9); }
-.term-bar { display: flex; align-items: center; gap: 7px; height: 56px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--divider); }
-.term-bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3f47; }
+.term-bar { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--divider); }
+.term-bar i { width: 12px; height: 12px; border-radius: 50%; background: #3a3f47; }
 .term-bar span { margin-left: 8px; font: 400 12px/1 var(--font-mono); color: var(--text-3); }
 /* Copy lives in the title bar, so the command has the whole line and
    wraps rather than hiding under a button or behind a sideways scroll. */
 .term-body { padding: 30px 22px 34px; }
 .term-body code { font: 400 15px/1.7 var(--font-mono); color: var(--text-1); white-space: pre-wrap; word-break: break-word; }
 .term-body .p { color: var(--accent-text); user-select: none; transition: color var(--dur-panel) var(--ease-out); }
-.caret { display: inline-block; width: .55em; height: 1.15em; margin-left: 3px; vertical-align: -.2em; background: var(--accent-text); animation: caret 1.05s steps(1, end) infinite; }
+.caret { display: inline-block; width: .55em; height: 1.15em; margin-left: 4px; vertical-align: -.2em; background: var(--accent-text); animation: caret 1.05s steps(1, end) infinite; }
 @keyframes caret { 50% { opacity: 0; } }
 .term-copy {
   position: absolute; right: 6px; top: 6px;
-  display: inline-flex; align-items: center; gap: 7px;
+  display: inline-flex; align-items: center; gap: 8px;
   height: 44px; padding: 0 16px; border-radius: 999px;
   background: var(--panel); border: 1px solid var(--border);
   font: 600 13px/1 var(--font-ui); color: var(--text-2);
@@ -361,7 +352,7 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 }
 
 /* ── Footer ────────────────────────────────────────────────────────── */
-.foot { padding: 34px 0; background: var(--sunk); border-top: 1px solid var(--divider); }
+.foot { padding: 32px 0; background: var(--sunk); border-top: 1px solid var(--divider); }
 .foot-in { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
 .foot nav { display: flex; gap: 6px 22px; flex-wrap: wrap; font-size: 14px; color: var(--text-3); }
 .foot nav a { display: inline-flex; align-items: center; min-height: 44px; }

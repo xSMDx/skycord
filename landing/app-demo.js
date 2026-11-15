@@ -211,7 +211,7 @@
       voiceView.hidden = true;
       if (textView.hidden || wasVoice) textView.hidden = false;
       renderMsgs(v);
-      input.placeholder = 'Message #' + v + (v === 'general' ? ' — try it' : '');
+      input.placeholder = 'Message #' + v;   // the app's own wording
     }
     header();
     markCurrent();

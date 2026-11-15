@@ -78,7 +78,7 @@
 }
 .ri-mark { background: var(--bg-panel); color: var(--accent); }
 .ri-mark svg { width: 28px; height: 28px; }
-.ri[aria-current="true"] .ri-icon { border-radius: var(--edge-xl); box-shadow: 0 4px 16px rgba(var(--accent-rgb), .4); }
+.ri[aria-current="true"] .ri-icon { border-radius: var(--edge-xl); box-shadow: 0 4px 12px rgba(0, 0, 0, .35); }
 .ri:active .ri-icon { transform: scale(.94); transition-duration: 0ms; }
 .ri-add .ri-icon { color: var(--green); }
 .ri-add .ri-icon svg { width: 20px; height: 20px; }
@@ -208,9 +208,8 @@
 .msg {
   display: flex; align-items: flex-start;
   margin-top: var(--msg-gap); padding: var(--msg-pad) 16px var(--msg-pad) 0;
-  transition: background-color var(--d1) var(--eo), opacity var(--d3) var(--eo), transform var(--d3) var(--eo),
-              margin-top var(--d3) var(--eio), padding var(--d3) var(--eio);
-  transition-delay: 0ms, var(--stagger, 0ms), var(--stagger, 0ms), 0ms, 0ms;
+  transition: background-color var(--d1) var(--eo), opacity var(--d3) var(--eo), transform var(--d3) var(--eo);
+  transition-delay: 0ms, var(--stagger, 0ms), var(--stagger, 0ms);
 }
 @starting-style { .msg { opacity: 0; transform: translateY(8px); } }
 .msg-av {
@@ -398,7 +397,6 @@
   .btn { transition: transform var(--dur-press) var(--ease-out), box-shadow var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease; }
   .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--edge); }
   .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--edge); transition-duration: 0ms; }
-  .band-pause:hover { transform: scale(1.06); }
   .term-copy:hover { transform: translateY(-1px); }
   .foot nav a { transition: color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out); }
   .foot nav a:hover { transform: translateY(-1px); }
@@ -406,7 +404,6 @@
   /* Demo buttons: a lift and a touch of light, pressed back down on click. */
   .demo button:not(:disabled):not(.on):not([aria-pressed="true"]):hover { filter: brightness(1.14); }
   .demo .ph-round:not(:disabled):hover, .demo .rx-chip:hover, .demo .sh-opt:hover, .demo .ph-again:hover { transform: translateY(-2px); }
-  .demo .sw:not([aria-pressed="true"]):hover { transform: scale(1.08); }
 }
 .demo button { transition-property: background-color, color, border-color, box-shadow, opacity, filter, transform; transition-duration: var(--dur-ui); transition-timing-function: var(--ease-out); }
 .demo button:active { transition-duration: 0ms; }
