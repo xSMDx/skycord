@@ -1,0 +1,257 @@
+/* ── The home page: the sky world ──────────────────────────────────────
+   Home page only. The changelog and roadmap keep the dark look in site.css.
+
+   The sky and the panels use fixed colours, never --accent: the themes demo
+   rewrites the accent, and the sky must not change colour when someone tries
+   it. The accent button, the nav underline and the install prompt do follow. Every text-on-
+   colour pair here was computed: white body text (88%) on the lightest
+   stop of each panel gradient is at least 4.5:1. */
+:root {
+  --w1: #0a1a45; --w2: #12307f; --w3: #1b46a8;
+  --on-world: #ffffff; --on-world-2: rgba(255, 255, 255, .88);
+  --ground: #2f5fcf;
+}
+.c-world {
+  position: relative; overflow: clip; color: var(--on-world);
+  background: linear-gradient(180deg, var(--w1) 0%, var(--w2) 22%, var(--w3) 48%, var(--w3) 70%, var(--w2) 90%, var(--w1) 100%);
+}
+/* Stars: one static tile of dots. Nothing twinkles. */
+.c-world::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 2200px; pointer-events: none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20px 30px, rgba(255,255,255,.9), transparent 60%),
+    radial-gradient(1px 1px at 140px 90px, rgba(255,255,255,.7), transparent 60%),
+    radial-gradient(1.5px 1.5px at 260px 160px, rgba(255,255,255,.8), transparent 60%),
+    radial-gradient(1px 1px at 80px 220px, rgba(255,255,255,.6), transparent 60%),
+    radial-gradient(2px 2px at 330px 40px, rgba(190,220,255,.9), transparent 60%),
+    radial-gradient(1px 1px at 200px 280px, rgba(255,255,255,.55), transparent 60%);
+  background-size: 360px 300px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 50%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 0%, #000 50%, transparent 100%);
+  opacity: .8;
+}
+/* The top bar is fixed: anything focused or jumped to clears it. */
+html { scroll-padding-top: 88px; }
+
+/* The top bar floats over the sky, and takes a body once you leave the top. */
+.c-world .topbar { position: fixed; left: 0; right: 0; background: transparent; backdrop-filter: none; border-bottom-color: transparent; }
+.c-world .topbar.stuck { background: rgba(10, 26, 69, .82); backdrop-filter: blur(14px) saturate(140%); border-bottom-color: rgba(255,255,255,.12); }
+.c-world .links { color: var(--on-world-2); }
+.c-world .brand-mark { color: #fff; }
+
+/* Buttons in the world: a white key, and a key in the accent. The accent one
+   follows the themes demo, as its caption promises: pick Ember and it turns
+   orange. (Sky by default; ink text on it, as in the app.) */
+.c-world .btn.primary { background: #fff; color: #0b1240; --edge: #8ea4dc; }
+.c-world .btn.ghost { background: var(--accent); color: var(--on-accent); border-color: transparent; --edge: color-mix(in srgb, var(--accent) 55%, #000); }
+@media (hover: hover) and (pointer: fine) {
+  .c-world .btn.primary:hover { background: #f1f4ff; }
+  .c-world .btn.ghost:hover { background: var(--accent-hover); }
+}
+
+/* ── The logo, as a character ───────────────────────────────────────────
+   The headphones mark is a persona-icons character too (vendor/src/mark.ts):
+   it breathes, blinks, looks at the pointer, and reacts when the whole link is
+   hovered, pressed, held or spam-clicked. Its eyes are holes in the real mark;
+   here they are circles in the colour of whatever is behind (--mark-eye), and a
+   drawn expression takes that colour too. The old SVG inside the host is the
+   fallback until it mounts. */
+.brand-pc { display: block; flex: none; width: 32px; height: 32px; color: #fff; --mark-eye: #0a1a45; }
+.c-world .foot .brand-pc { --mark-eye: var(--ground); }
+.brand-pc svg { display: block; width: 100%; height: 100%; }
+.brand-pc .pi { border-radius: 0; }
+.brand-pc .pi-mark-eye { fill: var(--mark-eye); }
+.brand-pc .pi-face { stroke: var(--mark-eye); }
+
+/* ── Type ──────────────────────────────────────────────────────────── */
+.c-h1 {
+  font: 700 clamp(38px, 4.3vw, 60px)/1 var(--font-display);
+  letter-spacing: -.005em; text-transform: uppercase; text-wrap: balance; max-width: 12ch;
+  color: #fff; text-shadow: 0 4px 0 rgba(5, 11, 31, .55);
+}
+.c-h1 .w { display: inline-block; }
+.c-h2 {
+  font: 700 clamp(32px, 4vw, 54px)/1 var(--font-display);
+  text-transform: uppercase; text-wrap: balance; color: #fff; text-shadow: 0 4px 0 rgba(5, 11, 31, .45);
+}
+.c-sub { margin: 16px auto 0; max-width: 46ch; font-size: 18px; color: var(--on-world-2); }
+.c-meta { margin-top: 16px; font: 400 12.5px/1.6 var(--font-mono); color: rgba(255,255,255,.7); max-width: 46ch; }
+
+/* ── Hero: the product owns the first screen ───────────────────────── */
+.c-hero { position: relative; z-index: 1; padding: 112px 0 40px; }
+.c-hero-in { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); align-items: center; gap: 24px; min-height: min(calc(100vh - 152px), 700px); }
+.c-lede { margin-top: 20px; max-width: 40ch; font-size: 18px; line-height: 1.55; color: var(--on-world-2); }
+.c-hero .cta-row { margin-top: 30px; flex-wrap: nowrap; gap: 12px; }
+.c-hero .btn.big { padding: 0 22px; }
+
+/* The scene: the app on a monitor and a phone, and the crew around it */
+.c-scene { position: relative; aspect-ratio: 1.22; }
+.c-mon { position: absolute; left: 6%; top: 4%; width: 80%; z-index: 2; }
+.c-bezel {
+  padding: 10px 10px 26px; border-radius: 22px; background: #0d1230;
+  box-shadow: 0 40px 80px -30px rgba(0,0,0,.8), inset 0 0 0 2px rgba(255,255,255,.06);
+  transform: perspective(1400px) rotateY(-10deg) rotateX(3deg); transform-origin: 60% 50%;
+}
+.c-bezel img { display: block; width: 100%; height: auto; border-radius: 12px; }
+.c-stand { width: 28%; height: 46px; margin: -4px auto 0; background: linear-gradient(180deg, #151b45, #0b0f28); clip-path: polygon(30% 0, 70% 0, 86% 100%, 14% 100%); }
+.c-stand-foot { width: 46%; height: 10px; margin: 0 auto; border-radius: 6px; background: #0b0f28; }
+.c-phone { position: absolute; right: 2%; bottom: 10%; width: 23%; z-index: 4; transform: rotate(5deg); }
+.c-phone-in { padding: 7px; border-radius: 26px; background: #0d1230; box-shadow: 0 30px 50px -20px rgba(0,0,0,.8), inset 0 0 0 2px rgba(255,255,255,.08); }
+.c-phone img { display: block; width: 100%; height: auto; border-radius: 20px; }
+
+/* ── Persona characters (persona-icons skill, vendor/persona-icons-0.1.*) ──
+   Lucide line art that idles, blinks, looks at the pointer and reacts to
+   it. A translucent body lifts them off the sky. They are
+   toys: hidden from assistive tech, out of the tab order. */
+.pc { position: absolute; display: block; aspect-ratio: 1; z-index: 5; --pc-w: 20%; width: var(--pc-w); }
+/* No filter on a character: a drop-shadow on something that animates re-rasterises
+   every frame and nearly tripled idle main-thread work (about 1.1 s against
+   0.4 s per 5 s, headless). The translucent body and the bright stroke carry them. */
+.pc .pi { inline-size: 100%; block-size: 100%; border-radius: 0; }
+.pc .pi svg { width: 100%; height: 100%; overflow: visible; }
+.pc .pi svg :is(path, rect, circle) { fill: rgba(255, 255, 255, .13); }
+.pc .pi svg .pi-face * { fill: none; }
+.pc .pi svg .pi-face .pi-blush { fill: var(--pi-blush, #f472b6); }
+.pc-chat  { --pc-w: 14%; left: -5%; top: -2%; z-index: 3; }
+.pc-star  { --pc-w: 12%; right: 3%; top: 3%; z-index: 3; }
+.pc-ghost { --pc-w: 23%; left: 40%; top: -17%; z-index: 1; }
+.pc-heart { --pc-w: 12%; left: 41%; bottom: 0; z-index: 6; }
+.pc-cat   { --pc-w: 26%; left: -3%; bottom: -3%; }
+.pc-bot   { --pc-w: 24%; right: 14%; bottom: -8%; }
+
+/* ── Try it: the working app ───────────────────────────────────────── */
+.c-try { position: relative; z-index: 1; padding: 40px 0 72px; text-align: center; }
+.c-try .stage-wrap { position: relative; margin-top: 40px; text-align: left; perspective: 1600px; }
+.c-try .vstage { position: relative; z-index: 1; }
+
+/* ── One idea per screen: a panel ──────────────────────────────────── */
+.c-panels { position: relative; z-index: 1; padding: 24px 0 28px; }
+.c-panels > .shell { display: grid; gap: 28px; }
+.c-panel {
+  --pa: #2a5bd6; --pb: #1c3d9c;
+  position: relative; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: 56px;
+  padding: 64px; border-radius: 44px;
+  background: linear-gradient(160deg, var(--pa), var(--pb));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 40px 80px -40px rgba(0,0,0,.6);
+}
+.c-panel[data-tone="violet"]  { --pa: #5a3fd2; --pb: #3a249a; }
+.c-panel[data-tone="green"]   { --pa: #0c7050; --pb: #084a36; }
+.c-panel[data-tone="magenta"] { --pa: #a3236a; --pb: #70124a; }
+.c-panel[data-flip] { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); }
+.c-panel[data-flip] .c-panel-copy { order: 2; }
+.c-panel .c-h2 { font-size: clamp(30px, 3.6vw, 50px); text-align: left; }
+.c-panel p { margin-top: 18px; font-size: 18px; line-height: 1.55; color: var(--on-world-2); max-width: 36ch; }
+.c-panel .cta-row { margin-top: 28px; }
+.c-panel-demo .demo { min-height: 340px; display: flex; flex-direction: column; }
+.c-panel-demo .demo-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.c-panel-peek { --pc-w: 120px; left: 12px; top: -78px; z-index: 0; }
+
+/* The self-host panel's terminal */
+.term { position: relative; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--sunk); box-shadow: 0 40px 80px -36px rgba(0,0,0,.9); }
+.term-bar { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--divider); }
+.term-bar i { width: 12px; height: 12px; border-radius: 50%; background: #3a3f47; }
+.term-bar span { margin-left: 8px; font: 400 12px/1 var(--font-mono); color: var(--text-3); }
+/* Copy lives in the title bar, so the command has the whole line and wraps
+   rather than hiding under a button or behind a sideways scroll. */
+.term-body { padding: 30px 22px 34px; }
+.term-body code { font: 400 15px/1.7 var(--font-mono); color: var(--text-1); white-space: pre-wrap; word-break: break-word; }
+.term-body .p { color: var(--accent-text); user-select: none; transition: color var(--dur-panel) var(--ease-out); }
+.caret { display: inline-block; width: .55em; height: 1.15em; margin-left: 4px; vertical-align: -.2em; background: var(--accent-text); animation: caret 1.05s steps(1, end) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.term-copy {
+  position: absolute; right: 6px; top: 6px;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 16px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border);
+  font: 600 13px/1 var(--font-ui); color: var(--text-2);
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.term-copy:active { transform: scale(0.97); }
+.term-copy.done { color: var(--green); }
+@media (hover: hover) and (pointer: fine) { .term-copy:hover { background: var(--raised); color: var(--text-strong); transform: translateY(-1px); } }
+
+/* ── Ending: a punchline, the crew, the name ───────────────────────── */
+.c-end { position: relative; z-index: 1; padding: 120px 0 0; text-align: center; overflow: hidden; }
+.c-end .c-h2 { font-size: clamp(40px, 6vw, 84px); line-height: .96; }
+.c-end .cta-row { justify-content: center; margin-top: 34px; }
+.c-end .c-meta { margin-left: auto; margin-right: auto; }
+.c-crowd { position: relative; display: flex; justify-content: center; align-items: flex-end; gap: 0; margin-top: 40px; height: 330px; }
+.c-crowd .pc { position: relative; --pc-w: 170px; margin: 0 -6px 66px; flex: none; }
+.c-crowd .pc-lead { --pc-w: 210px; }
+.c-cloud { position: absolute; left: -10%; width: 120%; bottom: -2px; height: 120px; z-index: 6; }
+/* The cloud becomes the ground the name and the footer stand on. */
+.c-ground { position: relative; z-index: 1; background: var(--ground); }
+.c-wordmark {
+  position: relative; z-index: 0; padding-top: 24px; overflow: hidden; text-align: center;
+  font: 700 clamp(120px, 24vw, 340px)/.8 var(--font-display); letter-spacing: -.03em;
+  color: rgba(255,255,255,.14); white-space: nowrap; user-select: none;
+}
+.c-world .foot { position: relative; z-index: 2; background: var(--ground); border-top-color: rgba(255,255,255,.18); }
+.c-world .foot nav { color: rgba(255,255,255,.9); }
+.c-world .foot-note { color: rgba(255,255,255,.85); }
+.c-world .foot .brand-mark { color: #fff; }
+
+/* ── Choreography hold ─────────────────────────────────────────────── */
+/* `html.anim` is set by the inline script in <head> only when motion is
+   allowed, and removed by site-motion.js the moment its timeline owns
+   these elements, or by a 2.5 s safety timer if the module never runs.
+   Without it, nothing here is ever hidden. */
+.anim .c-h1, .anim .c-lede, .anim .c-hero .cta-row, .anim .c-meta, .anim .c-mon, .anim .c-phone-in, .anim .c-scene .pc, .anim .c-panel { opacity: 0; }
+
+/* ── Responsive ────────────────────────────────────────────────────── */
+@media (max-width: 1100px) { .c-hero .cta-row { flex-wrap: wrap; } }
+/* The hero keeps two columns down to 761px (a small laptop window, a tablet
+   on its side); only a phone stacks it. */
+@media (max-width: 900px) and (min-width: 761px) {
+  .c-hero { padding-top: 96px; }
+  .c-hero-in { gap: 12px; }
+  .c-h1 { font-size: clamp(34px, 4.6vw, 40px); }
+  .c-lede { font-size: 16px; }
+}
+@media (max-width: 760px) {
+  .c-hero { padding-top: 84px; }
+  .c-hero-in { grid-template-columns: minmax(0, 1fr); gap: 8px; min-height: 0; }
+  .c-scene { order: -1; aspect-ratio: 1.55; }   /* the picture first, as it is on a phone */
+  /* Headline, then the buttons, then the explanation: the two things a
+     visitor needs stay above the fold on a 640px-tall phone. */
+  .c-copy { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .c-copy .cta-row { order: 2; margin-top: 22px; }
+  .c-lede { order: 3; margin-top: 22px; font-size: 17px; }
+  .c-meta { order: 4; }
+  .c-h1, .c-lede, .c-meta { margin-left: auto; margin-right: auto; }
+  .c-hero .cta-row { justify-content: center; width: 100%; }
+  .pc-chat { --pc-w: 17%; left: 1%; }
+  .pc-ghost { --pc-w: 26%; top: -15%; }
+}
+@media (max-width: 900px) {
+  .c-panel, .c-panel[data-flip] { grid-template-columns: minmax(0, 1fr); padding: 36px 22px; gap: 28px; border-radius: 32px; }
+  .c-panel[data-flip] .c-panel-copy { order: 0; }
+  .c-panel .c-h2, .c-panel p { text-align: center; margin-left: auto; margin-right: auto; }
+  .c-panel .cta-row { justify-content: center; }
+  .c-panel-peek { --pc-w: 96px; left: 50%; translate: -50% 0; top: -66px; }
+  .c-crowd { height: 170px; }
+  .c-crowd .pc { --pc-w: 84px; margin: 0 -4px 30px; }
+  .c-crowd .pc-lead { --pc-w: 104px; }
+  .c-crowd .pc:nth-child(1), .c-crowd .pc:nth-child(5) { display: none; }
+  .c-cloud { height: 56px; }
+}
+@media (max-width: 560px) {
+  .c-panel-demo .demo { min-height: 0; }
+  .term-body { padding: 18px 16px 20px; }
+  .term-body code { font-size: 14px; }
+}
+
+/* ── Print ─────────────────────────────────────────────────────────── */
+/* Nothing waits on a scroll that paper will never do. */
+@media print {
+  [data-held], .anim .c-h1, .anim .c-lede, .anim .c-hero .cta-row, .anim .c-meta, .anim .c-mon, .anim .c-phone-in, .anim .c-scene .pc, .anim .c-panel { opacity: 1 !important; transform: none !important; }
+  .caret { display: none; }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────── */
+/* The libraries are never loaded (see <head>) and loops stop. The
+   characters and the mini app handle reduced motion themselves. */
+@media (prefers-reduced-motion: reduce) {
+  .anim .c-h1, .anim .c-lede, .anim .c-hero .cta-row, .anim .c-meta, .anim .c-mon, .anim .c-phone-in, .anim .c-scene .pc, .anim .c-panel { opacity: 1; }
+  .caret { animation: none; }
+}

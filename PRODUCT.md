@@ -82,8 +82,7 @@ Voice runs on LiveKit. The client is Vue 3 + TypeScript; the server is Express +
 - **Muscle memory is binding.** The three-column structure (server rail → channel sidebar →
   conversation), where things live, and what clicks do must not change. A redesign replaces the
   visual world on top of that structure; nobody should have to relearn where anything is.
-- Landing voice, already in use: *"your crew's place to talk."* Plain, unceremonious, second
-  person.
+- Landing voice: headlines are short, uppercase and a little playful (*"your crew's place to talk"*, *"go on, click something"*, *"that's the whole page"*); body copy stays plain, unceremonious, second person, and never claims more than the product does. Updated 2026-11-15, when the home page moved to the sky world.
 - The repository is private on purpose until the app is in good shape.
 
 ## Evidence on Hand

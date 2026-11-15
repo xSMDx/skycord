@@ -35,6 +35,15 @@
  * change site.css, so it would not change its hash. The fonts have not
  * changed since they were added, and a rewriter that parses CSS is a much
  * bigger thing than this; if they ever do change, purge them by hand.
+ *
+ * Left alone on purpose: the libraries in vendor/ (motion-14.9.0.js,
+ * anime-4.5.0.js, persona-icons-0.1.js and its .css). The version is in their file name, so they never change
+ * at a URL and need no hash. A ?v= would also break them: their
+ * <link rel="modulepreload"> must match the URL that site-motion.js imports
+ * exactly, and the importing module is not rewritten. The pattern below
+ * matches root-level files only, so it never reaches into vendor/.
+ * site-motion.js, home.js and home.css sit at the root and are stamped like any
+ * other asset.
  */
 import { createHash } from 'crypto'
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'fs'

@@ -1,0 +1,112 @@
+/* Persona Icons — base styles. Import ONCE. How you import it depends on the project:
+ *
+ *  • Tailwind v4 (utilities live in @layer utilities): import INTO a layer, or utility classes
+ *    on <PersonaIcon className="p-2 …"> lose to these unlayered rules:
+ *        @import "./components/persona-icons/persona-icons.css" layer(components);
+ *  • Tailwind v3: plain import, placed BEFORE the Tailwind stylesheet so utilities come later.
+ *  • Everything else: plain import (side-effect import in main.tsx / layout.tsx). Unlayered,
+ *    these rules beat global `button { … }` styles (e.g. the Vite starter's), which would
+ *    otherwise turn every icon into a padded dark button.
+ */
+
+.pi {
+  --pi-size: 24px;
+  --pi-blush: #f472b6;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--pi-size);
+  block-size: var(--pi-size);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 25%;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 0;
+  vertical-align: middle;
+  cursor: pointer;
+  /* Touch: no double-tap zoom delay, no grey flash, no long-press callout or text selection. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pi[data-interactive='false'] {
+  cursor: default;
+}
+
+.pi:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pi:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* Animation layers: each one has a single owner (see controller.ts). */
+.pi-layer {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  transform-origin: var(--pi-pivot, 50% 50%);
+}
+
+.pi svg {
+  display: block;
+  overflow: visible; /* parts and faces may move past the 24×24 box */
+}
+
+/* Eyes and pupils: `translate` follows the cursor (CSS vars written per frame),
+   `scale` is free for blinking, `transform` is free for glances. Three channels, no conflict. */
+.pi [data-pi-eye],
+.pi [data-pi-look] {
+  transform-box: fill-box;
+  transform-origin: center;
+  translate: calc(var(--pi-eye-x, 0) * 1px) calc(var(--pi-eye-y, 0) * 1px);
+}
+
+.pi [data-pi-hidden] {
+  opacity: 0;
+}
+
+.pi .pi-blush {
+  fill: var(--pi-blush);
+  stroke: none;
+  opacity: 0.55;
+}
+
+.pi .pi-zzz {
+  stroke-width: 1.5;
+  animation: pi-zzz 2.6s ease-in-out infinite;
+}
+
+@keyframes pi-zzz {
+  0% {
+    opacity: 0;
+    translate: 0 1px;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 1.5px -2.5px;
+  }
+}
+
+.pi[data-reduced] .pi-zzz {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pi .pi-zzz {
+    animation: none;
+  }
+}

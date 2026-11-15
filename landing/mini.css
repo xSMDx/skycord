@@ -1,0 +1,452 @@
+/* ── The mini app ──────────────────────────────────────────────────────
+   A small, working Skycord in the hero. Values are the app's own
+   (src/styles/tokens.css, ChatApp.vue, MessageItem.vue, MessageInput.vue,
+   CallBar.vue), scoped to .mini so they never leak into the page. Home page
+   only; the changelog and roadmap never load this file.
+
+   Motion follows the app and Emil Kowalski's rules: transitions rather than
+   keyframes so every state change can be interrupted, ease-out on arrival,
+   exits faster than entrances, UI moves under 300 ms, hover only where
+   there is a fine pointer, and press feedback that lands on pointer-down. */
+
+.vstage {
+  position: relative;
+  padding: 8px;
+  border-radius: 26px;
+  background: #0b0c0e;
+  border: 1px solid var(--border);
+  box-shadow: 0 50px 100px -40px rgba(0,0,0,.95), 0 18px 40px -24px rgba(0,0,0,.7);
+  transform-origin: 50% 100%;
+}
+
+.mini {
+  /* App tokens — dark default */
+  --bg-floor: #111214; --bg-deep: #17191c; --bg-panel: #2b2d31; --bg-chat: #313338;
+  --bg-input: #1e1f22; --bg-chatbar: #383a40; --bg-chatbar-focus: #3d3f45;
+  --t-strong: #ffffff; --t1: #dcddde; --t2: #b5bac1; --t3: #abb1b8; --t-faint: #adb0b5; --icon: var(--t3);
+  --hover: rgba(255,255,255,.06); --hover-strong: rgba(255,255,255,.10); --press-veil: rgba(255,255,255,.09);
+  --active-ring: rgba(255,255,255,.34); --active-bg: rgba(255,255,255,.045);
+  --seam: rgba(0,0,0,.3); --border: rgba(255,255,255,.08); --track: rgba(255,255,255,.10);
+  --green: #23a55a; --green-text: #69c28e; --danger: #ed4245; --danger-hover: #c93b3e; --danger-text: #f59697;
+  --switch-off: #80848e;
+  --edge-sm: 4px; --edge-md: 6px; --edge-lg: 8px; --edge-xl: 12px;
+  --d1: 120ms; --d2: 180ms; --d3: 240ms; --d4: 340ms; --dx: 140ms;
+  --eo: cubic-bezier(.32, .72, 0, 1); --ei: cubic-bezier(.4, 0, 1, 1); --eio: cubic-bezier(.4, 0, .2, 1);
+  --msg-gap: 17px; --msg-pad: 1px;
+  /* the surfaces fade when the theme changes — a state change, not a jump */
+  --surf: background-color var(--d3) var(--eio), color var(--d3) var(--eio), border-color var(--d3) var(--eio);
+
+  position: relative;
+  display: grid; grid-template-columns: 72px 236px minmax(0, 1fr);
+  height: clamp(470px, 44vw, 560px);
+  border-radius: 18px; overflow: hidden;
+  background: var(--bg-chat); color: var(--t1);
+  font: 400 14px/1.375 var(--font-ui); text-align: left;
+  transition: var(--surf);
+}
+.mini button { font: inherit; color: inherit; }
+.mini svg { display: block; flex: none; }
+
+/* App themes, the real presets (DESIGN.md, "Themes"). Light inverts the
+   alpha direction, as it does in the app. */
+.mini[data-mtheme="midnight"] { --bg-floor: #050507; --bg-deep: #0b0c0e; --bg-panel: #15161a; --bg-chat: #1a1b1f; --bg-input: #0e0f12; --bg-chatbar: #24252b; --bg-chatbar-focus: #2a2b31; }
+.mini[data-mtheme="amoled"]   { --bg-floor: #000000; --bg-deep: #050506; --bg-panel: #0a0a0c; --bg-chat: #000000; --bg-input: #0a0a0c; --bg-chatbar: #141417; --bg-chatbar-focus: #1a1a1e; }
+.mini[data-mtheme="light"] {
+  --bg-floor: #e3e5e8; --bg-deep: #ebedef; --bg-panel: #f2f3f5; --bg-chat: #ffffff; --bg-input: #e3e5e8; --bg-chatbar: #ebedef; --bg-chatbar-focus: #e3e5e8;
+  --t-strong: #060607; --t1: #2e3338; --t2: #4e5058; --t3: #5c5e66; --t-faint: #5c5e66;
+  --hover: rgba(0,0,0,.06); --hover-strong: rgba(0,0,0,.10); --press-veil: rgba(0,0,0,.10);
+  --active-ring: rgba(0,0,0,.42); --active-bg: rgba(0,0,0,.05); --seam: rgba(0,0,0,.08); --border: rgba(0,0,0,.08); --track: rgba(0,0,0,.18);
+  --green-text: #156135; --danger-text: #9b2d30;
+}
+.mini[data-density="compact"] { --msg-gap: 8px;  --msg-pad: 0px; }
+.mini[data-density="roomy"]   { --msg-gap: 24px; --msg-pad: 6px; }
+
+/* ── Server rail ─────────────────────────────────────────────────── */
+.m-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 10px; background: var(--bg-floor); transition: var(--surf); }
+.ri { position: relative; display: flex; align-items: center; justify-content: center; width: 72px; height: 52px; flex: none; }
+.ri-pip {
+  position: absolute; left: 0; top: 50%; width: 4px; height: 36px;
+  border-radius: 0 2px 2px 0; background: var(--t-strong);
+  transform: translateY(-50%) scaleY(0);
+  transition: transform var(--d2) var(--eo);
+}
+.ri[aria-current="true"] .ri-pip { transform: translateY(-50%) scaleY(1); }
+.ri-icon {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; overflow: hidden;
+  background: var(--c, var(--bg-panel)); color: #fff; font: 700 14px/1 var(--font-ui);
+  transition: border-radius var(--d3) var(--eo), transform var(--d2) var(--eo), background-color var(--d2) var(--eo), box-shadow var(--d2) var(--eo);
+}
+.ri-mark { background: var(--bg-panel); color: var(--accent); }
+.ri-mark svg { width: 28px; height: 28px; }
+.ri[aria-current="true"] .ri-icon { border-radius: var(--edge-xl); box-shadow: 0 4px 12px rgba(0, 0, 0, .35); }
+.ri:active .ri-icon { transform: scale(.94); transition-duration: 0ms; }
+.ri-add .ri-icon { color: var(--green); }
+.ri-add .ri-icon svg { width: 20px; height: 20px; }
+.ri-badge {
+  position: absolute; bottom: 4px; right: 10px; min-width: 16px; height: 16px; padding: 0 4px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--edge-lg); border: 2px solid var(--bg-floor);
+  background: var(--danger); color: #0e0f11; font: 700 10px/1 var(--font-ui);
+  transition: transform var(--d2) var(--eo), opacity var(--d2) var(--eo);
+}
+.ri-badge.gone { transform: scale(.6); opacity: 0; }
+.ri-divider { width: 32px; height: 2px; margin: 2px 0; border-radius: 1px; background: var(--bg-panel); }
+
+/* ── Channel list ────────────────────────────────────────────────── */
+.m-side { display: flex; flex-direction: column; min-width: 0; background: var(--bg-panel); transition: var(--surf); }
+.m-side-swap { flex: 1; display: flex; flex-direction: column; min-height: 0; transition: opacity var(--d2) var(--eo), transform var(--d2) var(--eo); }
+.m-side-swap.out { opacity: 0; transform: translateX(-8px); transition-duration: var(--dx); transition-timing-function: var(--ei); }
+.sb-header {
+  height: 48px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 0 16px; border-bottom: 1px solid var(--seam);
+  font-weight: 700; font-size: 14px; color: var(--t-strong); text-align: left;
+  transition: background-color var(--d2) var(--eo), border-color var(--d3) var(--eio);
+}
+.sb-header svg { width: 16px; height: 16px; color: var(--t2); transition: transform var(--d2) var(--eo); }
+.sb-body { flex: 1; overflow: hidden; padding: 8px 8px 4px; }
+.ch-group-label { padding: 14px 8px 6px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--t3); white-space: nowrap; }
+.ch-group-label:first-child { padding-top: 6px; }
+.ch-item {
+  position: relative; display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border-radius: var(--edge-md);
+  font-size: 14px; color: var(--t3); text-align: left; white-space: nowrap;
+  transition: background-color var(--d1) var(--eo), color var(--d1) var(--eo), outline-color var(--d2) var(--eo);
+  outline: 1px solid transparent; outline-offset: -1px;
+}
+.ch-item svg { width: 18px; height: 18px; color: var(--icon); transition: transform var(--d2) var(--eo); }
+.ch-item.unread { color: var(--t2); font-weight: 600; }
+.ch-item.unread::before { content: ''; position: absolute; left: -8px; top: 50%; width: 4px; height: 8px; margin-top: -4px; border-radius: 0 4px 4px 0; background: var(--t-strong); }
+.ch-item[aria-current="true"] { color: var(--t-strong); background: var(--active-bg); outline-color: var(--active-ring); font-weight: 500; }
+.ch-item[aria-current="true"]::before { display: none; }
+.ch-item:active { box-shadow: inset 0 0 0 100vmax var(--press-veil); }
+
+.vc-list { list-style: none; margin: 2px 0 4px; }
+.vc-occ {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px 4px 32px; border-radius: var(--edge-md);
+  font-size: 13px; color: var(--t3); white-space: nowrap;
+  transition: opacity var(--d3) var(--eo), transform var(--d3) var(--eo), background-color var(--d1) var(--eo);
+}
+@starting-style { .vc-occ { opacity: 0; transform: translateX(-8px); } }
+.vc-occ.you { color: var(--t1); }
+.vc-av {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--c); color: #fff; font: 700 9px/1 var(--font-ui);
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow var(--d2) var(--eo);
+}
+.vc-occ.speaking .vc-av { box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--green); }
+.vc-live { margin-left: auto; padding: 2px 5px; border-radius: var(--edge-sm); background: var(--danger); color: #0e0f11; font: 700 9px/1.2 var(--font-ui); letter-spacing: .04em; }
+.vc-ic { width: 14px; height: 14px; margin-left: auto; color: var(--danger-text); }
+
+/* Voice connected — opens from zero height (grid rows), so the user panel
+   is pushed, not jumped. */
+.vcp { display: grid; grid-template-rows: 0fr; background: var(--bg-deep); border-top: 1px solid transparent; transition: grid-template-rows var(--d3) var(--eo), border-color var(--d3) var(--eo), var(--surf); }
+.vcp-in { min-height: 0; overflow: hidden; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; }
+.mini.in-call .vcp { grid-template-rows: 1fr; border-top-color: var(--seam); }
+.mini.in-call .vcp-in { padding-top: 8px; padding-bottom: 8px; }
+.vcp-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vcp-info b { color: var(--green-text); font-size: 13px; font-weight: 700; }
+.vcp-info span { font-size: 12px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── User panel ──────────────────────────────────────────────────── */
+.user-panel { height: 52px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--bg-deep); transition: var(--surf); }
+.up-left { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--edge-md); transition: background-color var(--d2) var(--eo); }
+.up-av { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font: 700 13px/1 var(--font-ui); flex: none; transition: background-color var(--dur-panel) var(--ease-out); }
+.up-dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--green); border: 2.5px solid var(--bg-deep); transition: background-color var(--d2) var(--eo), border-color var(--d3) var(--eio); }
+.mini.deafened .up-dot { background: var(--danger); }
+.up-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.up-name { font-size: 13px; font-weight: 700; color: var(--t-strong); line-height: 1; }
+.up-tag { font-size: 11px; color: var(--t-faint); line-height: 1; }
+.up-btns { display: flex; gap: 1px; flex: none; }
+.up-btn {
+  position: relative; display: grid; place-items: center; width: 32px; height: 32px;
+  border-radius: var(--edge-md); color: var(--icon);
+  transition: background-color var(--d1) var(--eo), color var(--d1) var(--eo), transform var(--d1) var(--eo);
+}
+.up-btn svg { width: 20px; height: 20px; }
+.up-btn:active { transform: scale(.88); transition-duration: 0ms; }
+.up-btn[aria-pressed="true"] { color: var(--danger-text); background: rgba(237, 66, 69, .12); }
+.up-btn[data-act="settings"] svg { transition: transform var(--d4) var(--eo); }
+
+/* Two icons, one button: the swap crossfades through a little blur, so it
+   reads as one icon changing rather than two trading places. */
+.i-on, .i-off { grid-area: 1 / 1; transition: opacity var(--d2) var(--eo), transform var(--d2) var(--eo), filter var(--d2) var(--eo); }
+.i-off { opacity: 0; transform: scale(.6); filter: blur(2px); }
+[aria-pressed="true"] > .i-on { opacity: 0; transform: scale(.6); filter: blur(2px); }
+[aria-pressed="true"] > .i-off { opacity: 1; transform: none; filter: none; }
+
+/* ── Main ────────────────────────────────────────────────────────── */
+.m-main { position: relative; display: flex; flex-direction: column; min-width: 0; background: var(--bg-chat); transition: var(--surf); }
+.m-tabs { display: none; }
+.chat-header {
+  height: 48px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 16px;
+  border-bottom: 1px solid var(--seam); white-space: nowrap; min-width: 0;
+  transition: border-color var(--d3) var(--eio);
+}
+.ch-hash { width: 22px; height: 22px; color: var(--icon); }
+.chat-header b { font-size: 15px; font-weight: 700; color: var(--t-strong); }
+.ch-topic { margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--border); font-size: 13px; color: var(--t3); overflow: hidden; text-overflow: ellipsis; }
+.m-head-count { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--t3); }
+.m-head-count[hidden] { display: none; }
+.m-head-count::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.m-head-swap { transition: opacity var(--d2) var(--eo); }
+
+.m-view { position: relative; flex: 1; min-height: 0; }
+.m-text, .m-voice {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  transition: opacity var(--d3) var(--eo), transform var(--d3) var(--eo), filter var(--d3) var(--eo);
+}
+.m-text[hidden], .m-voice[hidden] { display: none; }
+/* Arrivals: a view or a message comes in from just below, already mostly
+   there — never from nothing. */
+@starting-style {
+  .m-text, .m-voice { opacity: 0; transform: translateY(8px); filter: blur(2px); }
+}
+
+.m-msgs { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; padding-bottom: 6px; }
+.msg {
+  display: flex; align-items: flex-start;
+  margin-top: var(--msg-gap); padding: var(--msg-pad) 16px var(--msg-pad) 0;
+  transition: background-color var(--d1) var(--eo), opacity var(--d3) var(--eo), transform var(--d3) var(--eo);
+  transition-delay: 0ms, var(--stagger, 0ms), var(--stagger, 0ms);
+}
+@starting-style { .msg { opacity: 0; transform: translateY(8px); } }
+.msg-av {
+  display: grid; place-items: center; flex: none;
+  width: 32px; height: 32px; margin: 3px 12px 0 16px; border-radius: 50%;
+  background: var(--c); color: #fff; font: 700 13px/1 var(--font-ui);
+  transition: transform var(--d2) var(--eo);
+}
+.msg.you .msg-av { background: var(--accent); color: var(--on-accent); }
+.msg-body { min-width: 0; }
+.msg-name { font-size: 15px; font-weight: 600; color: var(--t-strong); margin-right: 6px; }
+.msg-ts { font-size: 11px; color: var(--t-faint); }
+.msg p { font-size: 15px; color: var(--t1); overflow-wrap: anywhere; }
+.msg-img { display: block; width: min(260px, 100%); height: auto; margin-top: 6px; border-radius: var(--edge-lg); }
+
+.m-typing { height: 22px; flex: none; display: flex; align-items: center; gap: 3px; padding: 0 18px; font-size: 12px; color: var(--t2); opacity: 0; transition: opacity var(--d2) var(--eo); }
+.m-typing.on { opacity: 1; }
+.m-typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--t2); animation: mDots 1.2s var(--eio) infinite; }
+.m-typing i:nth-child(2) { animation-delay: .15s; } .m-typing i:nth-child(3) { animation-delay: .3s; }
+.m-typing span { margin-left: 6px; }
+@keyframes mDots { 0%, 60%, 100% { transform: none; opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+.input-wrapper {
+  flex: none; display: flex; align-items: center; gap: 4px;
+  margin: 0 16px 16px; padding: 0 6px 0 14px;
+  border-radius: var(--edge-lg); border: 1px solid transparent; background: var(--bg-chatbar);
+  transition: background-color var(--d2) var(--eo), border-color var(--d2) var(--eo);
+}
+.input-wrapper:focus-within { background: var(--bg-chatbar-focus); border-color: var(--border); }
+.m-input { flex: 1; min-width: 0; height: 44px; border: 0; outline: none; background: transparent; color: var(--t1); font: 400 15px var(--font-ui); }
+.m-input::placeholder { color: var(--t-faint); }
+.m-send { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--edge-md); color: var(--icon); transition: background-color var(--d1) var(--eo), color var(--d1) var(--eo), transform var(--d1) var(--eo), opacity var(--d1) var(--eo); }
+.m-send svg { width: 18px; height: 18px; }
+.m-send:active { transform: scale(.9); transition-duration: 0ms; }
+.input-wrapper:not(.has-text) .m-send { opacity: .45; }
+
+/* Voice channel: the app's call bar */
+.m-voice { align-items: center; gap: 14px; padding: 14px 14px 16px; background: var(--bg-floor); }
+.m-share {
+  position: relative; width: 100%; flex: 1; min-height: 0; border-radius: var(--edge-xl); overflow: hidden; background: #16324a;
+  transition: opacity var(--d3) var(--eo), transform var(--d3) var(--eo);
+}
+.m-share.yours { box-shadow: inset 0 0 0 3px var(--green); }
+.st-scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+.st-live { position: absolute; right: 10px; top: 10px; padding: 5px 7px; border-radius: 5px; background: var(--danger); color: #0e0f11; font: 700 11px/1 var(--font-ui); letter-spacing: .05em; }
+.st-tag { position: absolute; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(0,0,0,.62); color: #fff; font: 600 12px/1.45 var(--font-ui); }
+.st-tag svg { width: 13px; height: 13px; }
+
+.cb-stage { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; }
+.cb-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; transition: opacity var(--d3) var(--eo), transform var(--d3) var(--eo); }
+@starting-style { .cb-tile { opacity: 0; transform: scale(.9); } }
+.cb-av {
+  position: relative; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--c); color: #fff; font: 700 19px/1 var(--font-ui);
+  box-shadow: 0 0 0 0 transparent; transition: box-shadow var(--d2) var(--eo);
+}
+.cb-tile.you .cb-av { background: var(--accent); color: var(--on-accent); }
+.cb-tile.speaking .cb-av { box-shadow: 0 0 0 3px var(--green); }
+.cb-mute { position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--bg-chatbar); color: var(--danger-text); border: 3px solid var(--bg-floor); transition: transform var(--d2) var(--eo), opacity var(--d2) var(--eo); }
+.cb-mute svg { width: 11px; height: 11px; }
+.cb-tile:not(.muted) .cb-mute { transform: scale(.5); opacity: 0; }
+.cb-name { font-size: 12px; font-weight: 600; color: var(--t1); }
+
+.cb-bar { display: flex; align-items: center; gap: 8px; flex: none; }
+.cb-group { display: flex; gap: 2px; padding: 4px; border-radius: var(--edge-xl); background: var(--bg-input); transition: var(--surf); }
+.cb-b {
+  position: relative; display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: var(--edge-lg); color: var(--t-strong);
+  transition: background-color var(--d1) var(--eo), color var(--d1) var(--eo), transform var(--d1) var(--eo);
+}
+.cb-b svg { width: 20px; height: 20px; }
+.cb-b:active { transform: scale(.92); transition-duration: 0ms; }
+.cb-b[data-act="mute"][aria-pressed="true"] { background: var(--danger); color: #0e0f11; }
+.cb-b[data-act="cam"][aria-pressed="true"], .cb-b[data-act="share"][aria-pressed="true"] { background: var(--green); color: #0e0f11; }
+.cb-leave { display: grid; place-items: center; width: 56px; height: 44px; border-radius: var(--edge-xl); background: var(--danger); color: #0e0f11; transition: background-color var(--d1) var(--eo), transform var(--d1) var(--eo); }
+.cb-leave svg { width: 22px; height: 22px; }
+.cb-leave:active { transform: scale(.94); transition-duration: 0ms; }
+
+/* ── Settings modal ──────────────────────────────────────────────── */
+/* Modals scale from the centre (they belong to no trigger), and leave
+   faster than they came. */
+.m-modal {
+  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 22px;
+  background: rgba(0,0,0,.6);
+  transition: opacity var(--d3) var(--eo);
+}
+.m-modal[hidden] { display: none; }
+.m-modal-card {
+  position: relative; display: grid; grid-template-columns: 172px minmax(0, 1fr);
+  width: min(580px, 100%); height: min(360px, 100%);
+  border-radius: var(--edge-xl); overflow: hidden; background: var(--bg-chat);
+  box-shadow: 0 24px 60px -12px rgba(0,0,0,.7);
+  transition: transform var(--d3) var(--eo), opacity var(--d3) var(--eo), var(--surf);
+}
+@starting-style {
+  .m-modal { opacity: 0; }
+  .m-modal-card { transform: scale(.96); opacity: 0; }
+}
+.m-modal.closing { opacity: 0; transition-duration: var(--dx); transition-timing-function: var(--ei); }
+.m-modal.closing .m-modal-card { transform: scale(.97); opacity: 0; transition-duration: var(--dx); transition-timing-function: var(--ei); }
+
+.m-set-nav { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 18px 10px; background: var(--bg-panel); transition: var(--surf); }
+.m-set-label { padding: 0 10px 8px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--t3); }
+.m-set-tab {
+  position: relative; z-index: 1; padding: 7px 10px; border-radius: var(--edge-md);
+  font-size: 14px; font-weight: 500; color: var(--t2); text-align: left; white-space: nowrap;
+  transition: color var(--d2) var(--eo), background-color var(--d1) var(--eo);
+}
+.m-set-tab[aria-selected="true"] { color: var(--t-strong); }
+
+/* One indicator per tab list, gliding to the selected tab (app-demo.js
+   sets its position). It moves; the tabs only change colour. */
+.m-set-ind, .m-tab-ind, .seg-ind {
+  position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none;
+  transform-origin: 0 0;   /* app-demo.js glides it on transform alone (FLIP) */
+  transition: background-color var(--dur-panel) var(--ease-out);
+}
+.m-set-ind { border-radius: var(--edge-md); background: var(--hover-strong); }
+
+.m-set-pages { position: relative; padding: 22px 24px; overflow: hidden; }
+.m-page { transition: opacity var(--d3) var(--eo), transform var(--d3) var(--eo), filter var(--d3) var(--eo); }
+.m-page[hidden] { display: none; }
+@starting-style { .m-page { opacity: 0; transform: translateY(6px); filter: blur(2px); } }
+.m-page h3 { font: 700 20px/1.2 var(--font-ui); color: var(--t-strong); }
+.m-field { margin: 18px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--t3); }
+.mini .seg { background: var(--bg-input); border-color: var(--border); transition: var(--surf); }
+.mini .seg-b { color: var(--t3); }
+
+.m-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--t1); cursor: pointer; }
+.m-switch:first-of-type { margin-top: 10px; }
+.m-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.m-switch i { position: relative; flex: none; width: 40px; height: 24px; border-radius: 12px; background: var(--switch-off); transition: background-color var(--d2) var(--eo); }
+.m-switch i::after {
+  content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 9px; background: #fff;
+  transform-origin: left center;
+  transition: transform var(--d2) var(--eo);
+}
+.m-switch input:checked + i { background: var(--green); }
+.m-switch input:checked + i::after { transform: translateX(16px); transform-origin: right center; }
+/* The thumb stretches while held, toward where it is going. */
+.m-switch:active i::after { transform: scaleX(1.22); }
+.m-switch:active input:checked + i::after { transform: translateX(16px) scaleX(1.22); }
+.m-switch input:focus-visible + i { outline: 2px solid var(--t-strong); outline-offset: 2px; }
+
+.m-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--t3); color: var(--t3); transition: background-color var(--d1) var(--eo), color var(--d1) var(--eo), border-color var(--d1) var(--eo), transform var(--d1) var(--eo); }
+.m-close svg { width: 14px; height: 14px; }
+.m-close:active { transform: scale(.9); transition-duration: 0ms; }
+
+/* ── Sliding indicator for every segmented control on the page ──────── */
+/* With the indicator in place the selected button stops painting its own
+   fill; the fill glides between options instead of blinking. */
+.seg.glide { position: relative; }
+.seg.glide .seg-b { position: relative; z-index: 1; }
+.seg.glide .seg-b.on { background: transparent; }
+.seg-ind { border-radius: 6px; background: var(--accent); }
+
+/* ── Hover, everywhere there is a pointer ────────────────────────── */
+@media (hover: hover) and (pointer: fine) {
+  .ri:hover .ri-icon { border-radius: var(--edge-xl); transform: scale(1.05); }
+  .ri:not([aria-current="true"]):hover .ri-pip { transform: translateY(-50%) scaleY(.55); }
+  .ri-add:hover .ri-icon { background: var(--green); color: #0e0f11; }
+  .sb-header:hover { background: var(--hover); }
+  .sb-header:hover svg { transform: translateY(1px); }
+  .ch-item:hover { background: var(--hover); color: var(--t2); }
+  .ch-item[aria-current="true"]:hover { color: var(--t-strong); }
+  .ch-item:hover svg { transform: translateX(2px); }
+  .vc-occ:hover { background: var(--hover); }
+  .up-left:hover { background: var(--hover); }
+  .up-btn:hover { background: var(--hover); color: var(--t1); }
+  .up-btn[aria-pressed="true"]:hover { background: rgba(237, 66, 69, .2); color: var(--danger-text); }
+  .up-btn[data-act="settings"]:hover svg { transform: rotate(45deg); }
+  .msg:hover { background: var(--hover); }
+  .msg:hover .msg-av { transform: scale(1.06); }
+  .m-send:hover { background: var(--hover); color: var(--t1); }
+  .input-wrapper.has-text .m-send:hover { color: var(--accent); }
+  .cb-b:hover { background: var(--hover); }
+  .cb-b[data-act="mute"][aria-pressed="true"]:hover { background: var(--danger-hover); }
+  .cb-b[data-act="cam"][aria-pressed="true"]:hover, .cb-b[data-act="share"][aria-pressed="true"]:hover { background: #1f9450; }
+  .cb-leave:hover { background: var(--danger-hover); transform: translateY(-1px); }
+  .m-set-tab:not([aria-selected="true"]):hover { background: var(--hover); color: var(--t1); }
+  .m-close:hover { background: var(--hover); color: var(--t-strong); border-color: var(--t-strong); }
+  .m-switch:hover i { filter: brightness(1.08); }
+
+  /* Page buttons: keys lift a little off their edge. */
+  .btn { transition: transform var(--dur-press) var(--ease-out), box-shadow var(--dur-press) var(--ease-out), background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, color var(--dur-ui) ease; }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--edge); }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--edge); transition-duration: 0ms; }
+  .term-copy:hover { transform: translateY(-1px); }
+  .foot nav a { transition: color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out); }
+  .foot nav a:hover { transform: translateY(-1px); }
+
+  /* Demo buttons: a lift and a touch of light, pressed back down on click. */
+  .demo button:not(:disabled):not(.on):not([aria-pressed="true"]):hover { filter: brightness(1.14); }
+  .demo .ph-round:not(:disabled):hover, .demo .rx-chip:hover, .demo .sh-opt:hover, .demo .ph-again:hover { transform: translateY(-2px); }
+}
+.demo button { transition-property: background-color, color, border-color, box-shadow, opacity, filter, transform; transition-duration: var(--dur-ui); transition-timing-function: var(--ease-out); }
+.demo button:active { transition-duration: 0ms; }
+.band-pause { transition: background-color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out); }
+.term-copy { transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out); }
+
+/* ── Phone: the main view alone, channels as tabs ─────────────────── */
+@media (max-width: 760px) {
+  .vstage { padding: 6px; border-radius: 22px; }
+  .mini { grid-template-columns: minmax(0, 1fr); height: 540px; border-radius: 16px; }
+  .m-rail, .m-side { display: none; }
+  .m-tabs { position: relative; display: flex; gap: 4px; padding: 6px; background: var(--bg-panel); border-bottom: 1px solid var(--seam); transition: var(--surf); }
+  .m-tab { position: relative; z-index: 1; flex: 1; height: 48px; border-radius: var(--edge-md); font-size: 14px; font-weight: 600; color: var(--t3); white-space: nowrap; transition: color var(--d2) var(--eo); }
+  .m-tab[aria-selected="true"] { color: var(--t-strong); }
+  .m-tab-ind { border-radius: var(--edge-md); background: var(--bg-chat); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .m-tab-gear { width: 48px; height: 48px; flex: none; }
+  .m-send { width: 48px; height: 48px; }
+  .m-input { height: 48px; }
+  .ch-topic { display: none; }
+  .msg p { font-size: 14px; }
+  .cb-av { width: 46px; height: 46px; font-size: 17px; }
+  .cb-stage { gap: 12px; }
+  .cb-b { width: 44px; height: 44px; }
+  .m-modal { padding: 10px; }
+  .m-modal-card { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+  .m-set-nav { flex-direction: row; padding: 8px 52px 8px 8px; overflow-x: auto; }
+  .m-set-label { display: none; }
+  .m-set-tab { height: 44px; padding: 0 12px; }
+  .m-close { width: 44px; height: 44px; top: 8px; right: 6px; border: 0; }
+  .m-set-pages { padding: 16px; }
+}
+
+/* ── Reduced motion: every state still changes, nothing travels ──────── */
+@media (prefers-reduced-motion: reduce) {
+  .mini *, .mini *::before, .mini *::after, .seg-ind, .demo button {
+    transition-duration: 1ms !important; transition-delay: 0ms !important; animation: none !important;
+  }
+  @starting-style { .m-text, .m-voice, .msg, .m-page, .cb-tile, .vc-occ, .m-modal, .m-modal-card { opacity: 1; transform: none; filter: none; } }
+}
+
+/* ── A fuller conversation: an image and reactions ─────────────────── */
+.msg-embed { display: block; width: min(300px, 100%); aspect-ratio: 16 / 9; margin-top: 6px; border-radius: 8px; overflow: hidden; }
+.msg-embed svg { width: 100%; height: 100%; display: block; }
+.msg-rx { display: flex; gap: 4px; margin-top: 6px; }
+.msg-rx span { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border); font-size: 13px; color: var(--t2); }
+.msg-rx span.mine { border-color: rgba(56, 182, 241, .6); background: rgba(56, 182, 241, .14); color: #8fd4f6; }
