@@ -563,8 +563,20 @@ rejected as goofy on 2026-11-15). Rules:
 - **One personality each, and neighbours differ**: cat playful, bot robotic or
   curious, ghost shy, chat bubble nervous, star chaotic or sleepy, heart curious
   or playful.
-- **Never turn the icon into a different illustration.** The headphones mark
-  is not a character; it stays the logo in the nav and footer.
+- **Never turn an icon into a different illustration.** The scene characters
+  are Lucide icons, redrawn by nobody. The headphones mark is the one other
+  character, and it is the logo itself, not an illustration of something else:
+  `vendor/src/mark.ts` carries the real mark path (scaled onto the engine's
+  24-unit grid by `scale-mark.mjs`, so it cannot drift from `i-mark`) with its
+  own rig. It is **curious** (follows the pointer, leans in), reacts when
+  the **whole link** is hovered, pressed, held or spam-clicked (the character is
+  a hidden span; the link keeps its name, focus and keyboard behaviour), and
+  its signature is a bounce with the headphone band pulsing. The mark's eyes are
+  holes in the real logo; here they are circles in the colour of whatever is
+  behind (`--mark-eye`: #0a1a45 over the sky, the ground colour in the footer),
+  and a drawn expression takes that colour too. The static SVG inside the
+  host is the fallback until it mounts, and the changelog and roadmap keep the
+  old cat logo (`SkycordCat` in `site.js`: eyes follow the pointer, blink, boop).
 - **A character reaction never carries meaning.** They are decoration;
   nothing on the page depends on one.
 

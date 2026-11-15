@@ -49,6 +49,20 @@ html { scroll-padding-top: 88px; }
   .c-world .btn.ghost:hover { background: var(--accent-hover); }
 }
 
+/* ── The logo, as a character ───────────────────────────────────────────
+   The headphones mark is a persona-icons character too (vendor/src/mark.ts):
+   it breathes, blinks, looks at the pointer, and reacts when the whole link is
+   hovered, pressed, held or spam-clicked. Its eyes are holes in the real mark;
+   here they are circles in the colour of whatever is behind (--mark-eye), and a
+   drawn expression takes that colour too. The old SVG inside the host is the
+   fallback until it mounts. */
+.brand-pc { display: block; flex: none; width: 32px; height: 32px; color: #fff; --mark-eye: #0a1a45; }
+.c-world .foot .brand-pc { --mark-eye: var(--ground); }
+.brand-pc svg { display: block; width: 100%; height: 100%; }
+.brand-pc .pi { border-radius: 0; }
+.brand-pc .pi-mark-eye { fill: var(--mark-eye); }
+.brand-pc .pi-face { stroke: var(--mark-eye); }
+
 /* ── Type ──────────────────────────────────────────────────────────── */
 .c-h1 {
   font: 700 clamp(38px, 4.3vw, 60px)/1 var(--font-display);

@@ -19,6 +19,7 @@ import { prefersReducedMotion } from './motion';
 import { personalities, type PersonalityName } from './personalities';
 import { resolveRig } from './rigs';
 import { iconNodes } from './icons';
+import { markNodes, markRig } from './mark';
 import type { Expression, FaceSpec, PersonaEvent, Personality } from './types';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -91,7 +92,7 @@ const SLOP = 8;
 const pointerKind = (t: string): PointerKind => (t === 'touch' ? 'touch' : t === 'pen' ? 'pen' : 'mouse');
 const isInside = (r: DOMRect, x: number, y: number) => x >= r.left - SLOP && x <= r.right + SLOP && y >= r.top - SLOP && y <= r.bottom + SLOP;
 
-function attachInteraction(el: HTMLElement, onEvent: (e: PersonaEvent) => void, config: InteractionConfig): () => void {
+function attachInteraction(el: HTMLElement, onEvent: (e: PersonaEvent) => void, config: InteractionConfig, keys = true): () => void {
   let state = initialInteractionState;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let detach: (() => void) | null = null;
@@ -148,9 +149,8 @@ function attachInteraction(el: HTMLElement, onEvent: (e: PersonaEvent) => void, 
   el.addEventListener('pointerenter', onEnter);
   el.addEventListener('pointerleave', onLeave);
   el.addEventListener('pointerdown', onDown);
-  el.addEventListener('keydown', onKeyDown);
-  el.addEventListener('keyup', onKeyUp);
-  el.addEventListener('blur', onBlur);
+  // When a link drives the character the link keeps its own keyboard behaviour.
+  if (keys) { el.addEventListener('keydown', onKeyDown); el.addEventListener('keyup', onKeyUp); el.addEventListener('blur', onBlur); }
   el.addEventListener('contextmenu', onContext);
   return () => {
     if (timer) clearTimeout(timer);
@@ -158,9 +158,7 @@ function attachInteraction(el: HTMLElement, onEvent: (e: PersonaEvent) => void, 
     el.removeEventListener('pointerenter', onEnter);
     el.removeEventListener('pointerleave', onLeave);
     el.removeEventListener('pointerdown', onDown);
-    el.removeEventListener('keydown', onKeyDown);
-    el.removeEventListener('keyup', onKeyUp);
-    el.removeEventListener('blur', onBlur);
+    if (keys) { el.removeEventListener('keydown', onKeyDown); el.removeEventListener('keyup', onKeyUp); el.removeEventListener('blur', onBlur); }
     el.removeEventListener('contextmenu', onContext);
   };
 }
@@ -178,6 +176,9 @@ export interface PersonaOptions {
   toy?: boolean;
   /** Never reacts to input; only idles and looks. */
   decorative?: boolean;
+  /** Closest-ancestor selector (e.g. 'a'): that element drives the pointer reactions, so hovering or
+   *  pressing the whole link reacts. The character is then a non-focusable, hidden span. */
+  trigger?: string;
   interaction?: Partial<InteractionConfig>;
   onPersonaEvent?: (e: PersonaEvent) => void;
 }
@@ -185,11 +186,11 @@ export interface PersonaOptions {
 export interface PersonaHandle { root: HTMLElement; signal(): void; destroy(): void }
 
 export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | null {
-  const nodes = iconNodes[o.icon];
+  const nodes = o.icon === 'skycord' ? markNodes : iconNodes[o.icon];
   if (!nodes) { console.warn(`[persona-icons] Unknown icon "${o.icon}"`); return null; }
   const size = o.size ?? 24;
   const base = typeof o.personality === 'string' ? personalities[o.personality] : (o.personality ?? personalities.playful);
-  const rig = resolveRig(o.icon);
+  const rig = o.icon === 'skycord' ? markRig : resolveRig(o.icon);
   const config: InteractionConfig = { ...defaultInteractionConfig, ...o.interaction };
   const interactive = !o.decorative;
 
@@ -200,12 +201,16 @@ export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | 
   let asleep = false;
 
   // DOM: the four animation layers, each with one owner (see controller.ts).
-  const root = document.createElement(interactive ? 'button' : 'span');
+  const triggerEl = interactive && o.trigger ? (host.closest(o.trigger) as HTMLElement | null) : null;
+  const asButton = interactive && !triggerEl;
+  const root = document.createElement(asButton ? 'button' : 'span');
   root.className = 'pi';
   root.setAttribute('data-personality', base.name);
   root.style.setProperty('--pi-size', `${size}px`);
   root.style.setProperty('--pi-pivot', rig.pivot ?? '50% 50%');
-  if (interactive) {
+  if (triggerEl) {
+    root.setAttribute('aria-hidden', 'true');   // the link carries the name
+  } else if (interactive) {
     (root as HTMLButtonElement).type = 'button';
     if (o.toy) { root.setAttribute('aria-hidden', 'true'); root.tabIndex = -1; }
     else root.setAttribute('aria-label', o.label ?? o.icon);
@@ -219,7 +224,7 @@ export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | 
   for (const [k, v] of Object.entries({ xmlns: SVG, width: String(size), height: String(size), viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': String(o.strokeWidth ?? 2), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false', class: `lucide lucide-${o.icon}` })) svg.setAttribute(k, v);
   for (const [tag, attrs] of nodes) { const el = document.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); svg.appendChild(el); }
   react.appendChild(svg); drive.appendChild(react); pose.appendChild(drive); idle.appendChild(pose); root.appendChild(idle);
-  host.appendChild(root);
+  host.replaceChildren(root);   // replaces any fallback markup (the static logo) the host shipped with
 
   let controller: PersonaController | null = null;
   let destroyed = false;
@@ -263,7 +268,7 @@ export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | 
     controller?.handle(e);
     o.onPersonaEvent?.(e);
   };
-  const detach = interactive ? attachInteraction(root, onEvent, config) : () => {};
+  const detach = interactive ? attachInteraction(triggerEl ?? root, onEvent, config, !triggerEl) : () => {};
 
   const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   const onMq = () => { const next = mq!.matches; if (next !== reduced) { reduced = next; start(); } };
@@ -295,6 +300,7 @@ export function mountPersonas(scope: ParentNode = document): PersonaHandle[] {
       face: host.dataset.face === 'true' ? true : host.dataset.face === 'false' ? false : 'auto',
       toy: host.dataset.toy !== undefined,
       decorative: host.dataset.decorative !== undefined,
+      trigger: host.dataset.trigger,
     });
     if (h) out.push(h);
   });
