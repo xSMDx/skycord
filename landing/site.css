@@ -412,6 +412,14 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
   .term-body code { font-size: 14px; }
 }
 
+/* ── Print ─────────────────────────────────────────────────────────── */
+/* Nothing waits on a scroll that paper will never do. */
+@media print {
+  [data-held], .anim .hero-h, .anim .a-in, .anim .tile { opacity: 1 !important; transform: none !important; }
+  .band-track { animation: none; }
+  .caret, .band-pause { display: none; }
+}
+
 /* ── Reduced motion ────────────────────────────────────────────────── */
 /* No movement at all: the libraries are never loaded (see <head>), the
    marquee becomes a row you can read, and loops stop. */
