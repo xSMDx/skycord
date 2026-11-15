@@ -63,8 +63,12 @@ port of `PersonaIcon.tsx`, `useInteraction.ts` and `Face.tsx`:
 
 Bundle with `esbuild src/persona.ts --bundle --minify --format=esm
 --target=es2020 --legal-comments=none --outfile=persona-icons-0.1.js`, with the
-engine files and `persona.ts` and `icons.ts` in `src/`. The wrapper source,
-the icon extraction script and the headless pre-flight (`persona-check.cjs`:
-mount, no rig warnings, eye tracking, hover/click/hold/spam, touch, reduced
-motion, phone widths) were kept with the landing redesign notes. They should
-move into the skill or the repo when the Vue app adopts the same engine.
+engine files and `persona.ts` and `icons.ts` in `src/`.
+
+The wrapper (`src/persona.ts`), the icon nodes (`src/icons.ts`) and the script
+that extracts them (`src/extract-icons.mjs`) are committed here. The engine
+files are the skill's own (`~/.claude/skills/persona-icons/assets/persona-icons/`)
+and are not copied into the repo: copy them next to `persona.ts` to rebuild.
+Lucide's licence is in `LICENSE-lucide.txt`. The Vue app will need its own
+wrapper around the same engine; `persona.ts` shows the contract (the four
+animation layers, the controller options and the interaction wiring).

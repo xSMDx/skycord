@@ -273,10 +273,11 @@ the demo is the app: dark, in the app's own greys.
 
 Rules that follow from it:
 
-- **The world uses fixed colours, never `--accent`.** The themes demo rewrites
-  `--accent` on `<html>`, and the sky must not change colour when someone tries
-  it. Accent-coloured details (the install prompt, the cat's brand mark) still
-  follow it.
+- **The sky and the panels use fixed colours, never `--accent`.** The themes
+  demo rewrites `--accent` on `<html>`, and the sky must not change colour when
+  someone tries it. What does follow it: the secondary (accent) button, the nav
+  underline and the install prompt, so the demo's caption ("every button, link
+  and ring on this page") stays true. The brand mark is white.
 - **Every text-on-colour pair is computed.** White body text at 88% on the
   lightest stop of each panel gradient is at least 4.5:1 (Blue 4.95, Violet
   5.67, Green 5.11, Magenta 5.73). A new tone needs its number first.
@@ -284,7 +285,7 @@ Rules that follow from it:
   "Go on, click something" section copies the app's tokens (see
   `mini.css`) and its real themes; it does not take the sky.
 - **Buttons are keys.** A pill on a 4px darker edge (`--edge`), sinking 3px
-  on press with no transition: white (primary) and Sky `#38b6f1` (secondary) in
+  on press with no transition: white (primary) and the accent, Sky `#38b6f1` by default (secondary), in
   the world. The edge is the only zero-blur shadow on the page, apart from the
   headline's 4px drop, which is the same idea in type.
 - **No coloured glows.** Elevation is a neutral shadow; a colour never becomes
@@ -394,7 +395,7 @@ The app's faces, served from `landing/fonts/` (no font CDN sees who visits):
 - **Chakra Petch 700, uppercase** for every headline on the home page: the
   hero `clamp(38px, 4.3vw, 60px)/1`, panels `clamp(30px, 3.6vw, 50px)`, the
   "click something" section `clamp(32px, 4vw, 54px)`, the ending up to 84px,
-  and the giant "Skycord" wordmark behind the footer at 7% white. Headlines
+  and the giant "Skycord" wordmark behind the footer at 14% white. Headlines
   are short and a little playful; body copy stays plain (see PRODUCT.md).
 - **Archivo 400–700** for everything else: body 18px/1.55 on the sky, and the
   app's own sizes inside the working app (15px messages, 11px/700 uppercase
@@ -554,8 +555,10 @@ rejected as goofy on 2026-11-15). Rules:
 
 - **Lucide line art, unchanged.** Stroke 1.5, `currentColor`, one colour per
   character from the accent presets and white: Pink cat, Sky bot, white ghost,
-  Rose heart, Amber star. A translucent body (`rgba(255,255,255,.13)`) and a
-  soft neutral shadow lift them off the sky.
+  Rose heart, Amber star. A translucent body (`rgba(255,255,255,.13)`) lifts
+  them off the sky. **No filter on a character**: a drop-shadow on something
+  that animates re-rasterises every frame and nearly tripled idle main-thread
+  work (about 1.1 s against 0.4 s per 5 s, headless).
 - **One personality each, and neighbours differ**: cat playful, bot robotic or
   curious, ghost shy, chat bubble nervous, star chaotic or sleepy, heart curious
   or playful.

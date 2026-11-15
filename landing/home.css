@@ -1,14 +1,14 @@
 /* ── The home page: the sky world ──────────────────────────────────────
    Home page only. The changelog and roadmap keep the dark look in site.css.
 
-   Fixed colours, never --accent: the themes demo rewrites the accent, and
-   the sky must not change colour when someone tries it. Every text-on-
+   The sky and the panels use fixed colours, never --accent: the themes demo
+   rewrites the accent, and the sky must not change colour when someone tries
+   it. The accent button, the nav underline and the install prompt do follow. Every text-on-
    colour pair here was computed: white body text (88%) on the lightest
    stop of each panel gradient is at least 4.5:1. */
 :root {
   --w1: #0a1a45; --w2: #12307f; --w3: #1b46a8;
   --on-world: #ffffff; --on-world-2: rgba(255, 255, 255, .88);
-  --sky-btn: #38b6f1; --sky-btn-edge: #1d7fb5;
   --ground: #2f5fcf;
 }
 .c-world {
@@ -38,12 +38,14 @@
 .c-world .links { color: var(--on-world-2); }
 .c-world .brand-mark { color: #fff; }
 
-/* Buttons in the world: a white key and a sky key */
+/* Buttons in the world: a white key, and a key in the accent. The accent one
+   follows the themes demo, as its caption promises: pick Ember and it turns
+   orange. (Sky by default; ink text on it, as in the app.) */
 .c-world .btn.primary { background: #fff; color: #0b1240; --edge: #8ea4dc; }
-.c-world .btn.ghost { background: var(--sky-btn); color: #06142e; border-color: transparent; --edge: var(--sky-btn-edge); }
+.c-world .btn.ghost { background: var(--accent); color: var(--on-accent); border-color: transparent; --edge: color-mix(in srgb, var(--accent) 55%, #000); }
 @media (hover: hover) and (pointer: fine) {
   .c-world .btn.primary:hover { background: #f1f4ff; }
-  .c-world .btn.ghost:hover { background: #4cc0f4; }
+  .c-world .btn.ghost:hover { background: var(--accent-hover); }
 }
 
 /* ── Type ──────────────────────────────────────────────────────────── */
@@ -84,10 +86,13 @@
 
 /* ── Persona characters (persona-icons skill, vendor/persona-icons-0.1.*) ──
    Lucide line art that idles, blinks, looks at the pointer and reacts to
-   it. A translucent body and a soft shadow lift them off the sky. They are
+   it. A translucent body lifts them off the sky. They are
    toys: hidden from assistive tech, out of the tab order. */
 .pc { position: absolute; display: block; aspect-ratio: 1; z-index: 5; --pc-w: 20%; width: var(--pc-w); }
-.pc .pi { inline-size: 100%; block-size: 100%; border-radius: 0; filter: drop-shadow(0 12px 14px rgba(0, 0, 0, .38)); }
+/* No filter on a character: a drop-shadow on something that animates re-rasterises
+   every frame and nearly tripled idle main-thread work (about 1.1 s against
+   0.4 s per 5 s, headless). The translucent body and the bright stroke carry them. */
+.pc .pi { inline-size: 100%; block-size: 100%; border-radius: 0; }
 .pc .pi svg { width: 100%; height: 100%; overflow: visible; }
 .pc .pi svg :is(path, rect, circle) { fill: rgba(255, 255, 255, .13); }
 .pc .pi svg .pi-face * { fill: none; }
@@ -180,13 +185,30 @@
 
 /* ── Responsive ────────────────────────────────────────────────────── */
 @media (max-width: 1100px) { .c-hero .cta-row { flex-wrap: wrap; } }
-@media (max-width: 900px) {
-  .c-hero { padding-top: 92px; }
+/* The hero keeps two columns down to 761px (a small laptop window, a tablet
+   on its side); only a phone stacks it. */
+@media (max-width: 900px) and (min-width: 761px) {
+  .c-hero { padding-top: 96px; }
+  .c-hero-in { gap: 12px; }
+  .c-h1 { font-size: clamp(34px, 4.6vw, 40px); }
+  .c-lede { font-size: 16px; }
+}
+@media (max-width: 760px) {
+  .c-hero { padding-top: 84px; }
   .c-hero-in { grid-template-columns: minmax(0, 1fr); gap: 8px; min-height: 0; }
-  .c-scene { order: -1; }          /* the picture first, as it is on a phone */
-  .c-copy { text-align: center; }
+  .c-scene { order: -1; aspect-ratio: 1.55; }   /* the picture first, as it is on a phone */
+  /* Headline, then the buttons, then the explanation: the two things a
+     visitor needs stay above the fold on a 640px-tall phone. */
+  .c-copy { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .c-copy .cta-row { order: 2; margin-top: 22px; }
+  .c-lede { order: 3; margin-top: 22px; font-size: 17px; }
+  .c-meta { order: 4; }
   .c-h1, .c-lede, .c-meta { margin-left: auto; margin-right: auto; }
-  .c-hero .cta-row { justify-content: center; }
+  .c-hero .cta-row { justify-content: center; width: 100%; }
+  .pc-chat { --pc-w: 17%; left: 1%; }
+  .pc-ghost { --pc-w: 26%; top: -15%; }
+}
+@media (max-width: 900px) {
   .c-panel, .c-panel[data-flip] { grid-template-columns: minmax(0, 1fr); padding: 36px 22px; gap: 28px; border-radius: 32px; }
   .c-panel[data-flip] .c-panel-copy { order: 0; }
   .c-panel .c-h2, .c-panel p { text-align: center; margin-left: auto; margin-right: auto; }
@@ -196,8 +218,6 @@
   .c-crowd .pc { --pc-w: 84px; margin: 0 -4px 30px; }
   .c-crowd .pc-lead { --pc-w: 104px; }
   .c-crowd .pc:nth-child(1), .c-crowd .pc:nth-child(5) { display: none; }
-  .pc-chat { --pc-w: 17%; left: 1%; }
-  .pc-ghost { --pc-w: 26%; top: -15%; }
   .c-cloud { height: 56px; }
 }
 @media (max-width: 560px) {
