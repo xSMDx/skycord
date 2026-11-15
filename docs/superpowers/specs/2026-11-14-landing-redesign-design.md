@@ -94,3 +94,28 @@ motion.
 Exact spans per tile, tile colour order, stat wording within the true facts, and
 timings within DESIGN.md's motion bands (the marketing reveal tier is allowed up to
 ~620 ms).
+
+## Amendment 2026-11-15: the sky world (owner-approved from a full-fidelity comp)
+
+After the Crew room shipped to the PR the owner said they were "not happy with the design" and asked what discord.com
+has that the page does not, then chose **all** the gaps, including a coloured world. A comp was built and approved
+("Yes, build it"), and replaces the Crew room look on the **home page only**. The changelog and roadmap stay dark.
+
+What changed against the original design:
+- **Look:** one continuous sky (fixed colours, never `--accent`), coloured panels, uppercase playful headlines, tactile
+  white and sky buttons. DESIGN.md "Color — the landing site" and "Typography" carry the numbers.
+- **Structure:** a product-first hero (headline, buttons and the app on a monitor and phone all above the fold at
+  1280×720 and 1280×900), then "Go on, click something" (the working mini app), then one idea per panel (the same
+  eight features and their live demos, with one or two short lines each instead of a paragraph and tick lists), a
+  self-host panel with the terminal, a punchline ending, a crowd on a cloud and a giant wordmark. The marquee, the
+  numbers sentence and the count-up are gone.
+- **Characters:** the persona-icons skill's Lucide characters (cat, bot, ghost, heart, star, chat bubble), after a
+  first hand-drawn set was rejected as goofy. Vanilla port in `vendor/persona-icons-0.1.js`.
+- **Copy:** about 990 words became about 350. Dropped: the tick lists and the long paragraphs. Every remaining claim
+  is one that was already on the page or in PRODUCT.md.
+- **Weight:** 248.9 KB gzipped with motion, 221.8 KB with reduced motion (the old page: 152.5 KB). The increase is the
+  working app (about 22 KB), the characters (about 15 KB) and two hero images (about 32 KB).
+- **Motion split:** Anime.js: the hero opening and the typing. Motion: the working app's scroll tilt and the panel
+  springs. persona-icons: the characters. The count-up, tile hover and marquee are gone.
+- **Rules changed:** PRODUCT.md's landing voice (playful uppercase headlines, plain body) and DESIGN.md's dark-only
+  landing rule (now: the home page is a sky; the reading pages stay dark).

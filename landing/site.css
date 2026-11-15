@@ -189,167 +189,7 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 }
 
 
-/* ── Hero ──────────────────────────────────────────────────────────── */
-/* Left-set and large: the headline is the first thing and it says what
-   this is in five words, so it gets the room. The voice stage under it
-   is the proof. */
-.hero { position: relative; padding: clamp(32px, 5.5vw, 68px) 0 clamp(36px, 5vw, 64px); overflow: clip; }
-.hero-h {
-  font-size: clamp(50px, 8.6vw, 112px);
-  line-height: .9; letter-spacing: -.03em;
-  max-width: 11ch; text-wrap: balance;
-}
-.hero-h em { font-style: normal; color: var(--accent-text); transition: color var(--dur-panel) var(--ease-out); }
-/* splitText wraps each word; they must not break the balance or the em. */
-.hero-h .w { display: inline-block; }
-
-.hero-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  gap: 32px 48px; align-items: end;
-  margin-top: clamp(22px, 2.6vw, 34px);
-}
-.hero .lede { margin: 0; }
-.hero-act { justify-self: end; max-width: 540px; text-align: right; }
-.hero-act .cta-row { margin-top: 0; justify-content: flex-end; }
-.hero-act .meta { margin-top: 14px; font-family: var(--font-mono); font-size: 12.5px; text-wrap: balance; }
-
-/* ── The mini app ──────────────────────────────────────────────────── */
-/* Its frame and everything inside it live in mini.css (home page only). */
-.stage-wrap { margin-top: clamp(30px, 3.6vw, 48px); padding-bottom: 8px; perspective: 1600px; }
-
-/* ── Feature marquee ───────────────────────────────────────────────── */
-.band { padding: 22px 0 6px; overflow: hidden; }
-.band-track { display: flex; width: max-content; animation: marquee 48s linear infinite; }
-.band-run { display: flex; gap: 12px; padding-right: 12px; list-style: none; }
-.band-run li {
-  display: inline-flex; align-items: center; gap: 10px; white-space: nowrap;
-  height: 50px; padding: 0 22px 0 16px; border-radius: 999px;
-  background: var(--panel); border: 1px solid var(--border);
-  font: 600 16px/1 var(--font-ui); color: var(--text-1);
-}
-.band-run svg { width: 22px; height: 22px; color: var(--accent); transition: color var(--dur-panel) var(--ease-out); }
-@keyframes marquee { to { transform: translateX(-50%); } }
-@media (hover: hover) and (pointer: fine) { .band:hover .band-track { animation-play-state: paused; } }
-.band { position: relative; }
-.band.paused .band-track { animation-play-state: paused; }
-.band-pause {
-  position: absolute; right: 16px; top: calc(50% + 8px); translate: 0 -50%;
-  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
-  background: var(--ink); border: 1px solid var(--border); color: var(--text-1);
-  box-shadow: 0 0 0 10px var(--ink);
-  transition: background-color var(--dur-ui) ease;
-}
-.band-pause .i-play, .band-pause[aria-pressed="true"] .i-pause { display: none; }
-.band-pause[aria-pressed="true"] .i-play { display: block; }
-@media (hover: hover) and (pointer: fine) { .band-pause:hover { background: var(--panel); } }
-
-/* ── Feature tiles ─────────────────────────────────────────────────── */
-/* Colour at page scale: whole tiles carry Sky (which follows the accent
-   demo) and three accent presets, each with ink text — DESIGN.md's
-   "text on Sky is ink" extended to its siblings. The demos inside stay
-   dark: they are the app, sitting on the colour. */
-.tiles { padding: clamp(48px, 6vw, 84px) 0 clamp(56px, 7vw, 96px); }
-.tile-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
-.tile {
-  --tile-2: var(--text-2);
-  position: relative;
-  display: flex; flex-direction: column; gap: 30px;
-  padding: clamp(24px, 3vw, 40px);
-  border-radius: 28px;
-  background: var(--panel); border: 1px solid var(--border);
-}
-.tile[data-span="5"] { grid-column: span 5; }
-.tile[data-span="6"] { grid-column: span 6; }
-.tile[data-span="7"] { grid-column: span 7; }
-.tile[data-span="12"] {
-  grid-column: 1 / -1;
-  display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
-  align-items: center; gap: clamp(28px, 4vw, 60px);
-}
-.tile h2 { font-size: clamp(32px, 3.5vw, 48px); }
-.tile-copy p { margin-top: 16px; font-size: 16px; color: var(--tile-2); max-width: 46ch; }
-.tile .ticks li { color: var(--tile-2); }
-.tile .cta-row { margin-top: 28px; }
-.tile-demo { margin-top: auto; }
-.tile-demo .demo { min-height: 340px; display: flex; flex-direction: column; }
-.tile-demo .demo-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
-
-.tile:not([data-tone="dark"]) { border-color: transparent; }
-.tile:not([data-tone="dark"]) h2 { color: inherit; }
-.tile:not([data-tone="dark"]) .ticks li::before { border-color: currentColor; }
-.tile[data-tone="sky"]    { background: var(--accent); color: var(--on-accent); transition: background-color var(--dur-panel) var(--ease-out), color var(--dur-panel) var(--ease-out); }
-.tile[data-tone="green"]  { background: var(--green);  color: var(--ink-text); }
-.tile[data-tone="yellow"] { background: var(--warning); color: var(--ink-text); }
-.tile[data-tone="pink"]   { background: var(--pink);   color: var(--ink-text); }
-.tile:not([data-tone="dark"]) { --tile-2: color-mix(in srgb, currentColor 84%, transparent); }
-/* A dark button reads as a key on a coloured tile; the page's ghost
-   button would sit on it like a hole. */
-.tile:not([data-tone="dark"]) .btn.ghost { background: var(--ink); color: #fff; border-color: transparent; --edge: #000; }
-
-/* ── In numbers ────────────────────────────────────────────────────── */
-/* One sentence set large, not a row of stat cards: the figures are true
-   and plain, so they read best as something said. */
-.numbers { padding: clamp(24px, 4vw, 48px) 0 clamp(64px, 8vw, 112px); }
-.nums {
-  display: flex; flex-direction: column; gap: .14em;
-  font: 700 clamp(32px, 5.6vw, 76px)/1.02 var(--font-display);
-  letter-spacing: -.02em; color: var(--text-3);
-}
-.nums b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
-.n-line:first-child b { color: var(--accent-text); transition: color var(--dur-panel) var(--ease-out); }
-
-/* ── Self-host ─────────────────────────────────────────────────────── */
-.selfhost { padding: clamp(64px, 8vw, 108px) 0; background: var(--raised); }
-.sh-in { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 70px); align-items: center; }
-.selfhost h2 { font-size: clamp(36px, 4.6vw, 60px); }
-.selfhost p { margin-top: 18px; color: var(--text-2); max-width: 44ch; }
-.term { position: relative; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--sunk); box-shadow: 0 40px 80px -36px rgba(0,0,0,.9); }
-.term-bar { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--divider); }
-.term-bar i { width: 12px; height: 12px; border-radius: 50%; background: #3a3f47; }
-.term-bar span { margin-left: 8px; font: 400 12px/1 var(--font-mono); color: var(--text-3); }
-/* Copy lives in the title bar, so the command has the whole line and
-   wraps rather than hiding under a button or behind a sideways scroll. */
-.term-body { padding: 30px 22px 34px; }
-.term-body code { font: 400 15px/1.7 var(--font-mono); color: var(--text-1); white-space: pre-wrap; word-break: break-word; }
-.term-body .p { color: var(--accent-text); user-select: none; transition: color var(--dur-panel) var(--ease-out); }
-.caret { display: inline-block; width: .55em; height: 1.15em; margin-left: 4px; vertical-align: -.2em; background: var(--accent-text); animation: caret 1.05s steps(1, end) infinite; }
-@keyframes caret { 50% { opacity: 0; } }
-.term-copy {
-  position: absolute; right: 6px; top: 6px;
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 44px; padding: 0 16px; border-radius: 999px;
-  background: var(--panel); border: 1px solid var(--border);
-  font: 600 13px/1 var(--font-ui); color: var(--text-2);
-  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease;
-}
-.term-copy:active { transform: scale(0.97); }
-.term-copy.done { color: var(--green); }
-@media (hover: hover) and (pointer: fine) { .term-copy:hover { background: var(--raised); color: var(--text-strong); } }
-
-/* ── Closing band ──────────────────────────────────────────────────── */
-/* The page ends on a field of the accent, ink on Sky. */
-.end {
-  position: relative; overflow: hidden;
-  padding: clamp(72px, 9vw, 124px) 0;
-  background: var(--accent); color: var(--on-accent);
-  transition: background-color var(--dur-panel) var(--ease-out), color var(--dur-panel) var(--ease-out);
-}
-.end-in { position: relative; }
-.end h2 { color: inherit; font-size: clamp(46px, 7.4vw, 100px); line-height: .92; letter-spacing: -.03em; }
-.end .cta-row { margin-top: 36px; }
-.end .meta { margin-top: 22px; color: color-mix(in srgb, currentColor 84%, transparent); }
-.end-mark {
-  position: absolute; right: -2%; bottom: -36%;
-  width: clamp(240px, 38vw, 520px); height: auto;
-  color: color-mix(in srgb, currentColor 11%, transparent);
-  pointer-events: none;
-}
-.end .btn.primary { background: var(--ink); color: #fff; --edge: #000; }
-.end .btn.ghost { background: #fff; color: var(--ink); border-color: transparent; --edge: color-mix(in srgb, var(--accent) 50%, #000); }
-@media (hover: hover) and (pointer: fine) {
-  .end .btn.primary:hover { background: #1b1d22; }
-  .end .btn.ghost:hover { background: #eef0f2; }
-}
+/* The home page's own styles (the sky world, panels, hero) live in home.css. */
 
 /* ── Footer ────────────────────────────────────────────────────────── */
 .foot { padding: 32px 0; background: var(--sunk); border-top: 1px solid var(--divider); }
@@ -360,8 +200,7 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 .foot-note { margin-left: auto; font-size: 13px; color: var(--text-3); }
 
 /* ── Scroll reveal ─────────────────────────────────────────────────── */
-/* Kept for the changelog and roadmap. The home page's motion lives in
-   site-motion.js. Transitions, not keyframes: a reveal can be retargeted
+/* Transitions, not keyframes: a reveal can be retargeted
    if the user scrolls back before it finishes. */
 .js .reveal {
   opacity: 0;
@@ -371,58 +210,18 @@ h1 em { font-style: normal; color: var(--accent-text); transition: color var(--d
 }
 .js .reveal.seen { opacity: 1; transform: none; }
 
-/* ── Choreography hold ─────────────────────────────────────────────── */
-/* `html.anim` is set by the inline script in <head> only when motion is
-   allowed, and removed by site-motion.js the moment its timeline owns
-   these elements — or by a 2.5 s safety timer if the module never runs.
-   Without it, nothing here is ever hidden. */
-.anim .hero-h, .anim .a-in, .anim .tile { opacity: 0; }
-
 /* ── Responsive ────────────────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .links { display: none; }
-  .hero-row { grid-template-columns: minmax(0, 1fr); }
-  .hero-act { justify-self: start; text-align: left; }
-  .hero-act .cta-row { justify-content: flex-start; }
-  .tile-grid { grid-template-columns: minmax(0, 1fr); }
-  .tile[data-span] { grid-column: 1 / -1; }
-  .tile[data-span="12"] { display: flex; }
-  .sh-in { grid-template-columns: minmax(0, 1fr); gap: 34px; }
-}
+@media (max-width: 900px) { .links { display: none; } }
 @media (max-width: 560px) {
   .shell { padding: 0 16px; }
   .cta-row .btn { width: 100%; }
   .foot-note { margin-left: 0; width: 100%; }
-  .tile { border-radius: 22px; padding: 22px 18px; }
-  .tile-demo .demo { min-height: 0; }
-  .band-run li { height: 44px; font-size: 15px; }
-
-  /* The install command wraps at every width (see .term-body): at 375px it
-     once ran 389px wide inside a 341px scroller, cut off mid-URL. */
-  .term-body { padding: 18px 16px 20px; }
-  .term-body code { font-size: 14px; }
-}
-
-/* ── Print ─────────────────────────────────────────────────────────── */
-/* Nothing waits on a scroll that paper will never do. */
-@media print {
-  [data-held], .anim .hero-h, .anim .a-in, .anim .tile { opacity: 1 !important; transform: none !important; }
-  .band-track { animation: none; }
-  .caret, .band-pause { display: none; }
 }
 
 /* ── Reduced motion ────────────────────────────────────────────────── */
-/* No movement at all: the libraries are never loaded (see <head>), the
-   marquee becomes a row you can read, and loops stop. */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .js .reveal { opacity: 1; transform: none; transition: none; }
-  .anim .hero-h, .anim .a-in, .anim .tile { opacity: 1; }
-  .band-track { animation: none; width: auto; }
-  .band-run { flex-wrap: wrap; justify-content: center; padding: 0 16px; }
-  .band-run[aria-hidden="true"] { display: none; }
-  .band-pause { display: none; }
-  .caret { animation: none; }
   .brand-mark.blink .eye, .brand-mark.boop svg { animation: none; }
   .brand-mark .eyes { transition: none; }
 }

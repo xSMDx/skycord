@@ -1,28 +1,34 @@
-# Vendored animation libraries
+# Vendored libraries
 
-Two MIT-licensed libraries, self-hosted so that no CDN sees who visits.
-Only `site-motion.js` imports them, and only when the visitor allows motion.
+Three self-hosted pieces, so that no CDN sees who visits. Anime.js and Motion
+are imported by `site-motion.js` only when the visitor allows motion. The
+persona engine is imported by `home.js` and handles reduced motion itself.
 
-| File | Library | Exports | Raw | gzip |
+| File | Library | What it carries | Raw | gzip |
 |---|---|---|---|---|
-| `motion-14.9.0.js` | [Motion](https://motion.dev) 14.9.0 | `animate` (from `motion/mini`, WAAPI), `scroll`, `inView`, `hover`, `spring` | 22.0 KB | 9.0 KB |
-| `anime-4.5.0.js` | [Anime.js](https://animejs.com) 4.5.0 | `createTimeline`, `animate`, `stagger`, `splitText` | 44.3 KB | 18.0 KB |
+| `motion-14.9.0.js` | [Motion](https://motion.dev) 14.9.0, MIT | `animate` (from `motion/mini`, WAAPI), `scroll`, `inView`, `hover`, `spring` | 22.0 KB | 9.0 KB |
+| `anime-4.5.0.js` | [Anime.js](https://animejs.com) 4.5.0, MIT | `createTimeline`, `animate`, `stagger`, `splitText` | 44.3 KB | 18.0 KB |
+| `persona-icons-0.1.js` + `.css` | persona-icons skill engine, plus Lucide icon nodes (ISC) | `mountPersonas()`: living characters from Lucide icons | 47.0 KB + 2.7 KB | 14.2 KB + 1.3 KB |
 
-The full builds weigh 59 KB and 41 KB gzipped. These carry only what the page uses.
+The full Motion and Anime.js builds weigh 59 KB and 41 KB gzipped. These carry
+only what the page uses.
 
-**Who does what.** Motion handles the scroll and the springs: the voice stage
-flattening as it scrolls up, the bubbles drifting, the tiles springing into
-view, and the hover lift. Anime.js handles anything sequenced: the hero's
-opening timeline, the stage's loop of people talking, the count-up of the
-numbers, and the install command typing itself.
+**Who does what.** Anime.js handles anything sequenced: the hero's opening
+timeline (headline words, then the lede and buttons, then the monitor and
+phone, then the crew popping in) and the install command typing itself. Motion
+handles scroll and springs: the working app standing up as it scrolls in, and
+each panel springing in. The persona engine drives the characters: idling,
+blinking, looking at the pointer, and reacting to hover, click, hold and
+spam-clicking.
 
 **Caching.** The version is in the file name, so a file never changes at its
 URL. That is why `stamp-assets.mjs` leaves these files alone: a `?v=` would
 also break `modulepreload`, which has to match the import URL exactly. Moving
 to a new version means a new file name. Update the imports in `site-motion.js`
-and the two `modulepreload` links in `index.html`.
+and `home.js`, the two `modulepreload` links in the head script of
+`index.html`, and the persona stylesheet link.
 
-## Rebuilding
+## Rebuilding Motion and Anime.js
 
 Run this in an empty folder outside the repo:
 
@@ -36,3 +42,29 @@ npx esbuild anime-entry.js  --bundle --minify --format=esm --legal-comments=none
 
 Then prepend the one-line licence banner that each file here starts with.
 The full licences are in `LICENSE-motion.txt` and `LICENSE-animejs.txt`.
+
+## Rebuilding the persona engine
+
+The engine is the `persona-icons` skill's own TypeScript (`controller`,
+`interaction`, `motion`, `personalities`, `presets`, `rigs`, `types`), used
+unchanged. The skill ships only a React component, so `persona.ts` is a vanilla
+port of `PersonaIcon.tsx`, `useInteraction.ts` and `Face.tsx`:
+
+- `mountPersonas()` mounts every
+  `<span data-persona="ghost" data-personality="shy" data-size="150" data-stroke="1.5" data-toy>`.
+  `data-face="true"` also draws a face on icons that have none of their own;
+  `data-toy` makes the character react to the pointer but hides it from
+  assistive tech and the tab order; `data-decorative` makes it never react.
+- `icons.ts` holds the Lucide icon nodes (ISC) for ghost, cat, bot, heart,
+  star, message-circle, sun and house, extracted from lucide-react 1.73.0. A
+  new character needs its node there, and a rig in the skill's `rigs.ts` if it
+  should have a native face.
+- `persona-icons-0.1.css` is the skill's `persona-icons.css`, unchanged.
+
+Bundle with `esbuild src/persona.ts --bundle --minify --format=esm
+--target=es2020 --legal-comments=none --outfile=persona-icons-0.1.js`, with the
+engine files and `persona.ts` and `icons.ts` in `src/`. The wrapper source,
+the icon extraction script and the headless pre-flight (`persona-check.cjs`:
+mount, no rig warnings, eye tracking, hover/click/hold/spam, touch, reduced
+motion, phone widths) were kept with the landing redesign notes. They should
+move into the skill or the repo when the Vue app adopts the same engine.

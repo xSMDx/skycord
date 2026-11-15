@@ -4,12 +4,13 @@
    decides, and holds the hero still until this takes over).
 
    Two libraries, one job each, so they never fight over an element:
-     Anime.js — anything sequenced: the hero's opening (the mini app
-                assembling itself), the numbers counting, the command typing.
-     Motion   — scroll and springs: the mini app standing up as it scrolls
-                in, tiles springing in, the hover lift.
-   The mini app's own states (channels, calls, settings) are CSS transitions
-   driven by app-demo.js, so they work with or without this file.
+     Anime.js — anything sequenced: the hero's opening (headline, then the
+                scene, then the crew popping in), and the command typing.
+     Motion   — scroll and springs: the working app standing up as it
+                scrolls in, and the panels springing in.
+   The working app's own states (channels, calls, settings) are CSS
+   transitions driven by app-demo.js, and the characters are driven by the
+   persona-icons engine (home.js), so both work with or without this file.
    Both libraries are vendored in vendor/ (see vendor/README.md). */
 
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)');
@@ -39,7 +40,7 @@ if (!REDUCE.matches) {
 
 function start(anime, motion) {
   const { createTimeline, animate: aAnimate, stagger, splitText } = anime;
-  const { animate: mAnimate, scroll, inView, hover, spring } = motion;
+  const { animate: mAnimate, scroll, inView, spring } = motion;
   const stops = [];   // teardown for reduced motion switched on later
 
   const h1 = $('[data-split]');
@@ -48,49 +49,43 @@ function start(anime, motion) {
 
   /* Late: the 2.5 s safety timer already showed the page, and the visitor
      may be reading it. Never hide what is on screen to replay it — keep
-     only the parts that add motion to a page already there (the loop,
-     scroll, hover). */
+     only the parts that add motion to a page already there (scroll). */
   const late = !html.classList.contains('anim');
-  const featureTiles = late ? [] : $$('#features .tile');
+  const panels = late ? [] : $$('.c-panel');
 
   /* ── Hero: the opening ─────────────────────────────────────────── */
-  // The app assembles itself the way it loads: rail, then the channel
-  // list, then the conversation.
   if (!late) {
     const words = splitText(h1, { words: { class: 'w' } }).words;
     words.forEach(hold);
-    const intro = ['.hero .lede', '.hero-act', '.stage-wrap'].map((s) => hold($(s)));
-    const rail = $$('.m-rail .ri, .m-rail .ri-divider', stage).map(hold);
-    const rows = $$('.sb-header, .ch-group-label, .ch-item, .vc-occ, .user-panel', stage).map(hold);
-    const talk = $$('.chat-header, .m-msgs .msg, .input-wrapper', stage).map(hold);
-    featureTiles.forEach(hold);
+    const copy = ['.c-lede', '.c-hero .cta-row', '.c-meta'].map((s) => hold($(s)));
+    const device = ['.c-mon', '.c-phone-in'].map((s) => hold($(s)));   // the phone's own tilt stays on its parent
+    const crew = $$('.c-scene .pc').map(hold);
+    panels.forEach(hold);
     release();
 
     const tl = createTimeline({ defaults: { ease: 'outExpo', duration: 900 } })
       .add(words, { opacity: [0, 1], translateY: ['0.45em', '0em'], delay: stagger(55) }, 0)
-      .add(intro[0], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 260)
-      .add(intro[1], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 340)
-      .add(intro[2], { opacity: [0, 1], translateY: [56, 0], duration: 1100 }, 380)
-      .add(rail, { opacity: [0, 1], scale: [0.8, 1], duration: 600, delay: stagger(50) }, 560)
-      .add(rows, { opacity: [0, 1], translateX: [-10, 0], duration: 600, delay: stagger(28) }, 640)
-      .add(talk, { opacity: [0, 1], translateY: [10, 0], duration: 650, delay: stagger(70) }, 780);
-    // Reduced motion switched on mid-intro jumps it to the end.
+      .add(copy[0], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 260)
+      .add(copy[1], { opacity: [0, 1], translateY: [16, 0], duration: 700 }, 340)
+      .add(copy[2], { opacity: [0, 1], translateY: [12, 0], duration: 700 }, 420)
+      .add(device[0], { opacity: [0, 1], translateY: [56, 0], duration: 1100 }, 300)
+      .add(device[1], { opacity: [0, 1], translateY: [64, 0], duration: 1100 }, 460)
+      .add(crew, { opacity: [0, 1], scale: [0.7, 1], duration: 800, delay: stagger(90) }, 700);
+    // Reduced motion switched on mid-opening jumps it to the end.
     stops.push(() => tl.complete());
     tl.then(() => {
-      // Hand the elements back to CSS: the mini app's own transitions own
-      // them from here.
-      [...words, ...intro, ...rail, ...rows, ...talk].forEach((el) => {
+      [...words, ...copy, ...device, ...crew].forEach((el) => {
         el.removeAttribute('data-held');
-        if (el !== intro[2]) { el.style.transform = ''; el.style.opacity = ''; }
+        el.style.transform = ''; el.style.opacity = '';
       });
     });
   }
 
-  /* ── The stage settles as you scroll to it ─────────────────────────
+  /* ── The working app stands up as you scroll to it ─────────────────
      It starts tipped back, as if lying on the desk, and stands up as it
-     reaches the middle of the screen. */
-  // Wide screens only: on a phone the mini app is the thing you touch, and
-  // a scaled-down stage would shrink its 48px tabs under the 44px minimum.
+     reaches the middle of the screen. Wide screens only: on a phone it is
+     the thing you touch, and a scaled-down stage would shrink its 48px
+     tabs under the 44px minimum. */
   if (matchMedia('(min-width: 761px)').matches) {
     stops.push(scroll(
       mAnimate(stage, { transform: ['rotateX(14deg) scale(.95)', 'rotateX(0deg) scale(1)'] }, { ease: 'linear' }),
@@ -98,54 +93,20 @@ function start(anime, motion) {
     ));
   }
 
-  /* ── Feature tiles spring in, and lift under a pointer ───────────── */
-  // A pointer that arrives mid-entrance waits for it: the hover lift is
-  // held back while the tile springs in, then applied on landing if the
-  // pointer is still there. Otherwise the entrance, finishing last, would
-  // drop a hovered tile back to the floor.
-  const fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
-  const lift = (tile) => mAnimate(tile, { transform: 'translateY(-4px)' }, { type: spring, bounce: 0, duration: 0.4 });
-  featureTiles.forEach((tile) => {
-    stops.push(inView(tile, () => {
-      mAnimate(tile, { opacity: [0, 1], transform: ['translateY(36px)', 'translateY(0px)'] },
+  /* ── Panels spring in as they arrive ───────────────────────────────── */
+  panels.forEach((panel) => {
+    stops.push(inView(panel, () => {
+      mAnimate(panel, { opacity: [0, 1], transform: ['translateY(40px)', 'translateY(0px)'] },
         { type: spring, bounce: 0, duration: 0.7 })
-        .then(() => {
-          tile.removeAttribute('data-held');
-          if (fine && tile.matches(':hover')) lift(tile);
-        });
+        .then(() => { panel.removeAttribute('data-held'); panel.style.opacity = ''; panel.style.transform = ''; });
     }, { amount: 0.12 }));
   });
-  if (fine) {
-    stops.push(hover('#features .tile', (tile) => {
-      if (!tile.hasAttribute('data-held')) lift(tile);
-      // Leaving always settles it, including after a lift applied on landing.
-      return () => mAnimate(tile, { transform: 'translateY(0px)' }, { type: spring, bounce: 0, duration: 0.4 });
-    }));
-  }
-
-  /* ── The numbers count up when they arrive ───────────────────────── */
-  // Each figure starts at 0 now, not when it arrives, or it would show its
-  // final value for a moment and then snap back. Screen readers read the
-  // stable copy beside it (.sr-only), never the moving one.
-  const nums = $('.numbers');
-  if (nums && !late) {   // late: the real figures are already showing
-    const counters = $$('[data-count]', nums).filter((el) => +el.dataset.count > 0);
-    counters.forEach((el) => { el.textContent = '0'; });
-    stops.push(inView(nums, () => {
-      counters.forEach((el, i) => {
-        const to = +el.dataset.count;
-        const n = { v: 0 };
-        aAnimate(n, { v: to, duration: 1400, delay: i * 140, ease: 'outExpo',
-          onUpdate: () => { el.textContent = String(Math.round(n.v)); } });
-      });
-    }, { amount: 0.5 }));
-  }
 
   /* ── The install command types itself, once ──────────────────────── */
   const cmd = $('#term-cmd');
   if (cmd && !late) {    // late: the command is already on screen, leave it
-    // Cleared up front for the same reason as the numbers; the Copy button
-    // and the .sr-only copy always carry the whole command.
+    // Cleared up front, or it would show whole for a moment and snap back;
+    // the Copy button and the .sr-only copy always carry the whole command.
     const full = cmd.textContent;
     cmd.textContent = '';
     stops.push(inView(cmd, () => {
@@ -157,11 +118,9 @@ function start(anime, motion) {
   }
 
   /* ── Printing ──────────────────────────────────────────────────────
-     Paper has no scroll to reveal anything: the real figures and the
-     whole command go in before the page is printed (site.css shows any
-     tile still waiting to spring in). */
+     Paper has no scroll to reveal anything: the whole command goes in
+     before the page is printed (home.css shows any panel still waiting). */
   window.addEventListener('beforeprint', () => {
-    $$('[data-count]').forEach((el) => { el.textContent = el.dataset.count; });
     if (cmd) cmd.textContent = cmd.nextElementSibling.textContent;
   });
 
@@ -169,9 +128,8 @@ function start(anime, motion) {
   REDUCE.addEventListener('change', () => {
     if (!REDUCE.matches) return;
     stops.forEach((s) => { try { typeof s === 'function' ? s() : s && s.stop && s.stop(); } catch (e) { /* already gone */ } });
-    $$('#stage, #features .tile').forEach((el) => { el.style.transform = ''; });
+    $$('#stage, .c-panel').forEach((el) => { el.style.transform = ''; });
     if (cmd) cmd.textContent = cmd.nextElementSibling.textContent;
-    $$('[data-count]').forEach((el) => { el.textContent = el.dataset.count; });
     unhideAll();
   });
 

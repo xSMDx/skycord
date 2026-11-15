@@ -443,3 +443,10 @@
   }
   @starting-style { .m-text, .m-voice, .msg, .m-page, .cb-tile, .vc-occ, .m-modal, .m-modal-card { opacity: 1; transform: none; filter: none; } }
 }
+
+/* ── A fuller conversation: an image and reactions ─────────────────── */
+.msg-embed { display: block; width: min(300px, 100%); aspect-ratio: 16 / 9; margin-top: 6px; border-radius: 8px; overflow: hidden; }
+.msg-embed svg { width: 100%; height: 100%; display: block; }
+.msg-rx { display: flex; gap: 4px; margin-top: 6px; }
+.msg-rx span { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border); font-size: 13px; color: var(--t2); }
+.msg-rx span.mine { border-color: rgba(56, 182, 241, .6); background: rgba(56, 182, 241, .14); color: #8fd4f6; }

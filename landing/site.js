@@ -168,16 +168,6 @@
     }).catch(function () { /* nothing to do; the command is on screen */ });
   });
 
-  /* ── Pause the feature marquee ──────────────────────────────────── */
-  document.addEventListener('click', function (e) {
-    var b = e.target.closest('.band-pause');
-    if (!b) return;
-    var on = b.getAttribute('aria-pressed') !== 'true';
-    b.setAttribute('aria-pressed', String(on));
-    b.setAttribute('aria-label', on ? 'Play the scrolling list' : 'Pause the scrolling list');
-    b.closest('.band').classList.toggle('paused', on);
-  });
-
-  /* The hero's voice stage, and every other moving part of the home page,
-     live in site-motion.js, which loads only when motion is allowed. */
+  /* The home page's choreography lives in site-motion.js, which loads only when
+     motion is allowed; the characters live in home.js. */
 })();

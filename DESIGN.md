@@ -37,13 +37,13 @@ get "improved" back into the bug it was fixing.
 
 | | **App** (`app.skycord.xyz`) | **Landing** (`skycord.xyz`) |
 |---|---|---|
-| Feel | Discord-adjacent, quiet, dense, gets out of the way | **Loud on purpose.** A live voice stage under a large headline, then colour at page scale: feature tiles and a closing band in the accent and three presets |
+| Feel | Discord-adjacent, quiet, dense, gets out of the way | **A sky, on purpose.** One continuous night-to-blue world with stars, the product big in the first screen, one idea per panel, and a punchline ending. Loud where the app is quiet |
 | Ground | `#111214` → `#313338` (layered greys) | The same greys, `#111214` → `#313338` |
 | Type | **Archivo** for the UI, **Chakra Petch** for headings | The same two, plus **Fira Code** for commands and versions — all self-hosted in `landing/fonts/` |
 | Text tiers | Neutral greys (`#dcddde` → `#949ba4`) | The same greys |
 | Themeable | Yes — 5 presets, 9 accents, custom, Material-You | No — the dark default only, deliberately |
-| Density | Tight. Rows, not cards. | Big type and big tiles, each holding a real, working piece of the app |
-| Personality | Restraint. It's a tool people live inside. | Shows, not tells: the app is on stage, mid-evening, and every demo works |
+| Density | Tight. Rows, not cards. | Big type, big panels, few words; each panel holds one real, working piece of the app |
+| Personality | Restraint. It's a tool people live inside. | Playful headlines, plain body copy. The app is on screen and clickable, and a small crew of characters lives around it |
 
 **Which do the tools use?**
 
@@ -257,43 +257,46 @@ was the one the contract did not list.
 
 ## Color — the landing site
 
-**Since 2026-09-21 the landing uses the app's palette**: the dark default of
-`tokens.css` above, Sky accent and all. Since 2026-11-14 (the "Crew room"
-redesign) it spends that palette at page scale instead of in accents: the
-feature tiles are whole fields of Sky, Green `#23a55a`, Yellow `#f0b232` and
-Pink `#eb459e` (accent presets), mixed with dark tiles, and the page closes
-on a band of Sky. The product is shown on a **voice stage** in the hero,
-drawn in the app's own greys (`#1e1f22` → `#383a40`) so it reads as the app.
+**Since 2026-11-15 the home page is a sky.** (Before that: the app's greys from
+2026-09-21, then the "Crew room" dark layout on 2026-11-14, which the owner
+found "a little boring" next to discord.com and fluxer.com.) It is one
+continuous world, `home.css`, scoped to `.c-world`: a vertical gradient from
+`#0a1a45` through `#12307f` to `#1b46a8` and back, with one static tile of stars
+(nothing twinkles), ending on a cloud band `#2f5fcf` that the footer stands
+on. The changelog and roadmap keep the dark look in `site.css`; they are
+reading pages, and the sky is not for them.
+
+Panels are fields of colour at page scale: Blue `#2a5bd6→#1c3d9c`, Violet
+`#5a3fd2→#3a249a`, Green `#0c7050→#084a36`, Magenta `#a3236a→#70124a`
+(`data-tone` on `.c-panel`), alternating down the page. Inside every panel
+the demo is the app: dark, in the app's own greys.
 
 Rules that follow from it:
 
-- **Tokens are copied, not reinterpreted.** The landing's `:root` block
-  repeats the app's values by name (`--bg-floor`, `--bg-panel`,
-  `--bg-chat`, `--accent` …). A change to the app's palette is a change to
-  both files.
-- **Text on Sky is ink** (`#0e0f11`), as in the app (`onAccent.ts`). The same
-  goes for the Green, Yellow and Pink tiles; secondary text on any coloured
-  tile is ink at 84%, which stays at or above 4.5:1 on all four.
-- **Sky follows the accent.** The Sky tile, the closing band and every
-  accent-coloured detail use `--accent` / `--on-accent`, so the themes demo
-  recolours the page as it claims to. The fixed tiles use `--ink-text`.
+- **The world uses fixed colours, never `--accent`.** The themes demo rewrites
+  `--accent` on `<html>`, and the sky must not change colour when someone tries
+  it. Accent-coloured details (the install prompt, the cat's brand mark) still
+  follow it.
+- **Every text-on-colour pair is computed.** White body text at 88% on the
+  lightest stop of each panel gradient is at least 4.5:1 (Blue 4.95, Violet
+  5.67, Green 5.11, Magenta 5.73). A new tone needs its number first.
+- **The app inside the page keeps the app's palette.** The working app in the
+  "Go on, click something" section copies the app's tokens (see
+  `mini.css`) and its real themes; it does not take the sky.
 - **Buttons are keys.** A pill on a 4px darker edge (`--edge`), sinking 3px
-  on press with no transition. The edge is the only zero-blur shadow on the
-  page; everything else that floats uses a soft, offset, neutral shadow.
-- **No coloured glows.** Elevation is a neutral shadow; the accent never
-  becomes a halo.
+  on press with no transition: white (primary) and Sky `#38b6f1` (secondary) in
+  the world. The edge is the only zero-blur shadow on the page, apart from the
+  headline's 4px drop, which is the same idea in type.
+- **No coloured glows.** Elevation is a neutral shadow; a colour never becomes
+  a halo.
 
-History: from 2026-08-24 the landing had its own look — "Ember" (charcoal and
-amber), then true black with Blurple `#5865F2` and Light Blurple `#E0E3FF` —
-kept apart from the app on purpose. The owner moved it onto the app's palette
-on 2026-09-21. From 2026-09-21 to 2026-11-14 the page was laid out as a
-Skycord server (rail, channel list, messages); the owner found it "a little
-boring", and the Crew room layout replaced it, keeping the palette, the faces,
-the mark, the copy and the live demos.
+History: from 2026-08-24 the landing had its own look, "Ember" (charcoal and
+amber), then true black with Blurple `#5865F2`. The owner moved it onto the
+app's palette on 2026-09-21. The sky replaces that on the home page only.
 
-Known gap: the page ground in `site.css` (`--ink` `#0a0b0d` and the rest) is
-still a little deeper than the app's greys. The stage uses the app's values
-locally. Moving the whole page ground over is a separate token pass.
+Known gap: the page ground in `site.css` (`--ink` `#0a0b0d` and the rest, used
+by the changelog and roadmap) is still a little deeper than the app's greys.
+Moving it over is a separate token pass.
 
 ---
 
@@ -388,12 +391,18 @@ with it. Both are the same signature at different weights of attention.
 
 The app's faces, served from `landing/fonts/` (no font CDN sees who visits):
 
-- **Chakra Petch 700** for the hero headline, `clamp(50px, 8.6vw, 112px)/.9`
-  with -0.03em tracking, for the tile headings (`clamp(32px, 3.5vw, 48px)`), for
-  the numbers sentence and for the closing band (up to 100px).
-- **Archivo 400–700** for everything else, at the app's sizes: 15px messages,
-  11px/700 uppercase category labels.
+- **Chakra Petch 700, uppercase** for every headline on the home page: the
+  hero `clamp(38px, 4.3vw, 60px)/1`, panels `clamp(30px, 3.6vw, 50px)`, the
+  "click something" section `clamp(32px, 4vw, 54px)`, the ending up to 84px,
+  and the giant "Skycord" wordmark behind the footer at 7% white. Headlines
+  are short and a little playful; body copy stays plain (see PRODUCT.md).
+- **Archivo 400–700** for everything else: body 18px/1.55 on the sky, and the
+  app's own sizes inside the working app (15px messages, 11px/700 uppercase
+  labels).
 - **Fira Code 400–500** for the install command and the hero's version line.
+
+Chakra Petch is a heavy face with a square build; the 4px hard drop under
+headlines is what keeps it from sinking into the gradient.
 
 ---
 
@@ -495,43 +504,65 @@ the thing that tells the user work is happening."
 ### Landing motion
 
 The landing has two animation libraries, vendored as tree-shaken ES modules in
-`landing/vendor/` (see its README). They have one job each, so they never
-animate the same element:
+`landing/vendor/` (see its README), plus the persona-icons engine for the
+characters. Each has one job, so they never animate the same element:
 
 - **Anime.js 4.5.0** handles anything sequenced: the hero's opening timeline
-  (headline words, then the lede and CTAs, then the stage and its tiles), the
-  stage's loop (speaking rings, bubbles replacing each other), the count-up
-  of the numbers, and the install command typing itself.
-- **Motion 14.9.0** handles scroll and springs: the stage stands up from
-  `rotateX(14deg)` as it scrolls to the middle of the screen, its bubble slots
-  drift, the feature tiles spring in, and they lift 4px under a fine pointer.
+  (headline words, then the lede and buttons, then the monitor and phone, then
+  the crew popping in with a stagger), and the install command typing itself.
+- **Motion 14.9.0** handles scroll and springs: the working app stands up from
+  `rotateX(14deg)` as it scrolls to the middle of the screen, and each panel
+  springs in as it arrives (no bounce).
+- **persona-icons** (`vendor/persona-icons-0.1.*`, `home.js`) drives the
+  characters: Lucide line art (cat, bot, ghost, heart, star, chat bubble) that
+  idles, blinks, looks at the pointer, and reacts to hover, click, hold and
+  spam-clicking, each with its own personality. The engine is the skill's own;
+  only the React binding was rewritten for plain HTML. They are toys: hidden
+  from assistive tech and out of the tab order. They handle reduced motion
+  themselves (expressions and tint still answer; nothing loops or travels), so
+  `home.js` loads either way.
 
 Rules:
 
 1. **Opt-out means not loaded.** Under `prefers-reduced-motion: reduce` the
    inline head script never adds `html.anim`, and `site-motion.js` never
-   imports the libraries. The page is complete as written.
-2. **Nothing waits on a script.** `html.anim` hides the hero and the feature
-   tiles only until the module takes over, or for 2.5 s at most. A module that
+   imports Anime.js or Motion. The page is complete as written.
+2. **Nothing waits on a script.** `html.anim` hides the hero and the panels
+   only until the module takes over, or for 2.5 s at most. A module that
    arrives after that never re-hides or replays what is on screen; it only
-   adds the loop, the scroll and the hover.
-3. **Loops run only when seen**: on screen (IntersectionObserver) and in a
-   visible tab, and a pause leaves nobody lit mid-sentence. Switching reduced
-   motion on mid-visit, even mid-intro, jumps the intro to its end, stops
-   every loop and puts the stage back to its still picture.
-4. **Anything that moves on its own can be stopped.** The feature marquee
-   has a pause button (keyboard and touch), and it pauses on hover.
-5. **The mini app is the app.** The hero's working preview (`mini.css`,
-   `app-demo.js`) copies the app's tokens, shell and component values,
-   and its own states (channels, calls, settings, themes) are CSS transitions,
-   not library tweens: interruptible, ease-out on arrival, exits faster than
-   entrances. Tab lists and segmented controls use one gliding indicator, moved
-   on transform alone (FLIP), never by animating width or height. The
-   scroll-linked tilt is wide screens only, so the phone's 48px tabs stay
-   at full size.
-6. Marketing timings may run longer than the app's bands (up to ~1.1 s for the
+   adds the scroll motion.
+3. **Loops run only when seen**: the working app's talking loop runs while it
+   is on screen in a visible tab, and a pause leaves nobody lit mid-sentence.
+   Switching reduced motion on mid-visit, even mid-opening, jumps the opening
+   to its end, stops every loop and puts the app back to its still picture.
+4. **The working app is the app.** `mini.css` and `app-demo.js` copy the app's
+   tokens, shell and component values, and its states (channels, calls,
+   settings, themes) are CSS transitions, not library tweens: interruptible,
+   ease-out on arrival, exits faster than entrances. Tab lists and segmented
+   controls use one gliding indicator, moved on transform alone (FLIP), never
+   by animating width or height. The scroll-linked tilt is wide screens only,
+   so the phone's 48px tabs stay at full size.
+5. Marketing timings may run longer than the app's bands (up to ~1.1 s for the
    opening), but they still arrive on an ease-out and leave faster than they
    came.
+
+### Landing characters
+
+The crew is the product's mascots, built from the persona-icons skill, not
+drawn by hand (a first hand-drawn set, made from the headphones mark, was
+rejected as goofy on 2026-11-15). Rules:
+
+- **Lucide line art, unchanged.** Stroke 1.5, `currentColor`, one colour per
+  character from the accent presets and white: Pink cat, Sky bot, white ghost,
+  Rose heart, Amber star. A translucent body (`rgba(255,255,255,.13)`) and a
+  soft neutral shadow lift them off the sky.
+- **One personality each, and neighbours differ**: cat playful, bot robotic or
+  curious, ghost shy, chat bubble nervous, star chaotic or sleepy, heart curious
+  or playful.
+- **Never turn the icon into a different illustration.** The headphones mark
+  is not a character; it stays the logo in the nav and footer.
+- **A character reaction never carries meaning.** They are decoration;
+  nothing on the page depends on one.
 
 ---
 
