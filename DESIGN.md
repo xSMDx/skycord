@@ -521,7 +521,15 @@ Rules:
    every loop and puts the stage back to its still picture.
 4. **Anything that moves on its own can be stopped.** The feature marquee
    has a pause button (keyboard and touch), and it pauses on hover.
-5. Marketing timings may run longer than the app's bands (up to ~1.1 s for the
+5. **The mini app is the app.** The hero's working preview (`mini.css`,
+   `app-demo.js`) copies the app's tokens, shell and component values,
+   and its own states (channels, calls, settings, themes) are CSS transitions,
+   not library tweens: interruptible, ease-out on arrival, exits faster than
+   entrances. Tab lists and segmented controls use one gliding indicator, moved
+   on transform alone (FLIP), never by animating width or height. The
+   scroll-linked tilt is wide screens only, so the phone's 48px tabs stay
+   at full size.
+6. Marketing timings may run longer than the app's bands (up to ~1.1 s for the
    opening), but they still arrive on an ease-out and leave faster than they
    came.
 

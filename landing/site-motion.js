@@ -89,10 +89,14 @@ function start(anime, motion) {
   /* ── The stage settles as you scroll to it ─────────────────────────
      It starts tipped back, as if lying on the desk, and stands up as it
      reaches the middle of the screen. */
-  stops.push(scroll(
-    mAnimate(stage, { transform: ['rotateX(14deg) scale(.95)', 'rotateX(0deg) scale(1)'] }, { ease: 'linear' }),
-    { target: stage, offset: ['start end', 'center center'] }
-  ));
+  // Wide screens only: on a phone the mini app is the thing you touch, and
+  // a scaled-down stage would shrink its 48px tabs under the 44px minimum.
+  if (matchMedia('(min-width: 761px)').matches) {
+    stops.push(scroll(
+      mAnimate(stage, { transform: ['rotateX(14deg) scale(.95)', 'rotateX(0deg) scale(1)'] }, { ease: 'linear' }),
+      { target: stage, offset: ['start end', 'center center'] }
+    ));
+  }
 
   /* ── Feature tiles spring in, and lift under a pointer ───────────── */
   featureTiles.forEach((tile) => {

@@ -16,13 +16,27 @@
   var REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   /* ── Gliding indicators ─────────────────────────────────────────── */
+  // The indicator takes its new size at once, then glides there on
+  // transform alone (FLIP): it starts drawn where it visually is now —
+  // mid-glide included, so a fast second click retargets smoothly — scaled
+  // to the old size, and settles at scale 1. No width or height animates.
   function place(ind, el, instant) {
     if (!ind || !el || !el.offsetWidth) return;
-    if (instant) ind.classList.add('no-glide');
-    ind.style.width = el.offsetWidth + 'px';
-    ind.style.height = el.offsetHeight + 'px';
-    ind.style.transform = 'translate(' + el.offsetLeft + 'px,' + el.offsetTop + 'px)';
-    if (instant) { void ind.offsetWidth; ind.classList.remove('no-glide'); }
+    var x = el.offsetLeft, y = el.offsetTop, w = el.offsetWidth, h = el.offsetHeight;
+    var was = ind.offsetWidth, glide = !instant && was && !REDUCE.matches && ind.animate;
+    if (glide) {
+      var m = new DOMMatrix(getComputedStyle(ind).transform);
+      var x0 = m.e, y0 = m.f, w0 = was * m.a, h0 = ind.offsetHeight * m.d;
+    }
+    if (ind._glide) ind._glide.cancel();
+    ind.style.width = w + 'px';
+    ind.style.height = h + 'px';
+    ind.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    if (!glide || (x0 === x && y0 === y && w0 === w && h0 === h)) return;
+    ind._glide = ind.animate([
+      { transform: 'translate(' + x0 + 'px,' + y0 + 'px) scale(' + (w0 / w) + ',' + (h0 / h) + ')' },
+      { transform: 'translate(' + x + 'px,' + y + 'px)' }
+    ], { duration: 240, easing: 'cubic-bezier(.32,.72,0,1)' });
   }
   // Every segmented control on the page (the demos' and the mini app's):
   // the selected fill glides instead of blinking from one option to the next.

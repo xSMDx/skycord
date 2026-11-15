@@ -188,6 +188,7 @@
 .chat-header b { font-size: 15px; font-weight: 700; color: var(--t-strong); }
 .ch-topic { margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--border); font-size: 13px; color: var(--t3); overflow: hidden; text-overflow: ellipsis; }
 .m-head-count { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--t3); }
+.m-head-count[hidden] { display: none; }
 .m-head-count::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
 .m-head-swap { transition: opacity var(--d2) var(--eo); }
 
@@ -324,10 +325,10 @@
    sets its position). It moves; the tabs only change colour. */
 .m-set-ind, .m-tab-ind, .seg-ind {
   position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none;
-  transition: transform var(--d3) var(--eo), width var(--d3) var(--eo), height var(--d3) var(--eo), background-color var(--dur-panel) var(--ease-out);
+  transform-origin: 0 0;   /* app-demo.js glides it on transform alone (FLIP) */
+  transition: background-color var(--dur-panel) var(--ease-out);
 }
 .m-set-ind { border-radius: var(--edge-md); background: var(--hover-strong); }
-.no-glide { transition: none !important; }
 
 .m-set-pages { position: relative; padding: 22px 24px; overflow: hidden; }
 .m-page { transition: opacity var(--d3) var(--eo), transform var(--d3) var(--eo), filter var(--d3) var(--eo); }
@@ -344,13 +345,14 @@
 .m-switch i { position: relative; flex: none; width: 40px; height: 24px; border-radius: 12px; background: var(--switch-off); transition: background-color var(--d2) var(--eo); }
 .m-switch i::after {
   content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 9px; background: #fff;
-  transition: transform var(--d2) var(--eo), width var(--d1) var(--eo);
+  transform-origin: left center;
+  transition: transform var(--d2) var(--eo);
 }
 .m-switch input:checked + i { background: var(--green); }
-.m-switch input:checked + i::after { transform: translateX(16px); }
+.m-switch input:checked + i::after { transform: translateX(16px); transform-origin: right center; }
 /* The thumb stretches while held, toward where it is going. */
-.m-switch:active i::after { width: 22px; }
-.m-switch:active input:checked + i::after { transform: translateX(12px); }
+.m-switch:active i::after { transform: scaleX(1.22); }
+.m-switch:active input:checked + i::after { transform: translateX(16px) scaleX(1.22); }
 .m-switch input:focus-visible + i { outline: 2px solid var(--t-strong); outline-offset: 2px; }
 
 .m-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--t3); color: var(--t3); transition: background-color var(--d1) var(--eo), color var(--d1) var(--eo), border-color var(--d1) var(--eo), transform var(--d1) var(--eo); }
