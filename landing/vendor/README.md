@@ -24,7 +24,9 @@ spam-clicking.
 **Caching.** The version is in the file name, so a file never changes at its
 URL. That is why `stamp-assets.mjs` leaves these files alone: a `?v=` would
 also break `modulepreload`, which has to match the import URL exactly. Moving
-to a new version means a new file name. Update the imports in `site-motion.js`
+to a new version means a new file name. Before the first deploy a file may be
+rebuilt in place; after it, bump the name on every rebuild, or the CDN serves
+the old one for up to four hours. Update the imports in `site-motion.js`
 and `home.js`, the two `modulepreload` links in the head script of
 `index.html`, and the persona stylesheet link.
 

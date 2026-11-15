@@ -279,7 +279,7 @@ Rules that follow from it:
   underline and the install prompt, so the demo's caption ("every button, link
   and ring on this page") stays true. The brand mark is white.
 - **Every text-on-colour pair is computed.** White body text at 88% on the
-  lightest stop of each panel gradient is at least 4.5:1 (Blue 4.95, Violet
+  lightest stop of each panel gradient is at least 4.5:1 (Blue 4.93, Violet
   5.67, Green 5.11, Magenta 5.73). A new tone needs its number first.
 - **The app inside the page keeps the app's palette.** The working app in the
   "Go on, click something" section copies the app's tokens (see
@@ -506,7 +506,8 @@ the thing that tells the user work is happening."
 
 The landing has two animation libraries, vendored as tree-shaken ES modules in
 `landing/vendor/` (see its README), plus the persona-icons engine for the
-characters. Each has one job, so they never animate the same element:
+characters. Each has one job, and no two animate the same property of the same
+element (Anime.js scales a character's host; the persona engine animates inside it):
 
 - **Anime.js 4.5.0** handles anything sequenced: the hero's opening timeline
   (headline words, then the lede and buttons, then the monitor and phone, then

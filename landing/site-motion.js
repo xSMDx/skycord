@@ -40,8 +40,13 @@ if (!REDUCE.matches) {
 
 function start(anime, motion) {
   const { createTimeline, animate: aAnimate, stagger, splitText } = anime;
-  const { animate: mAnimate, scroll, inView, spring } = motion;
+  const { animate: mAnimate, scroll, inView, spring: motionSpring } = motion;
+  // Reduced motion may have been switched on while the modules were loading: the
+  // change listener below is only added in here, so it would never fire.
+  if (REDUCE.matches) { unhideAll(); return; }
   const stops = [];   // teardown for reduced motion switched on later
+  const running = []; // animations in flight, so the teardown can halt them too
+  const halt = (a) => { try { (a.stop || a.pause || a.cancel).call(a); } catch (e) { /* already finished */ } };
 
   const h1 = $('[data-split]');
   const stage = $('#stage');
@@ -96,9 +101,10 @@ function start(anime, motion) {
   /* ── Panels spring in as they arrive ───────────────────────────────── */
   panels.forEach((panel) => {
     stops.push(inView(panel, () => {
-      mAnimate(panel, { opacity: [0, 1], transform: ['translateY(40px)', 'translateY(0px)'] },
-        { type: spring, bounce: 0, duration: 0.7 })
-        .then(() => { panel.removeAttribute('data-held'); panel.style.opacity = ''; panel.style.transform = ''; });
+      const spring = mAnimate(panel, { opacity: [0, 1], transform: ['translateY(40px)', 'translateY(0px)'] },
+        { type: motionSpring, bounce: 0, duration: 0.7 });
+      running.push(spring);
+      spring.then(() => { panel.removeAttribute('data-held'); panel.style.opacity = ''; panel.style.transform = ''; });
     }, { amount: 0.12 }));
   });
 
@@ -111,9 +117,9 @@ function start(anime, motion) {
     cmd.textContent = '';
     stops.push(inView(cmd, () => {
       const n = { c: 0 };
-      aAnimate(n, { c: full.length, duration: 1500, ease: 'linear',
+      running.push(aAnimate(n, { c: full.length, duration: 1500, ease: 'linear',
         onUpdate: () => { cmd.textContent = full.slice(0, Math.round(n.c)); },
-        onComplete: () => { cmd.textContent = full; } });
+        onComplete: () => { cmd.textContent = full; } }));
     }, { amount: 0.6 }));
   }
 
@@ -128,6 +134,7 @@ function start(anime, motion) {
   REDUCE.addEventListener('change', () => {
     if (!REDUCE.matches) return;
     stops.forEach((s) => { try { typeof s === 'function' ? s() : s && s.stop && s.stop(); } catch (e) { /* already gone */ } });
+    running.forEach(halt);
     $$('#stage, .c-panel').forEach((el) => { el.style.transform = ''; });
     if (cmd) cmd.textContent = cmd.nextElementSibling.textContent;
     unhideAll();

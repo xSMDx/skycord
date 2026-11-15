@@ -222,6 +222,7 @@ export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | 
   host.appendChild(root);
 
   let controller: PersonaController | null = null;
+  let destroyed = false;
   function renderFace() {
     svg.querySelector('.pi-face')?.remove();
     if (!faceWanted() || !rig.face) return;
@@ -241,12 +242,16 @@ export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | 
   }
   function start() {
     controller?.destroy();
+    // A new controller starts awake; the old one never reports waking up.
+    asleep = false; root.removeAttribute('data-asleep'); renderZzz();
     root.toggleAttribute('data-reduced', reduced);
     const c = new PersonaController({ root, idle, pose, drive, react, svg }, {
       getPersonality: () => base, rig, size, reducedMotion: reduced, interaction: config, faceActive: faceWanted(),
       onExpression: (e) => { expression = e; renderFace(); if (faceWanted()) c.syncNativeEyes(e); },
       onAsleep: (a) => { asleep = a; if (a) root.setAttribute('data-asleep', 'true'); else root.removeAttribute('data-asleep'); renderZzz(); },
-      onFaceUnavailable: () => { faceUnavailable = true; renderFace(); start(); },
+      // Fires from inside the controller's own start(): restart after it returns, never
+      // from within it (React got this for free because setState is async).
+      onFaceUnavailable: () => queueMicrotask(() => { if (destroyed) return; faceUnavailable = true; renderFace(); start(); }),
     });
     controller = c;
     renderFace();
@@ -254,11 +259,7 @@ export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | 
   }
   start();
 
-  let releasedFromHold = false, cancelledPress = false;
   const onEvent = (e: PersonaEvent) => {
-    if (e.type === 'press') releasedFromHold = cancelledPress = false;
-    if (e.type === 'release') releasedFromHold = true;
-    if (e.type === 'cancel') cancelledPress = true;
     controller?.handle(e);
     o.onPersonaEvent?.(e);
   };
@@ -271,7 +272,11 @@ export function mountPersona(host: Element, o: PersonaOptions): PersonaHandle | 
   return {
     root,
     signal: () => controller?.signal(),
-    destroy: () => { detach(); mq?.removeEventListener('change', onMq); controller?.destroy(); controller = null; root.remove(); },
+    destroy: () => {
+      destroyed = true;
+      detach(); mq?.removeEventListener('change', onMq); controller?.destroy(); controller = null; root.remove();
+      delete (host as HTMLElement).dataset.personaMounted;   // so mountPersonas() can mount it again
+    },
   };
 }
 
