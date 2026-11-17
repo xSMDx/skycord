@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } from './helpers'
+import { app, connectDb, disconnectDb, resetDb, register, befriend, auth, type TestUser } from './helpers'
 import { Server } from '../models/Server'
 import { PERMISSIONS, serializeBits, ALL_PERMISSIONS } from '../permissions'
 
@@ -220,6 +220,7 @@ describe('server mute reaches the token', () => {
 describe('a DM token is never narrowed', () => {
   it('grants everything, because no channel exists to take anything away', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const server = await mkServer(a)
     await Server.updateOne({ _id: server.id }, { $push: { members: b.id } })
     await addVoiceServer(a, server.id)

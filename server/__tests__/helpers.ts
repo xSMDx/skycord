@@ -8,6 +8,7 @@ import request from 'supertest'
 import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client'
 import { createApp } from '../app'
 import { initSocket } from '../sockets/chatSocket'
+import { Friendship } from '../models/Friendship'
 
 const TEST_URI =
   process.env.TEST_MONGO_URI ??
@@ -52,6 +53,14 @@ export const register = async (name?: string): Promise<TestUser> => {
 
 /** Authorization header for a test user. */
 export const auth = (u: TestUser) => ({ Authorization: `Bearer ${u.token}` })
+
+/**
+ * Makes two test users friends, straight in the database. Messaging and
+ * calling someone both need a relationship (canDM), and a test about a call
+ * or a message has no reason to drive the whole friend-request flow first.
+ */
+export const befriend = (a: TestUser, b: TestUser) =>
+  Friendship.create({ requester: a.id, receiver: b.id, status: 'accepted' })
 
 /**
  * A real HTTP server with the real socket layer attached, on an OS-assigned

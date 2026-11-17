@@ -7,7 +7,7 @@
  * have caught it.
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { app, connectDb, disconnectDb, resetDb, register, auth, type TestUser } from './helpers'
+import { app, connectDb, disconnectDb, resetDb, register, befriend, auth, type TestUser } from './helpers'
 import { Server } from '../models/Server'
 import { Message } from '../models/Message'
 import { Channel } from '../models/Channel'
@@ -137,6 +137,7 @@ describe('bitrate reaches the client', () => {
 
   it('is absent for a DM, which has no channel to carry one', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const res = await app().post('/voice/token').set(auth(a))
       .send({ conversationId: b.id, kind: 'dm' })
     expect(res.status).toBe(200)
