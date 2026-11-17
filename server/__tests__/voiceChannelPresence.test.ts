@@ -12,7 +12,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Socket as ClientSocket } from 'socket.io-client'
 import {
-  app, connectDb, disconnectDb, resetDb, register, auth,
+  app, connectDb, disconnectDb, resetDb, register, befriend, auth,
   withSocketServer, connectSocket, connectSocketRaw, nextEvent, type TestUser,
 } from './helpers'
 import { Server } from '../models/Server'
@@ -336,6 +336,7 @@ describe('call:join validates the dm partner the way getVoiceToken does', () => 
 describe('the DM and group call paths still work', () => {
   it('still reaches both DM participants, and still posts the system message on join AND on leave', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
 
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
@@ -542,6 +543,7 @@ describe('coming back after a dropped socket', () => {
 
   it('says nothing in the conversation while the call could still come back', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const room = roomFor('dm', b.id, a.id)
 
     const aSock = track(await connectSocket(sockets.url, a.token))
@@ -574,6 +576,7 @@ describe('coming back after a dropped socket', () => {
     // The guard against "fixing" this by never ending a call again: a grace
     // period that silently swallowed the message would pass every test above.
     const a = await register(), b = await register()
+    await befriend(a, b)
     const room = roomFor('dm', b.id, a.id)
 
     const aSock = track(await connectSocket(sockets.url, a.token))
@@ -642,6 +645,7 @@ describe('coming back after a dropped socket', () => {
     // The contrast that gives the grace period its meaning. `call:leave` is a
     // person deciding; nothing about it is in doubt, so nothing waits.
     const a = await register(), b = await register()
+    await befriend(a, b)
     const room = roomFor('dm', b.id, a.id)
 
     const aSock = track(await connectSocket(sockets.url, a.token))
@@ -689,6 +693,7 @@ describe('coming back after a dropped socket', () => {
      * would be free to land on another and be split off from them.
      */
     const a = await register(), b = await register()
+    await befriend(a, b)
     const room = roomFor('dm', b.id, a.id)
 
     const aSock = track(await connectSocket(sockets.url, a.token))
@@ -715,6 +720,7 @@ describe('coming back after a dropped socket', () => {
      * conclude, and the media server the call settled on is kept, not released.
      */
     const a = await register(), b = await register()
+    await befriend(a, b)
     const room = roomFor('dm', b.id, a.id)
 
     const aSock = track(await connectSocket(sockets.url, a.token))

@@ -13,7 +13,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Socket as ClientSocket } from 'socket.io-client'
 import {
-  connectDb, disconnectDb, resetDb, register,
+  connectDb, disconnectDb, resetDb, register, befriend,
   withSocketServer, connectSocket, connectSocketRaw, connectBackground, nextEvent,
 } from './helpers'
 import { cancelAllCallEnds, isInCall } from '../sockets/chatSocket'
@@ -61,6 +61,7 @@ const exactly = (...ids: string[]) => (p: CallState) =>
 describe('call:state startedAt', () => {
   it('startedAt is set when a DM call starts', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
 
@@ -75,6 +76,7 @@ describe('call:state startedAt', () => {
 
   it('a second person joining keeps the same startedAt', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
 
@@ -94,6 +96,7 @@ describe('call:state startedAt', () => {
 
   it('a call after the room emptied gets a new startedAt', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
 
@@ -127,6 +130,7 @@ describe('call:state startedAt', () => {
 
   it('the connect-time catch-up carries startedAt', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
 
     const aSelf = nextEvent(aSock, 'call:state')
@@ -155,6 +159,7 @@ describe('call:state startedAt', () => {
     process.env.CALL_END_GRACE_MS = '10000'
     try {
       const a = await register(), b = await register()
+      await befriend(a, b)
       const aSock = track(await connectSocket(sockets.url, a.token))
       const bSock = track(await connectSocket(sockets.url, b.token))
 
@@ -190,6 +195,7 @@ describe('call:state startedAt', () => {
 
   it('once the grace period lapses the next call starts a new clock', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
 
@@ -217,6 +223,7 @@ describe('a background socket and calls', () => {
 
   it('a background socket cannot join a call', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const bSock = track(await connectSocket(sockets.url, b.token))
     const aBackground = track(await connectBackground(sockets.url, a.token))
 
@@ -240,6 +247,7 @@ describe('a background socket and calls', () => {
 
   it('a background socket cannot rejoin a call either', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const bSock = track(await connectSocket(sockets.url, b.token))
     const aBackground = track(await connectBackground(sockets.url, a.token))
 

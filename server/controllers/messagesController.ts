@@ -28,9 +28,12 @@ export const dmConvId = (a: string, b: string) =>
  *     removes nothing, so an existing thread stays usable. Discord behaves the
  *     same way; stopping messages is what blocking is for, and that is still
  *     unimplemented (Friendship.status has 'blocked' but nothing reads it).
+ *     History means a message one of you wrote. The server's own lines
+ *     ("started a call") do not count: they record that something was
+ *     allowed, so they cannot be what allows it.
  *
  * What it does stop is the cold DM to a stranger's id, which is the actual
- * abuse vector.
+ * abuse vector. A DM call follows the same rule (canJoinCall, voiceController).
  */
 export const canDM = async (userId: string, partnerId: string): Promise<boolean> => {
   if (!mongoose.isValidObjectId(partnerId) || partnerId === userId) return false
@@ -45,8 +48,9 @@ export const canDM = async (userId: string, partnerId: string): Promise<boolean>
   })
   if (friends) return true
 
-  // Existing thread — one indexed lookup on conversationId.
-  const prior = await Message.exists({ conversationId: dmConvId(userId, partnerId) })
+  // Existing thread — one indexed lookup on conversationId. Written messages
+  // only; see "History" above.
+  const prior = await Message.exists({ conversationId: dmConvId(userId, partnerId), kind: { $ne: 'system' } })
   if (prior) return true
 
   const { Conversation } = await import('../models/Conversation')

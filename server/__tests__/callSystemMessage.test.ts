@@ -15,7 +15,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Socket as ClientSocket } from 'socket.io-client'
 import {
-  connectDb, disconnectDb, resetDb, register,
+  connectDb, disconnectDb, resetDb, register, befriend,
   withSocketServer, connectSocket, nextEvent, type TestUser,
 } from './helpers'
 import { Conversation } from '../models/Conversation'
@@ -55,6 +55,7 @@ const mkGroup = (owner: TestUser, members: TestUser[]) =>
 describe('the "started a call" line', () => {
   it('a DM call names its caller by display name, in the author and in the text', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     await named(a, 'Ann Display')
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
@@ -74,6 +75,7 @@ describe('the "started a call" line', () => {
 
   it('falls back to the username when the caller has no display name', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     await named(a, '')
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
@@ -88,6 +90,7 @@ describe('the "started a call" line', () => {
 
   it('uses the name the caller has now, not the one they had when the socket connected', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
     // A socket lives for hours; the person renamed themselves meanwhile.
@@ -121,6 +124,7 @@ describe('the "started a call" line', () => {
 describe('the "Call ended" line', () => {
   it('is written under the display name of the person who ended it', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     await named(a, 'Ann Display')
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))

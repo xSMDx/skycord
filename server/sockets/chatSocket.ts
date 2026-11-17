@@ -935,10 +935,11 @@ const allowsInChannel = (bits: bigint | null, perm: PermissionName): boolean =>
  *     convId)}` — happily builds a room from ANY string, and
  *     `postCallSystem`/`postCallEnded` write a real `Message` into it
  *     (`dmConvId(userId, junk)`) and emit to `user:<junk>`. Looped, that is
- *     unbounded database growth driven by one authenticated client. Whether
- *     two real, distinct people are allowed to ring each other at all
- *     (friendship, DND, etc.) is a separate product question this event
- *     never enforced before and is out of scope here.
+ *     unbounded database growth driven by one authenticated client.
+ *     And the two must be allowed to message each other (canDM): a call
+ *     rings the other person and leaves a line in their conversation, so it
+ *     may reach exactly the people a message may, and no one else. The
+ *     voice token and call-move endpoints apply the same rule.
  *   - group: Conversation -> members, same as `canAccessMessage`'s group
  *     branch above.
  *
@@ -959,7 +960,7 @@ const canJoinCall = async (
     if (kind === 'dm') {
       if (conversationId === userId) return false
       const partner = await User.findById(conversationId).select('_id').lean()
-      return !!partner
+      return !!partner && await canDM(userId, conversationId)
     }
     const group = await Conversation.findById(conversationId).select('members').lean()
     return !!group && group.members.some(m => m.toString() === userId)

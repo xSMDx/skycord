@@ -14,7 +14,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Socket as ClientSocket } from 'socket.io-client'
 import {
-  app, auth, connectDb, disconnectDb, resetDb, register,
+  app, auth, befriend, connectDb, disconnectDb, resetDb, register,
   withSocketServer, connectSocket, connectBackground, nextEvent, type TestUser,
 } from './helpers'
 import { Conversation } from '../models/Conversation'
@@ -70,6 +70,7 @@ const watchDeclines = (s: ClientSocket) => {
 describe('call:decline', () => {
   it('declining a DM call tells the caller and the decliner\'s other devices', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     // A display name that differs from the username, so the assertion below
     // can only pass by reading the right field.
     await User.updateOne({ _id: b.id }, { displayName: 'Bee Display' })
@@ -95,6 +96,7 @@ describe('call:decline', () => {
 
   it('the name falls back to the username when there is no display name', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     await User.updateOne({ _id: b.id }, { displayName: '' })
 
     const aSock = track(await connectSocket(sockets.url, a.token))
@@ -109,6 +111,7 @@ describe('call:decline', () => {
 
   it('a background socket can decline a DM call', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     // The phone: its Decline button speaks over the notification socket, the
     // one that is refused call:join and call:rejoin.
@@ -149,6 +152,7 @@ describe('call:decline', () => {
 
   it('a decline for a DM room you\'re not part of is ignored', async () => {
     const a = await register(), b = await register(), c = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
     const cSock = track(await connectSocket(sockets.url, c.token))
@@ -190,6 +194,7 @@ describe('call:decline', () => {
 
   it('a decline for an empty room is ignored', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
 
@@ -210,6 +215,7 @@ describe('call:decline', () => {
 
   it('a decline from someone already in the call is ignored', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
     await joinCall(aSock, 'dm', b.id)
@@ -233,6 +239,9 @@ describe('call:decline', () => {
     // nobody who was rung. Unlike a made-up room it IS live, so it gets past the
     // first gate and has to be turned away by the room's own prefix.
     const a = await register(), b = await register(), c = await register()
+    // For the DM-call controls at the end: a shared server is not enough to
+    // ring someone.
+    await befriend(a, b); await befriend(a, c)
     const { server, channels } = (await app().post('/servers').set(auth(a)).send({ name: 'VC' })).body
     await Server.updateOne({ _id: server.id }, { $push: { members: { $each: [b.id, c.id] } } })
     const voice = channels.find((ch: any) => ch.type === 'voice')
@@ -289,6 +298,7 @@ describe('call:decline', () => {
 
   it('malformed declines and made-up rooms are ignored and the server keeps working', async () => {
     const a = await register(), b = await register()
+    await befriend(a, b)
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
     await joinCall(aSock, 'dm', b.id)

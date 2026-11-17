@@ -7,7 +7,7 @@ import { Conversation } from '../models/Conversation'
 import { User } from '../models/User'
 import { Channel } from '../models/Channel'
 import { Server } from '../models/Server'
-import { dmConvId } from './messagesController'
+import { dmConvId, canDM } from './messagesController'
 import {
   getCallVoiceServer, fixCallVoiceServer, setCallVoiceServer, announceCallVoiceServer,
   callOccupancy, isInCall,
@@ -132,6 +132,8 @@ export const getVoiceToken = async (req: Request, res: Response, next: NextFunct
       if (conversationId === userId) { res.status(400).json({ message: 'Invalid DM' }); return }
       const partner = await User.findById(conversationId).select('_id').lean()
       if (!partner) { res.status(404).json({ message: 'User not found' }); return }
+      // Who may call whom is who may message whom (canDM); see canJoinCall.
+      if (!await canDM(userId, conversationId)) { res.status(403).json({ message: 'You cannot call this person' }); return }
     }
 
     const me = await User.findById(userId).select('username displayName').lean()
@@ -321,6 +323,7 @@ export const moveVoiceCall = async (req: Request, res: Response, next: NextFunct
       if (conversationId === userId) { res.status(400).json({ message: 'Invalid DM' }); return }
       const partner = await User.findById(conversationId).select('_id').lean()
       if (!partner) { res.status(404).json({ message: 'User not found' }); return }
+      if (!await canDM(userId, conversationId)) { res.status(403).json({ message: 'You cannot call this person' }); return }
     }
 
     const room = roomFor(kind, conversationId, userId)
