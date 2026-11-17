@@ -1,17 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { joinProgress, failedCallId, callConversation } from '../callStatus'
+import { joinProgress, failedLabel, failedCallId, callConversation } from '../callStatus'
 import type { ConnectStage } from '../useVoice'
 
 // The shape useVoice keeps while a join is under way: connecting is true for the
 // whole retry cycle, the stage walks through the steps, the attempt counts up.
-const v = (o: Partial<{ connecting: boolean; connectStage: ConnectStage; connectAttempt: number }> = {}) =>
-  ({ connecting: true, connectStage: 'connecting' as ConnectStage, connectAttempt: 1, ...o })
+// failReason is null unless the server refused the call.
+const v = (o: Partial<{ connecting: boolean; connectStage: ConnectStage; connectAttempt: number; failReason: string | null }> = {}) =>
+  ({ connecting: true, connectStage: 'connecting' as ConnectStage, connectAttempt: 1, failReason: null, ...o })
 
 describe('joinProgress', () => {
   it("'failed' → { label: 'Couldn’t connect', failing: true }", () => {
     // useVoice clears connecting and the attempt count before it sets 'failed'.
     expect(joinProgress(v({ connecting: false, connectStage: 'failed', connectAttempt: 0 })))
       .toEqual({ label: 'Couldn’t connect', failing: true })
+  })
+
+  it("a refused call reads 'failed' in the server’s words", () => {
+    expect(joinProgress(v({ connecting: false, connectStage: 'failed', connectAttempt: 0, failReason: 'Channel not found' })))
+      .toEqual({ label: 'Channel not found', failing: true })
+  })
+
+  it('a reason says nothing while the join is still under way', () => {
+    // useVoice clears it as each attempt starts; this is only the label's rule.
+    expect(joinProgress(v({ connectStage: 'no-route', failReason: 'Channel not found' })))
+      .toEqual({ label: 'No route', failing: true })
+    expect(joinProgress(v({ connectStage: 'connecting', failReason: 'Channel not found' })))
+      .toEqual({ label: 'Connecting…', failing: false })
   })
 
   it('a failed join reads as failed whatever else is still set', () => {
@@ -60,6 +74,25 @@ describe('joinProgress', () => {
 
   it('not in a call at all → null', () => {
     expect(joinProgress(v({ connecting: false, connectStage: null, connectAttempt: 0 }))).toBeNull()
+  })
+})
+
+// The words for a failed join, for the surfaces that say it outside
+// joinProgress (the phone sheet's controls), so they cannot word it otherwise.
+describe('failedLabel', () => {
+  it('is the server’s reason when it refused the call', () => {
+    expect(failedLabel({ failReason: 'You cannot join this voice channel' })).toBe('You cannot join this voice channel')
+  })
+
+  it('is “Couldn’t connect” for every other failure', () => {
+    expect(failedLabel({ failReason: null })).toBe('Couldn’t connect')
+  })
+
+  it('is the very label joinProgress gives the failed stage', () => {
+    for (const failReason of ['Channel not found', null]) {
+      expect(joinProgress(v({ connecting: false, connectStage: 'failed', connectAttempt: 0, failReason }))?.label)
+        .toBe(failedLabel({ failReason }))
+    }
   })
 })
 

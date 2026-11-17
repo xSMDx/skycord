@@ -310,7 +310,11 @@ describe('the phone call sheet', () => {
 
   it('says the call is not coming, not that it is on its way, while a failed join is held', () => {
     expect(sheet).toMatch(/failed\?: boolean/)
-    expect(sheet).toContain("const notJoined = computed(() => (props.failed ? 'Couldn’t connect' : 'Connecting…'))")
+    // In the words every other surface uses (callStatus's failedLabel): the
+    // server's reason when it refused the call, else "Couldn’t connect".
+    expect(sheet).toContain("import { failedLabel } from '@/composables/callStatus'")
+    expect(sheet).toContain("const notJoined = computed(() => (props.failed ? failedLabel(voice) : 'Connecting…'))")
+    expect(sheet).not.toContain("'Couldn’t connect'")
     expect(sheet).toMatch(/!props\.joined \? notJoined\.value\s*:\s*null/)
     expect(sheet).toMatch(/const cameraLabel = computed\(\(\) =>\s*!props\.joined \? notJoined\.value :/)
   })

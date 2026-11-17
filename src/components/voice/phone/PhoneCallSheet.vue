@@ -31,6 +31,7 @@ import { effectiveInputMode } from '@/composables/useVoiceSettings'
 import { permits } from '@/composables/voicePermits'
 import { media } from '@/composables/useVoiceMedia'
 import { speaker, setSpeaker } from '@/composables/phoneCall'
+import { failedLabel } from '@/composables/callStatus'
 import { musicCardLabel } from '@/composables/phoneCallRules'
 import { music, musicAvailable } from '@/composables/useMusic'
 import { sheetOffset, velocityOf, settlesOpen } from '@/composables/sheetDrag'
@@ -90,8 +91,12 @@ const micLabel = computed(() =>
     : pushToTalk.value ? 'This channel uses push to talk'
       : voice.localMuted ? 'Unmute' : 'Mute')
 
-/** Why a control that needs the call cannot act yet: on its way, or not coming. */
-const notJoined = computed(() => (props.failed ? 'Couldn’t connect' : 'Connecting…'))
+/**
+ * Why a control that needs the call cannot act yet: on its way, or not coming
+ * — and then why, in the subtitle's words: the server's reason when it refused
+ * the call, else "Couldn't connect".
+ */
+const notJoined = computed(() => (props.failed ? failedLabel(voice) : 'Connecting…'))
 
 /** Why Hold to talk cannot transmit right now, or null when it can. */
 const pttBlocked = computed<string | null>(() =>
