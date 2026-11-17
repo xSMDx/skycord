@@ -11,6 +11,7 @@ import {
   automaticTheme, onSystemChange, pickMode, pickStudio, pickVariant, seedVariants, setAutomatic,
   type DarkVariant, type Family, type LightVariant, type ThemeState,
 } from './themeMode'
+import { ALL_PRESETS } from './themePresets'
 
 export type Theme =
   | 'default' | 'midnight' | 'amoled' | 'light' | 'light-dim' | 'custom'
@@ -101,6 +102,52 @@ export const CUSTOM_TOKENS: { key: string; label: string; fallback: string }[] =
   { key: '--text-1',   label: 'Body text',          fallback: '#dcddde' },
 ]
 
+// ── What a theme may hold ────────────────────────────────────────────────────
+// A theme from a code or a link was made by somebody else, and its values are
+// written onto the page as CSS. So each field must be what the settings screen
+// itself makes: a colour is #rrggbb, a number sits in its slider's range, a
+// name is one the app knows, a switch is a boolean. A field that is anything
+// else is dropped on its own, and the rest of the theme still applies. The
+// server keeps the same rule for shared links (themesController).
+const HEX_COLOUR = /^#[0-9a-f]{6}$/i
+export const isHexColour = (v: unknown): v is string => typeof v === 'string' && HEX_COLOUR.test(v)
+/** The accent to paint with: 'auto' unless the setting is a real colour. */
+const safeAccent = (v: unknown): string => isHexColour(v) ? v : 'auto'
+const CUSTOM_KEYS = new Set(CUSTOM_TOKENS.map(t => t.key))
+/** The custom editor's own tokens holding colours, and nothing else; null if not an object. */
+const customColours = (v: unknown): Record<string, string> | null => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const out: Record<string, string> = {}
+  for (const [k, c] of Object.entries(v)) if (CUSTOM_KEYS.has(k) && isHexColour(c)) out[k] = c
+  return out
+}
+const THEME_IDS = new Set<string>(ALL_PRESETS.map(p => p.id))
+const SCHEMES: readonly SchemeName[] = ['off', 'tonalSpot', 'monochrome', 'neutral', 'fruitSalad']
+const oneOf = (list: readonly string[]) => (v: unknown) => typeof v === 'string' && list.includes(v)
+const keyOf = (map: Record<string, string>) => (v: unknown) =>
+  typeof v === 'string' && Object.prototype.hasOwnProperty.call(map, v)
+const numberIn = (min: number, max: number) => (v: unknown) =>
+  typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
+const isBool = (v: unknown) => typeof v === 'boolean'
+/** Every theme field but `custom`, which customColours filters entry by entry. */
+const FIELD_OK: Partial<Record<keyof Appearance, (v: unknown) => boolean>> = {
+  theme:             v => typeof v === 'string' && THEME_IDS.has(v),
+  accent:            v => v === 'auto' || isHexColour(v),
+  density:           oneOf(['cozy', 'compact', 'roomy']),
+  msgSize:           numberIn(10, 30),
+  groupSpacing:      numberIn(0, 48),
+  fontUi:            keyOf(UI_FONTS),
+  fontMono:          keyOf(MONO_FONTS),
+  showSendButton:    isBool,
+  scheme:            oneOf(SCHEMES),
+  contrast:          numberIn(-1, 1),
+  emojiPack:         oneOf(['native', 'twemoji', 'noto']),
+  underlineLinks:    isBool,
+  displayNameStyles: isBool,
+  msgLayout:         oneOf(['cozy', 'compact']),
+  zoom:              numberIn(50, 200),
+}
+
 const parseHex = (hex: string) => {
   const h = hex.replace('#', '')
   const n = h.length === 3 ? h.split('').map(c => c + c).join('') : h
@@ -174,7 +221,7 @@ if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
  * instead of `appearance.accent` wherever a real colour is required, or
  * 'auto' ends up parsed as one.
  */
-export const accentHex = computed(() => resolveAccentHex(appearance.accent, appearance.theme))
+export const accentHex = computed(() => resolveAccentHex(safeAccent(appearance.accent), appearance.theme))
 
 export const applyAppearance = () => {
   const root = document.documentElement
@@ -204,14 +251,17 @@ export const applyAppearance = () => {
     // against on its own — it needs the same concrete hex the CSS custom
     // properties below would show for this theme.
     const isDark = !isLightTheme(a.theme)
-    const tokens = buildSchemeTokens(resolveAccentHex(a.accent, a.theme), a.scheme, isDark, a.contrast)
+    const tokens = buildSchemeTokens(resolveAccentHex(safeAccent(a.accent), a.theme), a.scheme, isDark, a.contrast)
     for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v)
   } else if (a.theme === 'custom') {
-    for (const [k, v] of Object.entries(a.custom)) if (v) root.style.setProperty(k, v)
+    // Only the editor's own tokens, and only colours. What is applied here can
+    // come straight from localStorage, saved from a theme taken in before
+    // shared values were checked, so it is checked again at the page.
+    const c = customColours(a.custom) ?? {}
+    for (const [k, v] of Object.entries(c)) root.style.setProperty(k, v)
     // The editor only exposes 4 anchors; propagate them to the rest of the
     // chrome (sidebars, user panel, composer, secondary text) so the WHOLE app
     // follows a custom theme, not just the chat + main panel.
-    const c = a.custom
     const set = (k: string, v: string) => root.style.setProperty(k, v)
     if (c['--bg-panel']) set('--bg-raised', c['--bg-panel'])       // sidebar + settings shell
     if (c['--bg-floor']) set('--bg-deep', c['--bg-floor'])         // user panel
@@ -232,20 +282,22 @@ export const applyAppearance = () => {
   // explicit accent is the user's choice and applies in every theme.
   // isAutoAccent, not a bare `=== 'auto'`, so an empty saved accent takes this
   // branch too instead of falling into the one below and asking shade('') for
-  // a hex it doesn't have.
-  if (isAutoAccent(a.accent)) {
+  // a hex it doesn't have. safeAccent does the same for anything that is not
+  // a colour at all: it reads as 'auto' and never reaches the page.
+  const accent = safeAccent(a.accent)
+  if (isAutoAccent(accent)) {
     for (const p of ['--accent', '--accent-hover', '--accent-deep', '--accent-rgb', '--text-on-accent',
                       '--name-hover', '--mention-fg', '--accent-text', '--time-token-fg']) {
       root.style.removeProperty(p)
     }
   } else {
-    root.style.setProperty('--accent', a.accent)
-    root.style.setProperty('--accent-hover', shade(a.accent, -0.12))
+    root.style.setProperty('--accent', accent)
+    root.style.setProperty('--accent-hover', shade(accent, -0.12))
     // -12% is not enough for accent text on a light theme: accent-hover
     // measures 4.02:1 against 14px body text. -28% clears 4.5.
-    root.style.setProperty('--accent-deep', shade(a.accent, -0.28))
-    root.style.setProperty('--accent-rgb', rgbTriple(a.accent))
-    root.style.setProperty('--text-on-accent', onAccentText(a.accent))
+    root.style.setProperty('--accent-deep', shade(accent, -0.28))
+    root.style.setProperty('--accent-rgb', rgbTriple(accent))
+    root.style.setProperty('--text-on-accent', onAccentText(accent))
 
     // An explicit accent needs its own tints derived per theme family — dark
     // lightens toward white, light darkens toward black — the same split
@@ -257,7 +309,7 @@ export const applyAppearance = () => {
     // makes switching theme family with an explicit accent still correct —
     // without it, the other family's tint would sit in `root.style` and
     // outrank the stylesheet rule, since inline styles always win.
-    const { mentionFg, accentText } = isLightTheme(a.theme) ? accentTintsOnLight(a.accent) : accentTintsOnDark(a.accent)
+    const { mentionFg, accentText } = isLightTheme(a.theme) ? accentTintsOnLight(accent) : accentTintsOnDark(accent)
     // An inline style always outranks html.names-plain's stylesheet rule
     // (tokens.css), regardless of specificity, so unconditionally setting
     // --name-hover here silently defeated "Display Name Styles: off" for
@@ -332,11 +384,20 @@ const LEGACY_PREFIX = 'sykord-theme:'
  *  transposed letter, and a clever shared-suffix alternation gets it wrong. */
 export const THEME_CODE_RE = /(?:skycord|sykord)-theme:[A-Za-z0-9_-]+/
 
-// Keep only known theme fields from an arbitrary object (shared by code + link).
+// Keep only known theme fields from an arbitrary object (shared by code + link),
+// each holding a value it may hold — see "What a theme may hold" above.
 export const sanitizeTheme = (obj: any): Partial<Appearance> => {
   const out: Partial<Appearance> = {}
   if (!obj || typeof obj !== 'object') return out
-  for (const k of THEME_FIELDS) if (k in obj) (out as any)[k] = obj[k]
+  for (const k of THEME_FIELDS) {
+    if (!(k in obj)) continue
+    if (k === 'custom') {
+      const c = customColours(obj.custom)
+      if (c) out.custom = c
+    } else if (FIELD_OK[k]?.(obj[k])) {
+      (out as any)[k] = obj[k]
+    }
+  }
   return out
 }
 

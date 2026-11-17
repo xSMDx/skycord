@@ -7,7 +7,7 @@
  * explicit accent — see applyAppearance's dark-family branch.
  */
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
-import { onAccentText, accentTintsOnLight } from '../onAccent'
+import { onAccentText, accentTintsOnLight, SKY_DARK } from '../onAccent'
 
 // Same reason as themeCode.test.ts: useAppearance pulls in materialScheme →
 // @material/material-color-utilities, whose published ESM uses extensionless
@@ -20,6 +20,7 @@ vi.mock('../materialScheme', () => ({
 }))
 
 let setAppearance: (patch: any, persist?: boolean) => void
+let accentHex: { value: string }
 let styleStore: Map<string, string>
 let classSet: Set<string>
 
@@ -69,7 +70,7 @@ beforeAll(async () => {
   }
 
   const m = await import('../useAppearance')
-  ;({ setAppearance } = m as any)
+  ;({ setAppearance, accentHex } = m as any)
 })
 
 // applyAppearance's own removeProperty/setProperty calls for the DERIVED_KEYS
@@ -148,5 +149,44 @@ describe('applyAppearance — inline accent properties', () => {
     setAppearance({ theme: 'light', accent: '#38b6f1', displayNameStyles: true }, false)
     setAppearance({ accent: 'auto' }, false)
     for (const key of ACCENT_INLINE_KEYS) expect(styleStore.has(key), key).toBe(false)
+  })
+})
+
+/*
+ * Only colours reach the page. A theme applied before shared values were
+ * checked is still saved in localStorage, and it comes back through
+ * setAppearance without ever passing parseTheme, so the check has to happen
+ * here as well as at the door.
+ */
+describe('applyAppearance — only colours reach the page', () => {
+  // example.invalid is reserved and never resolves.
+  const OUTSIDE = 'url(https://example.invalid/x.png)'
+
+  it('an accent that is not a colour is treated as auto', () => {
+    setAppearance({ theme: 'default', accent: '#5865f2' }, false)
+    setAppearance({ accent: OUTSIDE }, false)
+    for (const key of ACCENT_INLINE_KEYS) expect(styleStore.has(key), key).toBe(false)
+    expect(accentHex.value).toBe(SKY_DARK)
+  })
+
+  it('a custom value that is not a colour is not written, and neither is anything derived from it', () => {
+    setAppearance({ theme: 'custom', scheme: 'off', accent: 'auto', custom: { '--bg-chat': OUTSIDE, '--bg-panel': '#112233' } }, false)
+    expect(styleStore.get('--bg-panel')).toBe('#112233')
+    expect(styleStore.has('--bg-chat')).toBe(false)
+    expect(styleStore.has('--bg-input')).toBe(false)   // derived from --bg-chat
+  })
+
+  it('a property the custom editor does not offer is never written', () => {
+    setAppearance({ theme: 'custom', scheme: 'off', accent: 'auto', custom: { 'background-image': OUTSIDE, '--bg-floor': '#000000' } }, false)
+    expect(styleStore.has('background-image')).toBe(false)
+    expect(styleStore.get('--bg-floor')).toBe('#000000')
+  })
+
+  it('nothing written to the page carries a url', () => {
+    setAppearance({
+      theme: 'custom', scheme: 'off', accent: OUTSIDE,
+      custom: { '--bg-chat': OUTSIDE, '--text-1': OUTSIDE, background: OUTSIDE },
+    }, false)
+    for (const [k, v] of styleStore) expect(v, k).not.toMatch(/url\(/i)
   })
 })

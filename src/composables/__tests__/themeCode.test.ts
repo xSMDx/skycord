@@ -23,6 +23,7 @@ vi.mock('../materialScheme', () => ({
 let serializeTheme: () => string
 let parseTheme: (code: string) => any
 let THEME_CODE_RE: RegExp
+let ACCENT_PRESETS: { name: string; hex: string }[]
 
 beforeAll(async () => {
   // The module reads localStorage and touches <html> at import time.
@@ -48,7 +49,7 @@ beforeAll(async () => {
     head: el(),
   }
   const m = await import('../useAppearance')
-  ;({ serializeTheme, parseTheme, THEME_CODE_RE } = m as any)
+  ;({ serializeTheme, parseTheme, THEME_CODE_RE, ACCENT_PRESETS } = m as any)
 })
 
 describe('the emitted code', () => {
@@ -96,5 +97,56 @@ describe('malformed input', () => {
     // appearing anywhere in the base64 body was cut out of the middle.
     const encoded = serializeTheme()
     expect(parseTheme('   ' + encoded + '  ')).not.toBeNull()
+  })
+})
+
+/*
+ * A code arrives in a message from anyone, and its values end up as CSS on the
+ * reader's page. So it may carry only what the settings screen itself makes:
+ * colours as #rrggbb, numbers in range, known names, booleans. Each field that
+ * breaks the rule is dropped on its own, and the rest of the theme still works.
+ */
+describe('what a code may carry', () => {
+  // example.invalid is reserved and never resolves.
+  const OUTSIDE = 'url(https://example.invalid/x.png)'
+  const code = (data: Record<string, unknown>) =>
+    'skycord-theme:' + btoa(JSON.stringify({ v: 1, ...data })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+  it('keeps what the settings screen produces', () => {
+    const data = {
+      theme: 'custom', accent: '#5865f2', density: 'compact', msgSize: 16, groupSpacing: 8,
+      fontUi: 'Inter', fontMono: 'Fira Code', showSendButton: false,
+      custom: { '--bg-chat': '#101010', '--bg-panel': '#202020', '--bg-floor': '#303030', '--text-1': '#eeeeee' },
+      scheme: 'tonalSpot', contrast: 0.5, emojiPack: 'twemoji', underlineLinks: true,
+      displayNameStyles: false, msgLayout: 'compact', zoom: 110,
+    }
+    expect(parseTheme(code(data))).toEqual(data)
+  })
+
+  it('drops a colour that is not a colour', () => {
+    expect(parseTheme(code({ theme: 'custom', accent: OUTSIDE, custom: { '--bg-chat': OUTSIDE, '--bg-panel': '#112233' } })))
+      .toEqual({ theme: 'custom', custom: { '--bg-panel': '#112233' } })
+  })
+
+  it('drops property names the custom editor does not offer', () => {
+    expect(parseTheme(code({ custom: { 'background-image': OUTSIDE, '--anything': '#112233', '--bg-floor': '#000000' } })))
+      .toEqual({ custom: { '--bg-floor': '#000000' } })
+  })
+
+  it('drops values of the wrong type or out of range', () => {
+    expect(parseTheme(code({
+      theme: 'nope', msgSize: '15px', zoom: 5000, contrast: 'high', showSendButton: 'yes',
+      fontUi: 'Comic', density: { a: 1 }, custom: 'not an object',
+    }))).toEqual({})
+  })
+
+  it('keeps every theme and accent the app offers', async () => {
+    const { ALL_PRESETS } = await import('../themePresets')
+    for (const p of ALL_PRESETS) {
+      const data = { theme: p.id, ...(p.accent ? { accent: p.accent } : {}) }
+      expect(parseTheme(code(data)), p.id).toEqual(data)
+    }
+    for (const p of ACCENT_PRESETS) expect(parseTheme(code({ accent: p.hex })), p.name).toEqual({ accent: p.hex })
+    expect(parseTheme(code({ accent: 'auto' }))).toEqual({ accent: 'auto' })
   })
 })
