@@ -6,9 +6,9 @@
  * media server that is busy — and wrong for a refusal, which gets the same
  * answer every time. A 4xx answer is a refusal, except:
  * - 429, too many requests: it passes once the window does.
- * - 401: the session lapsed, it was not the call that was refused. The
- *   access token is refreshed on a timer and whenever the socket is turned
- *   away, and the next try carries the new one.
+ * - 401: the session lapsed, it was not the call that was refused. The join
+ *   renews the session once and asks again (useVoice's askToken); a 401
+ *   after that goes round the loop with everything else that may pass.
  *
  * Read from what useApi throws for a failed response: the body, with
  * `status` added. Nothing without a whole-number status is a refusal: a

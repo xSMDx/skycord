@@ -13,7 +13,7 @@ import {
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
 import { micFailureReason, micIsLive, micAfterToggle, micStepOnPermitChange, type MicState } from './micState'
 import { holdPresence } from './usePresence'
-import { useAuth } from './useAuth'
+import { useAuth, silentRefresh } from './useAuth'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
 import { callRefusal } from './callRefusal'
@@ -1144,6 +1144,7 @@ watch(() => [voiceSettings.noiseMode, voiceSettings.sensitivity,
 // reach attemptConnect to auto-reconnect. useApi/useAuth are plain singletons,
 // safe to read here at import time; getVoiceToken reads the token at call time.
 const { getVoiceToken, moveVoiceCall } = useApi()
+const { accessToken } = useAuth()
 
 /**
  * @param voiceServerId Preferred media server for a DM or group call — the
@@ -1175,7 +1176,11 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
   // next attempt automatically — so the user never has to spam the call button;
   // they just watch it retry until it lands (or hit Cancel). A call the server
   // refuses is the exception: it stops on the first answer and says why.
-  const attemptConnect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: string, attempt: number) => {
+  // `renewed` is whether this join has renewed the session yet (see askToken):
+  // every join starts without, and its retries carry it on.
+  const attemptConnect = async (
+    convId: string, kind: 'dm' | 'group' | 'channel', name: string, attempt: number, renewed = false,
+  ) => {
     const seq = ++connectSeq
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
     if (failTimer)  { clearTimeout(failTimer);  failTimer = null }
@@ -1189,6 +1194,28 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     // cleanup has not run: the old reason must go here, not only there.
     voice.failReason = null
     voice.activeName = name   // set now so the "Connecting…" strip can label the call
+    // The token, asked for with the session as it is now. The access token can
+    // lapse under a call: the timer that renews it sleeps with the machine, so
+    // a call that drops as it wakes asks with a token that died meanwhile. That
+    // 401 gets one renewal and one more ask, within this attempt and once a
+    // join, as uploads and the socket do. A refresh with no answer leaves the
+    // session as it was, and the loop below tries again; one the server turns
+    // down has signed the session out, and the join ends with it, quietly.
+    const askToken = async () => {
+      try {
+        return await getVoiceToken(convId, kind, preferredVoiceServer)
+      } catch (err) {
+        if (renewed || (err as { status?: unknown } | null)?.status !== 401) throw err
+        const ok = await silentRefresh()
+        if (seq !== connectSeq) throw err   // cancelled meanwhile: the catch below lets it go
+        if (!ok) {
+          if (!accessToken.value) void leave()   // signed out: nothing could pass now
+          throw err
+        }
+        renewed = true
+        return getVoiceToken(convId, kind, preferredVoiceServer)
+      }
+    }
     // Whether the token request has answered. Only its failures can be the
     // server refusing the call; past it, LiveKit's connection errors carry a
     // status too, and every one of them is worth another try.
@@ -1198,7 +1225,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
         token, url, voiceServer, bitrate,
         mayPublishAudio, mayPublishVideo, voiceActivity, serverMute, serverDeafen,
         music: musicOnThisInstance,
-      } = await getVoiceToken(convId, kind, preferredVoiceServer)
+      } = await askToken()
       tokenAnswered = true
       channelBitrate = typeof bitrate === 'number' ? bitrate : null
       // Absent on an instance predating the feature, which means the same as
@@ -1323,7 +1350,7 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
         giveUp(refusal.reason)
       } else if (attempt < MAX_ATTEMPTS) {
         voice.connectStage = 'no-route'         // red flash; voice.connecting stays true so the strip persists
-        retryTimer = setTimeout(() => { void attemptConnect(convId, kind, name, attempt + 1) }, RETRY_DELAY_MS)
+        retryTimer = setTimeout(() => { void attemptConnect(convId, kind, name, attempt + 1, renewed) }, RETRY_DELAY_MS)
       } else {
         giveUp()                                 // out of tries → "Couldn't connect", auto-leave after a hold
       }
