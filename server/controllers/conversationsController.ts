@@ -91,6 +91,26 @@ const dropFromGroupRoom = (userId: string, groupId: string): void => {
   getIO()?.in(`user:${userId}`).socketsLeave(`group:${groupId}`)
 }
 
+/**
+ * Which of `ids` are accepted friends of `userId`.
+ *
+ * The one rule for putting someone in a group, whether it is being started or
+ * already exists: you can only add your own friends. Anyone else comes in
+ * through an invite link they choose to open (joinViaInvite). Sharing a group
+ * is also what lets two people message each other (canDM), so this rule
+ * decides that as well.
+ */
+const friendsAmong = async (userId: string, ids: string[]): Promise<Set<string>> => {
+  const friendships = await Friendship.find({
+    status: 'accepted',
+    $or: [
+      { requester: userId, receiver: { $in: ids } },
+      { receiver: userId, requester: { $in: ids } },
+    ],
+  }).lean()
+  return new Set(friendships.flatMap(f => [f.requester.toString(), f.receiver.toString()]))
+}
+
 // ── Create a group ────────────────────────────────────────────────────────────
 export const createGroup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -112,16 +132,7 @@ export const createGroup = async (req: Request, res: Response, next: NextFunctio
     // can't pull a stranger into a group out of nowhere. (Invite links are
     // the path for adding non-friends; see joinViaInvite.)
     const others = uniqueMembers.filter(id => id !== userId)
-    const friendships = await Friendship.find({
-      status: 'accepted',
-      $or: [
-        { requester: userId, receiver: { $in: others } },
-        { receiver: userId, requester: { $in: others } },
-      ],
-    }).lean()
-    const friendIds = new Set(
-      friendships.flatMap(f => [f.requester.toString(), f.receiver.toString()])
-    )
+    const friendIds = await friendsAmong(userId, others)
     const allAreFriends = others.every(id => friendIds.has(id))
     if (!allAreFriends) {
       res.status(403).json({ message: 'You can only add friends to a group' }); return
@@ -384,11 +395,17 @@ export const addGroupMembers = async (req: Request, res: Response, next: NextFun
   try {
     const userId = req.user!.sub
     const { groupId } = req.params
-    const { memberIds } = req.body as { memberIds: string[] }
+    const { memberIds } = req.body as { memberIds: unknown }
 
     if (!Array.isArray(memberIds) || memberIds.length === 0) {
       res.status(400).json({ message: 'No members selected' }); return
     }
+    // User ids, each once. Anything else is a bad request, not something to
+    // look up or cast halfway through the add.
+    if (!memberIds.every(id => typeof id === 'string' && mongoose.isObjectIdOrHexString(id))) {
+      res.status(400).json({ message: 'Invalid member' }); return
+    }
+    const wanted = [...new Set(memberIds as string[])]
     if (!mongoose.isValidObjectId(groupId)) { res.status(400).json({ message: 'Invalid group' }); return }
 
     const group = await Conversation.findById(groupId)
@@ -398,11 +415,18 @@ export const addGroupMembers = async (req: Request, res: Response, next: NextFun
     }
 
     const existing = new Set(group.members.map(m => m.toString()))
-    const toAdd = memberIds.filter(id => !existing.has(id))
+    const toAdd = wanted.filter(id => !existing.has(id))
     if (toAdd.length === 0) { res.status(400).json({ message: 'Those people are already in the group' }); return }
 
     if (existing.size + toAdd.length > MAX_GROUP_MEMBERS) {
       res.status(400).json({ message: `Group DMs can have up to ${MAX_GROUP_MEMBERS} members` }); return
+    }
+
+    // The same rule as starting a group: only the adder's own friends, every
+    // one of them, or nobody is added.
+    const friendIds = await friendsAmong(userId, toAdd)
+    if (!toAdd.every(id => friendIds.has(id))) {
+      res.status(403).json({ message: 'You can only add friends to a group' }); return
     }
 
     group.members.push(...toAdd.map(id => new mongoose.Types.ObjectId(id)))
