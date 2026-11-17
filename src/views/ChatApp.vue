@@ -90,6 +90,7 @@ import { savedThemes, applySavedTheme, type SavedTheme } from '@/composables/use
 import { useVoice, isConnectedVoiceRoom, userPref, setUserPref, setStreamVolume, userVolumeMax, joinedStreams, joinStream, leaveStream } from '@/composables/useVoice'
 import { useSelfAudio }      from '@/composables/useSelfAudio'
 import { useVoiceMedia }     from '@/composables/useVoiceMedia'
+import { whenJoined, type JoinWait } from '@/composables/whenJoined'
 // The app-wide right-click menu. Aliased because the message-only ContextMenu
 // above still owns its own surface until it's migrated onto this one.
 import AppContextMenu        from '@/components/ui/ContextMenu.vue'
@@ -1467,20 +1468,39 @@ const openCameraPreview = (intent: 'camera' | 'video-call' = 'camera') => {
   showCameraPreview.value = true
 }
 
+/**
+ * A video call whose join is still on its way, waiting to turn the camera on
+ * when it lands. One at most: two waits landing together would each switch
+ * the camera, on and straight back off. Dropped with the view, because
+ * unmounting it (signing out) does not end the call, and the camera must not
+ * come on after that.
+ */
+let cameraAfterJoin: JoinWait | null = null
+onBeforeUnmount(() => cameraAfterJoin?.cancel())
+
 const onCameraConfirmed = async () => {
   showCameraPreview.value = false
 
-  // Join first when the preview was opened to START a video call. Awaiting the
-  // connect matters: toggleCamera reaches for the room singleton, which does
-  // not exist until the connection resolves.
+  // Join first when the preview was opened to START a video call. toggleCamera
+  // reaches for the room singleton, which does not exist until the join lands,
+  // and connect() only starts the join: attemptConnect carries on by itself,
+  // retries and all. So this waits for that call's join. Nothing to publish to
+  // if it fails or is cancelled, and a failed join already says so itself
+  // (the connectStage watcher's toast, or the phone's call screen).
   if (cameraPreviewIntent.value === 'video-call' && !callActiveHere.value) {
     const c = currentCall.value; if (!c) return
     try { await vConnect(c.id, c.kind, c.name) }
     catch { showToast('Couldn’t connect to voice'); return }
-    // Nothing to publish to if the connect failed or was cancelled.
-    if (!voice.connected) return
+    cameraAfterJoin?.cancel()
+    const wait = cameraAfterJoin = whenJoined(c.id)
+    const landed = await wait.landed
+    if (cameraAfterJoin === wait) cameraAfterJoin = null
+    if (!landed) return
   }
 
+  // Confirming means camera on. It can already be on, from a video call whose
+  // join landed while this preview was open again, and toggling would turn it off.
+  if (media.localCamOn) return
   const err = await toggleCamera()
   if (err) showToast(err)
 }
