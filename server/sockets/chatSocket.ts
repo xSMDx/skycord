@@ -1005,6 +1005,36 @@ const presenceAudience = async (
   return [...new Set([...friendIds, ...coMemberIds])].filter(id => id !== userId)
 }
 
+/**
+ * One bad event must not stop the server.
+ *
+ * Socket.IO calls each listener from its own event-loop callback, so a
+ * listener that throws is caught by nothing and the process exits, dropping
+ * every connection on the instance. A listener that returns a rejected promise
+ * is only kept from doing the same by the process-wide handler in index.ts.
+ *
+ * This wraps `socket.on` for one connection, so every listener registered
+ * through it, today's and any added later, is caught where it runs: a throw or
+ * a rejection becomes one log line. Handlers still check their own payloads;
+ * this is the floor under them, not a substitute. The log line carries the
+ * message only, so a client sending junk cannot fill the log with stacks.
+ */
+export const guardListeners = (socket: Socket): void => {
+  type Listener = (...args: unknown[]) => unknown
+  const register = socket.on.bind(socket) as unknown as (event: string, listener: Listener) => Socket
+  const report = (event: string, err: unknown) =>
+    console.error(`[WS] ${event} failed:`, err instanceof Error ? err.message : err)
+  const guarded = (event: string, listener: Listener) => register(event, (...args: unknown[]) => {
+    try {
+      const out = listener(...args)
+      if (out instanceof Promise) out.catch(err => report(event, err))
+    } catch (err) {
+      report(event, err)
+    }
+  })
+  socket.on = guarded as unknown as Socket['on']
+}
+
 export const initSocket = (httpServer: HttpServer): IOServer => {
   const io = new IOServer(httpServer, {
     cors: { origin: config.cors.clientOrigin, credentials: true },
@@ -1046,6 +1076,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
   })
 
   io.on('connection', async (socket: Socket) => {
+    // First, before any handler below is registered: see guardListeners.
+    guardListeners(socket)
     const userId   = (socket as any).userId   as string
     const username = (socket as any).username as string
     console.log(`[WS] + ${username}`)
@@ -1454,10 +1486,12 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     })
 
     // ── Typing ─────────────────────────────────────────────────────────────
-    socket.on('typing:start', (data: { partnerId: string }) => {
+    socket.on('typing:start', (data: { partnerId?: unknown }) => {
+      if (typeof data?.partnerId !== 'string') return
       io.to(`user:${data.partnerId}`).emit('typing:start', { userId, username })
     })
-    socket.on('typing:stop', (data: { partnerId: string }) => {
+    socket.on('typing:stop', (data: { partnerId?: unknown }) => {
+      if (typeof data?.partnerId !== 'string') return
       io.to(`user:${data.partnerId}`).emit('typing:stop', { userId })
     })
 
