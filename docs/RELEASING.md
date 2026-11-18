@@ -164,6 +164,27 @@ audio worklet, `licenses.json` — silently never deployed. The worklet 404'd in
 production for days while screen sharing degraded quietly to "video without
 sound", with nothing in any log to say so.
 
+**The API runs as its own user, not as root.** pm2 itself runs as root, but it
+starts `sykord-api` as the system user `skycord` (no login, no other groups)
+from `/srv/sykord`. `~/sykord` is a link to that folder, so the sequence above
+is unchanged. The code stays owned by root and `.env` is `root:skycord`, mode
+640: the API can read its settings but cannot change its own code. Two rules
+follow from that:
+
+- **Never add `--update-env` to the restart.** It copies root's whole shell
+  environment back into the API and points its `HOME` at `/root`. The API keeps
+  running as `skycord`, but with root's variables. If it happens, start it
+  again clean (a few seconds of downtime):
+
+  ```bash
+  pm2 delete sykord-api && cd /srv/sykord && env -i HOME=/root PM2_HOME=/root/.pm2 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin pm2 start /srv/sykord/dist/server/index.js --name sykord-api --cwd /srv/sykord --uid skycord --gid skycord && pm2 save
+  ```
+
+- **Keep `.env` readable by the `skycord` group** when you edit or replace it
+  (`chown root:skycord .env && chmod 640 .env`). The API refuses to start
+  without `MONGO_URI` and its JWT secrets, so a `.env` it cannot read takes it
+  down at the next restart.
+
 Then run the smoke check below. Verify by content, never by status code.
 
 ## After any deploy or nginx change
