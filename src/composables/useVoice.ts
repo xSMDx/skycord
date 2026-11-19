@@ -13,9 +13,10 @@ import {
 import { createMicChainProcessor, type MicChainProcessor } from './micChain'
 import { micFailureReason, micIsLive, micAfterToggle, micStepOnPermitChange, type MicState } from './micState'
 import { holdPresence } from './usePresence'
-import { useAuth } from './useAuth'
+import { useAuth, silentRefresh } from './useAuth'
 import { useApi } from './useApi'
 import { getRoom, setRoom } from './voiceRoom'
+import { callRefusal } from './callRefusal'
 import { MUSIC_IDENTITY, music, musicAvailable, setMusicTarget } from './useMusic'
 import { applySubscriptions } from './subscriptionPolicy'
 import {
@@ -59,6 +60,14 @@ interface VoiceState {
   connectStage: ConnectStage       // which step of the join we're on
   connectAttempt: number           // 1 = first try, >1 = auto-retrying ("Trying again…")
   connectingConvId: string | null  // which conv is mid-join (activeConvId isn't set until connected)
+  /**
+   * Why the join failed, in the server's own words, when the server refused
+   * the call (callRefusal): read with connectStage 'failed', in place of
+   * "Couldn't connect". null for every other failure, and whenever no join
+   * has failed. Cleared as each attempt starts and by cleanup, so a reason
+   * never labels the next call.
+   */
+  failReason:   string | null
   connected:    boolean
   // When this call first connected (ms since the epoch): what the call timer
   // counts from. A reconnect to the same conversation keeps it, because the
@@ -96,7 +105,7 @@ interface VoiceState {
 export const voice = reactive<VoiceState>({
   activeConvId: null, activeKind: null, activeName: '',
   connecting: false, connectStage: null, connectAttempt: 0, connectingConvId: null, connected: false,
-  connectedAt: null,
+  failReason: null, connectedAt: null,
   localMuted: false, localDeafened: false, participants: [],
   ping: null, quality: 'unknown', mic: 'muted', voiceServer: null,
   serverMuted: false, serverDeafened: false,
@@ -980,6 +989,7 @@ const cleanup = () => {
   voice.connectStage = null
   voice.connectAttempt = 0
   voice.connectingConvId = null
+  voice.failReason = null
   voice.activeConvId = null
   voice.activeKind = null
   voice.activeName = ''
@@ -1134,6 +1144,7 @@ watch(() => [voiceSettings.noiseMode, voiceSettings.sensitivity,
 // reach attemptConnect to auto-reconnect. useApi/useAuth are plain singletons,
 // safe to read here at import time; getVoiceToken reads the token at call time.
 const { getVoiceToken, moveVoiceCall } = useApi()
+const { accessToken } = useAuth()
 
 /**
  * @param voiceServerId Preferred media server for a DM or group call — the
@@ -1163,8 +1174,13 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
 
   // One join attempt. On failure it flashes "No route" (red) and schedules the
   // next attempt automatically — so the user never has to spam the call button;
-  // they just watch it retry until it lands (or hit Cancel).
-  const attemptConnect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: string, attempt: number) => {
+  // they just watch it retry until it lands (or hit Cancel). A call the server
+  // refuses is the exception: it stops on the first answer and says why.
+  // `renewed` is whether this join has renewed the session yet (see askToken):
+  // every join starts without, and its retries carry it on.
+  const attemptConnect = async (
+    convId: string, kind: 'dm' | 'group' | 'channel', name: string, attempt: number, renewed = false,
+  ) => {
     const seq = ++connectSeq
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
     if (failTimer)  { clearTimeout(failTimer);  failTimer = null }
@@ -1173,13 +1189,44 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
     voice.connectAttempt = attempt
     voice.connectStage = attempt === 1 ? 'finding-server' : 'connecting'
     voice.connectingConvId = convId
+    // A new call can start while a refused one is still held on screen, and
+    // connect() skips leave() then (nothing is connected or connecting), so
+    // cleanup has not run: the old reason must go here, not only there.
+    voice.failReason = null
     voice.activeName = name   // set now so the "Connecting…" strip can label the call
+    // The token, asked for with the session as it is now. The access token can
+    // lapse under a call: the timer that renews it sleeps with the machine, so
+    // a call that drops as it wakes asks with a token that died meanwhile. That
+    // 401 gets one renewal and one more ask, within this attempt and once a
+    // join, as uploads and the socket do. A refresh with no answer leaves the
+    // session as it was, and the loop below tries again; one the server turns
+    // down has signed the session out, and the join ends with it, quietly.
+    const askToken = async () => {
+      try {
+        return await getVoiceToken(convId, kind, preferredVoiceServer)
+      } catch (err) {
+        if (renewed || (err as { status?: unknown } | null)?.status !== 401) throw err
+        const ok = await silentRefresh()
+        if (seq !== connectSeq) throw err   // cancelled meanwhile: the catch below lets it go
+        if (!ok) {
+          if (!accessToken.value) void leave()   // signed out: nothing could pass now
+          throw err
+        }
+        renewed = true
+        return getVoiceToken(convId, kind, preferredVoiceServer)
+      }
+    }
+    // Whether the token request has answered. Only its failures can be the
+    // server refusing the call; past it, LiveKit's connection errors carry a
+    // status too, and every one of them is worth another try.
+    let tokenAnswered = false
     try {
       const {
         token, url, voiceServer, bitrate,
         mayPublishAudio, mayPublishVideo, voiceActivity, serverMute, serverDeafen,
         music: musicOnThisInstance,
-      } = await getVoiceToken(convId, kind, preferredVoiceServer)
+      } = await askToken()
+      tokenAnswered = true
       channelBitrate = typeof bitrate === 'number' ? bitrate : null
       // Absent on an instance predating the feature, which means the same as
       // off: the panel stays hidden rather than appearing with nothing behind
@@ -1295,18 +1342,26 @@ const connect = async (convId: string, kind: 'dm' | 'group' | 'channel', name: s
       console.warn(`[voice] attempt ${attempt} failed`, err)
       teardownRoom()                            // drop the half-open room, keep the call target
       voice.connected = false
-      if (attempt < MAX_ATTEMPTS) {
+      // Refused (a 4xx to the token request): asking again gets the same
+      // answer, so stop now and give the server's reason, rather than flash
+      // "No route" for twenty seconds and end on "Couldn't connect".
+      const refusal = tokenAnswered ? null : callRefusal(err)
+      if (refusal) {
+        giveUp(refusal.reason)
+      } else if (attempt < MAX_ATTEMPTS) {
         voice.connectStage = 'no-route'         // red flash; voice.connecting stays true so the strip persists
-        retryTimer = setTimeout(() => { void attemptConnect(convId, kind, name, attempt + 1) }, RETRY_DELAY_MS)
+        retryTimer = setTimeout(() => { void attemptConnect(convId, kind, name, attempt + 1, renewed) }, RETRY_DELAY_MS)
       } else {
         giveUp()                                 // out of tries → "Couldn't connect", auto-leave after a hold
       }
     }
   }
 
-  // Exhausted all attempts: stop trying, show a terminal red "Couldn't connect"
-  // in the network strip, then auto-leave the call after FAIL_HOLD_MS.
-  const giveUp = () => {
+  // Exhausted all attempts, or refused: stop trying, show a terminal red
+  // "Couldn't connect" in the network strip — the server's reason in its
+  // place, when it refused the call — then auto-leave after FAIL_HOLD_MS.
+  const giveUp = (reason: string | null = null) => {
+    voice.failReason = reason   // before the stage, so whatever reacts to 'failed' reads it
     voice.connecting = false
     voice.connected = false
     voice.connectedAt = null   // the call is over; the strip that remains is the failure, not a running timer

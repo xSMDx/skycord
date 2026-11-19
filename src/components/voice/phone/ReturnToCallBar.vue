@@ -18,9 +18,10 @@
  * Props: `name` is the call's (the DM's person, the group, "Channel / Server");
  * `talking` is whether anyone in it is talking now; `startedAt` is when you
  * connected (voice.connectedAt), null while the first connect is under way;
- * `failure` is why the call is not up ("Couldn't connect") while a failed
- * join is held, shown in place of the timer on the danger fill — the strip
- * then says the call went, rather than that it is going on.
+ * `failure` is why the call is not up ("Couldn't connect", or the server's
+ * reason when it refused the call) while a failed join is held, shown in
+ * place of the timer on the danger fill — the strip then says the call went,
+ * rather than that it is going on.
  */
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { formatElapsed } from '@/composables/phoneCallRules'
@@ -107,7 +108,18 @@ const time = computed(() => (props.startedAt === null ? null : formatElapsed(now
 .rtc-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A step further off than the dot is from the name: two facts, not one phrase. */
 .rtc-time { flex: none; margin-left: 4px; font-weight: 500; color: var(--text-2); font-variant-numeric: tabular-nums; }
-.rtc.failed .rtc-time { color: inherit; }
+/* A failure is a sentence, not a timer, and can be the server's own reason.
+   The name starts from nothing and grows into whatever the reason leaves, up
+   to its own width (so the two still centre together); the reason is cut,
+   with an ellipsis, only where it alone is wider than the bar. Not a heavier
+   shrink on the name: the reason would still take a sliver of any shortfall,
+   and a sliver is enough to end it in an ellipsis. The label says it whole. */
+.rtc.failed .rtc-name { flex: 1 1 0; max-width: max-content; }
+.rtc.failed .rtc-time {
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: inherit;
+}
 
 /* Arrives in place, and the dot changes without moving. */
 @media (prefers-reduced-motion: reduce) {

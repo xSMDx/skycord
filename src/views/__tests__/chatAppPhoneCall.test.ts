@@ -147,6 +147,29 @@ describe('the return-to-call bar', () => {
       expect(styleOf(returnBar)).toMatch(/\.rtc\.failed\s*\{[^}]*background: var\(--danger-hover\);[^}]*color: var\(--text-on-danger-hover\)/)
     })
 
+    it('fits a failure in the server’s words: the name gives way first, and the words are cut only past the bar’s width', () => {
+      // A timer is a few fixed characters and never shrinks; a refusal is a
+      // sentence. The label still carries it whole.
+      const css = styleOf(returnBar)
+      const rule = (selector: string) =>
+        new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? ''
+      // The name starts from nothing and grows into what the words leave, up
+      // to its own width, so the group still centres. A weighted shrink would
+      // not do: the words would always take a sliver of any shortfall, and a
+      // sliver is enough to end them in an ellipsis.
+      const name = rule('.rtc.failed .rtc-name')
+      expect(name).toMatch(/flex: 1 1 0;/)
+      expect(name).toMatch(/max-width: max-content/)
+      expect(name).not.toMatch(/flex-shrink/)
+      const words = rule('.rtc.failed .rtc-time')
+      expect(words).toMatch(/flex: 0 1 auto/)
+      expect(words).toMatch(/min-width: 0/)
+      expect(words).toMatch(/overflow: hidden/)
+      expect(words).toMatch(/text-overflow: ellipsis/)
+      expect(words).toMatch(/white-space: nowrap/)
+      expect(returnBar).toContain('`Return to call: ${name}, ${failure}`')
+    })
+
     it('stops its clock when it goes', () => {
       expect(returnBar).toMatch(/onBeforeUnmount\([\s\S]{0,80}clearInterval/)
     })
@@ -220,7 +243,8 @@ describe('a failed join on a touch phone', () => {
 
   it('says so on the screen or the return bar, not in a toast over the call’s controls', () => {
     const w = between('watch(() => voice.connectStage, (stage, prev) => {', '\n})')
-    expect(w).toContain("showToast('Couldn’t connect to voice')")
+    // The server's reason when it refused the call; the old words otherwise.
+    expect(w).toContain("showToast(voice.failReason ?? 'Couldn’t connect to voice')")
     expect(w).toMatch(/stage === 'failed' && prev !== 'failed' && !noPushToTalkKey\.value/)
   })
 

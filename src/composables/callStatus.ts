@@ -1,8 +1,9 @@
 /**
  * What to say while a call is still being joined, or has failed to be. One
- * decision for every surface that shows it — the desktop connection strip and
- * the phone call screen's subtitle — so the two cannot word the same moment
- * differently. Pure, so each state can be tested without a call.
+ * decision for every surface that shows it — the desktop connection strip,
+ * the phone call screen's subtitle and its controls, the return bar — so they
+ * cannot word the same moment differently. Pure, so each state can be tested
+ * without a call.
  *
  * Only the words and whether they are bad news live here. A surface keeps its
  * own icon and colour: the strip's signal bars are not the phone screen's text.
@@ -25,10 +26,17 @@ const STAGE_LABEL: Partial<Record<NonNullable<ConnectStage>, string>> = {
   'rtc-connecting': 'RTC connecting…',
 }
 
+/**
+ * What a failed join says: the server's own reason when it refused the call
+ * (useVoice's failReason, "Channel not found"), else "Couldn't connect". For
+ * the failed stage only; a reason never labels a join still under way.
+ */
+export const failedLabel = (v: { failReason: string | null }): string => v.failReason ?? 'Couldn’t connect'
+
 export const joinProgress = (
-  v: { connecting: boolean; connectStage: ConnectStage; connectAttempt: number },
+  v: { connecting: boolean; connectStage: ConnectStage; connectAttempt: number; failReason: string | null },
 ): JoinProgress | null => {
-  if (v.connectStage === 'failed') return { label: 'Couldn’t connect', failing: true }
+  if (v.connectStage === 'failed') return { label: failedLabel(v), failing: true }
   if (!v.connecting) return null
   // Auto-retry cycle: red "No route" flash, then "Trying again…", repeat.
   if (v.connectStage === 'no-route') return { label: 'No route', failing: true }

@@ -829,7 +829,8 @@ const showPhoneCall = () => {
  * that has failed and whose failure useVoice is still holding. giveUp clears
  * connected and connecting at once, and the phone has no VoiceConnectedPanel
  * to say why the call went, so the screen (or the return bar) stays through
- * the hold, saying "Couldn't connect", until it is dismissed or the hold ends.
+ * the hold, saying "Couldn't connect" (or the server's reason, when it refused
+ * the call), until it is dismissed or the hold ends.
  */
 const callSurfaceUp = computed(() => voice.connected || voice.connecting || callFailedId.value !== null)
 
@@ -852,7 +853,7 @@ watch(callInView, inView => {
 const returnBarShown = computed(() => noPushToTalkKey.value && callSurfaceUp.value && !phoneCall.open)
 /** Anyone in the call talking, for the return bar's dot. */
 const callTalking = computed(() => voice.participants.some(p => p.speaking && !p.muted))
-/** Why the call is not up, in the words the screen uses ("Couldn't connect"), during a failed join's hold. */
+/** Why the call is not up, in the words the screen uses ("Couldn't connect", or the server's reason), during a failed join's hold. */
 const callFailure = computed(() => (callFailedId.value !== null ? joinProgress(voice)?.label ?? null : null))
 
 // What a touch phone needs while a call is up. Read live, not decided once:
@@ -1248,12 +1249,16 @@ watch(() => callVoiceChannel.value?.id ?? null, (id, prev) => {
  * you've looked away from it. Fires once per failed attempt, not on every
  * render while the fail-hold is showing.
  *
+ * A call the server refused gives its own reason instead ("Channel not
+ * found"), as the panel does: the same request would be refused again, and
+ * "Couldn't connect" would send the person to check a network that is fine.
+ *
  * Not on a touch phone: there the call screen's subtitle, or the return bar
- * when it is minimised, already says "Couldn't connect" for the whole hold, and
- * the toast landed on the call screen's own controls.
+ * when it is minimised, already says why for the whole hold, and the toast
+ * landed on the call screen's own controls.
  */
 watch(() => voice.connectStage, (stage, prev) => {
-  if (stage === 'failed' && prev !== 'failed' && !noPushToTalkKey.value) showToast('Couldn’t connect to voice')
+  if (stage === 'failed' && prev !== 'failed' && !noPushToTalkKey.value) showToast(voice.failReason ?? 'Couldn’t connect to voice')
 })
 
 // Presence userIds for the open conversation's call, resolved to display info
