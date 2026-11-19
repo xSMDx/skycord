@@ -299,4 +299,23 @@ describe('signing out of a call still joining', () => {
     expect(requestsTo('/auth/refresh')).toBe(0)
     expect(h.rooms).toHaveLength(1)
   })
+
+  it('a join whose lapsed session cannot be renewed still ends with it, quietly', async () => {
+    // voiceRefusal.test.ts pins this with nobody signed in. Signed in, as in the
+    // app, the refused renewal is a sign-out, and the leave that follows ends
+    // the join before the join's own check for it. The end is the same: no
+    // failure shown, and nothing more asked.
+    answers(401, { message: 'Invalid or expired token' })
+    refreshes(401, { message: 'Invalid or expired refresh token' })
+    await useVoice().connect('c1', 'channel', 'Lounge')
+    await settle()
+
+    expect(useAuth().isAuthed.value).toBe(false)
+    expectNoCall()
+    expect(voice.failReason).toBeNull()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(requestsTo('/voice/token')).toBe(1)
+    expect(requestsTo('/auth/refresh')).toBe(1)
+    expect(h.rooms).toHaveLength(0)
+  })
 })
