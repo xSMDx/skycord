@@ -1144,7 +1144,7 @@ watch(() => [voiceSettings.noiseMode, voiceSettings.sensitivity,
 // reach attemptConnect to auto-reconnect. useApi/useAuth are plain singletons,
 // safe to read here at import time; getVoiceToken reads the token at call time.
 const { getVoiceToken, moveVoiceCall } = useApi()
-const { accessToken } = useAuth()
+const { accessToken, user: authUser } = useAuth()
 
 /**
  * @param voiceServerId Preferred media server for a DM or group call — the
@@ -1489,5 +1489,26 @@ watch(callServerMoved, m => {
   intentionalLeave = false
   void attemptConnect(convId, kind, name, 1)
 })
+
+/**
+ * Signing out ends the call, and any call still joining.
+ *
+ * Signing out does not reload the page: App.vue swaps the app for the sign-in
+ * page, and nothing of a call lives in the view. The room, and the <audio>
+ * elements on <body> its voices play through, are this module's, and LiveKit
+ * keeps its own connection. So someone who signed out mid-call stayed in it,
+ * heard and hearing from the sign-in page and still on everybody's stage,
+ * while their dropped socket took them out of every sidebar. A join under way
+ * carried on and could land after the sign-out.
+ *
+ * Keyed on who is signed in, so both ways a session ends count: Log out, and a
+ * renewal the server refuses (silentRefresh), which signs out without logout()
+ * running. Not on the token, which is renewed under a call every 14 minutes,
+ * nor on the user object, which a profile edit replaces. Sync, as the upload
+ * queue's session watch is: no step of a join runs between the sign-out and
+ * the leave.
+ */
+const signedInAs = () => (accessToken.value ? authUser.value?.id ?? null : null)
+watch(signedInAs, (_now, before) => { if (before) void leave() }, { flush: 'sync' })
 
 export const useVoice = () => ({ voice, voiceRoomName, connect, leave, toggleMute, toggleDeafen, applyOutput, switchVoiceServer, pttPress, pttRelease })
