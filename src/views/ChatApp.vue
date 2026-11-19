@@ -4300,6 +4300,8 @@ const openEmojiForInput = ()               => { emojiTargetMsgId.value = null;  
 // picker as the emoji button, just landing on the GIF tab, rather than adding a
 // second modal that would need its own search, loading and error states.
 const openGifForInput   = ()               => { emojiTargetMsgId.value = null;  emojiPickerTab.value = 'gifs';   showEmojiPicker.value = true }
+// The composer's "+" › Sticker: the same picker, landing on its Stickers tab.
+const openStickersForInput = ()            => { emojiTargetMsgId.value = null;  emojiPickerTab.value = 'stickers'; showEmojiPicker.value = true }
 const handleEmojiSelect = (emoji: string)  => {
   if (emojiTargetMsgId.value !== null) handleReact(emojiTargetMsgId.value, emoji)
   else newMessage.value += emoji
@@ -6190,6 +6192,7 @@ watch([incomingCall, appFocused, () => notificationPrefs.enabled, chosenStatus, 
             @typing="handleTyping"
             @openEmoji="openEmojiForInput"
             @openGif="openGifForInput"
+            @openStickers="openStickersForInput"
             @clearReply="clearReplyTarget"
             @clearAllReply="replyTargets = []"
           />

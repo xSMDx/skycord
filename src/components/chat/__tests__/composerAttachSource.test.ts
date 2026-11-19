@@ -45,11 +45,12 @@ describe('the composer attaches', () => {
   const t = templateOf(input)
   const s = scriptOf(input)
 
-  it('the paperclip opens a hidden multiple file input, and is disabled without permission', () => {
+  // The paperclip became the "+" menu (composerPlusSource.test.ts); its
+  // Upload a File row is what greys out without permission (composerMenu.test.ts).
+  it('Upload a File opens a hidden multiple file input, and never without permission', () => {
     expect(t).toMatch(/<input[^>]*type="file"[^>]*multiple/)
     expect(t).toMatch(/<input[^>]*type="file"[^>]*hidden/)
-    expect(t).toMatch(/class="input-attach[^"]*"[^>]*:disabled="!canAttach"/)
-    expect(t).toMatch(/class="input-attach[^"]*"[^>]*@click[^>]*pickFiles/)
+    expect(s).toMatch(/const pickFiles = \(\): void => \{ if \(props\.canAttach\)/)
   })
 
   it('pasting files adds them to the tray instead of the text', () => {
