@@ -21,6 +21,7 @@ import {
   rtc, retainRtcStats, releaseRtcStats, snapshotRtcStats,
   fmtBitrate, fmtBytes, fmtMs, fmtNum, fmtHz, fmtBool, outLossPct, last,
 } from '@/composables/useRtcStats'
+import { useModalHistory } from '@/composables/modalHistory'
 
 const emit = defineEmits<{ close: []; toast: [msg: string] }>()
 
@@ -29,6 +30,19 @@ const tab = ref<'transport' | 'outbound' | 'inbound'>('transport')
 
 onMounted(retainRtcStats)
 onBeforeUnmount(releaseRtcStats)
+
+// Back and forward step through the tabs you opened and close from the first
+// (modalHistory.ts); Escape closes, as every other overlay does.
+const overlayEl = ref<HTMLElement | null>(null)
+useModalHistory<'transport' | 'outbound' | 'inbound'>({
+  el: () => overlayEl.value,
+  close: () => emit('close'),
+  read: () => tab.value,
+  go: t => { tab.value = t },
+})
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 const identity = computed(() => getRoom()?.localParticipant?.name
   || getRoom()?.localParticipant?.identity || 'You')
@@ -58,7 +72,7 @@ const lossPct = computed(() => outLossPct())
 
 <template>
   <Teleport to="body">
-    <div class="ov" @click.self="emit('close')">
+    <div ref="overlayEl" class="ov" data-overlay @click.self="emit('close')">
       <div class="dbg">
         <button class="dbg-x" @click="emit('close')" v-tip="'Close'"><X :size="18" :stroke-width="2.25" /></button>
 

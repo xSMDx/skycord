@@ -15,7 +15,8 @@ import { avatarFor } from '@/composables/useAvatar'
 import { useUpdates } from '@/composables/useUpdates'
 import { shouldPrompt } from '@/composables/updatePrompt'
 import { appBridge } from '@/composables/desktopBridge'
-import { backAction, overlayOpen, pressEscape, closeOverlays } from '@/composables/androidBack'
+import { backAction, overlayOpen, closeOverlays } from '@/composables/androidBack'
+import { navigateModals, modalNav, installBrowserModalHistory } from '@/composables/modalHistory'
 import { useAndroidChrome } from '@/composables/androidChrome'
 import { alertsBelongToPage, declinedText, firstDecline } from '@/composables/androidNotify'
 import { useSearch, type SearchHit } from '@/composables/useSearch'
@@ -438,25 +439,31 @@ const showSearchFilters = ref(false)
 const showSearchScreen  = ref(false)
 
 // Android: the back button, offered to the page first (see androidBack.ts),
-// and the system bars in the theme's colour.
+// and the system bars in the theme's colour. Over a modal with tabs or pages it
+// goes back through them first, then closes it (modalHistory.ts), the same as
+// back on the desktop and in a browser.
 const stopAndroidBack = appBridge()?.onBack?.(() => {
   // The search screen and the list/conversation split are phone layouts; on a
   // landscape phone or a tablet the panes sit side by side and those flags can be stale.
   const a = backAction({
     searchOpen: showSearchScreen.value && isMobile.value,
-    overlayOpen: overlayOpen(),
+    overlayOpen: overlayOpen() || !!modalNav.value,
     onConversation: mobileNav.onConversation.value && isMobile.value,
     // connected covers channels, DMs and groups; connecting is a join or a reconnect, which is still a call
     // (Android silences the microphone of an app in the background once it is up).
     inCall: voice.connected || voice.connecting,
   })
   if (a === 'close-search') showSearchScreen.value = false
-  else if (a === 'escape') pressEscape()
+  else if (a === 'escape') navigateModals('back')
   else if (a === 'to-list') mobileNav.backToList()
   else if (a === 'stay-in-call') showToast('Leave the call first — Android stops your microphone when Skycord is in the background')
   return a !== 'none'
 })
 onBeforeUnmount(() => stopAndroidBack?.())
+// In a browser tab, the browser's own back and forward (its buttons, the
+// mouse's, Alt+Left) do the same while a modal is open. Nothing in the apps.
+const stopModalHistory = installBrowserModalHistory()
+onBeforeUnmount(() => stopModalHistory())
 useAndroidChrome()
 
 /** The result opened last, marked in the panel so you can see where you were. */
