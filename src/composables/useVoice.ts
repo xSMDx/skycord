@@ -967,10 +967,9 @@ const wireRoom = (r: Room, seq: number) => {
     // us late that it ended. The call carries on in the room that replaced it.
     if (getRoom() !== r) return
     // The same person joined this call on another device, and LiveKit lets
-    // one connection per person into a room. Rejoining would take the call
-    // straight back, the other device would do the same, and the two would
-    // drop each other every second or two for as long as both stayed open.
-    // This device leaves instead, and says why: see takenOver.
+    // one connection per person into a room. Rejoining took the call straight
+    // back from the device they had just joined on — which is what this
+    // used to do. This device leaves instead, and says why: see takenOver.
     if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
       takenOver = true
       void leave()

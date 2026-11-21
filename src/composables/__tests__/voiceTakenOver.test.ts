@@ -1,14 +1,14 @@
 /**
- * Joining the same call on another device takes it over; it does not start a
- * fight.
+ * Joining the same call on another device takes it over; the first device
+ * does not take it back.
  *
  * LiveKit lets one connection per person into a room. When the phone joins a
  * call the PC is in, the media server drops the PC with DUPLICATE_IDENTITY.
- * The PC treated that like any other drop and rejoined at once — which
- * dropped the phone, which rejoined, which dropped the PC, every second or
- * two, for as long as both stayed open. Each round trip was a leave and a join
- * on everybody's stage, and whichever device was hung up first told the server
- * the person had left the call they were still in on the other one.
+ * The PC treated that like any other drop and rejoined at once, taking the
+ * call straight back from the device the person had just joined on (seen end
+ * to end with two tabs: the first held the call, the second ended up out of
+ * it). And whichever device then hung up told the server the person had left,
+ * whatever the other one was doing.
  *
  * Now the device that was taken over leaves the call quietly, and every other
  * kind of drop still rejoins as before. A drop reported by a room this device
