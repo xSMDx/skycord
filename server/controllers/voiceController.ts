@@ -10,7 +10,7 @@ import { Server } from '../models/Server'
 import { dmConvId, canDM } from './messagesController'
 import {
   getCallVoiceServer, fixCallVoiceServer, setCallVoiceServer, announceCallVoiceServer,
-  callOccupancy, isInCall,
+  callOccupancy, isInCall, noteCallTokenIssued,
 } from '../sockets/chatSocket'
 import { Category } from '../models/Category'
 import { loadAccess, channelBits, has } from '../utils/access'
@@ -237,6 +237,9 @@ let voice
       ...(grant.sources ? { canPublishSources: grant.sources } : {}),
     })
     const token = await at.toJwt()
+    // The join comes next, and a page whose socket is down can still make it:
+    // the roster sweep watches this room for a while so it is listed anyway.
+    noteCallTokenIssued(room)
 
     // `voiceServer` is named so the client can SAY where the call is. Whoever
     // supplies the media server can record what crosses it, so being routed to

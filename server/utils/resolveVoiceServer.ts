@@ -109,6 +109,23 @@ export const resolveForChannel = async (
 }
 
 /**
+ * A media server by the id a DM or group call settled on (chatSocket's
+ * callVoiceServer), for asking that server about the call — the roster sweep.
+ *
+ * No membership scoping, unlike resolveForConversation: this mints nothing and
+ * routes nobody, it only finds where a room already is. Null, missing or
+ * unusable ids land where the token endpoint would have sent the call: the
+ * instance's own server.
+ */
+export const resolveVoiceById = async (id: string | null | undefined): Promise<ResolvedVoice | null> => {
+  if (!id) return instanceVoice()
+  if (isInstanceVoiceId(id)) return namedInstance(id) ?? instanceVoice()
+  if (!Types.ObjectId.isValid(id)) return instanceVoice()
+  const row = await VoiceServer.findById(id).select('+apiSecret').lean()
+  return (row && usable(row)) || instanceVoice()
+}
+
+/**
  * For a DM or group call: the caller's preference if it still resolves, else
  * the instance.
  *

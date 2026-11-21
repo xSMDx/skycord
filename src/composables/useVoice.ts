@@ -6,7 +6,7 @@
  */
 import { reactive, ref, watch } from 'vue'
 import {
-  Room, RoomEvent, Track, VideoQuality,
+  Room, RoomEvent, Track, VideoQuality, DisconnectReason,
   type RemoteTrack, type RemoteTrackPublication, type RemoteParticipant, type Participant,
   type LocalAudioTrack, type LocalParticipant,
 } from 'livekit-client'
@@ -155,6 +155,15 @@ const publishMic = (p: LocalParticipant) => {
 
 let intentionalLeave = false  // true while WE tear the room down, so the Disconnected
                               // handler doesn't try to reconnect our own hangup
+/**
+ * Set when this device leaves only because the same person joined the call on
+ * another one (DUPLICATE_IDENTITY). The leave then tells the server so, and
+ * the server keeps the call alive in the gap before the other device's join
+ * arrives — that join waits on the microphone, perhaps on a permission prompt,
+ * and a plain hang-up in that gap would end a DM call with "Call ended" and
+ * start it again a moment later. Cleared by cleanup.
+ */
+let takenOver = false
 const RETRY_DELAY_MS = 1600   // pause on the red "No route" flash before retrying
 const MAX_ATTEMPTS   = 14     // keep retrying this many times before giving up
 const FAIL_HOLD_MS   = 10000  // show "Couldn't connect" this long, then auto-leave
@@ -321,15 +330,32 @@ watch(
  *
  * The state goes with it. The watcher above only fires when one of the four
  * things it reads changes, and a reconnect changes none of them — so without
- * this line a restored occupant came back with their mute, deafen and
+ * reportVoiceState a restored occupant came back with their mute, deafen and
  * screen-share flags cleared.
  */
 watch(socketConnected, (up, wasUp) => {
   if (!up || wasUp) return
-  if (!voice.connected || !voice.activeConvId || !voice.activeKind) return
+  reannounceCall()
+})
+
+/**
+ * Tell the server again that we are in the call we are in, with what we are
+ * doing in it. A rejoin, never a join: it seats us and announces nothing.
+ *
+ * Only for a live call. While the media connection is still joining or
+ * rejoining there is nothing to vouch for yet, and that path sends its own
+ * call:join when it lands. Returns whether anything was sent.
+ *
+ * Called when the socket comes back (above), and by voiceSeat.ts whenever the
+ * server's list for our call leaves us out — the page holds the media
+ * connection, so it is the one party that knows for certain we are in.
+ */
+export const reannounceCall = (): boolean => {
+  if (!voice.connected || !voice.activeConvId || !voice.activeKind) return false
   emitCallRejoin(voice.activeConvId, voice.activeKind)
   reportVoiceState()
-})
+  return true
+}
 
 export const voiceRoomName = (kind: 'dm' | 'group' | 'channel', convId: string, myId: string) =>
   kind === 'channel' ? `voice:${convId}`
@@ -933,10 +959,22 @@ const wireRoom = (r: Room, seq: number) => {
   r.on(RoomEvent.ConnectionQualityChanged, (q: any, p: Participant) => {
     if (p?.isLocal) voice.quality = (q as VoiceQuality) || 'unknown'
   })
-  r.on(RoomEvent.Disconnected, () => {
+  r.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
     // Our own hangup, or a failure during the initial join (handled by
     // attemptConnect's catch): let those paths finish, don't reconnect.
     if (intentionalLeave || !voice.connected) return
+    // A room we already let go of — torn down for a rejoin or a move — telling
+    // us late that it ended. The call carries on in the room that replaced it.
+    if (getRoom() !== r) return
+    // The same person joined this call on another device, and LiveKit lets
+    // one connection per person into a room. Rejoining took the call straight
+    // back from the device they had just joined on — which is what this
+    // used to do. This device leaves instead, and says why: see takenOver.
+    if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
+      takenOver = true
+      void leave()
+      return
+    }
     // An ESTABLISHED call dropped unexpectedly → self-heal: tear down the dead
     // room (keeping the call identity) and run the same retry cycle to rejoin.
     const convId = voice.activeConvId, kind = voice.activeKind, name = voice.activeName
@@ -982,7 +1020,10 @@ const cleanup = () => {
   // (RoomEvent.Disconnected → cleanup, NOT via leave()). Without this, an
   // unexpected media drop leaves you a ghost participant in everyone else's
   // call banner until your whole socket disconnects. Idempotent server-side.
-  if (voice.activeConvId && voice.activeKind) emitCallLeave(voice.activeConvId, voice.activeKind)
+  if (voice.activeConvId && voice.activeKind) {
+    emitCallLeave(voice.activeConvId, voice.activeKind, takenOver ? 'taken-over' : undefined)
+  }
+  takenOver = false
   voice.connected = false
   voice.connectedAt = null
   voice.connecting = false

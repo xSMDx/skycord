@@ -23,6 +23,7 @@ import {
 } from '../utils/musicService'
 import { Track as LibraryTrack } from '../models/Track'
 import type { Source as MusicSource } from './musicState'
+import { listRoomIdentities } from '../utils/callRoster'
 
 // Presence (who holds a socket, who is away) lives in server/state/presence.ts
 // so the User model can derive a wire-safe status without importing this file,
@@ -538,6 +539,285 @@ export const cancelAllCallEnds = (): void => {
 const forgetEmptyRoom = (room: string): void => {
   activeCalls.delete(room)
   voiceStates.delete(room)
+  callSeats.delete(room)
+  unanswered.delete(room)
+}
+
+/**
+ * Who vouches for each occupant: room -> userId -> the holders of their seat.
+ *
+ * A holder is a socket id — the connection that joined or rejoined — or
+ * LIVEKIT, when the media server's own roster is what put the person there
+ * (see the roster section below). A person is in the room while ANY holder
+ * vouches for them, and leaves only when the last one lets go.
+ *
+ * Occupancy used to be one entry per person while everything that adds and
+ * removes it is per connection, and that mismatch is what took people out of
+ * the list while they were still in the call. A browser on a shaky network
+ * learns first that its connection died and is back on a new one, rejoined,
+ * within a couple of seconds; the server only gives up on the old connection
+ * when its ping goes unanswered, up to fifteen seconds later. The rejoin found
+ * the person already listed and changed nothing, and the old connection's
+ * disconnect then deleted the only entry there was. The same went for two
+ * devices: either one leaving took the person out while the other was in the
+ * call. presence.ts counts sockets per user for exactly this reason; calls
+ * never did.
+ *
+ * `activeCalls` stays as it was — the people in each room — and is kept in
+ * step here, so the dozen places that read it read the same thing as before.
+ */
+const callSeats = new Map<string, Map<string, Set<string>>>()
+
+/** The holder that stands for the media server's roster rather than a connection. */
+const LIVEKIT = 'livekit'
+
+/** Add one holder's claim. True when the person is new to the room. */
+const takeSeat = (room: string, userId: string, holder: string): boolean => {
+  let byUser = callSeats.get(room)
+  if (!byUser) { byUser = new Map(); callSeats.set(room, byUser) }
+  let holders = byUser.get(userId)
+  const isNew = !holders || holders.size === 0
+  if (!holders) { holders = new Set(); byUser.set(userId, holders) }
+  holders.add(holder)
+  let set = activeCalls.get(room)
+  if (!set) { set = new Set(); activeCalls.set(room, set) }
+  set.add(userId)
+  return isNew
+}
+
+/** Withdraw one holder's claim. True when that was the person's last one. */
+const releaseSeat = (room: string, userId: string, holder: string): boolean => {
+  const byUser = callSeats.get(room)
+  const holders = byUser?.get(userId)
+  if (!byUser || !holders || !holders.delete(holder)) return false
+  if (holders.size > 0) return false
+  byUser.delete(userId)
+  if (byUser.size === 0) callSeats.delete(room)
+  activeCalls.get(room)?.delete(userId)
+  return true
+}
+
+const holdsSeat = (room: string, userId: string, holder: string): boolean =>
+  callSeats.get(room)?.get(userId)?.has(holder) ?? false
+
+/** How many holders vouch for this person in this room. */
+const seatHolders = (room: string, userId: string): number =>
+  callSeats.get(room)?.get(userId)?.size ?? 0
+
+/**
+ * The things that follow somebody's last seat in a room going, apart from the
+ * broadcast. Their state goes with them — state outliving its occupant renders
+ * a ghost row — and their music, since leaving the call leaves its music (not
+ * a teardown: the channel keeps its own grace period). A room left empty is
+ * forgotten at once; whether its CALL is over depends on how they went: a
+ * hang-up says so, anything else waits out the grace period (scheduleCallEnd).
+ */
+const personLeft = (room: string, userId: string, conclusive: boolean, author: CallAuthor): void => {
+  if (musicRooms.forget(userId).includes(room)) broadcastMusic(room)
+  const st = voiceStates.get(room)
+  if (st) { st.delete(userId); if (st.size === 0) voiceStates.delete(room) }
+  if ((activeCalls.get(room)?.size ?? 0) > 0) return
+  forgetEmptyRoom(room)
+  if (conclusive) {
+    releaseCallRoom(room)
+    void postCallEnded(room, author)
+  } else {
+    scheduleCallEnd(room, author)
+  }
+}
+
+// ── The media server's roster ─────────────────────────────────────────────
+/**
+ * Who LiveKit has in a call room: their identities, or null when it cannot be
+ * asked. Seats come and go over sockets, and that covers every page that can
+ * talk to the server — not one whose connection is down for longer than a
+ * blip while LiveKit carries on, one frozen in a background tab, or one that
+ * joined with its socket already gone (the token comes over HTTP). Those
+ * people are in the call, heard by everyone, and the list said otherwise. So
+ * the server asks LiveKit, and seats anybody it lists whom no connection
+ * vouches for, under the LIVEKIT holder.
+ *
+ * Its word only ever stands in for a connection: a seat a socket holds is
+ * never taken away because LiveKit did not list the person — they may be
+ * between two of LiveKit's own reconnects — and no answer is no information,
+ * changing nothing either way. Replaceable for the tests.
+ */
+type RosterProbe = (room: string) => Promise<string[] | null>
+const defaultRosterProbe: RosterProbe = room => listRoomIdentities(room, callVoiceServer.get(room))
+let rosterProbe: RosterProbe = defaultRosterProbe
+/** For the tests: answer for the media server. null puts the real one back. */
+export const setRosterProbe = (probe: RosterProbe | null): void => { rosterProbe = probe ?? defaultRosterProbe }
+
+const askRoster = async (room: string): Promise<Set<string> | null> => {
+  try {
+    const ids = await rosterProbe(room)
+    // People only: the music service is in the room as a participant too, and
+    // anything that is not a user id is nobody this server could seat.
+    return ids ? new Set(ids.filter(id => /^[a-f\d]{24}$/i.test(id))) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * People who just hung up or were removed, per room, until when. LiveKit can
+ * still list somebody for a moment after they leave, and that must not seat
+ * them straight back. A connection seating them again clears it.
+ */
+const recentlyLeft = new Map<string, number>()
+const LEFT_QUIET_MS = 20_000
+const leftKey = (room: string, userId: string) => `${room}|${userId}`
+const noteLeft = (room: string, userId: string): void => {
+  recentlyLeft.set(leftKey(room, userId), Date.now() + LEFT_QUIET_MS)
+}
+const leftRecently = (room: string, userId: string): boolean => {
+  const until = recentlyLeft.get(leftKey(room, userId))
+  if (until === undefined) return false
+  if (until > Date.now()) return true
+  recentlyLeft.delete(leftKey(room, userId))
+  return false
+}
+
+/**
+ * Rooms a token was just issued for, until when. A page whose socket is down
+ * can still join (the token comes over HTTP), and its room may hold nobody
+ * this server knows about yet; the sweep looks at it for a while anyway.
+ */
+const tokenWatch = new Map<string, number>()
+const TOKEN_WATCH_MS = 60_000
+export const noteCallTokenIssued = (room: string): void => { tokenWatch.set(room, Date.now() + TOKEN_WATCH_MS) }
+
+/**
+ * What a room name says about joining it, as `userId` would: the arguments
+ * canJoinCall takes. Null for a room this user could not be in at all.
+ */
+const joinSpecFor = (room: string, userId: string): { kind: 'dm' | 'group' | 'channel'; conversationId: string } | null => {
+  if (room.startsWith('voice:')) return { kind: 'channel', conversationId: room.slice(6) }
+  if (room.startsWith('group:')) return { kind: 'group', conversationId: room.slice(6) }
+  if (!room.startsWith('dm:')) return null
+  const ids = room.slice(3).split('_')
+  if (ids.length !== 2 || !ids.includes(userId)) return null
+  return { kind: 'dm', conversationId: ids[0] === userId ? ids[1] : ids[0] }
+}
+
+/**
+ * How many times in a row LiveKit could not say who is in a room. No answer
+ * changes nothing — except that a seat held only on LiveKit's word cannot
+ * outlive LiveKit's silence for ever: after STAND_IN_UNANSWERED_LIMIT checks
+ * (about two minutes at STAND_IN_CHECK_MS) nobody vouches for it any more.
+ */
+const unanswered = new Map<string, number>()
+export const STAND_IN_UNANSWERED_LIMIT = 40
+
+/** Let go of every LIVEKIT seat in a room, as LiveKit not listing them would. */
+const dropStandIns = (room: string): boolean => {
+  let changed = false
+  for (const [userId, holders] of [...(callSeats.get(room) ?? [])]) {
+    if (!holders.has(LIVEKIT)) continue
+    if (releaseSeat(room, userId, LIVEKIT)) {
+      personLeft(room, userId, false, { id: userId, name: '' })
+      changed = true
+    }
+  }
+  return changed
+}
+
+/**
+ * Bring one room's occupancy into line with LiveKit: seat whoever it lists
+ * that nobody seats (and may be there), and let go of LIVEKIT seats for
+ * whoever it no longer lists. Returns false when LiveKit could not be asked.
+ */
+const reconcileRoom = async (room: string): Promise<boolean> => {
+  const present = await askRoster(room)
+  if (!present) {
+    const misses = (unanswered.get(room) ?? 0) + 1
+    unanswered.set(room, misses)
+    if (misses >= STAND_IN_UNANSWERED_LIMIT) {
+      unanswered.delete(room)
+      if (dropStandIns(room)) broadcastCallState(room)
+    }
+    return false
+  }
+  unanswered.delete(room)
+  let changed = false
+  for (const [userId, holders] of [...(callSeats.get(room) ?? [])]) {
+    if (!holders.has(LIVEKIT) || present.has(userId)) continue
+    if (releaseSeat(room, userId, LIVEKIT)) {
+      personLeft(room, userId, false, { id: userId, name: '' })
+      changed = true
+    }
+  }
+  for (const userId of present) {
+    if (activeCalls.get(room)?.has(userId) || leftRecently(room, userId)) continue
+    const spec = joinSpecFor(room, userId)
+    if (!spec || !await canJoinCall(spec.kind, spec.conversationId, userId)) continue
+    // Seated by a connection, or seen leaving, while the check ran.
+    if (activeCalls.get(room)?.has(userId) || leftRecently(room, userId)) continue
+    // Somebody is in it, so this is a call carrying on, not a new one: no
+    // pending end, and the start it already had.
+    cancelCallEnd(room)
+    noteCallStarted(room)
+    takeSeat(room, userId, LIVEKIT)
+    changed = true
+  }
+  if (changed) broadcastCallState(room)
+  return true
+}
+
+let sweeping = false
+const reconcileAll = async (rooms: Iterable<string>): Promise<void> => {
+  if (sweeping) return
+  sweeping = true
+  try {
+    for (const room of rooms) {
+      try { await reconcileRoom(room) } catch (err) { console.error('[WS] roster sweep', room, err) }
+    }
+  } finally {
+    sweeping = false
+  }
+}
+
+/**
+ * Reconcile every room worth asking about: the occupied ones, the ones whose
+ * call end is pending, and the ones a token was just issued for. One room at a
+ * time, and never two sweeps at once. Exported for the tests, which sweep by
+ * hand; the server sweeps every CALL_ROSTER_SWEEP_MS (see initSocket).
+ */
+export const sweepCallRosters = async (): Promise<void> => {
+  const now = Date.now()
+  for (const [room, until] of tokenWatch) if (until <= now) tokenWatch.delete(room)
+  const rooms = new Set<string>([...pendingCallEnd.keys(), ...tokenWatch.keys()])
+  for (const [room, members] of activeCalls) if (members.size > 0) rooms.add(room)
+  await reconcileAll(rooms)
+}
+
+/**
+ * How often rooms holding a LIVEKIT seat are checked, between sweeps. Such a
+ * seat stands in for somebody whose connection dropped while LiveKit still
+ * had them — usually a page about to reconnect, but sometimes a browser that
+ * crashed or a laptop that closed, which LiveKit takes a while to notice. A
+ * quick look keeps the list from holding them much longer than LiveKit does.
+ */
+const STAND_IN_CHECK_MS = 3_000
+
+/** Reconcile only the rooms holding a LIVEKIT seat. Exported for the tests. */
+export const sweepStandInRooms = async (): Promise<void> => {
+  const rooms: string[] = []
+  for (const [room, byUser] of callSeats) {
+    if ([...byUser.values()].some(holders => holders.has(LIVEKIT))) rooms.push(room)
+  }
+  if (rooms.length) await reconcileAll(rooms)
+}
+
+/**
+ * How often the server asks LiveKit about live rooms. 0 turns the sweep off,
+ * which only the tests want; a missing or nonsensical value means the default.
+ */
+const rosterSweepMs = (): number => {
+  const raw = process.env.CALL_ROSTER_SWEEP_MS
+  if (!raw) return 15_000
+  const ms = Number(raw)
+  return Number.isFinite(ms) && ms >= 0 ? ms : 15_000
 }
 
 /**
@@ -759,22 +1039,15 @@ const postCallEnded = async (room: string, author: CallAuthor) => {
 /**
  * Conclude, after the grace period, that the call in an emptied room is over.
  *
- * Scheduled only from the dropped-socket path. A deliberate `call:leave` and a
- * moderator's eviction both end the call on the spot — they are evidence about
- * the person, not about the network — and only a socket vanishing leaves the
- * question genuinely open.
+ * Scheduled only from the paths that are no evidence the person left: a
+ * dropped socket, a device taken over by another, LiveKit no longer listing
+ * somebody it had seated. A deliberate `call:leave` and a moderator's eviction
+ * both end the call on the spot — they are evidence about the person, not
+ * about the network.
  */
 const scheduleCallEnd = (room: string, author: CallAuthor): void => {
   cancelCallEnd(room)
-  const timer = setTimeout(() => {
-    pendingCallEnd.delete(room)
-    // Belt and braces: every path that re-enters a room cancels this timer, so
-    // arriving here with occupants would be a bug — and the cost of being
-    // wrong is a message in somebody's history that nothing ever takes back.
-    if ((activeCalls.get(room)?.size ?? 0) > 0) return
-    releaseCallRoom(room)
-    void postCallEnded(room, author)
-  }, callEndGraceMs())
+  const timer = setTimeout(() => { void concludeCallEnd(room, author, timer) }, callEndGraceMs())
   /*
    * Unref'd deliberately, and not only so a pending end cannot hold a
    * shutdown open for the whole grace period: a process on its way out must
@@ -785,6 +1058,29 @@ const scheduleCallEnd = (room: string, author: CallAuthor): void => {
    */
   timer.unref?.()
   pendingCallEnd.set(room, timer)
+}
+
+/**
+ * The grace period is up. Before anything is written, LiveKit is asked whether
+ * the room really is empty: somebody whose connection has been down for longer
+ * than the grace period can still be in the call, heard by everyone, and a
+ * "Call ended" under a call that carries on is the wrong this exists to
+ * prevent. Anybody it lists is seated again (reconcileRoom) and the end is off.
+ * An answer that cannot be had changes nothing, and the call ends as before.
+ */
+const concludeCallEnd = async (room: string, author: CallAuthor, timer: NodeJS.Timeout): Promise<void> => {
+  if (pendingCallEnd.get(room) !== timer) return
+  if ((activeCalls.get(room)?.size ?? 0) === 0) await reconcileRoom(room)
+  // Cancelled or re-armed while LiveKit answered: somebody came back, or a
+  // newer end is pending.
+  if (pendingCallEnd.get(room) !== timer) return
+  pendingCallEnd.delete(room)
+  // Belt and braces: every path that re-enters a room cancels this timer, so
+  // arriving here with occupants would be a bug — and the cost of being
+  // wrong is a message in somebody's history that nothing ever takes back.
+  if ((activeCalls.get(room)?.size ?? 0) > 0) return
+  releaseCallRoom(room)
+  void postCallEnded(room, author)
 }
 
 /**
@@ -805,6 +1101,11 @@ const scheduleCallEnd = (room: string, author: CallAuthor): void => {
 export const dropFromCall = (room: string, userId: string): boolean => {
   const set = activeCalls.get(room)
   if (!set || !set.has(userId)) return false
+  // Every seat they hold, on every device: the moderator acted on the person.
+  // And LiveKit may still list them for a moment after the eviction.
+  callSeats.get(room)?.delete(userId)
+  if (callSeats.get(room)?.size === 0) callSeats.delete(room)
+  noteLeft(room, userId)
   set.delete(userId)
   const st = voiceStates.get(room)
   if (st) { st.delete(userId); if (st.size === 0) voiceStates.delete(room) }
@@ -1046,6 +1347,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     pingTimeout: 5000,
   })
   _io = io
+
+  // Ask LiveKit about live rooms every so often: see reconcileRoom. Unref'd, and
+  // stopped with the server, so it holds nothing open on the way out.
+  const sweepMs = rosterSweepMs()
+  if (sweepMs > 0) {
+    const sweep = setInterval(() => { void sweepCallRosters() }, sweepMs)
+    const standIns = setInterval(() => { void sweepStandInRooms() }, Math.min(STAND_IN_CHECK_MS, sweepMs))
+    sweep.unref?.()
+    standIns.unref?.()
+    httpServer.on('close', () => { clearInterval(sweep); clearInterval(standIns) })
+  }
 
   // Connectivity is in-memory, so a restart clears it for free — there is no
   // longer any stale presence to scrub from the database.
@@ -1544,45 +1856,106 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
     const me: CallAuthor = { id: userId, name: username }
 
     /**
-     * Take this socket's user out of a call room.
+     * Everything this connection does to call seats, one at a time, in the
+     * order it was sent.
      *
-     * No membership check here, deliberately: this only ever deletes the
-     * CALLER's own id from the room's Set (`set.has(userId)` guards that), so
-     * it cannot forge or evict anyone else's occupancy. Once call:join is
-     * guarded above, a caller can only ever be in a room they were let into,
-     * so there is nothing left for a leave-side check to catch.
+     * call:join and call:rejoin wait on the database before they seat
+     * anybody; call:leave and voice:state did not wait at all. So a leave
+     * sent right behind a join was handled first — a no-op — and the join
+     * then seated a person who had gone, for every sidebar until their socket
+     * closed. And the mute and deafen useVoice sends right behind every join
+     * and rejoin were dropped as coming from somebody not in a call, so after
+     * each reconnect the person showed as unmuted.
      *
-     * `cause` is the whole of the difference between ending the call now and
-     * ending it after a grace period, and it is a required argument so that a
-     * third caller has to say which it is rather than inherit a default.
-     * A `call:leave` is a person deciding to leave. A `disconnect` is a socket
-     * vanishing, which says nothing at all about whether the person is still
-     * in the LiveKit room — usually they are, and are back in seconds.
+     * The disconnect is not queued: it is no request, and a queue held up by
+     * a slow lookup must not keep a dead connection's seat alive. The seating
+     * handlers check the connection is still up after they wait instead.
      */
-    const leaveCall = (room: string, cause: 'hang-up' | 'socket-lost') => {
-      const set = activeCalls.get(room)
-      if (!set || !set.has(userId)) return
-      set.delete(userId)
-      // Leaving the call leaves its music too. Not a teardown: the channel
-      // keeps its own grace period, so coming straight back finds it playing.
-      if (musicRooms.forget(userId).includes(room)) broadcastMusic(room)
-      // State outliving its occupant would render a ghost row: every client
-      // reads occupancy and state together.
-      const st = voiceStates.get(room)
-      if (st) { st.delete(userId); if (st.size === 0) voiceStates.delete(room) }
+    let callQueue: Promise<unknown> = Promise.resolve()
+    const inOrder = (work: () => unknown): Promise<unknown> => {
+      const run = callQueue.then(work)
+      callQueue = run.catch(() => {})
+      return run
+    }
+
+    /**
+     * Seat this connection's user in `room`, vouched for by this connection.
+     * True when the person is new to the room.
+     *
+     * A connection is in one call at a time — the page holds one LiveKit room
+     * — so joining one leaves any other it was still in. The page always says
+     * so first; this only covers a leave that never arrived.
+     */
+    const seatHere = (room: string): boolean => {
+      for (const other of [...joinedCallRooms]) if (other !== room) leaveCall(other, 'hang-up')
+      const isNew = takeSeat(room, userId, socket.id)
+      // A connection vouches for them now: LiveKit's stand-in goes, and a
+      // recent hang-up no longer holds the roster back.
+      releaseSeat(room, userId, LIVEKIT)
+      recentlyLeft.delete(leftKey(room, userId))
+      joinedCallRooms.add(room)
+      return isNew
+    }
+
+    /**
+     * Give back this connection's seat in a call room.
+     *
+     * Only ever this connection's own seat: another connection of the same
+     * person — the new socket after a blip, the phone after the PC — keeps
+     * theirs, and the person stays in the room until the last one goes. A
+     * leave from a connection that holds no seat in the room changes nothing:
+     * a join cancelled on one device says nothing about the call another
+     * device is in.
+     *
+     * `cause` decides what a person's last seat going means, and is required
+     * so that a new caller has to say which it is:
+     * - 'hang-up': they said they are leaving. LiveKit's stand-in goes too,
+     *   and an emptied call ends now.
+     * - 'socket-lost': the connection vanished, which says nothing about
+     *   whether they are still in the LiveKit room — usually they are, and
+     *   back in seconds.
+     * - 'taken-over': the page left because the same person joined on another
+     *   device, whose own join waits on its microphone and lands a moment later.
+     * For the last two LiveKit is asked first (verifyBeforeRelease), and an
+     * emptied call waits out the grace period.
+     */
+    const leaveCall = (room: string, cause: 'hang-up' | 'socket-lost' | 'taken-over') => {
       joinedCallRooms.delete(room)
-      if (set.size === 0) {
-        // Occupancy goes at once whichever this was. The sidebars have to stay
-        // honest about who is there, and only the CALL's fate is in question.
-        forgetEmptyRoom(room)
-        if (cause === 'hang-up') {
-          releaseCallRoom(room)
-          void postCallEnded(room, me)
-        } else {
-          scheduleCallEnd(room, me)
-        }
+      if (!holdsSeat(room, userId, socket.id)) return
+      if (cause === 'hang-up') {
+        releaseSeat(room, userId, LIVEKIT)
+        noteLeft(room, userId)
+      } else if (seatHolders(room, userId) === 1) {
+        void verifyBeforeRelease(room)
+        return
       }
-      broadcastCall(room)
+      if (releaseSeat(room, userId, socket.id)) {
+        personLeft(room, userId, cause === 'hang-up', me)
+        broadcastCall(room)
+      }
+    }
+
+    /**
+     * The person's last seat is going and nothing says they left. If LiveKit
+     * still has them in the room they are still in the call, and the seat
+     * passes to LiveKit's stand-in instead of going: no gap in anybody's list
+     * while their page reconnects, or while their other device's join lands.
+     * Otherwise — or when LiveKit cannot be asked — it goes, as it always did.
+     */
+    const verifyBeforeRelease = async (room: string) => {
+      const present = await askRoster(room)
+      // Seated again by this same connection meanwhile (a page that was taken
+      // over and joined back), or removed already by a moderator.
+      if (joinedCallRooms.has(room) || !holdsSeat(room, userId, socket.id)) return
+      if (present?.has(userId) && !leftRecently(room, userId)) {
+        takeSeat(room, userId, LIVEKIT)
+        releaseSeat(room, userId, socket.id)
+        return
+      }
+      if (releaseSeat(room, userId, socket.id)) {
+        personLeft(room, userId, false, me)
+        broadcastCall(room)
+      }
     }
 
     /**
@@ -1594,12 +1967,12 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * given socket, and taking a room from the payload would let a client
      * write state into a channel it never joined.
      */
-    socket.on('voice:state', (raw: unknown) => {
+    socket.on('voice:state', (raw: unknown) => inOrder(() => {
       if (!raw || typeof raw !== 'object') return
       // The one voice room this socket is actually in. Nothing to describe
       // otherwise, and nowhere to broadcast it.
       const room = [...joinedCallRooms].find(r => r.startsWith('voice:'))
-      if (!room || !activeCalls.get(room)?.has(userId)) return
+      if (!room || !holdsSeat(room, userId, socket.id)) return
 
       const r = raw as Record<string, unknown>
       // Coerced, not trusted: a missing flag means false rather than
@@ -1618,8 +1991,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
           && prev.sharing === next.sharing) return
       m.set(userId, next)
       broadcastCall(room)
-    })
-    socket.on('call:join', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+    }))
+    socket.on('call:join', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => inOrder(async () => {
       // A background connection must not put the person in a call: it would
       // list them as present while every other surface shows them offline.
       // No ack is taken on this event, so there is nothing to answer.
@@ -1629,9 +2002,11 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // "not allowed" — no ack is expected on this event, so there is nothing
       // to report back beyond simply not joining.
       if (!await canJoinCall(data.kind, data.conversationId, userId)) return
+      // Gone while the check ran: a seat now would be held by a connection
+      // that can never give it back.
+      if (!socket.connected) return
       const room = callRoom(data.kind, data.conversationId)
-      let set = activeCalls.get(room)
-      const wasEmpty = !set || set.size === 0
+      const wasEmpty = (activeCalls.get(room)?.size ?? 0) === 0
       /*
        * A room inside its grace period is not an empty room: its call is still
        * live, it has just lost every socket that was watching it. So somebody
@@ -1647,10 +2022,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
        */
       const resuming = callEndPending(room)
       cancelCallEnd(room)
-      if (!set) { set = new Set(); activeCalls.set(room, set) }
       noteCallStarted(room)
-      set.add(userId)
-      joinedCallRooms.add(room)
+      seatHere(room)
       // No "X started a call" for a voice channel: there is no text history
       // there to read it in, so the Message would only ever be dead weight in
       // a conversation nobody can open. Narrowing here is also what keeps
@@ -1664,19 +2037,20 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // until the song ended. Sent even when nothing plays: an empty list is
       // an answer, and it clears anything stale from a previous call.
       socket.emit('music:state', musicRooms.view(room))
-    })
+    }))
 
     /**
      * Put somebody back in the occupancy their socket took with it.
      *
-     * A dropped socket empties this person out of every call: the disconnect
-     * handler runs `leaveCall` for each room it held, and every sidebar in
-     * the instance loses them at once. Their LiveKit connection is a separate
-     * connection to a separate service and survives the blip untouched — they
-     * are still in the call, still audible, still a tile on everyone's stage.
-     * Socket.IO then reconnects with a NEW socket whose `joinedCallRooms` is
-     * empty, and nothing used to refill it. The stage and the sidebar
-     * disagreed from that moment until the person left for real.
+     * A dropped socket used to empty this person out of every call: the
+     * disconnect handler ran `leaveCall` for each room it held, and every
+     * sidebar in the instance lost them at once. Their LiveKit connection is
+     * a separate connection to a separate service and survives the blip
+     * untouched — they are still in the call, still audible, still a tile on
+     * everyone's stage. Socket.IO then reconnects with a NEW socket whose
+     * `joinedCallRooms` is empty, and this is what refills it, with a seat of
+     * its own (see callSeats for why the order those two arrive in no longer
+     * matters).
      *
      * A single `pm2 restart` severs every socket at once, so one deploy could
      * empty every voice channel in the instance while every call carried on.
@@ -1686,12 +2060,13 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
      * call" — after an API restart that would announce every call in the
      * instance a second time, in everybody's history.
      */
-    socket.on('call:rejoin', async (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+    socket.on('call:rejoin', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => inOrder(async () => {
       // Same as call:join: a background connection never holds a seat in a call.
       if (background) return
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
       // The same gate as call:join: coming back from a blip is not a way in.
       if (!await canJoinCall(data.kind, data.conversationId, userId)) return
+      if (!socket.connected) return
       const room = callRoom(data.kind, data.conversationId)
       // The evidence the grace period was waiting for, arriving before
       // anything was written down. A room whose last occupant is back is not a
@@ -1699,12 +2074,8 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // dropped before the broadcast below, so no surface ever sees a call
       // that is both occupied and on its way out.
       cancelCallEnd(room)
-      let set = activeCalls.get(room)
-      if (!set) { set = new Set(); activeCalls.set(room, set) }
       noteCallStarted(room)
-      const wasPresent = set.has(userId)
-      set.add(userId)
-      joinedCallRooms.add(room)
+      const isNew = seatHere(room)
       // Tell the caller either way: it may have reconnected before its own
       // `chan:` membership was restored, and a client missing itself from the
       // list is the same fault seen from the other side.
@@ -1712,16 +2083,17 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // The same for music: a new socket missed every change made while the
       // old one was gone.
       socket.emit('music:state', musicRooms.view(room))
-      // Already listed — a second tab, or a duplicate rejoin. Nothing changed
-      // for anyone else, so nothing is fanned out to them.
-      if (wasPresent) return
+      // Already listed — the old connection not yet given up on, a second
+      // tab, LiveKit's stand-in, a duplicate rejoin. Nothing changed for
+      // anyone else, so nothing is fanned out to them.
+      if (!isNew) return
       broadcastCall(room)
-    })
+    }))
 
-    socket.on('call:leave', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel' }) => {
+    socket.on('call:leave', (data: { conversationId: string; kind: 'dm' | 'group' | 'channel'; reason?: unknown }) => inOrder(() => {
       if (!data?.conversationId || (data.kind !== 'dm' && data.kind !== 'group' && data.kind !== 'channel')) return
-      leaveCall(callRoom(data.kind, data.conversationId), 'hang-up')
-    })
+      leaveCall(callRoom(data.kind, data.conversationId), data.reason === 'taken-over' ? 'taken-over' : 'hang-up')
+    }))
 
     /**
      * Turn down a call that is ringing.
@@ -2170,6 +2542,7 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
       // Catch up on calls already in progress. Without this, someone who was
       // offline when the call started sees no ringing/indicator when they come
       // online — call:state is only broadcast on join/leave, which they missed.
+      const live: ReturnType<typeof callStatePayload>[] = []
       for (const [room, participants] of activeCalls) {
         if (participants.size === 0) continue
         // Same three-way shape as broadcastCall, and for the same reason: the
@@ -2185,8 +2558,18 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
         // broadcast would have carried: the occupants, their state (without it
         // they see who is there but not who is muted until somebody changes),
         // and when the call started.
-        socket.emit('call:state', callStatePayload(room))
+        const payload = callStatePayload(room)
+        live.push(payload)
+        socket.emit('call:state', payload)
       }
+      // ...and then all of them at once. A room says only what changed and the
+      // loop above skips empty rooms, so a call that ended while this person's
+      // connection was down was never heard to end: it stayed in their voice
+      // list, and a DM or group call stayed "in progress", until a reload. The
+      // snapshot names every live call they may see, so the page can drop the
+      // rest. The per-room events stay for pages and the Android service that
+      // predate it.
+      socket.emit('call:snapshot', { calls: live })
     } catch (err) {
       // A failed setup must not take the connection down — the handlers are
       // already live and usable with their fallback values.

@@ -71,6 +71,13 @@ const settledWith = (s: ClientSocket, room: string, ids: string[]): Promise<any>
     s.on('call:state', on)
   })
 
+/** Resolves on the first call:state for this room that `ok` accepts. */
+const callStateWhere = (s: ClientSocket, room: string, ok: (p: any) => boolean): Promise<any> =>
+  new Promise(resolve => {
+    const on = (p: any) => { if (p.room === room && ok(p)) { s.off('call:state', on); resolve(p) } }
+    s.on('call:state', on)
+  })
+
 describe('voice:state', () => {
   it('rides along with the occupancy it describes', async () => {
     const a = await register(), b = await register()
@@ -124,15 +131,21 @@ describe('voice:state', () => {
     const v = await mkVoice(a, s.id)
     const room = `voice:${v.id}`
 
+    // Each step waits for the broadcast that shows its own result. Waiting for
+    // "the next call:state" let a late broadcast from an earlier step — the
+    // second join, the mute — stand in for the leave, and the test failed now
+    // and then for no fault in the server.
     const aSock = track(await connectSocket(sockets.url, a.token))
     const bSock = track(await connectSocket(sockets.url, b.token))
+    const both = settledWith(bSock, room, [a.id, b.id])
     aSock.emit('call:join', { conversationId: v.id, kind: 'channel' })
     bSock.emit('call:join', { conversationId: v.id, kind: 'channel' })
-    await nextCallState(bSock, room)
+    await both
+    const muted = callStateWhere(bSock, room, p => p.states?.[a.id]?.muted === true)
     aSock.emit('voice:state', { muted: true })
-    await nextCallState(bSock, room)
+    await muted
 
-    const afterLeave = nextCallState(bSock, room)
+    const afterLeave = settledWith(bSock, room, [b.id])
     aSock.emit('call:leave', { conversationId: v.id, kind: 'channel' })
     const p = await afterLeave
 
