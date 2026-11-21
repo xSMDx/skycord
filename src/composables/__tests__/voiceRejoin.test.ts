@@ -47,6 +47,7 @@ vi.mock('../useSocket', async () => {
 })
 
 let voice: typeof import('../useVoice').voice
+let reannounceCall: typeof import('../useVoice').reannounceCall
 let connected: import('vue').Ref<boolean>
 let nextTick: typeof import('vue').nextTick
 
@@ -64,7 +65,7 @@ beforeAll(async () => {
 
   ;({ nextTick } = await import('vue'))
   ;({ connected } = await import('../useSocket') as unknown as { connected: import('vue').Ref<boolean> })
-  ;({ voice } = await import('../useVoice'))
+  ;({ voice, reannounceCall } = await import('../useVoice'))
 })
 
 /** Module-level state, shared app-wide by design — reset, not reconstructed. */
@@ -140,5 +141,36 @@ describe('re-announcing a call after the socket comes back', () => {
     connected.value = true
     await nextTick()
     expect(emitted.filter(e => e.event === 'call:rejoin')).toEqual([])
+  })
+})
+
+/**
+ * The same re-announce, on demand. voiceSeat.ts calls it when the server's
+ * list for this call leaves this page out, so it must say exactly what a
+ * reconnect says — the rejoin and the state together — and nothing at all
+ * when there is no live call to speak for.
+ */
+describe('reannounceCall', () => {
+  it('sends the rejoin and the state, in that order', () => {
+    inCall(true)
+    voice.localMuted = true
+    expect(reannounceCall()).toBe(true)
+    expect(emitted.map(e => e.event)).toEqual(['call:rejoin', 'voice:state'])
+    expect(emitted[0].payload).toEqual({ conversationId: 'chan-1', kind: 'channel' })
+    expect(emitted[1].payload).toMatchObject({ muted: true })
+  })
+
+  it('says nothing outside a call', () => {
+    inCall(false)
+    expect(reannounceCall()).toBe(false)
+    expect(emitted).toEqual([])
+  })
+
+  it('says nothing while the media connection is still rejoining', () => {
+    voice.activeConvId = 'chan-1'
+    voice.activeKind = 'channel'
+    voice.connected = false
+    expect(reannounceCall()).toBe(false)
+    expect(emitted).toEqual([])
   })
 })

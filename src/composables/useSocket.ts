@@ -26,7 +26,8 @@ export const connected   = ref(false)
  *   offline    — retries exhausted, or the tab reports no network
  */
 export type ConnState = 'connected' | 'connecting' | 'offline'
-const connState = ref<ConnState>('connecting')
+/** Exported so voiceSeat.ts can tell a connection that gave up from one still trying. */
+export const connState = ref<ConnState>('connecting')
 const typingUsers = ref<Record<string, { username: string; timer: ReturnType<typeof setTimeout> }>>({})
 // Active voice calls: LiveKit room name -> userIds currently in it (server-tracked
 // presence, so the UI can show Join / "In a call" without being in the room).
@@ -132,6 +133,48 @@ export const resetCalls = (): void => {
   voiceStates.value      = {}
 }
 
+/** One room's occupancy and state, as `call:state` and `call:snapshot` carry it. */
+interface CallStatePayload {
+  room: string; userIds: string[]; serverId?: string
+  /** When the call began, ms since epoch. Nothing in the web client reads it. */
+  startedAt?: number
+  states?: Record<string, VoiceMemberState>
+}
+
+/**
+ * Replace everything known about calls with the server's own list.
+ *
+ * `call:state` only says what changed, and the catch-up on connect only names
+ * occupied rooms, so a call that ended while this connection was down was
+ * never heard to end: its occupants stayed in the voice channel list and a DM
+ * or group call stayed "in progress" until a reload. The Android page forgets
+ * its calls before waking from a rest for that reason (forgetCallsForWake);
+ * an ordinary reconnect did nothing of the kind. The server now follows the
+ * catch-up with every live call this connection may see, so whatever is not
+ * on the list is over.
+ *
+ * A room's server is kept from what was known when the snapshot does not
+ * name one, for the reason the call:state handler gives. A payload that is
+ * not a list changes nothing: a good picture is not wiped by a bad message.
+ */
+const applyCallSnapshot = (p: unknown): void => {
+  const calls = (p as { calls?: unknown } | null)?.calls
+  if (!Array.isArray(calls)) return
+  const occupants: Record<string, string[]> = {}
+  const states: Record<string, Record<string, VoiceMemberState>> = {}
+  const servers: Record<string, string> = {}
+  for (const c of calls as CallStatePayload[]) {
+    if (!c || typeof c.room !== 'string' || !Array.isArray(c.userIds) || !c.userIds.length) continue
+    occupants[c.room] = c.userIds
+    if (c.states) states[c.room] = c.states
+    const server = c.serverId ?? voiceRoomServers.value[c.room]
+    if (server) servers[c.room] = server
+  }
+  activeCalls.value = occupants
+  voiceStates.value = states
+  voiceRoomServers.value = servers
+}
+
 type CB<T> = (p: T) => void
 const _h: Record<string, CB<any>> = {
   onMessage:        ((_p: any) => {}) as CB<any>,
@@ -192,7 +235,14 @@ import { applySelfPresence } from './usePresence'
 // (useVoice's cleanup, which fires on unexpected LiveKit drops) can clear server
 // presence too, not just the component that opened the call.
 export const emitCallJoin  = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:join',  { conversationId, kind })
-export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'channel') => _socket?.emit('call:leave', { conversationId, kind })
+/**
+ * `reason` is 'taken-over' when this device left only because the same person
+ * joined the call on another one. The server keeps the call alive through
+ * that, as it does through a dropped connection, instead of ending it in the
+ * gap before the other device's join arrives.
+ */
+export const emitCallLeave = (conversationId: string, kind: 'dm' | 'group' | 'channel', reason?: 'taken-over') =>
+  _socket?.emit('call:leave', reason ? { conversationId, kind, reason } : { conversationId, kind })
 /**
  * Occupancy only, after a socket came back. A separate event from call:join
  * because it must not announce the call a second time — see chatSocket's
@@ -226,6 +276,16 @@ let _netWatchInstalled = false
  * events must not treat the missing socket as trouble in the meantime.
  */
 let _resting = false
+
+/**
+ * Start trying to reach the server again, now. "Try again" in the connection
+ * strip, and voiceSeat.ts for a connection that gave up while a call is live.
+ */
+export const retryConnection = (): void => {
+  connState.value = 'connecting'
+  _socket?.connect()
+}
+
 const installNetworkWatch = () => {
   if (_netWatchInstalled || typeof window === 'undefined') return
   _netWatchInstalled = true
@@ -408,12 +468,11 @@ export const useSocket = () => {
     // sockets hear it for DMs and groups, so a Decline on the phone quiets the PC.
     _socket.on('call:declined', (p: { room: string; userId: string; name: string }) => _h.onCallDeclined(p))
 
-    _socket.on('call:state', (p: {
-      room: string; userIds: string[]; serverId?: string
-      /** When the call began, ms since epoch. Nothing in the web client reads it. */
-      startedAt?: number
-      states?: Record<string, VoiceMemberState>
-    }) => {
+    // Every live call this connection may see, right after the catch-up on
+    // connect: see applyCallSnapshot.
+    _socket.on('call:snapshot', (p: unknown) => applyCallSnapshot(p))
+
+    _socket.on('call:state', (p: CallStatePayload) => {
       const next = { ...activeCalls.value }
       if (p.userIds?.length) next[p.room] = p.userIds
       else delete next[p.room]
@@ -529,7 +588,7 @@ export const useSocket = () => {
   return {
     connected, connState, typingUsers, activeCalls, voiceRoomServers,
     /** Manual retry, for the "Try again" affordance once we've given up. */
-    retry: () => { connState.value = 'connecting'; _socket?.connect() },
+    retry: retryConnection,
     connect, disconnect, rest,
     sendDMSocket, sendReplySocket,
     sendEditSocket, sendDeleteSocket,

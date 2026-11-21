@@ -29,6 +29,7 @@ import { ownEcho } from '@/composables/ownEcho'
 import { statusLabel, setChosenStatus, chosenStatus, startIdleWatch, stopIdleWatch, applyPresence, livePresence, resetPresenceMap, type ChosenStatus } from '@/composables/usePresence'
 import { createBackgroundSocket, mergeCaughtUp } from '@/composables/backgroundSocket'
 import { useSocket, dmConvId, forgetVoiceRoom, resetCalls, voiceStates, emitCallDecline } from '@/composables/useSocket'
+import { installVoiceSeatWatch } from '@/composables/voiceSeat'
 import { useServers, resetServers, fallBackToInitials } from '@/composables/useServers'
 import { filterMembers } from '@/composables/memberFilter'
 import { canActOnMemberUI } from '@/composables/permissionMeta'
@@ -252,6 +253,8 @@ const {
 
 const { voice, connect: vConnect, leave: vLeave, voiceRoomName } = useVoice()
 const { media, toggleCamera } = useVoiceMedia()
+// While this page is in a call, the voice list must have it: see voiceSeat.ts.
+onBeforeUnmount(installVoiceSeatWatch())
 
 // ── Incoming DM call ─────────────────────────────────────────────────────────
 // Derived from call presence: a DM room (stable per friend-pair id) where the
