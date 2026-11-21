@@ -40,7 +40,10 @@ import { Server } from '../models/Server'
 import { Message } from '../models/Message'
 import {
   cancelAllCallEnds, isInCall, callEndPending, setRosterProbe, sweepCallRosters,
+  sweepStandInRooms, STAND_IN_UNANSWERED_LIMIT,
 } from '../sockets/chatSocket'
+import { listRoomIdentities } from '../utils/callRoster'
+import { Channel } from '../models/Channel'
 import { dmConvId } from '../controllers/messagesController'
 
 const GRACE_MS = 1200
@@ -302,5 +305,70 @@ describe('a call is not declared over while its room has people in it', () => {
     expect(await Message.countDocuments({ content: 'Call ended' })).toBe(0)
     expect(await Message.countDocuments({ content: { $regex: 'started a call' } })).toBe(started)
     expect(isInCall(room, a.id)).toBe(true)
+  })
+})
+
+/**
+ * A seat held on LiveKit's word stands in for somebody whose connection
+ * dropped while LiveKit still had them: usually a page about to reconnect,
+ * sometimes a browser that crashed. It must not outlast them by much.
+ */
+describe("a seat held on LiveKit's word", () => {
+  /** a in the call on LiveKit's word only: their connection is gone. */
+  const standIn = async () => {
+    const a = await register(), b = await register()
+    const { voice, room } = await seed(a, b)
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    const bSock = track(await connectSocket(sockets.url, b.token))
+    aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    await settle()
+    lk.set(room, [a.id])
+    aSock.disconnect()
+    await settle()
+    expect(isInCall(room, a.id)).toBe(true)
+    return { a, b, bSock, voice, room }
+  }
+
+  it('is checked between sweeps, and goes as soon as LiveKit lets the person go', async () => {
+    const { a, bSock, room } = await standIn()
+    lk.set(room, [])
+    const gone = nextEvent(bSock, 'call:state')
+    await sweepStandInRooms()
+    expect((await gone).userIds).toEqual([])
+    expect(isInCall(room, a.id)).toBe(false)
+  })
+
+  it('only those rooms are checked between sweeps', async () => {
+    const a = await register(), b = await register()
+    const { voice } = await seed(a, b)
+    const aSock = track(await connectSocket(sockets.url, a.token))
+    aSock.emit('call:join', { conversationId: voice.id, kind: 'channel' })
+    await settle()
+    asked = []
+    await sweepStandInRooms()
+    expect(asked).toEqual([])
+  })
+
+  it('goes once LiveKit has said nothing for long enough', async () => {
+    const { a, room } = await standIn()
+    lk.set(room, null)
+    for (let i = 0; i < STAND_IN_UNANSWERED_LIMIT - 1; i++) await sweepStandInRooms()
+    expect(isInCall(room, a.id)).toBe(true)
+    await sweepStandInRooms()
+    expect(isInCall(room, a.id)).toBe(false)
+  })
+
+  it('goes with its voice channel, which nobody can be listed in once deleted', async () => {
+    const { a, voice, room } = await standIn()
+    await Channel.deleteOne({ _id: voice.id })
+    expect(await listRoomIdentities(room, undefined)).toEqual([])
+
+    setRosterProbe(r => listRoomIdentities(r, undefined))
+    try {
+      await sweepStandInRooms()
+    } finally {
+      setRosterProbe(async r => { asked.push(r); return lk.has(r) ? lk.get(r)! : [] })
+    }
+    expect(isInCall(room, a.id)).toBe(false)
   })
 })

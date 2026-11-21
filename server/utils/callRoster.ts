@@ -27,10 +27,13 @@ const ROSTER_TIMEOUT_S = 4
  * everyone in the channel); for a DM or group, the server its first token
  * fixed (`pinned`, from chatSocket's callVoiceServer), else the instance's.
  */
-export const voiceForRoom = async (room: string, pinned: string | null | undefined): Promise<ResolvedVoice | null> => {
+export const voiceForRoom = async (
+  room: string, pinned: string | null | undefined,
+): Promise<ResolvedVoice | null | 'no-channel'> => {
   if (room.startsWith('voice:')) {
     const channel = await Channel.findById(room.slice(6)).select('server voiceServer').lean()
-    if (!channel) return null
+    // Deleted: nobody can be listed in it, whoever LiveKit still has there.
+    if (!channel) return 'no-channel'
     return resolveForChannel(channel.server, (channel as { voiceServer?: string | null }).voiceServer ?? null)
   }
   return resolveVoiceById(pinned)
@@ -41,12 +44,13 @@ const lastWarned = new Map<string, number>()
 const WARN_EVERY_MS = 5 * 60_000
 
 export const listRoomIdentities = async (room: string, pinned: string | null | undefined): Promise<string[] | null> => {
-  let voice: ResolvedVoice | null
+  let voice: ResolvedVoice | null | 'no-channel'
   try {
     voice = await voiceForRoom(room, pinned)
   } catch {
     return null
   }
+  if (voice === 'no-channel') return []
   if (!voice) return null
   const url = adminUrlFor(voice)
   try {

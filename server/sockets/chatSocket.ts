@@ -540,6 +540,7 @@ const forgetEmptyRoom = (room: string): void => {
   activeCalls.delete(room)
   voiceStates.delete(room)
   callSeats.delete(room)
+  unanswered.delete(room)
 }
 
 /**
@@ -700,13 +701,44 @@ const joinSpecFor = (room: string, userId: string): { kind: 'dm' | 'group' | 'ch
 }
 
 /**
+ * How many times in a row LiveKit could not say who is in a room. No answer
+ * changes nothing — except that a seat held only on LiveKit's word cannot
+ * outlive LiveKit's silence for ever: after STAND_IN_UNANSWERED_LIMIT checks
+ * (about two minutes at STAND_IN_CHECK_MS) nobody vouches for it any more.
+ */
+const unanswered = new Map<string, number>()
+export const STAND_IN_UNANSWERED_LIMIT = 40
+
+/** Let go of every LIVEKIT seat in a room, as LiveKit not listing them would. */
+const dropStandIns = (room: string): boolean => {
+  let changed = false
+  for (const [userId, holders] of [...(callSeats.get(room) ?? [])]) {
+    if (!holders.has(LIVEKIT)) continue
+    if (releaseSeat(room, userId, LIVEKIT)) {
+      personLeft(room, userId, false, { id: userId, name: '' })
+      changed = true
+    }
+  }
+  return changed
+}
+
+/**
  * Bring one room's occupancy into line with LiveKit: seat whoever it lists
  * that nobody seats (and may be there), and let go of LIVEKIT seats for
  * whoever it no longer lists. Returns false when LiveKit could not be asked.
  */
 const reconcileRoom = async (room: string): Promise<boolean> => {
   const present = await askRoster(room)
-  if (!present) return false
+  if (!present) {
+    const misses = (unanswered.get(room) ?? 0) + 1
+    unanswered.set(room, misses)
+    if (misses >= STAND_IN_UNANSWERED_LIMIT) {
+      unanswered.delete(room)
+      if (dropStandIns(room)) broadcastCallState(room)
+    }
+    return false
+  }
+  unanswered.delete(room)
   let changed = false
   for (const [userId, holders] of [...(callSeats.get(room) ?? [])]) {
     if (!holders.has(LIVEKIT) || present.has(userId)) continue
@@ -733,6 +765,18 @@ const reconcileRoom = async (room: string): Promise<boolean> => {
 }
 
 let sweeping = false
+const reconcileAll = async (rooms: Iterable<string>): Promise<void> => {
+  if (sweeping) return
+  sweeping = true
+  try {
+    for (const room of rooms) {
+      try { await reconcileRoom(room) } catch (err) { console.error('[WS] roster sweep', room, err) }
+    }
+  } finally {
+    sweeping = false
+  }
+}
+
 /**
  * Reconcile every room worth asking about: the occupied ones, the ones whose
  * call end is pending, and the ones a token was just issued for. One room at a
@@ -740,19 +784,29 @@ let sweeping = false
  * hand; the server sweeps every CALL_ROSTER_SWEEP_MS (see initSocket).
  */
 export const sweepCallRosters = async (): Promise<void> => {
-  if (sweeping) return
-  sweeping = true
-  try {
-    const now = Date.now()
-    for (const [room, until] of tokenWatch) if (until <= now) tokenWatch.delete(room)
-    const rooms = new Set<string>([...pendingCallEnd.keys(), ...tokenWatch.keys()])
-    for (const [room, members] of activeCalls) if (members.size > 0) rooms.add(room)
-    for (const room of rooms) {
-      try { await reconcileRoom(room) } catch (err) { console.error('[WS] roster sweep', room, err) }
-    }
-  } finally {
-    sweeping = false
+  const now = Date.now()
+  for (const [room, until] of tokenWatch) if (until <= now) tokenWatch.delete(room)
+  const rooms = new Set<string>([...pendingCallEnd.keys(), ...tokenWatch.keys()])
+  for (const [room, members] of activeCalls) if (members.size > 0) rooms.add(room)
+  await reconcileAll(rooms)
+}
+
+/**
+ * How often rooms holding a LIVEKIT seat are checked, between sweeps. Such a
+ * seat stands in for somebody whose connection dropped while LiveKit still
+ * had them — usually a page about to reconnect, but sometimes a browser that
+ * crashed or a laptop that closed, which LiveKit takes a while to notice. A
+ * quick look keeps the list from holding them much longer than LiveKit does.
+ */
+const STAND_IN_CHECK_MS = 3_000
+
+/** Reconcile only the rooms holding a LIVEKIT seat. Exported for the tests. */
+export const sweepStandInRooms = async (): Promise<void> => {
+  const rooms: string[] = []
+  for (const [room, byUser] of callSeats) {
+    if ([...byUser.values()].some(holders => holders.has(LIVEKIT))) rooms.push(room)
   }
+  if (rooms.length) await reconcileAll(rooms)
 }
 
 /**
@@ -1299,8 +1353,10 @@ export const initSocket = (httpServer: HttpServer): IOServer => {
   const sweepMs = rosterSweepMs()
   if (sweepMs > 0) {
     const sweep = setInterval(() => { void sweepCallRosters() }, sweepMs)
+    const standIns = setInterval(() => { void sweepStandInRooms() }, Math.min(STAND_IN_CHECK_MS, sweepMs))
     sweep.unref?.()
-    httpServer.on('close', () => clearInterval(sweep))
+    standIns.unref?.()
+    httpServer.on('close', () => { clearInterval(sweep); clearInterval(standIns) })
   }
 
   // Connectivity is in-memory, so a restart clears it for free — there is no
