@@ -37,6 +37,32 @@ describe('createNavHistory', () => {
     expect(h.canForward).toBe(false)
   })
 
+  it('can swap the place it is on without adding a step', () => {
+    const h = make()
+    h.push(at('friends'))
+    h.push(at('discover'))
+    h.replace(at('dm', { dmId: 'd1' }))
+    expect(h.current).toEqual(at('dm', { dmId: 'd1' }))
+    expect(h.back()).toEqual(at('friends'))
+    expect(h.forward()).toEqual(at('dm', { dmId: 'd1' }))
+  })
+
+  it('a swap on an empty history is the first place', () => {
+    const h = make()
+    h.replace(at('friends'))
+    expect(h.current).toEqual(at('friends'))
+    expect(h.canBack).toBe(false)
+  })
+
+  it('shows where back would go without going', () => {
+    const h = make()
+    expect(h.peekBack()).toBeNull()
+    h.push(at('friends'))
+    h.push(at('discover'))
+    expect(h.peekBack()).toEqual(at('friends'))
+    expect(h.current).toEqual(at('discover'))
+  })
+
   it('does not record the same place twice in a row', () => {
     const h = make()
     h.push(at('friends'))

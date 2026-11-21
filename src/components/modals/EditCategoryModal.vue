@@ -19,6 +19,7 @@ import {
   useApi,
   type WireRole, type WireMember, type WireOverwrite, type WireCategory,
 } from '@/composables/useApi'
+import type { ModalPages } from '@/composables/modalHistory'
 
 /** Only what the tabs need — the client Category and the wire row both fit. */
 const props = defineProps<{
@@ -35,6 +36,11 @@ const TABS = [
 ] as const
 type TabId = typeof TABS[number]['id']
 const tab = ref<TabId>('overview')
+// Back and forward step through the tabs you opened (modalHistory.ts).
+const pages: ModalPages<TabId> = {
+  read: () => tab.value,
+  go: t => { tab.value = t },
+}
 
 // ── Overview ──────────────────────────────────────────────────────────────
 const name = ref(props.category.name)
@@ -103,7 +109,7 @@ const savePerms = async (payload: { overwrites: WireOverwrite[] }) => {
 </script>
 
 <template>
-  <ModalBase width="740px" @close="emit('close')">
+  <ModalBase width="740px" :pages="pages" @close="emit('close')">
     <div class="ec">
       <aside class="ec-rail">
         <div class="ec-rail-head">

@@ -15,6 +15,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide } f
 import { useViewport } from '@/composables/useViewport'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 import { applyClickOrigin } from '@/composables/useClickOrigin'
+import { useModalHistory, type ModalPages } from '@/composables/modalHistory'
 
 const props = defineProps<{
   title?: string
@@ -30,6 +31,9 @@ const props = defineProps<{
    *  — to step out of a mode of its own, like the music room's selection — and
    *  the dialog stays open. Without one, or when it answers false, Escape closes. */
   escapeGuard?: () => boolean
+  /** The modal's tabs or pages, for back and forward (modalHistory.ts). Without
+   *  them the modal is one page: back closes it, forward does nothing. */
+  pages?: ModalPages<any>
 }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -59,6 +63,20 @@ defineExpose({ requestClose })
 
 const { isMobile } = useViewport()
 const sheet = ref<HTMLElement | null>(null)
+
+/*
+ * Back and forward — the desktop title bar, the mouse's buttons, Alt+Left and
+ * Alt+Right, the Android back button, a browser's history — move through this
+ * modal's pages while it is on top, and close it from the first one. Never the
+ * app behind it. Joined here, so every modal on this shell has it.
+ */
+useModalHistory({
+  el: () => sheet.value,
+  close: requestClose,
+  active: () => shown.value,
+  read: props.pages?.read,
+  go: props.pages?.go,
+})
 
 const drag = useSheetDrag(
   () => sheet.value?.getBoundingClientRect().height ?? 0,

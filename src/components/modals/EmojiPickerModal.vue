@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { Search, X } from 'lucide-vue-next'
 import { useGifs, gifPreviewUrl, gifFullUrl, GIF_SETUP_DOC } from '@/composables/useGifs'
+import { useModalHistory } from '@/composables/modalHistory'
 
 const emit = defineEmits<{ select: [value: string]; selectGif: [url: string]; close: [] }>()
 
@@ -14,6 +15,16 @@ const props = withDefaults(defineProps<{ initialTab?: 'emojis' | 'gifs' | 'stick
 const search    = ref('')
 const activeTab = ref<'emojis' | 'gifs' | 'stickers'>(props.initialTab)
 const activeCategory = ref('recent')
+
+// Back and forward step through the tabs you opened and close from the first
+// (modalHistory.ts).
+const pickerEl = ref<HTMLElement | null>(null)
+useModalHistory<'emojis' | 'gifs' | 'stickers'>({
+  el: () => pickerEl.value,
+  close: () => emit('close'),
+  read: () => activeTab.value,
+  go: t => { activeTab.value = t },
+})
 
 // ── Emoji data ────────────────────────────────────────────────────────────
 // Each emoji paired with searchable name keywords so the filter actually works
@@ -207,7 +218,7 @@ const select = (v: string) => { emit('select', v); emit('close') }
 </script>
 
 <template>
-  <div class="picker" data-overlay @keydown.esc="emit('close')">
+  <div ref="pickerEl" class="picker" data-overlay @keydown.esc="emit('close')">
 
     <!-- Tabs -->
     <div class="picker-tabs">
