@@ -24,6 +24,10 @@
  *   S5  A's socket stays down for longer than the call-end grace period while
  *       A is still in a DM call (no "Call ended" while A is in the room)
  *   S6  A joins the same channel from a second tab (one takes over, no fight)
+ *   S7  A closes the tab that is in the call: how soon B's list drops A
+ *   S8  A's whole browser is killed, no unload: how soon B's list drops A
+ * S7 and S8 time the list against LiveKit: it may keep A until LiveKit lets
+ * A go (that is when A's tile leaves the stage too), but not much longer.
  *
  * Needs, already running (nothing here starts a window):
  *   MongoDB  on 127.0.0.1:27017       docker run -d --name e2e-mongo -p 27017:27017 mongo:4.4
@@ -57,7 +61,7 @@ import { RoomServiceClient } from 'livekit-server-sdk'
 const require = createRequire(import.meta.url)
 // E2E_ROOT runs the API and Vite from another checkout of the same repo — to
 // watch an older build fail the same checks.
-const root = process.env.E2E_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const root = process.env.E2E_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const { chromium } = require(process.env.PLAYWRIGHT_CORE ?? 'playwright-core')
 
 const CFG = {
@@ -419,6 +423,9 @@ const main = async () => {
       await waitFor(async () => (await stateOf(pageA, room)).inCall, 30_000)
     }
 
+    /** The tab whose call S7 closes: S6 moves the call to a second tab. */
+    let callTab = pageA
+
     if (wanted('S6')) {
       log('S6: A joins the same channel from a second tab')
       const pageA2 = await ctxA.newPage()
@@ -439,7 +446,66 @@ const main = async () => {
         `first tab in call: ${last[0]}, second: ${last[1]}; LiveKit has A ${(await roster(room)).filter(id => id === A.id).length}x; samples: ${trace}`)
       check('S6: the two tabs do not take the call from each other', flips === 0, `${flips} changes in 10 s`)
       await listMatchesRoom('S6')
-      await pageA2.close()
+      if (last[1]) callTab = pageA2
+      else await pageA2.close()
+    }
+
+    /**
+     * How long after `t0` B's list, and LiveKit, each stopped having A. The
+     * list may follow LiveKit, which is when A's tile leaves B's stage too,
+     * but should not lag it by more than a few seconds.
+     */
+    const timeDeparture = async (label, t0) => {
+      const listGone = await waitFor(async () => {
+        const b = await stateOf(pageB, room)
+        return !b.list.includes(A.id) && !(await rowsOf(pageB)).includes(A.name) && Date.now()
+      }, 90_000, 200)
+      const lkGone = await waitFor(async () => !(await roster(room)).includes(A.id) && Date.now(), 90_000, 200)
+      const list = listGone ? listGone - t0 : null, media = lkGone ? lkGone - t0 : null
+      check(`${label}: B's list lets A go no more than 5 s after LiveKit does`,
+        list !== null && media !== null && list <= media + 5_000,
+        `list after ${list ?? '>90000'} ms, LiveKit after ${media ?? '>90000'} ms`)
+    }
+
+    if (wanted('S7')) {
+      log('S7: A closes the tab that is in the call')
+      if (!(await stateOf(callTab, room)).inCall) {
+        await join(callTab, voiceId, 'channel', 'General')
+        await waitFor(async () => (await stateOf(callTab, room)).inCall, 30_000)
+      }
+      await waitFor(async () => (await stateOf(pageB, room)).list.includes(A.id), 20_000)
+      const t0 = Date.now()
+      await callTab.close({ runBeforeUnload: true })
+      await timeDeparture('S7', t0)
+    }
+
+    if (wanted('S8')) {
+      log("S8: A's whole browser is killed, no unload")
+      // Nobody else of A's may be in the call: on an old build the earlier
+      // page takes the call back from the new browser, and that is S6's bug,
+      // not this one.
+      for (const p of new Set([pageA, callTab])) {
+        if (!p.isClosed() && (await stateOf(p, room)).inCall) await leave(p)
+      }
+      await waitFor(async () => !(await stateOf(pageB, room)).list.includes(A.id), 20_000)
+      // A browser server, not launch(): only it hands over the process to kill.
+      const server = await chromium.launchServer({
+        headless: true,
+        channel: process.env.E2E_CHROME_CHANNEL || undefined,
+        args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
+      })
+      const doomed = await chromium.connect(server.wsEndpoint())
+      const ctx = await doomed.newContext({ userAgent: `${baseUa} SkycordE2E/A`, permissions: ['microphone', 'camera'] })
+      const page = await ctx.newPage()
+      await signIn(page, A)
+      await join(page, voiceId, 'channel', 'General')
+      await waitFor(async () => (await stateOf(page, room)).inCall, 30_000)
+      await waitFor(async () => (await stateOf(pageB, room)).list.includes(A.id), 20_000)
+      const pid = server.process().pid
+      const t0 = Date.now()
+      if (process.platform === 'win32') execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+      else server.process().kill('SIGKILL')
+      await timeDeparture('S8', t0)
     }
   } finally {
     await browser?.close().catch(() => {})
